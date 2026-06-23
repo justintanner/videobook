@@ -40,9 +40,16 @@ const PROVIDER_OPTIONS: ReadonlyArray<{ value: SwapProvider; label: string }> = 
 
 // One labeled micro-thumb mapping an "Image N" prompt token to its actual
 // reference image, so the prompt's "Image 1 / Image 2 …" wording is legible.
-// Wired-character thumbs get an × to unwire them from this frame (onRemove);
-// the source frame and prior-frame continuity thumbs are fixed (no ×).
-function TokenThumb({ n, src, title, onRemove }: { n: number; src: string | null; title: string; onRemove?: () => void }) {
+// Every input is deletable via its × (onRemove): the source frame resets the
+// frame's swap, a character thumb unwires that character, and the prior-frame
+// continuity thumb drops continuity. removeTitle carries the per-kind tooltip.
+function TokenThumb({ n, src, title, onRemove, removeTitle }: {
+  n: number;
+  src: string | null;
+  title: string;
+  onRemove?: () => void;
+  removeTitle?: string;
+}) {
   return (
     <div className="group relative shrink-0" style={{ width: 36, height: 36 }} title={title}>
       {src ? (
@@ -59,8 +66,8 @@ function TokenThumb({ n, src, title, onRemove }: { n: number; src: string | null
         <button
           type="button"
           onClick={onRemove}
-          title="Remove this character from the frame"
-          aria-label="Remove character from frame"
+          title={removeTitle ?? 'Remove this input'}
+          aria-label={removeTitle ?? 'Remove this input'}
           className={cn(
             'nodrag absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full',
             'border border-zinc-600 bg-zinc-900 text-zinc-300 leading-none',
@@ -128,14 +135,18 @@ function SwapGenNodeImpl({ data }: NodeProps<Node<SwapGenNodeData>>) {
     [scene, frameIndex, sidecar.characters],
   );
   const charCount = wiredChars.length;
-  const priorSwapAssetId = frameIndex === 2 ? (scene?.swap?.image1 ?? undefined) : undefined;
+  // Frame 2 normally threads frame 1's swap as a continuity reference; the user
+  // can delete that input (skip_prior_swap) — then we drop it from the gen and
+  // the prompt, and offer a restore chip instead.
+  const skipPrior = Boolean(scene?.skip_prior_swap);
+  const priorSwapAssetId = frameIndex === 2 && !skipPrior ? (scene?.swap?.image1 ?? undefined) : undefined;
+  const canRestorePrior = frameIndex === 2 && skipPrior && Boolean(scene?.swap?.image1);
 
-  // Unwire a character from this frame. Persists the reduced list; the frame
-  // must keep ≥1 character (the server rejects an empty set), so the × is only
-  // offered when more than one is wired.
+  // Unwire a character from this frame. Persists the reduced list; removing the
+  // last wired character sends an empty set, which clears the wiring so the
+  // frame falls back to all roster characters (a swap always needs ≥1 ref).
   const removeChar = useCallback((charId: string) => {
     const next = wiredChars.map((c) => c.asset_id).filter((id) => id !== charId);
-    if (next.length < 1) return;
     void actions.setFrameCharacters(sceneIndex, frameIndex, next);
   }, [wiredChars, actions, sceneIndex, frameIndex]);
 
@@ -155,19 +166,22 @@ function SwapGenNodeImpl({ data }: NodeProps<Node<SwapGenNodeData>>) {
   const hasVariants = !!variants && Object.keys(variants).length > 0;
 
   // Inline Image-token thumbs: 1 = source frame, 2/3 = wired chars, then prior.
-  // Char thumbs carry charId so they get an × (unwire); source/prior don't.
+  // Every thumb carries a `kind` so render attaches the right × delete action
+  // (source → reset frame, char → unwire, prior → drop continuity).
+  type TokenKind = 'source' | 'char' | 'prior';
   const tokenThumbs = useMemo(() => {
     const cacheBust = scene ? `${scene.start.toFixed(2)}-${scene.end.toFixed(2)}` : '';
-    const out: Array<{ n: number; src: string | null; title: string; charId?: string }> = [
+    const out: Array<{ n: number; src: string | null; title: string; kind: TokenKind; charId?: string }> = [
       {
         n: 1,
         src: `/files/${projectSlug}/plan/s${sceneIndex + 1}-image${frameIndex}-source.jpg?v=${cacheBust}`,
         title: 'Image 1 — source frame',
+        kind: 'source',
       },
     ];
     wiredChars.forEach((c, i) => {
       const item = mediaItems.find((m) => m.id === c.asset_id);
-      out.push({ n: i + 2, src: item?.thumbnailSrc ?? item?.filePath ?? null, title: `Image ${i + 2} — ${c.name}`, charId: c.asset_id });
+      out.push({ n: i + 2, src: item?.thumbnailSrc ?? item?.filePath ?? null, title: `Image ${i + 2} — ${c.name}`, kind: 'char', charId: c.asset_id });
     });
     if (priorSwapAssetId) {
       const item = mediaItems.find((m) => m.id === priorSwapAssetId);
@@ -175,6 +189,7 @@ function SwapGenNodeImpl({ data }: NodeProps<Node<SwapGenNodeData>>) {
         n: wiredChars.length + 2,
         src: item?.thumbnailSrc ?? item?.filePath ?? `/files/${projectSlug}/${priorSwapAssetId}/original.png`,
         title: `Image ${wiredChars.length + 2} — prior frame (continuity)`,
+        kind: 'prior',
       });
     }
     return out;
@@ -204,6 +219,26 @@ function SwapGenNodeImpl({ data }: NodeProps<Node<SwapGenNodeData>>) {
 
   if (!scene) return null;
 
+  // Map a token thumb to its × delete behaviour. A char needs ≥1 reference, so
+  // its × only shows when removing actually changes the gen (another wired char,
+  // or other roster chars to fall back to). The source × only shows once a swap
+  // exists to reset. The prior thumb is always droppable.
+  function removalFor(t: { kind: TokenKind; charId?: string }): { onRemove?: () => void; removeTitle?: string } {
+    if (t.kind === 'char') {
+      if (charCount > 1 || sidecar.characters.length > 1) {
+        return { onRemove: () => removeChar(t.charId as string), removeTitle: 'Remove this character from the frame' };
+      }
+      return {};
+    }
+    if (t.kind === 'source') {
+      if (selectedAssetId || hasVariants) {
+        return { onRemove: () => { void actions.clearFrameSwap(sceneIndex, frameIndex); }, removeTitle: 'Reset this frame (clear the swap)' };
+      }
+      return {};
+    }
+    return { onRemove: () => { void actions.setSkipPrior(sceneIndex, true); }, removeTitle: 'Drop the prior-frame continuity reference' };
+  }
+
   const front = (
     <div>
       <StateThumb tile={tile} heightPx={imageH} idleText="no swap yet" alt={data.label} />
@@ -215,20 +250,34 @@ function SwapGenNodeImpl({ data }: NodeProps<Node<SwapGenNodeData>>) {
           onPick={(assetId) => { void actions.promoteVariant(sceneIndex, frameIndex, assetId); }}
         />
       )}
-      <div className="mt-2 flex items-center gap-2">
-        {tokenThumbs.map((t) => (
-          <TokenThumb
-            key={t.n}
-            n={t.n}
-            src={t.src}
-            title={t.title}
-            onRemove={t.charId && charCount > 1 ? () => removeChar(t.charId as string) : undefined}
-          />
-        ))}
+      <div className="mt-2 flex items-center gap-2 flex-wrap">
+        {tokenThumbs.map((t) => {
+          const removal = removalFor(t);
+          return (
+            <TokenThumb
+              key={t.n}
+              n={t.n}
+              src={t.src}
+              title={t.title}
+              onRemove={removal.onRemove}
+              removeTitle={removal.removeTitle}
+            />
+          );
+        })}
         {charCount === 1 && (
           <span className="text-[9px] font-mono text-violet-300/60 leading-tight">
             1 char · drag a character to add
           </span>
+        )}
+        {canRestorePrior && (
+          <button
+            type="button"
+            onClick={() => { void actions.setSkipPrior(sceneIndex, false); }}
+            title="Restore the prior-frame continuity reference"
+            className="nodrag text-[9px] font-mono text-amber-300/70 hover:text-amber-200 leading-tight underline decoration-dotted"
+          >
+            continuity off · restore
+          </button>
         )}
       </div>
       <div className="mt-2 flex flex-col gap-1.5">

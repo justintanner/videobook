@@ -40,6 +40,10 @@ export interface PlanScene {
     image1?: string[];
     image2?: string[];
   } | null;
+  // When set, the last-frame (frame 2) swap drops the first-frame swap it would
+  // otherwise thread as a continuity reference (the canvas "delete prior-frame
+  // input" action). Only meaningful for frame 2 — frame 1 has no in-scene prior.
+  skip_prior_swap?: boolean;
   swap?: {
     image1: string | null;
     image2: string | null;

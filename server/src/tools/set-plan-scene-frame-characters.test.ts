@@ -104,6 +104,26 @@ describe("set_plan_scene_frame_characters", () => {
     expect(onDisk.scenes[0].frame_characters?.image1).toEqual([chars[0]]);
   });
 
+  it("clears the wiring when given an empty list (falls back to all)", async () => {
+    // Wire one character, then clear it.
+    await setPlanSceneFrameCharactersDef(fs).handler({
+      project_slug: PROJECT,
+      scene_index: 0,
+      frame_index: 1,
+      character_asset_ids: [chars[0]],
+    });
+    const cleared = await setPlanSceneFrameCharactersDef(fs).handler({
+      project_slug: PROJECT,
+      scene_index: 0,
+      frame_index: 1,
+      character_asset_ids: [],
+    });
+    expect(cleared.isError).toBeFalsy();
+    const onDisk = parseSidecar(Buffer.from(unwrap(await fs.readFile("plan", ".plan.json", PROJECT)) as Uint8Array).toString("utf-8"));
+    // The image1 key is removed entirely so consumers fall back to all characters.
+    expect(onDisk.scenes[0].frame_characters?.image1).toBeUndefined();
+  });
+
   it("rejects ids outside the character roster", async () => {
     const result = await setPlanSceneFrameCharactersDef(fs).handler({
       project_slug: PROJECT,

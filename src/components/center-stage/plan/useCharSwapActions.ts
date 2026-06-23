@@ -45,7 +45,14 @@ export interface CharSwapActions {
   runVideoReplace: (sceneIndex: number, assetId: string) => Promise<void>;
   promoteVariant: (sceneIndex: number, frameIndex: 1 | 2, assetId: string) => Promise<void>;
   // Persist the per-frame character wiring (the canvas connect/disconnect edits).
+  // An empty list clears the wiring so the frame falls back to all characters.
   setFrameCharacters: (sceneIndex: number, frameIndex: 1 | 2, characterAssetIds: string[]) => Promise<void>;
+  // Reset a frame to idle (null its swap + drop that frame's variants); the
+  // source still stays so a fresh Run regenerates it.
+  clearFrameSwap: (sceneIndex: number, frameIndex: 1 | 2) => Promise<void>;
+  // Toggle whether the scene's frame-2 swap threads the frame-1 swap as a
+  // continuity reference (the canvas "delete prior-frame input" / restore).
+  setSkipPrior: (sceneIndex: number, skip: boolean) => Promise<void>;
   // Kick off the vision auto-match job (all scenes when sceneIndex omitted).
   matchCharacters: (sceneIndex?: number) => Promise<{ jobId: string } | null>;
   isSwapInFlight: (sceneIndex: number, frameIndex: 1 | 2) => boolean;
@@ -212,8 +219,8 @@ export function useCharSwapActions(params: {
   }, [callTool, projectSlug, applySidecar]);
 
   const setFrameCharacters = useCallback<CharSwapActions['setFrameCharacters']>(async (sceneIndex, frameIndex, characterAssetIds) => {
+    // Empty list is allowed — it clears the wiring (frame falls back to all chars).
     const ids = characterAssetIds.map((id) => id.replace(/^@/, ''));
-    if (ids.length < 1) return;
     const result = await callTool('set_plan_scene_frame_characters', {
       project_slug: projectSlug,
       scene_index: sceneIndex,
@@ -222,6 +229,32 @@ export function useCharSwapActions(params: {
     });
     if (result.isError) {
       toast({ title: `Scene ${sceneIndex + 1} image${frameIndex} wiring failed`, description: errText(result, 'set_plan_scene_frame_characters failed'), duration: 5000 });
+      return;
+    }
+    applySidecar(result);
+  }, [callTool, projectSlug, applySidecar]);
+
+  const clearFrameSwap = useCallback<CharSwapActions['clearFrameSwap']>(async (sceneIndex, frameIndex) => {
+    const result = await callTool('clear_plan_scene_frame_swap', {
+      project_slug: projectSlug,
+      scene_index: sceneIndex,
+      frame_index: frameIndex,
+    });
+    if (result.isError) {
+      toast({ title: `Scene ${sceneIndex + 1} image${frameIndex} reset failed`, description: errText(result, 'clear_plan_scene_frame_swap failed'), duration: 5000 });
+      return;
+    }
+    applySidecar(result);
+  }, [callTool, projectSlug, applySidecar]);
+
+  const setSkipPrior = useCallback<CharSwapActions['setSkipPrior']>(async (sceneIndex, skip) => {
+    const result = await callTool('set_plan_scene_skip_prior', {
+      project_slug: projectSlug,
+      scene_index: sceneIndex,
+      skip,
+    });
+    if (result.isError) {
+      toast({ title: `Scene ${sceneIndex + 1} continuity toggle failed`, description: errText(result, 'set_plan_scene_skip_prior failed'), duration: 5000 });
       return;
     }
     applySidecar(result);
@@ -318,5 +351,5 @@ export function useCharSwapActions(params: {
     }
   }, [pendingProps, mediaItems, callTool, projectSlug, applySidecar]);
 
-  return { runSwap, runVideo, runVideoReplace, promoteVariant, setFrameCharacters, matchCharacters, isSwapInFlight, isVideoInFlight };
+  return { runSwap, runVideo, runVideoReplace, promoteVariant, setFrameCharacters, clearFrameSwap, setSkipPrior, matchCharacters, isSwapInFlight, isVideoInFlight };
 }

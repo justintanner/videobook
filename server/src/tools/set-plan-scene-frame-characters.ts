@@ -30,7 +30,6 @@ type PlanSidecar = {
   model: string;
 };
 
-const MIN_CHARACTERS = 1;
 const MAX_CHARACTERS = 2;
 
 const schema = {
@@ -39,16 +38,15 @@ const schema = {
   frame_index: z.union([z.literal(1), z.literal(2)]).describe("1 = first-frame swap (image1), 2 = last-frame swap (image2)"),
   character_asset_ids: z
     .array(z.string())
-    .min(MIN_CHARACTERS)
     .max(MAX_CHARACTERS)
-    .describe(`${MIN_CHARACTERS}–${MAX_CHARACTERS} character asset ids (char-*/img-*, @ optional) wired to this frame's swap, in order. First = Image 2, second = Image 3.`),
+    .describe(`0–${MAX_CHARACTERS} character asset ids (char-*/img-*, @ optional) wired to this frame's swap, in order. First = Image 2, second = Image 3. An empty list clears the wiring so the frame falls back to all characters.`),
 };
 
 export function setPlanSceneFrameCharactersDef(fs: VideocityFs): ToolDef {
   return {
     name: "set_plan_scene_frame_characters",
     description:
-      "Set which character(s) a plan scene's swap frame uses (the canvas wiring). Writes scenes[N].frame_characters.image{1|2} as an ordered list of 1–2 character asset ids; the swap gen then feeds only those references instead of all characters. Returns the updated sidecar.",
+      "Set which character(s) a plan scene's swap frame uses (the canvas wiring). Writes scenes[N].frame_characters.image{1|2} as an ordered list of 0–2 character asset ids; the swap gen then feeds only those references instead of all characters. An empty list clears the wiring (the frame falls back to all characters). Returns the updated sidecar.",
     schema,
     handler: async (args) => {
       const { project_slug, scene_index, frame_index, character_asset_ids } = args as {
@@ -107,15 +105,16 @@ export function setPlanSceneFrameCharactersDef(fs: VideocityFs): ToolDef {
         seen.add(id);
         ids.push(id);
       }
-      if (ids.length < MIN_CHARACTERS) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `At least ${MIN_CHARACTERS} character required` }],
-        };
-      }
 
+      // Empty list clears the wiring (delete the key) so the frame falls back to
+      // all characters — the "delete the last wired character" path on the canvas.
+      const frameKey = `image${frame_index}` as "image1" | "image2";
       const frameCharacters: FrameCharacters = { ...(scene.frame_characters ?? {}) };
-      frameCharacters[`image${frame_index}` as "image1" | "image2"] = ids;
+      if (ids.length === 0) {
+        delete frameCharacters[frameKey];
+      } else {
+        frameCharacters[frameKey] = ids;
+      }
       plan.scenes[scene_index] = { ...scene, frame_characters: frameCharacters };
 
       const writeResult = await fs.writeFile(
