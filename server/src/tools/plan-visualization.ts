@@ -73,6 +73,30 @@ export function buildSkeletonPlanSidecar(sourceAssetId: string, characters: Char
   };
 }
 
+// Skeleton index.md written the moment a char_swap plan is requested, alongside
+// the skeleton .plan.json. videocity-engine's computeAssetStatus treats the
+// `plan` singleton as "ready" ONLY once `index.md` exists; before it lands the
+// plan dir holds just .plan.json (no media, no lock, no pending row for `plan` —
+// the gen job leases the source video, not the plan), so the asset falls through
+// computeAssetStatus's orphan fallback to "error" and the @plan sidebar card
+// renders red for the whole draft/generation window. Writing a placeholder
+// index.md now keeps the card out of that false-error state; the job overwrites
+// it with the full per-chunk markdown on completion. Mirrors the header
+// renderMarkdown() produces in jobs/plan-visualization.ts, minus the scenes.
+export function buildSkeletonPlanMarkdown(sourceAssetId: string, characters: CharacterContext[]): string {
+  const charLine = characters.map((c) => `@${c.asset_id} (${c.name})`).join(", ");
+  return [
+    "# Plan: gpt-image-2 + Seedance 2 remix",
+    "",
+    `**Source:** ${sourceAssetId}`,
+    `**Characters:** ${charLine}`,
+    `**Model:** ${MODEL}`,
+    "",
+    "_Preparing the plan — per-chunk visuals appear here once generation runs._",
+    "",
+  ].join("\n");
+}
+
 export async function loadCharacter(
   fs: VideocityFs,
   charId: string,
@@ -455,6 +479,10 @@ export function planVisualizationDef(fs: VideocityFs): ToolDef {
       if (projectResult.ok) {
         await mkdir(join(projectResult.value.path, "plan"), { recursive: true });
         await fs.writeFile("plan", ".plan.json", JSON.stringify(skeleton, null, 2), project_slug);
+        // index.md must exist for the plan asset to read as "ready" rather than
+        // orphan-"error" while the job generates the real plan (see
+        // buildSkeletonPlanMarkdown). The job overwrites it on completion.
+        await fs.writeFile("plan", "index.md", buildSkeletonPlanMarkdown(sourceAssetId, characters), project_slug);
       }
 
       if (defer) {

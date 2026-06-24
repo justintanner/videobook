@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeChunks, sampleFramesForScenes, dialogForChunk, speechTimelineForChunk, buildSkeletonPlanSidecar } from "./plan-visualization.js";
+import { computeChunks, sampleFramesForScenes, dialogForChunk, speechTimelineForChunk, buildSkeletonPlanSidecar, buildSkeletonPlanMarkdown } from "./plan-visualization.js";
 import { parseScdetOutput, deriveCandidates } from "../scene-detect.js";
 
 type Candidate = { t: number; score: number; kind: "shot" | "settle" };
@@ -107,6 +107,23 @@ describe("buildSkeletonPlanSidecar", () => {
     expect(parsed.scenes).toEqual([]);
     expect(parsed.characters).toHaveLength(2);
     expect(typeof parsed.analysis_prompt).toBe("string");
+  });
+});
+
+describe("buildSkeletonPlanMarkdown", () => {
+  const characters = [
+    { asset_id: "char-a", name: "Alice", description: "desc a" },
+    { asset_id: "char-b", name: "Bob", description: "desc b" },
+  ];
+
+  // The plan asset reads as orphan-"error" (red @plan card) until index.md
+  // exists, so the tool must write a non-empty placeholder up front.
+  it("produces non-empty markdown naming the source and every character", () => {
+    const md = buildSkeletonPlanMarkdown("vid-source", characters);
+    expect(md.length).toBeGreaterThan(0);
+    expect(md).toContain("vid-source");
+    expect(md).toContain("@char-a (Alice)");
+    expect(md).toContain("@char-b (Bob)");
   });
 });
 
