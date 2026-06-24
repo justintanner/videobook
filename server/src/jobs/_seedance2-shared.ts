@@ -96,6 +96,7 @@ export function registerSeedance2Job(fs: VideocityFs, jobType: string): void {
       meta: {
         prompt,
         mode: "all",
+        apiModel,
         sourceImageIds,
         sourceVideoIds,
         sourceAudioIds,

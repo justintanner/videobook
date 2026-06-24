@@ -405,7 +405,9 @@ async function completeSeedance2Video(
     source_images: meta.sourceImageIds,
     source_videos: meta.sourceVideoIds,
     source_audios: meta.sourceAudioIds,
-    model: "bytedance/seedance-2-fast",
+    // seedance-2 / -fast / -mini share this handler (keyed off taskType), so the
+    // exact model rides in meta.apiModel; fall back for older queued payloads.
+    model: typeof meta.apiModel === "string" ? meta.apiModel : "bytedance/seedance-2-fast",
     download_url: videoUrl,
     download_url_content_hash: contentHash(buffer),
     ...(meta.mode !== undefined ? { seedance_mode: meta.mode } : {}),
@@ -917,10 +919,13 @@ async function completeHappyHorseVideo(
 
   const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
 
+  // t2v/i2v/ref generate against HappyHorse 1.1; video-edit has no 1.1 endpoint
+  // and stays on 1.0. This string is descriptive provenance only (never fed to
+  // modelSlug/pricing), so the 1.1 keys are safe to record.
   const happyhorseModel =
-    taskType === "happyhorse_t2v_video" ? "happyhorse/text-to-video"
-      : taskType === "happyhorse_i2v_video" ? "happyhorse/image-to-video"
-      : taskType === "happyhorse_ref_video" ? "happyhorse/reference-to-video"
+    taskType === "happyhorse_t2v_video" ? "happyhorse-1-1/text-to-video"
+      : taskType === "happyhorse_i2v_video" ? "happyhorse-1-1/image-to-video"
+      : taskType === "happyhorse_ref_video" ? "happyhorse-1-1/reference-to-video"
       : "happyhorse/video-edit";
   const provenance = {
     source_images: meta.sourceImageIds,

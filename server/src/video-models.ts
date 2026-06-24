@@ -12,14 +12,15 @@ import {
   KlingVideoRequestSchema,
   Seedance2FastInputSchema,
   Seedance2InputSchema,
+  Seedance2MiniInputSchema,
   Wan27AudioSettingSchema,
   Wan27ImageToVideoRequestSchema,
   Wan27RefToVideoRequestSchema,
   Wan27TextToVideoRequestSchema,
   Wan27VideoEditRequestSchema,
-  HappyHorseImageToVideoRequestSchema,
-  HappyHorseReferenceToVideoRequestSchema,
-  HappyHorseTextToVideoRequestSchema,
+  HappyHorse11ImageToVideoRequestSchema,
+  HappyHorse11ReferenceToVideoRequestSchema,
+  HappyHorse11TextToVideoRequestSchema,
   HappyHorseVideoEditRequestSchema,
   VolcengineVideoToVideoLipSyncRequestSchema,
   Omnihuman15RequestSchema,
@@ -126,6 +127,21 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: [
       "prompt",
       "first_frame_slug", "last_frame_slug",
+      "image_slugs", "video_slugs", "audio_slugs",
+      "aspect_ratio", "resolution", "duration",
+      "generate_audio", "web_search", "nsfw_checker",
+    ],
+    defaults: {},
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
+    ],
+  },
+  seedance2_mini: {
+    label: "Seedance 2 Mini",
+    tool_name: "generate_seedance2_mini_video",
+    description: "ByteDance Seedance 2 Mini — text-to-video with optional reference images, videos, and/or audio (no first/last frame; up to 720p)",
+    params: [
+      "prompt",
       "image_slugs", "video_slugs", "audio_slugs",
       "aspect_ratio", "resolution", "duration",
       "generate_audio", "web_search", "nsfw_checker",
@@ -246,30 +262,30 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     ],
   },
   happyhorse_t2v: {
-    label: "HappyHorse — Text",
+    label: "HappyHorse 1.1 — Text",
     tool_name: "generate_happyhorse_t2v_video",
-    description: "HappyHorse text-to-video (kie)",
-    params: ["prompt", "resolution", "aspect_ratio", "duration", "seed"],
+    description: "HappyHorse 1.1 text-to-video (kie)",
+    params: ["prompt", "resolution", "aspect_ratio", "duration"],
     defaults: {},
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   happyhorse_i2v: {
-    label: "HappyHorse — First Frame",
+    label: "HappyHorse 1.1 — First Frame",
     tool_name: "generate_happyhorse_i2v_video",
-    description: "HappyHorse image-to-video from a single first-frame image (kie)",
-    params: ["prompt", "first_frame_slug", "resolution", "duration", "seed"],
+    description: "HappyHorse 1.1 image-to-video from a single first-frame image (kie)",
+    params: ["prompt", "first_frame_slug", "resolution", "duration"],
     defaults: {},
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
   },
   happyhorse_ref: {
-    label: "HappyHorse — Reference",
+    label: "HappyHorse 1.1 — Reference",
     tool_name: "generate_happyhorse_ref_video",
-    description: "HappyHorse reference-to-video for multi-character scenes (1-9 reference images)",
-    params: ["prompt", "image_slugs", "resolution", "aspect_ratio", "duration", "seed"],
+    description: "HappyHorse 1.1 reference-to-video for multi-character scenes (1-9 reference images)",
+    params: ["prompt", "image_slugs", "resolution", "aspect_ratio", "duration"],
     defaults: {},
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
@@ -453,10 +469,11 @@ const IMAGE_FIELD_SCHEMAS: Record<string, ZodLike> = {
   generate_kling30_video: KlingVideoRequestSchema.shape.input.shape.image_urls,
   generate_seedance2_video: Seedance2InputSchema.shape.reference_image_urls,
   generate_seedance2_fast_video: Seedance2FastInputSchema.shape.reference_image_urls,
+  generate_seedance2_mini_video: Seedance2MiniInputSchema.shape.reference_image_urls,
   generate_grok_imagine_video: GrokImageToVideoRequestSchema.shape.input.shape.image_urls,
   generate_grok_imagine_ref_video: XaiVideoGenerateRequestSchema.shape.reference_images,
   generate_wan27_r2v_video: Wan27RefToVideoRequestSchema.shape.input.shape.reference_image,
-  generate_happyhorse_ref_video: HappyHorseReferenceToVideoRequestSchema.shape.input.shape.reference_image,
+  generate_happyhorse_ref_video: HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.reference_image,
 };
 
 const IMAGE_SLOT_OVERRIDES: Record<string, SlotConstraints> = {
@@ -496,6 +513,15 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     generate_audio: Seedance2FastInputSchema.shape.generate_audio,
     web_search: Seedance2FastInputSchema.shape.web_search,
     nsfw_checker: Seedance2FastInputSchema.shape.nsfw_checker,
+  },
+  generate_seedance2_mini_video: {
+    prompt: Seedance2MiniInputSchema.shape.prompt,
+    resolution: Seedance2MiniInputSchema.shape.resolution,
+    aspect_ratio: Seedance2MiniInputSchema.shape.aspect_ratio,
+    duration: Seedance2MiniInputSchema.shape.duration,
+    generate_audio: Seedance2MiniInputSchema.shape.generate_audio,
+    web_search: Seedance2MiniInputSchema.shape.web_search,
+    nsfw_checker: Seedance2MiniInputSchema.shape.nsfw_checker,
   },
   generate_grok_imagine_video: {
     prompt: GrokImageToVideoRequestSchema.shape.input.shape.prompt,
@@ -562,18 +588,18 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     nsfw_checker: Wan27ImageToVideoRequestSchema.shape.input.shape.nsfw_checker,
   },
   generate_happyhorse_t2v_video: {
-    resolution: HappyHorseTextToVideoRequestSchema.shape.input.shape.resolution,
-    aspect_ratio: HappyHorseTextToVideoRequestSchema.shape.input.shape.aspect_ratio,
-    duration: HappyHorseTextToVideoRequestSchema.shape.input.shape.duration,
+    resolution: HappyHorse11TextToVideoRequestSchema.shape.input.shape.resolution,
+    aspect_ratio: HappyHorse11TextToVideoRequestSchema.shape.input.shape.aspect_ratio,
+    duration: HappyHorse11TextToVideoRequestSchema.shape.input.shape.duration,
   },
   generate_happyhorse_i2v_video: {
-    resolution: HappyHorseImageToVideoRequestSchema.shape.input.shape.resolution,
-    duration: HappyHorseImageToVideoRequestSchema.shape.input.shape.duration,
+    resolution: HappyHorse11ImageToVideoRequestSchema.shape.input.shape.resolution,
+    duration: HappyHorse11ImageToVideoRequestSchema.shape.input.shape.duration,
   },
   generate_happyhorse_ref_video: {
-    resolution: HappyHorseReferenceToVideoRequestSchema.shape.input.shape.resolution,
-    aspect_ratio: HappyHorseReferenceToVideoRequestSchema.shape.input.shape.aspect_ratio,
-    duration: HappyHorseReferenceToVideoRequestSchema.shape.input.shape.duration,
+    resolution: HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.resolution,
+    aspect_ratio: HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.aspect_ratio,
+    duration: HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.duration,
   },
   generate_happyhorse_videoedit_video: {
     resolution: HappyHorseVideoEditRequestSchema.shape.input.shape.resolution,
@@ -878,6 +904,16 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "video_slugs") prop.description = "Reference video assets (0-3, total ≤15s, e.g., @vid-motion)";
       if (param === "audio_slugs") prop.description = "Reference audio assets (0-3, total ≤15s, e.g., @aud-music)";
       if (param === "nsfw_checker") prop.description = "Content safety filter (default false)";
+    }
+    if (toolName === "generate_seedance2_mini_video") {
+      if (param === "prompt") { prop.description = "Video description (optional, max 20000 characters)"; prop.maxLength = 20000; }
+      if (param === "aspect_ratio") prop.description = "Frame dimensions (adaptive auto-fits to content)";
+      if (param === "resolution") prop.description = "Output resolution: 480p / 720p";
+      if (param === "duration") prop.description = "Video duration: 4-15 seconds (default 15)";
+      if (param === "image_slugs") prop.description = "Reference image assets (e.g., @img-style)";
+      if (param === "video_slugs") prop.description = "Reference video assets (0-3, total ≤15s, e.g., @vid-motion)";
+      if (param === "audio_slugs") prop.description = "Reference audio assets (0-3, total ≤15s, e.g., @aud-music)";
+      if (param === "nsfw_checker") prop.description = "Content safety filter (default true)";
     }
     if (toolName === "generate_wan27_t2v_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
@@ -1260,6 +1296,7 @@ ROUTING PREFERENCES:
 - Use generate_grok_imagine_video ONLY when user explicitly mentions "grok" for video
 - Use generate_seedance2_video when user mentions "seedance" or "bytedance" and wants 1080p, or just defaults to the higher-quality variant. Accepts any input combination: text-only, first/last frame, reference images/videos/audio
 - Use generate_seedance2_fast_video when user mentions "seedance fast" or 480p/720p is acceptable (faster/cheaper). Same input flexibility as the full variant
+- Use generate_seedance2_mini_video when user mentions "seedance mini". Text prompt plus optional reference images/videos/audio; no first/last frame; 480p/720p
 - Use generate_wan27_i2v_video ONLY when user mentions "wan" with first/last frame or clip continuation
 - Use generate_wan27_videoedit_video ONLY when user mentions "wan" with video editing or modifying an existing video
 - Use generate_wan27_r2v_video ONLY when user mentions "wan" with reference images, reference videos, or voice
@@ -1272,6 +1309,7 @@ ROUTING PREFERENCES:
 KEY CONSTRAINTS:
 - For generate_kling30_video: mode "std"/"pro", duration "3"-"15", aspect_ratio "16:9"/"9:16"/"1:1", sound boolean
 - For generate_seedance2_video and generate_seedance2_fast_video: duration "4"-"15", aspect_ratio includes "adaptive"; full variant accepts "480p"/"720p"/"1080p", fast variant accepts "480p"/"720p" only. Inputs are all optional and free to mix: first_frame_slug, last_frame_slug, image_slugs (0-9), video_slugs (0-3, total ≤15s), audio_slugs (0-3, total ≤15s). Pure text prompt is fine too
+- For generate_seedance2_mini_video: duration "4"-"15" (default 15), aspect_ratio includes "adaptive", resolution "480p"/"720p". No first/last frame; mix prompt with image_slugs, video_slugs (0-3, total ≤15s), audio_slugs (0-3, total ≤15s). Prompt is optional when references are supplied
 - For generate_grok_imagine_video: REQUIRES at least one image, mode "fun"/"normal", duration 6-30 (integer seconds), aspect_ratio "2:3"/"3:2"/"1:1"/"16:9"/"9:16"
 - For extend_grok_imagine_video: REQUIRES video_slug, prompt, extend_at, and extend_times "6"/"10"
 - For generate_wan27_i2v_video: REQUIRES at least one of first_frame_slug / last_frame_slug / first_clip_slug, duration "2"-"15", resolution "720p"/"1080p"

@@ -1,7 +1,7 @@
 import type { VideocityFs } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
-import { HappyHorseAspectRatioSchema, HappyHorseResolutionSchema } from "@apicity/kie/zod";
+import { HappyHorse11AspectRatioSchema, HappyHorseResolutionSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField } from "./schema-from-apicity.js";
@@ -19,9 +19,8 @@ const generateHappyhorseT2vVideoSchema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Video description (max 5000 chars / 2500 Chinese chars)"),
   resolution: apicityField(HappyHorseResolutionSchema, "Output resolution: 720p / 1080p (default 1080p)"),
-  aspect_ratio: apicityField(HappyHorseAspectRatioSchema, "Output aspect ratio (default 16:9)"),
+  aspect_ratio: apicityField(HappyHorse11AspectRatioSchema, "Output aspect ratio (default 16:9)"),
   duration: z.string().optional().describe("Video duration in seconds (3-15, default 5)"),
-  seed: z.number().int().optional().describe("Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 
@@ -33,12 +32,16 @@ export function generateHappyhorseT2vVideoDef(fs: VideocityFs): ToolDef {
     description: "Generate a video from a prompt using HappyHorse text-to-video. Creates a new vid- asset and enqueues a background job.",
     schema: generateHappyhorseT2vVideoSchema,
     handler: async (args) => {
-      const { project_slug, prompt, resolution, aspect_ratio, duration, seed } = args as Args;
+      const { project_slug, prompt, resolution, aspect_ratio, duration } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }] };
       }
 
+      // Asset/job naming keys off the 1.0 happyhorse/* slug ("hh"): @apicity/cost
+      // 0.6.0 has no slug for the happyhorse-1-1/* endpoints (modelSlug would
+      // throw). The generation payload still targets happyhorse-1-1. See
+      // docs/apicity-gaps.md.
       const videoName = `${modelSlug("kie", "happyhorse/text-to-video")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
@@ -57,7 +60,6 @@ export function generateHappyhorseT2vVideoDef(fs: VideocityFs): ToolDef {
         ...(resolution !== undefined ? { resolution } : {}),
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
         ...(duration !== undefined ? { duration } : {}),
-        ...(seed !== undefined ? { seed } : {}),
       } as unknown as Record<string, unknown>);
 
       return {

@@ -15,6 +15,9 @@ import type {
   GrokTextToImageRequest,
   Seedance2FastRequest,
   Seedance2Request,
+  Seedance2MiniRequest,
+  Seedance2MiniAspectRatio,
+  Seedance2MiniResolution,
   NanoBananaProRequest,
   GptImage2ImageToImageRequest,
   GptImage2ImageToImageAspectRatio,
@@ -29,12 +32,12 @@ import type {
   Wan27RefToVideoRequest,
   Wan27VideoEditRequest,
   Wan27TextToVideoRequest,
-  HappyHorseTextToVideoRequest,
-  HappyHorseImageToVideoRequest,
-  HappyHorseReferenceToVideoRequest,
+  HappyHorse11TextToVideoRequest,
+  HappyHorse11ImageToVideoRequest,
+  HappyHorse11ReferenceToVideoRequest,
+  HappyHorse11AspectRatio,
   HappyHorseVideoEditRequest,
   HappyHorseResolution,
-  HappyHorseAspectRatio,
   HappyHorseAudioSetting,
   Wan27ImageRequest,
   Wan27ImageProRequest,
@@ -324,6 +327,46 @@ function buildSeedance2VideoPayload(
         : {}),
     },
   } as Seedance2FastRequest;
+}
+
+// Seedance 2 Mini is a distinct kie endpoint from seedance-2/-fast: no
+// first/last frame, prompt optional, 480p/720p only. Kept separate from
+// buildSeedance2VideoPayload rather than branching that two-model switch.
+type Seedance2MiniVideoArgs = {
+  prompt?: string;
+  aspect_ratio?: Seedance2MiniAspectRatio;
+  resolution?: Seedance2MiniResolution;
+  duration?: string;
+  generate_audio?: boolean;
+  web_search?: boolean;
+  nsfw_checker?: boolean;
+};
+
+type Seedance2MiniVideoOpts = {
+  referenceImageUrls?: string[];
+  referenceVideoUrls?: string[];
+  referenceAudioUrls?: string[];
+};
+
+function buildSeedance2MiniVideoPayload(
+  args: Seedance2MiniVideoArgs,
+  opts: Seedance2MiniVideoOpts,
+): Seedance2MiniRequest {
+  return {
+    model: "bytedance/seedance-2-mini",
+    input: {
+      ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
+      ...(opts.referenceImageUrls && opts.referenceImageUrls.length > 0 ? { reference_image_urls: opts.referenceImageUrls } : {}),
+      ...(opts.referenceVideoUrls && opts.referenceVideoUrls.length > 0 ? { reference_video_urls: opts.referenceVideoUrls } : {}),
+      ...(opts.referenceAudioUrls && opts.referenceAudioUrls.length > 0 ? { reference_audio_urls: opts.referenceAudioUrls } : {}),
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
+      ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
+      ...(args.generate_audio !== undefined ? { generate_audio: args.generate_audio } : {}),
+      ...(args.web_search !== undefined ? { web_search: args.web_search } : {}),
+      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
+    },
+  };
 }
 
 type NanoBananaImageArgs = {
@@ -760,20 +803,18 @@ export function buildOmnihumanPayload(
 type HappyHorseT2vArgs = {
   prompt: string;
   resolution?: HappyHorseResolution;
-  aspect_ratio?: HappyHorseAspectRatio;
+  aspect_ratio?: HappyHorse11AspectRatio;
   duration?: string;
-  seed?: number;
 };
 
-function buildHappyHorseT2vPayload(args: HappyHorseT2vArgs): HappyHorseTextToVideoRequest {
+function buildHappyHorseT2vPayload(args: HappyHorseT2vArgs): HappyHorse11TextToVideoRequest {
   return {
-    model: "happyhorse/text-to-video",
+    model: "happyhorse-1-1/text-to-video",
     input: {
       prompt: args.prompt,
       ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
       ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
-      ...(args.seed !== undefined ? { seed: args.seed } : {}),
     },
   };
 }
@@ -782,18 +823,16 @@ type HappyHorseI2vArgs = {
   prompt?: string;
   resolution?: HappyHorseResolution;
   duration?: string;
-  seed?: number;
 };
 
-function buildHappyHorseI2vPayload(args: HappyHorseI2vArgs, imageUrl: string): HappyHorseImageToVideoRequest {
+function buildHappyHorseI2vPayload(args: HappyHorseI2vArgs, imageUrl: string): HappyHorse11ImageToVideoRequest {
   return {
-    model: "happyhorse/image-to-video",
+    model: "happyhorse-1-1/image-to-video",
     input: {
       image_urls: [imageUrl],
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
       ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
       ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
-      ...(args.seed !== undefined ? { seed: args.seed } : {}),
     },
   };
 }
@@ -801,21 +840,19 @@ function buildHappyHorseI2vPayload(args: HappyHorseI2vArgs, imageUrl: string): H
 type HappyHorseRefArgs = {
   prompt: string;
   resolution?: HappyHorseResolution;
-  aspect_ratio?: HappyHorseAspectRatio;
+  aspect_ratio?: HappyHorse11AspectRatio;
   duration?: string;
-  seed?: number;
 };
 
-function buildHappyHorseRefPayload(args: HappyHorseRefArgs, referenceImages: string[]): HappyHorseReferenceToVideoRequest {
+function buildHappyHorseRefPayload(args: HappyHorseRefArgs, referenceImages: string[]): HappyHorse11ReferenceToVideoRequest {
   return {
-    model: "happyhorse/reference-to-video",
+    model: "happyhorse-1-1/reference-to-video",
     input: {
       prompt: args.prompt,
       reference_image: referenceImages,
       ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
       ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
-      ...(args.seed !== undefined ? { seed: args.seed } : {}),
     },
   };
 }
@@ -877,7 +914,7 @@ function buildXaiGrokImagineRefVideoPayload(
   return {
     prompt: args.prompt,
     ...(imageUrls.length > 0 ? { reference_images: imageUrls.map((url) => ({ url })) } : {}),
-    ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
+    ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) as XaiVideoGenerateRequest["duration"] } : {}),
     ...(args.resolution !== undefined ? { resolution: args.resolution as XaiVideoGenerateRequest["resolution"] } : {}),
     ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as XaiVideoGenerateRequest["aspect_ratio"] } : {}),
   };
@@ -894,7 +931,7 @@ function buildXaiGrokImagineVideoPayload(
       : imageUrls.length > 1
         ? { reference_images: imageUrls.map((url) => ({ url })) }
         : {}),
-    ...(numericDuration(args.duration) !== undefined ? { duration: numericDuration(args.duration) } : {}),
+    ...(numericDuration(args.duration) !== undefined ? { duration: numericDuration(args.duration) as XaiVideoGenerateRequest["duration"] } : {}),
     ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
     ...(args.aspect_ratio !== undefined && args.aspect_ratio !== "auto" ? { aspect_ratio: args.aspect_ratio as XaiVideoGenerateRequest["aspect_ratio"] } : {}),
   };
@@ -1132,6 +1169,20 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_seedance2_mini_video": {
+      const referenceImageUrls = imageSlugs.length > 0 ? imageSlugs : undefined;
+      const referenceVideoUrls = (args.video_slugs as string[] | undefined) ?? undefined;
+      const referenceAudioUrls = (args.audio_slugs as string[] | undefined) ?? undefined;
+      const payload = buildSeedance2MiniVideoPayload(
+        args as Seedance2MiniVideoArgs,
+        {
+          ...(referenceImageUrls !== undefined ? { referenceImageUrls } : {}),
+          ...(referenceVideoUrls !== undefined && referenceVideoUrls.length > 0 ? { referenceVideoUrls } : {}),
+          ...(referenceAudioUrls !== undefined && referenceAudioUrls.length > 0 ? { referenceAudioUrls } : {}),
+        },
+      );
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
+    }
     case "generate_grok_imagine_text_image": {
       if (isXaiProvider(provider)) {
         const payload: XaiImageGenerateRequest = {
@@ -1327,7 +1378,7 @@ function translateToolPayload(
 
 const VIDEO_TOOLS = new Set([
   "generate_kling30_video", "generate_kling30_motion_control_video",
-  "generate_seedance2_video", "generate_seedance2_fast_video",
+  "generate_seedance2_video", "generate_seedance2_fast_video", "generate_seedance2_mini_video",
   "generate_grok_imagine_video", "generate_grok_imagine_t2v_video", "generate_grok_imagine_ref_video",
   "extend_grok_imagine_video",
   "generate_wan27_t2v_video", "generate_wan27_i2v_video", "generate_wan27_videoedit_video", "generate_wan27_r2v_video", "extend_wan27_video",
@@ -1373,6 +1424,7 @@ export {
   buildSeedreamTextImagePayload,
   buildSeedreamImageEditPayload,
   buildSeedance2VideoPayload,
+  buildSeedance2MiniVideoPayload,
   buildWan27TextToVideoPayload,
   buildWan27FramesVideoPayload,
   buildWan27ReferenceVideoPayload,
@@ -1388,4 +1440,4 @@ export {
   translateToolPayload,
   getValidationWarnings,
 };
-export type { TranslateResult, Seedance2VideoArgs, Seedance2VideoOpts, Wan27FramesVideoArgs, Wan27FramesVideoOpts, Wan27ReferenceVideoArgs, Wan27ReferenceVideoOpts };
+export type { TranslateResult, Seedance2VideoArgs, Seedance2VideoOpts, Seedance2MiniVideoArgs, Seedance2MiniVideoOpts, Wan27FramesVideoArgs, Wan27FramesVideoOpts, Wan27ReferenceVideoArgs, Wan27ReferenceVideoOpts };

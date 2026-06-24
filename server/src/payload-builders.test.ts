@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { Seedance2MiniRequestSchema } from "@apicity/kie/zod";
 import { translateToolPayload } from "./payload-builders.js";
 
 describe("translateToolPayload", () => {
@@ -37,5 +38,33 @@ describe("translateToolPayload", () => {
     expect(result?.payload.input).toMatchObject({
       mode: "normal",
     });
+  });
+
+  it("builds a schema-valid Seedance 2 Mini payload (refs, no first/last frame)", () => {
+    const result = translateToolPayload("generate_seedance2_mini_video", {
+      prompt: "a tiny horse trotting",
+      image_slugs: ["https://example.test/ref.png"],
+      video_slugs: ["https://example.test/motion.mp4"],
+      aspect_ratio: "adaptive",
+      resolution: "720p",
+      duration: "12",
+      generate_audio: true,
+      nsfw_checker: true,
+    });
+
+    expect(result?.payload).toEqual({
+      model: "bytedance/seedance-2-mini",
+      input: {
+        prompt: "a tiny horse trotting",
+        reference_image_urls: ["https://example.test/ref.png"],
+        reference_video_urls: ["https://example.test/motion.mp4"],
+        aspect_ratio: "adaptive",
+        resolution: "720p",
+        duration: 12,
+        generate_audio: true,
+        nsfw_checker: true,
+      },
+    });
+    expect(Seedance2MiniRequestSchema.safeParse(result?.payload).success).toBe(true);
   });
 });

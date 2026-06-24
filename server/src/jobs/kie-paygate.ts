@@ -12,14 +12,21 @@ import { requireApiKey } from "../api-key.js";
 
 export const KIE_PAYGATE_DOT_PATH = "api.v1.jobs.createTask";
 
-// Local shim: @apicity/cost@0.5.4 has no rate for the Volcengine v2v lip-sync
-// or OmniHuman 1.5 models shipped in @apicity/kie, so computeEstimate flags
-// them as unbounded. The paygate only binds the request hash — it never
-// recomputes cost downstream — so admitting these models here is safe. Remove
-// each entry once @apicity/cost prices the corresponding model.
+// Local shim: @apicity/cost@0.6.0 has no rate for the Volcengine v2v lip-sync,
+// OmniHuman 1.5, HappyHorse 1.1, or Seedance 2 Mini models shipped in
+// @apicity/kie, so computeEstimate flags them as unbounded. The paygate only
+// binds the request hash — it never recomputes cost downstream — so admitting
+// these models here is safe. (HappyHorse 1.1 rates match the priced 1.0
+// happyhorse/* endpoints; the cost-display estimator keys off those — see
+// cost-adapters.ts. Seedance 2 Mini has no priced sibling and surfaces as "—".)
+// Remove each entry once @apicity/cost prices the corresponding model.
 const COST_TABLE_PENDING_MODELS = new Set<string>([
   "volcengine/video-to-video-lip-sync",
   "omnihuman-1-5",
+  "happyhorse-1-1/text-to-video",
+  "happyhorse-1-1/image-to-video",
+  "happyhorse-1-1/reference-to-video",
+  "bytedance/seedance-2-mini",
 ]);
 
 type SubmitKieTaskArgs = {

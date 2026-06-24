@@ -172,3 +172,70 @@ Deriving from apicity surfaced validation the FE was silently missing. These are
   resolution / duration now carry the apicity enums (previously free-text).
 - `generate_omnihuman_video.seed` (min `-1`) and `generate_alibaba_video.seed`
   (`0`–`2147483647`) now carry apicity's numeric bounds.
+
+---
+
+## 9. (gap) `@apicity/cost@0.6.0` has no slugs/pricing for HappyHorse 1.1
+
+`@apicity/kie@0.6.0` ships the new **HappyHorse 1.1** endpoints
+(`happyhorse-1-1/text-to-video`, `happyhorse-1-1/image-to-video`,
+`happyhorse-1-1/reference-to-video`) — zod schemas, types, and `model-schemas`
+— but `@apicity/cost@0.6.0` was **not** updated alongside it: `MODEL_SLUGS` and
+the kie pricing table still know only the 1.0 `happyhorse/*` keys. Concretely:
+
+- `modelSlug("kie", "happyhorse-1-1/...")` **throws** (`No slug registered`).
+- `computeEstimate` for a `happyhorse-1-1/*` payload returns `$0` + a
+  `not found in pricing table` warning, which `mintKieOtp` treats as unbounded
+  and **rejects**.
+
+There is no 1.1 `video-edit` endpoint, so `generate_happyhorse_videoedit_video`
+stays on 1.0 (`happyhorse/video-edit`) unchanged.
+
+**Workaround (videocity migrated t2v/i2v/ref to 1.1):**
+
+- Generation payloads target `happyhorse-1-1/*` (`server/src/payload-builders.ts`).
+- Asset/job **naming** keeps the 1.0 `happyhorse/*` key for `modelSlug` (slug is
+  `"hh"`; avoids the throw) — comments in the three `generate-happyhorse-*` tools.
+- **Cost display** keeps the 1.0 `happyhorse/*` keys in
+  `server/src/cost-adapters.ts` (per-second rates are identical:
+  `$0.155`/`$0.265` by resolution).
+- The **paygate** admits the three `happyhorse-1-1/*` models via
+  `COST_TABLE_PENDING_MODELS` in `server/src/jobs/kie-paygate.ts`, exactly like
+  the existing Volcengine / OmniHuman shims.
+
+**Ask apicity:** add `happyhorse-1-1/*` slugs + pricing to `@apicity/cost` (and a
+`happyhorse-1-1` duration/aspect-ratio note if rates ever diverge from 1.0).
+Remove all four workarounds once priced.
+
+---
+
+## 10. (gap) `@apicity/cost@0.6.0` has no slug/pricing for Seedance 2 Mini
+
+Same shape as §9. `@apicity/kie@0.6.0` ships the **Seedance 2 Mini** endpoint
+(`bytedance/seedance-2-mini`) — zod, types, `model-schemas` — but
+`@apicity/cost@0.6.0` prices only `bytedance/seedance-2` and
+`bytedance/seedance-2-fast`. So `modelSlug("kie", "bytedance/seedance-2-mini")`
+throws and `mintKieOtp` would reject the model as unbounded.
+
+Unlike HappyHorse 1.1, Mini has **no priced sibling** whose rate it can safely
+borrow (it is a distinct, presumably cheaper tier), so videocity does **not**
+fabricate a cost-display rate.
+
+**Workaround (`generate_seedance2_mini_video`):**
+
+- Generation payload targets `bytedance/seedance-2-mini`
+  (`buildSeedance2MiniVideoPayload` in `server/src/payload-builders.ts`).
+- Asset/job **naming** uses a literal `SLUG = "seedance2mini"` in
+  `server/src/tools/generate-seedance2-mini-video.ts` (modelSlug would throw),
+  mirroring the Volcengine / OmniHuman tools.
+- **Cost display**: intentionally *no* `cost-adapters.ts` entry → the UI shows
+  `—` (honest "no rate available") rather than a guessed number.
+- The **paygate** admits `bytedance/seedance-2-mini` via
+  `COST_TABLE_PENDING_MODELS` in `server/src/jobs/kie-paygate.ts`.
+- Reuses the shared `seedance2_video` TaskType + `completeSeedance2Video`
+  handler (they key off taskType, not model); the exact model rides in
+  `meta.apiModel` so provenance records `bytedance/seedance-2-mini`.
+
+**Ask apicity:** add a `bytedance/seedance-2-mini` slug + pricing to
+`@apicity/cost`. Remove the naming/paygate workarounds and wire a
+`cost-adapters.ts` entry once priced.

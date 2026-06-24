@@ -23,7 +23,6 @@ const generateHappyhorseI2vVideoSchema = {
   prompt: z.string().optional().describe("Optional video description (max 5000 chars / 2500 Chinese chars)"),
   resolution: apicityField(HappyHorseResolutionSchema, "Output resolution: 720p / 1080p (default 1080p)"),
   duration: z.string().optional().describe("Video duration in seconds (3-15, default 5)"),
-  seed: z.number().int().optional().describe("Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 
@@ -35,7 +34,7 @@ export function generateHappyhorseI2vVideoDef(fs: VideocityFs): ToolDef {
     description: "Generate a video from a single first-frame image using HappyHorse image-to-video. Creates a new vid- asset and enqueues a background job.",
     schema: generateHappyhorseI2vVideoSchema,
     handler: async (args) => {
-      const { project_slug, first_frame_slug, prompt, resolution, duration, seed } = args as Args;
+      const { project_slug, first_frame_slug, prompt, resolution, duration } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }] };
@@ -50,6 +49,8 @@ export function generateHappyhorseI2vVideoDef(fs: VideocityFs): ToolDef {
       const file = findImageFile(manifest.value.files);
       if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
 
+      // Naming keys off the 1.0 happyhorse/* slug ("hh"); the payload targets
+      // happyhorse-1-1. See docs/apicity-gaps.md.
       const videoName = `${modelSlug("kie", "happyhorse/image-to-video")}-${assetId.replace(/^img-/, "")}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
@@ -70,7 +71,6 @@ export function generateHappyhorseI2vVideoDef(fs: VideocityFs): ToolDef {
         ...(prompt !== undefined ? { prompt } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
         ...(duration !== undefined ? { duration } : {}),
-        ...(seed !== undefined ? { seed } : {}),
       } as unknown as Record<string, unknown>);
 
       return {

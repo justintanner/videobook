@@ -28,6 +28,7 @@ import { registerGenerateKling30VideoJob } from "./generate-kling30-video.js";
 import { registerGenerateKling30MotionControlVideoJob } from "./generate-kling30-motion-control-video.js";
 import { registerGenerateSeedance2VideoJob } from "./generate-seedance2-video.js";
 import { registerGenerateSeedance2FastVideoJob } from "./generate-seedance2-fast-video.js";
+import { registerGenerateSeedance2MiniVideoJob } from "./generate-seedance2-mini-video.js";
 import { registerGenerateWan27T2vVideoJob } from "./generate-wan27-t2v-video.js";
 import { registerGenerateWan27I2vVideoJob } from "./generate-wan27-i2v-video.js";
 import { registerGenerateWan27VideoeditVideoJob } from "./generate-wan27-videoedit-video.js";
@@ -138,6 +139,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerGenerateKling30MotionControlVideoJob(fs);
   registerGenerateSeedance2VideoJob(fs);
   registerGenerateSeedance2FastVideoJob(fs);
+  registerGenerateSeedance2MiniVideoJob(fs);
   registerGenerateWan27T2vVideoJob(fs);
   registerGenerateWan27I2vVideoJob(fs);
   registerGenerateWan27VideoeditVideoJob(fs);

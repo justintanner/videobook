@@ -55,6 +55,7 @@ import { generateKling30VideoDef } from "./generate-kling30-video.js";
 import { generateKling30MotionControlVideoDef } from "./generate-kling30-motion-control-video.js";
 import { generateSeedance2VideoDef } from "./generate-seedance2-video.js";
 import { generateSeedance2FastVideoDef } from "./generate-seedance2-fast-video.js";
+import { generateSeedance2MiniVideoDef } from "./generate-seedance2-mini-video.js";
 import { generateWan27T2vVideoDef } from "./generate-wan27-t2v-video.js";
 import { generateWan27I2vVideoDef } from "./generate-wan27-i2v-video.js";
 import { generateWan27VideoeditVideoDef } from "./generate-wan27-videoedit-video.js";
@@ -252,6 +253,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     generateKling30MotionControlVideoDef(fs),
     generateSeedance2VideoDef(fs),
     generateSeedance2FastVideoDef(fs),
+    generateSeedance2MiniVideoDef(fs),
     generateWan27T2vVideoDef(fs),
     generateWan27I2vVideoDef(fs),
     generateWan27VideoeditVideoDef(fs),

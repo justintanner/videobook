@@ -133,6 +133,48 @@ describe("kie paygate", () => {
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 
+  it("admits HappyHorse 1.1 requests via the cost-table-pending shim", () => {
+    // @apicity/cost@0.6.0 ships no slug/pricing for happyhorse-1-1/*, so
+    // computeEstimate returns $0 + a "not found" warning. The three 1.1 models
+    // are listed in COST_TABLE_PENDING_MODELS, so mintKieOtp admits them and
+    // binds the request hash instead of rejecting as unbounded.
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+
+    const requests = [
+      { model: "happyhorse-1-1/text-to-video" as const, input: { prompt: "a horse", resolution: "1080p" as const, aspect_ratio: "16:9" as const, duration: 5 } },
+      { model: "happyhorse-1-1/image-to-video" as const, input: { image_urls: ["https://kie.example/first.png"], resolution: "1080p" as const, duration: 5 } },
+      { model: "happyhorse-1-1/reference-to-video" as const, input: { prompt: "two characters", reference_image: ["https://kie.example/char.png"], resolution: "720p" as const, aspect_ratio: "9:16" as const, duration: 5 } },
+    ];
+
+    for (const request of requests) {
+      const otp = mintKieOtp(request, 60);
+      const parsed = parseOtp(otp);
+      expect(parsed.payload.requestHash).toBe(canonicalHash(request));
+    }
+  });
+
+  it("admits a Seedance 2 Mini request via the cost-table-pending shim", () => {
+    // @apicity/cost@0.6.0 ships no slug/pricing for bytedance/seedance-2-mini,
+    // so computeEstimate returns $0 + a "not found" warning. The model is listed
+    // in COST_TABLE_PENDING_MODELS, so mintKieOtp admits it and binds the
+    // request hash instead of rejecting as unbounded.
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+
+    const request = {
+      model: "bytedance/seedance-2-mini" as const,
+      input: {
+        prompt: "a tiny horse trotting",
+        resolution: "720p" as const,
+        aspect_ratio: "16:9" as const,
+        duration: 15,
+      },
+    };
+    const otp = mintKieOtp(request, 60);
+    const parsed = parseOtp(otp);
+
+    expect(parsed.payload.requestHash).toBe(canonicalHash(request));
+  });
+
   it("rejects a kling-3.0/motion-control request with no duration hint as unbounded", () => {
     // kling-3.0/motion-control (char_swap) prices per second but its kie input
     // schema carries no duration field (output length = motion video). Without a

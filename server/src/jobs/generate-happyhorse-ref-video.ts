@@ -1,4 +1,5 @@
 import type { VideocityFs } from "videocity-engine";
+import type { HappyHorse11AspectRatio, HappyHorseResolution } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -15,10 +16,9 @@ type GenerateHappyhorseRefVideoPayload = {
   prompt: string;
   imageInputs: RefInput[];
   sourceImageIds: string[];
-  resolution?: "720p" | "1080p";
-  aspect_ratio?: "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
+  resolution?: HappyHorseResolution;
+  aspect_ratio?: HappyHorse11AspectRatio;
   duration?: string;
-  seed?: number;
 };
 
 export function registerGenerateHappyhorseRefVideoJob(fs: VideocityFs): void {
@@ -26,7 +26,7 @@ export function registerGenerateHappyhorseRefVideoJob(fs: VideocityFs): void {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt,
       imageInputs, sourceImageIds,
-      resolution, aspect_ratio, duration, seed,
+      resolution, aspect_ratio, duration,
     } = payload as GenerateHappyhorseRefVideoPayload;
 
     requireApiKey("KIE_API_KEY");
@@ -36,7 +36,7 @@ export function registerGenerateHappyhorseRefVideoJob(fs: VideocityFs): void {
       referenceImages.push(await uploadAssetToKie(fs, assetId, filename, projectSlug));
     }
 
-    const request = buildHappyHorseRefPayload({ prompt, resolution, aspect_ratio, duration, seed }, referenceImages);
+    const request = buildHappyHorseRefPayload({ prompt, resolution, aspect_ratio, duration }, referenceImages);
     const taskId = await submitKieTask(fs, ctx, {
       request,
       taskType: "happyhorse_ref_video",
