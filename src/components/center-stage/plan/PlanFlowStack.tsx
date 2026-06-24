@@ -7,12 +7,13 @@
 // → swap frames → video. Owns the shared actions hook, the clip/audio bootstrap,
 // the scene-arrival poll, and the regenerate-from-new-inputs poll.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2, Sparkles } from 'lucide-react';
 import type { UseMcpResult } from 'use-mcp/react';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { SourceAspect } from '@/lib/plan-aspect';
 import { PlanFlowProvider, type PlanFlowContextValue } from './PlanFlowContext';
-import { PlanGenPrompt } from './PlanGenPrompt';
+import { PlanAnalysisNode } from './PlanAnalysisNode';
 import { FlowColumn, FlowStep } from './flow/FlowColumn';
 import { FlowConnector } from './flow/FlowConnector';
 import { useCharSwapActions } from './useCharSwapActions';
@@ -74,9 +75,22 @@ export function PlanFlowStack({
   // plan_visualization overwrites .plan.json once at job completion, so the
   // signature flips atomically — no partial-plan window to guard.
   const [regenerating, setRegenerating] = useState(false);
-  // `generating` drives the generation-prompt block: the first build (no scenes
-  // yet) or an in-flight regenerate from new inputs.
-  const generating = building || regenerating;
+  // `starting` bridges the explicit Generate click → the first read_plan that
+  // shows the job underway (so the loader/poll take over before the sidecar's
+  // awaiting_start flag clears).
+  const [starting, setStarting] = useState(false);
+  // Draft: prepared (skeleton written) but the vision job hasn't been enqueued —
+  // the user reads the prompt and clicks Generate. We don't poll while in draft.
+  // A regenerate-from-new-inputs is an explicit immediate gen, so it leaves draft.
+  const draft = building && Boolean(sidecar.awaiting_start) && !starting && !regenerating;
+  // `generating` drives the analysis block's loader/force-expand: a started first
+  // build (no scenes yet, not draft) or an in-flight regenerate from new inputs.
+  const generating = (building && !draft) || regenerating;
+  // The analysis block stays in the flow whenever there's a prompt to show (or a
+  // gen/draft is in play), so the analysis prompt is discoverable in a finished
+  // plan — not only while generating.
+  const showAnalysis =
+    generating || draft || Boolean(sidecar.analysis_prompt?.trim()) || Boolean(sidecar.user_context?.trim());
   const regenPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelledRef = useRef(false);
   useEffect(() => {
@@ -133,12 +147,37 @@ export function PlanFlowStack({
     regenPollRef.current = setTimeout(() => { void poll(); }, 3000);
   }, [regenerating, callTool, projectSlug, onSidecarUpdate]);
 
-  // --- Scene-arrival poll: the template flow lands here the moment
-  // plan_visualization is enqueued, so scenes may not exist yet. Poll read_plan
-  // until they do (~5 min budget), then stop. setState lives in the async
-  // closure so the effect body stays setState-free (react-hooks lint).
+  // --- Generate (leave draft): the user reviewed the prompt and clicked Generate.
+  // Enqueue the vision job (a non-deferred plan_visualization for the same inputs)
+  // and clear the draft marker locally so the loader + scene poll take over.
+  const runGenerate = useCallback(async () => {
+    if (starting) return;
+    const source = sidecar.source_asset_id;
+    const a = sidecar.characters[0]?.asset_id;
+    const b = sidecar.characters[1]?.asset_id;
+    if (!source || !a || !b) return;
+    setStarting(true);
+    const result = await callTool('plan_visualization', {
+      source_asset_id: source,
+      project_slug: projectSlug,
+      character_asset_ids: [a, b],
+    });
+    if (result.isError) {
+      const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'plan_visualization failed';
+      toast({ title: 'Generate failed', description: msg, duration: 5000 });
+      setStarting(false);
+      return;
+    }
+    onSidecarUpdate({ ...sidecar, awaiting_start: false });
+    setStarting(false);
+  }, [starting, sidecar, callTool, projectSlug, onSidecarUpdate]);
+
+  // --- Scene-arrival poll: once generation has started, scenes may not exist
+  // yet. Poll read_plan until they do (~5 min budget), then stop. Skipped while
+  // in draft (no job running). setState lives in the async closure so the effect
+  // body stays setState-free (react-hooks lint).
   useEffect(() => {
-    if (sidecar.scenes.length > 0) return;
+    if (sidecar.scenes.length > 0 || draft) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let tries = 0;
@@ -158,7 +197,7 @@ export function PlanFlowStack({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [sidecar.scenes.length, callTool, projectSlug, onSidecarUpdate]);
+  }, [sidecar.scenes.length, draft, callTool, projectSlug, onSidecarUpdate]);
 
   return (
     <PlanFlowProvider value={ctx}>
@@ -176,12 +215,41 @@ export function PlanFlowStack({
           />
         </FlowStep>
 
-        {/* Generation prompt + loader — shown ONLY while (re)generating; the flow
-            collapses to the plain connector once the plan is ready. */}
-        {generating && <FlowConnector height={40} />}
-        {generating && (
+        {/* Analysis prompt — persistent + collapsible. Force-expands while
+            (re)generating or in draft (read before you generate), then stays as a
+            collapsed "Analysis prompt" header in the finished plan so it's still
+            discoverable (not gone after gen). */}
+        {showAnalysis && <FlowConnector height={40} />}
+        {showAnalysis && (
           <FlowStep>
-            <PlanGenPrompt userContext={sidecar.user_context} systemPrompt={sidecar.analysis_prompt} />
+            <PlanAnalysisNode
+              generating={generating}
+              forceOpen={draft}
+              userContext={sidecar.user_context}
+              systemPrompt={sidecar.analysis_prompt}
+            />
+          </FlowStep>
+        )}
+
+        {/* Draft → an explicit Generate gate: nothing runs until the user, having
+            read the prompt above, starts the job. */}
+        {draft && <FlowConnector height={40} />}
+        {draft && (
+          <FlowStep>
+            <div className="flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={() => { void runGenerate(); }}
+                disabled={starting}
+                className="flex items-center gap-2 rounded-md border border-emerald-500/60 bg-emerald-500/15 px-5 py-2.5 font-mono text-sm font-bold uppercase tracking-wider text-emerald-100 transition-colors hover:bg-emerald-500/25 disabled:opacity-50"
+              >
+                {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {starting ? 'Starting…' : 'Generate plan'}
+              </button>
+              <span className="font-mono text-[10px] text-zinc-500">
+                reads the source, splits it into scenes, and writes a prompt per scene
+              </span>
+            </div>
           </FlowStep>
         )}
 

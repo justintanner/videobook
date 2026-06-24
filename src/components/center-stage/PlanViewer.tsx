@@ -2717,18 +2717,22 @@ function CharSwapSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
     if (!canGenerate || !sourceId || !charAId || !charBId) return;
     setGenerating(true);
     try {
+      // Defer: write the draft skeleton (source + cast + analysis prompt) without
+      // enqueuing the vision job, so /plan opens on a review screen where the user
+      // reads the prompt and clicks "Generate plan" to actually start the run.
       const result = await callTool('plan_visualization', {
         source_asset_id: sourceId,
         project_slug: projectSlug,
         character_asset_ids: [charAId, charBId],
+        defer: true,
       });
       if (result.isError) {
-        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to generate plan';
-        toast({ title: 'Plan generation failed', description: msg, duration: 5000 });
+        const msg = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Failed to prepare plan';
+        toast({ title: 'Plan setup failed', description: msg, duration: 5000 });
         return;
       }
-      // plan_visualization runs in the background (vision + ffmpeg). Navigate to
-      // the inline /plan view — the embedded stack polls there until scenes land.
+      // Navigate to the inline /plan review view — the embedded stack shows the
+      // analysis prompt and a Generate button (no job runs until the user starts it).
       onGenerated();
     } finally {
       if (!cancelledRef.current) setGenerating(false);
