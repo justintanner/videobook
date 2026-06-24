@@ -28,6 +28,9 @@ import { FlipCard, FlipToggle, NodeFrame, StateThumb } from './nodeUi';
 import { nodeImageHeight } from './nodeLayout';
 import { RunButton, Segmented } from './controls';
 import { VariantStrip, VARIANT_STRIP_H } from './VariantStrip';
+import { RichPromptField } from '@/components/ui/RichPromptField';
+import type { ChipThumb } from '@/components/ui/AssetThumbChip';
+import type { RichToken } from '@/components/ui/richPromptTokens';
 
 const NODE_WIDTH = 400;
 const CONTROLS_H = 170;
@@ -228,6 +231,31 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
     return out;
   }, [scene, projectSlug, sceneIndex, frameIndex, wiredChars, mediaItems, priorSwapAssetId]);
 
+  // Resolve the prompt's inline tokens to thumbs: "[Image N]" → the matching
+  // token thumb (source/char/prior), "@slug" → any project asset.
+  const assetSlugs = useMemo(() => mediaItems.map((m) => m.slug).filter(Boolean), [mediaItems]);
+  const slugForAssetId = useCallback(
+    (id: string) => mediaItems.find((m) => m.id === id)?.slug ?? null,
+    [mediaItems],
+  );
+  const resolveRef = useCallback(
+    (token: RichToken): ChipThumb | null => {
+      if (token.kind === 'image-ref') {
+        const t = tokenThumbs.find((x) => x.n === token.n);
+        if (!t) return null;
+        return { thumbnailSrc: t.src, type: t.kind === 'char' ? 'character' : 'image', label: t.title, badge: String(token.n) };
+      }
+      const item = mediaItems.find((m) => m.slug === token.slug);
+      if (!item) return null;
+      return {
+        thumbnailSrc: item.thumbnailSrc ?? item.filePath ?? null,
+        type: item.type === 'video' ? 'video' : 'image',
+        label: item.slug,
+      };
+    },
+    [tokenThumbs, mediaItems],
+  );
+
   const payload = useMemo(
     () => buildSwapPayload(provider, model, wiredChars, sceneIndex, frameIndex, prompt, sourceAspect, priorSwapAssetId),
     [provider, model, wiredChars, sceneIndex, frameIndex, prompt, sourceAspect, priorSwapAssetId],
@@ -348,16 +376,17 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
             })}
           </div>
         )}
-        <textarea
+        <RichPromptField
           value={prompt}
-          onChange={(e) => onPromptChange(e.target.value)}
+          onChange={onPromptChange}
+          resolveRef={resolveRef}
+          assetSlugs={assetSlugs}
+          slugForAssetId={slugForAssetId}
           rows={3}
-          spellCheck={false}
-          className={cn(
-            'nodrag w-full resize-none rounded bg-black/60 border border-zinc-700 px-1.5 py-1',
-            'text-[10px] font-mono text-emerald-100/90 leading-snug',
-            'focus:outline-none focus:border-emerald-500/60 scrollbar-hide',
-          )}
+          fieldClassName="nodrag w-full px-1.5 py-1 text-[10px] font-mono leading-snug"
+          surfaceClassName="nodrag rounded border border-zinc-700 bg-black/60 focus-within:border-emerald-500/60"
+          textClassName="text-emerald-100/90"
+          caretClassName="caret-emerald-300"
         />
         <div className="flex items-center justify-end">
           <RunButton

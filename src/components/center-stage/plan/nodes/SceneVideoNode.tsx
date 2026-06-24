@@ -3,7 +3,9 @@
 // SceneBlock, a Run wired to the shared useCharSwapActions, and a GUI↔JSON flip
 // showing the derived KIE video payload with inline clip/audio/ref thumbnails.
 import { memo, useCallback, useMemo, useState } from 'react';
-import { cn } from '@/lib/utils';
+import { RichPromptField } from '@/components/ui/RichPromptField';
+import type { ChipThumb } from '@/components/ui/AssetThumbChip';
+import type { RichToken } from '@/components/ui/richPromptTokens';
 import { PayloadJsonView } from '@/components/center-stage/PlanViewer';
 import { usePlanFlow } from '../PlanFlowContext';
 import type { SceneVideoNodeData } from './nodeData';
@@ -50,6 +52,31 @@ function SceneVideoNodeImpl({ data }: { data: SceneVideoNodeData }) {
     setPrompts((prev) => ({ ...prev, [model]: next }));
   }, [model]);
 
+  // "@ImageN" / "Image N" → the Nth plan character; "@slug" → any project asset.
+  const assetSlugs = useMemo(() => mediaItems.map((m) => m.slug).filter(Boolean), [mediaItems]);
+  const slugForAssetId = useCallback(
+    (id: string) => mediaItems.find((m) => m.id === id)?.slug ?? null,
+    [mediaItems],
+  );
+  const resolveRef = useCallback(
+    (token: RichToken): ChipThumb | null => {
+      if (token.kind === 'image-ref') {
+        const c = characters[token.n - 1];
+        if (!c) return null;
+        const item = mediaItems.find((m) => m.id === c.asset_id);
+        return { thumbnailSrc: item?.thumbnailSrc ?? item?.filePath ?? null, type: 'character', label: c.name, badge: String(token.n) };
+      }
+      const item = mediaItems.find((m) => m.slug === token.slug);
+      if (!item) return null;
+      return {
+        thumbnailSrc: item.thumbnailSrc ?? item.filePath ?? null,
+        type: item.type === 'video' ? 'video' : 'image',
+        label: item.slug,
+      };
+    },
+    [characters, mediaItems],
+  );
+
   const imageH = nodeImageHeight(NODE_WIDTH, sourceAspect);
   const videoTile = scene ? deriveVideoTileState(scene, mediaItems, projectSlug) : ({ kind: 'idle' } as const);
 
@@ -92,16 +119,17 @@ function SceneVideoNodeImpl({ data }: { data: SceneVideoNodeData }) {
       )}
       <div className="mt-2 flex flex-col gap-1.5">
         <Segmented options={VIDEO_OPTIONS} value={model} onChange={setModel} ariaLabel="video model" />
-        <textarea
+        <RichPromptField
           value={prompts[model]}
-          onChange={(e) => onPromptChange(e.target.value)}
+          onChange={onPromptChange}
+          resolveRef={resolveRef}
+          assetSlugs={assetSlugs}
+          slugForAssetId={slugForAssetId}
           rows={2}
-          spellCheck={false}
-          className={cn(
-            'nodrag w-full resize-none rounded bg-black/60 border border-zinc-700 px-1.5 py-1',
-            'text-[10px] font-mono text-sky-100/90 leading-snug',
-            'focus:outline-none focus:border-sky-500/60 scrollbar-hide',
-          )}
+          fieldClassName="nodrag w-full px-1.5 py-1 text-[10px] font-mono leading-snug"
+          surfaceClassName="nodrag rounded border border-zinc-700 bg-black/60 focus-within:border-sky-500/60"
+          textClassName="text-sky-100/90"
+          caretClassName="caret-sky-300"
         />
         <div className="flex items-center justify-between gap-2">
           <span className="text-[9px] font-mono text-zinc-500 truncate">

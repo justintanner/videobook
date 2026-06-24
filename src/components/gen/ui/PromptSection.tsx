@@ -1,6 +1,6 @@
-import { useRef } from 'react';
 import { Loader2, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { RichPromptField } from '@/components/ui/RichPromptField';
 import { GenSection, type GenSectionColor } from './GenSection';
 import { PromptHistoryArrows } from '@/components/ui/PromptHistoryArrows';
 import { ImagePromptRewritePopover, type ImagePromptRewriteSubmit } from '@/components/gen/ImagePromptRewritePopover';
@@ -97,6 +97,16 @@ const ARROW_COLOR: Record<GenSectionColor, string> = {
   fuchsia: 'text-fuchsia-400/70',
 };
 
+const CARET_COLOR: Record<GenSectionColor, string> = {
+  projects: 'caret-zinc-300',
+  image: 'caret-cyan-300',
+  video: 'caret-violet-300',
+  plan: 'caret-emerald-300',
+  final: 'caret-amber-300',
+  blue: 'caret-blue-300',
+  fuchsia: 'caret-fuchsia-300',
+};
+
 export function PromptSection({
   value,
   onChange,
@@ -115,8 +125,6 @@ export function PromptSection({
   onRewriteSubmit,
   rewriteDisabled,
 }: PromptSectionProps) {
-  const localRef = useRef<HTMLTextAreaElement | null>(null);
-
   const showRewrite = category === 'image' && setRewriteOpen && onRewriteSubmit;
 
   const rightSlot = (
@@ -180,40 +188,43 @@ export function PromptSection({
       warning={warning}
       rightSlot={rightSlot}
     >
-      <textarea
-        ref={localRef}
+      <RichPromptField
         value={value.replace(/\\n/g, '\n')}
-        onChange={(e) => {
-          onChange(e.target.value);
+        onChange={(next) => {
+          onChange(next);
           promptHistory.reset();
         }}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowUp' && !e.shiftKey && (localRef.current?.selectionStart ?? 0) === 0) {
+        resolveRef={() => null}
+        disabled={disabled}
+        autoFocus
+        rows={4}
+        fieldClassName="w-full px-3 py-2 font-mono text-sm leading-relaxed"
+        surfaceClassName={cn(
+          'rounded border bg-black/60 transition-all duration-200',
+          TEXTAREA_COLOR[color].replace(/\bfocus:/g, 'focus-within:'),
+          disabled && 'opacity-50',
+        )}
+        textClassName={TEXTAREA_COLOR[color]}
+        caretClassName={CARET_COLOR[color]}
+        onKeyDownExtra={(e) => {
+          if (e.key === 'ArrowUp' && !e.shiftKey && (e.currentTarget.selectionStart ?? 0) === 0) {
             const prev = promptHistory.navigateBack(value);
             if (prev !== null) {
               e.preventDefault();
               onChange(prev);
+              return true;
             }
-            return;
           }
           if (e.key === 'ArrowDown' && !e.shiftKey && promptHistory.cursor !== -1) {
             const next = promptHistory.navigateForward();
             if (next !== null) {
               e.preventDefault();
               onChange(next);
+              return true;
             }
           }
+          return false;
         }}
-        disabled={disabled}
-        autoFocus
-        rows={4}
-        className={cn(
-          'w-full px-3 py-2 resize-none bg-black/60 border rounded',
-          'font-mono text-sm leading-relaxed',
-          'focus:outline-none transition-all duration-200',
-          'disabled:opacity-50 disabled:cursor-not-allowed',
-          TEXTAREA_COLOR[color],
-        )}
       />
     </GenSection>
   );

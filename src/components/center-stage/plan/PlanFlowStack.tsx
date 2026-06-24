@@ -6,13 +6,15 @@
 // source frames → swap frames → video. Owns the shared actions hook, the
 // clip/audio bootstrap, the vision Auto-match button, and the scene-arrival poll
 // (the latter two re-homed from the old PlanFlowEditor).
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { UseMcpResult } from 'use-mcp/react';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { SourceAspect } from '@/lib/plan-aspect';
 import { PlanFlowProvider, type PlanFlowContextValue } from './PlanFlowContext';
+import { FlowColumn, FlowStep } from './flow/FlowColumn';
+import { FlowConnector } from './flow/FlowConnector';
 import { useCharSwapActions } from './useCharSwapActions';
 import { useSceneFilesBootstrap } from './useSceneFilesBootstrap';
 import { formatTimecode, type PlanSidecar } from './charSwapModel';
@@ -145,36 +147,38 @@ export function PlanFlowStack({
     };
   }, [sidecar.scenes.length, callTool, projectSlug, onSidecarUpdate]);
 
+  const header = (
+    <div className="flex items-center justify-between gap-3">
+      <span className="font-mono text-[11px] tracking-widest text-zinc-500">
+        {sidecar.scenes.length} scenes · {sidecar.characters.length} chars
+      </span>
+      {sidecar.scenes.length > 0 && (
+        <button
+          type="button"
+          onClick={() => { void runAutoMatch(); }}
+          disabled={matching}
+          title="Vision-match which character belongs in each frame, then wire it up"
+          className={cn(
+            'flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-mono border transition-colors',
+            matching
+              ? 'border-violet-500/40 text-violet-300/70 cursor-wait'
+              : anyWired
+                ? 'border-zinc-700 text-zinc-300 hover:border-violet-500/60 hover:text-violet-200'
+                : 'border-violet-500/60 text-violet-200 bg-violet-500/15 hover:bg-violet-500/25 animate-pulse',
+          )}
+        >
+          {matching ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+          {matching ? 'matching…' : anyWired ? 'Re-match' : 'Auto-match'}
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <PlanFlowProvider value={ctx}>
-      <div className="flex flex-col gap-5" data-plan-stack>
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 bg-zinc-950/85 backdrop-blur-sm py-2">
-          <span className="font-mono text-[11px] tracking-widest text-zinc-500">
-            {sidecar.scenes.length} scenes · {sidecar.characters.length} chars
-          </span>
-          {sidecar.scenes.length > 0 && (
-            <button
-              type="button"
-              onClick={() => { void runAutoMatch(); }}
-              disabled={matching}
-              title="Vision-match which character belongs in each frame, then wire it up"
-              className={cn(
-                'flex items-center gap-1.5 rounded px-2 py-1 text-[11px] font-mono border transition-colors',
-                matching
-                  ? 'border-violet-500/40 text-violet-300/70 cursor-wait'
-                  : anyWired
-                    ? 'border-zinc-700 text-zinc-300 hover:border-violet-500/60 hover:text-violet-200'
-                    : 'border-violet-500/60 text-violet-200 bg-violet-500/15 hover:bg-violet-500/25 animate-pulse',
-              )}
-            >
-              {matching ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-              {matching ? 'matching…' : anyWired ? 'Re-match' : 'Auto-match'}
-            </button>
-          )}
-        </div>
-
+      <FlowColumn header={header} className="max-w-3xl">
         {building && (
-          <div className="flex items-center gap-2 rounded-md border border-emerald-500/40 bg-zinc-900/70 px-3 py-2">
+          <div className="mb-2 flex items-center gap-2 rounded-md border border-emerald-500/40 bg-zinc-900/70 px-3 py-2">
             <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400/80" />
             <span className="font-mono text-[11px] text-emerald-200/80">splitting video into scenes…</span>
           </div>
@@ -183,31 +187,40 @@ export function PlanFlowStack({
         {sidecar.scenes.map((scene, s) => {
           const cacheBust = `${scene.start.toFixed(2)}-${scene.end.toFixed(2)}`;
           return (
-            <section
-              key={s}
-              className="flex flex-col gap-3 border-t border-zinc-800/60 pt-4 first:border-t-0 first:pt-0"
-            >
-              <div className="flex items-baseline gap-2">
-                <span className="font-mono text-xs font-bold tracking-wider text-emerald-300/80 uppercase">
-                  Scene {s + 1}
-                </span>
-                <span className="font-mono text-[10px] text-zinc-600">
-                  {formatTimecode(scene.start)}–{formatTimecode(scene.end)}
-                </span>
+            <Fragment key={s}>
+              {/* between scenes — passive connector (scenes come from video splitting) */}
+              {s > 0 && <FlowConnector height={40} />}
+              <div className="flex w-full flex-col items-center">
+                <div className="mb-2 flex items-baseline gap-2">
+                  <span className="font-mono text-xs font-bold tracking-wider text-emerald-300/80 uppercase">
+                    Scene {s + 1}
+                  </span>
+                  <span className="font-mono text-[10px] text-zinc-600">
+                    {formatTimecode(scene.start)}–{formatTimecode(scene.end)}
+                  </span>
+                </div>
+                <FlowStep>
+                  <div className="flex flex-wrap justify-center gap-3">
+                    <SourceFrameNode data={{ sceneIndex: s, frameIndex: 1, cacheBust, label: `S${s + 1} · source first` }} />
+                    <SourceFrameNode data={{ sceneIndex: s, frameIndex: 2, cacheBust, label: `S${s + 1} · source last` }} />
+                  </div>
+                </FlowStep>
+                <FlowConnector />
+                <FlowStep>
+                  <div className="flex flex-wrap justify-center gap-3">
+                    <SwapGenNode data={{ sceneIndex: s, frameIndex: 1, label: `S${s + 1} · swap frame 1` }} />
+                    <SwapGenNode data={{ sceneIndex: s, frameIndex: 2, label: `S${s + 1} · swap frame 2` }} />
+                  </div>
+                </FlowStep>
+                <FlowConnector />
+                <FlowStep>
+                  <SceneVideoNode data={{ sceneIndex: s, label: `S${s + 1} · video` }} />
+                </FlowStep>
               </div>
-              <div className="flex flex-wrap gap-3">
-                <SourceFrameNode data={{ sceneIndex: s, frameIndex: 1, cacheBust, label: `S${s + 1} · source first` }} />
-                <SourceFrameNode data={{ sceneIndex: s, frameIndex: 2, cacheBust, label: `S${s + 1} · source last` }} />
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <SwapGenNode data={{ sceneIndex: s, frameIndex: 1, label: `S${s + 1} · swap frame 1` }} />
-                <SwapGenNode data={{ sceneIndex: s, frameIndex: 2, label: `S${s + 1} · swap frame 2` }} />
-              </div>
-              <SceneVideoNode data={{ sceneIndex: s, label: `S${s + 1} · video` }} />
-            </section>
+            </Fragment>
           );
         })}
-      </div>
+      </FlowColumn>
     </PlanFlowProvider>
   );
 }

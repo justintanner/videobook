@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ChevronRight, Film, Loader2, MapPin, Play, Square, X, FileText, Code, Copy, Check, RefreshCw, Images, Mic, Volume2, LayoutTemplate, Plus, Sparkles, Pencil } from 'lucide-react';
 import { CloseButton } from '@/components/ui/CloseButton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -15,6 +15,12 @@ import {
 } from '@/lib/plan-aspect';
 import { autoPickCharSwap, autoPickClipShow, autoPickStoryboard } from './templates/auto-pick';
 import { PlanFlowStack } from './plan/PlanFlowStack';
+import { FlowColumn, FlowStep } from './plan/flow/FlowColumn';
+import { FlowConnector } from './plan/flow/FlowConnector';
+import { RichPromptField } from '@/components/ui/RichPromptField';
+import type { ChipThumb } from '@/components/ui/AssetThumbChip';
+import type { RichToken } from '@/components/ui/richPromptTokens';
+import { NodeFrame } from './plan/nodes/nodeUi';
 import {
   ALL_VIDEO_MODELS,
   KIE_MODEL_NAME_BY_VIDEO,
@@ -673,98 +679,108 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
   const canGenerateVideo = sourceImageIds.length > 0 && Boolean(storyboardAssetId) && !savingPlan && !generatingVideo;
 
   return (
-    <div className="space-y-5">
-      <section className="border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
-        <header className="flex items-center justify-between px-3 py-2 border-b border-zinc-800/60 bg-black/40">
-          <div className="flex items-center gap-2 text-xs font-mono">
-            <span className="inline-flex w-5 h-5 items-center justify-center rounded-full border border-emerald-500/40 text-emerald-300/80 text-[10px] font-bold">1</span>
-            <span className="text-emerald-300/70 uppercase tracking-wider">Generate storyboard image</span>
+    <FlowColumn className="max-w-2xl">
+      <FlowStep>
+        <section className="w-full border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
+          <header className="flex items-center justify-between px-3 py-2 border-b border-zinc-800/60 bg-black/40">
+            <div className="flex items-center gap-2 text-xs font-mono">
+              <span className="inline-flex w-5 h-5 items-center justify-center rounded-full border border-emerald-500/40 text-emerald-300/80 text-[10px] font-bold">1</span>
+              <span className="text-emerald-300/70 uppercase tracking-wider">Generate storyboard image</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => { void handleGenerateStoryboard(); }}
+              disabled={!canGenerateStoryboard}
+              title={canGenerateStoryboard ? 'Generate storyboard with GPT Image 2' : 'Drop a source image first'}
+              className={cn(
+                'h-7 px-2.5 flex items-center gap-1.5 rounded',
+                'text-[10px] font-mono font-bold uppercase tracking-wider',
+                'text-emerald-300 hover:text-white',
+                'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/35 hover:border-emerald-500/70',
+                'transition-colors duration-150',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+              )}
+            >
+              {generatingStoryboard ? <Loader2 className="w-3 h-3 animate-spin" /> : <Images className="w-3 h-3" />}
+              {generatingStoryboard ? 'Generating...' : 'Generate'}
+            </button>
+          </header>
+          <div className="p-3 flex flex-col gap-3">
+            <div className="w-full max-w-sm self-center">
+              <StoryboardImageSlot
+                state={storyboardState}
+                sourceAspect={outputAspect}
+                assetId={storyboardAssetId}
+                replacing={replacingStoryboard}
+                generating={generatingStoryboard}
+                onIdleClick={() => { void handleGenerateStoryboard(); }}
+                onReplace={(assetId) => { void handleStoryboardReplace(assetId); }}
+                onErrorRetry={() => { void handleGenerateStoryboard(); }}
+                onRegen={() => { void handleGenerateStoryboard(); }}
+              />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Storyboard prompt</div>
+              <PromptEditor
+                value={storyboardPrompt}
+                onChange={handleStoryboardPromptChange}
+                mediaItems={mediaItems}
+                projectSlug={projectSlug}
+                imageRefs={sourceImageIds}
+              />
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => { void handleGenerateStoryboard(); }}
-            disabled={!canGenerateStoryboard}
-            title={canGenerateStoryboard ? 'Generate storyboard with GPT Image 2' : 'Drop a source image first'}
-            className={cn(
-              'h-7 px-2.5 flex items-center gap-1.5 rounded',
-              'text-[10px] font-mono font-bold uppercase tracking-wider',
-              'text-emerald-300 hover:text-white',
-              'bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/35 hover:border-emerald-500/70',
-              'transition-colors duration-150',
-              'disabled:opacity-50 disabled:cursor-not-allowed',
-            )}
-          >
-            {generatingStoryboard ? <Loader2 className="w-3 h-3 animate-spin" /> : <Images className="w-3 h-3" />}
-            {generatingStoryboard ? 'Generating...' : 'Generate'}
-          </button>
-        </header>
-        <div className="p-3 grid grid-cols-1 md:grid-cols-[minmax(12rem,18rem)_1fr] gap-3">
-          <StoryboardImageSlot
-            state={storyboardState}
-            sourceAspect={outputAspect}
-            assetId={storyboardAssetId}
-            replacing={replacingStoryboard}
-            generating={generatingStoryboard}
-            onIdleClick={() => { void handleGenerateStoryboard(); }}
-            onReplace={(assetId) => { void handleStoryboardReplace(assetId); }}
-            onErrorRetry={() => { void handleGenerateStoryboard(); }}
-            onRegen={() => { void handleGenerateStoryboard(); }}
-          />
-          <div className="min-w-0">
-            <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50 mb-1">Storyboard prompt</div>
-            <PromptEditor
-              value={storyboardPrompt}
-              onChange={handleStoryboardPromptChange}
+        </section>
+      </FlowStep>
+
+      <FlowConnector />
+
+      <FlowStep>
+        <section className="w-full border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
+          <header className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800/60 bg-black/40 text-xs font-mono">
+            <span className="inline-flex w-5 h-5 items-center justify-center rounded-full border border-emerald-500/40 text-emerald-300/80 text-[10px] font-bold">2</span>
+            <span className="text-emerald-300/70 uppercase tracking-wider">Generate video</span>
+          </header>
+          <div className="px-3 py-3 bg-black/20">
+            <div className="mb-3 flex items-center gap-3 text-[11px] font-mono">
+              <label className="flex items-center gap-1.5">
+                <span className="text-emerald-300/50 uppercase tracking-wider">Duration:</span>
+                <input
+                  type="number"
+                  min={4}
+                  max={15}
+                  value={durationS}
+                  onChange={(e) => setDurationS(Math.min(15, Math.max(4, Number(e.target.value) || 15)))}
+                  className="h-6 w-14 px-1.5 rounded bg-black/60 border border-zinc-700 text-emerald-300/90 focus:outline-none focus:border-emerald-500/60"
+                />
+              </label>
+              <span className="text-emerald-300/45">16:9 / 2K GPT storyboard / 720p video</span>
+            </div>
+            <VideoPanel
+              selectedModel={selectedVideoModel}
+              onSelectModel={setSelectedVideoModel}
+              models={STORYBOARD_VIDEO_MODELS}
+              prompt={videoPrompt}
+              onPromptChange={handleVideoPromptChange}
+              payload={videoPayload}
               mediaItems={mediaItems}
+              sourceAspect={outputAspect}
               projectSlug={projectSlug}
+              imageRefs={[storyboardAssetId, ...sourceImageIds].filter((id): id is string => Boolean(id))}
+              disabled={!canGenerateVideo}
+              disabledReason={sourceImageIds.length === 0 ? 'Drop a source image first' : !storyboardAssetId ? 'Generate or drop a storyboard first' : generatingVideo ? 'Video gen submitting...' : undefined}
+              videoTileState={videoTileState}
+              videoAssetId={sidecar?.video_asset_id ?? null}
+              replacing={replacingVideo || generatingVideo}
+              onIdleClick={() => { void handleGenerateVideo(); }}
+              onReplace={(vidAssetId) => { void handleVideoReplace(vidAssetId); }}
+              onErrorRetry={() => { void handleGenerateVideo(); }}
+              onRegen={() => { void handleGenerateVideo(); }}
             />
           </div>
-        </div>
-      </section>
-
-      <section className="border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
-        <header className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800/60 bg-black/40 text-xs font-mono">
-          <span className="inline-flex w-5 h-5 items-center justify-center rounded-full border border-emerald-500/40 text-emerald-300/80 text-[10px] font-bold">2</span>
-          <span className="text-emerald-300/70 uppercase tracking-wider">Generate video</span>
-        </header>
-        <div className="px-3 py-3 bg-black/20">
-          <div className="mb-3 flex items-center gap-3 text-[11px] font-mono">
-            <label className="flex items-center gap-1.5">
-              <span className="text-emerald-300/50 uppercase tracking-wider">Duration:</span>
-              <input
-                type="number"
-                min={4}
-                max={15}
-                value={durationS}
-                onChange={(e) => setDurationS(Math.min(15, Math.max(4, Number(e.target.value) || 15)))}
-                className="h-6 w-14 px-1.5 rounded bg-black/60 border border-zinc-700 text-emerald-300/90 focus:outline-none focus:border-emerald-500/60"
-              />
-            </label>
-            <span className="text-emerald-300/45">16:9 / 2K GPT storyboard / 720p video</span>
-          </div>
-          <VideoPanel
-            selectedModel={selectedVideoModel}
-            onSelectModel={setSelectedVideoModel}
-            models={STORYBOARD_VIDEO_MODELS}
-            prompt={videoPrompt}
-            onPromptChange={handleVideoPromptChange}
-            payload={videoPayload}
-            mediaItems={mediaItems}
-            sourceAspect={outputAspect}
-            projectSlug={projectSlug}
-            disabled={!canGenerateVideo}
-            disabledReason={sourceImageIds.length === 0 ? 'Drop a source image first' : !storyboardAssetId ? 'Generate or drop a storyboard first' : generatingVideo ? 'Video gen submitting...' : undefined}
-            videoTileState={videoTileState}
-            videoAssetId={sidecar?.video_asset_id ?? null}
-            replacing={replacingVideo || generatingVideo}
-            onIdleClick={() => { void handleGenerateVideo(); }}
-            onReplace={(vidAssetId) => { void handleVideoReplace(vidAssetId); }}
-            onErrorRetry={() => { void handleGenerateVideo(); }}
-            onRegen={() => { void handleGenerateVideo(); }}
-          />
-        </div>
-      </section>
-    </div>
+        </section>
+      </FlowStep>
+    </FlowColumn>
   );
 }
 
@@ -996,30 +1012,57 @@ function ClipShowWork({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpd
       </div>
     );
   }
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-800/60 pb-2">
-        <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/45">
-          {sidecar.segments.length} joke{sidecar.segments.length === 1 ? '' : 's'} planned
-        </div>
-        <div className="flex items-center gap-2">
-          <ClipShowGenerateImagesButton sidecar={sidecar} projectSlug={projectSlug} callTool={callTool} onSidecarUpdate={onSidecarUpdate} />
-          <ClipShowReadThroughPlayer sidecar={sidecar} mediaItems={mediaItems} projectSlug={projectSlug} />
-        </div>
+  const hostItem = mediaItems.find((m) => m.id === sidecar.character.asset_id);
+  const hostThumb = hostItem?.thumbnailSrc ?? hostItem?.filePath ?? null;
+
+  const header = (
+    <div className="flex items-center justify-between gap-3">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/45">
+        {sidecar.segments.length} joke{sidecar.segments.length === 1 ? '' : 's'} planned
       </div>
-      {sidecar.segments.map((segment, index) => (
-        <ClipShowSegmentBlock
-          key={index}
-          sidecar={sidecar}
-          segment={segment}
-          index={index}
-          mediaItems={mediaItems}
-          projectSlug={projectSlug}
-          callTool={callTool}
-          onSidecarUpdate={onSidecarUpdate}
-        />
-      ))}
+      <div className="flex items-center gap-2">
+        <ClipShowGenerateImagesButton sidecar={sidecar} projectSlug={projectSlug} callTool={callTool} onSidecarUpdate={onSidecarUpdate} />
+        <ClipShowReadThroughPlayer sidecar={sidecar} mediaItems={mediaItems} projectSlug={projectSlug} />
+      </div>
     </div>
+  );
+
+  return (
+    <FlowColumn header={header} className="max-w-2xl">
+      <FlowStep>
+        <NodeFrame label="Host" accent="border-emerald-600/50" width={220}>
+          <div className="flex items-center gap-2.5">
+            <div className="h-12 w-12 shrink-0 overflow-hidden rounded border border-zinc-700 bg-black/50">
+              {hostThumb ? (
+                <img src={hostThumb} alt={sidecar.character.name} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center"><Mic className="h-4 w-4 text-emerald-300/40" /></div>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-[11px] font-mono text-emerald-100/90">{sidecar.character.name}</div>
+              <div className="truncate text-[9px] font-mono text-emerald-300/40">voice · {sidecar.character.elevenlabs_voice_id}</div>
+            </div>
+          </div>
+        </NodeFrame>
+      </FlowStep>
+      {sidecar.segments.map((segment, index) => (
+        <Fragment key={index}>
+          <FlowConnector />
+          <FlowStep>
+            <ClipShowSegmentBlock
+              sidecar={sidecar}
+              segment={segment}
+              index={index}
+              mediaItems={mediaItems}
+              projectSlug={projectSlug}
+              callTool={callTool}
+              onSidecarUpdate={onSidecarUpdate}
+            />
+          </FlowStep>
+        </Fragment>
+      ))}
+    </FlowColumn>
   );
 }
 
@@ -1390,7 +1433,7 @@ function ClipShowSegmentBlock({ sidecar, segment, index, mediaItems, projectSlug
   const canGenerateAudio = joke.trim().length > 0 && !generatingAudio && !regenerating;
 
   return (
-    <section className="min-w-0 overflow-hidden rounded border border-emerald-500/20 bg-zinc-950/55">
+    <section className="w-full min-w-0 overflow-hidden rounded border border-emerald-500/20 bg-zinc-950/55">
       <header className="flex items-center justify-between gap-3 px-3 py-2.5 border-b border-emerald-500/15 bg-black/45">
         <div className="min-w-0 flex items-center gap-2 font-mono">
           <span className="inline-flex w-6 h-6 shrink-0 items-center justify-center rounded-full border border-emerald-500/45 bg-emerald-500/10 text-emerald-200 text-[11px] font-bold">{index + 1}</span>
@@ -2189,7 +2232,7 @@ function VideoSwapSlot({
   );
 }
 
-function VideoPanel({ selectedModel, onSelectModel, models = ALL_VIDEO_MODELS, prompt, onPromptChange, payload, mediaItems, sourceAspect, projectSlug, disabled, disabledReason, videoTileState, videoAssetId, replacing, onIdleClick, onReplace, onErrorRetry, onRegen }: {
+function VideoPanel({ selectedModel, onSelectModel, models = ALL_VIDEO_MODELS, prompt, onPromptChange, payload, mediaItems, sourceAspect, projectSlug, imageRefs, disabled, disabledReason, videoTileState, videoAssetId, replacing, onIdleClick, onReplace, onErrorRetry, onRegen }: {
   selectedModel: VideoModel;
   onSelectModel: (model: VideoModel) => void;
   models?: VideoModel[];
@@ -2199,6 +2242,7 @@ function VideoPanel({ selectedModel, onSelectModel, models = ALL_VIDEO_MODELS, p
   mediaItems: MediaItem[];
   sourceAspect: SourceAspect;
   projectSlug: string;
+  imageRefs?: string[];
   disabled: boolean;
   disabledReason?: string;
   videoTileState: VideoTileState;
@@ -2267,6 +2311,7 @@ function VideoPanel({ selectedModel, onSelectModel, models = ALL_VIDEO_MODELS, p
           onChange={onPromptChange}
           mediaItems={mediaItems}
           projectSlug={projectSlug}
+          imageRefs={imageRefs}
         />
       ) : (
         <PayloadJsonView payload={payload} mediaItems={mediaItems} projectSlug={projectSlug} />
@@ -2410,141 +2455,52 @@ export function PayloadJsonView({ payload, mediaItems, projectSlug }: {
 // Token regex for the prompt-text view — matches @<prefix><id> bare (no
 // surrounding quotes). Restricted to known asset prefixes plus `plan/` so
 // in-prose mentions like `@Image1` don't get spuriously chipped.
-const PROMPT_TOKEN_REGEX = /@(?:img-|vid-|aud-|char-|plan\/)[\w\-./]+/g;
-
-// Tab/color-coded chip palette — one stable color per distinct token in the
-// prompt, so re-mentions of the same asset always render in the same hue.
-const CHIP_PALETTE: Array<{ ring: string; text: string; bg: string }> = [
-  { ring: 'ring-emerald-400/50', text: 'text-emerald-200', bg: 'bg-emerald-500/15' },
-  { ring: 'ring-sky-400/50', text: 'text-sky-200', bg: 'bg-sky-500/15' },
-  { ring: 'ring-fuchsia-400/50', text: 'text-fuchsia-200', bg: 'bg-fuchsia-500/15' },
-  { ring: 'ring-amber-400/50', text: 'text-amber-200', bg: 'bg-amber-500/15' },
-  { ring: 'ring-violet-400/50', text: 'text-violet-200', bg: 'bg-violet-500/15' },
-  { ring: 'ring-rose-400/50', text: 'text-rose-200', bg: 'bg-rose-500/15' },
-];
-
-function paletteForIndex(i: number): typeof CHIP_PALETTE[number] {
-  return CHIP_PALETTE[i % CHIP_PALETTE.length];
-}
-
-function renderPromptLine(
-  line: string,
-  mediaItems: MediaItem[],
-  projectSlug: string,
-  colorByToken: Map<string, number>,
-  lineKey: number,
-): React.ReactNode[] {
-  const parts: React.ReactNode[] = [];
-  PROMPT_TOKEN_REGEX.lastIndex = 0;
-  let lastIndex = 0;
-  let tokenKey = 0;
-  let match: RegExpExecArray | null;
-  while ((match = PROMPT_TOKEN_REGEX.exec(line)) !== null) {
-    if (match.index > lastIndex) parts.push(line.slice(lastIndex, match.index));
-    const slug = match[0];
-    const thumb = resolveSlugThumb(slug, mediaItems, projectSlug);
-    const idx = colorByToken.get(slug) ?? 0;
-    const palette = paletteForIndex(idx);
-    parts.push(
-      <span
-        key={`${lineKey}-${tokenKey++}`}
-        className={cn(
-          'inline-flex items-center gap-1 align-middle px-1 py-px rounded ring-1',
-          palette.bg, palette.text, palette.ring,
-        )}
-      >
-        {thumb?.kind === 'image' && thumb.src && (
-          <img
-            src={thumb.src}
-            alt=""
-            className="w-3.5 h-3.5 inline-block rounded object-cover align-middle"
-          />
-        )}
-        {thumb?.kind === 'waveform' && thumb.waveform && (
-          <InlineWaveformThumb peaks={thumb.waveform} />
-        )}
-        <span>{slug}</span>
-      </span>,
-    );
-    lastIndex = PROMPT_TOKEN_REGEX.lastIndex;
-  }
-  if (lastIndex < line.length) parts.push(line.slice(lastIndex));
-  return parts;
-}
-
-// Two-mode prompt input: chip-view (colored tokens with inline thumbs) when
-// not focused, plain textarea when focused. Click-to-edit, blur to view.
-function PromptEditor({ value, onChange, mediaItems, projectSlug }: {
+// Prompt input rendering now lives in RichPromptField (transparent, editable,
+// inline thumbs). resolveSlugThumb + InlineWaveformThumb remain in use by the
+// JSON payload view below.
+// Transparent rich prompt with inline asset thumbs. "@<asset id>" tokens resolve
+// via resolveSlugThumb; positional "[Image N]" / "@ImageN" tokens resolve against
+// the per-field `imageRefs` (the ordered asset ids those positions stand for).
+function PromptEditor({ value, onChange, mediaItems, projectSlug, imageRefs = [] }: {
   value: string;
   onChange: (next: string) => void;
   mediaItems: MediaItem[];
   projectSlug: string;
+  imageRefs?: string[];
 }) {
-  const [editing, setEditing] = useState(false);
-  const [editorHeight, setEditorHeight] = useState<number | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const previewRef = useRef<HTMLButtonElement | null>(null);
-  useEffect(() => {
-    if (editing && textareaRef.current) {
-      textareaRef.current.focus();
-      const len = textareaRef.current.value.length;
-      textareaRef.current.setSelectionRange(len, len);
-    }
-  }, [editing]);
-  const handleEdit = useCallback(() => {
-    setEditorHeight(previewRef.current?.getBoundingClientRect().height ?? null);
-    setEditing(true);
-  }, []);
-  // Stable color assignment: first distinct token gets palette[0], second
-  // distinct token gets palette[1], and so on. Matches reads in renderPromptLine.
-  const colorByToken = useMemo(() => {
-    const map = new Map<string, number>();
-    let next = 0;
-    for (const m of value.matchAll(PROMPT_TOKEN_REGEX)) {
-      if (!map.has(m[0])) {
-        map.set(m[0], next++);
+  const assetSlugs = useMemo(() => mediaItems.map((m) => m.id), [mediaItems]);
+  const resolveRef = useCallback(
+    (token: RichToken): ChipThumb | null => {
+      if (token.kind === 'image-ref') {
+        const id = imageRefs[token.n - 1];
+        if (!id) return null;
+        const thumb = resolveSlugThumb(id, mediaItems, projectSlug);
+        return {
+          thumbnailSrc: thumb?.kind === 'image' ? thumb.src : null,
+          type: 'image',
+          label: id,
+          badge: String(token.n),
+        };
       }
-    }
-    return map;
-  }, [value]);
-  const lines = useMemo(() => value.split('\n'), [value]);
-  if (editing) {
-    return (
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={() => setEditing(false)}
-        rows={4}
-        style={editorHeight == null ? undefined : { height: `${editorHeight}px` }}
-        className={cn(
-          'w-full p-2 rounded bg-black/60 border border-zinc-700 text-[11px] font-mono text-emerald-300/90 resize-y',
-          'focus:outline-none focus:border-emerald-500/60',
-          'placeholder:text-emerald-300/40',
-        )}
-      />
-    );
-  }
+      const thumb = resolveSlugThumb(token.slug, mediaItems, projectSlug);
+      if (!thumb || thumb.kind !== 'image' || !thumb.src) return null;
+      return { thumbnailSrc: thumb.src, type: 'image', label: token.slug };
+    },
+    [imageRefs, mediaItems, projectSlug],
+  );
   return (
-    <button
-      ref={previewRef}
-      type="button"
-      onClick={handleEdit}
-      title="Click to edit prompt"
-      className={cn(
-        'w-full text-left p-2 rounded bg-black/60 border border-zinc-700',
-        'text-[11px] font-mono text-emerald-300/90 leading-relaxed',
-        'whitespace-pre-wrap break-words',
-        'hover:border-emerald-500/40 transition-colors cursor-text min-h-[5rem]',
-      )}
-    >
-      {lines.map((line, i) => (
-        <span key={i}>
-          {renderPromptLine(line, mediaItems, projectSlug, colorByToken, i)}
-          {i < lines.length - 1 && '\n'}
-        </span>
-      ))}
-    </button>
+    <RichPromptField
+      value={value}
+      onChange={onChange}
+      resolveRef={resolveRef}
+      assetSlugs={assetSlugs}
+      slugForAssetId={(id) => id}
+      rows={4}
+      fieldClassName="w-full p-2 text-[11px] font-mono leading-relaxed"
+      surfaceClassName="rounded border border-zinc-700 bg-black/60 focus-within:border-emerald-500/60"
+      textClassName="text-emerald-300/90"
+      caretClassName="caret-emerald-300"
+    />
   );
 }
 
