@@ -31,9 +31,9 @@ import { RichPromptField } from '@/components/ui/RichPromptField';
 import type { ChipThumb } from '@/components/ui/AssetThumbChip';
 import type { RichToken } from '@/components/ui/richPromptTokens';
 
-const NODE_WIDTH = 400;
-const CONTROLS_H = 155;
-const THUMB_STRIP_H = 50;
+const NODE_WIDTH = 520;
+const CONTROLS_H = 250;
+const THUMB_STRIP_H = 70;
 
 // The provider/model selectors collapse to one direct "Run <model>" button per
 // model. kie hosts all three models (fal only nbp/wan), so every button runs on
@@ -56,15 +56,15 @@ function TokenThumb({ n, src, title, onRemove, removeTitle }: {
   removeTitle?: string;
 }) {
   return (
-    <div className="group relative shrink-0" style={{ width: 36, height: 36 }} title={title}>
+    <div className="group relative shrink-0" style={{ width: 48, height: 48 }} title={title}>
       {src ? (
         <img src={src} alt={title} className="w-full h-full object-cover rounded border border-zinc-700" />
       ) : (
         <div className="w-full h-full rounded border border-zinc-700 bg-black/50 flex items-center justify-center">
-          <UserRound className="w-4 h-4 text-zinc-600" />
+          <UserRound className="w-5 h-5 text-zinc-600" />
         </div>
       )}
-      <span className="absolute -top-1 -left-1 min-w-[12px] h-3 px-0.5 rounded-sm bg-emerald-500/90 text-black text-[8px] font-mono font-bold leading-3 text-center">
+      <span className="absolute -top-1 -left-1 min-w-[15px] h-3.5 px-0.5 rounded-sm bg-emerald-500/90 text-black text-[10px] font-mono font-bold leading-[14px] text-center">
         {n}
       </span>
       {onRemove && (
@@ -74,12 +74,12 @@ function TokenThumb({ n, src, title, onRemove, removeTitle }: {
           title={removeTitle ?? 'Remove this input'}
           aria-label={removeTitle ?? 'Remove this input'}
           className={cn(
-            'nodrag absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full',
+            'nodrag absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full',
             'border border-zinc-600 bg-zinc-900 text-zinc-300 leading-none',
             'hover:border-red-500 hover:bg-red-600 hover:text-white',
           )}
         >
-          <X className="h-2.5 w-2.5" />
+          <X className="h-3 w-3" />
         </button>
       )}
     </div>
@@ -267,15 +267,19 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
   }
 
   const front = (
-    <div>
-      <StateThumb tile={tile} heightPx={imageH} idleText="no swap yet" alt={data.label} />
+    <div className="flex h-full flex-col">
+      <div className="shrink-0">
+        <StateThumb tile={tile} heightPx={imageH} idleText="no swap yet" alt={data.label} />
+      </div>
       {hasVariants && (
-        <VariantStrip
-          variants={variants}
-          selectedAssetId={selectedAssetId}
-          mediaItems={mediaItems}
-          onPick={(assetId) => { void actions.promoteVariant(sceneIndex, frameIndex, assetId); }}
-        />
+        <div className="shrink-0">
+          <VariantStrip
+            variants={variants}
+            selectedAssetId={selectedAssetId}
+            mediaItems={mediaItems}
+            onPick={(assetId) => { void actions.promoteVariant(sceneIndex, frameIndex, assetId); }}
+          />
+        </div>
       )}
       <div
         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDropActive(true); }}
@@ -283,7 +287,7 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
         onDrop={onDropCharacter}
         title="Drag a character from the sidebar to wire it into this frame"
         className={cn(
-          'mt-2 flex items-center gap-2 flex-wrap rounded p-1 -m-1 transition-colors',
+          'mt-2.5 shrink-0 flex items-center gap-2.5 flex-wrap rounded p-1 -m-1 transition-colors',
           dropActive ? 'ring-1 ring-violet-400/70 bg-violet-500/10' : 'ring-1 ring-transparent',
         )}
       >
@@ -301,7 +305,7 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
           );
         })}
         {charCount === 1 && (
-          <span className="text-[9px] font-mono text-violet-300/60 leading-tight">
+          <span className="text-[11px] font-mono text-violet-300/60 leading-tight">
             1 char · drag a character from the sidebar to add
           </span>
         )}
@@ -310,29 +314,31 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
             type="button"
             onClick={() => { void actions.setSkipPrior(sceneIndex, false); }}
             title="Restore the prior-frame continuity reference"
-            className="nodrag text-[9px] font-mono text-amber-300/70 hover:text-amber-200 leading-tight underline decoration-dotted"
+            className="nodrag text-[11px] font-mono text-amber-300/70 hover:text-amber-200 leading-tight underline decoration-dotted"
           >
             continuity off · restore
           </button>
         )}
       </div>
-      <div className="mt-2 flex flex-col gap-2">
+      <div className="mt-2.5 flex min-h-0 flex-1 flex-col gap-2.5">
         <RichPromptField
           value={prompt}
           onChange={onPromptChange}
           resolveRef={resolveRef}
           assetSlugs={assetSlugs}
           slugForAssetId={slugForAssetId}
+          fill
           rows={6}
-          fieldClassName="nodrag w-full px-2 py-1.5 text-[11px] font-mono leading-snug"
+          fieldClassName="nodrag w-full px-2.5 py-2 text-[13px] font-mono leading-relaxed"
           surfaceClassName="nodrag rounded border border-zinc-700 bg-black/60 focus-within:border-emerald-500/60"
           textClassName="text-emerald-100/90"
           caretClassName="caret-emerald-300"
         />
-        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+        <div className="shrink-0 flex items-center justify-end gap-2 flex-wrap">
           {SWAP_MODELS.map((m) => (
             <RunButton
               key={m}
+              size="lg"
               onClick={() => runModel(m)}
               running={runningModels.has(m)}
               label={`Run ${SHORT_LABEL_BY_MODEL[m]}`}
@@ -351,6 +357,7 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
       label={data.label}
       accent="border-emerald-600/50"
       width={NODE_WIDTH}
+      size="lg"
       badge={<FlipToggle flipped={flipped} onToggle={() => setFlipped((f) => !f)} />}
     >
       <FlipCard

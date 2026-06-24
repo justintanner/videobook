@@ -44,13 +44,17 @@ export function RunButton({
   disabled,
   label = 'Run',
   title,
+  size = 'sm',
 }: {
   onClick: () => void;
   running?: boolean;
   disabled?: boolean;
   label?: string;
   title?: string;
+  size?: 'sm' | 'lg';
 }) {
+  const lg = size === 'lg';
+  const iconCls = lg ? 'w-4 h-4' : 'w-3 h-3';
   return (
     <button
       type="button"
@@ -58,15 +62,15 @@ export function RunButton({
       disabled={disabled || running}
       title={title}
       className={cn(
-        'nodrag h-6 px-2 flex items-center gap-1 rounded',
-        'text-[10px] font-mono font-bold uppercase tracking-wider',
+        'nodrag flex items-center rounded font-mono font-bold uppercase tracking-wider',
+        lg ? 'h-9 px-3.5 gap-1.5 text-xs' : 'h-6 px-2 gap-1 text-[10px]',
         'text-emerald-200 bg-emerald-500/15 hover:bg-emerald-500/25',
         'border border-emerald-500/40 hover:border-emerald-500/70 transition-colors',
         'disabled:opacity-40 disabled:cursor-not-allowed',
         FOCUS_RING_BUTTON,
       )}
     >
-      {running ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+      {running ? <Loader2 className={cn(iconCls, 'animate-spin')} /> : <Play className={iconCls} />}
       {running ? '…' : label}
     </button>
   );

@@ -54,13 +54,16 @@ export function NodeFrame({
   badge,
   children,
   width = NODE_W,
+  size = 'sm',
 }: {
   label: string;
   accent?: string;
   badge?: React.ReactNode;
   children: React.ReactNode;
   width?: number;
+  size?: 'sm' | 'lg';
 }) {
+  const lg = size === 'lg';
   return (
     <div
       className={cn(
@@ -69,13 +72,13 @@ export function NodeFrame({
       )}
       style={{ width }}
     >
-      <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 border-b border-zinc-800/80 bg-black/50">
-        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-300/80 truncate">
+      <div className={cn('flex items-center justify-between gap-2 border-b border-zinc-800/80 bg-black/50', lg ? 'px-3.5 py-2.5' : 'px-2.5 py-1.5')}>
+        <span className={cn('font-mono font-bold uppercase tracking-wider text-emerald-300/80 truncate', lg ? 'text-xs' : 'text-[10px]')}>
           {label}
         </span>
         {badge}
       </div>
-      <div className="p-2">{children}</div>
+      <div className={lg ? 'p-3' : 'p-2'}>{children}</div>
     </div>
   );
 }

@@ -24,6 +24,10 @@ export interface RichPromptFieldProps {
   assetSlugs?: string[]; // candidates for @-mention matching + autocomplete
   slugForAssetId?: (id: string) => string | null; // drag-drop: asset id → slug
   rows?: number;
+  // Fill the parent's height instead of sizing to `rows`. The wrapper becomes a
+  // flex column that grows (flex-1) and the textarea stretches to fill it, so the
+  // field can absorb the slack in a fixed-height card. `rows` still seeds a min.
+  fill?: boolean;
   disabled?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
@@ -51,6 +55,7 @@ export function RichPromptField({
   assetSlugs = [],
   slugForAssetId,
   rows = 4,
+  fill = false,
   disabled,
   placeholder,
   autoFocus,
@@ -178,7 +183,7 @@ export function RichPromptField({
   );
 
   return (
-    <div className="relative">
+    <div className={cn('relative', fill && 'flex min-h-0 flex-1 flex-col')}>
       {showSuggestions && (
         <AutocompleteDropdown
           items={items}
@@ -188,7 +193,7 @@ export function RichPromptField({
         />
       )}
       <div
-        className={cn('relative', surfaceClassName, dropActive && 'ring-1 ring-emerald-400/60')}
+        className={cn('relative', fill && 'flex min-h-0 flex-1', surfaceClassName, dropActive && 'ring-1 ring-emerald-400/60')}
         onDragOver={(e) => {
           if (!e.dataTransfer.types.includes('application/json')) return;
           e.preventDefault();
@@ -252,6 +257,7 @@ export function RichPromptField({
             'relative block resize-none border-0 bg-transparent text-transparent whitespace-pre-wrap break-normal scrollbar-hide',
             'focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed',
             'placeholder:text-zinc-500/40',
+            fill && 'h-full w-full flex-1',
           )}
         />
       </div>
