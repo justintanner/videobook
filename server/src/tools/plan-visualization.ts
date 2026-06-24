@@ -32,23 +32,25 @@ export type Chunk = {
   end: number;
 };
 
-export const SYSTEM_PROMPT_PLAN = `You produce one cinematic prompt per pre-computed video chunk. Each prompt drives a two-stage pipeline: (1) image-to-image at 2K using the source video's aspect ratio swaps the two on-screen subjects in the chunk's first and last frames with the two reference characters; (2) bytedance/seedance-2 then animates between those two edited frames using the chunk video as a motion reference and the chunk audio as a dialogue/timing reference.
+export const SYSTEM_PROMPT_PLAN = `You produce one cinematic prompt per pre-computed video chunk. Each prompt drives a two-stage pipeline: (1) image-to-image at 2K using the source video's aspect ratio swaps the on-screen subject(s) in the chunk's first and last frames with the matching reference character(s); (2) bytedance/seedance-2 then animates between those two edited frames using the chunk video as a motion reference and the chunk audio as a dialogue/timing reference.
 
 INPUTS YOU RECEIVE:
-- Two characters (exactly two, by @asset_id) — these REPLACE the two main on-screen subjects in every chunk.
+- Two reference characters (by @asset_id). These REPLACE the original on-screen people. A chunk — and each individual frame within it — may show BOTH characters (a two-shot), exactly ONE (a single / close-up, or one side of a shot-reverse-shot), or neither (an insert or cutaway). Read the frames; never assume both characters are on screen.
 - A pre-computed list of chunks. Each chunk is ${MIN_SCENE_S}–${MAX_SCENE_S}s wide (variable, aligned to silence gaps in the transcript where possible) with explicit start/end and the transcript words spoken inside it.
+- A SPEECH TIMELINE per chunk: whether the OPENING frame and the CLOSING frame land on speech or on silence, the speaker turns with timestamps, and how many distinct speakers are heard. This is your ground truth for who (if anyone) is talking at the exact frames you anchor to — trust it over visual guesswork.
 - Sampled frames from the source clip (image inputs). Each frame is labelled with its timestamp in the user message; map frames to chunks by timestamp to ground your descriptions in what actually appears on screen.
 
 YOUR JOB:
 For each chunk, return one "visual" — a single dense paragraph (60–110 words) that:
 
-1. Names the two characters by their @asset_id token verbatim. Never use the human-readable name. Downstream tools resolve @asset_id to the actual likeness.
+1. Names ONLY the character(s) actually visible by their @asset_id token verbatim — one @id in a single/close-up, both in a two-shot. Never use the human-readable name, and never force the absent character into a single shot. Downstream tools resolve @asset_id to the actual likeness.
 2. Describes the cinematic SHOT — environment, lighting, color palette, mood, camera (lens, angle, motion), composition. Default to photorealistic, 8k, shallow depth of field. Anchor to what the sampled frames actually show in this chunk's time window.
-3. Describes the ACTION the two characters perform across the chunk — phrased so it reads as motion between a "first beat" (frame 0 of the chunk) and a "final beat" (last frame of the chunk). Seedance interpolates between two edited reference frames; your prompt must imply that motion arc explicitly.
-4. Handles CAMERA CHANGES inside the chunk. A chunk is 7–14s wide and may span more than one camera setup — a hard cut, angle change, push-in, or reframe can happen mid-chunk. Read the sampled frames in timestamp order: if the chunk's FIRST and LAST frames are clearly different shots (different angle, framing, or subject placement), do NOT describe a single continuous take — write the visual as a deliberate camera move or cut between the two setups (e.g. "opens on a wide two-shot of @<charA-id> and @<charB-id>, then cuts to a tight over-the-shoulder favoring @<charA-id>"), and anchor the "first beat" to the opening frame and the "final beat" to the closing frame so the two edited reference frames read as the genuine endpoints of that camera change. If every sampled frame shares one camera setup, treat the chunk as a single continuous shot.
-5. Locks character identity: include "lock the appearance of @<charA-id> and @<charB-id> to reference image 1 and reference image 2 respectively". The frames go in reference_image_urls (NOT first_frame_url / last_frame_url — those are mutually exclusive with the multimodal reference fields and would be rejected by the Seedance 2 schema).
-6. Honors the chunk's audio: dialogue, pacing, and audible action cues from the transcript drive what the characters DO. Match on-screen action to the words spoken in this chunk.
-7. Concrete > abstract. If the chunk's words are metaphorical, render the metaphor literally and visually.
+3. Decides TALKING vs LISTENING for the opening frame and the closing frame SEPARATELY, and states each explicitly. A subject is talking only if mid-speech — mouth open, jaw in motion. Otherwise they are silent: mouth closed, listening, reacting, or between lines. Ground this in BOTH the frame and the speech timeline: if the timeline marks a boundary frame SILENT, the subject there is closed-mouthed and listening — describe them that way and NEVER as mid-sentence. The opening frame is frequently a silent reaction beat; do not default it to talking. In a single shot the on-screen subject is talking only while it is their turn in the timeline.
+4. Describes the ACTION across the chunk as motion between a "first beat" (frame 0 of the chunk) and a "final beat" (last frame of the chunk). Seedance interpolates between the two edited reference frames, so the arc — including each subject's talking/listening state at each end — must be explicit.
+5. Handles CAMERA CHANGES inside the chunk. A chunk may span more than one camera setup — a hard cut, angle change, push-in, reframe, or a cut between single shots (shot-reverse-shot). Read the sampled frames in timestamp order: if the FIRST and LAST frames are clearly different shots (different angle, framing, or which subject is on screen), do NOT describe a single continuous take — write the visual as a deliberate move or cut between the two setups, anchoring the "first beat" to the opening frame and the "final beat" to the closing frame so the two edited reference frames read as the genuine endpoints. Examples: "opens on a single of @<charA-id> closed-mouthed and listening, then cuts to a tight single of @<charB-id> mid-sentence"; or "holds a two-shot as @<charA-id> talks and @<charB-id> reacts in profile". If every sampled frame shares one camera setup AND the same subject configuration, treat the chunk as a single continuous shot.
+6. Locks identity: for each character you place on screen, include "lock the appearance of @<id> to its reference image". The edited frames go in reference_image_urls (NOT first_frame_url / last_frame_url — those are mutually exclusive with the multimodal reference fields and would be rejected by the Seedance 2 schema).
+7. Honors the chunk's audio: dialogue, pacing, and audible action cues from the transcript drive what the characters DO. Match on-screen action to the words spoken in this chunk and to the speech timeline's turn boundaries.
+8. Concrete > abstract. If the chunk's words are metaphorical, render the metaphor literally and visually.
 
 OUTPUT: JSON only, matching the provided schema. The "visuals" array MUST have exactly one entry per chunk, in the same order as the input chunks.`;
 
@@ -229,6 +231,93 @@ export function dialogForChunk(words: ElevenLabsWord[], chunk: Chunk): string {
   return inChunk.map((w) => w.text).join(" ").trim() || "(no speech in this chunk)";
 }
 
+// Lead-in / tail-out silence threshold. When the gap between a chunk boundary and
+// the nearest spoken word meets this, the boundary FRAME the swap pipeline edits
+// (image1 at chunk.start, image2 just before chunk.end) is a silent beat — the
+// on-screen subject is listening/reacting, not mid-speech.
+const BOUNDARY_SILENCE_S = 0.4;
+
+// Mid-chunk gap that breaks one speaker turn from the next in the timeline.
+const TURN_SILENCE_S = 0.5;
+
+// Group a chunk's words into speaker turns with absolute timestamps, emitting a
+// "[silence Xs]" marker for every gap that exceeds TURN_SILENCE_S. speaker_id is
+// optional (diarization may be off); it falls back to "?".
+function groupSpeakerTurns(words: ElevenLabsWord[]): string[] {
+  const lines: string[] = [];
+  let speaker: string | undefined;
+  let turnStart = 0;
+  let buffer: string[] = [];
+  let prevEnd: number | null = null;
+
+  const flush = () => {
+    if (buffer.length === 0) return;
+    lines.push(`  @${turnStart.toFixed(2)}s spk=${speaker ?? "?"}: ${buffer.join(" ")}`);
+    buffer = [];
+  };
+
+  for (const w of words) {
+    if (prevEnd !== null && w.start - prevEnd > TURN_SILENCE_S) {
+      flush();
+      lines.push(`  [silence ${(w.start - prevEnd).toFixed(2)}s]`);
+      speaker = undefined;
+    }
+    if (w.speaker_id !== speaker) {
+      flush();
+      speaker = w.speaker_id;
+      turnStart = w.start;
+    }
+    if (buffer.length === 0) turnStart = w.start;
+    buffer.push(w.text.trim());
+    prevEnd = w.end;
+  }
+  flush();
+  return lines;
+}
+
+// Speaker- and timing-aware breakdown of a chunk's dialog. Where dialogForChunk
+// flattens words into one string, this surfaces the two signals the analysis
+// model is otherwise blind to: (a) whether the opening and closing frames — the
+// exact frames the i2i swap edits — land on speech or silence, the single most
+// reliable cue for "is the subject talking in the frame we're about to bake?";
+// and (b) how many distinct speakers are heard and when, so the model can infer
+// shot/reverse-shot structure instead of forcing a two-shot. Degrades gracefully
+// when diarization is off (no speaker_id) — the boundary silence still holds.
+export function speechTimelineForChunk(words: ElevenLabsWord[], chunk: Chunk): string {
+  const inChunk = words
+    .filter((w) => w.type === "word")
+    .filter((w) => w.start >= chunk.start && w.start < chunk.end);
+  if (inChunk.length === 0) {
+    return "Speech timeline: silent throughout — no words land in this chunk. Both the opening and closing frames are wordless beats (reaction, action, or B-roll); no one is talking.";
+  }
+
+  const firstWord = inChunk[0];
+  const lastWord = inChunk[inChunk.length - 1];
+  const leadIn = firstWord.start - chunk.start;
+  const tail = chunk.end - lastWord.end;
+  const openState = leadIn >= BOUNDARY_SILENCE_S
+    ? `SILENT — ${leadIn.toFixed(2)}s of lead-in before the first word at ${firstWord.start.toFixed(2)}s; treat the opening frame as a non-talking, listening/reaction beat`
+    : `speech already active (first word at ${firstWord.start.toFixed(2)}s)`;
+  const closeState = tail >= BOUNDARY_SILENCE_S
+    ? `SILENT — last word ends at ${lastWord.end.toFixed(2)}s, ${tail.toFixed(2)}s before the close; the closing frame is a non-talking beat`
+    : `speech runs to the close (last word ends at ${lastWord.end.toFixed(2)}s)`;
+
+  const speakerIds = [...new Set(inChunk.map((w) => w.speaker_id).filter((s): s is string => Boolean(s)))];
+  const speakerLine = speakerIds.length >= 2
+    ? `Distinct speakers heard: ${speakerIds.length} (${speakerIds.join(", ")}) — turns alternate, so the camera likely cuts between single shots, one speaker per shot.`
+    : speakerIds.length === 1
+      ? `Distinct speakers heard: 1 (${speakerIds[0]}).`
+      : "Speaker labels unavailable (no diarization) — infer who is on screen from the frames.";
+
+  return [
+    `Speech timeline (absolute seconds; chunk opens @${chunk.start.toFixed(2)}s, closes @${chunk.end.toFixed(2)}s):`,
+    `  opening frame @${chunk.start.toFixed(2)}s: ${openState}`,
+    ...groupSpeakerTurns(inChunk),
+    `  closing frame @${chunk.end.toFixed(2)}s: ${closeState}`,
+    `  ${speakerLine}`,
+  ].join("\n");
+}
+
 export function buildPlanContext(
   characters: CharacterContext[],
   chunks: Chunk[],
@@ -240,14 +329,13 @@ export function buildPlanContext(
     .join("\n");
 
   const chunkBlocks = chunks.map((c, i) => {
-    const text = dialogForChunk(words, c);
     const chunkFrameTs = sampledFrames
       .filter((f) => f.sceneIdx === i)
       .map((f) => `${f.t.toFixed(2)}s`)
       .join(", ");
     return [
       `Chunk ${i + 1}: ${c.start.toFixed(2)}s – ${c.end.toFixed(2)}s (${(c.end - c.start).toFixed(2)}s)`,
-      `Transcript: ${text}`,
+      speechTimelineForChunk(words, c),
       `Frame timestamps for this chunk: ${chunkFrameTs || "(none)"}`,
     ].join("\n");
   });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeChunks, sampleFramesForScenes, dialogForChunk, buildSkeletonPlanSidecar } from "./plan-visualization.js";
+import { computeChunks, sampleFramesForScenes, dialogForChunk, speechTimelineForChunk, buildSkeletonPlanSidecar } from "./plan-visualization.js";
 import { parseScdetOutput, deriveCandidates } from "../scene-detect.js";
 
 type Candidate = { t: number; score: number; kind: "shot" | "settle" };
@@ -36,6 +36,53 @@ describe("dialogForChunk", () => {
   it("falls back to a placeholder when no words land in the chunk", () => {
     expect(dialogForChunk([word("later", 9.0, 9.4)], { start: 0, end: 2 })).toBe("(no speech in this chunk)");
     expect(dialogForChunk([], { start: 0, end: 2 })).toBe("(no speech in this chunk)");
+  });
+});
+
+describe("speechTimelineForChunk", () => {
+  const spk = (text: string, start: number, end: number, speaker_id: string) =>
+    ({ text, start, end, type: "word" as const, speaker_id });
+
+  it("flags the opening frame SILENT when speech starts >= 0.4s after the chunk opens", () => {
+    // First word lands 1.5s in — the frame the swap edits at t=0 is a listening beat.
+    const out = speechTimelineForChunk([word("finally", 1.5, 1.9), word("talking", 2.0, 2.4)], { start: 0, end: 8 });
+    expect(out).toContain("opening frame @0.00s: SILENT");
+    expect(out).toContain("1.50s of lead-in");
+  });
+
+  it("flags the opening frame as already speaking when the first word starts < 0.4s in", () => {
+    const out = speechTimelineForChunk([word("immediately", 0.1, 0.6)], { start: 0, end: 8 });
+    expect(out).toContain("opening frame @0.00s: speech already active");
+    expect(out).not.toContain("opening frame @0.00s: SILENT");
+  });
+
+  it("flags the closing frame SILENT when the last word ends >= 0.4s before the close", () => {
+    const out = speechTimelineForChunk([word("done", 1.0, 1.4)], { start: 0, end: 8 });
+    expect(out).toContain("closing frame @8.00s: SILENT");
+  });
+
+  it("reports the chunk silent throughout when no words land in the window", () => {
+    expect(speechTimelineForChunk([], { start: 0, end: 8 })).toContain("silent throughout");
+    expect(speechTimelineForChunk([word("elsewhere", 20, 20.4)], { start: 0, end: 8 })).toContain("silent throughout");
+  });
+
+  it("counts distinct diarized speakers — two speakers cue shot/reverse-shot", () => {
+    const out = speechTimelineForChunk(
+      [spk("you", 0.1, 0.4, "spk_0"), spk("said", 0.5, 0.9, "spk_0"), spk("no", 3.0, 3.4, "spk_1")],
+      { start: 0, end: 8 },
+    );
+    expect(out).toContain("Distinct speakers heard: 2 (spk_0, spk_1)");
+    expect(out).toContain("cuts between single shots");
+    // Speaker change after a >0.5s gap breaks into separate turns.
+    expect(out).toContain("spk=spk_0");
+    expect(out).toContain("spk=spk_1");
+    expect(out).toContain("[silence");
+  });
+
+  it("degrades gracefully when diarization is off (no speaker_id)", () => {
+    const out = speechTimelineForChunk([word("hi", 0.1, 0.4)], { start: 0, end: 8 });
+    expect(out).toContain("Speaker labels unavailable");
+    expect(out).toContain("spk=?");
   });
 });
 
