@@ -15,7 +15,8 @@ import type { TemplateCatalogEntry } from './templates/catalog';
 // formula is the legacy char-swap plan.
 function formulaFromPlanJson(text: string): PlanFormula | null {
   try {
-    const parsed = JSON.parse(text) as { formula?: string };
+    const parsed = JSON.parse(text) as { exists?: boolean; formula?: string };
+    if (parsed.exists === false) return null;
     if (parsed.formula === 'clip_show') return 'clip_show';
     if (parsed.formula === 'storyboard_video') return 'storyboard_video';
     return 'char_swap';

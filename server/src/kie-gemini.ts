@@ -22,6 +22,28 @@ type GeminiFlashRequest = {
   signal?: AbortSignal;
 };
 
+function fetchInputUrl(input: Parameters<typeof fetch>[0]): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
+export function geminiFlashAuthFetch(apiKey: string, doFetch: typeof fetch = fetch): typeof fetch {
+  return (async (input, init) => {
+    const url = fetchInputUrl(input);
+    if (!url.includes("/gemini/v1/models/gemini-3-5-flash:streamGenerateContent")) {
+      return doFetch(input, init);
+    }
+
+    const requestHeaders = typeof input === "string" || input instanceof URL ? undefined : input.headers;
+    const headers = new Headers(init?.headers ?? requestHeaders);
+    headers.delete("X-Goog-Api-Key");
+    headers.set("Authorization", `Bearer ${apiKey}`);
+    headers.set("Content-Type", "application/json");
+    return doFetch(input, { ...init, headers });
+  }) as typeof fetch;
+}
+
 export function geminiTextPart(text: string): KieGeminiPart {
   return { text };
 }
@@ -44,6 +66,14 @@ export function isGeminiFlashAsyncIterable(
 }
 
 export function geminiFlashResponseText(response: KieGemini35FlashGenerateContentResponse): string {
+  const envelope = response as { code?: unknown; msg?: unknown; message?: unknown };
+  if (typeof envelope.code === "number" && envelope.code !== 0 && envelope.code !== 200) {
+    const message = typeof envelope.msg === "string"
+      ? envelope.msg
+      : typeof envelope.message === "string" ? envelope.message : "request failed";
+    throw new Error(`Kie Gemini API error ${envelope.code}: ${message}`);
+  }
+
   return (response.candidates ?? [])
     .flatMap((candidate) => candidate.content?.parts ?? [])
     .map((part) => typeof part.text === "string" ? part.text : "")
@@ -62,7 +92,11 @@ export async function firstGeminiFlashContent(result: KieGemini35FlashStreamGene
 }
 
 export async function callGeminiFlash(args: GeminiFlashRequest): Promise<string> {
-  const provider = createKie({ apiKey: args.apiKey, timeout: args.timeout ?? 240_000 });
+  const provider = createKie({
+    apiKey: args.apiKey,
+    timeout: args.timeout ?? 240_000,
+    fetch: geminiFlashAuthFetch(args.apiKey),
+  });
   const call = withRetry<KieGemini35FlashStreamGenerateContentRequest, KieGemini35FlashStreamGenerateContentResult>(
     provider.gemini.post.v1.models.gemini35Flash.streamGenerateContent,
     { retries: 2, baseMs: 500 },
@@ -71,8 +105,6 @@ export async function callGeminiFlash(args: GeminiFlashRequest): Promise<string>
   const generationConfig: Record<string, unknown> = {};
   if (args.temperature !== undefined) generationConfig.temperature = args.temperature;
   if (args.maxOutputTokens !== undefined) generationConfig.maxOutputTokens = args.maxOutputTokens;
-  if (args.responseMimeType !== undefined) generationConfig.responseMimeType = args.responseMimeType;
-  if (args.responseSchema !== undefined) generationConfig.responseSchema = args.responseSchema;
 
   const result = await call({
     stream: false,
@@ -80,9 +112,33 @@ export async function callGeminiFlash(args: GeminiFlashRequest): Promise<string>
     ...(Object.keys(generationConfig).length > 0 ? { generationConfig } : {}),
   }, args.signal);
 
-  return firstGeminiFlashContent(result);
+  const text = await firstGeminiFlashContent(result);
+  if (text.length === 0) throw new Error("Kie Gemini returned no text content");
+  return text;
 }
 
-export function callGeminiFlashJson(args: Omit<GeminiFlashRequest, "responseMimeType">): Promise<string> {
-  return callGeminiFlash({ ...args, responseMimeType: "application/json" });
+export function normalizeGeminiJsonText(text: string): string {
+  const trimmed = text.trim();
+  const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
+  if (fenced) return fenced[1].trim();
+
+  const objectStart = trimmed.indexOf("{");
+  const arrayStart = trimmed.indexOf("[");
+  const starts = [objectStart, arrayStart].filter((idx) => idx >= 0);
+  if (starts.length === 0) return trimmed;
+
+  const start = Math.min(...starts);
+  const objectEnd = trimmed.lastIndexOf("}");
+  const arrayEnd = trimmed.lastIndexOf("]");
+  const end = Math.max(objectEnd, arrayEnd);
+  if (start > 0 || end < trimmed.length - 1) {
+    if (end > start) return trimmed.slice(start, end + 1).trim();
+  }
+
+  return trimmed;
+}
+
+export async function callGeminiFlashJson(args: Omit<GeminiFlashRequest, "responseMimeType">): Promise<string> {
+  const outputText = await callGeminiFlash(args);
+  return normalizeGeminiJsonText(outputText);
 }

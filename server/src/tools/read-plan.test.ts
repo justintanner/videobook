@@ -8,6 +8,7 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 type TextContent = Array<{ type: string; text: string }>;
 
 interface ReadPlanResponse {
+  exists?: boolean;
   formula?: string;
   scenes: Array<{ start: number; end: number; visual: string }>;
   total_duration_s: number;
@@ -15,6 +16,18 @@ interface ReadPlanResponse {
   source_asset_id: string;
   characters: Array<{ asset_id: string; name: string; description: string }>;
   model: string;
+}
+
+interface MissingPlanResponse {
+  exists: false;
+  formula: null;
+  scenes: [];
+  total_duration_s: 0;
+  max_scene_seconds: 0;
+  source_asset_id: null;
+  characters: [];
+  model: null;
+  generation_status: "missing";
 }
 
 const FIXTURE_SIDECAR: ReadPlanResponse = {
@@ -68,6 +81,7 @@ describe("read_plan tool", () => {
     expect(result.isError).toBeFalsy();
     const content = result.content as TextContent;
     const parsed: ReadPlanResponse = JSON.parse(content[0].text);
+    expect(parsed.exists).toBe(true);
     expect(parsed.scenes).toHaveLength(2);
     expect(parsed.scenes[0].visual).toBe(FIXTURE_SIDECAR.scenes[0].visual);
     expect(parsed.scenes[1].start).toBe(8.5);
@@ -78,13 +92,19 @@ describe("read_plan tool", () => {
     expect(parsed.model).toBe("gpt-test-model");
   });
 
-  it("returns an error when no plan exists yet", async () => {
+  it("returns an empty response when no plan exists yet", async () => {
     const result = await client.callTool({
       name: "read_plan",
       arguments: { project_slug: "test-proj" },
     });
 
-    expect(result.isError).toBe(true);
+    expect(result.isError).toBeFalsy();
+    const content = result.content as TextContent;
+    const parsed: MissingPlanResponse = JSON.parse(content[0].text);
+    expect(parsed.exists).toBe(false);
+    expect(parsed.formula).toBeNull();
+    expect(parsed.scenes).toEqual([]);
+    expect(parsed.generation_status).toBe("missing");
   });
 
   it("returns an error when the project does not exist", async () => {

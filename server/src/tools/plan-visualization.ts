@@ -71,6 +71,7 @@ export function buildSkeletonPlanSidecar(sourceAssetId: string, characters: Char
     characters,
     model: CHAR_SWAP_PLAN_MODEL,
     analysis_prompt: SYSTEM_PROMPT_PLAN,
+    generation_status: "draft" as const,
   };
 }
 
@@ -474,6 +475,7 @@ export function planVisualizationDef(fs: VideocityFs): ToolDef {
       // enqueues immediately; the job overwrites the skeleton with real scenes.
       const skeleton = {
         ...buildSkeletonPlanSidecar(sourceAssetId, characters),
+        generation_status: defer ? "draft" as const : "generating" as const,
         ...(defer ? { awaiting_start: true } : {}),
       };
       const projectResult = await fs.getProject(project_slug);

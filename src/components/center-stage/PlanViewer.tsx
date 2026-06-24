@@ -129,8 +129,14 @@ type AnyPlanSidecar = PlanSidecar | StoryboardVideoPlanSidecar | ClipShowPlanSid
 
 function planFormula(sidecar: AnyPlanSidecar | null): PlanFormula | null {
   if (!sidecar) return null;
+  if ((sidecar as AnyPlanSidecar & { exists?: boolean }).exists === false) return null;
   if (sidecar.formula === 'clip_show') return 'clip_show';
   return sidecar.formula === 'storyboard_video' ? 'storyboard_video' : 'char_swap';
+}
+
+function parseReadPlanSidecar(text: string): AnyPlanSidecar | null {
+  const parsed = JSON.parse(text) as AnyPlanSidecar & { exists?: boolean };
+  return parsed.exists === false ? null : parsed;
 }
 
 function isStoryboardVideoPlan(sidecar: AnyPlanSidecar | null): sidecar is StoryboardVideoPlanSidecar {
@@ -248,7 +254,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose, 
       }
       try {
         const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-        setSidecar(JSON.parse(text) as AnyPlanSidecar);
+        setSidecar(parseReadPlanSidecar(text));
       } catch {
         setSidecar(null);
       } finally {
@@ -2604,7 +2610,7 @@ function useCurrentSidecar(projectSlug: string, callTool: UseMcpResult['callTool
       if (result.isError) { setState({ loading: false, sidecar: null }); return; }
       try {
         const text = (result.content as Array<{ type: string; text: string }>)[0].text;
-        setState({ loading: false, sidecar: JSON.parse(text) as AnyPlanSidecar });
+        setState({ loading: false, sidecar: parseReadPlanSidecar(text) });
       } catch {
         setState({ loading: false, sidecar: null });
       }
@@ -2973,7 +2979,9 @@ function ClipShowSetupInner({ projectSlug, mediaItems, callTool, onGenerated, in
         let parsed: AnyPlanSidecar;
         try {
           const text = (planResult.content as Array<{ type: string; text: string }>)[0].text;
-          parsed = JSON.parse(text);
+          const readPlan = parseReadPlanSidecar(text);
+          if (!readPlan) continue;
+          parsed = readPlan;
         } catch { continue; }
         if (planFormula(parsed) !== 'clip_show') continue;
         const cs = parsed as ClipShowPlanSidecar;

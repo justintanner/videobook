@@ -72,6 +72,9 @@ export interface PlanSidecar {
   analysis_prompt?: string;
   user_context?: string;
   word_count?: number;
+  generation_status?: 'draft' | 'generating' | 'ready' | 'failed';
+  generation_error?: string;
+  failed_at?: string;
   // Draft marker: the plan was prepared (skeleton written) but the vision job
   // has NOT been enqueued yet, so the user can read the analysis prompt before
   // generating. The work area shows a "Generate plan" button instead of polling;

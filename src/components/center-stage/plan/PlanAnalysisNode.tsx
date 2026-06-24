@@ -14,7 +14,7 @@
 // the swap/video tiles — a JSON toggle that flips the body to the request
 // "source" (model + system/user messages) that the server sends.
 import { useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Loader2, Sparkles } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePlanFlow } from './PlanFlowContext';
 import { PayloadJsonView } from '@/components/center-stage/PlanViewer';
@@ -31,8 +31,10 @@ function PromptBlock({ label, text }: { label: string; text: string }) {
   );
 }
 
-export function PlanAnalysisNode({ generating, forceOpen, userContext, systemPrompt, model }: {
+export function PlanAnalysisNode({ generating, failed, error, forceOpen, userContext, systemPrompt, model }: {
   generating: boolean;
+  failed?: boolean;
+  error?: string;
   // Keep the prompt expanded even when not generating — used for the draft
   // "read before you generate" gate.
   forceOpen?: boolean;
@@ -44,11 +46,13 @@ export function PlanAnalysisNode({ generating, forceOpen, userContext, systemPro
   const { mediaItems, projectSlug } = usePlanFlow();
   const user = userContext?.trim() ?? '';
   const system = systemPrompt?.trim() ?? '';
+  const errorText = error?.trim() ?? '';
+  const isFailed = Boolean(failed) || errorText.length > 0;
   const hasAny = user.length > 0 || system.length > 0;
   // Collapsed by default once ready; generating / draft force-expand it.
   const [open, setOpen] = useState(false);
   const [flipped, setFlipped] = useState(false);
-  const expanded = open || generating || Boolean(forceOpen);
+  const expanded = open || generating || isFailed || Boolean(forceOpen);
 
   // The plan's JSON "source": the request the server sends to produce it — the
   // model plus the system/user messages — mirroring server/src/jobs/
@@ -74,13 +78,15 @@ export function PlanAnalysisNode({ generating, forceOpen, userContext, systemPro
           className="nodrag flex flex-1 items-center gap-2 text-left"
           title={expanded ? 'Hide analysis prompt' : 'Show the analysis prompt that built this plan'}
         >
-          {generating ? (
+          {isFailed ? (
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-300/80" />
+          ) : generating ? (
             <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-emerald-400/80" />
           ) : (
             <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-400/70" />
           )}
           <span className="font-mono text-[11px] uppercase tracking-wider text-emerald-300/70">
-            {generating ? 'Generating plan…' : 'Analysis prompt'}
+            {isFailed ? 'Plan failed' : generating ? 'Generating plan…' : 'Analysis prompt'}
           </span>
           {model && (
             <span className="shrink-0 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-emerald-300/70">
@@ -97,7 +103,11 @@ export function PlanAnalysisNode({ generating, forceOpen, userContext, systemPro
       </div>
       {expanded && (
         <div className={cn('px-3 pb-3', !generating && 'pt-1')}>
-          {hasAny ? (
+          {isFailed ? (
+            <div className="rounded border border-red-500/30 bg-red-950/20 p-2.5 font-mono text-[11px] leading-relaxed text-red-100/80">
+              {errorText || 'Plan generation failed.'}
+            </div>
+          ) : hasAny ? (
             flipped ? (
               <PayloadJsonView payload={payload} mediaItems={mediaItems} projectSlug={projectSlug} />
             ) : (

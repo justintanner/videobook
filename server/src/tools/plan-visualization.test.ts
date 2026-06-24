@@ -100,6 +100,7 @@ describe("buildSkeletonPlanSidecar", () => {
     expect(sidecar.characters).toEqual(characters);
     expect(sidecar.model).toBe(CHAR_SWAP_PLAN_MODEL);
     expect(sidecar.analysis_prompt.length).toBeGreaterThan(0);
+    expect(sidecar.generation_status).toBe("draft");
   });
 
   it("round-trips through JSON so read_plan returns the same shape the client expects", () => {
@@ -108,6 +109,7 @@ describe("buildSkeletonPlanSidecar", () => {
     expect(parsed.scenes).toEqual([]);
     expect(parsed.characters).toHaveLength(2);
     expect(typeof parsed.analysis_prompt).toBe("string");
+    expect(parsed.generation_status).toBe("draft");
   });
 });
 

@@ -42,9 +42,11 @@ function planInputsSignature(sc: PlanSidecar): string {
 function parsePlan(result: Awaited<ReturnType<UseMcpResult['callTool']>>): (PlanSidecar & { formula?: string }) | null {
   if (result.isError) return null;
   try {
-    return JSON.parse((result.content as Array<{ type: string; text: string }>)[0].text) as PlanSidecar & {
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0].text) as PlanSidecar & {
+      exists?: boolean;
       formula?: string;
     };
+    return parsed.exists === false ? null : parsed;
   } catch {
     return null;
   }
@@ -69,6 +71,7 @@ export function PlanFlowStack({
   );
 
   const building = sidecar.scenes.length === 0;
+  const failed = building && sidecar.generation_status === 'failed';
 
   // --- Regenerate from new inputs: re-run plan_visualization, then poll
   // read_plan until the rebuilt plan (new source/cast + fresh scenes) lands.
@@ -82,15 +85,15 @@ export function PlanFlowStack({
   // Draft: prepared (skeleton written) but the vision job hasn't been enqueued —
   // the user reads the prompt and clicks Generate. We don't poll while in draft.
   // A regenerate-from-new-inputs is an explicit immediate gen, so it leaves draft.
-  const draft = building && Boolean(sidecar.awaiting_start) && !starting && !regenerating;
+  const draft = building && Boolean(sidecar.awaiting_start) && !failed && !starting && !regenerating;
   // `generating` drives the analysis block's loader/force-expand: a started first
   // build (no scenes yet, not draft) or an in-flight regenerate from new inputs.
-  const generating = (building && !draft) || regenerating;
+  const generating = !failed && ((building && !draft) || regenerating);
   // The analysis block stays in the flow whenever there's a prompt to show (or a
   // gen/draft is in play), so the analysis prompt is discoverable in a finished
   // plan — not only while generating.
   const showAnalysis =
-    generating || draft || Boolean(sidecar.analysis_prompt?.trim()) || Boolean(sidecar.user_context?.trim());
+    failed || generating || draft || Boolean(sidecar.analysis_prompt?.trim()) || Boolean(sidecar.user_context?.trim());
   const regenPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelledRef = useRef(false);
   useEffect(() => {
@@ -131,12 +134,19 @@ export function PlanFlowStack({
       if (
         parsed &&
         (!parsed.formula || parsed.formula === 'char_swap') &&
-        planInputsSignature(parsed) === target &&
-        parsed.scenes.length > 0
+        planInputsSignature(parsed) === target
       ) {
-        onSidecarUpdate(parsed);
-        setRegenerating(false);
-        return;
+        if (parsed.generation_status === 'failed') {
+          onSidecarUpdate(parsed);
+          toast({ title: 'Plan failed', description: parsed.generation_error ?? 'plan generation failed', duration: 5000 });
+          setRegenerating(false);
+          return;
+        }
+        if (parsed.scenes.length > 0) {
+          onSidecarUpdate(parsed);
+          setRegenerating(false);
+          return;
+        }
       }
       if (tries >= MAX_TRIES) {
         setRegenerating(false);
@@ -168,7 +178,13 @@ export function PlanFlowStack({
       setStarting(false);
       return;
     }
-    onSidecarUpdate({ ...sidecar, awaiting_start: false });
+    onSidecarUpdate({
+      ...sidecar,
+      awaiting_start: false,
+      generation_status: 'generating',
+      generation_error: undefined,
+      failed_at: undefined,
+    });
     setStarting(false);
   }, [starting, sidecar, callTool, projectSlug, onSidecarUpdate]);
 
@@ -177,7 +193,7 @@ export function PlanFlowStack({
   // in draft (no job running). setState lives in the async closure so the effect
   // body stays setState-free (react-hooks lint).
   useEffect(() => {
-    if (sidecar.scenes.length > 0 || draft) return;
+    if (sidecar.scenes.length > 0 || draft || failed) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let tries = 0;
@@ -186,9 +202,15 @@ export function PlanFlowStack({
       tries += 1;
       const parsed = parsePlan(await callTool('read_plan', { project_slug: projectSlug }));
       if (cancelled) return;
-      if (parsed && (!parsed.formula || parsed.formula === 'char_swap') && parsed.scenes.length > 0) {
-        onSidecarUpdate(parsed);
-        return;
+      if (parsed && (!parsed.formula || parsed.formula === 'char_swap')) {
+        if (parsed.generation_status === 'failed') {
+          onSidecarUpdate(parsed);
+          return;
+        }
+        if (parsed.scenes.length > 0) {
+          onSidecarUpdate(parsed);
+          return;
+        }
       }
       if (tries < MAX_TRIES) timer = setTimeout(() => { void attempt(); }, 3000);
     };
@@ -197,7 +219,7 @@ export function PlanFlowStack({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [sidecar.scenes.length, draft, callTool, projectSlug, onSidecarUpdate]);
+  }, [sidecar.scenes.length, draft, failed, callTool, projectSlug, onSidecarUpdate]);
 
   return (
     <PlanFlowProvider value={ctx}>
@@ -224,6 +246,8 @@ export function PlanFlowStack({
           <FlowStep>
             <PlanAnalysisNode
               generating={generating}
+              failed={failed}
+              error={sidecar.generation_error}
               forceOpen={draft}
               userContext={sidecar.user_context}
               systemPrompt={sidecar.analysis_prompt}
