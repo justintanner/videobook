@@ -56,18 +56,10 @@ export function generateGeminiOmniVideoDef(fs: VideocityFs): ToolDef {
       const imgs = (image_slugs ?? []).filter((s) => !blank(s));
       const videoSlug = blank(video_slug) ? undefined : video_slug;
 
-      // Gemini's input schema validates image_urls/video_list[].url as plain
-      // z.string() (not .url()), so @slugs pass safeParse here; the job uploads
-      // them to real URLs via uploadAssetToKie before submit. Validate the full
-      // request shape (enums/ranges) with slugs in place.
       const apicityCheck = GeminiOmniVideoRequestSchema.safeParse({
         model: "gemini-omni-video",
         input: {
           prompt,
-          ...(imgs.length > 0 ? { image_urls: imgs } : {}),
-          ...(videoSlug !== undefined
-            ? { video_list: [{ url: videoSlug, start: video_clip_start ?? 0, ends: video_clip_ends ?? 0 }] }
-            : {}),
           duration,
           ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
           ...(seed !== undefined ? { seed } : {}),
