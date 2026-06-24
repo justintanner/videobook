@@ -12,21 +12,9 @@ const num = (v: unknown): number | undefined => {
   return undefined;
 };
 
-// xAI / OpenAI text payloads mirror the upstream API body. The cost lib's
+// OpenAI text payloads mirror the upstream API body. The cost lib's
 // extractor flattens chat/responses payloads to a single string for the
 // chars/4 token heuristic, then prices via the bundled rate table.
-const xaiText = (model: string, defaultMaxOut?: number): CostAdapter => (input) => {
-  const max = num(input.max_output_tokens) ?? defaultMaxOut;
-  return {
-    provider: "xai",
-    payload: {
-      model,
-      text: str(input.script_text) || str(input.prompt) || str(input.text) || "",
-      ...(max !== undefined ? { max_output_tokens: max } : {}),
-    },
-  };
-};
-
 const openaiText = (model: string, defaultMaxOut?: number): CostAdapter => (input) => {
   const max = num(input.max_output_tokens) ?? defaultMaxOut;
   return {
@@ -168,10 +156,7 @@ const kieGrokImagineImageEdit: CostAdapter = () => ({
 // switched to a pure-local pricing table.
 const ADAPTERS: Record<string, CostAdapter> = {
   // --- text rewrites / chat ---
-  rewrite_script: xaiText("grok-4.20-reasoning", 4000),
   rewrite_prompt: openaiText("gpt-5.2", 1000),
-  chat: openaiText("gpt-5.4", 2000),
-  describe_image: xaiText("grok-4.20-reasoning", 1500),
 
   // --- KIE per-second video ---
   generate_seedance2_video: kieSeedance("bytedance/seedance-2"),

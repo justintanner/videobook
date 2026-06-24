@@ -43,7 +43,7 @@ export function registerProcessImageJob(fs: VideocityFs): void {
       }
 
       // Vision analysis (describe_image) is gated to slot drop in
-      // tools/assign-slot.ts so we don't burn gpt-5.4 on uploads that never
+      // tools/assign-slot.ts so we don't burn Gemini analysis on uploads that never
       // land in the timeline.
       return { success: true, width, height };
     });

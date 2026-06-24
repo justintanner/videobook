@@ -1,15 +1,14 @@
 import type { VideocityFs } from "videocity-engine";
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
-import { createOpenAi, withRetry, withFallback, textPart, imageBase64Part, firstContent } from "@apicity/openai";
-import type { OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
-import { createKie } from "@apicity/kie";
+import type { KieGeminiPart } from "@apicity/kie";
 import { registerJobHandler, queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
 import { findAudioFile } from "videocity-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
 import { enqueueLazyTimelineRender } from "../lazy-render.js";
+import { callGeminiFlashJson, geminiImageBase64Part, geminiTextPart } from "../kie-gemini.js";
 
 type AnalyzeVideoPayload = {
   type: "analyze_video";
@@ -79,10 +78,10 @@ export function registerAnalyzeVideoJob(fs: VideocityFs): void {
     const framesDir = join(assetDir, "original_frames");
 
     const sampled = sampleFrames(frameFiles);
-    const frameParts = [];
+    const frameParts: KieGeminiPart[] = [];
     for (const file of sampled) {
       const buf = await readFile(join(framesDir, file));
-      frameParts.push(imageBase64Part(buf.toString("base64"), "image/jpeg", "low"));
+      frameParts.push(geminiImageBase64Part(buf.toString("base64"), "image/jpeg"));
     }
 
     let transcriptionText = "";
@@ -113,41 +112,27 @@ export function registerAnalyzeVideoJob(fs: VideocityFs): void {
     contextParts.push(`${sampled.length} frames from the video are attached below.`);
 
     const userContent = [
-      textPart(contextParts.join("\n\n")),
+      geminiTextPart(contextParts.join("\n\n")),
       ...frameParts,
     ];
 
     let analysis: Record<string, unknown> = FALLBACK_ANALYSIS;
 
-    const openaiKey = getApiKey("OPENAI_API_KEY");
     const kieKey = getApiKey("KIE_API_KEY");
 
-    const providers: Array<(req: OpenAiChatRequest, signal?: AbortSignal) => Promise<OpenAiChatResponse>> = [];
-    if (openaiKey) {
-      const p = createOpenAi({ apiKey: openaiKey, timeout: 180_000 });
-      providers.push(withRetry<OpenAiChatRequest, OpenAiChatResponse>(p.post.v1.chat.completions, { retries: 2, baseMs: 500 }));
-    }
     if (kieKey) {
-      const p = createKie({ apiKey: kieKey, timeout: 180_000 });
-      providers.push(withRetry(p.chat.completions, { retries: 2, baseMs: 500 }));
-    }
-
-    if (providers.length > 0) {
       try {
-        const chat = providers.length > 1
-          ? withFallback(providers)
-          : providers[0];
-        const result = await chat({
-          model: "gpt-5.4",
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: userContent },
+        const outputText = await callGeminiFlashJson({
+          apiKey: kieKey,
+          parts: [
+            geminiTextPart(`Instructions:\n${SYSTEM_PROMPT}`),
+            ...userContent,
           ],
-          response_format: { type: "json_object" },
           temperature: 0.3,
-          max_completion_tokens: 4096,
+          maxOutputTokens: 4096,
+          timeout: 180_000,
         });
-        analysis = JSON.parse(firstContent(result));
+        analysis = JSON.parse(outputText) as Record<string, unknown>;
       } catch (e) {
         console.error(`[analyze_video] API failed for ${assetId}:`, e instanceof Error ? e.message : e);
       }

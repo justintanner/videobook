@@ -8,7 +8,6 @@ import type {
 } from "@apicity/elevenlabs";
 import { findAudioFile, findPrimaryMediaFile, findVideoFile } from "videocity-engine";
 import { createElevenLabs } from "@apicity/elevenlabs";
-import { createOpenAi, firstContent } from "@apicity/openai";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -20,6 +19,7 @@ import { probeVideo } from "../ffmpeg.js";
 import { validateDownloadOutput } from "./download-video.js";
 import { withLocalLease } from "./_lease.js";
 import { chunkStarts, chunkLength, extractAudioChunk } from "./_audio-chunks.js";
+import { callGeminiFlashJson, geminiTextPart } from "../kie-gemini.js";
 import {
   archiveTags,
   assetSnapshotKey,
@@ -84,8 +84,6 @@ type TranscriptResult = {
 const MEDIA_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".avi", ".mkv", ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"]);
 const CHUNK_SECONDS = 20 * 60;
 const ELEVENLABS_TIMEOUT_MS = 10 * 60_000;
-const ENRICHMENT_MODEL = "gpt-5.4";
-
 function readStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
@@ -334,28 +332,21 @@ function sampleTranscript(text: string): string {
 }
 
 async function enrichMetadata(title: string | null, transcript: string): Promise<{ topics: string[]; people: string[] }> {
-  const apiKey = getApiKey("OPENAI_API_KEY");
+  const apiKey = getApiKey("KIE_API_KEY");
   const sample = sampleTranscript(transcript);
   if (!apiKey || (!title && !sample)) return { topics: [], people: [] };
-  const provider = createOpenAi({ apiKey, timeout: 120_000 });
   try {
-    const response = await provider.post.v1.chat.completions({
-      model: ENRICHMENT_MODEL,
-      messages: [
-        {
-          role: "system",
-          content: "Return JSON only with topics:string[] and people:string[]. Topics are searchable subjects. People are named people only, not generic roles.",
-        },
-        {
-          role: "user",
-          content: `Title: ${title ?? ""}\n\nTranscript sample:\n${sample}`,
-        },
+    const outputText = await callGeminiFlashJson({
+      apiKey,
+      parts: [
+        geminiTextPart("Return JSON only with topics:string[] and people:string[]. Topics are searchable subjects. People are named people only, not generic roles."),
+        geminiTextPart(`Title: ${title ?? ""}\n\nTranscript sample:\n${sample}`),
       ],
-      response_format: { type: "json_object" },
       temperature: 0.1,
-      max_completion_tokens: 1000,
+      maxOutputTokens: 1000,
+      timeout: 120_000,
     });
-    const parsed = JSON.parse(firstContent(response)) as Record<string, unknown>;
+    const parsed = JSON.parse(outputText) as Record<string, unknown>;
     return {
       topics: readStringArray(parsed.topics),
       people: readStringArray(parsed.people),

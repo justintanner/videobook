@@ -2,8 +2,7 @@ import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { readFile as fsReadFile } from "node:fs/promises";
-import { createOpenAi, withRetry, textPart, imageBase64Part, firstContent } from "@apicity/openai";
-import type { OpenAiContentPart, OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
+import type { KieGeminiPart } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
@@ -15,6 +14,7 @@ import {
   sampleFrames,
   type Sfx,
 } from "../tools/_suggest-shared.js";
+import { callGeminiFlashJson, geminiImageBase64Part, geminiTextPart } from "../kie-gemini.js";
 
 const MAX_SFX = 8;
 const TIMESTAMP_END_BUFFER_S = 0.05;
@@ -71,47 +71,36 @@ export function registerSuggestSfxJob(fs: VideocityFs): void {
     const { assetId, projectSlug } = payload as SuggestSfxPayload;
 
     return withLocalLease(fs, projectSlug, assetId, ctx, "analyze", async () => {
-      const apiKey = getApiKey("OPENAI_API_KEY");
-      if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
+      const apiKey = getApiKey("KIE_API_KEY");
+      if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
 
       const loaded = await loadAssetForAnalysis(fs, assetId, projectSlug);
       if (!loaded.ok) throw new Error(loaded.error.message);
       const { framesDir, frameNames, transcript, meta, prior } = loaded.value;
 
       const sampled = sampleFrames(frameNames);
-      const frameParts: OpenAiContentPart[] = [];
+      const frameParts: KieGeminiPart[] = [];
       for (const file of sampled) {
         const buf = await fsReadFile(join(framesDir, file));
-        frameParts.push(imageBase64Part(buf.toString("base64"), "image/jpeg", "low"));
+        frameParts.push(geminiImageBase64Part(buf.toString("base64"), "image/jpeg"));
       }
 
       const contextString = buildSfxContext(meta, prior, transcript, sampled.length);
-      const userContent: OpenAiContentPart[] = [
-        textPart(contextString),
+      const userContent: KieGeminiPart[] = [
+        geminiTextPart(contextString),
         ...frameParts,
       ];
 
-      const provider = createOpenAi({ apiKey, timeout: 240_000 });
-      const call = withRetry<OpenAiChatRequest, OpenAiChatResponse>(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
-
-      const result = await call({
-        model: MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT_SFX },
-          { role: "user", content: userContent },
+      const outputText = await callGeminiFlashJson({
+        apiKey,
+        parts: [
+          geminiTextPart(`Instructions:\n${SYSTEM_PROMPT_SFX}`),
+          ...userContent,
         ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "suggest_sfx_result",
-            schema: SUGGEST_SFX_JSON_SCHEMA as unknown as Record<string, unknown>,
-            strict: true,
-          },
-        },
         temperature: 0.3,
-        max_completion_tokens: 4096,
+        maxOutputTokens: 4096,
+        responseSchema: SUGGEST_SFX_JSON_SCHEMA as unknown as Record<string, unknown>,
       });
-      const outputText = firstContent(result);
 
       let parsed: { sfx: Sfx[]; summary: string };
       try {

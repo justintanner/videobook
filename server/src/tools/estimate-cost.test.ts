@@ -71,13 +71,13 @@ describe("estimate_cost tool", () => {
     expect(payload.estimate.breakdown.units).toBe(5);
   });
 
-  it("estimates a heuristic-token text tool (xai rewrite_script)", async () => {
+  it("estimates a heuristic-token text tool (openai rewrite_prompt)", async () => {
     const result = await client.callTool({
       name: "estimate_cost",
       arguments: {
         calls: [{
-          tool_name: "rewrite_script",
-          input: { script_text: "x".repeat(400) },
+          tool_name: "rewrite_prompt",
+          input: { prompt: "x".repeat(400) },
         }],
       },
     });

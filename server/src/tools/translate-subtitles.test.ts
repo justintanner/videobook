@@ -12,7 +12,7 @@ type TextContent = Array<{ type: string; text: string }>;
 describe("translate_subtitles tool", () => {
   let client: Client;
   let tempDir: string;
-  const originalKey = process.env.OPENAI_API_KEY;
+  const originalKey = process.env.KIE_API_KEY;
 
   beforeAll(async () => {
     await queue.start();
@@ -23,7 +23,7 @@ describe("translate_subtitles tool", () => {
   });
 
   beforeEach(async () => {
-    delete process.env.OPENAI_API_KEY;
+    delete process.env.KIE_API_KEY;
     tempDir = await mkdtemp(join(tmpdir(), "videocity-translate-subs-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
@@ -34,15 +34,15 @@ describe("translate_subtitles tool", () => {
 
   afterEach(async () => {
     if (originalKey) {
-      process.env.OPENAI_API_KEY = originalKey;
+      process.env.KIE_API_KEY = originalKey;
     } else {
-      delete process.env.OPENAI_API_KEY;
+      delete process.env.KIE_API_KEY;
     }
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("returns error when OPENAI_API_KEY is not set", async () => {
+  it("returns error when KIE_API_KEY is not set", async () => {
     const result = await client.callTool({
       name: "translate_subtitles",
       arguments: { asset_id: "vid-test", project_slug: "test-proj", language: "en" },
@@ -54,7 +54,7 @@ describe("translate_subtitles tool", () => {
   });
 
   it("rejects asset ids that are not vid- or aud-", async () => {
-    process.env.OPENAI_API_KEY = "test-key";
+    process.env.KIE_API_KEY = "test-key";
     const result = await client.callTool({
       name: "translate_subtitles",
       arguments: { asset_id: "img-test", project_slug: "test-proj", language: "en" },
@@ -66,7 +66,7 @@ describe("translate_subtitles tool", () => {
   });
 
   it("returns error when the asset has no elevenlabs.json", async () => {
-    process.env.OPENAI_API_KEY = "test-key";
+    process.env.KIE_API_KEY = "test-key";
     const fs = createFs({ projectsDir: tempDir });
     const asset = await fs.createAsset("vid", "untranscribed", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
@@ -83,7 +83,7 @@ describe("translate_subtitles tool", () => {
   });
 
   it("enqueues the translate job for a transcribed asset", async () => {
-    process.env.OPENAI_API_KEY = "test-key";
+    process.env.KIE_API_KEY = "test-key";
     const fs = createFs({ projectsDir: tempDir });
     const asset = await fs.createAsset("vid", "transcribed", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");

@@ -158,7 +158,7 @@ export function registerRewriteScriptJob(fs: VideocityFs): void {
     } = payload as RewriteScriptPayload;
 
     return withLocalLease(fs, projectSlug, scriptAssetId, ctx, "rewrite_script", async () => {
-      const responses = buildResponses(requireApiKey("OPENAI_API_KEY"));
+      const responses = buildResponses(requireApiKey("KIE_API_KEY"));
 
       const readResult = await fs.readFile(scriptAssetId, SCRIPT_FILENAME, projectSlug);
       if (!readResult.ok) {

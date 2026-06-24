@@ -60,8 +60,8 @@ export function rewriteScriptDef(fs: VideocityFs): ToolDef {
         );
       }
 
-      if (!process.env.OPENAI_API_KEY) {
-        return error("OPENAI_API_KEY is not set");
+      if (!process.env.KIE_API_KEY) {
+        return error("KIE_API_KEY is not set");
       }
 
       const scriptManifest = await fs.getManifest(asset_id, project_slug);
@@ -97,4 +97,3 @@ export function rewriteScriptDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

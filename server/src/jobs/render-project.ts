@@ -136,7 +136,7 @@ async function resolveSubtitleSegments(
   }
 
   try {
-    const responses = buildResponses(requireApiKey("OPENAI_API_KEY"));
+    const responses = buildResponses(requireApiKey("KIE_API_KEY"));
     const sidecar = await translateTranscript(raw, subtitleLanguage, responses);
     const writeResult = await fs.writeFile(
       assetId,

@@ -831,7 +831,7 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
 
   // Auto-render and auto-analyze are intentionally NOT performed here.
   // Renders fire from explicit /render or assign_slot (lazy on slot drop).
-  // gpt-5.4 analysis fires from assign_slot (lazy on slot drop) and
+  // Gemini analysis fires from assign_slot (lazy on slot drop) and
   // gpt-4o-mini speech-to-text fires eagerly from process_video on upload.
   // Sync only retries the ElevenLabs transcribe step (auto_transcribe), which
   // is gated on .original.analysis.json already existing — i.e. only kicks in

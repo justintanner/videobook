@@ -2,11 +2,16 @@ import type { VideocityFs } from "videocity-engine";
 import { join, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
-import { createOpenAi, withRetry } from "@apicity/openai";
 import type { OpenAiResponseRequest, OpenAiResponseResponse } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
+import {
+  KIE_GEMINI_FLASH_MODEL,
+  callGeminiFlashJson,
+  geminiImageDataUrlPart,
+  geminiTextPart,
+} from "../kie-gemini.js";
 type DescribeImagePayload = {
   type: "describe_image";
   sourceAssetId: string;
@@ -32,7 +37,7 @@ const GUIDE_PATH = join(__dirname, "../guides/image_reproduction_guide.md");
 
 export const SCRIPT_FILENAME = "original.md";
 export const ANALYSIS_FILENAME = ".original.analysis.json";
-export const VISION_MODEL = "gpt-5.4";
+export const VISION_MODEL = KIE_GEMINI_FLASH_MODEL;
 export const PROMPT_CHAR_LIMIT = 1900;
 
 function mimeForFilename(filename: string): "image/jpeg" | "image/png" | "image/webp" {
@@ -78,16 +83,76 @@ export function mimeForImageFilename(filename: string): "image/jpeg" | "image/pn
 
 export function buildResponses(apiKey: string | undefined): ResponsesFn {
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not set");
+    throw new Error("KIE_API_KEY is not set");
   }
-  const client = createOpenAi({ apiKey, timeout: 180_000 });
-  return withRetry(client.post.v1.responses, { retries: 2, baseMs: 500 });
+  return async (req, signal) => {
+    const parts = responseRequestToGeminiParts(req);
+    const outputText = await callGeminiFlashJson({
+      apiKey,
+      parts,
+      temperature: typeof req.temperature === "number" ? req.temperature : undefined,
+      maxOutputTokens: typeof req.max_output_tokens === "number" ? req.max_output_tokens : undefined,
+      timeout: 180_000,
+      signal,
+    });
+
+    return {
+      status: "completed",
+      model: VISION_MODEL,
+      output: [{
+        type: "message",
+        role: "assistant",
+        status: "completed",
+        content: [{ type: "output_text", text: outputText, annotations: [] }],
+      }],
+    } as unknown as OpenAiResponseResponse;
+  };
 }
 
-// Concatenates all assistant output_text segments. Throws if the model
-// produced a refusal — Grok rarely does this on the kinds of images
-// describe_image runs against, but we surface it explicitly rather than
-// silently returning an empty string.
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function appendResponseContent(parts: ReturnType<typeof geminiTextPart>[], content: unknown): void {
+  if (typeof content === "string") {
+    parts.push(geminiTextPart(content));
+    return;
+  }
+
+  if (!Array.isArray(content)) return;
+
+  for (const item of content) {
+    if (!isRecord(item)) continue;
+    if (item.type === "input_text" && typeof item.text === "string") {
+      parts.push(geminiTextPart(item.text));
+    } else if (item.type === "input_image" && typeof item.image_url === "string") {
+      parts.push(geminiImageDataUrlPart(item.image_url));
+    }
+  }
+}
+
+function responseRequestToGeminiParts(req: OpenAiResponseRequest): ReturnType<typeof geminiTextPart>[] {
+  const parts: ReturnType<typeof geminiTextPart>[] = [];
+  if (typeof req.instructions === "string" && req.instructions.trim()) {
+    parts.push(geminiTextPart(`Instructions:\n${req.instructions}`));
+  }
+
+  const input = req.input as unknown;
+  if (typeof input === "string") {
+    parts.push(geminiTextPart(input));
+  } else if (Array.isArray(input)) {
+    for (const item of input) {
+      if (!isRecord(item)) continue;
+      appendResponseContent(parts, item.content);
+    }
+  }
+
+  if (parts.length === 0) {
+    parts.push(geminiTextPart("Return the requested JSON object."));
+  }
+  return parts;
+}
+
 export function firstResponseText(response: OpenAiResponseResponse): string {
   const texts: string[] = [];
   for (const item of response.output) {
@@ -105,7 +170,7 @@ export async function describeImageBytes(
   mime: "image/jpeg" | "image/png" | "image/webp",
   responses?: ResponsesFn,
 ): Promise<DescribeImageResult> {
-  const fn = responses ?? buildResponses(requireApiKey("OPENAI_API_KEY"));
+  const fn = responses ?? buildResponses(requireApiKey("KIE_API_KEY"));
   const guide = await readFile(GUIDE_PATH, "utf-8");
   const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
   const response = await fn({
@@ -151,7 +216,7 @@ export function registerDescribeImageJob(fs: VideocityFs): void {
     // mode runs on the source asset, which already exists at status='ready'.
     const targetAssetId = scriptAssetId ?? sourceAssetId;
     return withLocalLease(fs, projectSlug, targetAssetId, ctx, "describe", async () => {
-      const responses = buildResponses(requireApiKey("OPENAI_API_KEY"));
+      const responses = buildResponses(requireApiKey("KIE_API_KEY"));
 
       const readResult = await fs.readFile(sourceAssetId, sourceImageFilename, projectSlug);
       if (!readResult.ok) {

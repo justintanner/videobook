@@ -1,8 +1,9 @@
 import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { findVideoFile } from "videocity-engine";
+import { KIE_GEMINI_FLASH_MODEL } from "../kie-gemini.js";
 
-export const MODEL = "gpt-5.4";
+export const MODEL = KIE_GEMINI_FLASH_MODEL;
 const MAX_FRAMES = 15;
 const SILENCE_MARKER_THRESHOLD_S = 0.5;
 export const DEAD_AIR_THRESHOLD_S = 1.5;

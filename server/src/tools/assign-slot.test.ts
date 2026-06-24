@@ -195,15 +195,15 @@ describe("assign_slot lazy analysis trigger", () => {
       name: "create_project",
       arguments: { project_slug: "test-proj" },
     });
-    savedKey = process.env.OPENAI_API_KEY;
+    savedKey = process.env.KIE_API_KEY;
     // "test-" prefix is rejected by api-key.ts so any accidentally-dequeued job
-// fails closed before hitting the real provider.
-process.env.OPENAI_API_KEY = "test-key";
+    // fails closed before hitting the real provider.
+    process.env.KIE_API_KEY = "test-key";
   });
 
   afterEach(async () => {
-    if (savedKey !== undefined) process.env.OPENAI_API_KEY = savedKey;
-    else delete process.env.OPENAI_API_KEY;
+    if (savedKey !== undefined) process.env.KIE_API_KEY = savedKey;
+    else delete process.env.KIE_API_KEY;
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
@@ -247,8 +247,8 @@ process.env.OPENAI_API_KEY = "test-key";
     expect(parsed.auto_analyze).toBeUndefined();
   });
 
-  it("does not enqueue analysis when OPENAI_API_KEY is missing", async () => {
-    delete process.env.OPENAI_API_KEY;
+  it("does not enqueue analysis when KIE_API_KEY is missing", async () => {
+    delete process.env.KIE_API_KEY;
     const assetId = await uploadImage("photo.png");
 
     const result = await client.callTool({

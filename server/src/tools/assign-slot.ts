@@ -26,8 +26,7 @@ async function enqueueLazyAnalysis(
   // check (not getApiKey) so the gate also lets through placeholder keys
   // used in tests; the real placeholder defense lives at the actual API
   // call inside analyze-video / describe-image (via requireApiKey/getApiKey).
-  if (isImage && !process.env.OPENAI_API_KEY) return null;
-  if (isVideo && !process.env.OPENAI_API_KEY && !process.env.KIE_API_KEY) return null;
+  if (!process.env.KIE_API_KEY) return null;
 
   const manifestResult = await fs.getManifest(asset.id, projectSlug, { includeDotfiles: true });
   if (!manifestResult.ok) return null;

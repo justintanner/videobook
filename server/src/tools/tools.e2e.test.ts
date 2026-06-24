@@ -781,8 +781,8 @@ describe("MCP tools e2e", () => {
     expect(parse(result).category).toBe("image");
   });
 
-  it("chat returns error without OPENAI_API_KEY", async () => {
-    if (hasOpenAiKey) return;
+  it("chat returns error without KIE_API_KEY", async () => {
+    if (hasKieKey) return;
     const result = await client.callTool({
       name: "chat",
       arguments: {
@@ -791,6 +791,6 @@ describe("MCP tools e2e", () => {
       },
     });
     expect(result.isError).toBe(true);
-    expect(parseText(result)).toContain("OPENAI_API_KEY");
+    expect(parseText(result)).toContain("KIE_API_KEY");
   });
 });

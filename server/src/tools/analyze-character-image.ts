@@ -28,10 +28,10 @@ export function analyzeCharacterImageDef(fs: VideocityFs): ToolDef {
       "Synchronous — no jobs, no assets created. Used by the /character flow to seed the editable form before generating a character sheet.",
     schema,
     handler: async (args) => {
-      if (!process.env.OPENAI_API_KEY) {
+      if (!process.env.KIE_API_KEY) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "OPENAI_API_KEY environment variable is not set" }],
+          content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
         };
       }
       const { project_slug, image_slug, subject_kind } = args as {
@@ -83,4 +83,3 @@ export function analyzeCharacterImageDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

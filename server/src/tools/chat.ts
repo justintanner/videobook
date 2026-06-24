@@ -3,13 +3,14 @@
  */
 import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
-import { createOpenAi, firstContent } from "@apicity/openai";
 import { resolveAllAssets, expandSlotRefs } from "videocity-engine";
 import { buildChatRoutingPrompt, getRoutableTool, TIMESTAMP_PARAMS } from "../chat-router.js";
 import { getRecentHistory, formatHistoryForPrompt, logUserTurn, logAssistantTurn } from "videocity-engine";
 import { parseTime } from "../time-parse.js";
 import { withLogging } from "./log-wrapper.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
+import { callGeminiFlashJson, geminiTextPart } from "../kie-gemini.js";
+import { getApiKey } from "../api-key.js";
 
 type ChatDecision = {
   tool: string;
@@ -79,10 +80,9 @@ export function chatDef(fs: VideocityFs): ToolDef {
       const historyLines = await getRecentHistory(fs, slug);
       const historyContext = formatHistoryForPrompt(historyLines);
 
-      // 5. Call GPT 5.4 for routing
-      const apiKey = process.env.OPENAI_API_KEY;
+      const apiKey = getApiKey("KIE_API_KEY");
       if (!apiKey) {
-        return error("OPENAI_API_KEY environment variable is not set");
+        return error("KIE_API_KEY environment variable is not set");
       }
 
       const systemPrompt = buildChatRoutingPrompt(slug, historyContext || undefined);
@@ -102,19 +102,19 @@ Determine which tool to use and what parameters to pass.`;
 
       let decision: ChatDecision;
       try {
-        const provider = createOpenAi({ apiKey, timeout: 15_000 });
-        const result = await provider.post.v1.chat.completions({
-          model: "gpt-5.4",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage },
+        const outputText = await callGeminiFlashJson({
+          apiKey,
+          parts: [
+            geminiTextPart(`Instructions:\n${systemPrompt}`),
+            geminiTextPart(userMessage),
           ],
-          response_format: { type: "json_object" },
           temperature: 0.1,
-          max_completion_tokens: 512,
-        }, AbortSignal.timeout(15_000));
+          maxOutputTokens: 512,
+          timeout: 15_000,
+          signal: AbortSignal.timeout(15_000),
+        });
 
-        decision = JSON.parse(firstContent(result)) as ChatDecision;
+        decision = JSON.parse(outputText) as ChatDecision;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return error(`Routing failed: ${msg}`);
@@ -192,4 +192,3 @@ Determine which tool to use and what parameters to pass.`;
 function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
 }
-

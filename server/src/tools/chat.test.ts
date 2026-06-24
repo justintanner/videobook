@@ -10,12 +10,12 @@ type TextContent = Array<{ type: string; text: string }>;
 // Per-test createTestClient + create_project under parallel test load was
 // blowing past the 60s hook budget — every per-test call stomps the queue's
 // global projectsDir, racing concurrent suites into ENOENT. Tests don't
-// share persistent state in conflicting ways; only the OPENAI_API_KEY env
+// share persistent state in conflicting ways; only the KIE_API_KEY env
 // mutation needs per-test cleanup.
 describe("chat tool", () => {
   let client: Client;
   let tempDir: string;
-  const origKey = process.env.OPENAI_API_KEY;
+  const origKey = process.env.KIE_API_KEY;
 
   beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
@@ -32,8 +32,8 @@ describe("chat tool", () => {
   });
 
   afterEach(() => {
-    if (origKey) process.env.OPENAI_API_KEY = origKey;
-    else delete process.env.OPENAI_API_KEY;
+    if (origKey) process.env.KIE_API_KEY = origKey;
+    else delete process.env.KIE_API_KEY;
   });
 
   it("returns error for unresolved @tag", async () => {
@@ -49,8 +49,8 @@ describe("chat tool", () => {
     expect(content[0].text).toContain("Asset not found");
   });
 
-  it("returns error when OPENAI_API_KEY is not set", async () => {
-    delete process.env.OPENAI_API_KEY;
+  it("returns error when KIE_API_KEY is not set", async () => {
+    delete process.env.KIE_API_KEY;
     const result = await client.callTool({
       name: "chat",
       arguments: {
@@ -71,7 +71,7 @@ describe("chat tool", () => {
       arguments: { project_slug: "test-proj", filename: "sunset.png", data },
     });
 
-    delete process.env.OPENAI_API_KEY;
+    delete process.env.KIE_API_KEY;
     const result = await client.callTool({
       name: "chat",
       arguments: {
@@ -83,7 +83,7 @@ describe("chat tool", () => {
     // Asset resolution succeeds (no "Asset not found" error) but API key check fails
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("OPENAI_API_KEY");
+    expect(content[0].text).toContain("KIE_API_KEY");
     expect(content[0].text).not.toContain("Asset not found");
   });
 
@@ -103,7 +103,7 @@ describe("chat tool", () => {
   });
 
   it("prompt without @tags and no API key returns API key error", async () => {
-    delete process.env.OPENAI_API_KEY;
+    delete process.env.KIE_API_KEY;
     const result = await client.callTool({
       name: "chat",
       arguments: {
@@ -113,6 +113,6 @@ describe("chat tool", () => {
     });
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("OPENAI_API_KEY");
+    expect(content[0].text).toContain("KIE_API_KEY");
   });
 });

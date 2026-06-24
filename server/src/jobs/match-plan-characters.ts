@@ -1,17 +1,10 @@
-// Vision auto-match: for each plan scene's source frames, decide which of the
-// plan's reference characters actually appear, and persist that as the per-frame
-// wiring (scenes[N].frame_characters.image{1|2}). The canvas seeds its
-// character→swap edges from this, so each frame's swap feeds only the matching
-// subject(s) instead of always both. Reuses the @apicity/openai chat.completions
-// vision pattern from the plan-visualization job.
 import type { VideocityFs } from "videocity-engine";
 import { extname } from "node:path";
-import { createOpenAi, withRetry, textPart, imageBase64Part, firstContent } from "@apicity/openai";
-import type { OpenAiContentPart, OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
+import type { KieGeminiPart } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
-import { MODEL } from "../tools/_suggest-shared.js";
 import { findImageFile } from "../tools/_image-inputs.js";
+import { callGeminiFlashJson, geminiImageBase64Part, geminiTextPart } from "../kie-gemini.js";
 
 type FrameCharacters = { image1?: string[]; image2?: string[] };
 
@@ -82,7 +75,7 @@ async function loadCharImages(
 }
 
 async function classifyFrame(
-  call: (req: OpenAiChatRequest) => Promise<OpenAiChatResponse>,
+  apiKey: string,
   charImages: CharImage[],
   sourceBase64: string,
 ): Promise<string[]> {
@@ -91,15 +84,15 @@ async function classifyFrame(
     .map((c, i) => `Character ${i + 1}: id="${c.assetId}", name="${c.name}"${c.description ? `, ${c.description}` : ""}`)
     .join("\n");
 
-  const userContent: OpenAiContentPart[] = [
-    textPart(
+  const userContent: KieGeminiPart[] = [
+    geminiTextPart(
       `The first image is the SOURCE FRAME (a still from a film scene). ` +
         `The following ${charImages.length} image(s) are CHARACTER references, in this order:\n${charBlock}\n\n` +
         `Return character_asset_ids: the reference id(s) that match the prominent on-screen person(s) in the SOURCE FRAME, ` +
         `ordered by prominence (most prominent first), at most two, at least one.`,
     ),
-    imageBase64Part(sourceBase64, "image/jpeg", "high"),
-    ...charImages.map((c) => imageBase64Part(c.base64, c.mime, "low")),
+    geminiImageBase64Part(sourceBase64, "image/jpeg"),
+    ...charImages.map((c) => geminiImageBase64Part(c.base64, c.mime)),
   ];
 
   const schema = {
@@ -115,22 +108,19 @@ async function classifyFrame(
     required: ["character_asset_ids"],
   };
 
-  const result = await call({
-    model: MODEL,
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT_MATCH },
-      { role: "user", content: userContent },
+  const outputText = await callGeminiFlashJson({
+    apiKey,
+    parts: [
+      geminiTextPart(`Instructions:\n${SYSTEM_PROMPT_MATCH}`),
+      ...userContent,
     ],
-    response_format: {
-      type: "json_schema",
-      json_schema: { name: "character_match", schema: schema as unknown as Record<string, unknown>, strict: true },
-    },
-    max_completion_tokens: 2048,
+    maxOutputTokens: 2048,
+    responseSchema: schema as unknown as Record<string, unknown>,
   });
 
   let parsed: { character_asset_ids?: string[] };
   try {
-    parsed = JSON.parse(firstContent(result)) as { character_asset_ids?: string[] };
+    parsed = JSON.parse(outputText) as { character_asset_ids?: string[] };
   } catch {
     return [ids[0]];
   }
@@ -147,8 +137,8 @@ export function registerMatchPlanCharactersJob(fs: VideocityFs): void {
   registerJobHandler("match_plan_characters", async (payload) => {
     const { projectSlug, sceneIndex } = payload as unknown as MatchPlanCharactersPayload;
 
-    const apiKey = getApiKey("OPENAI_API_KEY");
-    if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
+    const apiKey = getApiKey("KIE_API_KEY");
+    if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
 
     const planRead = await fs.readFile("plan", ".plan.json", projectSlug);
     if (!planRead.ok) throw new Error(`No plan in ${projectSlug}: ${planRead.error.message}`);
@@ -162,14 +152,6 @@ export function registerMatchPlanCharactersJob(fs: VideocityFs): void {
     const targetIndices =
       sceneIndex == null ? plan.scenes.map((_, i) => i) : [sceneIndex];
 
-    const provider = createOpenAi({ apiKey, timeout: 120_000 });
-    const call = withRetry<OpenAiChatRequest, OpenAiChatResponse>(
-      provider.post.v1.chat.completions,
-      { retries: 2, baseMs: 500 },
-    );
-
-    // Classify into an in-memory map first, then merge into a freshly-read plan
-    // so we don't clobber concurrent swap/select writes to .plan.json.
     const matched = new Map<string, string[]>();
     for (const s of targetIndices) {
       if (!plan.scenes[s]) continue;
@@ -177,7 +159,7 @@ export function registerMatchPlanCharactersJob(fs: VideocityFs): void {
         const srcName = `s${s + 1}-image${f}-source.jpg`;
         const srcRead = await fs.readFile("plan", srcName, projectSlug);
         if (!srcRead.ok) continue; // source frame not extracted — skip this frame
-        const ids = await classifyFrame(call, charImages, Buffer.from(srcRead.value).toString("base64"));
+        const ids = await classifyFrame(apiKey, charImages, Buffer.from(srcRead.value).toString("base64"));
         matched.set(`${s}:${f}`, ids);
       }
     }

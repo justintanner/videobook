@@ -12,6 +12,7 @@ import {
   type ResponsesFn,
 } from "./describe-image.js";
 import { findImageFile } from "../tools/_image-inputs.js";
+import { KIE_GEMINI_FLASH_MODEL } from "../kie-gemini.js";
 
 export type CharacterSubjectKind = "female" | "male" | "animal" | "other";
 
@@ -79,7 +80,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const GUIDE_PATH = join(__dirname, "../guides/character_schema_guide.md");
 
 export const CHARACTER_METADATA_KEY = "character";
-const VISION_MODEL = "gpt-5.4";
+const VISION_MODEL = KIE_GEMINI_FLASH_MODEL;
 
 export const isAnimalSubject = (k: CharacterSubjectKind): boolean =>
   k === "animal";
@@ -211,7 +212,7 @@ export async function extractCharacterFromBytes(
   sourceAssetId: string,
   options: ExtractCharacterOptions = {},
 ): Promise<Character> {
-  const fn = options.responses ?? buildResponses(requireApiKey("OPENAI_API_KEY"));
+  const fn = options.responses ?? buildResponses(requireApiKey("KIE_API_KEY"));
   const guide = await readFile(GUIDE_PATH, "utf-8");
   const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
   const userText = options.subjectKindOverride

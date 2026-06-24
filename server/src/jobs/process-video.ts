@@ -199,7 +199,7 @@ export function registerProcessVideoJob(fs: VideocityFs): void {
 
     // Speech-to-text stays eager: cheap (gpt-4o-mini-transcribe) and useful as
     // a standalone artifact even if the asset never lands in a slot. Vision
-    // analysis (gpt-5.4) is gated to slot drop in tools/assign-slot.ts.
+    // analysis (Gemini) is gated to slot drop in tools/assign-slot.ts.
     if (process.env.NODE_ENV !== "test" && !skipDownstreamJobs && probe.hasAudio) {
       const transcribeJobId = `transcribe-video-audio-${assetId}-${Date.now()}`;
       await queue.enqueue(transcribeJobId, {

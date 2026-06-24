@@ -7,14 +7,7 @@ import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
-import { createKie, withRetry } from "@apicity/kie";
-import type {
-  KieGemini35FlashGenerateContentResponse,
-  KieGemini35FlashStreamGenerateContentChunk,
-  KieGemini35FlashStreamGenerateContentRequest,
-  KieGemini35FlashStreamGenerateContentResult,
-  KieGeminiPart,
-} from "@apicity/kie";
+import type { KieGeminiPart } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
@@ -33,6 +26,7 @@ import {
   sampleFramesForScenes,
   type CharacterContext,
 } from "../tools/plan-visualization.js";
+import { callGeminiFlashJson, geminiImageBase64Part, geminiTextPart } from "../kie-gemini.js";
 
 const execFileAsync = promisify(execFile);
 const planVisRequire = createRequire(import.meta.url);
@@ -74,39 +68,6 @@ const VISUALS_GEMINI_SCHEMA = {
     },
   },
 } as const;
-
-function geminiTextPart(text: string): KieGeminiPart {
-  return { text };
-}
-
-function geminiImageBase64Part(base64: string, mimeType: string): KieGeminiPart {
-  return { inline_data: { mime_type: mimeType, data: base64 } };
-}
-
-function isAsyncIterableResult(
-  result: KieGemini35FlashStreamGenerateContentResult,
-): result is AsyncIterable<KieGemini35FlashStreamGenerateContentChunk> {
-  const maybeIterable = result as { [Symbol.asyncIterator]?: unknown };
-  return typeof maybeIterable[Symbol.asyncIterator] === "function";
-}
-
-function geminiResponseText(response: KieGemini35FlashGenerateContentResponse): string {
-  return (response.candidates ?? [])
-    .flatMap((candidate) => candidate.content?.parts ?? [])
-    .map((part) => typeof part.text === "string" ? part.text : "")
-    .join("")
-    .trim();
-}
-
-async function firstGeminiContent(result: KieGemini35FlashStreamGenerateContentResult): Promise<string> {
-  if (!isAsyncIterableResult(result)) return geminiResponseText(result);
-
-  let text = "";
-  for await (const chunk of result) {
-    text += geminiResponseText(chunk);
-  }
-  return text.trim();
-}
 
 async function extractFrameJpeg(inputPath: string, timestamp: number, outPath: string): Promise<Buffer> {
   try {
@@ -244,24 +205,13 @@ export function registerPlanVisualizationJob(fs: VideocityFs): void {
         ...frameParts,
       ];
 
-      const provider = createKie({ apiKey, timeout: 240_000 });
-      const call = withRetry<KieGemini35FlashStreamGenerateContentRequest, KieGemini35FlashStreamGenerateContentResult>(
-        provider.gemini.post.v1.models.gemini35Flash.streamGenerateContent,
-        { retries: 2, baseMs: 500 },
-      );
-
-      const outputText = await firstGeminiContent(await call({
-        stream: false,
-        contents: [
-          { role: "user", parts: userContent },
-        ],
-        generationConfig: {
-          temperature: 0.5,
-          maxOutputTokens: 8192,
-          responseMimeType: "application/json",
-          responseSchema: VISUALS_GEMINI_SCHEMA,
-        },
-      }));
+      const outputText = await callGeminiFlashJson({
+        apiKey,
+        parts: userContent,
+        temperature: 0.5,
+        maxOutputTokens: 8192,
+        responseSchema: VISUALS_GEMINI_SCHEMA as unknown as Record<string, unknown>,
+      });
 
       let visuals: { visual: string }[];
       try {

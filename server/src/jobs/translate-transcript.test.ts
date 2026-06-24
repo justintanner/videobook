@@ -18,10 +18,10 @@ describe("runTranslateTranscript", () => {
   let fs: VideocityFs;
   let tempDir: string;
   const projectSlug = "test-proj";
-  const originalKey = process.env.OPENAI_API_KEY;
+  const originalKey = process.env.KIE_API_KEY;
 
   beforeEach(async () => {
-    delete process.env.OPENAI_API_KEY;
+    delete process.env.KIE_API_KEY;
     tempDir = await mkdtemp(join(tmpdir(), "videocity-translate-test-"));
     fs = createFsForTest(tempDir);
     const project = await fs.createProject(projectSlug);
@@ -30,9 +30,9 @@ describe("runTranslateTranscript", () => {
 
   afterEach(async () => {
     if (originalKey) {
-      process.env.OPENAI_API_KEY = originalKey;
+      process.env.KIE_API_KEY = originalKey;
     } else {
-      delete process.env.OPENAI_API_KEY;
+      delete process.env.KIE_API_KEY;
     }
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
@@ -78,7 +78,7 @@ describe("runTranslateTranscript", () => {
 
   it("serves a cached sidecar whose hash matches the transcript without calling the LLM", async () => {
     const assetId = await createTranscribedAsset();
-    // OPENAI_API_KEY is unset: reaching translation would throw, so success proves the cache path.
+    // KIE_API_KEY is unset: reaching translation would throw, so success proves the cache path.
     const sidecar = {
       sourceTextHash: computeSourceTextHash(parseSegments(transcriptJson)),
       targetLanguage: "en",
@@ -112,6 +112,6 @@ describe("runTranslateTranscript", () => {
       assetId,
       projectSlug,
       targetLanguage: "en",
-    }, testCtx)).rejects.toThrow(/OPENAI_API_KEY/);
+    }, testCtx)).rejects.toThrow(/KIE_API_KEY/);
   });
 });

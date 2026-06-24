@@ -19,10 +19,10 @@ export function suggestSfxDef(fs: VideocityFs): ToolDef {
       const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
       const assetId = asset_id.replace(/^@/, "");
 
-      if (!process.env.OPENAI_API_KEY) {
+      if (!process.env.KIE_API_KEY) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "OPENAI_API_KEY environment variable is not set" }],
+          content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
         };
       }
 
