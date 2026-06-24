@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeChunks, sampleFramesForScenes, dialogForChunk } from "./plan-visualization.js";
+import { computeChunks, sampleFramesForScenes, dialogForChunk, buildSkeletonPlanSidecar } from "./plan-visualization.js";
 import { parseScdetOutput, deriveCandidates } from "../scene-detect.js";
 
 type Candidate = { t: number; score: number; kind: "shot" | "settle" };
@@ -36,6 +36,30 @@ describe("dialogForChunk", () => {
   it("falls back to a placeholder when no words land in the chunk", () => {
     expect(dialogForChunk([word("later", 9.0, 9.4)], { start: 0, end: 2 })).toBe("(no speech in this chunk)");
     expect(dialogForChunk([], { start: 0, end: 2 })).toBe("(no speech in this chunk)");
+  });
+});
+
+describe("buildSkeletonPlanSidecar", () => {
+  const characters = [
+    { asset_id: "char-a", name: "Alice", description: "desc a" },
+    { asset_id: "char-b", name: "Bob", description: "desc b" },
+  ];
+
+  it("builds a char_swap sidecar with no scenes but source, cast, and analysis prompt populated", () => {
+    const sidecar = buildSkeletonPlanSidecar("vid-source", characters);
+    expect(sidecar.formula).toBe("char_swap");
+    expect(sidecar.scenes).toEqual([]);
+    expect(sidecar.source_asset_id).toBe("vid-source");
+    expect(sidecar.characters).toEqual(characters);
+    expect(sidecar.analysis_prompt.length).toBeGreaterThan(0);
+  });
+
+  it("round-trips through JSON so read_plan returns the same shape the client expects", () => {
+    const parsed = JSON.parse(JSON.stringify(buildSkeletonPlanSidecar("vid-source", characters)));
+    expect(parsed.formula).toBe("char_swap");
+    expect(parsed.scenes).toEqual([]);
+    expect(parsed.characters).toHaveLength(2);
+    expect(typeof parsed.analysis_prompt).toBe("string");
   });
 });
 

@@ -1,11 +1,14 @@
 import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
+import { join } from "node:path";
+import { mkdir } from "node:fs/promises";
 import { queue } from "../queue.js";
 import type { Candidate } from "../scene-detect.js";
 import type { ToolDef } from "./tool-def.js";
 import {
   decodeBuffer,
   loadAssetForAnalysis,
+  MODEL,
   type ElevenLabsWord,
 } from "./_suggest-shared.js";
 
@@ -47,6 +50,25 @@ For each chunk, return one "visual" — a single dense paragraph (60–110 words
 6. Concrete > abstract. If the chunk's words are metaphorical, render the metaphor literally and visually.
 
 OUTPUT: JSON only, matching the provided schema. The "visuals" array MUST have exactly one entry per chunk, in the same order as the input chunks.`;
+
+// Minimal sidecar persisted the moment a char_swap plan is requested, so the
+// /plan work area can render the source video, the two characters, and the
+// analysis prompt (with a loader) right away — before the background job has
+// produced any scenes. The job overwrites .plan.json with the full plan (scenes,
+// user_context, word_count, real duration) on completion. Shape mirrors the
+// job's sidecar so the client reads the two identically.
+export function buildSkeletonPlanSidecar(sourceAssetId: string, characters: CharacterContext[]) {
+  return {
+    formula: "char_swap" as const,
+    scenes: [] as Array<{ start: number; end: number; visual: string }>,
+    source_asset_id: sourceAssetId,
+    total_duration_s: 0,
+    max_scene_seconds: MAX_SCENE_S,
+    characters,
+    model: MODEL,
+    analysis_prompt: SYSTEM_PROMPT_PLAN,
+  };
+}
 
 export async function loadCharacter(
   fs: VideocityFs,
@@ -309,8 +331,9 @@ export function planVisualizationDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const characters = character_asset_ids.map((id) => id.replace(/^@/, ""));
-      for (const charId of characters) {
+      const characterIds = character_asset_ids.map((id) => id.replace(/^@/, ""));
+      const characters: CharacterContext[] = [];
+      for (const charId of characterIds) {
         const character = await loadCharacter(fs, charId, project_slug);
         if (!character) {
           return {
@@ -318,6 +341,18 @@ export function planVisualizationDef(fs: VideocityFs): ToolDef {
             content: [{ type: "text" as const, text: `Character asset not found: ${charId}` }],
           };
         }
+        characters.push(character);
+      }
+
+      // Persist a skeleton sidecar now so /plan shows the source, cast, and
+      // analysis prompt (with a loader) immediately, while the background job
+      // produces the scenes. Best-effort: if the write fails the work area just
+      // waits for the job's own write instead. The job overwrites it on success.
+      const skeleton = buildSkeletonPlanSidecar(sourceAssetId, characters);
+      const projectResult = await fs.getProject(project_slug);
+      if (projectResult.ok) {
+        await mkdir(join(projectResult.value.path, "plan"), { recursive: true });
+        await fs.writeFile("plan", ".plan.json", JSON.stringify(skeleton, null, 2), project_slug);
       }
 
       const jobId = `plan-visualization-${sourceAssetId}-${Date.now()}`;
@@ -326,7 +361,7 @@ export function planVisualizationDef(fs: VideocityFs): ToolDef {
         assetId: sourceAssetId,
         assetDir: loaded.value.manifest.path,
         projectSlug: project_slug,
-        characterAssetIds: characters,
+        characterAssetIds: characterIds,
       });
 
       return {
