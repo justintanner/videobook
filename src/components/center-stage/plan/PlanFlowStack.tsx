@@ -227,6 +227,7 @@ export function PlanFlowStack({
               forceOpen={draft}
               userContext={sidecar.user_context}
               systemPrompt={sidecar.analysis_prompt}
+              model={sidecar.model}
             />
           </FlowStep>
         )}
