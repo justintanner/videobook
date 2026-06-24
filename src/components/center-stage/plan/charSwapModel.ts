@@ -44,6 +44,15 @@ export interface PlanScene {
   // otherwise thread as a continuity reference (the canvas "delete prior-frame
   // input" action). Only meaningful for frame 2 — frame 1 has no in-scene prior.
   skip_prior_swap?: boolean;
+  // Per-frame "skip the character swap, use the original source frame as-is" flag
+  // (the canvas "skip → source" action on the swap tile). When image{N} is true,
+  // the video gen uses @plan/s{N}-image{F}-source.jpg as that keyframe and the
+  // RUN VIDEO gate treats the frame as ready. Mutually exclusive with a selected
+  // swap for the same frame — the server nulls one when the other is set.
+  frame_source?: {
+    image1?: boolean;
+    image2?: boolean;
+  } | null;
   swap?: {
     image1: string | null;
     image2: string | null;
@@ -64,6 +73,11 @@ export interface PlanSidecar {
   analysis_prompt?: string;
   user_context?: string;
   word_count?: number;
+  // Draft marker: the plan was prepared (skeleton written) but the vision job
+  // has NOT been enqueued yet, so the user can read the analysis prompt before
+  // generating. The work area shows a "Generate plan" button instead of polling;
+  // it's cleared (and the job enqueued) on the explicit Generate.
+  awaiting_start?: boolean;
 }
 
 // The character asset_ids wired to a frame's swap, in order. Falls back to ALL
@@ -95,6 +109,18 @@ export function frameCharacters(
   return frameCharacterIds(scene, frameIndex, allCharacters)
     .map((id) => byId.get(id))
     .filter((c): c is PlanSidecar['characters'][number] => Boolean(c));
+}
+
+// True when a frame is set to skip its swap and use the original source frame.
+export function frameUsesSource(scene: PlanScene | undefined, frameIndex: 1 | 2): boolean {
+  return Boolean(scene?.frame_source?.[`image${frameIndex}` as 'image1' | 'image2']);
+}
+
+// The @plan slug for a scene's extracted source frame — the keyframe used when a
+// frame skips its swap. Mirrors the server's sourceFilename in
+// swap-plan-scene-frame.ts (1-based scene number).
+export function sourceFrameSlug(sceneIndex: number, frameIndex: 1 | 2): string {
+  return `@${PLAN_ASSET_ID}/s${sceneIndex + 1}-image${frameIndex}-source.jpg`;
 }
 
 // Count-aware default swap prompt. Mirrors the server's buildSwapPrompt
@@ -361,41 +387,62 @@ export function rewriteVisualWithImageTokens(
   return result;
 }
 
-// "Both swaps present" gate. Slot-presence is the new accepted: a swap that's
-// landed in the slot counts; a missing or in-flight swap blocks RUN VIDEO.
-// Char-refs-only mode (no swap on either side) is also fine.
+// "Both keyframes present" gate. A frame is satisfied when its swap has landed
+// and is ready, OR it's set to use the source frame as-is. Char-refs-only mode
+// (neither frame swapped or sourced) is also fine; mixing one active frame with
+// an empty other blocks RUN VIDEO.
 export function videoReadyForGen(
   scene: PlanScene,
   tile1: FrameTileState,
   tile2: FrameTileState,
 ): { ok: boolean; reason?: string } {
-  const hasAny = !!(scene.swap?.image1 || scene.swap?.image2);
-  if (!hasAny) return { ok: true };
-  if (tile1.kind === 'ready' && tile2.kind === 'ready') return { ok: true };
-  return { ok: false, reason: 'Both swap frames must finish generating' };
+  const frame1Active = !!scene.swap?.image1 || frameUsesSource(scene, 1);
+  const frame2Active = !!scene.swap?.image2 || frameUsesSource(scene, 2);
+  if (!frame1Active && !frame2Active) return { ok: true };
+  const sat1 = frameUsesSource(scene, 1) || tile1.kind === 'ready';
+  const sat2 = frameUsesSource(scene, 2) || tile2.kind === 'ready';
+  if (sat1 && sat2) return { ok: true };
+  return { ok: false, reason: 'Both frames must be ready (swap or skipped to source)' };
 }
 
-// Grok Imagine i2v animates from the first-frame swap alone, so only frame 1
-// must be present and ready — frame 2 is irrelevant to it.
+// Grok Imagine i2v animates from the first frame alone, so only frame 1 must be
+// present — its swap ready, or skipped to the source frame. Frame 2 is irrelevant.
 export function grokVideoReadyForGen(
   scene: PlanScene,
   tile1: FrameTileState,
 ): { ok: boolean; reason?: string } {
-  if (!scene.swap?.image1) return { ok: false, reason: 'Generate the first-frame swap first' };
+  if (frameUsesSource(scene, 1)) return { ok: true };
+  if (!scene.swap?.image1) return { ok: false, reason: 'Generate or skip the first-frame swap first' };
   if (tile1.kind !== 'ready') return { ok: false, reason: 'First-frame swap must finish generating' };
   return { ok: true };
 }
 
-function readySwapAssetIds(
+// Per-frame keyframe slug for the video gen: a ready swap asset (`@id`), or the
+// source frame (`@plan/…`) when the frame is skipped to source. Null when the
+// frame has no usable keyframe yet (no swap / still generating).
+function frameKeyframeSlug(
   scene: PlanScene,
+  frameIndex: 1 | 2,
+  sceneIndex: number,
+  mediaItems: MediaItem[],
+): string | null {
+  if (frameUsesSource(scene, frameIndex)) return sourceFrameSlug(sceneIndex, frameIndex);
+  const id = scene.swap?.[`image${frameIndex}` as 'image1' | 'image2'];
+  if (!id) return null;
+  const item = mediaItems.find((m) => m.id === id);
+  return item?.status === 'ready' ? `@${id}` : null;
+}
+
+// Both keyframe slugs when both frames resolve (ready swap or skipped to source);
+// otherwise null so the caller falls back to bare character refs.
+function readyKeyframeSlugs(
+  scene: PlanScene,
+  sceneIndex: number,
   mediaItems: MediaItem[],
 ): [string, string] | null {
-  const a = scene.swap?.image1;
-  const b = scene.swap?.image2;
+  const a = frameKeyframeSlug(scene, 1, sceneIndex, mediaItems);
+  const b = frameKeyframeSlug(scene, 2, sceneIndex, mediaItems);
   if (!a || !b) return null;
-  const itemA = mediaItems.find((m) => m.id === a);
-  const itemB = mediaItems.find((m) => m.id === b);
-  if (itemA?.status !== 'ready' || itemB?.status !== 'ready') return null;
   return [a, b];
 }
 
@@ -405,13 +452,16 @@ export const KIE_MODEL_NAME_BY_VIDEO: Record<VideoModel, string> = {
   'grok-imagine-1-5': 'grok-imagine/image-to-video',
 };
 
-// First-frame swap + character refs, used by both the Grok tool args and the
-// JSON preview. For preview-only the frame may not exist yet (RUN VIDEO is
-// gated on it), so fall back to the bare character refs.
-function grokImageSlugs(scene: PlanScene, characters: PlanSidecar['characters']): string[] {
-  const frame1 = scene.swap?.image1;
+// First-frame keyframe + character refs, used by both the Grok tool args and the
+// JSON preview. The keyframe is the first-frame swap (`@id`) or the source frame
+// (`@plan/…`) when skipped to source. For preview-only the frame may not exist
+// yet (RUN VIDEO is gated on it), so fall back to the bare character refs.
+function grokImageSlugs(scene: PlanScene, sceneIndex: number, characters: PlanSidecar['characters']): string[] {
+  const frame1 = frameUsesSource(scene, 1)
+    ? sourceFrameSlug(sceneIndex, 1)
+    : (scene.swap?.image1 ? `@${scene.swap.image1}` : null);
   return frame1
-    ? [`@${frame1}`, ...characters.map((c) => `@${c.asset_id}`)]
+    ? [frame1, ...characters.map((c) => `@${c.asset_id}`)]
     : characters.map((c) => `@${c.asset_id}`);
 }
 
@@ -423,6 +473,7 @@ function grokSceneDuration(scene: PlanScene): number {
 export function buildKieVideoPayload(
   videoModel: VideoModel,
   scene: PlanScene,
+  sceneIndex: number,
   characters: PlanSidecar['characters'],
   mediaItems: MediaItem[],
   sceneClipSlug: string | null,
@@ -436,7 +487,7 @@ export function buildKieVideoPayload(
       model: KIE_MODEL_NAME_BY_VIDEO[videoModel],
       input: {
         prompt: trimmed.length > 0 ? trimmed : rewriteVisualWithImageTokens(scene.visual, characters),
-        image_urls: grokImageSlugs(scene, characters),
+        image_urls: grokImageSlugs(scene, sceneIndex, characters),
         mode: 'normal',
         duration: grokSceneDuration(scene),
         resolution: '720p',
@@ -445,10 +496,8 @@ export function buildKieVideoPayload(
       },
     };
   }
-  const swapped = readySwapAssetIds(scene, mediaItems);
-  const referenceImages = swapped
-    ? swapped.map((id) => `@${id}`)
-    : characters.map((c) => `@${c.asset_id}`);
+  const keyframes = readyKeyframeSlugs(scene, sceneIndex, mediaItems);
+  const referenceImages = keyframes ?? characters.map((c) => `@${c.asset_id}`);
   const trimmed = customPrompt.trim();
   const prompt = trimmed.length > 0
     ? trimmed
@@ -474,6 +523,7 @@ export function buildKieVideoPayload(
 // derived KIE REST shape via buildKieVideoPayload above.
 export function buildSeedanceToolArgs(
   scene: PlanScene,
+  sceneIndex: number,
   characters: PlanSidecar['characters'],
   mediaItems: MediaItem[],
   sceneClipSlug: string,
@@ -481,10 +531,8 @@ export function buildSeedanceToolArgs(
   customPrompt: string,
   sourceAspect: SourceAspect,
 ): Record<string, unknown> {
-  const swapped = readySwapAssetIds(scene, mediaItems);
-  const imageSlugs = swapped
-    ? swapped.map((id) => `@${id}`)
-    : characters.map((c) => `@${c.asset_id}`);
+  const keyframes = readyKeyframeSlugs(scene, sceneIndex, mediaItems);
+  const imageSlugs = keyframes ?? characters.map((c) => `@${c.asset_id}`);
   const trimmed = customPrompt.trim();
   return {
     prompt: trimmed.length > 0 ? trimmed : rewriteVisualWithImageTokens(scene.visual, characters),
@@ -509,16 +557,17 @@ export function buildSeedanceToolArgs(
 // the first-frame swap doesn't exist yet (Grok requires >=1 image).
 export function buildGrokImagineToolArgs(
   scene: PlanScene,
+  sceneIndex: number,
   characters: PlanSidecar['characters'],
   sceneAudioSlug: string,
   customPrompt: string,
   sourceAspect: SourceAspect,
 ): Record<string, unknown> | null {
-  if (!scene.swap?.image1) return null;
+  if (!scene.swap?.image1 && !frameUsesSource(scene, 1)) return null;
   const trimmed = customPrompt.trim();
   return {
     prompt: trimmed.length > 0 ? trimmed : rewriteVisualWithImageTokens(scene.visual, characters),
-    image_slugs: grokImageSlugs(scene, characters),
+    image_slugs: grokImageSlugs(scene, sceneIndex, characters),
     mode: 'normal',
     duration: grokSceneDuration(scene),
     resolution: '720p',

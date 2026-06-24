@@ -6,6 +6,7 @@ type PlanScene = {
   start: number;
   end: number;
   visual: string;
+  frame_source?: { image1?: boolean; image2?: boolean } | null;
   swap?: {
     image1: string | null;
     image2: string | null;
@@ -92,7 +93,14 @@ export function replacePlanSceneFrameSwapDef(fs: VideocityFs): ToolDef {
       const swap = scene.swap ?? { image1: null, image2: null };
       swap[`image${frame_index}` as "image1" | "image2"] = asset_id;
       swap[`image${frame_index}_accepted` as "image1_accepted" | "image2_accepted"] = shouldAutoAccept;
-      plan.scenes[scene_index] = { ...scene, swap };
+      const nextScene: PlanScene = { ...scene, swap };
+      // Pointing a real image at this frame overrides any "use source" flag.
+      if (scene.frame_source?.[`image${frame_index}` as "image1" | "image2"]) {
+        const fsNext = { ...scene.frame_source };
+        delete fsNext[`image${frame_index}` as "image1" | "image2"];
+        nextScene.frame_source = Object.keys(fsNext).length > 0 ? fsNext : undefined;
+      }
+      plan.scenes[scene_index] = nextScene;
 
       const writeResult = await fs.writeFile(
         "plan",

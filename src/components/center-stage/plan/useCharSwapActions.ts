@@ -53,6 +53,9 @@ export interface CharSwapActions {
   // Toggle whether the scene's frame-2 swap threads the frame-1 swap as a
   // continuity reference (the canvas "delete prior-frame input" / restore).
   setSkipPrior: (sceneIndex: number, skip: boolean) => Promise<void>;
+  // Toggle whether a frame skips its swap and uses the original source frame
+  // as-is for the video (the canvas "skip → source" action on the swap tile).
+  setFrameSource: (sceneIndex: number, frameIndex: 1 | 2, useSource: boolean) => Promise<void>;
   // Kick off the vision auto-match job (all scenes when sceneIndex omitted).
   matchCharacters: (sceneIndex?: number) => Promise<{ jobId: string } | null>;
   isSwapInFlight: (sceneIndex: number, frameIndex: 1 | 2) => boolean;
@@ -150,10 +153,10 @@ export function useCharSwapActions(params: {
     const audioSlug = `${PLAN_ASSET_ID}/${scene.audio_filename}`;
     const isGrok = videoModel === 'grok-imagine-1-5';
     const toolArgs = isGrok
-      ? buildGrokImagineToolArgs(scene, sidecar.characters, audioSlug, prompt, sourceAspect)
-      : buildSeedanceToolArgs(scene, sidecar.characters, mediaItems, clipSlug, audioSlug, prompt, sourceAspect);
+      ? buildGrokImagineToolArgs(scene, sceneIndex, sidecar.characters, audioSlug, prompt, sourceAspect)
+      : buildSeedanceToolArgs(scene, sceneIndex, sidecar.characters, mediaItems, clipSlug, audioSlug, prompt, sourceAspect);
     if (!toolArgs) {
-      toast({ title: `Scene ${sceneIndex + 1}`, description: 'Generate the first-frame swap before running Grok Imagine.', duration: 4000 });
+      toast({ title: `Scene ${sceneIndex + 1}`, description: 'Generate or skip the first-frame swap before running Grok Imagine.', duration: 4000 });
       return;
     }
     setVideoScenes((prev) => new Set(prev).add(sceneIndex));
@@ -260,6 +263,20 @@ export function useCharSwapActions(params: {
     applySidecar(result);
   }, [callTool, projectSlug, applySidecar]);
 
+  const setFrameSource = useCallback<CharSwapActions['setFrameSource']>(async (sceneIndex, frameIndex, useSource) => {
+    const result = await callTool('set_plan_scene_frame_source', {
+      project_slug: projectSlug,
+      scene_index: sceneIndex,
+      frame_index: frameIndex,
+      use_source: useSource,
+    });
+    if (result.isError) {
+      toast({ title: `Scene ${sceneIndex + 1} image${frameIndex} source toggle failed`, description: errText(result, 'set_plan_scene_frame_source failed'), duration: 5000 });
+      return;
+    }
+    applySidecar(result);
+  }, [callTool, projectSlug, applySidecar]);
+
   const matchCharacters = useCallback<CharSwapActions['matchCharacters']>(async (sceneIndex) => {
     const result = await callTool('match_plan_scene_characters', {
       project_slug: projectSlug,
@@ -351,5 +368,5 @@ export function useCharSwapActions(params: {
     }
   }, [pendingProps, mediaItems, callTool, projectSlug, applySidecar]);
 
-  return { runSwap, runVideo, runVideoReplace, promoteVariant, setFrameCharacters, clearFrameSwap, setSkipPrior, matchCharacters, isSwapInFlight, isVideoInFlight };
+  return { runSwap, runVideo, runVideoReplace, promoteVariant, setFrameCharacters, clearFrameSwap, setSkipPrior, setFrameSource, matchCharacters, isSwapInFlight, isVideoInFlight };
 }

@@ -159,6 +159,7 @@ import { replacePlanSceneFrameSwapDef } from "./replace-plan-scene-frame-swap.js
 import { clearPlanSceneFrameSwapDef } from "./clear-plan-scene-frame-swap.js";
 import { setPlanSceneFrameCharactersDef } from "./set-plan-scene-frame-characters.js";
 import { setPlanSceneSkipPriorDef } from "./set-plan-scene-skip-prior.js";
+import { setPlanSceneFrameSourceDef } from "./set-plan-scene-frame-source.js";
 import { matchPlanSceneCharactersDef } from "./match-plan-scene-characters.js";
 import { acceptPlanSceneVideoSwapDef } from "./accept-plan-scene-video-swap.js";
 import { replacePlanSceneVideoSwapDef } from "./replace-plan-scene-video-swap.js";
@@ -358,6 +359,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     clearPlanSceneFrameSwapDef(fs),
     setPlanSceneFrameCharactersDef(fs),
     setPlanSceneSkipPriorDef(fs),
+    setPlanSceneFrameSourceDef(fs),
     matchPlanSceneCharactersDef(fs),
     acceptPlanSceneVideoSwapDef(fs),
     replacePlanSceneVideoSwapDef(fs),

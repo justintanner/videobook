@@ -7,7 +7,7 @@
 // Image 1/2/3(/4) resolve to. Frame 2 threads the prior frame-1 swap as
 // continuity reference.
 import { memo, useCallback, useMemo, useState } from 'react';
-import { UserRound, X } from 'lucide-react';
+import { ImageOff, RotateCcw, UserRound, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import { PayloadJsonView } from '@/components/center-stage/PlanViewer';
@@ -20,6 +20,7 @@ import {
   defaultSwapPrompt,
   deriveTileState,
   frameCharacters,
+  frameUsesSource,
   type SwapModel,
   type SwapProvider,
 } from '../charSwapModel';
@@ -93,6 +94,9 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
 
   const [runningModels, setRunningModels] = useState<Set<SwapModel>>(new Set());
   const [dropActive, setDropActive] = useState(false);
+  // Separate drop-highlight for the big swap tile (drop a ready image to use it
+  // directly as the swap) vs the character thumb-strip below (wire a character).
+  const [tileDropActive, setTileDropActive] = useState(false);
   // Single prompt override; falls back to the count-aware default so it always
   // reflects how many characters are wired (1 → "Image 2", 2 → "Image 2 and
   // Image 3"). Every "Run <model>" button sends this same prompt.
@@ -157,6 +161,40 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
 
   const tile = scene ? deriveTileState(scene, frameIndex, mediaItems) : ({ kind: 'idle' } as const);
   const imageH = nodeImageHeight(NODE_WIDTH, sourceAspect, 300);
+  // "Skip → use the original source frame as-is" state for this frame.
+  const usesSource = frameUsesSource(scene, frameIndex);
+  const sourceFrameUrl = scene
+    ? `/files/${projectSlug}/plan/s${sceneIndex + 1}-image${frameIndex}-source.jpg?v=${scene.start.toFixed(2)}-${scene.end.toFixed(2)}`
+    : '';
+
+  // Drop a ready image asset onto the tile to use it directly as this frame's
+  // swap (bypassing generation). Same server path as picking a variant; the
+  // server clears any "use source" flag when a real image is pointed at the frame.
+  const onDropSwapImage = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setTileDropActive(false);
+    const json = e.dataTransfer.getData('application/json');
+    if (!json) return;
+    let id: string | null = null;
+    try {
+      const payload = JSON.parse(json) as { id?: unknown };
+      if (typeof payload.id === 'string') id = payload.id.replace(/^@/, '');
+    } catch {
+      return;
+    }
+    if (!id) return;
+    const item = mediaItems.find((m) => m.id === id);
+    if (!item || (item.type !== 'image' && item.type !== 'character')) {
+      toast({
+        title: 'Drop an image',
+        description: "Drag a ready image asset onto the frame to use it directly as this frame's swap.",
+        duration: 4000,
+      });
+      return;
+    }
+    void actions.promoteVariant(sceneIndex, frameIndex, id);
+  }, [mediaItems, actions, sceneIndex, frameIndex]);
 
   const variantsKey = `image${frameIndex}_variants` as 'image1_variants' | 'image2_variants';
   const variants = scene?.swap?.[variantsKey];
@@ -230,6 +268,8 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
     setRunningModels((prev) => new Set(prev).add(m));
     void (async () => {
       try {
+        // Generating a swap means the frame is no longer skipped-to-source.
+        if (usesSource) await actions.setFrameSource(sceneIndex, frameIndex, false);
         await actions.runSwap(sceneIndex, frameIndex, SWAP_PROVIDER, m, {
           customPrompt: prompt,
           ...(priorSwapAssetId ? { priorSwapAssetId } : {}),
@@ -242,7 +282,7 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
         });
       }
     })();
-  }, [actions, sceneIndex, frameIndex, prompt, priorSwapAssetId]);
+  }, [actions, sceneIndex, frameIndex, prompt, priorSwapAssetId, usesSource]);
 
   if (!scene) return null;
 
@@ -268,8 +308,46 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
 
   const front = (
     <div className="flex h-full flex-col">
-      <div className="shrink-0">
-        <StateThumb tile={tile} heightPx={imageH} idleText="no swap yet" alt={data.label} />
+      <div
+        className={cn('shrink-0 rounded transition-shadow', tileDropActive && 'ring-2 ring-sky-400/70')}
+        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setTileDropActive(true); }}
+        onDragLeave={() => setTileDropActive(false)}
+        onDrop={onDropSwapImage}
+        title="Drop a ready image here to use it directly as this frame's swap"
+      >
+        {usesSource ? (
+          <div className="relative w-full overflow-hidden rounded border border-sky-700/50 bg-black/60" style={{ height: imageH }}>
+            <img src={sourceFrameUrl} alt={`${data.label} (source frame)`} className="h-full w-full object-cover" />
+            <span className="absolute left-1.5 top-1.5 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-sky-200">
+              using source frame
+            </span>
+            <button
+              type="button"
+              onClick={() => { void actions.setFrameSource(sceneIndex, frameIndex, false); }}
+              title="Undo — generate a swap for this frame instead"
+              className="nodrag absolute right-1.5 top-1.5 flex items-center gap-1 rounded border border-zinc-600 bg-zinc-900/80 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300 hover:border-emerald-500 hover:text-emerald-200"
+            >
+              <RotateCcw className="h-3 w-3" />
+              undo
+            </button>
+          </div>
+        ) : tile.kind === 'idle' ? (
+          <div className="flex w-full flex-col items-center justify-center gap-2 rounded border border-dashed border-zinc-700 bg-black/60 px-3 text-center" style={{ height: imageH }}>
+            <ImageOff className="h-5 w-5 text-zinc-600" />
+            <span className="font-mono text-[11px] text-zinc-500">no swap yet</span>
+            <span className="font-mono text-[10px] text-zinc-600">drop an image here to use it directly</span>
+            <button
+              type="button"
+              onClick={() => { void actions.setFrameSource(sceneIndex, frameIndex, true); }}
+              title="Skip the swap — use the original source frame as-is for the video"
+              className="nodrag mt-0.5 rounded border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-sky-200 hover:bg-sky-500/20"
+            >
+              skip → use source frame
+            </button>
+          </div>
+        ) : (
+          <StateThumb tile={tile} heightPx={imageH} idleText="no swap yet" alt={data.label} />
+        )}
       </div>
       {hasVariants && (
         <div className="shrink-0">
