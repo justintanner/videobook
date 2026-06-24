@@ -77,7 +77,11 @@ function SceneVideoNodeImpl({ data }: { data: SceneVideoNodeData }) {
   );
 
   const imageH = nodeImageHeight(NODE_WIDTH, sourceAspect, 300);
-  const videoTile = scene ? deriveVideoTileState(scene, mediaItems, projectSlug) : ({ kind: 'idle' } as const);
+  const running = actions.isVideoInFlight(sceneIndex);
+  // Pass `running` so a not-yet-listed asset only spins while the submit is in
+  // flight; a dangling scene.swap.video link (asset deleted / gen rolled back)
+  // falls back to idle instead of spinning forever.
+  const videoTile = scene ? deriveVideoTileState(scene, mediaItems, projectSlug, running) : ({ kind: 'idle' } as const);
 
   const gate = useMemo(() => {
     if (!scene) return { ok: false, reason: 'no scene' };
@@ -93,7 +97,6 @@ function SceneVideoNodeImpl({ data }: { data: SceneVideoNodeData }) {
     return buildKieVideoPayload(model, scene, sceneIndex, characters, mediaItems, clipSlug, audioSlug, prompts[model], sourceAspect);
   }, [scene, sceneIndex, model, characters, mediaItems, prompts, sourceAspect]);
 
-  const running = actions.isVideoInFlight(sceneIndex);
   const run = useCallback(() => {
     void actions.runVideo(sceneIndex, model, prompts[model]);
   }, [actions, sceneIndex, model, prompts]);

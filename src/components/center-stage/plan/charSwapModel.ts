@@ -256,11 +256,28 @@ export type VideoTileState =
   | { kind: 'ready'; src: string }
   | { kind: 'error'; message: string };
 
-export function deriveVideoTileState(scene: PlanScene, mediaItems: MediaItem[], projectSlug: string): VideoTileState {
+export function deriveVideoTileState(
+  scene: PlanScene,
+  mediaItems: MediaItem[],
+  projectSlug: string,
+  // True only while a video submit is actively in flight (the RUN VIDEO call
+  // hasn't returned). Lets a not-yet-listed asset read as "generating" during
+  // that window without spinning forever once the window closes.
+  submitting = false,
+): VideoTileState {
   const vidId = scene.swap?.video;
   if (!vidId) return { kind: 'idle' };
   const item = mediaItems.find((m) => m.id === vidId);
-  if (!item) return { kind: 'generating' };
+  if (!item) {
+    // The linked video asset isn't in the asset list. While a submit is in
+    // flight the asset already exists server-side but hasn't surfaced in
+    // mediaItems yet → show the spinner. Otherwise the link is dangling: the
+    // asset was deleted, or its creation was rolled back after a failed/timed-out
+    // gen, so the scene points at an id that will never appear. Fall back to idle
+    // (offer RUN VIDEO again — a fresh run overwrites the stale link) instead of
+    // spinning forever.
+    return submitting ? { kind: 'generating' } : { kind: 'idle' };
+  }
   if (item.status === 'error') return { kind: 'error', message: item.failedMessage ?? 'video gen failed' };
   if (item.status === 'ready') {
     const src = `/files/${projectSlug}/${vidId}/original.mp4`;

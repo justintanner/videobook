@@ -1,6 +1,15 @@
 import { defineConfig, configDefaults } from 'vitest/config';
+import path from 'node:path';
 
 export default defineConfig({
+  // Mirror vite.config.ts's `@` → src alias so tests can import src modules
+  // (and modules that themselves import via `@/`). vitest.config.ts is a
+  // standalone config and does not inherit vite.config.ts's resolve settings.
+  resolve: {
+    alias: {
+      '@': path.resolve(import.meta.dirname, 'src'),
+    },
+  },
   test: {
     exclude: ['**/*.e2e.test.ts', '**/*.spec.ts', 'server/dist/**', ...configDefaults.exclude],
     setupFiles: ['./vitest.setup.ts'],
