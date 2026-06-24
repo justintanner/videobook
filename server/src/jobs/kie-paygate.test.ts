@@ -132,4 +132,38 @@ describe("kie paygate", () => {
 
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
+
+  it("rejects a kling-3.0/motion-control request with no duration hint as unbounded", () => {
+    // kling-3.0/motion-control (char_swap) prices per second but its kie input
+    // schema carries no duration field (output length = motion video). Without a
+    // top-level duration hint the units derivation fails and the estimate is
+    // unbounded.
+    const request = {
+      model: "kling-3.0/motion-control" as const,
+      input: {
+        input_urls: ["https://kie.example/character.png"],
+        video_urls: ["https://kie.example/motion.mp4"],
+        mode: "720p" as const,
+      },
+    };
+    expect(() => mintKieOtp(request, 60)).toThrow(/cost estimate is not bounded/);
+  });
+
+  it("mints a bounded OTP for a kling-3.0/motion-control request with a top-level duration hint", async () => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+
+    const request = {
+      model: "kling-3.0/motion-control" as const,
+      duration: 6.4,
+      input: {
+        input_urls: ["https://kie.example/character.png"],
+        video_urls: ["https://kie.example/motion.mp4"],
+        mode: "720p" as const,
+      },
+    };
+    const otp = mintKieOtp(request, 60);
+    const parsed = parseOtp(otp);
+
+    expect(parsed.payload.requestHash).toBe(canonicalHash(request));
+  });
 });
