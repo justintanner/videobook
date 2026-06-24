@@ -17,7 +17,6 @@ import {
   PLAN_ASSET_ID,
   SHORT_LABEL_BY_MODEL,
   TOOL_BY_VIDEO_MODEL,
-  buildGrokImagineToolArgs,
   buildSeedanceToolArgs,
   frameCharacterIds,
   variantKey,
@@ -151,14 +150,7 @@ export function useCharSwapActions(params: {
     }
     const clipSlug = `${PLAN_ASSET_ID}/${scene.clip_filename}`;
     const audioSlug = `${PLAN_ASSET_ID}/${scene.audio_filename}`;
-    const isGrok = videoModel === 'grok-imagine-1-5';
-    const toolArgs = isGrok
-      ? buildGrokImagineToolArgs(scene, sceneIndex, sidecar.characters, audioSlug, prompt, sourceAspect)
-      : buildSeedanceToolArgs(scene, sceneIndex, sidecar.characters, mediaItems, clipSlug, audioSlug, prompt, sourceAspect);
-    if (!toolArgs) {
-      toast({ title: `Scene ${sceneIndex + 1}`, description: 'Generate or skip the first-frame swap before running Grok Imagine.', duration: 4000 });
-      return;
-    }
+    const toolArgs = buildSeedanceToolArgs(scene, sceneIndex, sidecar.characters, mediaItems, clipSlug, audioSlug, prompt, sourceAspect);
     setVideoScenes((prev) => new Set(prev).add(sceneIndex));
     try {
       const result = await callTool(TOOL_BY_VIDEO_MODEL[videoModel], { project_slug: projectSlug, ...toolArgs });

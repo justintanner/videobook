@@ -1,7 +1,7 @@
-// Per-scene video gen (Seedance interpolation / Grok i2v). Model selector,
-// per-model prompt (Grok seeds with the scene's dialog), gating mirroring
-// SceneBlock, a Run wired to the shared useCharSwapActions, and a GUI↔JSON flip
-// showing the derived KIE video payload with inline clip/audio/ref thumbnails.
+// Per-scene video gen (Seedance interpolation). Model selector, per-model
+// prompt, gating mirroring SceneBlock, a Run wired to the shared
+// useCharSwapActions, and a GUI↔JSON flip showing the derived KIE video payload
+// with inline clip/audio/ref thumbnails.
 import { memo, useCallback, useMemo, useState } from 'react';
 import { RichPromptField } from '@/components/ui/RichPromptField';
 import type { ChipThumb } from '@/components/ui/AssetThumbChip';
@@ -15,7 +15,6 @@ import {
   buildKieVideoPayload,
   deriveTileState,
   deriveVideoTileState,
-  grokVideoReadyForGen,
   rewriteVisualWithImageTokens,
   videoReadyForGen,
   type VideoModel,
@@ -32,7 +31,7 @@ const CONTROLS_H = 200;
 const SHORT_VIDEO_LABEL: Record<VideoModel, string> = {
   'seedance-2-ref': 'sd2',
   'seedance-2-fast': 'sd2·f',
-  'grok-imagine-1-5': 'grok',
+  'seedance-2-mini': 'sd2·m',
 };
 const VIDEO_OPTIONS = ALL_VIDEO_MODELS.map((m) => ({ value: m, label: SHORT_VIDEO_LABEL[m] }));
 
@@ -41,13 +40,11 @@ function SceneVideoNodeImpl({ data }: { data: SceneVideoNodeData }) {
   const { sceneIndex } = data;
   const scene = sidecar.scenes[sceneIndex];
 
-  const [model, setModel] = useState<VideoModel>('seedance-2-ref');
+  const [model, setModel] = useState<VideoModel>('seedance-2-mini');
   const [flipped, setFlipped] = useState(false);
   const [prompts, setPrompts] = useState<Record<VideoModel, string>>(() => {
     const seed = scene ? rewriteVisualWithImageTokens(scene.visual, characters) : '';
-    const dialog = (scene?.dialog ?? '').trim();
-    const grokSeed = dialog.length > 0 && dialog !== '(no speech in this chunk)' ? `${seed}\n\nDialogue: ${dialog}` : seed;
-    return { 'seedance-2-ref': seed, 'seedance-2-fast': seed, 'grok-imagine-1-5': grokSeed };
+    return { 'seedance-2-ref': seed, 'seedance-2-fast': seed, 'seedance-2-mini': seed };
   });
 
   const onPromptChange = useCallback((next: string) => {
@@ -86,8 +83,8 @@ function SceneVideoNodeImpl({ data }: { data: SceneVideoNodeData }) {
     if (!scene) return { ok: false, reason: 'no scene' };
     const tile1 = deriveTileState(scene, 1, mediaItems);
     const tile2 = deriveTileState(scene, 2, mediaItems);
-    return model === 'grok-imagine-1-5' ? grokVideoReadyForGen(scene, tile1) : videoReadyForGen(scene, tile1, tile2);
-  }, [scene, mediaItems, model]);
+    return videoReadyForGen(scene, tile1, tile2);
+  }, [scene, mediaItems]);
 
   const payload = useMemo(() => {
     if (!scene) return null;

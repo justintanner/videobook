@@ -22,7 +22,6 @@ import type { ChipThumb } from '@/components/ui/AssetThumbChip';
 import type { RichToken } from '@/components/ui/richPromptTokens';
 import { NodeFrame } from './plan/nodes/nodeUi';
 import {
-  ALL_VIDEO_MODELS,
   KIE_MODEL_NAME_BY_VIDEO,
   LABEL_BY_VIDEO_MODEL,
   STORYBOARD_VIDEO_MODELS,
@@ -2204,7 +2203,7 @@ function VideoSwapSlot({
   );
 }
 
-function VideoPanel({ selectedModel, onSelectModel, models = ALL_VIDEO_MODELS, prompt, onPromptChange, payload, mediaItems, sourceAspect, projectSlug, imageRefs, disabled, disabledReason, videoTileState, videoAssetId, replacing, onIdleClick, onReplace, onErrorRetry, onRegen }: {
+function VideoPanel({ selectedModel, onSelectModel, models = STORYBOARD_VIDEO_MODELS, prompt, onPromptChange, payload, mediaItems, sourceAspect, projectSlug, imageRefs, disabled, disabledReason, videoTileState, videoAssetId, replacing, onIdleClick, onReplace, onErrorRetry, onRegen }: {
   selectedModel: VideoModel;
   onSelectModel: (model: VideoModel) => void;
   models?: VideoModel[];

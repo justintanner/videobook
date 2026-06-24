@@ -9,7 +9,6 @@
 import type { MediaItem } from '@/components/sidebar/types';
 import {
   falWanImageSizeForDimensions,
-  grokAspectRatioForDimensions,
   kieImageAspectRatioForDimensions,
   seedanceAspectRatioForDimensions,
   type SourceAspect,
@@ -187,23 +186,26 @@ export function parseVariantKey(key: string): { provider: SwapProvider; model: S
   return null;
 }
 
-export type VideoModel = 'seedance-2-ref' | 'seedance-2-fast' | 'grok-imagine-1-5';
+export type VideoModel = 'seedance-2-ref' | 'seedance-2-fast' | 'seedance-2-mini';
 
-export const ALL_VIDEO_MODELS: VideoModel[] = ['seedance-2-ref', 'seedance-2-fast', 'grok-imagine-1-5'];
-// Storyboard formula stays Seedance-only — Grok i2v animates from a single
-// reference frame, which doesn't fit the storyboard sheet → video flow.
+// char_swap per-scene video picker. Seedance 2 Mini leads (the default) with
+// Seedance Fast as the lighter alternative; the heavyweight Seedance 2 (ref)
+// and Grok Imagine were dropped from this flow.
+export const ALL_VIDEO_MODELS: VideoModel[] = ['seedance-2-mini', 'seedance-2-fast'];
+// Storyboard formula keeps the priced Seedance 2 (ref) + Fast pair — Mini is a
+// char_swap-only default for now.
 export const STORYBOARD_VIDEO_MODELS: VideoModel[] = ['seedance-2-ref', 'seedance-2-fast'];
 
 export const TOOL_BY_VIDEO_MODEL: Record<VideoModel, string> = {
   'seedance-2-ref': 'generate_seedance2_video',
   'seedance-2-fast': 'generate_seedance2_fast_video',
-  'grok-imagine-1-5': 'generate_grok_imagine_video',
+  'seedance-2-mini': 'generate_seedance2_mini_video',
 };
 
 export const LABEL_BY_VIDEO_MODEL: Record<VideoModel, string> = {
   'seedance-2-ref': 'Seedance 2',
   'seedance-2-fast': 'Seedance Fast',
-  'grok-imagine-1-5': 'Grok Imagine 1.5',
+  'seedance-2-mini': 'Seedance 2 Mini',
 };
 
 // Per-scene clip + audio live as sibling files inside the `plan` asset
@@ -405,18 +407,6 @@ export function videoReadyForGen(
   return { ok: false, reason: 'Both frames must be ready (swap or skipped to source)' };
 }
 
-// Grok Imagine i2v animates from the first frame alone, so only frame 1 must be
-// present — its swap ready, or skipped to the source frame. Frame 2 is irrelevant.
-export function grokVideoReadyForGen(
-  scene: PlanScene,
-  tile1: FrameTileState,
-): { ok: boolean; reason?: string } {
-  if (frameUsesSource(scene, 1)) return { ok: true };
-  if (!scene.swap?.image1) return { ok: false, reason: 'Generate or skip the first-frame swap first' };
-  if (tile1.kind !== 'ready') return { ok: false, reason: 'First-frame swap must finish generating' };
-  return { ok: true };
-}
-
 // Per-frame keyframe slug for the video gen: a ready swap asset (`@id`), or the
 // source frame (`@plan/…`) when the frame is skipped to source. Null when the
 // frame has no usable keyframe yet (no swap / still generating).
@@ -449,26 +439,8 @@ function readyKeyframeSlugs(
 export const KIE_MODEL_NAME_BY_VIDEO: Record<VideoModel, string> = {
   'seedance-2-ref': 'bytedance/seedance-2',
   'seedance-2-fast': 'bytedance/seedance-2-fast',
-  'grok-imagine-1-5': 'grok-imagine/image-to-video',
+  'seedance-2-mini': 'bytedance/seedance-2-mini',
 };
-
-// First-frame keyframe + character refs, used by both the Grok tool args and the
-// JSON preview. The keyframe is the first-frame swap (`@id`) or the source frame
-// (`@plan/…`) when skipped to source. For preview-only the frame may not exist
-// yet (RUN VIDEO is gated on it), so fall back to the bare character refs.
-function grokImageSlugs(scene: PlanScene, sceneIndex: number, characters: PlanSidecar['characters']): string[] {
-  const frame1 = frameUsesSource(scene, 1)
-    ? sourceFrameSlug(sceneIndex, 1)
-    : (scene.swap?.image1 ? `@${scene.swap.image1}` : null);
-  return frame1
-    ? [frame1, ...characters.map((c) => `@${c.asset_id}`)]
-    : characters.map((c) => `@${c.asset_id}`);
-}
-
-// Grok i2v duration is an integer 6-30; scene lengths (~7-14s) clamp into range.
-function grokSceneDuration(scene: PlanScene): number {
-  return Math.min(30, Math.max(6, Math.round(scene.end - scene.start)));
-}
 
 export function buildKieVideoPayload(
   videoModel: VideoModel,
@@ -481,21 +453,6 @@ export function buildKieVideoPayload(
   customPrompt: string,
   sourceAspect: SourceAspect,
 ): { model: string; input: Record<string, unknown> } {
-  if (videoModel === 'grok-imagine-1-5') {
-    const trimmed = customPrompt.trim();
-    return {
-      model: KIE_MODEL_NAME_BY_VIDEO[videoModel],
-      input: {
-        prompt: trimmed.length > 0 ? trimmed : rewriteVisualWithImageTokens(scene.visual, characters),
-        image_urls: grokImageSlugs(scene, sceneIndex, characters),
-        mode: 'normal',
-        duration: grokSceneDuration(scene),
-        resolution: '720p',
-        aspect_ratio: grokAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
-        nsfw_checker: false,
-      },
-    };
-  }
   const keyframes = readyKeyframeSlugs(scene, sceneIndex, mediaItems);
   const referenceImages = keyframes ?? characters.map((c) => `@${c.asset_id}`);
   const trimmed = customPrompt.trim();
@@ -547,32 +504,5 @@ export function buildSeedanceToolArgs(
     aspect_ratio: seedanceAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
     duration: String(Math.min(15, Math.max(4, Math.round(scene.end - scene.start)))),
     generate_audio: false,
-  };
-}
-
-// Build the args for the generate_grok_imagine_video MCP tool. Grok i2v animates
-// from reference image(s) rather than interpolating between two frames, so it
-// anchors on the swapped first frame plus the character refs; the scene's
-// original audio is spliced back over the output server-side. Returns null when
-// the first-frame swap doesn't exist yet (Grok requires >=1 image).
-export function buildGrokImagineToolArgs(
-  scene: PlanScene,
-  sceneIndex: number,
-  characters: PlanSidecar['characters'],
-  sceneAudioSlug: string,
-  customPrompt: string,
-  sourceAspect: SourceAspect,
-): Record<string, unknown> | null {
-  if (!scene.swap?.image1 && !frameUsesSource(scene, 1)) return null;
-  const trimmed = customPrompt.trim();
-  return {
-    prompt: trimmed.length > 0 ? trimmed : rewriteVisualWithImageTokens(scene.visual, characters),
-    image_slugs: grokImageSlugs(scene, sceneIndex, characters),
-    mode: 'normal',
-    duration: grokSceneDuration(scene),
-    resolution: '720p',
-    aspect_ratio: grokAspectRatioForDimensions(sourceAspect.width, sourceAspect.height),
-    nsfw_checker: false,
-    replace_audio_with: `@${sceneAudioSlug}`,
   };
 }
