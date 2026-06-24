@@ -10,12 +10,15 @@ export function Segmented<T extends string>({
   value,
   onChange,
   ariaLabel,
+  size = 'sm',
 }: {
   options: ReadonlyArray<{ value: T; label: string }>;
   value: T;
   onChange: (next: T) => void;
   ariaLabel?: string;
+  size?: 'sm' | 'lg';
 }) {
+  const lg = size === 'lg';
   return (
     <div className="nodrag inline-flex rounded border border-zinc-700/70 overflow-hidden" role="group" aria-label={ariaLabel}>
       {options.map((o) => {
@@ -26,7 +29,8 @@ export function Segmented<T extends string>({
             type="button"
             onClick={() => onChange(o.value)}
             className={cn(
-              'px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wide transition-colors',
+              'font-mono uppercase tracking-wide transition-colors',
+              lg ? 'px-2.5 py-1 text-[11px]' : 'px-1.5 py-0.5 text-[9px]',
               active ? 'bg-emerald-500/25 text-emerald-200' : 'bg-black/40 text-zinc-400 hover:text-zinc-200',
             )}
           >

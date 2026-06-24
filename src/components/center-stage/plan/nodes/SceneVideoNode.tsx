@@ -24,8 +24,10 @@ import { FlipCard, FlipToggle, NodeFrame, StateThumb } from './nodeUi';
 import { nodeImageHeight } from './nodeLayout';
 import { RunButton, Segmented } from './controls';
 
-const NODE_WIDTH = 280;
-const CONTROLS_H = 112;
+// Sized to match the swap/source nodes above (one column wide). The fill prompt
+// grows to push the Run button flush against the bottom.
+const NODE_WIDTH = 520;
+const CONTROLS_H = 200;
 
 const SHORT_VIDEO_LABEL: Record<VideoModel, string> = {
   'seedance-2-ref': 'sd2',
@@ -77,7 +79,7 @@ function SceneVideoNodeImpl({ data }: { data: SceneVideoNodeData }) {
     [characters, mediaItems],
   );
 
-  const imageH = nodeImageHeight(NODE_WIDTH, sourceAspect);
+  const imageH = nodeImageHeight(NODE_WIDTH, sourceAspect, 300);
   const videoTile = scene ? deriveVideoTileState(scene, mediaItems, projectSlug) : ({ kind: 'idle' } as const);
 
   const gate = useMemo(() => {
@@ -91,8 +93,8 @@ function SceneVideoNodeImpl({ data }: { data: SceneVideoNodeData }) {
     if (!scene) return null;
     const clipSlug = scene.clip_filename ? `${PLAN_ASSET_ID}/${scene.clip_filename}` : null;
     const audioSlug = scene.audio_filename ? `${PLAN_ASSET_ID}/${scene.audio_filename}` : null;
-    return buildKieVideoPayload(model, scene, characters, mediaItems, clipSlug, audioSlug, prompts[model], sourceAspect);
-  }, [scene, model, characters, mediaItems, prompts, sourceAspect]);
+    return buildKieVideoPayload(model, scene, sceneIndex, characters, mediaItems, clipSlug, audioSlug, prompts[model], sourceAspect);
+  }, [scene, sceneIndex, model, characters, mediaItems, prompts, sourceAspect]);
 
   const running = actions.isVideoInFlight(sceneIndex);
   const run = useCallback(() => {
@@ -102,40 +104,43 @@ function SceneVideoNodeImpl({ data }: { data: SceneVideoNodeData }) {
   if (!scene) return null;
 
   const front = (
-    <div>
-      {videoTile.kind === 'ready' ? (
-        <video
-          src={videoTile.src}
-          muted
-          loop
-          playsInline
-          className="w-full rounded bg-black/60 border border-zinc-800 object-cover"
-          style={{ height: imageH }}
-          onMouseEnter={(e) => { void e.currentTarget.play().catch(() => {}); }}
-          onMouseLeave={(e) => { e.currentTarget.pause(); }}
-        />
-      ) : (
-        <StateThumb tile={videoTile} heightPx={imageH} idleText="no video yet" alt={data.label} />
-      )}
-      <div className="mt-2 flex flex-col gap-1.5">
-        <Segmented options={VIDEO_OPTIONS} value={model} onChange={setModel} ariaLabel="video model" />
+    <div className="flex h-full flex-col">
+      <div className="shrink-0">
+        {videoTile.kind === 'ready' ? (
+          <video
+            src={videoTile.src}
+            muted
+            loop
+            playsInline
+            className="w-full rounded bg-black/60 border border-zinc-800 object-cover"
+            style={{ height: imageH }}
+            onMouseEnter={(e) => { void e.currentTarget.play().catch(() => {}); }}
+            onMouseLeave={(e) => { e.currentTarget.pause(); }}
+          />
+        ) : (
+          <StateThumb tile={videoTile} heightPx={imageH} idleText="no video yet" alt={data.label} />
+        )}
+      </div>
+      <div className="mt-2.5 flex min-h-0 flex-1 flex-col gap-2.5">
+        <Segmented options={VIDEO_OPTIONS} value={model} onChange={setModel} ariaLabel="video model" size="lg" />
         <RichPromptField
           value={prompts[model]}
           onChange={onPromptChange}
           resolveRef={resolveRef}
           assetSlugs={assetSlugs}
           slugForAssetId={slugForAssetId}
-          rows={2}
-          fieldClassName="nodrag w-full px-1.5 py-1 text-[10px] font-mono leading-snug"
+          fill
+          rows={4}
+          fieldClassName="nodrag w-full px-2.5 py-2 text-[13px] font-mono leading-relaxed"
           surfaceClassName="nodrag rounded border border-zinc-700 bg-black/60 focus-within:border-sky-500/60"
           textClassName="text-sky-100/90"
           caretClassName="caret-sky-300"
         />
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[9px] font-mono text-zinc-500 truncate">
+        <div className="shrink-0 flex items-center justify-between gap-2">
+          <span className="text-[11px] font-mono text-zinc-500 truncate">
             {gate.ok ? '720p · ready' : (gate.reason ?? '')}
           </span>
-          <RunButton onClick={run} running={running} disabled={!gate.ok} label="Run video" title={gate.reason} />
+          <RunButton size="lg" onClick={run} running={running} disabled={!gate.ok} label="Run video" title={gate.reason} />
         </div>
       </div>
     </div>
@@ -146,6 +151,7 @@ function SceneVideoNodeImpl({ data }: { data: SceneVideoNodeData }) {
       label={data.label}
       accent="border-sky-600/50"
       width={NODE_WIDTH}
+      size="lg"
       badge={<FlipToggle flipped={flipped} onToggle={() => setFlipped((f) => !f)} />}
     >
       <FlipCard
