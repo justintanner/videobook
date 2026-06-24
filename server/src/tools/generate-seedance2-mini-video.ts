@@ -65,13 +65,28 @@ export function generateSeedance2MiniVideoDef(fs: VideocityFs): ToolDef {
       const vids = dropBlanks(video_slugs);
       const auds = dropBlanks(audio_slugs);
 
+      // Seedance 2 Mini's apicity input schema validates reference_*_urls with
+      // z.string().url(), but at this layer they are still @slugs — the job
+      // (jobs/generate-seedance2-mini-video.ts) uploads them to real URLs via
+      // uploadAssetToKie before submit. (The regular/fast Seedance schemas use
+      // plain z.string(), so they tolerate slugs.) Validate the slug arrays with
+      // a slug-friendly mirror that keeps apicity's max counts, then omit them
+      // from the apicity pre-check below. See docs/apicity-gaps.md §11.
+      const refSlugCheck = z.object({
+        reference_image_urls: z.array(z.string()).optional(),
+        reference_video_urls: z.array(z.string()).max(3).optional(),
+        reference_audio_urls: z.array(z.string()).max(3).optional(),
+      }).safeParse({
+        ...(imgs.length > 0 ? { reference_image_urls: imgs } : {}),
+        ...(vids.length > 0 ? { reference_video_urls: vids } : {}),
+        ...(auds.length > 0 ? { reference_audio_urls: auds } : {}),
+      });
+      if (!refSlugCheck.success) return zodErrorToToolResult(refSlugCheck.error);
+
       const apicityCheck = Seedance2MiniRequestSchema.safeParse({
         model: "bytedance/seedance-2-mini",
         input: {
           ...(prompt !== undefined ? { prompt } : {}),
-          ...(imgs.length > 0 ? { reference_image_urls: imgs } : {}),
-          ...(vids.length > 0 ? { reference_video_urls: vids } : {}),
-          ...(auds.length > 0 ? { reference_audio_urls: auds } : {}),
           ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
           ...(resolution !== undefined ? { resolution } : {}),
           ...(duration !== undefined ? { duration: parseInt(duration, 10) } : {}),

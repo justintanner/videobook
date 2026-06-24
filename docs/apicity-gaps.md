@@ -239,3 +239,39 @@ fabricate a cost-display rate.
 **Ask apicity:** add a `bytedance/seedance-2-mini` slug + pricing to
 `@apicity/cost`. Remove the naming/paygate workarounds and wire a
 `cost-adapters.ts` entry once priced.
+
+---
+
+## 11. (bug) Seedance 2 Mini reference arrays enforce `.url()`; regular/fast use plain `z.string()`
+
+`Seedance2MiniInputSchema` validates all three reference arrays with
+`z.array(z.string().url())`:
+
+```js
+reference_image_urls: z.array(z.string().url()).default([]),
+reference_video_urls: z.array(z.string().url()).max(3).default([]),
+reference_audio_urls: z.array(z.string().url()).max(3).default([]),
+```
+
+But the sibling `Seedance2InputSchema` (regular) and `Seedance2FastInputSchema`
+use plain `z.array(z.string())` for the same fields. videocity tools validate
+the *request shape* against these schemas **before** resolving references — at
+which point reference fields hold `@slug` / `@plan/<file>` addresses, not URLs
+(the job uploads them to real Kie URLs via `uploadAssetToKie` just before
+submit). The lax regular/fast schemas tolerate slugs; the Mini schema's `.url()`
+rejects every slug with `Invalid URL`, so `generate_seedance2_mini_video`
+returned an error for every call carrying references — surfacing as
+`[SCENE N FAILED]` in the char_swap flow once Mini became its default model.
+
+**Workaround (`server/src/tools/generate-seedance2-mini-video.ts`):** validate
+the incoming slug arrays against a slug-friendly mirror
+(`z.array(z.string())` + the apicity max counts) and **omit** `reference_*_urls`
+from the `Seedance2MiniRequestSchema.safeParse` pre-check. Everything else
+(prompt length, duration range, enums) is still validated against apicity; the
+slugs are validated for existence/type by `resolveImageSlug` /
+`resolveVideoSlug` / `resolveAudioSlug` and uploaded to real URLs in the job.
+
+**Ask apicity:** make the Seedance 2 Mini reference arrays consistent with the
+regular/fast schemas (plain `z.string()`), or expose a separate slot for
+pre-upload validation. The `.url()` constraint is only correct at the live REST
+boundary, not at the SDK's request-construction layer.
