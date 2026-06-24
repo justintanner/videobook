@@ -8,9 +8,10 @@ import type { ToolDef } from "./tool-def.js";
 import {
   decodeBuffer,
   loadAssetForAnalysis,
-  MODEL,
   type ElevenLabsWord,
 } from "./_suggest-shared.js";
+
+export const CHAR_SWAP_PLAN_MODEL = "gemini-3-5-flash";
 
 // Scene length window. Floor stays at 7s (matches the prior fixed-chunk
 // default and the per-modality reference budget headroom on seedance-2);
@@ -68,7 +69,7 @@ export function buildSkeletonPlanSidecar(sourceAssetId: string, characters: Char
     total_duration_s: 0,
     max_scene_seconds: MAX_SCENE_S,
     characters,
-    model: MODEL,
+    model: CHAR_SWAP_PLAN_MODEL,
     analysis_prompt: SYSTEM_PROMPT_PLAN,
   };
 }
@@ -90,7 +91,7 @@ export function buildSkeletonPlanMarkdown(sourceAssetId: string, characters: Cha
     "",
     `**Source:** ${sourceAssetId}`,
     `**Characters:** ${charLine}`,
-    `**Model:** ${MODEL}`,
+    `**Model:** ${CHAR_SWAP_PLAN_MODEL}`,
     "",
     "_Preparing the plan — per-chunk visuals appear here once generation runs._",
     "",
@@ -416,10 +417,10 @@ export function planVisualizationDef(fs: VideocityFs): ToolDef {
 
       const sourceAssetId = source_asset_id.replace(/^@/, "");
 
-      if (!process.env.OPENAI_API_KEY) {
+      if (!process.env.KIE_API_KEY) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "OPENAI_API_KEY environment variable is not set" }],
+          content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
         };
       }
 

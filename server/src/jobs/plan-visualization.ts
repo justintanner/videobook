@@ -7,15 +7,22 @@ import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
-import { createOpenAi, withRetry, textPart, imageBase64Part, firstContent } from "@apicity/openai";
-import type { OpenAiContentPart, OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
+import { createKie, withRetry } from "@apicity/kie";
+import type {
+  KieGemini35FlashGenerateContentResponse,
+  KieGemini35FlashStreamGenerateContentChunk,
+  KieGemini35FlashStreamGenerateContentRequest,
+  KieGemini35FlashStreamGenerateContentResult,
+  KieGeminiPart,
+} from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
 import { probeVideo } from "../ffmpeg.js";
 import { detectSceneCandidates } from "../scene-detect.js";
-import { MODEL, loadAssetForAnalysis } from "../tools/_suggest-shared.js";
+import { loadAssetForAnalysis } from "../tools/_suggest-shared.js";
 import {
+  CHAR_SWAP_PLAN_MODEL,
   MIN_SCENE_S,
   MAX_SCENE_S,
   SYSTEM_PROMPT_PLAN,
@@ -53,22 +60,53 @@ const VisualsSchema = z.object({
   visuals: z.array(z.object({ visual: z.string().min(20) })).min(1),
 });
 
-const VISUALS_JSON_SCHEMA = {
+const VISUALS_GEMINI_SCHEMA = {
   type: "object",
   required: ["visuals"],
-  additionalProperties: false,
   properties: {
     visuals: {
       type: "array",
       items: {
         type: "object",
         required: ["visual"],
-        additionalProperties: false,
         properties: { visual: { type: "string" } },
       },
     },
   },
 } as const;
+
+function geminiTextPart(text: string): KieGeminiPart {
+  return { text };
+}
+
+function geminiImageBase64Part(base64: string, mimeType: string): KieGeminiPart {
+  return { inline_data: { mime_type: mimeType, data: base64 } };
+}
+
+function isAsyncIterableResult(
+  result: KieGemini35FlashStreamGenerateContentResult,
+): result is AsyncIterable<KieGemini35FlashStreamGenerateContentChunk> {
+  const maybeIterable = result as { [Symbol.asyncIterator]?: unknown };
+  return typeof maybeIterable[Symbol.asyncIterator] === "function";
+}
+
+function geminiResponseText(response: KieGemini35FlashGenerateContentResponse): string {
+  return (response.candidates ?? [])
+    .flatMap((candidate) => candidate.content?.parts ?? [])
+    .map((part) => typeof part.text === "string" ? part.text : "")
+    .join("")
+    .trim();
+}
+
+async function firstGeminiContent(result: KieGemini35FlashStreamGenerateContentResult): Promise<string> {
+  if (!isAsyncIterableResult(result)) return geminiResponseText(result);
+
+  let text = "";
+  for await (const chunk of result) {
+    text += geminiResponseText(chunk);
+  }
+  return text.trim();
+}
 
 async function extractFrameJpeg(inputPath: string, timestamp: number, outPath: string): Promise<Buffer> {
   try {
@@ -162,8 +200,8 @@ export function registerPlanVisualizationJob(fs: VideocityFs): void {
     const { assetId: sourceAssetId, projectSlug, characterAssetIds } = payload as PlanVisualizationPayload;
 
     return withLocalLease(fs, projectSlug, sourceAssetId, ctx, "analyze", async () => {
-      const apiKey = getApiKey("OPENAI_API_KEY");
-      if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
+      const apiKey = getApiKey("KIE_API_KEY");
+      if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
 
       const loaded = await loadAssetForAnalysis(fs, sourceAssetId, projectSlug);
       if (!loaded.ok) throw new Error(loaded.error.message);
@@ -193,39 +231,37 @@ export function registerPlanVisualizationJob(fs: VideocityFs): void {
       if (chunks.length === 0) throw new Error("Could not compute chunks from source video");
 
       const sampled = sampleFramesForScenes(frameNames, chunks);
-      const frameParts: OpenAiContentPart[] = [];
+      const frameParts: KieGeminiPart[] = [];
       for (const f of sampled) {
         const buf = await fsReadFile(join(framesDir, f.name));
-        frameParts.push(imageBase64Part(buf.toString("base64"), "image/jpeg", "low"));
+        frameParts.push(geminiImageBase64Part(buf.toString("base64"), "image/jpeg"));
       }
 
       const userContext = buildPlanContext(characters, chunks, transcript.words, sampled);
-      const userContent: OpenAiContentPart[] = [
-        textPart(userContext),
+      const userContent: KieGeminiPart[] = [
+        geminiTextPart(`Instructions:\n${SYSTEM_PROMPT_PLAN}`),
+        geminiTextPart(userContext),
         ...frameParts,
       ];
 
-      const provider = createOpenAi({ apiKey, timeout: 240_000 });
-      const call = withRetry<OpenAiChatRequest, OpenAiChatResponse>(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
+      const provider = createKie({ apiKey, timeout: 240_000 });
+      const call = withRetry<KieGemini35FlashStreamGenerateContentRequest, KieGemini35FlashStreamGenerateContentResult>(
+        provider.gemini.post.v1.models.gemini35Flash.streamGenerateContent,
+        { retries: 2, baseMs: 500 },
+      );
 
-      const result = await call({
-        model: MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT_PLAN },
-          { role: "user", content: userContent },
+      const outputText = await firstGeminiContent(await call({
+        stream: false,
+        contents: [
+          { role: "user", parts: userContent },
         ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "plan_visualization_visuals",
-            schema: VISUALS_JSON_SCHEMA as unknown as Record<string, unknown>,
-            strict: true,
-          },
+        generationConfig: {
+          temperature: 0.5,
+          maxOutputTokens: 8192,
+          responseMimeType: "application/json",
+          responseSchema: VISUALS_GEMINI_SCHEMA,
         },
-        temperature: 0.5,
-        max_completion_tokens: 8192,
-      });
-      const outputText = firstContent(result);
+      }));
 
       let visuals: { visual: string }[];
       try {
@@ -258,13 +294,13 @@ export function registerPlanVisualizationJob(fs: VideocityFs): void {
         total_duration_s: totalDuration,
         max_scene_seconds: MAX_SCENE_S,
         characters,
-        model: MODEL,
+        model: CHAR_SWAP_PLAN_MODEL,
         analysis_prompt: SYSTEM_PROMPT_PLAN,
         user_context: userContext,
         word_count: transcript.words.filter((w) => w.type === "word").length,
       };
 
-      const markdown = renderMarkdown(sourceAssetId, totalDuration, characters, MODEL, scenes);
+      const markdown = renderMarkdown(sourceAssetId, totalDuration, characters, CHAR_SWAP_PLAN_MODEL, scenes);
 
       const projectResult = await fs.getProject(projectSlug);
       if (!projectResult.ok) throw new Error(projectResult.error.message);
@@ -295,7 +331,7 @@ export function registerPlanVisualizationJob(fs: VideocityFs): void {
         success: true,
         scenes: scenes.length,
         total_duration_s: totalDuration,
-        model: MODEL,
+        model: CHAR_SWAP_PLAN_MODEL,
       };
     });
   });

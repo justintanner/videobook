@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeChunks, sampleFramesForScenes, dialogForChunk, speechTimelineForChunk, buildSkeletonPlanSidecar, buildSkeletonPlanMarkdown } from "./plan-visualization.js";
+import { CHAR_SWAP_PLAN_MODEL, computeChunks, sampleFramesForScenes, dialogForChunk, speechTimelineForChunk, buildSkeletonPlanSidecar, buildSkeletonPlanMarkdown } from "./plan-visualization.js";
 import { parseScdetOutput, deriveCandidates } from "../scene-detect.js";
 
 type Candidate = { t: number; score: number; kind: "shot" | "settle" };
@@ -98,6 +98,7 @@ describe("buildSkeletonPlanSidecar", () => {
     expect(sidecar.scenes).toEqual([]);
     expect(sidecar.source_asset_id).toBe("vid-source");
     expect(sidecar.characters).toEqual(characters);
+    expect(sidecar.model).toBe(CHAR_SWAP_PLAN_MODEL);
     expect(sidecar.analysis_prompt.length).toBeGreaterThan(0);
   });
 
@@ -124,6 +125,7 @@ describe("buildSkeletonPlanMarkdown", () => {
     expect(md).toContain("vid-source");
     expect(md).toContain("@char-a (Alice)");
     expect(md).toContain("@char-b (Bob)");
+    expect(md).toContain(`**Model:** ${CHAR_SWAP_PLAN_MODEL}`);
   });
 });
 
