@@ -270,13 +270,26 @@ export function registerPlanVisualizationJob(fs: VideocityFs): void {
       if (!projectResult.ok) throw new Error(projectResult.error.message);
       await mkdir(join(projectResult.value.path, "plan"), { recursive: true });
 
+      // Extract the per-scene source frames BEFORE writing .plan.json. The client's
+      // scene-arrival poll renders the source-frame + swap nodes the instant the
+      // sidecar reports scenes; if the JPEGs aren't on disk yet those <img> tags
+      // 404 and stick on a "no source frame" placeholder (their cache-bust is the
+      // stable scene start/end, so they never retry). Writing the frames first
+      // makes "scenes present in sidecar" imply "source frames on disk". Frame
+      // extraction is best-effort: a single ffmpeg failure degrades that one frame
+      // to the placeholder rather than aborting the whole plan.
+      try {
+        await extractSceneSourceFrames(fs, projectSlug, videoFsPath, scenes);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[plan_visualization] source-frame extraction failed for ${sourceAssetId}: ${msg}`);
+      }
+
       const writeMd = await fs.writeFile("plan", "index.md", markdown, projectSlug);
       if (!writeMd.ok) throw new Error(`Failed to write index.md: ${writeMd.error.message}`);
 
       const writeJson = await fs.writeFile("plan", ".plan.json", JSON.stringify(sidecar, null, 2), projectSlug);
       if (!writeJson.ok) throw new Error(`Failed to write .plan.json: ${writeJson.error.message}`);
-
-      await extractSceneSourceFrames(fs, projectSlug, videoFsPath, scenes);
 
       return {
         success: true,
