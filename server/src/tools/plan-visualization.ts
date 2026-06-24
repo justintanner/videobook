@@ -45,9 +45,10 @@ For each chunk, return one "visual" — a single dense paragraph (60–110 words
 1. Names the two characters by their @asset_id token verbatim. Never use the human-readable name. Downstream tools resolve @asset_id to the actual likeness.
 2. Describes the cinematic SHOT — environment, lighting, color palette, mood, camera (lens, angle, motion), composition. Default to photorealistic, 8k, shallow depth of field. Anchor to what the sampled frames actually show in this chunk's time window.
 3. Describes the ACTION the two characters perform across the chunk — phrased so it reads as motion between a "first beat" (frame 0 of the chunk) and a "final beat" (last frame of the chunk). Seedance interpolates between two edited reference frames; your prompt must imply that motion arc explicitly.
-4. Locks character identity: include "lock the appearance of @<charA-id> and @<charB-id> to reference image 1 and reference image 2 respectively". The frames go in reference_image_urls (NOT first_frame_url / last_frame_url — those are mutually exclusive with the multimodal reference fields and would be rejected by the Seedance 2 schema).
-5. Honors the chunk's audio: dialogue, pacing, and audible action cues from the transcript drive what the characters DO. Match on-screen action to the words spoken in this chunk.
-6. Concrete > abstract. If the chunk's words are metaphorical, render the metaphor literally and visually.
+4. Handles CAMERA CHANGES inside the chunk. A chunk is 7–14s wide and may span more than one camera setup — a hard cut, angle change, push-in, or reframe can happen mid-chunk. Read the sampled frames in timestamp order: if the chunk's FIRST and LAST frames are clearly different shots (different angle, framing, or subject placement), do NOT describe a single continuous take — write the visual as a deliberate camera move or cut between the two setups (e.g. "opens on a wide two-shot of @<charA-id> and @<charB-id>, then cuts to a tight over-the-shoulder favoring @<charA-id>"), and anchor the "first beat" to the opening frame and the "final beat" to the closing frame so the two edited reference frames read as the genuine endpoints of that camera change. If every sampled frame shares one camera setup, treat the chunk as a single continuous shot.
+5. Locks character identity: include "lock the appearance of @<charA-id> and @<charB-id> to reference image 1 and reference image 2 respectively". The frames go in reference_image_urls (NOT first_frame_url / last_frame_url — those are mutually exclusive with the multimodal reference fields and would be rejected by the Seedance 2 schema).
+6. Honors the chunk's audio: dialogue, pacing, and audible action cues from the transcript drive what the characters DO. Match on-screen action to the words spoken in this chunk.
+7. Concrete > abstract. If the chunk's words are metaphorical, render the metaphor literally and visually.
 
 OUTPUT: JSON only, matching the provided schema. The "visuals" array MUST have exactly one entry per chunk, in the same order as the input chunks.`;
 
@@ -283,16 +284,22 @@ export function planVisualizationDef(fs: VideocityFs): ToolDef {
         .array(z.string())
         .length(REQUIRED_CHARACTERS)
         .describe(`Exactly ${REQUIRED_CHARACTERS} subject assets (char-* or img-*) — the two on-screen subjects to swap in each chunk`),
+      defer: z
+        .boolean()
+        .optional()
+        .describe("When true, write the draft skeleton (source + cast + analysis prompt) but DO NOT enqueue the vision job — the user reviews the prompt in /plan and starts generation explicitly. Default false (generate immediately)."),
     },
     handler: async (args) => {
       const {
         source_asset_id,
         project_slug,
         character_asset_ids,
+        defer,
       } = args as {
         source_asset_id: string;
         project_slug: string;
         character_asset_ids: string[];
+        defer?: boolean;
       };
 
       const sourceAssetId = source_asset_id.replace(/^@/, "");
@@ -348,11 +355,27 @@ export function planVisualizationDef(fs: VideocityFs): ToolDef {
       // analysis prompt (with a loader) immediately, while the background job
       // produces the scenes. Best-effort: if the write fails the work area just
       // waits for the job's own write instead. The job overwrites it on success.
-      const skeleton = buildSkeletonPlanSidecar(sourceAssetId, characters);
+      // `awaiting_start` marks a draft the user can read before generation runs;
+      // the work area shows a "Generate plan" button instead of polling. A
+      // non-deferred call (the explicit Generate / a regenerate) omits it and
+      // enqueues immediately; the job overwrites the skeleton with real scenes.
+      const skeleton = {
+        ...buildSkeletonPlanSidecar(sourceAssetId, characters),
+        ...(defer ? { awaiting_start: true } : {}),
+      };
       const projectResult = await fs.getProject(project_slug);
       if (projectResult.ok) {
         await mkdir(join(projectResult.value.path, "plan"), { recursive: true });
         await fs.writeFile("plan", ".plan.json", JSON.stringify(skeleton, null, 2), project_slug);
+      }
+
+      if (defer) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({ asset_id: sourceAssetId, status: "draft" }),
+          }],
+        };
       }
 
       const jobId = `plan-visualization-${sourceAssetId}-${Date.now()}`;
