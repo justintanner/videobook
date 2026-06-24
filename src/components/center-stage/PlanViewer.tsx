@@ -298,21 +298,15 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose, 
             <PlanEmptyState onBackToTemplates={onBackToTemplates} />
           ) : (
             <>
-              <div className="mb-4 flex items-center gap-2">
-                <PlanBackButton onBack={onBackToTemplates} />
-              </div>
               {formula === 'char_swap' && charSidecar ? (
-                <>
-                  <PlanAuditFromSidecar sidecar={charSidecar} projectSlug={projectSlug} />
-                  <PlanFlowStack
-                    sidecar={charSidecar}
-                    mediaItems={mediaItems}
-                    projectSlug={projectSlug}
-                    sourceAspect={charSourceAspect}
-                    callTool={callTool}
-                    onSidecarUpdate={(next) => setSidecar(next)}
-                  />
-                </>
+                <PlanFlowStack
+                  sidecar={charSidecar}
+                  mediaItems={mediaItems}
+                  projectSlug={projectSlug}
+                  sourceAspect={charSourceAspect}
+                  callTool={callTool}
+                  onSidecarUpdate={(next) => setSidecar(next)}
+                />
               ) : formula === 'storyboard_video' ? (
                 <StoryboardVideoPlanFormula
                   sidecar={storyboardVideoSidecar}
@@ -358,28 +352,6 @@ function PlanEmptyState({ onBackToTemplates }: { onBackToTemplates: () => void }
         /templates
       </button>
     </div>
-  );
-}
-
-function PlanBackButton({ onBack }: {
-  onBack: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onBack}
-      title="Back to templates"
-      className={cn(
-        'h-8 px-2.5 flex items-center gap-1.5 rounded',
-        'text-[10px] font-mono font-bold uppercase tracking-wider',
-        'text-emerald-300/65 hover:text-emerald-200',
-        'bg-zinc-950/60 hover:bg-emerald-500/10 border border-zinc-700/70 hover:border-emerald-500/50',
-        'transition-colors duration-150',
-      )}
-    >
-      <ArrowLeft className="w-3.5 h-3.5" />
-      Templates
-    </button>
   );
 }
 
@@ -2601,148 +2573,6 @@ function PlanHeaderSlot({ label, kind, item, sourceAspect, onDrop }: {
         )}
       </div>
       <div className="text-[10px] font-mono text-emerald-300/60 truncate w-44">{item?.slug ?? '—'}</div>
-    </div>
-  );
-}
-
-interface VisionAuditScene {
-  start: number;
-  end: number;
-  frames: Array<{ name: string; t: number }>;
-}
-
-interface VisionAuditData {
-  headline: 'pre-flight' | 'post-gen';
-  sourceAssetId: string;
-  scenes: VisionAuditScene[];
-  totalFrames: number;
-  wordCount: number | null;
-  systemPrompt: string | null;
-  userContext: string | null;
-}
-
-function VisionAuditView({ data, projectSlug }: {
-  data: VisionAuditData;
-  projectSlug: string;
-}) {
-  const heading = data.headline === 'pre-flight' ? 'Pre-flight preview' : 'Vision input (sent to model)';
-  const wordsLine = data.wordCount != null
-    ? `${data.wordCount} transcribed words`
-    : 'no word-level transcript stored';
-  return (
-    <div className="mb-6 space-y-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <div className="text-xs font-mono uppercase tracking-wider text-emerald-300/70">
-          {heading}
-        </div>
-        <div className="text-xs font-mono text-emerald-300/40">
-          {data.scenes.length} scenes · {data.totalFrames} frames · {wordsLine}
-        </div>
-      </div>
-      <div className="space-y-3">
-        {data.scenes.map((scene, i) => (
-          <PlanPreviewSceneRow
-            key={`${scene.start}-${scene.end}-${i}`}
-            scene={scene}
-            sceneIndex={i}
-            sourceId={data.sourceAssetId}
-            projectSlug={projectSlug}
-          />
-        ))}
-      </div>
-      {data.userContext && (
-        <details className="group">
-          <summary className="cursor-pointer text-xs font-mono uppercase tracking-wider text-emerald-300/70 hover:text-emerald-300 transition-colors duration-150 select-none">
-            User message <span className="text-emerald-300/40">(per-chunk context sent alongside frames)</span>
-          </summary>
-          <pre className="mt-2 p-3 rounded border border-zinc-800/60 bg-zinc-950/80 text-[11px] leading-relaxed font-mono text-emerald-200/80 whitespace-pre-wrap break-words overflow-auto max-h-[40vh]">
-            {data.userContext}
-          </pre>
-        </details>
-      )}
-      {data.systemPrompt && (
-        <details className="group">
-          <summary className="cursor-pointer text-xs font-mono uppercase tracking-wider text-emerald-300/70 hover:text-emerald-300 transition-colors duration-150 select-none">
-            System prompt <span className="text-emerald-300/40">(sent to vision model)</span>
-          </summary>
-          <pre className="mt-2 p-3 rounded border border-zinc-800/60 bg-zinc-950/80 text-[11px] leading-relaxed font-mono text-emerald-200/80 whitespace-pre-wrap break-words overflow-auto max-h-[40vh]">
-            {data.systemPrompt}
-          </pre>
-        </details>
-      )}
-    </div>
-  );
-}
-
-function PlanAuditFromSidecar({ sidecar, projectSlug }: {
-  sidecar: PlanSidecar;
-  projectSlug: string;
-}) {
-  const scenes = useMemo<VisionAuditScene[]>(
-    () => sidecar.scenes.map((s) => ({
-      start: s.start,
-      end: s.end,
-      frames: s.frames ?? [],
-    })),
-    [sidecar.scenes],
-  );
-  const totalFrames = scenes.reduce((acc, s) => acc + s.frames.length, 0);
-  const hasAnyFrames = totalFrames > 0;
-  const hasAnyAuditData = hasAnyFrames || Boolean(sidecar.user_context) || Boolean(sidecar.analysis_prompt);
-  if (!hasAnyAuditData) return null;
-  return (
-    <VisionAuditView
-      data={{
-        headline: 'post-gen',
-        sourceAssetId: sidecar.source_asset_id,
-        scenes,
-        totalFrames,
-        wordCount: sidecar.word_count ?? null,
-        systemPrompt: sidecar.analysis_prompt ?? null,
-        userContext: sidecar.user_context ?? null,
-      }}
-      projectSlug={projectSlug}
-    />
-  );
-}
-
-function PlanPreviewSceneRow({ scene, sceneIndex, sourceId, projectSlug }: {
-  scene: VisionAuditScene;
-  sceneIndex: number;
-  sourceId: string;
-  projectSlug: string;
-}) {
-  const duration = (scene.end - scene.start).toFixed(2);
-  return (
-    <div className="rounded border border-zinc-800/60 bg-zinc-950/40 p-3">
-      <div className="flex items-center justify-between mb-2 text-xs font-mono">
-        <span className="text-emerald-300/90">
-          Scene {sceneIndex + 1} — {scene.start.toFixed(2)}s – {scene.end.toFixed(2)}s ({duration}s)
-        </span>
-        <span className="text-emerald-300/40">{scene.frames.length} frame{scene.frames.length === 1 ? '' : 's'}</span>
-      </div>
-      {scene.frames.length === 0 ? (
-        <div className="text-[11px] font-mono text-amber-300/60">No frames in window — vision model would receive no input for this scene.</div>
-      ) : (
-        <div
-          className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-domain"
-          style={{ '--scrollbar-rgb': '52, 211, 153' } as React.CSSProperties}
-        >
-          {scene.frames.map((frame) => (
-            <div key={frame.name} className="flex-none">
-              <img
-                src={`/files/${projectSlug}/${sourceId}/original_frames/${frame.name}`}
-                alt={`t=${frame.t.toFixed(2)}s`}
-                className="h-20 w-auto rounded border border-zinc-800/60 object-cover"
-                loading="lazy"
-              />
-              <div className="text-[9px] font-mono text-emerald-300/40 mt-0.5 text-center">
-                {frame.t.toFixed(2)}s
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
