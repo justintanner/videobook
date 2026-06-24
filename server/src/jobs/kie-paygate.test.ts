@@ -99,4 +99,37 @@ describe("kie paygate", () => {
 
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
+
+  it("rejects a happyhorse/video-edit request with no duration hint as unbounded", () => {
+    // happyhorse/video-edit prices per second but its kie input schema carries
+    // no duration field (output length = source video). Without a top-level
+    // duration hint the units derivation fails and the estimate is unbounded.
+    const request = {
+      model: "happyhorse/video-edit" as const,
+      input: {
+        prompt: "swap the characters",
+        video_url: "https://kie.example/source.mp4",
+        resolution: "1080p" as const,
+      },
+    };
+    expect(() => mintKieOtp(request, 60)).toThrow(/cost estimate is not bounded/);
+  });
+
+  it("mints a bounded OTP for a happyhorse/video-edit request with a top-level duration hint", async () => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+
+    const request = {
+      model: "happyhorse/video-edit" as const,
+      duration: 9.97,
+      input: {
+        prompt: "swap the characters",
+        video_url: "https://kie.example/source.mp4",
+        resolution: "1080p" as const,
+      },
+    };
+    const otp = mintKieOtp(request, 60);
+    const parsed = parseOtp(otp);
+
+    expect(parsed.payload.requestHash).toBe(canonicalHash(request));
+  });
 });
