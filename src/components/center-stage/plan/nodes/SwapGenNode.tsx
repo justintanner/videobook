@@ -1,11 +1,11 @@
-// Character-swap image gen for one scene frame. Provider/model selectors, a
-// per-(provider+model) prompt override, a GUI↔JSON flip, a variant filmstrip
-// (click to promote), and "one node → many models" fan-out: Run fires the
-// primary model plus any toggled extras sequentially, each landing as its own
-// variant. The swap feeds only the character(s) WIRED to this frame (editable
-// on the canvas / seeded by vision auto-match), so a row of inline micro-thumbs
-// shows exactly what Image 1/2/3(/4) resolve to. Frame 2 threads the prior
-// frame-1 swap as continuity reference.
+// Character-swap image gen for one scene frame. One shared prompt, a GUI↔JSON
+// flip, a variant filmstrip (click to promote), and a direct "Run <model>"
+// button per model (nbp / gi2 / wan) — each enqueues that model on kie as its
+// own variant, so clicking several fans out across models. The swap feeds only
+// the character(s) WIRED to this frame (drag a character from the sidebar onto
+// the frame to wire it), so a row of inline micro-thumbs shows exactly what
+// Image 1/2/3(/4) resolve to. Frame 2 threads the prior frame-1 swap as
+// continuity reference.
 import { memo, useCallback, useMemo, useState } from 'react';
 import { UserRound, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -20,26 +20,28 @@ import {
   defaultSwapPrompt,
   deriveTileState,
   frameCharacters,
-  variantKey,
   type SwapModel,
   type SwapProvider,
 } from '../charSwapModel';
 import { FlipCard, FlipToggle, NodeFrame, StateThumb } from './nodeUi';
 import { nodeImageHeight } from './nodeLayout';
-import { RunButton, Segmented } from './controls';
+import { RunButton } from './controls';
 import { VariantStrip, VARIANT_STRIP_H } from './VariantStrip';
 import { RichPromptField } from '@/components/ui/RichPromptField';
 import type { ChipThumb } from '@/components/ui/AssetThumbChip';
 import type { RichToken } from '@/components/ui/richPromptTokens';
 
 const NODE_WIDTH = 400;
-const CONTROLS_H = 170;
+const CONTROLS_H = 155;
 const THUMB_STRIP_H = 50;
 
-const PROVIDER_OPTIONS: ReadonlyArray<{ value: SwapProvider; label: string }> = [
-  { value: 'kie', label: 'kie' },
-  { value: 'fal', label: 'fal' },
-];
+// The provider/model selectors collapse to one direct "Run <model>" button per
+// model. kie hosts all three models (fal only nbp/wan), so every button runs on
+// kie and the provider toggle is gone — each click enqueues that model as its
+// own variant. The JSON-flip preview uses the primary model as a representative.
+const SWAP_PROVIDER: SwapProvider = 'kie';
+const SWAP_MODELS = MODELS_BY_PROVIDER[SWAP_PROVIDER];
+const PRIMARY_SWAP_MODEL: SwapModel = 'nano-banana-pro';
 
 // One labeled micro-thumb mapping an "Image N" prompt token to its actual
 // reference image, so the prompt's "Image 1 / Image 2 …" wording is legible.
@@ -89,49 +91,13 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
   const { sceneIndex, frameIndex } = data;
   const scene = sidecar.scenes[sceneIndex];
 
-  const [provider, setProvider] = useState<SwapProvider>('kie');
-  const [model, setModel] = useState<SwapModel>('nano-banana-pro');
-  const [extra, setExtra] = useState<Set<SwapModel>>(new Set());
+  const [runningModels, setRunningModels] = useState<Set<SwapModel>>(new Set());
   const [dropActive, setDropActive] = useState(false);
-  // Sparse map of user prompt overrides keyed by variantKey; the displayed
-  // prompt falls back to the count-aware default so it always reflects how many
-  // characters are wired (1 → "Image 2", 2 → "Image 2 and Image 3").
-  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  // Single prompt override; falls back to the count-aware default so it always
+  // reflects how many characters are wired (1 → "Image 2", 2 → "Image 2 and
+  // Image 3"). Every "Run <model>" button sends this same prompt.
+  const [override, setOverride] = useState<string | null>(null);
   const [flipped, setFlipped] = useState(false);
-
-  const modelOptions = useMemo(
-    () => MODELS_BY_PROVIDER[provider].map((m) => ({ value: m, label: SHORT_LABEL_BY_MODEL[m] })),
-    [provider],
-  );
-  const otherModels = useMemo(
-    () => MODELS_BY_PROVIDER[provider].filter((m) => m !== model),
-    [provider, model],
-  );
-
-  const onProviderChange = useCallback((next: SwapProvider) => {
-    setProvider(next);
-    const supported = MODELS_BY_PROVIDER[next];
-    setModel((cur) => (supported.includes(cur) ? cur : supported[0]));
-    setExtra((prev) => new Set([...prev].filter((m) => supported.includes(m))));
-  }, []);
-
-  const onModelChange = useCallback((next: SwapModel) => {
-    setModel(next);
-    setExtra((prev) => {
-      if (!prev.has(next)) return prev;
-      const n = new Set(prev);
-      n.delete(next);
-      return n;
-    });
-  }, []);
-
-  const toggleExtra = useCallback((m: SwapModel) => {
-    setExtra((prev) => {
-      const n = new Set(prev);
-      if (n.has(m)) n.delete(m); else n.add(m);
-      return n;
-    });
-  }, []);
 
   // Characters wired to THIS frame (defaults to all when unwired).
   const wiredChars = useMemo(
@@ -186,15 +152,11 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
     void actions.setFrameCharacters(sceneIndex, frameIndex, [...explicit, id].slice(-2));
   }, [sidecar.characters, scene, frameIndex, sceneIndex, actions]);
 
-  const key = variantKey(provider, model);
-  const prompt = overrides[key] ?? defaultSwapPrompt(charCount, Boolean(priorSwapAssetId));
-  const onPromptChange = useCallback((next: string) => {
-    setOverrides((prev) => ({ ...prev, [key]: next }));
-  }, [key]);
+  const prompt = override ?? defaultSwapPrompt(charCount, Boolean(priorSwapAssetId));
+  const onPromptChange = useCallback((next: string) => { setOverride(next); }, []);
 
   const tile = scene ? deriveTileState(scene, frameIndex, mediaItems) : ({ kind: 'idle' } as const);
   const imageH = nodeImageHeight(NODE_WIDTH, sourceAspect, 300);
-  const running = actions.isSwapInFlight(sceneIndex, frameIndex);
 
   const variantsKey = `image${frameIndex}_variants` as 'image1_variants' | 'image2_variants';
   const variants = scene?.swap?.[variantsKey];
@@ -257,26 +219,30 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
   );
 
   const payload = useMemo(
-    () => buildSwapPayload(provider, model, wiredChars, sceneIndex, frameIndex, prompt, sourceAspect, priorSwapAssetId),
-    [provider, model, wiredChars, sceneIndex, frameIndex, prompt, sourceAspect, priorSwapAssetId],
+    () => buildSwapPayload(SWAP_PROVIDER, PRIMARY_SWAP_MODEL, wiredChars, sceneIndex, frameIndex, prompt, sourceAspect, priorSwapAssetId),
+    [wiredChars, sceneIndex, frameIndex, prompt, sourceAspect, priorSwapAssetId],
   );
 
-  // Run the primary model plus any toggled extras, sequentially (each enqueues
-  // its own job; sequential await respects the server git mutex). Each lands as
-  // a variant in image{N}_variants.
-  const runModels = useMemo(() => [model, ...otherModels.filter((m) => extra.has(m))], [model, otherModels, extra]);
-  const run = useCallback(() => {
+  // Each "Run <model>" button enqueues that model on kie as its own variant in
+  // image{N}_variants. Want several models? Click several buttons — this replaces
+  // the old single Run + provider/model selectors + "+also" fan-out.
+  const runModel = useCallback((m: SwapModel) => {
+    setRunningModels((prev) => new Set(prev).add(m));
     void (async () => {
-      for (const m of runModels) {
-        const k = variantKey(provider, m);
-        const p = overrides[k] ?? defaultSwapPrompt(charCount, Boolean(priorSwapAssetId));
-        await actions.runSwap(sceneIndex, frameIndex, provider, m, {
-          customPrompt: p,
+      try {
+        await actions.runSwap(sceneIndex, frameIndex, SWAP_PROVIDER, m, {
+          customPrompt: prompt,
           ...(priorSwapAssetId ? { priorSwapAssetId } : {}),
+        });
+      } finally {
+        setRunningModels((prev) => {
+          const n = new Set(prev);
+          n.delete(m);
+          return n;
         });
       }
     })();
-  }, [actions, runModels, sceneIndex, frameIndex, provider, overrides, charCount, priorSwapAssetId]);
+  }, [actions, sceneIndex, frameIndex, prompt, priorSwapAssetId]);
 
   if (!scene) return null;
 
@@ -350,51 +316,29 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
           </button>
         )}
       </div>
-      <div className="mt-2 flex flex-col gap-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <Segmented options={PROVIDER_OPTIONS} value={provider} onChange={onProviderChange} ariaLabel="provider" />
-          <Segmented options={modelOptions} value={model} onChange={onModelChange} ariaLabel="model" />
-        </div>
-        {otherModels.length > 0 && (
-          <div className="nodrag flex items-center gap-1 flex-wrap">
-            <span className="text-[9px] font-mono text-zinc-500">+also</span>
-            {otherModels.map((m) => {
-              const on = extra.has(m);
-              return (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => toggleExtra(m)}
-                  className={cn(
-                    'px-1 py-0.5 rounded text-[9px] font-mono border transition-colors',
-                    on ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/50' : 'bg-black/40 text-zinc-400 border-zinc-700 hover:text-zinc-200',
-                  )}
-                >
-                  {SHORT_LABEL_BY_MODEL[m]}
-                </button>
-              );
-            })}
-          </div>
-        )}
+      <div className="mt-2 flex flex-col gap-2">
         <RichPromptField
           value={prompt}
           onChange={onPromptChange}
           resolveRef={resolveRef}
           assetSlugs={assetSlugs}
           slugForAssetId={slugForAssetId}
-          rows={3}
-          fieldClassName="nodrag w-full px-1.5 py-1 text-[10px] font-mono leading-snug"
+          rows={6}
+          fieldClassName="nodrag w-full px-2 py-1.5 text-[11px] font-mono leading-snug"
           surfaceClassName="nodrag rounded border border-zinc-700 bg-black/60 focus-within:border-emerald-500/60"
           textClassName="text-emerald-100/90"
           caretClassName="caret-emerald-300"
         />
-        <div className="flex items-center justify-end">
-          <RunButton
-            onClick={run}
-            running={running}
-            label={runModels.length > 1 ? `Run ${runModels.length}` : 'Run'}
-            title={`Run ${runModels.map((m) => SHORT_LABEL_BY_MODEL[m]).join(', ')} (${provider})`}
-          />
+        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+          {SWAP_MODELS.map((m) => (
+            <RunButton
+              key={m}
+              onClick={() => runModel(m)}
+              running={runningModels.has(m)}
+              label={`Run ${SHORT_LABEL_BY_MODEL[m]}`}
+              title={`Run ${SHORT_LABEL_BY_MODEL[m]} as a variant (kie)`}
+            />
+          ))}
         </div>
       </div>
     </div>

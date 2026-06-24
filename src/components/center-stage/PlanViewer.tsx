@@ -2517,7 +2517,7 @@ function isAcceptableForSlot(payload: SidebarDragPayload, kind: PlanSlotKind): b
   return payload.id.startsWith('char-') || payload.id.startsWith('img-');
 }
 
-function PlanHeaderSlot({ label, kind, item, sourceAspect, onDrop }: {
+export function PlanHeaderSlot({ label, kind, item, sourceAspect, onDrop }: {
   label: string;
   kind: PlanSlotKind;
   item: MediaItem | null;
