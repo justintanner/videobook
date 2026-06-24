@@ -7,12 +7,12 @@
 // → swap frames → video. Owns the shared actions hook, the clip/audio bootstrap,
 // the scene-arrival poll, and the regenerate-from-new-inputs poll.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
 import type { UseMcpResult } from 'use-mcp/react';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { SourceAspect } from '@/lib/plan-aspect';
 import { PlanFlowProvider, type PlanFlowContextValue } from './PlanFlowContext';
+import { PlanGenPrompt } from './PlanGenPrompt';
 import { FlowColumn, FlowStep } from './flow/FlowColumn';
 import { FlowConnector } from './flow/FlowConnector';
 import { useCharSwapActions } from './useCharSwapActions';
@@ -74,6 +74,9 @@ export function PlanFlowStack({
   // plan_visualization overwrites .plan.json once at job completion, so the
   // signature flips atomically — no partial-plan window to guard.
   const [regenerating, setRegenerating] = useState(false);
+  // `generating` drives the generation-prompt block: the first build (no scenes
+  // yet) or an in-flight regenerate from new inputs.
+  const generating = building || regenerating;
   const regenPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelledRef = useRef(false);
   useEffect(() => {
@@ -173,11 +176,13 @@ export function PlanFlowStack({
           />
         </FlowStep>
 
-        {building && (
-          <div className="mt-3 flex items-center gap-2 rounded-md border border-emerald-500/40 bg-zinc-900/70 px-3 py-2">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400/80" />
-            <span className="font-mono text-[11px] text-emerald-200/80">splitting video into scenes…</span>
-          </div>
+        {/* Generation prompt + loader — shown ONLY while (re)generating; the flow
+            collapses to the plain connector once the plan is ready. */}
+        {generating && <FlowConnector height={40} />}
+        {generating && (
+          <FlowStep>
+            <PlanGenPrompt userContext={sidecar.user_context} systemPrompt={sidecar.analysis_prompt} />
+          </FlowStep>
         )}
 
         {sidecar.scenes.length > 0 && <FlowConnector height={40} />}
