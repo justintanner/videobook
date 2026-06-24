@@ -16,27 +16,22 @@ something that should be exported isn't · **quirk** = packaging/versioning.
 
 ---
 
-## 1. (quirk) Mixed Zod major versions across the workspace
+## 1. (quirk) ~~Mixed Zod major versions across the workspace~~ — RESOLVED in 0.6.1
 
-`@apicity/kie` resolves **Zod 4** (`node_modules/zod` = 4.3.6) while
-`@apicity/alibaba`, `@apicity/xai`, and `@apicity/fal` resolve **Zod 3**
-(nested `zod` = 3.25.76). The published `.d.ts` are Zod-4-shaped, but several
-packages execute Zod-3 internals at runtime, so reading constraints off a schema
-requires handling both layouts:
+**Resolved by `@apicity/* 0.6.1`:** every provider now depends on `zod ^4.4.3`,
+so the workspace is unified on **Zod 4** end to end (the app's own zod is 4.3.6;
+both are Zod 4 with identical `_def.type` / `_def.checks[]._zod.def` /
+`_def.entries` internals). There is no longer any Zod-3 runtime anywhere.
 
-| | Zod 3 (alibaba/xai/fal) | Zod 4 (kie) |
-|---|---|---|
-| number int/min/max | `_def.checks[].kind` = `int`/`min`/`max`, flat `value` | `_def.checks[]._zod.def.check` = `number_format`/`greater_than`/`less_than` |
-| string min/max len | `_def.minLength.value` / `_def.checks[].kind` | `_def.checks[]._zod.def.check` = `min_length`/`max_length` |
-| enum values | `_def.values` (array) | `_def.entries` (object map) |
+The dual-version readers in `server/src/zod-slots.ts` were collapsed to
+**Zod-4-only** (the Zod-3 `_def.typeName` / flat `_def.checks[].kind` /
+`_def.minLength.value` / `.options` paths were removed), and the duplicated
+union-introspection in `server/src/tools/generate-qwen-image-edit-fal.ts` was
+replaced with the shared `zodUnionEnumOptions` helper.
 
-**Workaround:** the entire dual-version reader in
-`server/src/zod-slots.ts` — `enumOptions`, `readSlotConstraints`,
-`unwrapToCore`, and the new `zodNumberRange` / `zodStringMaxLength`. Comment at
-`zod-slots.ts:1-13` documents it.
-
-**Ask apicity:** unify on a single Zod major across all `@apicity/*` packages,
-and make the published `.d.ts` match the runtime.
+Historical note — under 0.6.0, `@apicity/kie` ran Zod 4 while
+`@apicity/alibaba`/`xai`/`fal` ran nested Zod 3 (3.25.76) despite Zod-4-shaped
+`.d.ts`; reading constraints required handling both layouts.
 
 ---
 
@@ -175,74 +170,59 @@ Deriving from apicity surfaced validation the FE was silently missing. These are
 
 ---
 
-## 9. (gap) `@apicity/cost@0.6.0` has no slugs/pricing for HappyHorse 1.1
+## 9. (gap) ~~`@apicity/cost@0.6.0` has no slugs/pricing for HappyHorse 1.1~~ — RESOLVED in 0.6.1
 
-`@apicity/kie@0.6.0` ships the new **HappyHorse 1.1** endpoints
-(`happyhorse-1-1/text-to-video`, `happyhorse-1-1/image-to-video`,
-`happyhorse-1-1/reference-to-video`) — zod schemas, types, and `model-schemas`
-— but `@apicity/cost@0.6.0` was **not** updated alongside it: `MODEL_SLUGS` and
-the kie pricing table still know only the 1.0 `happyhorse/*` keys. Concretely:
+**Resolved by `@apicity/cost@0.6.1`:** it now prices the **HappyHorse 1.1**
+endpoints (`happyhorse-1-1/{text,image,reference}-to-video`) directly —
+`modelSlug` resolves and `computeEstimate` returns a bounded estimate with no
+warnings.
 
-- `modelSlug("kie", "happyhorse-1-1/...")` **throws** (`No slug registered`).
-- `computeEstimate` for a `happyhorse-1-1/*` payload returns `$0` + a
-  `not found in pricing table` warning, which `mintKieOtp` treats as unbounded
-  and **rejects**.
+Note the 1.1 rates **differ** from 1.0 (1.1 is `$0.165`/`$0.22` per second by
+resolution vs 1.0's `$0.155`/`$0.265`), so the prior cost-display borrow of the
+1.0 slugs **over-charged** at 1080p. Fixes applied:
 
-There is no 1.1 `video-edit` endpoint, so `generate_happyhorse_videoedit_video`
-stays on 1.0 (`happyhorse/video-edit`) unchanged.
-
-**Workaround (videocity migrated t2v/i2v/ref to 1.1):**
-
-- Generation payloads target `happyhorse-1-1/*` (`server/src/payload-builders.ts`).
-- Asset/job **naming** keeps the 1.0 `happyhorse/*` key for `modelSlug` (slug is
-  `"hh"`; avoids the throw) — comments in the three `generate-happyhorse-*` tools.
-- **Cost display** keeps the 1.0 `happyhorse/*` keys in
-  `server/src/cost-adapters.ts` (per-second rates are identical:
-  `$0.155`/`$0.265` by resolution).
-- The **paygate** admits the three `happyhorse-1-1/*` models via
-  `COST_TABLE_PENDING_MODELS` in `server/src/jobs/kie-paygate.ts`, exactly like
-  the existing Volcengine / OmniHuman shims.
-
-**Ask apicity:** add `happyhorse-1-1/*` slugs + pricing to `@apicity/cost` (and a
-`happyhorse-1-1` duration/aspect-ratio note if rates ever diverge from 1.0).
-Remove all four workarounds once priced.
+- **Cost display** (`server/src/cost-adapters.ts`) now keys t2v/i2v/ref off the
+  actual `happyhorse-1-1/*` slugs. `video-edit` stays on 1.0
+  (`happyhorse/video-edit` — no 1.1 video-edit endpoint exists).
+- The three `happyhorse-1-1/*` entries were removed from
+  `COST_TABLE_PENDING_MODELS` (`server/src/jobs/kie-paygate.ts`) — admitted via
+  real pricing now.
+- Generation payloads already targeted `happyhorse-1-1/*`; unchanged.
 
 ---
 
-## 10. (gap) `@apicity/cost@0.6.0` has no slug/pricing for Seedance 2 Mini
+## 10. (gap) ~~`@apicity/cost@0.6.0` has no slug/pricing for Seedance 2 Mini~~ — RESOLVED in 0.6.1
 
-Same shape as §9. `@apicity/kie@0.6.0` ships the **Seedance 2 Mini** endpoint
-(`bytedance/seedance-2-mini`) — zod, types, `model-schemas` — but
-`@apicity/cost@0.6.0` prices only `bytedance/seedance-2` and
-`bytedance/seedance-2-fast`. So `modelSlug("kie", "bytedance/seedance-2-mini")`
-throws and `mintKieOtp` would reject the model as unbounded.
+**Resolved by `@apicity/cost@0.6.1`:** it now registers a `bytedance/seedance-2-mini`
+slug (`"sd2m"`) and per-second pricing (resolution-tiered, 480p/720p — the only
+tiers the tool exposes). Fixes applied:
 
-Unlike HappyHorse 1.1, Mini has **no priced sibling** whose rate it can safely
-borrow (it is a distinct, presumably cheaper tier), so videocity does **not**
-fabricate a cost-display rate.
-
-**Workaround (`generate_seedance2_mini_video`):**
-
-- Generation payload targets `bytedance/seedance-2-mini`
-  (`buildSeedance2MiniVideoPayload` in `server/src/payload-builders.ts`).
-- Asset/job **naming** uses a literal `SLUG = "seedance2mini"` in
-  `server/src/tools/generate-seedance2-mini-video.ts` (modelSlug would throw),
-  mirroring the Volcengine / OmniHuman tools.
-- **Cost display**: intentionally *no* `cost-adapters.ts` entry → the UI shows
-  `—` (honest "no rate available") rather than a guessed number.
-- The **paygate** admits `bytedance/seedance-2-mini` via
-  `COST_TABLE_PENDING_MODELS` in `server/src/jobs/kie-paygate.ts`.
-- Reuses the shared `seedance2_video` TaskType + `completeSeedance2Video`
-  handler (they key off taskType, not model); the exact model rides in
-  `meta.apiModel` so provenance records `bytedance/seedance-2-mini`.
-
-**Ask apicity:** add a `bytedance/seedance-2-mini` slug + pricing to
-`@apicity/cost`. Remove the naming/paygate workarounds and wire a
-`cost-adapters.ts` entry once priced.
+- **Cost display** (`server/src/cost-adapters.ts`) gained a
+  `generate_seedance2_mini_video: kieResolutionVideo("bytedance/seedance-2-mini", "720p")`
+  entry — the UI now shows a real number instead of `—`.
+- Asset/job **naming** switched from the literal `"seedance2mini"` to
+  `modelSlug("kie", "bytedance/seedance-2-mini")` (`server/src/tools/generate-seedance2-mini-video.ts`),
+  matching the sibling fast/regular tools.
+- The `bytedance/seedance-2-mini` entry was removed from
+  `COST_TABLE_PENDING_MODELS` (`server/src/jobs/kie-paygate.ts`).
+- Still reuses the shared `seedance2_video` TaskType + `completeSeedance2Video`
+  handler; the exact model rides in `meta.apiModel`.
 
 ---
 
-## 11. (bug) Seedance 2 Mini reference arrays enforce `.url()`; regular/fast use plain `z.string()`
+## 11. (bug) Seedance 2 Mini reference arrays enforce `.url()`; regular/fast use plain `z.string()` — FIXED upstream in 0.6.1
+
+**Fixed by `@apicity/kie@0.6.1`:** `Seedance2MiniInputSchema`'s `reference_*_urls`
+are now plain `z.array(z.string())` (no `.url()`), matching the regular/fast
+schemas. The slug-friendly `refSlugCheck` workaround below is therefore
+**redundant** — it still passes harmlessly and is left in place for now; a
+follow-up can drop it and validate the slug arrays directly against
+`Seedance2MiniRequestSchema`. (The new `generate_gemini_omni_video` tool relies
+on this same loosening: its `image_urls` / `video_list[].url` are plain
+`z.string()`, so it validates `@slug`s against the full request schema with no
+mirror — see §13.)
+
+Original report (0.6.0):
 
 `Seedance2MiniInputSchema` validates all three reference arrays with
 `z.array(z.string().url())`:
@@ -275,3 +255,53 @@ slugs are validated for existence/type by `resolveImageSlug` /
 regular/fast schemas (plain `z.string()`), or expose a separate slot for
 pre-upload validation. The `.url()` constraint is only correct at the live REST
 boundary, not at the SDK's request-construction layer.
+
+---
+
+## 12. (gap) `@apicity/cost@0.6.1` has no slug/pricing for Gemini Omni Video
+
+`@apicity/kie@0.6.1` ships the new **Gemini Omni Video** endpoint
+(`gemini-omni-video`) — zod, types, `model-schemas` — but `@apicity/cost@0.6.1`
+prices no `gemini-omni-video` rate. So `modelSlug("kie", "gemini-omni-video")`
+throws and `computeEstimate` returns `$0` + a `not found in pricing table`
+warning. Same shape as the (now-resolved) §10.
+
+**Workaround (`generate_gemini_omni_video`):**
+
+- Asset/job **naming** uses a literal `SLUG = "gemini-omni"` in
+  `server/src/tools/generate-gemini-omni-video.ts` (modelSlug would throw).
+- **Cost display**: intentionally *no* `cost-adapters.ts` entry → the UI shows
+  `—` (honest "no rate available").
+- The **paygate** admits `gemini-omni-video` via `COST_TABLE_PENDING_MODELS` in
+  `server/src/jobs/kie-paygate.ts`.
+- Reuses the shared `seedance2_video` TaskType + `completeSeedance2Video`
+  handler; the exact model rides in `meta.apiModel`.
+
+**Ask apicity:** add a `gemini-omni-video` slug + pricing to `@apicity/cost`.
+Remove the naming/paygate workarounds and wire a `cost-adapters.ts` entry once
+priced.
+
+---
+
+## 13. (gap) No `gemini-omni-audio` / `gemini-omni-character` create flow wired
+
+`gemini-omni-video`'s input accepts `audio_ids` (≤3) and `character_ids` (≤3)
+that reference assets minted by **separate create endpoints**:
+
+- `gemini-omni-audio` exists in `@apicity/kie@0.6.1` as
+  `kie.post.api.v1.omni.audio.create` (`GeminiOmniAudioCreateRequestSchema`, a
+  voice picked from 30 named voices) — but videocity has no asset-creation flow
+  for "mint an ID, then reference it later", so it is **not** wired.
+- `gemini-omni-character` has **no apicity endpoint at all** — it's only
+  referenced by ID in the video schema's description, with no create
+  method/schema to produce those IDs.
+
+**Workaround (`server/src/tools/generate-gemini-omni-video.ts` +
+`payload-builders.ts`):** `audio_ids` and `character_ids` are **omitted** from
+the tool's input schema and payload. Both are optional upstream, so omitting them
+keeps requests valid; the model still runs from prompt + reference images +
+reference video clip.
+
+**Ask apicity:** (a) add a `gemini-omni-character` create endpoint so character
+IDs can be produced; (b) once both create flows exist, videocity can add an
+audio/character asset-minting flow and surface `audio_ids` / `character_ids`.

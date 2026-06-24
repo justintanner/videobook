@@ -133,11 +133,10 @@ describe("kie paygate", () => {
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 
-  it("admits HappyHorse 1.1 requests via the cost-table-pending shim", () => {
-    // @apicity/cost@0.6.0 ships no slug/pricing for happyhorse-1-1/*, so
-    // computeEstimate returns $0 + a "not found" warning. The three 1.1 models
-    // are listed in COST_TABLE_PENDING_MODELS, so mintKieOtp admits them and
-    // binds the request hash instead of rejecting as unbounded.
+  it("mints a bounded OTP for HappyHorse 1.1 requests now priced by @apicity/cost", () => {
+    // @apicity/cost@0.6.1 prices happyhorse-1-1/* directly (no longer a
+    // COST_TABLE_PENDING_MODELS shim), so computeEstimate returns a bounded
+    // estimate with no warnings and mintKieOtp admits the request.
     process.env.APICITY_PAYGATE_SECRET = "test-secret";
 
     const requests = [
@@ -153,11 +152,10 @@ describe("kie paygate", () => {
     }
   });
 
-  it("admits a Seedance 2 Mini request via the cost-table-pending shim", () => {
-    // @apicity/cost@0.6.0 ships no slug/pricing for bytedance/seedance-2-mini,
-    // so computeEstimate returns $0 + a "not found" warning. The model is listed
-    // in COST_TABLE_PENDING_MODELS, so mintKieOtp admits it and binds the
-    // request hash instead of rejecting as unbounded.
+  it("mints a bounded OTP for a Seedance 2 Mini request now priced by @apicity/cost", () => {
+    // @apicity/cost@0.6.1 prices bytedance/seedance-2-mini directly (no longer a
+    // COST_TABLE_PENDING_MODELS shim), so computeEstimate returns a bounded
+    // estimate with no warnings and mintKieOtp admits the request.
     process.env.APICITY_PAYGATE_SECRET = "test-secret";
 
     const request = {
@@ -167,6 +165,28 @@ describe("kie paygate", () => {
         resolution: "720p" as const,
         aspect_ratio: "16:9" as const,
         duration: 15,
+      },
+    };
+    const otp = mintKieOtp(request, 60);
+    const parsed = parseOtp(otp);
+
+    expect(parsed.payload.requestHash).toBe(canonicalHash(request));
+  });
+
+  it("admits a Gemini Omni Video request via the cost-table-pending shim", () => {
+    // @apicity/cost@0.6.1 ships no slug/pricing for gemini-omni-video, so
+    // computeEstimate returns $0 + a "not found" warning. The model is listed in
+    // COST_TABLE_PENDING_MODELS, so mintKieOtp admits it and binds the request
+    // hash instead of rejecting as unbounded.
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+
+    const request = {
+      model: "gemini-omni-video" as const,
+      input: {
+        prompt: "a sunset over the ocean",
+        duration: "6" as const,
+        aspect_ratio: "16:9" as const,
+        resolution: "720p" as const,
       },
     };
     const otp = mintKieOtp(request, 60);

@@ -94,6 +94,8 @@ describe("estimate_cost tool", () => {
       ["generate_wan27_r2v_video", { duration: "5" }],
       ["generate_wan27_videoedit_video", {}],
       ["extend_wan27_video", { duration: "5" }],
+      // Seedance 2 Mini (resolution-tiered per-second; priced by @apicity/cost@0.6.1)
+      ["generate_seedance2_mini_video", { resolution: "720p", duration: "5" }],
       // Grok-imagine video (resolution-tiered)
       ["generate_grok_imagine_video", { resolution: "480p", duration: 8 }],
       ["generate_grok_imagine_t2v_video", { resolution: "480p", duration: 6 }],

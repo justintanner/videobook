@@ -4,9 +4,9 @@
  * Covers the three patterns used in @apicity provider schemas for reference-asset
  * fields: optional/required array, tuple (fixed-length), and single string.
  *
- * Supports both Zod 3 (`_def.typeName`, `_def.minLength.value`) and Zod 4
- * (`_def.type`, `_def.checks`) internals, since the @apicity workspace
- * straddles both versions.
+ * Reads Zod 4 internals (`_def.type`, `_def.checks[]._zod.def`) — every
+ * @apicity/* provider is unified on `zod ^4.4.3` (and the app's own zod is 4.x),
+ * so the prior Zod-3 straddling readers were dropped.
  *
  * The returned `max: null` means "unbounded per the Zod schema" — the UI should
  * render an add-more affordance rather than a fixed slot count.
@@ -14,13 +14,9 @@
 
 type ZodCheckV4 = { _zod?: { def?: { check?: string; minimum?: number; maximum?: number } } };
 
-// A single number/string `.min()/.max()/.int()` check. The @apicity workspace
-// straddles two runtime layouts: Zod 3 exposes checks flat (`kind`/`value`),
-// Zod 4 nests them under `_zod.def` (`check`/`value`/`format`).
+// A single number/string `.min()/.max()/.int()` check. Zod 4 nests checks under
+// `_zod.def` (`check`/`value`/`format`).
 type ZodConstraintCheck = {
-  kind?: string;
-  value?: number;
-  inclusive?: boolean;
   _zod?: {
     def?: {
       check?: string;
@@ -34,17 +30,13 @@ type ZodConstraintCheck = {
 };
 
 type ZodDef = {
-  typeName?: string;
   type?: string;
   innerType?: unknown;
   schema?: unknown;
   defaultValue?: unknown;
-  minLength?: { value: number } | null;
-  maxLength?: { value: number } | null;
   checks?: ZodCheckV4[];
   items?: unknown[];
   options?: unknown[];
-  values?: unknown;
   entries?: unknown;
 };
 
@@ -58,26 +50,13 @@ function defOf(schema: unknown): ZodDef | null {
   return def && typeof def === "object" ? (def as ZodDef) : null;
 }
 
-function ctorName(schema: unknown): string | null {
-  if (!schema || typeof schema !== "object") return null;
-  const ctor = (schema as { constructor?: { name?: string } }).constructor;
-  return ctor?.name ?? null;
-}
-
-function isType(schema: unknown, v3Name: string, v4Name: string): boolean {
-  const def = defOf(schema);
-  if (!def) return false;
-  if (def.typeName === v3Name) return true;
-  if (def.type === v4Name) return true;
-  return ctorName(schema) === v3Name;
+// Call sites keep the (unused) Zod-3 name argument so the ~30 call sites read
+// `isType(x, "ZodFoo", "foo")` unchanged; only the Zod-4 `_def.type` is matched.
+function isType(schema: unknown, _v3Name: string, v4Name: string): boolean {
+  return defOf(schema)?.type === v4Name;
 }
 
 function readArrayBounds(def: ZodDef): { min: number; max: number | null } {
-  const v3Min = def.minLength?.value;
-  const v3Max = def.maxLength?.value;
-  if (v3Min !== undefined || v3Max !== undefined) {
-    return { min: v3Min ?? 0, max: v3Max ?? null };
-  }
   let min = 0;
   let max: number | null = null;
   for (const c of def.checks ?? []) {
@@ -177,22 +156,15 @@ function toStringList(raw: unknown): string[] {
 /**
  * Read the string values of a (possibly wrapped) `ZodEnum`.
  *
- * Handles both internals the @apicity workspace straddles: Zod 3 exposes the
- * values as an array (`.options` / `_def.values`), Zod 4 as an object map
- * (`_def.entries`). The published `.d.ts` files are Zod-4-shaped while the
- * runtime resolves Zod 3, so this normalizes both to a plain string tuple.
+ * Zod 4 stores enum values as an object map under `_def.entries`; this
+ * normalizes them to a plain string tuple.
  *
  * Throws if `schema` does not resolve to an enum — these feed MCP tool input
  * schemas, so a silent empty list would be a worse failure than a loud one.
  */
 export function enumOptions(schema: ZodLike | null | undefined): EnumValues {
-  const inner = unwrapToCore(schema);
-  const optionsHolder = inner as { options?: unknown };
-  const def = defOf(inner);
-  const values =
-    toStringList(optionsHolder?.options).length > 0
-      ? toStringList(optionsHolder.options)
-      : toStringList(def?.values ?? def?.entries);
+  const def = defOf(unwrapToCore(schema));
+  const values = toStringList(def?.entries);
   if (values.length === 0) {
     throw new Error("enumOptions: schema did not resolve to a non-empty ZodEnum");
   }
@@ -254,10 +226,8 @@ export function zodIsRequired(schema: ZodLike | null | undefined): boolean {
 //
 // Numeric `.min()/.max()/.int()` and string `.min()/.max()` constraints live
 // only in the runtime Zod schema (the published `.d.ts` erase them and the JSON
-// `modelInputSchemas` registry omits them). These read them out, straddling the
-// two runtime layouts the @apicity workspace ships: Zod 3 (kie/...: flat
-// `_def.checks[].kind`) and Zod 4 (alibaba/xai/fal vs kie differ — flat vs
-// `_def.checks[]._zod.def.check`).
+// `modelInputSchemas` registry omits them). These read them out of the Zod 4
+// layout (`_def.checks[]._zod.def.check`).
 // ---------------------------------------------------------------------------
 
 export type NumberRange = { min?: number; max?: number; int: boolean };
@@ -267,14 +237,6 @@ function readNumberChecks(def: ZodDef): NumberRange {
   let max: number | undefined;
   let int = false;
   for (const raw of (def.checks ?? []) as ZodConstraintCheck[]) {
-    // Zod 3: flat `{ kind, value }`.
-    if (typeof raw.kind === "string") {
-      if (raw.kind === "int") int = true;
-      else if (raw.kind === "min" && typeof raw.value === "number") min = raw.value;
-      else if (raw.kind === "max" && typeof raw.value === "number") max = raw.value;
-      continue;
-    }
-    // Zod 4: `{ _zod: { def: { check, value, format } } }`.
     const cdef = raw._zod?.def;
     if (!cdef) continue;
     if (cdef.check === "number_format" && cdef.format === "safeint") int = true;
@@ -305,15 +267,7 @@ export function zodNumberRange(schema: ZodLike | null | undefined): NumberRange 
 }
 
 function readStringLength(def: ZodDef, which: "min" | "max"): number | undefined {
-  // Zod 3 also exposes string bounds as `_def.minLength/maxLength` objects.
-  if (which === "min" && def.minLength != null) return def.minLength.value;
-  if (which === "max" && def.maxLength != null) return def.maxLength.value;
   for (const raw of (def.checks ?? []) as ZodConstraintCheck[]) {
-    if (typeof raw.kind === "string") {
-      if (which === "min" && raw.kind === "min" && typeof raw.value === "number") return raw.value;
-      if (which === "max" && raw.kind === "max" && typeof raw.value === "number") return raw.value;
-      continue;
-    }
     const cdef = raw._zod?.def;
     if (!cdef) continue;
     if (which === "min" && cdef.check === "min_length" && typeof cdef.minimum === "number") return cdef.minimum;
@@ -357,4 +311,20 @@ export function zodEnumOptionsOrNull(schema: ZodLike | null | undefined): EnumVa
   } catch {
     return null;
   }
+}
+
+/**
+ * Read the enum options from a `ZodUnion` that contains a `ZodEnum` branch
+ * (e.g. fal `image_size`: an enum of named sizes unioned with a custom
+ * width/height object). Returns the first enum branch's options, or null if the
+ * schema is not such a union.
+ */
+export function zodUnionEnumOptions(schema: ZodLike | null | undefined): EnumValues | null {
+  const def = defOf(unwrapToCore(schema));
+  if (!def || def.type !== "union") return null;
+  for (const opt of (def.options ?? []) as ZodLike[]) {
+    const opts = zodEnumOptionsOrNull(opt);
+    if (opts) return opts;
+  }
+  return null;
 }

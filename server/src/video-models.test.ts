@@ -357,6 +357,20 @@ describe("getVideoToolSchema", () => {
     expect(schema!.defaults).toEqual({});
     expect(schema!.required).toEqual(expect.arrayContaining(["prompt", "mode", "duration", "sound", "multi_shots"]));
   });
+
+  it("gemini_omni: prompt+duration required, Apicity-derived enums and resolution default", () => {
+    const schema = getVideoToolSchema("generate_gemini_omni_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.required).toEqual(expect.arrayContaining(["prompt", "duration"]));
+    expect(schema!.required).not.toContain("video_slug");
+    expect(schema!.required).not.toContain("image_slugs");
+    expect(schema!.properties.duration.enum).toEqual(["4", "6", "8", "10"]);
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "9:16"]);
+    expect(schema!.properties.resolution.enum).toEqual(["720p", "1080p", "4k"]);
+    expect(schema!.properties.seed.type).toBe("integer");
+    expect(schema!.properties.image_slugs.maxItems).toBe(7);
+    expect(schema!.defaults).toEqual({ resolution: "720p" });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -463,6 +477,32 @@ describe("validateVideoParams", () => {
 
     const grokResult = validateVideoParams("generate_grok_imagine_video", { prompt: "test" });
     expect(grokResult.multi_prompt_slots).toBeNull();
+  });
+
+  it("gemini_omni: valid prompt + duration with no references passes", () => {
+    const result = validateVideoParams("generate_gemini_omni_video", { prompt: "a sunset", duration: "6" });
+    expect(result.valid).toBe(true);
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  it("gemini_omni: missing prompt/duration is flagged", () => {
+    const result = validateVideoParams("generate_gemini_omni_video", {});
+    expect(result.valid).toBe(false);
+    expect(result.missing_required).toEqual(expect.arrayContaining(["prompt", "duration"]));
+  });
+
+  it("gemini_omni: warns when a reference clip has bad timing", () => {
+    const result = validateVideoParams("generate_gemini_omni_video", {
+      prompt: "a sunset", duration: "6", video_slug: "@vid-motion", video_clip_start: 2, video_clip_ends: 2,
+    });
+    expect(result.warnings.some((w) => w.includes("video_clip_ends"))).toBe(true);
+  });
+
+  it("gemini_omni: warns when clip timecodes are set without a video_slug", () => {
+    const result = validateVideoParams("generate_gemini_omni_video", {
+      prompt: "a sunset", duration: "6", video_clip_start: 1, video_clip_ends: 5,
+    });
+    expect(result.warnings.some((w) => w.includes("require a video_slug"))).toBe(true);
   });
 });
 

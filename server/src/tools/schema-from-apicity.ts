@@ -3,10 +3,9 @@
  * schemas don't re-type enums / numeric ranges / string lengths that apicity
  * already defines.
  *
- * The apicity field's constraints are read via the version-tolerant helpers in
- * `zod-slots.ts` (the workspace straddles Zod 3 and Zod 4) and rebuilt as a
- * fresh Zod-4 field — the apicity schema object itself is never re-exported, so
- * no cross-version schema mixing occurs.
+ * The apicity field's constraints are read via the helpers in `zod-slots.ts`
+ * and rebuilt as a fresh field in the app's own zod — the apicity schema object
+ * itself is never re-exported, so no cross-instance schema mixing occurs.
  *
  * Use only for params that map 1:1 to an apicity field. Slug/URL fields and
  * bespoke params (`project_slug`, `_provider`, `image_slugs`, …) stay

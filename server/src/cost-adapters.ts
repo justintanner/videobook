@@ -176,10 +176,14 @@ const ADAPTERS: Record<string, CostAdapter> = {
   // --- KIE per-second video ---
   generate_seedance2_video: kieSeedance("bytedance/seedance-2"),
   generate_seedance2_fast_video: kieSeedance("bytedance/seedance-2-fast"),
-  // generate_seedance2_mini_video has no entry: @apicity/cost@0.6.0 prices no
-  // bytedance/seedance-2-mini rate and it has no priced sibling to borrow, so
-  // it surfaces as "—" in the UI and is admitted by the paygate via
-  // COST_TABLE_PENDING_MODELS. See docs/apicity-gaps.md §9.
+  // Mini prices per-second by resolution (480p / 720p — the only tiers the tool
+  // exposes); no first/last-frame split, so kieResolutionVideo is the right
+  // shape. @apicity/cost@0.6.1 added this rate (was "—" under 0.6.0). See
+  // docs/apicity-gaps.md §10.
+  generate_seedance2_mini_video: kieResolutionVideo("bytedance/seedance-2-mini", "720p"),
+  // generate_gemini_omni_video has no entry: @apicity/cost@0.6.1 prices no
+  // gemini-omni-video rate, so it surfaces as "—" in the UI and is admitted by
+  // the paygate via COST_TABLE_PENDING_MODELS. See docs/apicity-gaps.md §12.
   generate_kling30_video: kieKling30Video,
   generate_kling30_motion_control_video: kieKling30MotionControl,
 
@@ -197,15 +201,15 @@ const ADAPTERS: Record<string, CostAdapter> = {
   generate_grok_imagine_video: kieResolutionVideo("grok-imagine/image-to-video", "480p", 8),
   generate_grok_imagine_t2v_video: kieResolutionVideo("grok-imagine/text-to-video", "480p", 6),
 
-  // --- KIE HappyHorse video (resolution-tiered, $0.155/$0.265 per sec) ---
-  // t2v/i2v/ref generate against happyhorse-1-1/* (see payload-builders.ts), but
-  // @apicity/cost@0.6.0 prices only the 1.0 happyhorse/* keys. The per-second
-  // rates are identical, so the cost-display estimate keys off the 1.0 slugs
-  // here; the paygate admits 1.1 via COST_TABLE_PENDING_MODELS. videoedit stays
-  // on 1.0 (no 1.1 video-edit endpoint exists). See docs/apicity-gaps.md.
-  generate_happyhorse_t2v_video: kieResolutionVideo("happyhorse/text-to-video", "1080p"),
-  generate_happyhorse_i2v_video: kieResolutionVideo("happyhorse/image-to-video", "1080p"),
-  generate_happyhorse_ref_video: kieResolutionVideo("happyhorse/reference-to-video", "1080p"),
+  // --- KIE HappyHorse video (resolution-tiered, per-second) ---
+  // t2v/i2v/ref generate against happyhorse-1-1/* (see payload-builders.ts), and
+  // @apicity/cost@0.6.1 now prices those 1.1 keys directly. The 1.1 rates differ
+  // from 1.0 ($0.165/$0.22 per sec vs $0.155/$0.265), so we key off the actual
+  // 1.1 slugs here rather than borrowing 1.0. videoedit stays on the 1.0
+  // happyhorse/video-edit slug (no 1.1 video-edit endpoint exists).
+  generate_happyhorse_t2v_video: kieResolutionVideo("happyhorse-1-1/text-to-video", "1080p"),
+  generate_happyhorse_i2v_video: kieResolutionVideo("happyhorse-1-1/image-to-video", "1080p"),
+  generate_happyhorse_ref_video: kieResolutionVideo("happyhorse-1-1/reference-to-video", "1080p"),
   generate_happyhorse_videoedit_video: kieResolutionVideo("happyhorse/video-edit", "1080p"),
 
   // --- KIE GPT Image 2 (per-image, tiered by resolution) ---

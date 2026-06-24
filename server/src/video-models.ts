@@ -24,6 +24,7 @@ import {
   HappyHorseVideoEditRequestSchema,
   VolcengineVideoToVideoLipSyncRequestSchema,
   Omnihuman15RequestSchema,
+  GeminiOmniVideoRequestSchema,
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
@@ -145,6 +146,20 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "image_slugs", "video_slugs", "audio_slugs",
       "aspect_ratio", "resolution", "duration",
       "generate_audio", "web_search", "nsfw_checker",
+    ],
+    defaults: {},
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
+    ],
+  },
+  gemini_omni: {
+    label: "Gemini Omni Video",
+    tool_name: "generate_gemini_omni_video",
+    description: "Google Gemini Omni — multimodal text/image/clip-to-video. A prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes",
+    params: [
+      "prompt",
+      "image_slugs", "video_slug", "video_clip_start", "video_clip_ends",
+      "duration", "aspect_ratio", "resolution", "seed",
     ],
     defaults: {},
     providers: [
@@ -470,6 +485,7 @@ const IMAGE_FIELD_SCHEMAS: Record<string, ZodLike> = {
   generate_seedance2_video: Seedance2InputSchema.shape.reference_image_urls,
   generate_seedance2_fast_video: Seedance2FastInputSchema.shape.reference_image_urls,
   generate_seedance2_mini_video: Seedance2MiniInputSchema.shape.reference_image_urls,
+  generate_gemini_omni_video: GeminiOmniVideoRequestSchema.shape.input.shape.image_urls,
   generate_grok_imagine_video: GrokImageToVideoRequestSchema.shape.input.shape.image_urls,
   generate_grok_imagine_ref_video: XaiVideoGenerateRequestSchema.shape.reference_images,
   generate_wan27_r2v_video: Wan27RefToVideoRequestSchema.shape.input.shape.reference_image,
@@ -522,6 +538,13 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     generate_audio: Seedance2MiniInputSchema.shape.generate_audio,
     web_search: Seedance2MiniInputSchema.shape.web_search,
     nsfw_checker: Seedance2MiniInputSchema.shape.nsfw_checker,
+  },
+  generate_gemini_omni_video: {
+    prompt: GeminiOmniVideoRequestSchema.shape.input.shape.prompt,
+    duration: GeminiOmniVideoRequestSchema.shape.input.shape.duration,
+    aspect_ratio: GeminiOmniVideoRequestSchema.shape.input.shape.aspect_ratio,
+    resolution: GeminiOmniVideoRequestSchema.shape.input.shape.resolution,
+    seed: GeminiOmniVideoRequestSchema.shape.input.shape.seed,
   },
   generate_grok_imagine_video: {
     prompt: GrokImageToVideoRequestSchema.shape.input.shape.prompt,
@@ -786,6 +809,8 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   templ_start_seconds: { type: "number", description: "Template start offset in seconds", minimum: 0 },
   output_resolution: { type: "string", description: "Output resolution" },
   pe_fast_mode: { type: "boolean", description: "Prompt-enhance fast mode" },
+  video_clip_start: { type: "number", description: "Reference clip start time in seconds", minimum: 0 },
+  video_clip_ends: { type: "number", description: "Reference clip end time in seconds (must be > start and < start+10s)", minimum: 0 },
 };
 
 // ---------------------------------------------------------------------------
@@ -914,6 +939,19 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "video_slugs") prop.description = "Reference video assets (0-3, total ≤15s, e.g., @vid-motion)";
       if (param === "audio_slugs") prop.description = "Reference audio assets (0-3, total ≤15s, e.g., @aud-music)";
       if (param === "nsfw_checker") prop.description = "Content safety filter (default true)";
+    }
+    if (toolName === "generate_gemini_omni_video") {
+      // Enum/range/default for prompt, duration, aspect_ratio, resolution, seed
+      // auto-derive from VIDEO_PARAM_ZOD_SCHEMAS; only descriptions are set here.
+      if (param === "prompt") { prop.description = "Multimodal video generation prompt (max 20000 characters)"; prop.maxLength = 20000; }
+      if (param === "image_slugs") { prop.description = "Reference image assets (0-7, each ≤20MB, e.g., @img-style)"; prop.maxItems = 7; }
+      if (param === "video_slug") prop.description = "Reference video clip asset (one clip, e.g., @vid-motion)";
+      if (param === "video_clip_start") prop.description = "Reference clip start time in seconds (requires video_slug)";
+      if (param === "video_clip_ends") prop.description = "Reference clip end time in seconds; must be > start and < start+10s (requires video_slug)";
+      if (param === "duration") prop.description = "Output duration: 4 / 6 / 8 / 10 seconds (ignored when a reference video clip is supplied)";
+      if (param === "aspect_ratio") prop.description = "Output aspect ratio: 16:9 / 9:16";
+      if (param === "resolution") prop.description = "Output resolution: 720p / 1080p / 4k (default 720p)";
+      if (param === "seed") prop.description = "Random seed (0-2147483647)";
     }
     if (toolName === "generate_wan27_t2v_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
@@ -1194,6 +1232,25 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
+  if (toolName === "generate_gemini_omni_video") {
+    if (totalImages > 7) {
+      warnings.push(`Gemini Omni supports up to 7 reference images (got ${totalImages})`);
+    }
+    const videoSlug = params.video_slug as string | undefined;
+    const clipStart = params.video_clip_start as number | undefined;
+    const clipEnds = params.video_clip_ends as number | undefined;
+    if (!videoSlug && (clipStart !== undefined || clipEnds !== undefined)) {
+      warnings.push("video_clip_start/video_clip_ends require a video_slug");
+    }
+    if (videoSlug) {
+      const start = clipStart ?? 0;
+      const ends = clipEnds ?? 0;
+      if (!(ends > start) || ends - start >= 10) {
+        warnings.push("Gemini Omni reference clip must satisfy video_clip_ends > video_clip_start and < start+10s");
+      }
+    }
+  }
+
   if (toolName === "generate_seedance2_video" || toolName === "generate_seedance2_fast_video") {
     const audioSlugs = params.audio_slugs as string[] | undefined;
     const firstFrame = params.first_frame_slug as string | undefined;
@@ -1297,6 +1354,7 @@ ROUTING PREFERENCES:
 - Use generate_seedance2_video when user mentions "seedance" or "bytedance" and wants 1080p, or just defaults to the higher-quality variant. Accepts any input combination: text-only, first/last frame, reference images/videos/audio
 - Use generate_seedance2_fast_video when user mentions "seedance fast" or 480p/720p is acceptable (faster/cheaper). Same input flexibility as the full variant
 - Use generate_seedance2_mini_video when user mentions "seedance mini". Text prompt plus optional reference images/videos/audio; no first/last frame; 480p/720p
+- Use generate_gemini_omni_video ONLY when user explicitly mentions "gemini" or "omni" for video. Multimodal text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes
 - Use generate_wan27_i2v_video ONLY when user mentions "wan" with first/last frame or clip continuation
 - Use generate_wan27_videoedit_video ONLY when user mentions "wan" with video editing or modifying an existing video
 - Use generate_wan27_r2v_video ONLY when user mentions "wan" with reference images, reference videos, or voice
@@ -1310,6 +1368,7 @@ KEY CONSTRAINTS:
 - For generate_kling30_video: mode "std"/"pro", duration "3"-"15", aspect_ratio "16:9"/"9:16"/"1:1", sound boolean
 - For generate_seedance2_video and generate_seedance2_fast_video: duration "4"-"15", aspect_ratio includes "adaptive"; full variant accepts "480p"/"720p"/"1080p", fast variant accepts "480p"/"720p" only. Inputs are all optional and free to mix: first_frame_slug, last_frame_slug, image_slugs (0-9), video_slugs (0-3, total ≤15s), audio_slugs (0-3, total ≤15s). Pure text prompt is fine too
 - For generate_seedance2_mini_video: duration "4"-"15" (default 15), aspect_ratio includes "adaptive", resolution "480p"/"720p". No first/last frame; mix prompt with image_slugs, video_slugs (0-3, total ≤15s), audio_slugs (0-3, total ≤15s). Prompt is optional when references are supplied
+- For generate_gemini_omni_video: REQUIRES prompt and duration "4"/"6"/"8"/"10"; aspect_ratio "16:9"/"9:16"; resolution "720p"/"1080p"/"4k" (default 720p); seed integer. Optional image_slugs (0-7) and one video_slug with video_clip_start/video_clip_ends (ends > start and < start+10s)
 - For generate_grok_imagine_video: REQUIRES at least one image, mode "fun"/"normal", duration 6-30 (integer seconds), aspect_ratio "2:3"/"3:2"/"1:1"/"16:9"/"9:16"
 - For extend_grok_imagine_video: REQUIRES video_slug, prompt, extend_at, and extend_times "6"/"10"
 - For generate_wan27_i2v_video: REQUIRES at least one of first_frame_slug / last_frame_slug / first_clip_slug, duration "2"-"15", resolution "720p"/"1080p"

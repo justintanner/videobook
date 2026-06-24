@@ -1,6 +1,7 @@
 import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { Seedance2MiniInputSchema, Seedance2MiniRequestSchema } from "@apicity/kie/zod";
+import { modelSlug } from "@apicity/cost";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
@@ -13,10 +14,9 @@ import {
   type RefInput,
 } from "./_seedance2-shared.js";
 
-// modelSlug("kie", "bytedance/seedance-2-mini") would throw — @apicity/cost@0.6.0
-// has no slug registered for the Seedance 2 Mini model yet, so asset/job names
-// use this literal until the cost table catches up (see docs/apicity-gaps.md).
-const SLUG = "seedance2mini";
+// @apicity/cost@0.6.1 registers the Seedance 2 Mini slug ("sd2m"), matching the
+// sibling fast/regular tools' modelSlug-based naming.
+const SLUG = modelSlug("kie", "bytedance/seedance-2-mini");
 
 const miniInput = Seedance2MiniInputSchema.shape;
 

@@ -3,36 +3,17 @@ import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalQwenImageEditRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
-import { enumOptions } from "../zod-slots.js";
+import { zodUnionEnumOptions } from "../zod-slots.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
 import { apicityField } from "./schema-from-apicity.js";
 
 const base = FalQwenImageEditRequestSchema.shape;
 
-type ZodBranchLike = {
-  _def?: { typeName?: string; type?: string; options?: readonly unknown[] };
-  options?: readonly unknown[];
-  unwrap?: () => unknown;
-  constructor?: { name?: string };
-};
-
-function isEnumBranch(schema: unknown): boolean {
-  const branch = schema as ZodBranchLike;
-  return branch._def?.typeName === "ZodEnum" ||
-    branch._def?.type === "enum" ||
-    branch.constructor?.name === "ZodEnum";
-}
-
-function unionBranches(schema: ZodBranchLike): readonly unknown[] {
-  const inner = schema.unwrap?.() ?? schema;
-  const branch = inner as ZodBranchLike;
-  return branch.options ?? branch._def?.options ?? [];
-}
-
-const falImageSizeEnum = unionBranches(base.image_size).find(isEnumBranch);
-if (!falImageSizeEnum) throw new Error("FalQwenImageEditRequestSchema.image_size changed shape");
-const falImageSizeOptions = enumOptions(falImageSizeEnum);
+// fal `image_size` is a ZodUnion of a named-size enum and a custom {width,height}
+// object; pull the enum branch's options.
+const falImageSizeOptions = zodUnionEnumOptions(base.image_size);
+if (!falImageSizeOptions) throw new Error("FalQwenImageEditRequestSchema.image_size changed shape");
 type FalImageSize = typeof falImageSizeOptions[number];
 
 // The UI sends the Kie-canonical aspect-ratio strings (matching Qwen2ImageEditRequestSchema

@@ -57,6 +57,10 @@ import type {
   VolcengineVideoToVideoLipSyncMode,
   Omnihuman15Request,
   Omnihuman15OutputResolution,
+  GeminiOmniVideoRequest,
+  GeminiOmniVideoDuration,
+  GeminiOmniVideoAspectRatio,
+  GeminiOmniVideoResolution,
 } from "@apicity/kie";
 import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest, XaiImageReference } from "@apicity/xai";
 import type {
@@ -365,6 +369,47 @@ function buildSeedance2MiniVideoPayload(
       ...(args.generate_audio !== undefined ? { generate_audio: args.generate_audio } : {}),
       ...(args.web_search !== undefined ? { web_search: args.web_search } : {}),
       ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
+    },
+  };
+}
+
+// Gemini Omni Video: kie's Google Gemini multimodal text/image/clip-to-video
+// model. Reference images and a single reference video clip (with in/out
+// timecodes) are optional; duration is required. audio_ids/character_ids exist
+// upstream but are omitted here — they reference IDs minted by the
+// gemini-omni-audio/-character create endpoints, which videocity does not wire
+// (character has no apicity endpoint at all). See docs/apicity-gaps.md §13.
+type GeminiOmniVideoArgs = {
+  prompt: string;
+  duration: GeminiOmniVideoDuration;
+  aspect_ratio?: GeminiOmniVideoAspectRatio;
+  resolution?: GeminiOmniVideoResolution;
+  seed?: number;
+  video_clip_start?: number;
+  video_clip_ends?: number;
+};
+
+type GeminiOmniVideoOpts = {
+  imageUrls?: string[];
+  videoUrl?: string;
+};
+
+function buildGeminiOmniVideoPayload(
+  args: GeminiOmniVideoArgs,
+  opts: GeminiOmniVideoOpts,
+): GeminiOmniVideoRequest {
+  return {
+    model: "gemini-omni-video",
+    input: {
+      prompt: args.prompt,
+      ...(opts.imageUrls && opts.imageUrls.length > 0 ? { image_urls: opts.imageUrls } : {}),
+      ...(opts.videoUrl !== undefined
+        ? { video_list: [{ url: opts.videoUrl, start: args.video_clip_start ?? 0, ends: args.video_clip_ends ?? 0 }] }
+        : {}),
+      duration: args.duration,
+      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
+      ...(args.seed !== undefined ? { seed: args.seed } : {}),
+      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
     },
   };
 }
@@ -1183,6 +1228,17 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_gemini_omni_video": {
+      const videoSlug = args.video_slug as string | undefined;
+      const payload = buildGeminiOmniVideoPayload(
+        args as GeminiOmniVideoArgs,
+        {
+          ...(imageSlugs.length > 0 ? { imageUrls: imageSlugs } : {}),
+          ...(videoSlug !== undefined && videoSlug.trim() !== "" ? { videoUrl: videoSlug } : {}),
+        },
+      );
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
+    }
     case "generate_grok_imagine_text_image": {
       if (isXaiProvider(provider)) {
         const payload: XaiImageGenerateRequest = {
@@ -1379,6 +1435,7 @@ function translateToolPayload(
 const VIDEO_TOOLS = new Set([
   "generate_kling30_video", "generate_kling30_motion_control_video",
   "generate_seedance2_video", "generate_seedance2_fast_video", "generate_seedance2_mini_video",
+  "generate_gemini_omni_video",
   "generate_grok_imagine_video", "generate_grok_imagine_t2v_video", "generate_grok_imagine_ref_video",
   "extend_grok_imagine_video",
   "generate_wan27_t2v_video", "generate_wan27_i2v_video", "generate_wan27_videoedit_video", "generate_wan27_r2v_video", "extend_wan27_video",
@@ -1425,6 +1482,7 @@ export {
   buildSeedreamImageEditPayload,
   buildSeedance2VideoPayload,
   buildSeedance2MiniVideoPayload,
+  buildGeminiOmniVideoPayload,
   buildWan27TextToVideoPayload,
   buildWan27FramesVideoPayload,
   buildWan27ReferenceVideoPayload,
