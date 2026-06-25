@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CHAR_SWAP_PLAN_MODEL, computeChunks, sampleFramesForScenes, dialogForChunk, speechTimelineForChunk, buildSkeletonPlanSidecar, buildSkeletonPlanMarkdown } from "./plan-visualization.js";
+import { CHAR_SWAP_PLAN_MODEL, computeChunks, sampleFramesForScenes, dialogForChunk, speechTimelineForChunk, buildSkeletonPlanSidecar, buildSkeletonPlanMarkdown, autoTranscribePreflight } from "./plan-visualization.js";
 import { parseScdetOutput, deriveCandidates } from "../scene-detect.js";
 
 type Candidate = { t: number; score: number; kind: "shot" | "settle" };
@@ -128,6 +128,31 @@ describe("buildSkeletonPlanMarkdown", () => {
     expect(md).toContain("@char-a (Alice)");
     expect(md).toContain("@char-b (Bob)");
     expect(md).toContain(`**Model:** ${CHAR_SWAP_PLAN_MODEL}`);
+  });
+});
+
+describe("autoTranscribePreflight", () => {
+  it("proceeds immediately when the source already has elevenlabs word-level timings", () => {
+    // hasApiKey/hasAudio are irrelevant once the transcript is already elevenlabs.
+    expect(autoTranscribePreflight({ transcriptSource: "elevenlabs", hasApiKey: false, hasAudio: false }))
+      .toEqual({ proceed: true });
+  });
+
+  it("proceeds (auto-transcribe path) when a gpt4otrans source has an API key and audio", () => {
+    expect(autoTranscribePreflight({ transcriptSource: "gpt4otrans", hasApiKey: true, hasAudio: true }))
+      .toEqual({ proceed: true });
+  });
+
+  it("refuses when there is no ElevenLabs API key, naming the missing key", () => {
+    const r = autoTranscribePreflight({ transcriptSource: "gpt4otrans", hasApiKey: false, hasAudio: true });
+    expect(r.proceed).toBe(false);
+    if (!r.proceed) expect(r.reason).toContain("ELEVENLABS_API_KEY");
+  });
+
+  it("refuses when there is no audio track to transcribe", () => {
+    const r = autoTranscribePreflight({ transcriptSource: "gpt4otrans", hasApiKey: true, hasAudio: false });
+    expect(r.proceed).toBe(false);
+    if (!r.proceed) expect(r.reason).toContain("audio");
   });
 });
 

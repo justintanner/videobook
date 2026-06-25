@@ -1,5 +1,4 @@
 import type { VideocityFs } from "videocity-engine";
-import { findAudioFile } from "videocity-engine";
 import { copyFile, mkdir, unlink } from "node:fs/promises";
 import { join, resolve, basename } from "node:path";
 import { bundle } from "@remotion/bundler";
@@ -23,7 +22,7 @@ import type {
 } from "../remotion/subtitles/types.js";
 import { requireApiKey } from "../api-key.js";
 import { claimLockedLease } from "./_lease.js";
-import { transcribeAssetToElevenLabsJson } from "./_transcribe.js";
+import { ensureElevenLabsTranscript } from "./_transcribe.js";
 import { buildResponses } from "./describe-image.js";
 import {
   iso1FromIso3,
@@ -157,30 +156,6 @@ async function resolveSubtitleSegments(
   }
 }
 
-// Auto-transcribe so a subtitled render is never blocked on a missing
-// transcript. The caller holds the asset's render lease, so concurrent
-// per-orientation render jobs serialize: the first transcribes and writes
-// elevenlabs.json, the rest find it already present and skip. Throws on
-// failure (missing audio, API error) so the asset render surfaces the cause.
-async function ensureTranscript(
-  fs: VideocityFs,
-  projectSlug: string,
-  assetId: string,
-): Promise<void> {
-  const manifest = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
-  if (!manifest.ok) {
-    throw new Error(`auto-transcribe failed: ${manifest.error.message}`);
-  }
-  const audioFile = findAudioFile(manifest.value.files, assetId);
-  if (!audioFile) {
-    throw new Error(`auto-transcribe failed: no audio file found in asset ${assetId}`);
-  }
-  await transcribeAssetToElevenLabsJson(fs, projectSlug, assetId, audioFile.name, {
-    tagAudioEvents: true,
-    diarize: true,
-  });
-}
-
 export function registerRenderProjectJob(fs: VideocityFs): void {
   registerJobHandler("render_project", async (payload, _ctx) => {
     void _ctx;
@@ -278,7 +253,7 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
             // transcribe inline under this asset's render lease.
             let allSegments = null;
             if (subtitlesEnabled && !(await fs.readFile(asset.assetId, "elevenlabs.json", projectSlug)).ok) {
-              await ensureTranscript(fs, projectSlug, asset.assetId);
+              await ensureElevenLabsTranscript(fs, projectSlug, asset.assetId);
             }
             const elevenlabsResult = await fs.readFile(asset.assetId, "elevenlabs.json", projectSlug);
             if (elevenlabsResult.ok) {

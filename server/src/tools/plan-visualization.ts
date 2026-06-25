@@ -1,8 +1,10 @@
 import type { VideocityFs } from "videocity-engine";
+import { findAudioFile } from "videocity-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { queue } from "../queue.js";
+import { getApiKey } from "../api-key.js";
 import type { Candidate } from "../scene-detect.js";
 import type { ToolDef } from "./tool-def.js";
 import {
@@ -21,6 +23,22 @@ export const CHAR_SWAP_PLAN_MODEL = "gemini-3-5-flash";
 export const MIN_SCENE_S = 7;
 export const MAX_SCENE_S = 14;
 export const REQUIRED_CHARACTERS = 2;
+
+// Decide whether plan setup can proceed given the source's transcript. char_swap
+// needs ElevenLabs word-level timings; when only a non-elevenlabs transcript
+// (e.g. gpt4otrans) exists we no longer hard-fail — the plan job auto-transcribes
+// inline, but only if that can succeed here (API key + an audio track). Pure so
+// the decision + message are unit-testable; the fs/env reads happen in the caller.
+export function autoTranscribePreflight(input: {
+  transcriptSource: string;
+  hasApiKey: boolean;
+  hasAudio: boolean;
+}): { proceed: true } | { proceed: false; reason: string } {
+  if (input.transcriptSource === "elevenlabs") return { proceed: true };
+  if (!input.hasApiKey) return { proceed: false, reason: "ELEVENLABS_API_KEY is not set" };
+  if (!input.hasAudio) return { proceed: false, reason: "no audio track was found" };
+  return { proceed: true };
+}
 
 export type CharacterContext = {
   asset_id: string;
@@ -443,13 +461,25 @@ export function planVisualizationDef(fs: VideocityFs): ToolDef {
         };
       }
       if (loaded.value.transcript.source !== "elevenlabs") {
-        return {
-          isError: true as const,
-          content: [{
-            type: "text" as const,
-            text: `Plan visualization needs word-level timings (elevenlabs.json) but ${sourceAssetId} only has a ${loaded.value.transcript.source} transcript. Run /transcribe @${sourceAssetId} first.`,
-          }],
-        };
+        // No word-level timings yet — let the plan job auto-transcribe inline,
+        // but only when that can actually succeed (API key + an audio track).
+        // Otherwise keep the explicit /transcribe guidance.
+        const audioManifest = await fs.getManifest(sourceAssetId, project_slug, { includeDotfiles: true });
+        const preflight = autoTranscribePreflight({
+          transcriptSource: loaded.value.transcript.source,
+          hasApiKey: Boolean(getApiKey("ELEVENLABS_API_KEY")),
+          hasAudio: audioManifest.ok && Boolean(findAudioFile(audioManifest.value.files, sourceAssetId)),
+        });
+        if (!preflight.proceed) {
+          return {
+            isError: true as const,
+            content: [{
+              type: "text" as const,
+              text: `Plan visualization needs word-level timings (elevenlabs.json) but ${sourceAssetId} only has a ${loaded.value.transcript.source} transcript, and it can't be auto-transcribed (${preflight.reason}). Run /transcribe @${sourceAssetId} first.`,
+            }],
+          };
+        }
+        // Proceeds: the plan_visualization job transcribes before planning.
       }
 
       const characterIds = character_asset_ids.map((id) => id.replace(/^@/, ""));

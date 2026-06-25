@@ -10,6 +10,7 @@ import { createRequire } from "node:module";
 import type { KieGeminiPart } from "@apicity/kie";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
+import { ensureElevenLabsTranscript } from "./_transcribe.js";
 import { withLocalLease } from "./_lease.js";
 import { probeVideo } from "../ffmpeg.js";
 import { detectSceneCandidates } from "../scene-detect.js";
@@ -196,14 +197,24 @@ export function registerPlanVisualizationJob(fs: VideocityFs): void {
         const apiKey = getApiKey("KIE_API_KEY");
         if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
 
-        const loaded = await loadAssetForAnalysis(fs, sourceAssetId, projectSlug);
+        let loaded = await loadAssetForAnalysis(fs, sourceAssetId, projectSlug);
         if (!loaded.ok) throw new Error(loaded.error.message);
-        const { framesDir, frameNames, transcript } = loaded.value;
-        if (transcript.source !== "elevenlabs") {
-          throw new Error(
-            `Plan visualization needs word-level timings (elevenlabs.json) but ${sourceAssetId} only has a ${transcript.source} transcript. Run /transcribe @${sourceAssetId} first.`,
-          );
+        if (loaded.value.transcript.source !== "elevenlabs") {
+          // Auto-transcribe with ElevenLabs (word-level timings) inline rather
+          // than failing — this job holds the asset's analyze lease, and
+          // ensureElevenLabsTranscript is lease-agnostic. Mirrors render-project's
+          // subtitle auto-transcribe. Throws (failing the plan) on missing audio /
+          // API key / API error so the cause surfaces in the plan's failed state.
+          await ensureElevenLabsTranscript(fs, projectSlug, sourceAssetId);
+          loaded = await loadAssetForAnalysis(fs, sourceAssetId, projectSlug);
+          if (!loaded.ok) throw new Error(loaded.error.message);
+          if (loaded.value.transcript.source !== "elevenlabs") {
+            throw new Error(
+              `Auto-transcribe completed but ${sourceAssetId} still has no word-level timings (elevenlabs.json).`,
+            );
+          }
         }
+        const { framesDir, frameNames, transcript } = loaded.value;
 
         const videoManifest = await fs.getManifest(sourceAssetId, projectSlug, { includeDotfiles: false });
         if (!videoManifest.ok) throw new Error(videoManifest.error.message);

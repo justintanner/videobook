@@ -1,4 +1,5 @@
 import type { VideocityFs } from "videocity-engine";
+import { findAudioFile } from "videocity-engine";
 import type {
   ElevenLabsSpeechToTextRequest,
   ElevenLabsSpeechToTextResponse,
@@ -87,4 +88,27 @@ export async function transcribeAssetToElevenLabsJson(
     },
     projectSlug,
   );
+}
+
+/**
+ * Ensure an asset has ElevenLabs word-level timings (elevenlabs.json),
+ * transcribing inline if it's missing. Idempotent — returns immediately when the
+ * file already exists. Lease-agnostic: the caller owns the asset lease (a render
+ * job's render lease, a plan job's analyze lease). Throws on missing audio, a
+ * missing API key, or an API/write failure so the caller surfaces the cause.
+ */
+export async function ensureElevenLabsTranscript(
+  fs: VideocityFs,
+  projectSlug: string,
+  assetId: string,
+): Promise<void> {
+  if ((await fs.readFile(assetId, "elevenlabs.json", projectSlug)).ok) return;
+  const manifest = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+  if (!manifest.ok) throw new Error(`auto-transcribe failed: ${manifest.error.message}`);
+  const audioFile = findAudioFile(manifest.value.files, assetId);
+  if (!audioFile) throw new Error(`auto-transcribe failed: no audio file found in asset ${assetId}`);
+  await transcribeAssetToElevenLabsJson(fs, projectSlug, assetId, audioFile.name, {
+    tagAudioEvents: true,
+    diarize: true,
+  });
 }
