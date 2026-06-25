@@ -16,6 +16,7 @@ import { PlanFlowProvider, type PlanFlowContextValue } from './PlanFlowContext';
 import { PlanAnalysisNode } from './PlanAnalysisNode';
 import { FlowColumn, FlowStep } from './flow/FlowColumn';
 import { FlowConnector } from './flow/FlowConnector';
+import { BendableConnector } from './flow/BendableConnector';
 import { useCharSwapActions } from './useCharSwapActions';
 import { useSceneFilesBootstrap } from './useSceneFilesBootstrap';
 import { formatTimecode, type PlanSidecar } from './charSwapModel';
@@ -68,6 +69,13 @@ export function PlanFlowStack({
   const ctx = useMemo<PlanFlowContextValue>(
     () => ({ sidecar, characters: sidecar.characters, mediaItems, projectSlug, sourceAspect, actions }),
     [sidecar, mediaItems, projectSlug, sourceAspect, actions],
+  );
+
+  // Persisted bend geometry for a flow connector (straight when unset). Commit
+  // wiring lives in `actions.setConnectorGeometry` (writes sidecar.connectors).
+  const bendFor = useCallback(
+    (id: string) => sidecar.connectors?.[id] ?? { dx: 0, dy: 0 },
+    [sidecar.connectors],
   );
 
   const building = sidecar.scenes.length === 0;
@@ -284,8 +292,13 @@ export function PlanFlowStack({
           const cacheBust = `${scene.start.toFixed(2)}-${scene.end.toFixed(2)}`;
           return (
             <Fragment key={s}>
-              {/* between scenes — passive connector (scenes come from video splitting) */}
-              {s > 0 && <FlowConnector height={40} />}
+              {/* between scenes — bendable connector (scenes come from video splitting) */}
+              {s > 0 && (
+                <BendableConnector
+                  bend={bendFor(`s${s}-gap`)}
+                  onCommit={(dx, dy) => { void actions.setConnectorGeometry(`s${s}-gap`, dx, dy); }}
+                />
+              )}
               <div className="flex w-full flex-col items-center">
                 <div className="mb-2 flex items-baseline gap-2">
                   <span className="font-mono text-xs font-bold tracking-wider text-emerald-300/80 uppercase">
@@ -301,14 +314,20 @@ export function PlanFlowStack({
                     <SourceFrameNode data={{ sceneIndex: s, frameIndex: 2, cacheBust, label: `S${s + 1} · source last` }} />
                   </div>
                 </FlowStep>
-                <FlowConnector />
+                <BendableConnector
+                  bend={bendFor(`s${s}-source-swap`)}
+                  onCommit={(dx, dy) => { void actions.setConnectorGeometry(`s${s}-source-swap`, dx, dy); }}
+                />
                 <FlowStep>
                   <div className="flex flex-wrap justify-center gap-3">
                     <SwapGenNode data={{ sceneIndex: s, frameIndex: 1, label: `S${s + 1} · swap frame 1` }} />
                     <SwapGenNode data={{ sceneIndex: s, frameIndex: 2, label: `S${s + 1} · swap frame 2` }} />
                   </div>
                 </FlowStep>
-                <FlowConnector />
+                <BendableConnector
+                  bend={bendFor(`s${s}-swap-video`)}
+                  onCommit={(dx, dy) => { void actions.setConnectorGeometry(`s${s}-swap-video`, dx, dy); }}
+                />
                 <FlowStep>
                   <SceneVideoNode data={{ sceneIndex: s, label: `S${s + 1} · video` }} />
                 </FlowStep>

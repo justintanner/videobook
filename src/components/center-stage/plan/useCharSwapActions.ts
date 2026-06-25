@@ -55,6 +55,9 @@ export interface CharSwapActions {
   // Toggle whether a frame skips its swap and uses the original source frame
   // as-is for the video (the canvas "skip → source" action on the swap tile).
   setFrameSource: (sceneIndex: number, frameIndex: 1 | 2, useSource: boolean) => Promise<void>;
+  // Persist a flow connector's bend geometry (the draggable-handle edits). dx/dy
+  // are normalized [-1, 1]; passing { 0, 0 } resets the connector to straight.
+  setConnectorGeometry: (connectorId: string, dx: number, dy: number) => Promise<void>;
   // Kick off the vision auto-match job (all scenes when sceneIndex omitted).
   matchCharacters: (sceneIndex?: number) => Promise<{ jobId: string } | null>;
   isSwapInFlight: (sceneIndex: number, frameIndex: 1 | 2) => boolean;
@@ -269,6 +272,20 @@ export function useCharSwapActions(params: {
     applySidecar(result);
   }, [callTool, projectSlug, applySidecar]);
 
+  const setConnectorGeometry = useCallback<CharSwapActions['setConnectorGeometry']>(async (connectorId, dx, dy) => {
+    const result = await callTool('set_plan_connector_geometry', {
+      project_slug: projectSlug,
+      connector_id: connectorId,
+      dx,
+      dy,
+    });
+    if (result.isError) {
+      toast({ title: `Connector ${connectorId} update failed`, description: errText(result, 'set_plan_connector_geometry failed'), duration: 5000 });
+      return;
+    }
+    applySidecar(result);
+  }, [callTool, projectSlug, applySidecar]);
+
   const matchCharacters = useCallback<CharSwapActions['matchCharacters']>(async (sceneIndex) => {
     const result = await callTool('match_plan_scene_characters', {
       project_slug: projectSlug,
@@ -360,5 +377,5 @@ export function useCharSwapActions(params: {
     }
   }, [pendingProps, mediaItems, callTool, projectSlug, applySidecar]);
 
-  return { runSwap, runVideo, runVideoReplace, promoteVariant, setFrameCharacters, clearFrameSwap, setSkipPrior, setFrameSource, matchCharacters, isSwapInFlight, isVideoInFlight };
+  return { runSwap, runVideo, runVideoReplace, promoteVariant, setFrameCharacters, clearFrameSwap, setSkipPrior, setFrameSource, setConnectorGeometry, matchCharacters, isSwapInFlight, isVideoInFlight };
 }
