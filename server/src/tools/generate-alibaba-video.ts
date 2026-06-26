@@ -1,6 +1,6 @@
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
-import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
+import { AlibabaVideoSynthesisModelSchema, AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "videocity-engine";
@@ -8,7 +8,6 @@ import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField } from "./schema-from-apicity.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
 
-const ALIBABA_VIDEO_MODELS = ["wan2.7-i2v", "wan2.7-videoedit"] as const;
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
 function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
@@ -90,7 +89,7 @@ const generateAlibabaVideoSchema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Video description"),
   negative_prompt: z.string().optional().describe("Negative prompt — things to avoid"),
-  model: z.enum(ALIBABA_VIDEO_MODELS).describe("DashScope video model name ('wan2.7-i2v' or 'wan2.7-videoedit')"),
+  model: z.enum(AlibabaVideoSynthesisModelSchema.options).describe("DashScope video model name ('wan2.7-i2v' or 'wan2.7-videoedit')"),
   first_frame_slug: z.string().optional().describe("First frame image asset (e.g., @img-start)"),
   last_frame_slug: z.string().optional().describe("Last frame image asset (e.g., @img-end)"),
   first_clip_slug: z.string().optional().describe("Video asset for clip continuation (e.g., @vid-scene)"),

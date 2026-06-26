@@ -2,24 +2,15 @@ import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import type { SchemaArgs, ToolDef, ToolResult } from "./tool-def.js";
 import { generateNanoBananaProEditFalDef } from "./generate-nano-banana-pro-edit-fal.js";
-import { generateQwenImageEditFalDef } from "./generate-qwen-image-edit-fal.js";
 import { generateWan27ProEditFalDef } from "./generate-wan27-pro-edit-fal.js";
 import { generateSeedreamV5LiteEditFalDef } from "./generate-seedream-v5-lite-edit-fal.js";
 import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
-import { generateQwen2ImageEditDef } from "./generate-qwen2-image-edit.js";
 import { generateGptImageDef } from "./generate-gpt-image.js";
 import { generateWan27ImageProDef } from "./generate-wan27-image-pro.js";
 import { generateSeedreamImageDef } from "./generate-seedream-image.js";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 import { uploadBytesToFal } from "../jobs/_fal-upload.js";
 import { uploadBytesToKie } from "../jobs/_kie-upload.js";
-import {
-  describeImageBytes,
-  mimeForImageFilename,
-  ANALYSIS_FILENAME,
-  type DescribeImageResult,
-} from "../jobs/describe-image.js";
-import { findImageFile } from "./_image-inputs.js";
 import {
   CHARACTER_METADATA_KEY,
   isFreeformSubject,
@@ -49,6 +40,18 @@ export const SUPPORTED_OUTFIT_MODELS = [
 ] as const;
 export type OutfitModelKey = typeof SUPPORTED_OUTFIT_MODELS[number];
 
+// Outfit try-on composites at least two reference images (model + garment).
+// qwen2/image-edit is single-image (see docs/apicity-gaps.md), so it is not
+// offered for outfit. Character generation still uses qwen via the shared
+// SUPPORTED_OUTFIT_MODELS list.
+const OUTFIT_TRYON_MODELS = [
+  "nano_banana_pro",
+  "gpt_image_2",
+  "wan27_pro",
+  "seedream_v5_lite",
+] as const;
+type OutfitTryonModel = typeof OUTFIT_TRYON_MODELS[number];
+
 export const OUTFIT_PROVIDERS = ["kie", "fal"] as const;
 export type OutfitProvider = typeof OUTFIT_PROVIDERS[number];
 
@@ -66,12 +69,11 @@ const IMAGE_SIZE_MAP: Record<OutfitAspectRatio, "portrait_16_9" | "landscape_16_
 
 function resolveSizeArgs(
   provider: OutfitProvider,
-  model: OutfitModelKey,
+  model: OutfitTryonModel,
   ratio: OutfitAspectRatio | undefined,
 ): Record<string, string> {
   if (!ratio) return {};
-  if (provider === "kie" && model !== "qwen_image_edit") return { aspect_ratio: ratio };
-  if (model === "qwen_image_edit") return { image_size: ratio };
+  if (provider === "kie") return { aspect_ratio: ratio };
   if (provider === "fal" && model === "nano_banana_pro") return { aspect_ratio: ratio };
   if (provider === "fal" && model === "wan27_pro") return { image_size: IMAGE_SIZE_MAP[ratio] };
   if (provider === "fal" && model === "seedream_v5_lite") return { image_size: IMAGE_SIZE_MAP[ratio] };
@@ -122,7 +124,7 @@ const schema = {
     .optional()
     .describe("@img-* slug of the backdrop/scene reference (Image 4, optional)"),
   models: z
-    .array(z.enum(SUPPORTED_OUTFIT_MODELS))
+    .array(z.enum(OUTFIT_TRYON_MODELS))
     .min(1)
     .describe("Image edit models to run. One job enqueued per model."),
   provider: z
@@ -160,21 +162,19 @@ type ToolDefFactory = (fs: VideocityFs) => { handler: (args: Record<string, unkn
 const DISPATCH: Record<OutfitProvider, Partial<Record<OutfitModelKey, ToolDefFactory>>> = {
   kie: {
     nano_banana_pro: generateNanoBananaImageDef,
-    qwen_image_edit: generateQwen2ImageEditDef,
     gpt_image_2: generateGptImageDef,
     wan27_pro: generateWan27ImageProDef,
     seedream_v5_lite: generateSeedreamImageDef,
   },
   fal: {
     nano_banana_pro: generateNanoBananaProEditFalDef,
-    qwen_image_edit: generateQwenImageEditFalDef,
     wan27_pro: generateWan27ProEditFalDef,
     seedream_v5_lite: generateSeedreamV5LiteEditFalDef,
   },
 };
 
 interface EnqueueOutcome {
-  model: OutfitModelKey;
+  model: OutfitTryonModel;
   provider: OutfitProvider;
   prompt: string;
   image_count: number;
@@ -258,13 +258,11 @@ function compressCharacterProfile(c: Character | undefined): string {
 }
 
 // Provider-specific image-reference jargon. Numbered models use "Image N";
-// Qwen uses lowercase "image N" (and never receives Image 4 — its hard 3-image
-// cap means the backdrop is always text-described). Seedream uses native
-// "Figure N" — that's the syntax the official Wavespeed/fal docs prescribe.
-// (An earlier multi-figure turnaround bug came from the colon-prefixed legend
-// "Figure 1: subject; Figure 2: outfit", not the Figure-N syntax itself.)
-function refFor(model: OutfitModelKey, n: 1 | 2 | 3 | 4): string {
-  if (model === "qwen_image_edit") return `image ${n}`;
+// Seedream uses native "Figure N" — that's the syntax the official Wavespeed/fal
+// docs prescribe. (An earlier multi-figure turnaround bug came from the
+// colon-prefixed legend "Figure 1: subject; Figure 2: outfit", not the Figure-N
+// syntax itself.)
+function refFor(model: OutfitTryonModel, n: 1 | 2 | 3 | 4): string {
   if (model === "seedream_v5_lite") return `Figure ${n}`;
   return `Image ${n}`;
 }
@@ -292,15 +290,14 @@ function coverageTail(coverage: OutfitPoseCoverage): string {
  *
  * Per-model differences are reduced to:
  *  - image-reference jargon (`refFor`)
- *  - whether backdrop is passed as Image 4 (every model except Qwen)
+ *  - whether backdrop is passed as Image 4
  *  - per-model anti-failure tails (Seedream multi-view guard, GPT constraints,
- *    kie Avoid clause for Wan/Qwen)
+ *    kie Avoid clause for Wan)
  */
 function buildPromptCompact(
-  model: OutfitModelKey,
+  model: OutfitTryonModel,
   provider: OutfitProvider,
   hasBackdropImage: boolean,
-  backdropDescription: string | undefined,
   poseDescription: string | undefined,
   coverage: OutfitPoseCoverage,
   shot: string | undefined,
@@ -311,7 +308,6 @@ function buildPromptCompact(
   if (model === "seedream_v5_lite") {
     return buildPromptSeedream(
       hasBackdropImage,
-      backdropDescription,
       poseDescription,
       coverage,
       platform,
@@ -348,13 +344,11 @@ function buildPromptCompact(
     lines.push(`Pose: match ${ref(3)}.${tailPart}`);
   }
 
-  // Backdrop — passed as Image 4 when supported, otherwise text-described.
+  // Backdrop — passed as Image 4 when supplied, otherwise a generic setting.
   if (hasBackdropImage) {
     lines.push(
       `Backdrop: place the subject in the location shown in ${ref(4)} — match its lighting, colour cast, and depth.`,
     );
-  } else if (backdropDescription) {
-    lines.push(`Backdrop: ${backdropDescription} Match its lighting and colour cast.`);
   } else {
     lines.push("Backdrop: tasteful editorial setting with natural lighting.");
   }
@@ -373,7 +367,7 @@ function buildPromptCompact(
   if (model === "gpt_image_2") {
     lines.push("Constraints: no watermark, no text, no logos, no extra limbs, no deformed hands.");
   }
-  if (provider === "kie" && (model === "wan27_pro" || model === "qwen_image_edit")) {
+  if (provider === "kie" && model === "wan27_pro") {
     lines.push(`Avoid: ${WAN_QWEN_NEGATIVE}.`);
   }
 
@@ -394,7 +388,6 @@ function buildPromptCompact(
  */
 function buildPromptSeedream(
   hasBackdropImage: boolean,
-  backdropDescription: string | undefined,
   poseDescription: string | undefined,
   coverage: OutfitPoseCoverage,
   platform: Platform | undefined,
@@ -421,8 +414,6 @@ function buildPromptSeedream(
     sentences.push(
       `Place the subject in the location shown in ${ref(4)} — match its lighting, colour cast, and depth of field.`,
     );
-  } else if (backdropDescription) {
-    sentences.push(`Place the subject in this setting: ${backdropDescription}`);
   }
 
   // Single end-state preservation clause — the official template form.
@@ -449,26 +440,25 @@ interface SlugInputs {
 
 /**
  * Image layout: every model gets [model, garment, pose skeleton]. When a
- * backdrop is supplied AND the model isn't Qwen (hard 3-image cap), we also
- * pass the backdrop as Image 4. Qwen falls back to a text-described backdrop.
+ * backdrop is supplied we also pass it as Image 4.
  */
 function buildImageSlugs(
-  model: OutfitModelKey,
+  model: OutfitTryonModel,
   slugs: SlugInputs,
 ): { image_slugs: string[]; backdropAsImage: boolean } {
   const base = [slugs.model, slugs.garment, slugs.pose];
-  if (slugs.backdrop && model !== "qwen_image_edit") {
+  if (slugs.backdrop) {
     return { image_slugs: [...base, slugs.backdrop], backdropAsImage: true };
   }
   return { image_slugs: base, backdropAsImage: false };
 }
 
 /** Returns the negative-prompt string for models that show it in the UI —
- * only Wan / Qwen actually consume it (native on fal, baked into prompt on
- * kie). When none of the selected models are Wan or Qwen, returns null so
- * the UI can hide the panel. */
-function previewNegativePromptFor(models: readonly OutfitModelKey[]): string | null {
-  const relevant = models.some((m) => m === "wan27_pro" || m === "qwen_image_edit");
+ * only Wan actually consumes it (native on fal, baked into prompt on kie).
+ * When none of the selected models are Wan, returns null so the UI can hide
+ * the panel. */
+function previewNegativePromptFor(models: readonly OutfitTryonModel[]): string | null {
+  const relevant = models.some((m) => m === "wan27_pro");
   return relevant ? WAN_QWEN_NEGATIVE : null;
 }
 
@@ -486,7 +476,7 @@ const previewSchema = {
       "what the user sees matches what generate_outfit will send.",
     ),
   models: z
-    .array(z.enum(SUPPORTED_OUTFIT_MODELS))
+    .array(z.enum(OUTFIT_TRYON_MODELS))
     .min(1)
     .describe("Image edit models to preview prompts for."),
   provider: z
@@ -532,7 +522,7 @@ const previewSchema = {
 type PreviewArgs = SchemaArgs<typeof previewSchema>;
 
 interface PreviewEntry {
-  model: OutfitModelKey;
+  model: OutfitTryonModel;
   provider: OutfitProvider;
   prompt: string;
   image_count: number;
@@ -577,18 +567,12 @@ export function previewOutfitPromptsDef(fs: VideocityFs): ToolDef {
       const previewPoseDescription = a.pose_description?.trim() || undefined;
       const previewShot = a.pose_shot?.trim() || undefined;
       const character = await loadCharacterIfChar(fs, a.project_slug, a.model_image_slug);
-      // Preview shows a placeholder string for the text-described backdrop
-      // (Qwen path), since no actual backdrop slug is being analysed here.
-      const previewBackdropDescription = hasBackdrop
-        ? "[backdrop scene from your reference image]"
-        : undefined;
       const prompts: PreviewEntry[] = a.models.map((model) => {
         const { image_slugs, backdropAsImage } = buildImageSlugs(model, slugs);
         const prompt = buildPromptCompact(
           model,
           provider,
           backdropAsImage,
-          backdropAsImage ? undefined : previewBackdropDescription,
           previewPoseDescription,
           coverage,
           previewShot,
@@ -613,109 +597,6 @@ export function previewOutfitPromptsDef(fs: VideocityFs): ToolDef {
       };
     },
   };
-}
-
-async function readCachedAnalysis(
-  fs: VideocityFs,
-  assetId: string,
-  projectSlug: string,
-): Promise<DescribeImageResult | undefined> {
-  const read = await fs.readFile(assetId, ANALYSIS_FILENAME, projectSlug);
-  if (!read.ok) return undefined;
-  const text = typeof read.value === "string"
-    ? read.value
-    : new TextDecoder().decode(read.value);
-  try {
-    const parsed = JSON.parse(text) as DescribeImageResult;
-    if (typeof parsed?.prompt === "string") return parsed;
-  } catch {
-    // fall through and recompute
-  }
-  return undefined;
-}
-
-/**
- * Resolve an @img-* backdrop slug to a vision description. Reads the cached
- * `.original.analysis.json` written by describe_image when available;
- * otherwise runs vision on the bytes and writes the cache for next time.
- * Returns the full reproduction `prompt` field (scene, light, palette).
- * Pose descriptions are no longer derived here — callers pass the resolved
- * `pose_description` text directly so it's visible at the tool call site.
- *
- * Fallback chain on vision failure (e.g. XAI 400 from oversized originals):
- *   1. Retry on the cropped `square.jpg` variant (1080² is well within limits).
- *   2. Fall back to a slug-derived hint so Qwen still references the backdrop.
- */
-async function tryDescribe(
-  fs: VideocityFs,
-  assetId: string,
-  filename: string,
-  projectSlug: string,
-): Promise<string | undefined> {
-  const read = await fs.readFile(assetId, filename, projectSlug);
-  if (!read.ok) return undefined;
-  try {
-    const result = await describeImageBytes(
-      Buffer.from(read.value),
-      mimeForImageFilename(filename),
-    );
-    const writeResult = await fs.writeFile(
-      assetId,
-      ANALYSIS_FILENAME,
-      JSON.stringify(result, null, 2),
-      projectSlug,
-    );
-    if (!writeResult.ok) {
-      console.warn(
-        `[generate_outfit] backdrop cache write failed for ${assetId}: ${writeResult.error.message}`,
-      );
-    }
-    return result.prompt?.trim() || undefined;
-  } catch (err) {
-    console.warn(
-      `[generate_outfit] backdrop describe failed for ${assetId} via ${filename}: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return undefined;
-  }
-}
-
-function slugFallbackHint(assetId: string): string {
-  const stem = assetId.replace(/^img-/, "").replace(/-\d+$/, "");
-  const words = stem.replace(/-/g, " ").trim();
-  return words
-    ? `the supplied backdrop reference (${words}) — match its mood and lighting`
-    : "the supplied backdrop reference — match its mood and lighting";
-}
-
-async function describeBackdropAsset(
-  fs: VideocityFs,
-  projectSlug: string,
-  rawSlug: string,
-): Promise<string | undefined> {
-  if (rawSlug.startsWith("http://") || rawSlug.startsWith("https://")) return undefined;
-  const assetId = rawSlug.replace(/^@/, "");
-  if (!assetId.startsWith("img-")) return undefined;
-
-  const cached = await readCachedAnalysis(fs, assetId, projectSlug);
-  if (cached) return cached.prompt?.trim() || undefined;
-
-  const manifest = await fs.getManifest(assetId, projectSlug);
-  if (!manifest.ok) return undefined;
-  const imageFile = findImageFile(manifest.value.files);
-  if (!imageFile) return undefined;
-
-  const primary = await tryDescribe(fs, assetId, imageFile.name, projectSlug);
-  if (primary) return primary;
-
-  const cropped = manifest.value.files.find((f) => f.name === "square.jpg");
-  if (cropped && cropped.name !== imageFile.name) {
-    const secondary = await tryDescribe(fs, assetId, cropped.name, projectSlug);
-    if (secondary) return secondary;
-  }
-
-  const hint = slugFallbackHint(assetId);
-  console.warn(`[generate_outfit] backdrop describe falling back to slug hint for ${assetId}: "${hint}"`);
-  return hint;
 }
 
 export function generateOutfitDef(fs: VideocityFs): ToolDef {
@@ -789,13 +670,8 @@ export function generateOutfitDef(fs: VideocityFs): ToolDef {
       // (frontend or chat agent) reads the pose source's analysis JSON and
       // passes the body-geometry text directly, so the prompt is auditable
       // at the call site and the server makes no extra vision call.
-      // The backdrop is now passed as Image 4 for every model except Qwen
-      // (3-image cap). We only run the vision describe when at least one
-      // selected model is Qwen with a backdrop set.
-      const qwenWithBackdrop = hasBackdrop && a.models.includes("qwen_image_edit");
-      const backdropDescription = qwenWithBackdrop
-        ? await describeBackdropAsset(fs, a.project_slug, a.backdrop_image_slug!)
-        : undefined;
+      // The backdrop is passed as Image 4 for every model, so it is never
+      // text-described here.
       const poseDescription = a.pose_description?.trim() || undefined;
       const shot = a.pose_shot?.trim() || undefined;
 
@@ -809,7 +685,6 @@ export function generateOutfitDef(fs: VideocityFs): ToolDef {
           model,
           provider,
           backdropAsImage,
-          backdropAsImage ? undefined : backdropDescription,
           poseDescription,
           coverage,
           shot,
@@ -830,11 +705,10 @@ export function generateOutfitDef(fs: VideocityFs): ToolDef {
           continue;
         }
         const def = factory(fs);
-        // Only Wan and Qwen on fal consume the native negative_prompt field.
-        // Their kie counterparts already carry the Avoid clause in `prompt`.
-        // NBPro, Seedream and GPT Image 2 never receive a negative.
-        const nativeNegative =
-          provider === "fal" && (model === "qwen_image_edit" || model === "wan27_pro");
+        // Only Wan on fal consumes the native negative_prompt field. Its kie
+        // counterpart already carries the Avoid clause in `prompt`. NBPro,
+        // Seedream and GPT Image 2 never receive a negative.
+        const nativeNegative = provider === "fal" && model === "wan27_pro";
         // Seedream 5 Lite on Kie requires `quality` at the API level — pin
         // to "high" (4K) for outfit since try-on benefits from detail.
         const seedreamKieQuality =

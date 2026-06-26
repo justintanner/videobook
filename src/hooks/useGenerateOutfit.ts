@@ -5,6 +5,7 @@ import { toast } from "@/hooks/useToast";
 
 export type OutfitPlatform = "ig" | "tiktok" | "youtube";
 
+// Shared model-key union for outfit + character UIs.
 export type OutfitModelKey =
   | "nano_banana_pro"
   | "qwen_image_edit"
@@ -12,6 +13,7 @@ export type OutfitModelKey =
   | "wan27_pro"
   | "seedream_v5_lite";
 
+// Full picker for character generation (qwen routes to fal, single image is fine).
 export const OUTFIT_MODEL_OPTIONS: ReadonlyArray<{ key: OutfitModelKey; label: string }> = [
   { key: "nano_banana_pro", label: modelDisplay("kie", "nano-banana-pro") },
   { key: "qwen_image_edit", label: modelDisplay("kie", "qwen2/image-edit") },
@@ -19,6 +21,11 @@ export const OUTFIT_MODEL_OPTIONS: ReadonlyArray<{ key: OutfitModelKey; label: s
   { key: "wan27_pro", label: modelDisplay("kie", "wan/2-7-image-pro") },
   { key: "seedream_v5_lite", label: modelDisplay("kie", "seedream/5-lite-image-to-image") },
 ];
+
+// Outfit try-on omits qwen_image_edit: qwen2/image-edit is single-image and can't
+// composite a model + garment (+ pose) into one try-on.
+export const OUTFIT_TRYON_MODEL_OPTIONS: ReadonlyArray<{ key: OutfitModelKey; label: string }> =
+  OUTFIT_MODEL_OPTIONS.filter((m) => m.key !== "qwen_image_edit");
 
 export const OUTFIT_PROVIDERS = [
   { key: "kie", label: "Kie" },

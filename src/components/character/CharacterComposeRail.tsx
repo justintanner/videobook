@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import type { MediaItem } from '@/components/sidebar/types';
 import {
   OUTFIT_ASPECT_RATIOS,
-  OUTFIT_MODEL_OPTIONS,
+  OUTFIT_TRYON_MODEL_OPTIONS,
   type OutfitAspectRatio,
   type OutfitModelKey,
   type UseGenerateOutfitResult,
@@ -16,7 +16,7 @@ import { useEstimateCost, type EstimateCall } from '@/hooks/useEstimateCost';
 import { CostBadge } from '@/components/cost/CostBadge';
 import type { UseMcpResult } from 'use-mcp/react';
 
-const DEFAULT_MODELS: OutfitModelKey[] = OUTFIT_MODEL_OPTIONS.map((m) => m.key);
+const DEFAULT_MODELS: OutfitModelKey[] = OUTFIT_TRYON_MODEL_OPTIONS.map((m) => m.key);
 
 interface CharacterComposeRailProps {
   characterId: string;
@@ -245,7 +245,7 @@ export function CharacterComposeRail({
           ) : null}
         </div>
         <div className="flex flex-wrap gap-2 mb-2">
-          {OUTFIT_MODEL_OPTIONS.map((m) => {
+          {OUTFIT_TRYON_MODEL_OPTIONS.map((m) => {
             const active = selectedModels.has(m.key);
             const isPreviewing = m.key === previewModel;
             return (

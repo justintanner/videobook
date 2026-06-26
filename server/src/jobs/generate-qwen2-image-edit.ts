@@ -28,18 +28,16 @@ export function registerGenerateQwen2ImageEditJob(fs: VideocityFs): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const uploadedUrls: string[] = [];
-    for (const input of imageInputs) {
-      uploadedUrls.push(
-        "url" in input
-          ? input.url
-          : await uploadAssetToKie(fs, input.assetId, input.filename, projectSlug),
-      );
-    }
+    const input = imageInputs[0];
+    if (!input) throw new Error("generate_qwen2_image_edit requires exactly one reference image");
+    const imageUrl =
+      "url" in input
+        ? input.url
+        : await uploadAssetToKie(fs, input.assetId, input.filename, projectSlug);
 
     const request = buildQwen2ImageEditPayload(
       { prompt, image_size: imageSize, output_format: outputFormat, seed },
-      uploadedUrls,
+      imageUrl,
     );
     const taskId = await submitKieTask(fs, ctx, {
       request,

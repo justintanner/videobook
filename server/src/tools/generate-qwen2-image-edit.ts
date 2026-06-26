@@ -17,7 +17,7 @@ const qwen2ImageEditInputSchema = Qwen2ImageEditRequestSchema.shape.input.shape;
 const generateQwen2ImageEditSchema = {
   prompt: z.string().describe("Image editing prompt (max 800 chars)"),
   project_slug: z.string().describe("Project slug"),
-  image_slugs: z.array(z.string()).describe("1-3 @img-* slugs for reference images to edit"),
+  image_slugs: z.array(z.string()).min(1).max(1).describe("Exactly 1 @img-* slug for the reference image to edit"),
   image_size: apicityField(qwen2ImageEditInputSchema.image_size, "Output aspect ratio (default 16:9)"),
   output_format: apicityField(qwen2ImageEditInputSchema.output_format, "Output image format (default png)"),
   seed: z.number().optional().describe("Random seed"),
@@ -30,7 +30,7 @@ type Args = SchemaArgs<typeof generateQwen2ImageEditSchema>;
 export function generateQwen2ImageEditDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_qwen2_image_edit",
-    description: "Edit images using Qwen2 image-edit on Kie. Requires 1-3 reference images. Creates a new img- asset and enqueues a background job.",
+    description: "Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new img- asset and enqueues a background job.",
     schema: generateQwen2ImageEditSchema,
     handler: async (args) => {
       const { prompt, project_slug, image_slugs, image_size, output_format, seed, output_prefix } = args as Args;
@@ -44,16 +44,25 @@ export function generateQwen2ImageEditDef(fs: VideocityFs): ToolDef {
       }
 
       const rawSlugs = image_slugs ?? [];
+      if (rawSlugs.length !== 1) {
+        return {
+          isError: true as const,
+          content: [{
+            type: "text" as const,
+            text: `generate_qwen2_image_edit accepts exactly 1 reference image (got ${rawSlugs.length}). qwen2/image-edit is single-image; use a multi-image model for edits with more references.`,
+          }],
+        };
+      }
 
-      // Apicity Qwen2ImageEditRequestSchema enforces image_url .min(1).max(3)
-      // and prompt .min(1). Slugs stand in for URLs here — they are non-empty
-      // strings that satisfy the inner `z.string().min(1)` constraint. The
-      // actual URLs are resolved post-upload in the job handler.
+      // Apicity Qwen2ImageEditRequestSchema enforces image_url (a single string)
+      // and prompt .min(1). The slug stands in for the URL here — a non-empty
+      // string satisfying the inner `z.string()` constraint. The actual URL is
+      // resolved post-upload in the job handler.
       const apicityCheck = Qwen2ImageEditRequestSchema.safeParse({
         model: "qwen2/image-edit",
         input: {
           prompt,
-          image_url: rawSlugs.map((s) => s.replace(/^@/, "")),
+          image_url: rawSlugs[0].replace(/^@/, ""),
           ...(image_size !== undefined ? { image_size } : {}),
           ...(output_format !== undefined ? { output_format } : {}),
           ...(seed !== undefined ? { seed } : {}),

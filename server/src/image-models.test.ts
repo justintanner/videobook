@@ -343,18 +343,18 @@ describe("validateImageParams", () => {
     expect(result.warnings.some((w) => w.includes("requires at least 1"))).toBe(true);
   });
 
-  it("qwen2 warns when >3 images (slot constraint override)", () => {
-    const result = validateImageParams("generate_qwen2_image_edit", {
-      prompt: "edit this",
-      image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d"],
-    });
-    expect(result.warnings.some((w) => w.includes("supports 1-3 images"))).toBe(true);
-  });
-
-  it("qwen2 accepts 1-3 images", () => {
+  it("qwen2 warns when >1 image (single-image slot)", () => {
     const result = validateImageParams("generate_qwen2_image_edit", {
       prompt: "edit this",
       image_slugs: ["@img-a", "@img-b"],
+    });
+    expect(result.warnings.some((w) => w.includes("supports 1 images"))).toBe(true);
+  });
+
+  it("qwen2 accepts exactly 1 image", () => {
+    const result = validateImageParams("generate_qwen2_image_edit", {
+      prompt: "edit this",
+      image_slugs: ["@img-a"],
     });
     expect(result.warnings.some((w) => w.toLowerCase().includes("images"))).toBe(false);
   });

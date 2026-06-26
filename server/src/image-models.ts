@@ -22,16 +22,17 @@ import {
   Wan27ImageProRequestSchema,
   Wan27ImageRequestSchema,
 } from "@apicity/kie/zod";
-import { AlibabaImageReferenceSlotsSchema } from "@apicity/alibaba/zod";
-import { z } from "zod";
+import {
+  AlibabaImageReferenceSlotsSchema,
+  AlibabaQwenImageEditImageSlotsSchema,
+  AlibabaQwenImageGenerationImageSlotsSchema,
+} from "@apicity/alibaba/zod";
 import { readSlotConstraints, zodDefault, type SlotConstraints } from "./zod-slots.js";
 
 // Qwen multimodal endpoint accepts 0-3 reference images for qwen-image-2.0*
-// generation, and 1-3 required for qwen-image-edit*. No matching schema is
-// exported from @apicity/alibaba, so we define slot-constraint shims here.
-const AlibabaQwenImageReferenceSlotsSchema = z.array(z.string()).max(3);
-const AlibabaQwenImageEditReferenceSlotsSchema = z.array(z.string()).min(1).max(3);
-
+// generation, and 1-3 required for qwen-image-edit*. Slot constraints come from
+// @apicity/alibaba (AlibabaQwenImageGenerationImageSlotsSchema = .max(3),
+// AlibabaQwenImageEditImageSlotsSchema = .min(1).max(3)).
 const QWEN_GENERATION_MODEL_VALUES = ["qwen-image-2.0-pro", "qwen-image-2.0"] as const;
 const QWEN_EDIT_MODEL_VALUES = ["qwen-image-edit-plus", "qwen-image-edit-max", "qwen-image-edit"] as const;
 
@@ -152,7 +153,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     kieModelId: "qwen2/image-edit",
     tool_name: "generate_qwen2_image_edit",
     label: "Qwen2 Image Edit",
-    description: "Prompt-driven image edit using Qwen2 (requires 1-3 reference images)",
+    description: "Prompt-driven image edit using Qwen2 (requires exactly 1 reference image)",
     imageFieldSchema: Qwen2ImageEditRequestSchema.shape.input.shape.image_url,
     kieImageField: "image_url",
     defaultSchemas: {
@@ -240,14 +241,14 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     tool_name: "generate_alibaba_qwen_image",
     label: "Alibaba Qwen Image",
     description: "Alibaba Cloud Qwen text-to-image (qwen-image-2.0 family) with 0-3 optional reference images, via the synchronous multimodal endpoint",
-    imageFieldSchema: AlibabaQwenImageReferenceSlotsSchema,
+    imageFieldSchema: AlibabaQwenImageGenerationImageSlotsSchema,
   },
   {
     key: "alibaba_qwen_image_edit",
     tool_name: "generate_alibaba_qwen_image_edit",
     label: "Alibaba Qwen Image Edit",
     description: "Alibaba Cloud Qwen image editing (qwen-image-edit family) with 1-3 required reference images, via the synchronous multimodal endpoint",
-    imageFieldSchema: AlibabaQwenImageEditReferenceSlotsSchema,
+    imageFieldSchema: AlibabaQwenImageEditImageSlotsSchema,
   },
 ];
 

@@ -76,38 +76,35 @@ defaults)."*
 
 ---
 
-## 4. (gap) No exported Alibaba Qwen image slot / model enums
+## 4. (gap) ~~No exported Alibaba Qwen image slot enums~~ — RESOLVED; model-enum part PARTIAL
 
-`@apicity/alibaba` exports no schema for the Qwen multimodal endpoint's
-reference-image cardinality (0-3 for generation, 1-3 required for edit), and its
-`AlibabaMultimodalGenerationRequestSchema.shape.model` enum **intermixes dated
-snapshot ids** (`qwen-image-2.0-pro-2026-03-03`, `qwen-image-edit-plus-2025-12-15`,
-…) with stable ids and does not separate generation vs edit models.
+**Slot schemas — RESOLVED (≤0.6.2):** `@apicity/alibaba` now exports
+`AlibabaQwenImageGenerationImageSlotsSchema` (`.max(3)`) and
+`AlibabaQwenImageEditImageSlotsSchema` (`.min(1).max(3)`), matching the reference
+cardinality exactly. The local shims `AlibabaQwenImageReferenceSlotsSchema` /
+`AlibabaQwenImageEditReferenceSlotsSchema` in `server/src/image-models.ts` were
+deleted and replaced with the apicity imports.
 
-**Workaround:** `server/src/image-models.ts:29-36` defines local shims
-`AlibabaQwenImageReferenceSlotsSchema`, `AlibabaQwenImageEditReferenceSlotsSchema`,
-and the curated `QWEN_GENERATION_MODEL_VALUES` / `QWEN_EDIT_MODEL_VALUES`
-(stable-only, split). These are duplicated in
-`server/src/tools/generate-alibaba-qwen-image.ts` and `…-edit.ts`.
+**Model enums — PARTIAL:** apicity now also exports
+`AlibabaQwenImageGenerationModelSchema` / `AlibabaQwenImageEditModelSchema`
+(split generation vs edit — good), but they **still intermix dated snapshot ids**
+(`qwen-image-2.0-pro-2026-03-03`, `qwen-image-edit-plus-2025-12-15`, …) with the
+stable ids. videocity keeps the curated stable-only `QWEN_GENERATION_MODEL_VALUES`
+/ `QWEN_EDIT_MODEL_VALUES` in `server/src/image-models.ts` as a **deliberate
+divergence** (we expose stable ids only to MCP clients).
 
-**Ask apicity:** export `AlibabaQwenImageReferenceSlotsSchema`,
-`AlibabaQwenImageEditReferenceSlotsSchema`, and curated stable-only model enums
-split by generation vs edit.
+**Ask apicity:** offer stable-only variants of the Qwen image model enums (or a
+flag to exclude dated snapshots), so the curated lists can be derived too.
 
 ---
 
-## 5. (gap) No standalone Alibaba video-model enum
+## 5. (gap) ~~No standalone Alibaba video-model enum~~ — RESOLVED (≤0.6.2)
 
-The Alibaba video model list (`["wan2.7-i2v","wan2.7-videoedit"]`) is reachable
-only by unwrapping `AlibabaVideoSynthesisRequestSchema` through ~10 `ZodEffects`
-layers to `.shape.model`; there is no named `AlibabaVideoSynthesisModelSchema`
-export.
-
-**Workaround:** `server/src/video-models.ts` hardcodes
-`ALIBABA_VIDEO_MODELS = ["wan2.7-i2v", "wan2.7-videoedit"]`, duplicated in
-`server/src/tools/generate-alibaba-video.ts`.
-
-**Ask apicity:** export `AlibabaVideoSynthesisModelSchema`.
+**Resolved:** `@apicity/alibaba` now exports `AlibabaVideoSynthesisModelSchema`
+(`z.enum(["wan2.7-i2v", "wan2.7-videoedit"])`). The hardcoded `ALIBABA_VIDEO_MODELS`
+in `server/src/video-models.ts` and `server/src/tools/generate-alibaba-video.ts`
+were replaced with `enumOptions(AlibabaVideoSynthesisModelSchema)` /
+`z.enum(AlibabaVideoSynthesisModelSchema.options)` respectively.
 
 ---
 

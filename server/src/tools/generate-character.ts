@@ -381,8 +381,8 @@ function uniqueAdditionalRefs(sourceRef: string, refs: string[] | undefined): st
 }
 
 function imageRefLimitError(provider: OutfitProvider, model: OutfitModelKey, imageRefCount: number): string | null {
-  if (provider === "kie" && model === "qwen_image_edit" && imageRefCount > 3) {
-    return "Kie Qwen Image Edit supports at most 3 total input images. Remove an extra identity reference or the outfit image, or choose another model.";
+  if (provider === "kie" && model === "qwen_image_edit" && imageRefCount > 1) {
+    return "Kie Qwen2 Image Edit uses only one input image. Remove extra references/outfit images or choose another model.";
   }
   if (provider === "fal" && model === "qwen_image_edit" && imageRefCount > 1) {
     return "Fal Qwen Image Edit uses only one input image. Remove extra references/outfit images or choose another model.";

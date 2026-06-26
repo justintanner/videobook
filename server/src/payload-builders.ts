@@ -494,7 +494,7 @@ type Qwen2ImageEditArgs = {
 
 function buildQwen2ImageEditPayload(
   args: Qwen2ImageEditArgs,
-  imageInput: string[],
+  imageUrl: string,
 ): Qwen2ImageEditRequest {
   const image_size = valueOrZodDefault(
     args.image_size as NonNullable<Qwen2ImageEditRequest["input"]["image_size"]> | undefined,
@@ -505,7 +505,7 @@ function buildQwen2ImageEditPayload(
     model: "qwen2/image-edit",
     input: {
       prompt: args.prompt,
-      image_url: imageInput,
+      image_url: imageUrl,
       ...(image_size !== undefined ? { image_size } : {}),
       ...(output_format !== undefined ? { output_format } : {}),
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
@@ -1269,7 +1269,8 @@ function translateToolPayload(
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_qwen2_image_edit": {
-      const payload = buildQwen2ImageEditPayload(args as Qwen2ImageEditArgs, imageSlugs);
+      // qwen2/image-edit is single-image: use the first reference slug.
+      const payload = buildQwen2ImageEditPayload(args as Qwen2ImageEditArgs, imageSlugs[0] ?? "");
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_gpt_image": {

@@ -27,7 +27,7 @@ import {
   GeminiOmniVideoRequestSchema,
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
-import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
+import { AlibabaVideoSynthesisModelSchema, AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
 import {
   FalWanV2p7EditVideoRequestSchema,
   FalWanV2p7ImageToVideoRequestSchema,
@@ -730,8 +730,7 @@ const GROK_IMAGINE_DURATIONS = enumOptions(GrokImagineDurationSchema);
 // Feeds the shared audio_setting entry in PARAM_SCHEMAS.
 const WAN27_AUDIO_SETTINGS = enumOptions(Wan27AudioSettingSchema);
 
-// Apicity exposes no standalone Alibaba video-model enum (docs/apicity-gaps.md).
-const ALIBABA_VIDEO_MODELS = ["wan2.7-i2v", "wan2.7-videoedit"];
+const ALIBABA_VIDEO_MODELS = enumOptions(AlibabaVideoSynthesisModelSchema);
 
 const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   prompt: { type: "string", description: "Text description of what to generate" },
