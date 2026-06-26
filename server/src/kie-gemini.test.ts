@@ -3,6 +3,7 @@ import {
   geminiFlashResponseText,
   geminiFlashAuthFetch,
   normalizeGeminiJsonText,
+  toGeminiResponseSchema,
 } from "./kie-gemini.js";
 
 describe("normalizeGeminiJsonText", () => {
@@ -16,6 +17,47 @@ describe("normalizeGeminiJsonText", () => {
 
   it("leaves plain JSON unchanged", () => {
     expect(normalizeGeminiJsonText("{\"visuals\":[]}")).toBe("{\"visuals\":[]}");
+  });
+});
+
+describe("toGeminiResponseSchema", () => {
+  it("strips additionalProperties recursively while preserving the rest", () => {
+    const schema = {
+      type: "object",
+      additionalProperties: false,
+      required: ["visuals"],
+      properties: {
+        visuals: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["visual"],
+            properties: { visual: { type: "string" } },
+          },
+        },
+      },
+    };
+    expect(toGeminiResponseSchema(schema)).toEqual({
+      type: "object",
+      required: ["visuals"],
+      properties: {
+        visuals: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["visual"],
+            properties: { visual: { type: "string" } },
+          },
+        },
+      },
+    });
+  });
+
+  it("returns primitives unchanged", () => {
+    expect(toGeminiResponseSchema("x")).toBe("x");
+    expect(toGeminiResponseSchema(3)).toBe(3);
+    expect(toGeminiResponseSchema(null)).toBe(null);
   });
 });
 

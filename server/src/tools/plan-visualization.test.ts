@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CHAR_SWAP_PLAN_MODEL, computeChunks, sampleFramesForScenes, dialogForChunk, speechTimelineForChunk, buildSkeletonPlanSidecar, buildSkeletonPlanMarkdown, autoTranscribePreflight } from "./plan-visualization.js";
+import { CHAR_SWAP_PLAN_MODEL, computeChunks, sampleFramesForScenes, dialogForChunk, speechTimelineForChunk, buildSkeletonPlanSidecar, buildSkeletonPlanMarkdown, autoTranscribePreflight, coerceVisualsPayload, VisualsSchema } from "./plan-visualization.js";
 import { parseScdetOutput, deriveCandidates } from "../scene-detect.js";
 
 type Candidate = { t: number; score: number; kind: "shot" | "settle" };
@@ -11,6 +11,33 @@ const word = (text: string, start: number, end: number) =>
   ({ text, start, end, type: "word" as const });
 const spacing = (start: number, end: number) =>
   ({ text: " ", start, end, type: "spacing" as const });
+
+describe("coerceVisualsPayload", () => {
+  it("passes the well-formed envelope through unchanged", () => {
+    const payload = { visuals: [{ visual: "a" }, { visual: "b" }] };
+    expect(coerceVisualsPayload(payload)).toEqual(payload);
+  });
+
+  it("wraps a bare array of objects into the visuals envelope", () => {
+    expect(coerceVisualsPayload([{ visual: "a" }, { visual: "b" }])).toEqual({
+      visuals: [{ visual: "a" }, { visual: "b" }],
+    });
+  });
+
+  it("wraps a bare array of strings into the visuals envelope", () => {
+    expect(coerceVisualsPayload(["a", "b"])).toEqual({ visuals: [{ visual: "a" }, { visual: "b" }] });
+  });
+
+  it("leaves a primitive for VisualsSchema to reject", () => {
+    expect(coerceVisualsPayload("nope")).toBe("nope");
+    expect(() => VisualsSchema.parse(coerceVisualsPayload("nope"))).toThrow();
+  });
+
+  it("validates a coerced array of long visual strings", () => {
+    const long = "x".repeat(20);
+    expect(VisualsSchema.parse(coerceVisualsPayload([long])).visuals).toEqual([{ visual: long }]);
+  });
+});
 
 describe("dialogForChunk", () => {
   it("joins words whose start falls within the chunk's [start, end) window", () => {

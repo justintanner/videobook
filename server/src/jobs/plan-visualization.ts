@@ -1,6 +1,5 @@
 import type { VideocityFs } from "videocity-engine";
 import { findVideoFile } from "videocity-engine";
-import { z } from "zod";
 import { join } from "node:path";
 import { readFile as fsReadFile, mkdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -20,7 +19,10 @@ import {
   MIN_SCENE_S,
   MAX_SCENE_S,
   SYSTEM_PROMPT_PLAN,
+  VISUALS_JSON_SCHEMA,
+  VisualsSchema,
   buildPlanContext,
+  coerceVisualsPayload,
   computeChunks,
   dialogForChunk,
   loadCharacter,
@@ -50,10 +52,6 @@ type Scene = {
   audio_filename: string;
   frames: Array<{ name: string; t: number }>;
 };
-
-const VisualsSchema = z.object({
-  visuals: z.array(z.object({ visual: z.string().min(20) })).min(1),
-});
 
 async function extractFrameJpeg(inputPath: string, timestamp: number, outPath: string): Promise<Buffer> {
   try {
@@ -253,13 +251,16 @@ export function registerPlanVisualizationJob(fs: VideocityFs): void {
           parts: userContent,
           temperature: 0.5,
           maxOutputTokens: 8192,
+          responseSchema: VISUALS_JSON_SCHEMA as unknown as Record<string, unknown>,
         });
 
         let visuals: { visual: string }[];
         try {
-          visuals = VisualsSchema.parse(JSON.parse(outputText)).visuals;
+          visuals = VisualsSchema.parse(coerceVisualsPayload(JSON.parse(outputText))).visuals;
         } catch (err) {
-          throw new Error(`Model output failed schema validation: ${errorMessage(err)}`);
+          throw new Error(
+            `Model output failed schema validation: ${errorMessage(err)} (raw output: ${outputText.slice(0, 300)})`,
+          );
         }
 
         if (visuals.length !== chunks.length) {

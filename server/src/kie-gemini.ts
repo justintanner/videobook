@@ -22,6 +22,23 @@ type GeminiFlashRequest = {
   signal?: AbortSignal;
 };
 
+// Gemini's responseSchema accepts only the OpenAPI 3.0 Schema subset; JSON-Schema
+// keywords outside it (notably `additionalProperties`, `$schema`) make Google
+// reject the whole request. Strip them recursively so a schema authored for our
+// own Zod-side validation can be reused verbatim as a Gemini responseSchema.
+const GEMINI_UNSUPPORTED_SCHEMA_KEYS = new Set(["additionalProperties", "$schema"]);
+
+export function toGeminiResponseSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(toGeminiResponseSchema);
+  if (schema === null || typeof schema !== "object") return schema;
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (GEMINI_UNSUPPORTED_SCHEMA_KEYS.has(key)) continue;
+    result[key] = toGeminiResponseSchema(value);
+  }
+  return result;
+}
+
 function fetchInputUrl(input: Parameters<typeof fetch>[0]): string {
   if (typeof input === "string") return input;
   if (input instanceof URL) return input.toString();
@@ -105,6 +122,8 @@ export async function callGeminiFlash(args: GeminiFlashRequest): Promise<string>
   const generationConfig: Record<string, unknown> = {};
   if (args.temperature !== undefined) generationConfig.temperature = args.temperature;
   if (args.maxOutputTokens !== undefined) generationConfig.maxOutputTokens = args.maxOutputTokens;
+  if (args.responseMimeType !== undefined) generationConfig.responseMimeType = args.responseMimeType;
+  if (args.responseSchema !== undefined) generationConfig.responseSchema = toGeminiResponseSchema(args.responseSchema);
 
   const result = await call({
     stream: false,
@@ -139,6 +158,10 @@ export function normalizeGeminiJsonText(text: string): string {
 }
 
 export async function callGeminiFlashJson(args: Omit<GeminiFlashRequest, "responseMimeType">): Promise<string> {
-  const outputText = await callGeminiFlash(args);
+  // application/json puts Gemini in structured-output mode: combined with an
+  // optional responseSchema it returns a single parseable JSON value (no prose,
+  // no markdown fences) rather than best-effort text we have to scrape. The
+  // normalize step below stays as a safety net for models that ignore the hint.
+  const outputText = await callGeminiFlash({ ...args, responseMimeType: "application/json" });
   return normalizeGeminiJsonText(outputText);
 }

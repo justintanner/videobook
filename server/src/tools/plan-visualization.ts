@@ -24,6 +24,45 @@ export const MIN_SCENE_S = 7;
 export const MAX_SCENE_S = 14;
 export const REQUIRED_CHARACTERS = 2;
 
+// The analysis model returns one cinematic "visual" paragraph per chunk. This is
+// the single source of truth for that contract: VISUALS_JSON_SCHEMA constrains
+// Gemini's structured output (passed as responseSchema), VisualsSchema validates
+// the parsed result on our side, and coerceVisualsPayload absorbs the common
+// shape drift (a bare array instead of `{ visuals: [...] }`) before validation.
+export const VisualsSchema = z.object({
+  visuals: z.array(z.object({ visual: z.string().min(20) })).min(1),
+});
+
+export const VISUALS_JSON_SCHEMA = {
+  type: "object",
+  required: ["visuals"],
+  additionalProperties: false,
+  properties: {
+    visuals: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["visual"],
+        additionalProperties: false,
+        properties: {
+          visual: { type: "string" },
+        },
+      },
+    },
+  },
+} as const;
+
+// Gemini occasionally returns the bare visuals array (or an array of plain
+// strings) instead of the `{ visuals: [...] }` envelope. Normalize those shapes
+// so a well-formed-but-mis-nested response still parses rather than failing the
+// whole plan; anything else is passed through untouched for the schema to reject.
+export function coerceVisualsPayload(parsed: unknown): unknown {
+  if (Array.isArray(parsed)) {
+    return { visuals: parsed.map((entry) => (typeof entry === "string" ? { visual: entry } : entry)) };
+  }
+  return parsed;
+}
+
 // Decide whether plan setup can proceed given the source's transcript. char_swap
 // needs ElevenLabs word-level timings; when only a non-elevenlabs transcript
 // (e.g. gpt4otrans) exists we no longer hard-fail — the plan job auto-transcribes
