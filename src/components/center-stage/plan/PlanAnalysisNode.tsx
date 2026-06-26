@@ -30,37 +30,50 @@ function AssetChip({ id }: { id: string }) {
 }
 
 // One labelled input row: where it came from (header) + how it's sent (text vs
-// image badge) + the actual content.
+// image badge) + a thumbnail of the actual asset so you can review it visually +
+// the content the model receives.
 function SourceBlock({
   label,
   asset,
   kind,
   note,
   text,
+  thumbSrc,
+  thumbHint,
 }: {
   label: string;
   asset?: string;
   kind: 'text' | 'image';
   note?: string;
   text?: string;
+  // The actual pixels of this input, shown for visual review. For characters the
+  // image is shown but NOT sent (only the text description is) — see thumbHint.
+  thumbSrc?: string | null;
+  thumbHint?: string;
 }) {
   return (
     <div className="rounded border border-zinc-800/60 bg-zinc-950/60 p-2">
       <div className="mb-1 flex flex-wrap items-center gap-1.5">
         <span className="font-mono text-[9px] uppercase tracking-wider text-emerald-300/50">{label}</span>
         {asset && <AssetChip id={asset} />}
-        <span
-          className={cn(
-            'ml-auto inline-flex items-center gap-1 rounded px-1 py-0.5 font-mono text-[8px] uppercase tracking-wider',
-            kind === 'image'
-              ? 'bg-amber-500/10 text-amber-300/80'
-              : 'bg-sky-500/10 text-sky-300/80',
+        {/* Passive caption (not a button): how this input reaches the model. */}
+        <span className="pointer-events-none ml-auto inline-flex select-none items-center gap-1 font-mono text-[9px] lowercase tracking-wide text-zinc-500">
+          {kind === 'image' ? (
+            <ImageIcon className="h-2.5 w-2.5 text-amber-400/50" />
+          ) : (
+            <Type className="h-2.5 w-2.5 text-sky-400/50" />
           )}
-        >
-          {kind === 'image' ? <ImageIcon className="h-2.5 w-2.5" /> : <Type className="h-2.5 w-2.5" />}
-          {kind === 'image' ? 'sent as image' : 'sent as text'}
+          {kind === 'image' ? 'as image' : 'as text'}
         </span>
       </div>
+      {thumbSrc && (
+        <div className="mb-1.5 flex items-center justify-center overflow-hidden rounded border border-zinc-800/80 bg-black/50">
+          <img src={thumbSrc} alt={label} loading="lazy" className="max-h-44 w-full object-contain" />
+        </div>
+      )}
+      {thumbHint && (
+        <div className="mb-1 font-mono text-[9px] lowercase leading-relaxed tracking-wide text-zinc-500">{thumbHint}</div>
+      )}
       {note && <div className="font-mono text-[10px] leading-relaxed text-zinc-400">{note}</div>}
       {text && text.length > 0 && (
         <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-emerald-200/80 scrollbar-hide">
@@ -94,6 +107,13 @@ export function PlanAnalysisNode({ generating, failed, error, forceOpen, userCon
   const expanded = open || generating || isFailed || Boolean(forceOpen);
 
   const characters = sidecar.characters ?? [];
+  // The actual pixels of an input asset, for visual review. The asset_id may
+  // carry a leading @; mediaItems are keyed without it.
+  const thumbFor = (assetId?: string | null): string | null => {
+    if (!assetId) return null;
+    const item = mediaItems.find((m) => m.id === assetId.replace(/^@/, ''));
+    return item?.thumbnailSrc ?? item?.filePath ?? null;
+  };
   // The sampled frames the server attaches as image parts — the ONLY images in
   // the request. Empty until the vision job runs (draft state).
   const frames = useMemo(() => sidecar.scenes.flatMap((s) => s.frames ?? []), [sidecar.scenes]);
@@ -173,6 +193,8 @@ export function PlanAnalysisNode({ generating, failed, error, forceOpen, userCon
                   label={`character ${String.fromCharCode(65 + i)}${c.name ? ` · ${c.name}` : ''}`}
                   asset={c.asset_id}
                   kind="text"
+                  thumbSrc={thumbFor(c.asset_id)}
+                  thumbHint="reference image — shown for your review; only the text description below is sent"
                   text={c.description?.trim() || '(no description yet)'}
                 />
               ))}
@@ -181,6 +203,8 @@ export function PlanAnalysisNode({ generating, failed, error, forceOpen, userCon
                 label="video source"
                 asset={sidecar.source_asset_id}
                 kind="image"
+                thumbSrc={thumbFor(sidecar.source_asset_id)}
+                thumbHint="source clip — the model is sent sampled frames from it (below)"
                 note={videoNote}
               />
 
