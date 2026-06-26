@@ -80,18 +80,6 @@ export interface PlanSidecar {
   // generating. The work area shows a "Generate plan" button instead of polling;
   // it's cleared (and the job enqueued) on the explicit Generate.
   awaiting_start?: boolean;
-  // Per-connector bend geometry for the flow canvas — a normalized handle offset
-  // { dx, dy } in [-1, 1] (fraction of the connector box's half-width/-height),
-  // keyed by stable connector id ("s0-source-swap", "s0-swap-video", "s1-gap").
-  // Absent / { 0, 0 } → a straight connector. Set via set_plan_connector_geometry.
-  connectors?: Record<string, ConnectorBend>;
-}
-
-// Normalized bend handle offset for a flow connector. dx/dy in [-1, 1] are
-// fractions of the connector box's half-width / half-height; { 0, 0 } is straight.
-export interface ConnectorBend {
-  dx: number;
-  dy: number;
 }
 
 // The character asset_ids wired to a frame's swap, in order. Falls back to ALL

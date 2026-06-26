@@ -16,7 +16,6 @@ import { PlanFlowProvider, type PlanFlowContextValue } from './PlanFlowContext';
 import { PlanAnalysisNode } from './PlanAnalysisNode';
 import { FlowColumn, FlowStep } from './flow/FlowColumn';
 import { FlowConnector } from './flow/FlowConnector';
-import { BendableConnector } from './flow/BendableConnector';
 import { useCharSwapActions } from './useCharSwapActions';
 import { useSceneFilesBootstrap } from './useSceneFilesBootstrap';
 import { formatTimecode, type PlanSidecar } from './charSwapModel';
@@ -69,13 +68,6 @@ export function PlanFlowStack({
   const ctx = useMemo<PlanFlowContextValue>(
     () => ({ sidecar, characters: sidecar.characters, mediaItems, projectSlug, sourceAspect, actions }),
     [sidecar, mediaItems, projectSlug, sourceAspect, actions],
-  );
-
-  // Persisted bend geometry for a flow connector (straight when unset). Commit
-  // wiring lives in `actions.setConnectorGeometry` (writes sidecar.connectors).
-  const bendFor = useCallback(
-    (id: string) => sidecar.connectors?.[id] ?? { dx: 0, dy: 0 },
-    [sidecar.connectors],
   );
 
   const building = sidecar.scenes.length === 0;
@@ -242,14 +234,16 @@ export function PlanFlowStack({
             sourceAspect={sourceAspect}
             regenerating={regenerating}
             onRegenerate={(next) => { void runRegenerate(next); }}
+            // Fan-in lines to the analysis node render only when it's present below.
+            showConnector={showAnalysis}
           />
         </FlowStep>
 
         {/* Analysis prompt — persistent + collapsible. Force-expands while
             (re)generating or in draft (read before you generate), then stays as a
             collapsed "Analysis prompt" header in the finished plan so it's still
-            discoverable (not gone after gen). */}
-        {showAnalysis && <FlowConnector height={40} />}
+            discoverable (not gone after gen). The lead-in fan connector (three
+            lines from each input) is owned by PlanInputsNode above. */}
         {showAnalysis && (
           <FlowStep>
             <PlanAnalysisNode
@@ -292,13 +286,8 @@ export function PlanFlowStack({
           const cacheBust = `${scene.start.toFixed(2)}-${scene.end.toFixed(2)}`;
           return (
             <Fragment key={s}>
-              {/* between scenes — bendable connector (scenes come from video splitting) */}
-              {s > 0 && (
-                <BendableConnector
-                  bend={bendFor(`s${s}-gap`)}
-                  onCommit={(dx, dy) => { void actions.setConnectorGeometry(`s${s}-gap`, dx, dy); }}
-                />
-              )}
+              {/* between scenes (scenes come from video splitting) */}
+              {s > 0 && <FlowConnector height={40} />}
               <div className="flex w-full flex-col items-center">
                 <div className="mb-2 flex items-baseline gap-2">
                   <span className="font-mono text-xs font-bold tracking-wider text-emerald-300/80 uppercase">
@@ -314,20 +303,14 @@ export function PlanFlowStack({
                     <SourceFrameNode data={{ sceneIndex: s, frameIndex: 2, cacheBust, label: `S${s + 1} · source last` }} />
                   </div>
                 </FlowStep>
-                <BendableConnector
-                  bend={bendFor(`s${s}-source-swap`)}
-                  onCommit={(dx, dy) => { void actions.setConnectorGeometry(`s${s}-source-swap`, dx, dy); }}
-                />
+                <FlowConnector height={40} />
                 <FlowStep>
                   <div className="flex flex-wrap justify-center gap-3">
                     <SwapGenNode data={{ sceneIndex: s, frameIndex: 1, label: `S${s + 1} · swap frame 1` }} />
                     <SwapGenNode data={{ sceneIndex: s, frameIndex: 2, label: `S${s + 1} · swap frame 2` }} />
                   </div>
                 </FlowStep>
-                <BendableConnector
-                  bend={bendFor(`s${s}-swap-video`)}
-                  onCommit={(dx, dy) => { void actions.setConnectorGeometry(`s${s}-swap-video`, dx, dy); }}
-                />
+                <FlowConnector height={40} />
                 <FlowStep>
                   <SceneVideoNode data={{ sceneIndex: s, label: `S${s + 1} · video` }} />
                 </FlowStep>
