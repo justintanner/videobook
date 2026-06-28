@@ -11,6 +11,7 @@ import { useMountKey } from '@/contexts/MountKeyContext';
 import { ViewerToolbar } from './viewer-shared';
 import {
   sourceAspectFromDimensions,
+  sourceSlotBox,
   type SourceAspect,
 } from '@/lib/plan-aspect';
 import { autoPickCharSwap, autoPickClipShow, autoPickStoryboard } from './templates/auto-pick';
@@ -2522,6 +2523,11 @@ function isAcceptableForSlot(payload: SidebarDragPayload, kind: PlanSlotKind): b
   return payload.id.startsWith('char-') || payload.id.startsWith('img-');
 }
 
+// Source-slot pixel bounds: at most w-44 (176px) wide, capped at 132px tall so a
+// 9:16 clip renders short-and-narrow rather than towering over the input row.
+const SOURCE_SLOT_MAX_W = 176;
+const SOURCE_SLOT_MAX_H = 132;
+
 export function PlanHeaderSlot({ label, kind, item, sourceAspect, onDrop }: {
   label: string;
   kind: PlanSlotKind;
@@ -2548,13 +2554,20 @@ export function PlanHeaderSlot({ label, kind, item, sourceAspect, onDrop }: {
     }
   };
   const src = item?.thumbnailSrc ?? item?.filePath ?? null;
-  const slotStyle = kind === 'source' && sourceAspect ? { aspectRatio: sourceAspect.css } : undefined;
+  // Source slots size to the clip's aspect, but a tall (portrait) clip would
+  // tower over the row — cap the height and derive a narrower width so it stays
+  // compact. Character slots keep the fixed 16:9 box (aspect-video, w-44).
+  const sourceBox =
+    kind === 'source' && sourceAspect
+      ? sourceSlotBox(sourceAspect.ratio, SOURCE_SLOT_MAX_W, SOURCE_SLOT_MAX_H)
+      : null;
+  const slotStyle = sourceBox ? { width: sourceBox.width, height: sourceBox.height } : undefined;
   return (
     <div className="flex flex-col gap-1">
       <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50">{label}</span>
       <div
         className={cn(
-          'relative w-44 bg-zinc-900 border rounded overflow-hidden flex items-center justify-center transition-colors',
+          'relative mx-auto w-44 bg-zinc-900 border rounded overflow-hidden flex items-center justify-center transition-colors',
           kind !== 'source' && 'aspect-video',
           dragActive ? 'border-emerald-300 ring-2 ring-emerald-300/40' : 'border-zinc-700/60',
         )}

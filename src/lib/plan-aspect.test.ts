@@ -4,6 +4,7 @@ import {
   kieImageAspectRatioForDimensions,
   seedanceAspectRatioForDimensions,
   sourceAspectFromDimensions,
+  sourceSlotBox,
 } from './plan-aspect'
 
 describe('plan aspect helpers', () => {
@@ -54,5 +55,26 @@ describe('plan aspect helpers', () => {
 
   it('uses adaptive Seedance for non-native source ratios', () => {
     expect(seedanceAspectRatioForDimensions(1500, 1000)).toBe('adaptive')
+  })
+})
+
+describe('sourceSlotBox', () => {
+  it('keeps a landscape clip at full width and short height', () => {
+    // 16:9 at 176 wide → 99 tall, well under the 132 cap, so unchanged.
+    expect(sourceSlotBox(16 / 9, 176, 132)).toEqual({ width: 176, height: 99 })
+  })
+
+  it('clamps a tall 9:16 clip to the height cap and shrinks its width', () => {
+    // Aspect-driven height (176 / 0.5625 = 313) exceeds the cap, so height is
+    // pinned to 132 and width derived (132 * 0.5625 = 74).
+    expect(sourceSlotBox(9 / 16, 176, 132)).toEqual({ width: 74, height: 132 })
+  })
+
+  it('keeps a square clip within both bounds', () => {
+    expect(sourceSlotBox(1, 176, 132)).toEqual({ width: 132, height: 132 })
+  })
+
+  it('falls back to 16:9 for a non-positive ratio', () => {
+    expect(sourceSlotBox(0, 176, 132)).toEqual({ width: 176, height: 99 })
   })
 })

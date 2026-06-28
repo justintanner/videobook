@@ -20,6 +20,8 @@ import { cn } from '@/lib/utils';
 import { usePlanFlow } from './PlanFlowContext';
 import { PayloadJsonView } from '@/components/center-stage/PlanViewer';
 import { FlipToggle } from './nodes/nodeUi';
+import { extractStreamingVisuals } from './streamingVisuals';
+import type { PlanAnalysisProgress } from './usePlanAnalysisProgress';
 
 function AssetChip({ id }: { id: string }) {
   return (
@@ -30,26 +32,20 @@ function AssetChip({ id }: { id: string }) {
 }
 
 // One labelled input row: where it came from (header) + how it's sent (text vs
-// image badge) + a thumbnail of the actual asset so you can review it visually +
-// the content the model receives.
+// image badge) + the content the model receives. Text-only by design — the input
+// images aren't shown here; the focus is the prompt the model is given.
 function SourceBlock({
   label,
   asset,
   kind,
   note,
   text,
-  thumbSrc,
-  thumbHint,
 }: {
   label: string;
   asset?: string;
   kind: 'text' | 'image';
   note?: string;
   text?: string;
-  // The actual pixels of this input, shown for visual review. For characters the
-  // image is shown but NOT sent (only the text description is) — see thumbHint.
-  thumbSrc?: string | null;
-  thumbHint?: string;
 }) {
   return (
     <div className="rounded border border-zinc-800/60 bg-zinc-950/60 p-2">
@@ -66,14 +62,6 @@ function SourceBlock({
           {kind === 'image' ? 'as image' : 'as text'}
         </span>
       </div>
-      {thumbSrc && (
-        <div className="mb-1.5 flex items-center justify-center overflow-hidden rounded border border-zinc-800/80 bg-black/50">
-          <img src={thumbSrc} alt={label} loading="lazy" className="max-h-44 w-full object-contain" />
-        </div>
-      )}
-      {thumbHint && (
-        <div className="mb-1 font-mono text-[9px] lowercase leading-relaxed tracking-wide text-zinc-500">{thumbHint}</div>
-      )}
       {note && <div className="font-mono text-[10px] leading-relaxed text-zinc-400">{note}</div>}
       {text && text.length > 0 && (
         <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-emerald-200/80 scrollbar-hide">
@@ -84,7 +72,46 @@ function SourceBlock({
   );
 }
 
-export function PlanAnalysisNode({ generating, failed, error, forceOpen, userContext, systemPrompt, model }: {
+// Live "show your work" view of the analysis model's streaming output. While the
+// plan generates we poll the raw (growing) JSON and surface each scene's visual
+// description as it's written — completed scenes plus the one mid-stream.
+function AnalysisLiveOutput({ raw }: { raw: string }) {
+  const { complete, partial } = useMemo(() => extractStreamingVisuals(raw), [raw]);
+  const hasVisuals = complete.length > 0 || (partial !== null && partial.length > 0);
+  return (
+    <div className="rounded border border-emerald-500/20 bg-emerald-500/[0.03] p-2">
+      <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider text-emerald-300/50">
+        <Loader2 className="h-2.5 w-2.5 animate-spin text-emerald-400/70" />
+        analyzing — model output (live)
+      </div>
+      {hasVisuals ? (
+        <div className="flex flex-col gap-1.5">
+          {complete.map((v, i) => (
+            <div key={i} className="font-mono text-[11px] leading-relaxed text-emerald-200/80">
+              <span className="text-emerald-300/40">scene {i + 1} · </span>
+              {v}
+            </div>
+          ))}
+          {partial !== null && (
+            <div className="font-mono text-[11px] leading-relaxed text-emerald-200/60">
+              <span className="text-emerald-300/40">scene {complete.length + 1} · </span>
+              {partial}
+              <span className="ml-0.5 inline-block h-3 w-1 animate-pulse bg-emerald-300/70 align-middle" />
+            </div>
+          )}
+        </div>
+      ) : raw.length > 0 ? (
+        <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-emerald-200/70 scrollbar-hide">
+          {raw}
+        </pre>
+      ) : (
+        <div className="font-mono text-[11px] text-emerald-200/50">waiting for the model to respond…</div>
+      )}
+    </div>
+  );
+}
+
+export function PlanAnalysisNode({ generating, failed, error, forceOpen, userContext, systemPrompt, model, analysisProgress }: {
   generating: boolean;
   failed?: boolean;
   error?: string;
@@ -95,6 +122,8 @@ export function PlanAnalysisNode({ generating, failed, error, forceOpen, userCon
   systemPrompt?: string;
   // The model that produces the plan (sidecar.model) — shown as a usage badge.
   model?: string;
+  // Live streaming output of the analysis, polled while generating.
+  analysisProgress?: PlanAnalysisProgress;
 }) {
   const { sidecar, mediaItems, projectSlug } = usePlanFlow();
   const user = userContext?.trim() ?? '';
@@ -107,13 +136,6 @@ export function PlanAnalysisNode({ generating, failed, error, forceOpen, userCon
   const expanded = open || generating || isFailed || Boolean(forceOpen);
 
   const characters = sidecar.characters ?? [];
-  // The actual pixels of an input asset, for visual review. The asset_id may
-  // carry a leading @; mediaItems are keyed without it.
-  const thumbFor = (assetId?: string | null): string | null => {
-    if (!assetId) return null;
-    const item = mediaItems.find((m) => m.id === assetId.replace(/^@/, ''));
-    return item?.thumbnailSrc ?? item?.filePath ?? null;
-  };
   // The sampled frames the server attaches as image parts — the ONLY images in
   // the request. Empty until the vision job runs (draft state).
   const frames = useMemo(() => sidecar.scenes.flatMap((s) => s.frames ?? []), [sidecar.scenes]);
@@ -180,6 +202,11 @@ export function PlanAnalysisNode({ generating, failed, error, forceOpen, userCon
             <PayloadJsonView payload={payload} mediaItems={mediaItems} projectSlug={projectSlug} />
           ) : (
             <div className="flex flex-col gap-2">
+              {/* Live streaming output — the model writing the per-scene plan as
+                  we analyze. Only while generating; gives way to the real scene
+                  nodes once the plan lands. */}
+              {generating && <AnalysisLiveOutput raw={analysisProgress?.text ?? ''} />}
+
               {/* Provenance: what each input becomes in the request. */}
               <div className="rounded border border-amber-500/20 bg-amber-500/[0.04] p-2 font-mono text-[10px] leading-relaxed text-amber-200/70">
                 The only images sent to the model are the video&apos;s sampled frames. Each character is
@@ -193,8 +220,6 @@ export function PlanAnalysisNode({ generating, failed, error, forceOpen, userCon
                   label={`character ${String.fromCharCode(65 + i)}${c.name ? ` · ${c.name}` : ''}`}
                   asset={c.asset_id}
                   kind="text"
-                  thumbSrc={thumbFor(c.asset_id)}
-                  thumbHint="reference image — shown for your review; only the text description below is sent"
                   text={c.description?.trim() || '(no description yet)'}
                 />
               ))}
@@ -203,8 +228,6 @@ export function PlanAnalysisNode({ generating, failed, error, forceOpen, userCon
                 label="video source"
                 asset={sidecar.source_asset_id}
                 kind="image"
-                thumbSrc={thumbFor(sidecar.source_asset_id)}
-                thumbHint="source clip — the model is sent sampled frames from it (below)"
                 note={videoNote}
               />
 

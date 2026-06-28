@@ -20,6 +20,9 @@ type GeminiFlashRequest = {
   responseSchema?: JsonSchema;
   timeout?: number;
   signal?: AbortSignal;
+  // When provided, the request streams and this fires with the cumulative text
+  // after each chunk (for live "show your work" previews). Omitted = one-shot.
+  onDelta?: (textSoFar: string) => void;
 };
 
 // Gemini's responseSchema accepts only the OpenAPI 3.0 Schema subset; JSON-Schema
@@ -98,12 +101,23 @@ export function geminiFlashResponseText(response: KieGemini35FlashGenerateConten
     .trim();
 }
 
-export async function firstGeminiFlashContent(result: KieGemini35FlashStreamGenerateContentResult): Promise<string> {
-  if (!isGeminiFlashAsyncIterable(result)) return geminiFlashResponseText(result);
+// Collect the full text from a Gemini result, whether it's a single response
+// (stream:false) or an async iterable of SSE chunks (stream:true). When the
+// result streams, `onDelta` fires with the cumulative text after each chunk.
+export async function collectGeminiFlashContent(
+  result: KieGemini35FlashStreamGenerateContentResult,
+  onDelta?: (textSoFar: string) => void,
+): Promise<string> {
+  if (!isGeminiFlashAsyncIterable(result)) {
+    const text = geminiFlashResponseText(result);
+    onDelta?.(text);
+    return text;
+  }
 
   let text = "";
   for await (const chunk of result) {
     text += geminiFlashResponseText(chunk);
+    onDelta?.(text);
   }
   return text.trim();
 }
@@ -126,12 +140,13 @@ export async function callGeminiFlash(args: GeminiFlashRequest): Promise<string>
   if (args.responseSchema !== undefined) generationConfig.responseSchema = toGeminiResponseSchema(args.responseSchema);
 
   const result = await call({
-    stream: false,
+    // Stream only when the caller wants progressive deltas; one-shot otherwise.
+    stream: args.onDelta !== undefined,
     contents: [{ role: "user", parts: args.parts }],
     ...(Object.keys(generationConfig).length > 0 ? { generationConfig } : {}),
   }, args.signal);
 
-  const text = await firstGeminiFlashContent(result);
+  const text = await collectGeminiFlashContent(result, args.onDelta);
   if (text.length === 0) throw new Error("Kie Gemini returned no text content");
   return text;
 }

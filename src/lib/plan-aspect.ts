@@ -148,3 +148,24 @@ export function falWanImageSizeForDimensions(
   if (ratio === null) return FALLBACK_FAL_WAN_IMAGE_SIZE
   return nearestFalWanImageSize(ratio)
 }
+
+export interface SlotBox {
+  width: number
+  height: number
+}
+
+// Pixel size for a plan source-input thumbnail. The slot is at most `maxW` wide;
+// a tall (portrait) clip would otherwise tower over the row, so when the
+// aspect-driven height exceeds `maxH` we clamp the height and derive the width —
+// portrait clips render short-and-narrow instead of full-width-and-tall.
+// `ratio` is width/height; a non-positive ratio falls back to 16:9.
+export function sourceSlotBox(ratio: number, maxW: number, maxH: number): SlotBox {
+  const r = ratio > 0 && Number.isFinite(ratio) ? ratio : FALLBACK_RATIO
+  let width = maxW
+  let height = maxW / r
+  if (height > maxH) {
+    height = maxH
+    width = maxH * r
+  }
+  return { width: Math.round(width), height: Math.round(height) }
+}

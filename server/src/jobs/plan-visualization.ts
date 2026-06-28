@@ -30,6 +30,7 @@ import {
   type CharacterContext,
 } from "../tools/plan-visualization.js";
 import { callGeminiFlashJson, geminiImageBase64Part, geminiTextPart } from "../kie-gemini.js";
+import { startPlanProgress, updatePlanProgress, finishPlanProgress } from "../plan-progress.js";
 
 const execFileAsync = promisify(execFile);
 const planVisRequire = createRequire(import.meta.url);
@@ -246,12 +247,17 @@ export function registerPlanVisualizationJob(fs: VideocityFs): void {
           ...frameParts,
         ];
 
+        // Stream the model's output into the in-memory progress registry so the
+        // client can render the analysis live (read_plan_progress). This is a
+        // preview only; the authoritative scenes come from the parse below.
+        startPlanProgress(projectSlug);
         const outputText = await callGeminiFlashJson({
           apiKey,
           parts: userContent,
           temperature: 0.5,
           maxOutputTokens: 8192,
           responseSchema: VISUALS_JSON_SCHEMA as unknown as Record<string, unknown>,
+          onDelta: (text) => updatePlanProgress(projectSlug, text),
         });
 
         let visuals: { visual: string }[];
@@ -319,6 +325,8 @@ export function registerPlanVisualizationJob(fs: VideocityFs): void {
         const writeJson = await fs.writeFile("plan", ".plan.json", JSON.stringify(sidecar, null, 2), projectSlug);
         if (!writeJson.ok) throw new Error(`Failed to write .plan.json: ${writeJson.error.message}`);
 
+        finishPlanProgress(projectSlug, "done");
+
         return {
           success: true,
           scenes: scenes.length,
@@ -326,6 +334,7 @@ export function registerPlanVisualizationJob(fs: VideocityFs): void {
           model: CHAR_SWAP_PLAN_MODEL,
         };
       } catch (error) {
+        finishPlanProgress(projectSlug, "failed", errorMessage(error));
         await markPlanFailed(fs, projectSlug, sourceAssetId, error);
         throw error;
       }

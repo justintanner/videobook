@@ -166,6 +166,7 @@ import { matchPlanSceneCharactersDef } from "./match-plan-scene-characters.js";
 import { acceptPlanSceneVideoSwapDef } from "./accept-plan-scene-video-swap.js";
 import { replacePlanSceneVideoSwapDef } from "./replace-plan-scene-video-swap.js";
 import { readPlanDef } from "./read-plan.js";
+import { readPlanProgressDef } from "./read-plan-progress.js";
 import { planStoryboardVideoDef } from "./plan-storyboard-video.js";
 import { replacePlanStoryboardVideoStoryboardDef } from "./replace-plan-storyboard-video-storyboard.js";
 import { replacePlanStoryboardVideoVideoDef } from "./replace-plan-storyboard-video-video.js";
@@ -368,6 +369,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     acceptPlanSceneVideoSwapDef(fs),
     replacePlanSceneVideoSwapDef(fs),
     readPlanDef(fs),
+    readPlanProgressDef(),
     planStoryboardVideoDef(fs),
     replacePlanStoryboardVideoStoryboardDef(fs),
     replacePlanStoryboardVideoVideoDef(fs),

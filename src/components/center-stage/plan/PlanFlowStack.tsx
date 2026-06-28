@@ -18,6 +18,7 @@ import { FlowColumn, FlowStep } from './flow/FlowColumn';
 import { FlowConnector } from './flow/FlowConnector';
 import { useCharSwapActions } from './useCharSwapActions';
 import { useSceneFilesBootstrap } from './useSceneFilesBootstrap';
+import { usePlanAnalysisProgress } from './usePlanAnalysisProgress';
 import { formatTimecode, type PlanSidecar } from './charSwapModel';
 import { SourceFrameNode } from './nodes/SourceFrameNode';
 import { SwapGenNode } from './nodes/SwapGenNode';
@@ -94,6 +95,11 @@ export function PlanFlowStack({
   // plan — not only while generating.
   const showAnalysis =
     failed || generating || draft || Boolean(sidecar.analysis_prompt?.trim()) || Boolean(sidecar.user_context?.trim());
+
+  // Live streaming preview of the analysis model's output — polled only while
+  // generating, rendered inside the analysis node ("show your work").
+  const analysisProgress = usePlanAnalysisProgress({ callTool, projectSlug, active: generating });
+
   const regenPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelledRef = useRef(false);
   useEffect(() => {
@@ -254,6 +260,7 @@ export function PlanFlowStack({
               userContext={sidecar.user_context}
               systemPrompt={sidecar.analysis_prompt}
               model={sidecar.model}
+              analysisProgress={analysisProgress}
             />
           </FlowStep>
         )}
