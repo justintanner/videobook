@@ -122,6 +122,32 @@ export async function collectGeminiFlashContent(
   return text.trim();
 }
 
+// Kie's streaming endpoint intermittently returns a 500 "Server exception"
+// envelope mid-stream (~1 in 3 in practice). That error surfaces during stream
+// consumption — outside the provider's withRetry — so it isn't retried. Retry
+// the stream a couple of times, then fall back to a one-shot request, which is
+// reliable. A flaky stream thus degrades to a non-live request (the caller just
+// loses the progressive preview for that run) instead of failing the whole call.
+const STREAM_ATTEMPTS = 2;
+
+export async function invokeStreamingWithFallback(
+  invoke: (stream: boolean) => Promise<string>,
+): Promise<string> {
+  for (let attempt = 1; attempt <= STREAM_ATTEMPTS; attempt++) {
+    try {
+      const text = await invoke(true);
+      if (text.length > 0) return text;
+      throw new Error("Kie Gemini streamed no text content");
+    } catch (error) {
+      console.warn(
+        `[kie-gemini] streaming attempt ${attempt}/${STREAM_ATTEMPTS} failed: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  return invoke(false);
+}
+
 export async function callGeminiFlash(args: GeminiFlashRequest): Promise<string> {
   const provider = createKie({
     apiKey: args.apiKey,
@@ -139,14 +165,17 @@ export async function callGeminiFlash(args: GeminiFlashRequest): Promise<string>
   if (args.responseMimeType !== undefined) generationConfig.responseMimeType = args.responseMimeType;
   if (args.responseSchema !== undefined) generationConfig.responseSchema = toGeminiResponseSchema(args.responseSchema);
 
-  const result = await call({
-    // Stream only when the caller wants progressive deltas; one-shot otherwise.
-    stream: args.onDelta !== undefined,
-    contents: [{ role: "user", parts: args.parts }],
-    ...(Object.keys(generationConfig).length > 0 ? { generationConfig } : {}),
-  }, args.signal);
+  // onDelta fires only on the streaming path; the one-shot fallback runs silently.
+  const invoke = async (stream: boolean): Promise<string> => {
+    const result = await call({
+      stream,
+      contents: [{ role: "user", parts: args.parts }],
+      ...(Object.keys(generationConfig).length > 0 ? { generationConfig } : {}),
+    }, args.signal);
+    return collectGeminiFlashContent(result, stream ? args.onDelta : undefined);
+  };
 
-  const text = await collectGeminiFlashContent(result, args.onDelta);
+  const text = args.onDelta ? await invokeStreamingWithFallback(invoke) : await invoke(false);
   if (text.length === 0) throw new Error("Kie Gemini returned no text content");
   return text;
 }

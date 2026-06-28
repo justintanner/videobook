@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   geminiFlashResponseText,
   geminiFlashAuthFetch,
+  invokeStreamingWithFallback,
   normalizeGeminiJsonText,
   toGeminiResponseSchema,
 } from "./kie-gemini.js";
@@ -109,5 +110,39 @@ describe("geminiFlashAuthFetch", () => {
     });
 
     expect(capturedHeaders.get("Authorization")).toBe("Bearer original");
+  });
+});
+
+describe("invokeStreamingWithFallback", () => {
+  it("returns the streamed result when streaming succeeds", async () => {
+    const calls: boolean[] = [];
+    const invoke = async (stream: boolean) => {
+      calls.push(stream);
+      return stream ? "streamed" : "oneshot";
+    };
+    expect(await invokeStreamingWithFallback(invoke)).toBe("streamed");
+    expect(calls).toEqual([true]);
+  });
+
+  it("retries the stream, then falls back to one-shot on repeated stream failures", async () => {
+    const calls: boolean[] = [];
+    const invoke = async (stream: boolean) => {
+      calls.push(stream);
+      if (stream) throw new Error("Kie Gemini API error 500: Server exception, please try again later");
+      return "oneshot";
+    };
+    expect(await invokeStreamingWithFallback(invoke)).toBe("oneshot");
+    // Two streaming attempts, then a single one-shot fallback.
+    expect(calls).toEqual([true, true, false]);
+  });
+
+  it("treats an empty stream as a failure and falls back", async () => {
+    const calls: boolean[] = [];
+    const invoke = async (stream: boolean) => {
+      calls.push(stream);
+      return stream ? "" : "oneshot";
+    };
+    expect(await invokeStreamingWithFallback(invoke)).toBe("oneshot");
+    expect(calls).toEqual([true, true, false]);
   });
 });
