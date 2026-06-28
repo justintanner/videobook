@@ -59,22 +59,29 @@ describe('plan aspect helpers', () => {
 })
 
 describe('sourceSlotBox', () => {
-  it('keeps a landscape clip at full width and short height', () => {
-    // 16:9 at 176 wide → 99 tall, well under the 132 cap, so unchanged.
-    expect(sourceSlotBox(16 / 9, 176, 132)).toEqual({ width: 176, height: 99 })
+  // Fixed height (120), width from aspect, capped at maxW (176) — so the source
+  // sits at the same height as the character slots in the input row.
+  it('keeps the fixed height for every aspect', () => {
+    expect(sourceSlotBox(9 / 16, 120, 176).height).toBe(120)
+    expect(sourceSlotBox(16 / 9, 120, 176).height).toBe(120)
+    expect(sourceSlotBox(1, 120, 176).height).toBe(120)
   })
 
-  it('clamps a tall 9:16 clip to the height cap and shrinks its width', () => {
-    // Aspect-driven height (176 / 0.5625 = 313) exceeds the cap, so height is
-    // pinned to 132 and width derived (132 * 0.5625 = 74).
-    expect(sourceSlotBox(9 / 16, 176, 132)).toEqual({ width: 74, height: 132 })
+  it('derives a narrow width for a tall 9:16 clip', () => {
+    // 120 * 0.5625 = 67.5 → 68.
+    expect(sourceSlotBox(9 / 16, 120, 176)).toEqual({ width: 68, height: 120 })
   })
 
-  it('keeps a square clip within both bounds', () => {
-    expect(sourceSlotBox(1, 176, 132)).toEqual({ width: 132, height: 132 })
+  it('caps a wide landscape clip at maxW', () => {
+    // 120 * 1.778 = 213 → capped to 176.
+    expect(sourceSlotBox(16 / 9, 120, 176)).toEqual({ width: 176, height: 120 })
+  })
+
+  it('makes a square clip as wide as it is tall', () => {
+    expect(sourceSlotBox(1, 120, 176)).toEqual({ width: 120, height: 120 })
   })
 
   it('falls back to 16:9 for a non-positive ratio', () => {
-    expect(sourceSlotBox(0, 176, 132)).toEqual({ width: 176, height: 99 })
+    expect(sourceSlotBox(0, 120, 176)).toEqual({ width: 176, height: 120 })
   })
 })

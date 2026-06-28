@@ -2525,8 +2525,11 @@ function isAcceptableForSlot(payload: SidebarDragPayload, kind: PlanSlotKind): b
 
 // Source-slot pixel bounds: at most w-44 (176px) wide, capped at 132px tall so a
 // 9:16 clip renders short-and-narrow rather than towering over the input row.
+// All three input slots (source + the two characters) share one height so the
+// row reads as a uniform set; the source's width follows its clip aspect (capped
+// at the character-slot width), the characters keep the fixed w-44 box.
 const SOURCE_SLOT_MAX_W = 176;
-const SOURCE_SLOT_MAX_H = 132;
+const INPUT_SLOT_H = 120;
 
 export function PlanHeaderSlot({ label, kind, item, sourceAspect, onDrop }: {
   label: string;
@@ -2554,21 +2557,23 @@ export function PlanHeaderSlot({ label, kind, item, sourceAspect, onDrop }: {
     }
   };
   const src = item?.thumbnailSrc ?? item?.filePath ?? null;
-  // Source slots size to the clip's aspect, but a tall (portrait) clip would
-  // tower over the row — cap the height and derive a narrower width so it stays
-  // compact. Character slots keep the fixed 16:9 box (aspect-video, w-44).
+  // Every input slot is the same height (INPUT_SLOT_H). The source's width tracks
+  // its clip aspect so its orientation reads at a glance (portrait → narrow);
+  // the characters keep the fixed w-44 box. Content is letterboxed (object-contain)
+  // within the box, so a tall source no longer towers over the row.
   const sourceBox =
     kind === 'source' && sourceAspect
-      ? sourceSlotBox(sourceAspect.ratio, SOURCE_SLOT_MAX_W, SOURCE_SLOT_MAX_H)
+      ? sourceSlotBox(sourceAspect.ratio, INPUT_SLOT_H, SOURCE_SLOT_MAX_W)
       : null;
-  const slotStyle = sourceBox ? { width: sourceBox.width, height: sourceBox.height } : undefined;
+  const slotStyle = sourceBox
+    ? { width: sourceBox.width, height: sourceBox.height }
+    : { height: INPUT_SLOT_H };
   return (
     <div className="flex flex-col gap-1">
       <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300/50">{label}</span>
       <div
         className={cn(
           'relative mx-auto w-44 bg-zinc-900 border rounded overflow-hidden flex items-center justify-center transition-colors',
-          kind !== 'source' && 'aspect-video',
           dragActive ? 'border-emerald-300 ring-2 ring-emerald-300/40' : 'border-zinc-700/60',
         )}
         style={slotStyle}

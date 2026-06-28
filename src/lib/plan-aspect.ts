@@ -154,18 +154,13 @@ export interface SlotBox {
   height: number
 }
 
-// Pixel size for a plan source-input thumbnail. The slot is at most `maxW` wide;
-// a tall (portrait) clip would otherwise tower over the row, so when the
-// aspect-driven height exceeds `maxH` we clamp the height and derive the width —
-// portrait clips render short-and-narrow instead of full-width-and-tall.
-// `ratio` is width/height; a non-positive ratio falls back to 16:9.
-export function sourceSlotBox(ratio: number, maxW: number, maxH: number): SlotBox {
+// Pixel size for a plan source-input thumbnail. The slot is a fixed `height`
+// (so the source sits at the same height as the character slots in the input
+// row) with the width derived from the clip's aspect — a portrait clip renders
+// short-and-narrow, a landscape clip wider — capped at `maxW`. `ratio` is
+// width/height; a non-positive ratio falls back to 16:9.
+export function sourceSlotBox(ratio: number, height: number, maxW: number): SlotBox {
   const r = ratio > 0 && Number.isFinite(ratio) ? ratio : FALLBACK_RATIO
-  let width = maxW
-  let height = maxW / r
-  if (height > maxH) {
-    height = maxH
-    width = maxH * r
-  }
-  return { width: Math.round(width), height: Math.round(height) }
+  const width = Math.min(maxW, Math.round(height * r))
+  return { width, height }
 }
