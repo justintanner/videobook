@@ -54,52 +54,97 @@ type Scene = {
   frames: Array<{ name: string; t: number }>;
 };
 
-async function extractFrameJpeg(inputPath: string, timestamp: number, outPath: string): Promise<Buffer> {
+const FRAME_TAIL = ["-frames:v", "1", "-q:v", "2", "-update", "1"];
+
+// Run one ffmpeg single-frame grab. Returns the JPEG bytes, or null when ffmpeg
+// errors or writes an empty file — callers chain progressively safer seeks
+// rather than treating an empty grab as fatal.
+async function runFrameGrab(args: string[], outPath: string): Promise<Buffer | null> {
   try {
-    await execFileAsync(FFMPEG, [
-      "-y",
-      "-ss", String(timestamp),
-      "-i", inputPath,
-      "-frames:v", "1",
-      "-q:v", "2",
-      outPath,
-    ]);
-  } catch (error) {
-    const msg = error instanceof Error ? (error as Error & { stderr?: string }).stderr ?? error.message : String(error);
-    throw new Error(`ffmpeg failed at t=${timestamp}s: ${msg}`);
+    await execFileAsync(FFMPEG, args);
+  } catch {
+    return null;
   }
   const outStat = await stat(outPath).catch(() => null);
-  if (!outStat || outStat.size === 0) {
-    throw new Error(`ffmpeg produced no output at t=${timestamp}s`);
-  }
+  if (!outStat || outStat.size === 0) return null;
   return readFile(outPath);
 }
 
+// A frame at an exact timestamp known to be within the clip. Fast input-seek
+// first, then an accurate (decode-from-start) output-seek fallback for codecs —
+// notably AV1 — where input-seek near a boundary yields an empty packet.
+async function grabFrameAt(videoPath: string, timestamp: number, outPath: string): Promise<Buffer | null> {
+  return (
+    (await runFrameGrab(["-y", "-ss", String(timestamp), "-i", videoPath, ...FRAME_TAIL, outPath], outPath)) ??
+    (await runFrameGrab(["-y", "-i", videoPath, "-ss", String(timestamp), ...FRAME_TAIL, outPath], outPath))
+  );
+}
+
+// The clip's final frame, seeked relative to EOF so it never overshoots the last
+// decodable PTS. A container's duration can run past its last video frame (an
+// audio tail, or AV1 packaging), so an absolute seek to ~duration produces an
+// empty output; -sseof lands on a real frame regardless.
+async function grabLastFrame(videoPath: string, outPath: string): Promise<Buffer | null> {
+  return (
+    (await runFrameGrab(["-y", "-sseof", "-0.2", "-i", videoPath, ...FRAME_TAIL, outPath], outPath)) ??
+    (await grabFrameAt(videoPath, 0, outPath))
+  );
+}
+
+// Extract one scene frame to plan/sN-imageM-source.jpg. Best-effort per frame: a
+// failure logs and leaves that one frame as the client's "no source frame"
+// placeholder rather than aborting extraction of the others.
+async function writeSceneSourceFrame(
+  fs: VideocityFs,
+  projectSlug: string,
+  sceneIndex: number,
+  frameIndex: 1 | 2,
+  grab: (outPath: string) => Promise<Buffer | null>,
+): Promise<void> {
+  const fileName = `s${sceneIndex + 1}-image${frameIndex}-source.jpg`;
+  const temp = join(tmpdir(), `videocity-plan-${sceneIndex}-${frameIndex}-${Date.now()}.jpg`);
+  try {
+    const buf = await grab(temp);
+    if (!buf) {
+      console.warn(`[plan_visualization] ${fileName}: ffmpeg produced no frame`);
+      return;
+    }
+    const written = await fs.writeFile("plan", fileName, buf, projectSlug);
+    if (!written.ok) console.warn(`[plan_visualization] ${fileName}: ${written.error.message}`);
+  } finally {
+    await rm(temp, { force: true }).catch(() => {});
+  }
+}
+
+async function planFrameFileSet(fs: VideocityFs, projectSlug: string): Promise<Set<string>> {
+  const manifest = await fs.getManifest("plan", projectSlug, { includeDotfiles: false });
+  if (!manifest.ok) return new Set();
+  return new Set(manifest.value.files.map((f) => f.name));
+}
+
 // Per scene N (1-based), write plan/sN-image1-source.jpg (first frame) and
-// plan/sN-image2-source.jpg (last frame, ε before the boundary so we don't
-// fall off the end). The PlanViewer scene blocks address these via
-// `@plan/sN-imageM-source.jpg`.
-async function extractSceneSourceFrames(
+// plan/sN-image2-source.jpg (last frame). The final scene's last frame is taken
+// relative to EOF — its end equals the source duration, which can overshoot the
+// last real frame. The PlanViewer scene blocks address these via
+// `@plan/sN-imageM-source.jpg`. With `skipExisting`, only frames not already on
+// disk are extracted, so re-runs (the client's self-heal backfill) are idempotent.
+export async function extractSceneSourceFrames(
   fs: VideocityFs,
   projectSlug: string,
   videoPath: string,
   scenes: Array<{ start: number; end: number }>,
+  options: { skipExisting?: boolean } = {},
 ): Promise<void> {
+  const present = options.skipExisting ? await planFrameFileSet(fs, projectSlug) : new Set<string>();
   for (let i = 0; i < scenes.length; i++) {
-    const { start, end } = scenes[i];
-    const lastTs = Math.max(0, end - 0.05);
-    const tempFirst = join(tmpdir(), `videocity-plan-${i}-1-${Date.now()}.jpg`);
-    const tempLast = join(tmpdir(), `videocity-plan-${i}-2-${Date.now()}.jpg`);
-    try {
-      const firstBuf = await extractFrameJpeg(videoPath, start, tempFirst);
-      const lastBuf = await extractFrameJpeg(videoPath, lastTs, tempLast);
-      const w1 = await fs.writeFile("plan", `s${i + 1}-image1-source.jpg`, firstBuf, projectSlug);
-      if (!w1.ok) throw new Error(`scene ${i + 1} image1: ${w1.error.message}`);
-      const w2 = await fs.writeFile("plan", `s${i + 1}-image2-source.jpg`, lastBuf, projectSlug);
-      if (!w2.ok) throw new Error(`scene ${i + 1} image2: ${w2.error.message}`);
-    } finally {
-      await rm(tempFirst, { force: true }).catch(() => {});
-      await rm(tempLast, { force: true }).catch(() => {});
+    const isFinal = i === scenes.length - 1;
+    if (!present.has(`s${i + 1}-image1-source.jpg`)) {
+      await writeSceneSourceFrame(fs, projectSlug, i, 1, (out) => grabFrameAt(videoPath, scenes[i].start, out));
+    }
+    if (!present.has(`s${i + 1}-image2-source.jpg`)) {
+      const lastTs = Math.max(0, scenes[i].end - 0.05);
+      await writeSceneSourceFrame(fs, projectSlug, i, 2, (out) =>
+        isFinal ? grabLastFrame(videoPath, out) : grabFrameAt(videoPath, lastTs, out));
     }
   }
 }
@@ -185,6 +230,41 @@ async function markPlanFailed(
     awaiting_start: false,
   };
   await fs.writeFile("plan", ".plan.json", JSON.stringify(sidecar, null, 2), projectSlug);
+}
+
+type EnsurePlanSourceFramesPayload = {
+  type: "ensure_plan_source_frames";
+  projectSlug: string;
+};
+
+// Idempotent backfill: extract any per-scene source frames missing from a
+// finished plan (e.g. a flaky ffmpeg run at /plan-vis time left them out, or the
+// plan predates source-frame extraction). Reads the committed .plan.json for the
+// scene boundaries + source asset, then fills only the frames not already on
+// disk. The client's scene-files bootstrap calls this when a plan opens with
+// missing frames, so plans self-heal without a full re-vision.
+export function registerEnsurePlanSourceFramesJob(fs: VideocityFs): void {
+  registerJobHandler("ensure_plan_source_frames", async (payload) => {
+    const { projectSlug } = payload as EnsurePlanSourceFramesPayload;
+    const read = await fs.readMetadata<Record<string, unknown>>("plan", "plan", projectSlug);
+    if (!read.ok) return { success: true, extracted: 0, reason: "no plan sidecar" };
+
+    const sidecar = read.value;
+    const scenes = Array.isArray(sidecar.scenes)
+      ? (sidecar.scenes as Array<{ start: number; end: number }>)
+      : [];
+    const sourceAssetId = typeof sidecar.source_asset_id === "string" ? sidecar.source_asset_id : "";
+    if (scenes.length === 0 || !sourceAssetId) return { success: true, extracted: 0 };
+
+    const videoManifest = await fs.getManifest(sourceAssetId, projectSlug, { includeDotfiles: false });
+    if (!videoManifest.ok) throw new Error(videoManifest.error.message);
+    const videoFile = findVideoFile(videoManifest.value.files);
+    if (!videoFile) throw new Error(`No video file found in asset ${sourceAssetId}`);
+    const videoFsPath = join(videoManifest.value.path, videoFile.name);
+
+    await extractSceneSourceFrames(fs, projectSlug, videoFsPath, scenes, { skipExisting: true });
+    return { success: true };
+  });
 }
 
 export function registerPlanVisualizationJob(fs: VideocityFs): void {

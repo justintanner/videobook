@@ -8,7 +8,8 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { ImageOff } from 'lucide-react';
 import { usePlanFlow } from '../PlanFlowContext';
 import type { SourceFrameNodeData } from './nodeData';
-import { NodeFrame } from './nodeUi';
+import { NodeFrame, NODE_W } from './nodeUi';
+import { nodeImageHeight } from './nodeLayout';
 
 const MAX_RETRIES = 6;
 const RETRY_MS = 1500;
@@ -16,7 +17,7 @@ const RETRY_MS = 1500;
 // Inner image with bounded retry. Keyed by `baseSrc` in the parent so a new plan
 // or scene boundary remounts it and restarts the retries from zero — no
 // state-sync-from-props effect needed.
-function FrameImg({ baseSrc, label, aspectRatio }: { baseSrc: string; label: string; aspectRatio: string }) {
+function FrameImg({ baseSrc, label, heightPx }: { baseSrc: string; label: string; heightPx: number }) {
   const [retry, setRetry] = useState(0);
   const [exhausted, setExhausted] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -29,7 +30,7 @@ function FrameImg({ baseSrc, label, aspectRatio }: { baseSrc: string; label: str
   return (
     <div
       className="relative w-full rounded bg-black/60 border border-zinc-800 overflow-hidden flex items-center justify-center"
-      style={{ aspectRatio }}
+      style={{ height: heightPx }}
     >
       {exhausted ? (
         <div className="flex flex-col items-center gap-1 text-zinc-600">
@@ -57,9 +58,12 @@ function FrameImg({ baseSrc, label, aspectRatio }: { baseSrc: string; label: str
 function SourceFrameNodeImpl({ data }: { data: SourceFrameNodeData }) {
   const { projectSlug, sourceAspect } = usePlanFlow();
   const baseSrc = `/files/${projectSlug}/plan/s${data.sceneIndex + 1}-image${data.frameIndex}-source.jpg?v=${data.cacheBust}`;
+  // Cap the height the way the sibling swap/video nodes do, so a 9×16 source
+  // doesn't render a towering frame (the slot was previously height-unbounded).
+  const heightPx = nodeImageHeight(NODE_W, sourceAspect);
   return (
     <NodeFrame label={data.label} accent="border-zinc-600/60">
-      <FrameImg key={baseSrc} baseSrc={baseSrc} label={data.label} aspectRatio={sourceAspect.css} />
+      <FrameImg key={baseSrc} baseSrc={baseSrc} label={data.label} heightPx={heightPx} />
     </NodeFrame>
   );
 }

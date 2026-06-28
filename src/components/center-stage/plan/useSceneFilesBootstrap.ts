@@ -90,6 +90,19 @@ async function bootstrapSceneFiles(projectSlug: string, sidecar: PlanSidecar, ca
     }
   }
 
+  // Source frames (sN-imageM-source.jpg): extracted at /plan-vis time, but a
+  // flaky ffmpeg run (e.g. AV1 near-EOF) can leave them missing. Idempotently
+  // backfill any that aren't on disk so the scene nodes self-heal without a full
+  // re-vision. Best-effort — frame readiness doesn't gate clip/audio readiness.
+  const framesMissing = scenes.some((_, i) =>
+    !presentNames.has(`s${i + 1}-image1-source.jpg`) || !presentNames.has(`s${i + 1}-image2-source.jpg`));
+  if (framesMissing) {
+    const framesResult = await callTool('ensure_plan_source_frames', { project_slug: projectSlug });
+    if (framesResult.isError) {
+      toast({ title: 'Source frame extraction failed', description: readErr(framesResult, 'ensure_plan_source_frames failed'), duration: 5000 });
+    }
+  }
+
   const allClipsOk = scenes.every((s) => s.clip_filename);
   return allClipsOk && allAudioOk;
 }
