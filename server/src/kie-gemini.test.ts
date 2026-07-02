@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { KieGemini35FlashStreamGenerateContentResult } from "@apicity/kie";
 import {
+  collectGeminiFlashContent,
   geminiFlashResponseText,
   geminiFlashAuthFetch,
   invokeStreamingWithFallback,
@@ -110,6 +112,58 @@ describe("geminiFlashAuthFetch", () => {
     });
 
     expect(capturedHeaders.get("Authorization")).toBe("Bearer original");
+  });
+});
+
+describe("collectGeminiFlashContent", () => {
+  const chunkFor = (text: string) => ({ candidates: [{ content: { parts: [{ text }] } }] });
+
+  async function* streamChunks(texts: string[]): AsyncGenerator<unknown> {
+    for (const t of texts) yield chunkFor(t);
+  }
+
+  // An async iterable that yields one chunk then stalls until `signal` aborts,
+  // at which point it rejects with the abort reason — mirroring how a real fetch
+  // body stream terminates the for-await when its signal is aborted.
+  function stallingStream(first: string, signal: AbortSignal): AsyncIterable<unknown> {
+    return {
+      [Symbol.asyncIterator]() {
+        let sent = false;
+        return {
+          next() {
+            if (!sent) {
+              sent = true;
+              return Promise.resolve({ value: chunkFor(first), done: false });
+            }
+            return new Promise((_resolve, reject) => {
+              if (signal.aborted) { reject(signal.reason); return; }
+              signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+            });
+          },
+        };
+      },
+    };
+  }
+
+  it("concatenates streamed chunks and fires onDelta cumulatively", async () => {
+    const deltas: string[] = [];
+    const text = await collectGeminiFlashContent(
+      streamChunks(["Hello", "World"]) as unknown as KieGemini35FlashStreamGenerateContentResult,
+      (t) => deltas.push(t),
+    );
+    expect(text).toBe("HelloWorld");
+    expect(deltas).toEqual(["Hello", "HelloWorld"]);
+  });
+
+  it("aborts a stalled stream after the idle timeout, preserving text seen so far", async () => {
+    const controller = new AbortController();
+    const deltas: string[] = [];
+    await expect(collectGeminiFlashContent(
+      stallingStream("partial", controller.signal) as unknown as KieGemini35FlashStreamGenerateContentResult,
+      (t) => deltas.push(t),
+      { ms: 20, onIdle: () => controller.abort(new Error("Kie stream idle")) },
+    )).rejects.toThrow("Kie stream idle");
+    expect(deltas).toEqual(["partial"]);
   });
 });
 

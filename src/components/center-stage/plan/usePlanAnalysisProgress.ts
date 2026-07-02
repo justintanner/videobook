@@ -15,6 +15,11 @@ const EMPTY: PlanAnalysisProgress = { status: 'idle', text: '' };
 
 const POLL_MS = 1000;
 
+// Hard safety cap on the number of polls per active window (~6 min at 1s). The
+// primary stop is `active` (=generating) going false; this ensures the hook can
+// never poll unbounded even if that flag is stuck true by a future logic change.
+const MAX_POLLS = 360;
+
 async function fetchProgress(
   callTool: UseMcpResult['callTool'],
   projectSlug: string,
@@ -47,11 +52,13 @@ export function usePlanAnalysisProgress({
     if (!active) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let tries = 0;
     const poll = async () => {
+      tries += 1;
       const next = await fetchProgress(callTool, projectSlug);
       if (cancelled) return;
       if (next) setProgress(next);
-      timer = setTimeout(() => { void poll(); }, POLL_MS);
+      if (tries < MAX_POLLS) timer = setTimeout(() => { void poll(); }, POLL_MS);
     };
     void poll();
     return () => {

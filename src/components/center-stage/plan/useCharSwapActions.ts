@@ -6,7 +6,8 @@
 // All gens go through existing MCP tools that enqueue server-side jobs; nothing
 // long-running runs here. The two propagation effects (extract_last_frame →
 // seed next scene's first frame) are the one sanctioned tool-call-in-effect —
-// idempotent and guarded per asset id, lifted verbatim from SceneBlock.
+// idempotent and guarded on the persisted target-frame state so tab-switch
+// remounts never re-fire them, lifted from SceneBlock.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { UseMcpResult } from 'use-mcp/react';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -297,8 +298,13 @@ export function useCharSwapActions(params: {
   const isVideoInFlight = useCallback((sceneIndex: number) => videoScenes.has(sceneIndex), [videoScenes]);
 
   // --- Last-frame propagation (sanctioned tool-call-in-effect) ---
-  // When a scene's video reaches 'ready', extract its last frame and seed the
-  // next scene's first frame. One-shot per video asset id.
+  // When a scene's video reaches 'ready' AND the next scene's frame-1 is still
+  // unresolved, extract this video's last frame and seed that frame-1 for
+  // continuity. The durable guard (next frame-1 already resolved) makes this
+  // idempotent across tab-switch remounts — a fully-seeded plan reopens with
+  // zero tool calls — and never overwrites a frame-1 the user set. The in-memory
+  // ref only dedups within a single mount while the async extract→seed is in
+  // flight (before the seed lands in the sidecar).
   const propagatedRef = useRef<Set<string>>(new Set());
   const [pendingProps, setPendingProps] = useState<Array<{ imgAssetId: string; targetSceneIndex: number }>>([]);
 
@@ -306,7 +312,11 @@ export function useCharSwapActions(params: {
     sidecar.scenes.forEach((scene, index) => {
       const vidId = scene.swap?.video;
       if (!vidId) return;
-      if (index + 1 >= sidecar.scenes.length) return;
+      const next = sidecar.scenes[index + 1];
+      if (!next) return;
+      // Durable guard: never touch a downstream frame-1 that's already resolved
+      // (a prior seed, a manual/auto swap, or an explicit "use source").
+      if (next.swap?.image1 || next.frame_source?.image1) return;
       if (propagatedRef.current.has(vidId)) return;
       const item = mediaItems.find((m) => m.id === vidId);
       if (!item || item.status !== 'ready') return;

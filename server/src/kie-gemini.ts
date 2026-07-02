@@ -104,9 +104,13 @@ export function geminiFlashResponseText(response: KieGemini35FlashGenerateConten
 // Collect the full text from a Gemini result, whether it's a single response
 // (stream:false) or an async iterable of SSE chunks (stream:true). When the
 // result streams, `onDelta` fires with the cumulative text after each chunk.
+// `idle` arms a timer (reset on every chunk) that calls `onIdle` when no chunk
+// arrives within `ms` — the caller wires that to abort a hung stream so the
+// for-await throws instead of blocking forever.
 export async function collectGeminiFlashContent(
   result: KieGemini35FlashStreamGenerateContentResult,
   onDelta?: (textSoFar: string) => void,
+  idle?: { ms: number; onIdle: () => void },
 ): Promise<string> {
   if (!isGeminiFlashAsyncIterable(result)) {
     const text = geminiFlashResponseText(result);
@@ -115,9 +119,21 @@ export async function collectGeminiFlashContent(
   }
 
   let text = "";
-  for await (const chunk of result) {
-    text += geminiFlashResponseText(chunk);
-    onDelta?.(text);
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const arm = () => {
+    if (!idle) return;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(idle.onIdle, idle.ms);
+  };
+  try {
+    arm();
+    for await (const chunk of result) {
+      arm();
+      text += geminiFlashResponseText(chunk);
+      onDelta?.(text);
+    }
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   return text.trim();
 }
@@ -129,6 +145,14 @@ export async function collectGeminiFlashContent(
 // reliable. A flaky stream thus degrades to a non-live request (the caller just
 // loses the progressive preview for that run) instead of failing the whole call.
 const STREAM_ATTEMPTS = 2;
+
+// Kie's streaming endpoint can also stall mid-flight without erroring — the SSE
+// connection stays open but no further chunk arrives. The provider timeout
+// covers request initiation, not inter-chunk gaps, so an idle stream would hang
+// the for-await (and, for the plan job, wedge the source asset's analyze lease +
+// a queue slot indefinitely). Abort the stream after this many ms of silence so
+// the hang surfaces as a failed attempt and degrades to the one-shot fallback.
+const STREAM_IDLE_MS = 60_000;
 
 export async function invokeStreamingWithFallback(
   invoke: (stream: boolean) => Promise<string>,
@@ -166,13 +190,27 @@ export async function callGeminiFlash(args: GeminiFlashRequest): Promise<string>
   if (args.responseSchema !== undefined) generationConfig.responseSchema = toGeminiResponseSchema(args.responseSchema);
 
   // onDelta fires only on the streaming path; the one-shot fallback runs silently.
+  // Each attempt gets its own AbortController so the streaming idle-timeout can
+  // abort a hung stream without disturbing the (external) caller signal or later
+  // attempts. The one-shot fallback runs without an idle timeout — it relies on
+  // the provider's request timeout instead.
   const invoke = async (stream: boolean): Promise<string> => {
+    const controller = new AbortController();
+    const signal = args.signal
+      ? AbortSignal.any([args.signal, controller.signal])
+      : controller.signal;
     const result = await call({
       stream,
       contents: [{ role: "user", parts: args.parts }],
       ...(Object.keys(generationConfig).length > 0 ? { generationConfig } : {}),
-    }, args.signal);
-    return collectGeminiFlashContent(result, stream ? args.onDelta : undefined);
+    }, signal);
+    return collectGeminiFlashContent(
+      result,
+      stream ? args.onDelta : undefined,
+      stream
+        ? { ms: STREAM_IDLE_MS, onIdle: () => controller.abort(new Error(`Kie stream idle > ${STREAM_IDLE_MS}ms`)) }
+        : undefined,
+    );
   };
 
   const text = args.onDelta ? await invokeStreamingWithFallback(invoke) : await invoke(false);

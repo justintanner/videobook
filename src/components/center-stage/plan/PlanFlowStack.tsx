@@ -7,7 +7,7 @@
 // → swap frames → video. Owns the shared actions hook, the clip/audio bootstrap,
 // the scene-arrival poll, and the regenerate-from-new-inputs poll.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import type { UseMcpResult } from 'use-mcp/react';
 import { toast } from '@/hooks/useToast';
 import type { MediaItem } from '@/components/sidebar/types';
@@ -83,13 +83,19 @@ export function PlanFlowStack({
   // shows the job underway (so the loader/poll take over before the sidecar's
   // awaiting_start flag clears).
   const [starting, setStarting] = useState(false);
+  // `timedOut` bridges a scene-arrival poll that exhausted its budget without the
+  // plan ever landing (or failing). It stops the spinner + live-progress poll and
+  // surfaces a "taking longer than expected" notice with a Keep-checking action,
+  // instead of spinning forever. Cleared on any fresh generate/regenerate.
+  const [timedOut, setTimedOut] = useState(false);
   // Draft: prepared (skeleton written) but the vision job hasn't been enqueued —
   // the user reads the prompt and clicks Generate. We don't poll while in draft.
   // A regenerate-from-new-inputs is an explicit immediate gen, so it leaves draft.
   const draft = building && Boolean(sidecar.awaiting_start) && !failed && !starting && !regenerating;
   // `generating` drives the analysis block's loader/force-expand: a started first
   // build (no scenes yet, not draft) or an in-flight regenerate from new inputs.
-  const generating = !failed && ((building && !draft) || regenerating);
+  // A timeout clears it so the spinner + progress poll stop.
+  const generating = !failed && !timedOut && ((building && !draft) || regenerating);
   // The analysis block stays in the flow whenever there's a prompt to show (or a
   // gen/draft is in play), so the analysis prompt is discoverable in a finished
   // plan — not only while generating.
@@ -117,6 +123,7 @@ export function PlanFlowStack({
     if (regenerating) return;
     const target = `${next.sourceId}|${next.charAId},${next.charBId}`;
     setRegenerating(true);
+    setTimedOut(false);
     const result = await callTool('plan_visualization', {
       source_asset_id: next.sourceId,
       project_slug: projectSlug,
@@ -156,6 +163,11 @@ export function PlanFlowStack({
       }
       if (tries >= MAX_TRIES) {
         setRegenerating(false);
+        toast({
+          title: 'Regenerate is taking longer than expected',
+          description: 'The job may still be running — reopen the plan to check.',
+          duration: 6000,
+        });
         return;
       }
       regenPollRef.current = setTimeout(() => { void poll(); }, 3000);
@@ -173,6 +185,7 @@ export function PlanFlowStack({
     const b = sidecar.characters[1]?.asset_id;
     if (!source || !a || !b) return;
     setStarting(true);
+    setTimedOut(false);
     const result = await callTool('plan_visualization', {
       source_asset_id: source,
       project_slug: projectSlug,
@@ -199,7 +212,7 @@ export function PlanFlowStack({
   // in draft (no job running). setState lives in the async closure so the effect
   // body stays setState-free (react-hooks lint).
   useEffect(() => {
-    if (sidecar.scenes.length > 0 || draft || failed) return;
+    if (sidecar.scenes.length > 0 || draft || failed || timedOut) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let tries = 0;
@@ -218,14 +231,26 @@ export function PlanFlowStack({
           return;
         }
       }
-      if (tries < MAX_TRIES) timer = setTimeout(() => { void attempt(); }, 3000);
+      if (tries < MAX_TRIES) {
+        timer = setTimeout(() => { void attempt(); }, 3000);
+      } else {
+        // Budget exhausted with no scenes and no failure reported — stop the
+        // spinner/poll and let the user decide (Keep checking or regenerate)
+        // rather than spin forever.
+        setTimedOut(true);
+        toast({
+          title: 'Plan is taking longer than expected',
+          description: 'The job may still be running. Keep checking, or regenerate.',
+          duration: 6000,
+        });
+      }
     };
     timer = setTimeout(() => { void attempt(); }, 3000);
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [sidecar.scenes.length, draft, failed, callTool, projectSlug, onSidecarUpdate]);
+  }, [sidecar.scenes.length, draft, failed, timedOut, callTool, projectSlug, onSidecarUpdate]);
 
   return (
     <PlanFlowProvider value={ctx}>
@@ -262,6 +287,28 @@ export function PlanFlowStack({
               model={sidecar.model}
               analysisProgress={analysisProgress}
             />
+          </FlowStep>
+        )}
+
+        {/* Timeout → the scene-arrival poll gave up before the plan landed. Offer
+            an explicit re-check (re-arms the poll with a fresh budget) instead of
+            an endless spinner; the job may still be running server-side. */}
+        {timedOut && <FlowConnector height={40} />}
+        {timedOut && (
+          <FlowStep>
+            <div className="flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={() => { setTimedOut(false); }}
+                className="flex items-center gap-2 rounded-md border border-amber-500/60 bg-amber-500/15 px-5 py-2.5 font-mono text-sm font-bold uppercase tracking-wider text-amber-100 transition-colors hover:bg-amber-500/25"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Keep checking
+              </button>
+              <span className="font-mono text-[10px] text-zinc-500">
+                generation is taking longer than expected — the job may still be running
+              </span>
+            </div>
           </FlowStep>
         )}
 
