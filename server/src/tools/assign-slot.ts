@@ -37,7 +37,9 @@ async function enqueueLazyAnalysis(
   if (fileNames.has(".original.analysis.json")) return null;
 
   if (isVideo) {
-    const jobId = `auto-analyze-${asset.id}-${Date.now()}`;
+    // Stable dedupe key, shared with enqueueLazyAnalysisIfSlotted: a slot
+    // re-drop racing a re-process revival yields one analyze job, not two.
+    const jobId = `auto-analyze-${asset.id}`;
     await queue.enqueue(jobId, {
       type: "analyze_video",
       assetId: asset.id,
@@ -55,7 +57,7 @@ async function enqueueLazyAnalysis(
   const ext = originalFile.name.slice(originalFile.name.lastIndexOf("."));
   if (SKIP_CROP_EXTENSIONS.has(ext.toLowerCase())) return null;
 
-  const jobId = `auto-describe-${asset.id}-${Date.now()}`;
+  const jobId = `auto-describe-${asset.id}`;
   await queue.enqueue(jobId, {
     type: "describe_image",
     sourceAssetId: asset.id,

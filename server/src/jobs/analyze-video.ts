@@ -183,7 +183,10 @@ async function maybeEnqueueAutoTranscribe(
   const audioFile = findAudioFile(manifest.files, assetId);
   if (!audioFile) return;
 
-  const jobId = `auto-transcribe-${assetId}-${Date.now()}`;
+  // Stable dedupe key, shared with sync's auto-transcribe: when this trigger
+  // races an overlapping sync poll, the queue collapses both onto one job
+  // instead of paying for two ElevenLabs transcriptions.
+  const jobId = `auto-transcribe-${assetId}`;
   await queue.enqueue(jobId, {
     type: "transcribe",
     audioPath: join(manifest.path, audioFile.name),

@@ -50,6 +50,10 @@ type LazyRenderResult = {
   jobId: string;
 };
 
+type LazyAnalysisResult = {
+  jobId: string;
+};
+
 function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   if (Array.isArray(raw)) return { slots: raw, render: "landscape" };
   const render = Array.isArray(raw.render)
@@ -107,6 +111,47 @@ function nullableString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+/**
+ * Revive the slot-drop vision analysis for a timeline-assigned video whose
+ * .original.analysis.json is missing — the state a force re-process (trim,
+ * re-download) leaves behind after it invalidates the analysis sidecars.
+ * assign_slot only fires on slot drop, so without this revival the auto
+ * pipeline (analyze_video → ElevenLabs transcribe → lazy render) stays wedged
+ * and render_timeline reports missing_renders until a manual /render.
+ */
+export async function enqueueLazyAnalysisIfSlotted(
+  fs: VideocityFs,
+  projectSlug: string,
+  assetId: string,
+): Promise<LazyAnalysisResult | null> {
+  if (!assetId.startsWith("vid-")) return null;
+  // Same provider gate as assign_slot's lazy analysis: truthy env check (not
+  // getApiKey) so placeholder keys used in tests pass; the real placeholder
+  // defense lives at the API call inside analyze-video.
+  if (!process.env.KIE_API_KEY) return null;
+
+  const timelineResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", projectSlug);
+  if (!timelineResult.ok) return null;
+  const config = normalizeConfig(timelineResult.value);
+  if (!config.slots.some((slot) => slot.slug === assetId)) return null;
+
+  const manifestResult = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+  if (!manifestResult.ok) return null;
+  const fileNames = new Set(manifestResult.value.files.map((f) => f.name));
+  if (fileNames.has(".original.analysis.json")) return null;
+
+  // Stable dedupe key: concurrent triggers collapse onto one queued job.
+  const jobId = `auto-analyze-${assetId}`;
+  await queue.enqueue(jobId, {
+    type: "analyze_video",
+    assetId,
+    assetDir: manifestResult.value.path,
+    projectSlug,
+    hasTranscription: fileNames.has(".analysis.gpt4otrans.json"),
+  });
+  return { jobId };
+}
+
 async function isRenderAlreadyQueued(
   fs: VideocityFs,
   projectSlug: string,
@@ -147,7 +192,9 @@ export async function enqueueLazyTimelineRender(
   const action = renderActions[0];
   const stored = await readStoredRenderDefaults(fs, assetId, projectSlug, orientation);
   const subtitlesEnabled = action.hasElevenlabs && stored.subtitlesEnabled !== false;
-  const jobId = `auto-render-${assetId}-${orientation}-${Date.now()}`;
+  // Stable dedupe key: concurrent triggers (job-completion hooks racing a
+  // sync poll) collapse onto one queued render instead of double-rendering.
+  const jobId = `auto-render-${assetId}-${orientation}`;
 
   await queue.enqueue(jobId, {
     type: "render_project",

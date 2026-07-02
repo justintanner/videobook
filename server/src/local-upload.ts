@@ -212,6 +212,13 @@ async function uploadLocal(
       if (assetId.startsWith("vid-")) {
         const videoPath = path.join(assetPath, writtenFilename);
         const jobId = `process-video-${assetId}-${Date.now()}`;
+        // Downstream speech-to-text stays enqueued even when the caller waits:
+        // it is fire-and-forget (separate job id), so enqueueAndWait still
+        // returns as soon as processing finishes. Skipping it here left MCP
+        // upload_file videos permanently transcript-less, which wedged the
+        // slot auto-render pipeline for audio videos (hasAudio + no
+        // .analysis.gpt4otrans.json blocks findAutoRenderActions forever).
+        // Tests stay deterministic via process-video's NODE_ENV gate.
         const payload = {
           type: "process_video",
           videoPath,
@@ -219,7 +226,6 @@ async function uploadLocal(
           assetDir: assetPath,
           projectSlug: args.projectSlug,
           provenance,
-          ...(args.waitForProcessing ? { skipDownstreamJobs: true } : {}),
         } as unknown as Record<string, unknown>;
         processingError = await runProcessingJob(jobId, payload, args.waitForProcessing);
       } else if (assetId.startsWith("img-")) {

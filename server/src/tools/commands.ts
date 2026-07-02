@@ -1410,7 +1410,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/clear-failed",
-    description: "Delete all assets with failed generations in the current project",
+    description: "Clean up failed work: delete failed-generation husks and clear error badges from assets that already have media",
     example: "/clear-failed",
     category: "action",
     icon: "Trash2",

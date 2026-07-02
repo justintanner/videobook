@@ -8,7 +8,7 @@ import { getApiKey } from "../api-key.js";
 import { probeVideo } from "../ffmpeg.js";
 import { withLocalLease } from "./_lease.js";
 import { chunkStarts, chunkLength, extractAudioChunk } from "./_audio-chunks.js";
-import { enqueueLazyTimelineRender } from "../lazy-render.js";
+import { enqueueLazyAnalysisIfSlotted, enqueueLazyTimelineRender } from "../lazy-render.js";
 
 // gpt-4o-mini-transcribe has two ceilings: it rejects requests once
 // instructions + audio exceed its input budget (~25 minutes of audio), and it
@@ -108,6 +108,15 @@ export async function runTranscribeVideoAudio(
       return { success: false, reason };
     }
   });
+  // A force re-process (trim, re-download) invalidated the vision analysis;
+  // for slotted assets re-run it here — after speech-to-text, so the analyze
+  // prompt includes the fresh transcript — which revives auto-transcribe and
+  // the lazy render below (that call skips while the analysis is missing).
+  try {
+    await enqueueLazyAnalysisIfSlotted(fs, projectSlug, assetId);
+  } catch (err) {
+    void err;
+  }
   try {
     await enqueueLazyTimelineRender(fs, projectSlug, assetId);
   } catch (err) {

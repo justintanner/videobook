@@ -99,6 +99,45 @@ describe("clear_failed_tasks tool", () => {
     expect(healthyManifest.isError).toBeFalsy();
   });
 
+  it("keeps a materialized asset and clears its error row instead of deleting", async () => {
+    // A completed video whose sidecar job (e.g. ElevenLabs transcribe) failed:
+    // it has real media, so /clear-failed must not destroy it.
+    const created = await fs.createAsset("vid", "real clip", "test-proj");
+    if (!created.ok) throw new Error(created.error.message);
+    const videoAsset = created.value.assetId;
+    const written = await fs.writeFile(videoAsset, "original.mp4", Buffer.from("fake-video"), "test-proj");
+    if (!written.ok) throw new Error(written.error.message);
+    const errWritten = await fs.generationErrors.write("test-proj", videoAsset, {
+      message: "ElevenLabs API error 401: Invalid API key",
+    });
+    if (!errWritten.ok) throw new Error(errWritten.error.message);
+
+    const husk = await createImageAsset(fs, "test-proj", "dead gen");
+    await writeSyntheticPendingTask(fs, "test-proj", husk, "task-husk");
+    await failPendingTaskAndLog(fs, "test-proj", husk, "task-husk", { message: "boom" });
+
+    const res = await client.callTool({
+      name: "clear_failed_tasks",
+      arguments: { project_slug: "test-proj" },
+    });
+    expect(res.isError).toBeFalsy();
+    const parsed = JSON.parse(
+      (res.content as Array<{ type: string; text: string }>)[0].text,
+    ) as { cleared: string[]; error_cleared: string[]; errors: unknown[] };
+    expect(parsed.cleared).toEqual([husk]);
+    expect(parsed.error_cleared).toEqual([videoAsset]);
+    expect(parsed.errors).toEqual([]);
+
+    // Video asset survives with its media; error row is gone.
+    const manifest = await client.callTool({
+      name: "asset_manifest",
+      arguments: { asset_id: videoAsset, project_slug: "test-proj" },
+    });
+    expect(manifest.isError).toBeFalsy();
+    const errorRow = await fs.generationErrors.read("test-proj", videoAsset);
+    expect(errorRow.ok && errorRow.value).toBeNull();
+  });
+
   it("returns empty lists when there are no failed assets", async () => {
     await createImageAsset(fs, "test-proj", "only good");
 

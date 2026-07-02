@@ -837,9 +837,11 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
   // is gated on .original.analysis.json already existing — i.e. only kicks in
   // for assets the user has actually slotted.
 
-  // Auto-pipeline: advance analyzed videos through transcription
+  // Auto-pipeline: advance analyzed videos through transcription. Stable
+  // dedupe key, shared with analyze-video's auto-transcribe trigger: racing
+  // enqueues collapse onto one queued job instead of transcribing twice.
   for (const action of transcribeActions) {
-    const jobId = `auto-transcribe-${action.assetId}-${Date.now()}`;
+    const jobId = `auto-transcribe-${action.assetId}`;
     await queue.enqueue(jobId, {
       type: "transcribe",
       audioPath: action.audioPath,

@@ -3,6 +3,7 @@ import { extname, join } from "node:path";
 import { mkdir, readFile as fsReadFile, rm } from "node:fs/promises";
 import { registerJobHandler, queue } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
+import { enqueueLazyAnalysisIfSlotted } from "../lazy-render.js";
 import { probeVideo, runFfmpeg, extractWaveform, isThumbnailBlank, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
 
@@ -199,13 +200,26 @@ export function registerProcessVideoJob(fs: VideocityFs): void {
 
     // Speech-to-text stays eager: cheap (gpt-4o-mini-transcribe) and useful as
     // a standalone artifact even if the asset never lands in a slot. Vision
-    // analysis (Gemini) is gated to slot drop in tools/assign-slot.ts.
-    if (process.env.NODE_ENV !== "test" && !skipDownstreamJobs && probe.hasAudio) {
-      const transcribeJobId = `transcribe-video-audio-${assetId}-${Date.now()}`;
-      await queue.enqueue(transcribeJobId, {
-        type: "transcribe_video_audio",
-        videoPath: activeVideoPath, assetId, assetDir, projectSlug,
-      } as unknown as Record<string, unknown>);
+    // analysis (Gemini) is gated to slot drop in tools/assign-slot.ts — plus
+    // the slot-gated revival below for re-processed (trimmed/re-downloaded)
+    // videos, whose analysis sidecar was just invalidated.
+    if (process.env.NODE_ENV !== "test" && !skipDownstreamJobs) {
+      if (probe.hasAudio) {
+        const transcribeJobId = `transcribe-video-audio-${assetId}-${Date.now()}`;
+        await queue.enqueue(transcribeJobId, {
+          type: "transcribe_video_audio",
+          videoPath: activeVideoPath, assetId, assetDir, projectSlug,
+        } as unknown as Record<string, unknown>);
+      } else {
+        // Silent video: no transcribe job will run, so revive the slot-drop
+        // vision analysis here; transcribe_video_audio's tail owns it for
+        // videos with audio (after the fresh transcript lands).
+        try {
+          await enqueueLazyAnalysisIfSlotted(fs, projectSlug, assetId);
+        } catch {
+          // best-effort — analysis revival must not fail processing
+        }
+      }
     }
 
       return { success: true, width, height, duration, frame_count: frameCount };

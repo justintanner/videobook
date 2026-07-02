@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { VideocityFs } from "videocity-engine";
 import { createFsForTest } from "./fs.js";
-import { enqueueLazyTimelineRender } from "./lazy-render.js";
+import { enqueueLazyAnalysisIfSlotted, enqueueLazyTimelineRender } from "./lazy-render.js";
 import { queue } from "./queue.js";
 
 describe("enqueueLazyTimelineRender", () => {
@@ -51,7 +51,9 @@ describe("enqueueLazyTimelineRender", () => {
 
     const result = await enqueueLazyTimelineRender(fs, projectSlug, assetId);
 
-    expect(result?.jobId).toContain(`auto-render-${assetId}-portrait`);
+    // Exact stable id: it doubles as the queue dedupe key, so racing
+    // triggers collapse onto one render job.
+    expect(result?.jobId).toBe(`auto-render-${assetId}-portrait`);
     expect(enqueue).toHaveBeenCalledTimes(1);
     const payload = enqueue.mock.calls[0][1];
     expect(payload.type).toBe("render_project");
@@ -99,6 +101,106 @@ describe("enqueueLazyTimelineRender", () => {
     const assetId = await createVideoAsset();
 
     const result = await enqueueLazyTimelineRender(fs, projectSlug, assetId);
+
+    expect(result).toBeNull();
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+});
+
+describe("enqueueLazyAnalysisIfSlotted", () => {
+  let fs: VideocityFs;
+  let tempDir: string;
+  const projectSlug = "test-proj";
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-lazy-analysis-test-"));
+    fs = createFsForTest(tempDir);
+    vi.stubEnv("KIE_API_KEY", "test-key");
+    const project = await fs.createProject(projectSlug);
+    if (!project.ok) throw new Error(project.error.message);
+  });
+
+  afterEach(async () => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  // Mirrors the state a trim leaves behind: video re-processed (frames and
+  // speech-to-text fresh) but the vision analysis sidecar deleted.
+  async function createTrimmedVideoAsset(): Promise<string> {
+    const created = await fs.createAsset("vid", "clip", projectSlug);
+    if (!created.ok) throw new Error(created.error.message);
+    const assetId = created.value.assetId;
+    const writes = await Promise.all([
+      fs.writeFile(assetId, "original.mp4", Buffer.from("fake-video"), projectSlug),
+      fs.writeFile(assetId, ".analysis.gpt4otrans.json", Buffer.from(JSON.stringify({ text: "real spoken words" })), projectSlug),
+    ]);
+    for (const write of writes) {
+      if (!write.ok) throw new Error(write.error.message);
+    }
+    return assetId;
+  }
+
+  async function assignToTimeline(assetId: string): Promise<void> {
+    const timeline = await fs.writeProjectMeta("timeline", {
+      slots: [{ slug: assetId }],
+      render: "landscape",
+    }, projectSlug);
+    if (!timeline.ok) throw new Error(timeline.error.message);
+  }
+
+  it("enqueues analyze_video for a slotted video missing its analysis", async () => {
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const assetId = await createTrimmedVideoAsset();
+    await assignToTimeline(assetId);
+
+    const result = await enqueueLazyAnalysisIfSlotted(fs, projectSlug, assetId);
+
+    // Exact stable id shared with assign_slot's trigger: it doubles as the
+    // queue dedupe key, so racing triggers collapse onto one analyze job.
+    expect(result?.jobId).toBe(`auto-analyze-${assetId}`);
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    const payload = enqueue.mock.calls[0][1];
+    expect(payload.type).toBe("analyze_video");
+    expect(payload.assetId).toBe(assetId);
+    expect(payload.projectSlug).toBe(projectSlug);
+    expect(payload.hasTranscription).toBe(true);
+  });
+
+  it("does not enqueue when the analysis already exists", async () => {
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const assetId = await createTrimmedVideoAsset();
+    const written = await fs.writeFile(
+      assetId, ".original.analysis.json",
+      Buffer.from(JSON.stringify({ burnedInSubtitles: null })), projectSlug,
+    );
+    if (!written.ok) throw new Error(written.error.message);
+    await assignToTimeline(assetId);
+
+    const result = await enqueueLazyAnalysisIfSlotted(fs, projectSlug, assetId);
+
+    expect(result).toBeNull();
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("does not enqueue when the asset is not assigned to the timeline", async () => {
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const assetId = await createTrimmedVideoAsset();
+
+    const result = await enqueueLazyAnalysisIfSlotted(fs, projectSlug, assetId);
+
+    expect(result).toBeNull();
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("does not enqueue without a vision provider key", async () => {
+    vi.stubEnv("KIE_API_KEY", "");
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const assetId = await createTrimmedVideoAsset();
+    await assignToTimeline(assetId);
+
+    const result = await enqueueLazyAnalysisIfSlotted(fs, projectSlug, assetId);
 
     expect(result).toBeNull();
     expect(enqueue).not.toHaveBeenCalled();
