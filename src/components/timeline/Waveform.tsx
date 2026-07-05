@@ -1,12 +1,20 @@
+import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import { downsamplePeaks } from '@/lib/waveform';
 
 interface WaveformProps {
   data: number[];
   className?: string;
 }
 
+// The strip is stretched with preserveAspectRatio="none" into a small area, so
+// bars beyond screen resolution add DOM nodes with no visible benefit. Cap the
+// bar count so a 1000-sample waveform doesn't emit 2000 <rect> nodes per clip.
+const MAX_BARS = 120;
+
 export function Waveform({ data, className }: WaveformProps) {
-  const w = 100 / data.length;
+  const bars = useMemo(() => downsamplePeaks(data, MAX_BARS), [data]);
+  const w = 100 / bars.length;
   return (
     <div className={cn('relative', className)}>
       <svg
@@ -14,7 +22,7 @@ export function Waveform({ data, className }: WaveformProps) {
         preserveAspectRatio="none"
         className="absolute inset-0 w-full h-full opacity-40 blur-[2px]"
       >
-        {data.map((h, i) => {
+        {bars.map((h, i) => {
           const barH = Math.max(2, h * 38);
           return (
             <rect
@@ -34,7 +42,7 @@ export function Waveform({ data, className }: WaveformProps) {
         preserveAspectRatio="none"
         className="relative w-full h-full"
       >
-        {data.map((h, i) => {
+        {bars.map((h, i) => {
           const barH = Math.max(2, h * 38);
           const opacity = 0.3 + h * 0.7;
           return (

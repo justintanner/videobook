@@ -1,5 +1,6 @@
-import type { RefObject } from 'react';
+import { useMemo, type RefObject } from 'react';
 import { cn } from '@/lib/utils';
+import { downsamplePeaks } from '@/lib/waveform';
 import type { FrameBadge, SnapMarker, TrimMode, TrimRange } from './types';
 import { formatDurationMS } from './utils';
 import { getModeClasses } from './mode-classes';
@@ -134,11 +135,16 @@ export function Waveform({
   );
 }
 
+// The trim strip is wide and interactive, so keep more detail than the tiny
+// timeline strips — but still cap so a 1000-sample source isn't 1000 DOM nodes.
+const TRIM_MAX_BARS = 400;
+
 function WaveformBars({ data }: { data: number[] }) {
-  const maxVal = Math.max(...data, 1);
+  const bars = useMemo(() => downsamplePeaks(data, TRIM_MAX_BARS), [data]);
+  const maxVal = Math.max(...bars, 1);
   return (
     <div className="flex items-end w-full h-full gap-[0.5px] px-px">
-      {data.map((val, i) => (
+      {bars.map((val, i) => (
         <div
           key={i}
           className="flex-1 min-w-0 bg-violet-500/50 rounded-t-[0.5px]"
