@@ -51,7 +51,7 @@ interface StoryboardVideoPlanSidecar {
   storyboard_asset_id?: string | null;
   video_asset_id?: string | null;
   storyboard_model: 'generate_gpt_image';
-  video_model: 'generate_seedance2_video' | 'generate_seedance2_fast_video';
+  video_model: 'generate_seedance2_video' | 'generate_seedance2_fast_video' | 'generate_seedance2_mini_video';
   duration_s: number;
   aspect_ratio: '16:9';
   resolution: '720p';
@@ -362,7 +362,10 @@ function PlanEmptyState({ onBackToTemplates }: { onBackToTemplates: () => void }
 }
 
 function videoModelFromTool(toolName: string | undefined): VideoModel {
-  return toolName === 'generate_seedance2_fast_video' ? 'seedance-2-fast' : 'seedance-2-ref';
+  if (toolName === 'generate_seedance2_fast_video') return 'seedance-2-fast';
+  if (toolName === 'generate_seedance2_mini_video') return 'seedance-2-mini';
+  if (toolName === 'generate_seedance2_video') return 'seedance-2-ref';
+  return 'seedance-2-mini';
 }
 
 function normalizeStoryboardVideoPrompt(prompt: string): string {
@@ -571,8 +574,18 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     setGeneratingStoryboard(true);
     try {
       const shouldRebuildPrompt = storyboardState.kind === 'error' && !storyboardPromptEdited;
+      const prevStoryboardId = sidecar?.storyboard_asset_id ?? null;
       const plan = await savePlan(sourceImageIds, { resetPrompts: shouldRebuildPrompt });
       if (!plan) return;
+      // savePlan's server-side auto-gen already enqueued the storyboard sheet
+      // when it produced a fresh asset id — skip the redundant manual
+      // generate_gpt_image call. Falls through when the server didn't auto-gen
+      // (no KIE_API_KEY) or when regenerating an already-kept storyboard.
+      const newStoryboardId = plan.storyboard_asset_id ?? null;
+      if (newStoryboardId && newStoryboardId !== prevStoryboardId) {
+        toast({ title: 'Storyboard enqueued', description: 'GPT Image 2', duration: 2500 });
+        return;
+      }
       const result = await callTool('generate_gpt_image', {
         project_slug: projectSlug,
         prompt: plan.storyboard_prompt,
@@ -593,7 +606,7 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     } finally {
       setGeneratingStoryboard(false);
     }
-  }, [sourceImageIds, generatingStoryboard, storyboardState.kind, storyboardPromptEdited, savePlan, callTool, projectSlug, persistStoryboard]);
+  }, [sourceImageIds, generatingStoryboard, storyboardState.kind, storyboardPromptEdited, sidecar, savePlan, callTool, projectSlug, persistStoryboard]);
 
   const handleGenerateVideo = useCallback(async () => {
     if (sourceImageIds.length === 0 || generatingVideo) return;

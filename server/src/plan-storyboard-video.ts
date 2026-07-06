@@ -8,17 +8,24 @@ import {
 } from "./jobs/describe-image.js";
 import type { DescribeImageResult } from "./jobs/describe-image.js";
 import type { StoryboardVideoPlanSidecar, StoryboardVideoSourceAnalysis } from "./plan-types.js";
+import { resolveImageSlugs } from "./tools/_image-inputs.js";
+import { queue } from "./queue.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 const MAX_SOURCE_IMAGES = 15;
 type StoryboardVideoModel = StoryboardVideoPlanSidecar["video_model"];
 
 function isStoryboardVideoModel(value: unknown): value is StoryboardVideoModel {
-  return value === "generate_seedance2_video" || value === "generate_seedance2_fast_video";
+  return value === "generate_seedance2_video"
+    || value === "generate_seedance2_fast_video"
+    || value === "generate_seedance2_mini_video";
 }
 
 function normalizeStoryboardVideoModel(value: unknown): StoryboardVideoModel {
-  return value === "generate_seedance2_fast_video" ? "generate_seedance2_fast_video" : "generate_seedance2_video";
+  if (value === "generate_seedance2_video") return "generate_seedance2_video";
+  if (value === "generate_seedance2_fast_video") return "generate_seedance2_fast_video";
+  if (value === "generate_seedance2_mini_video") return "generate_seedance2_mini_video";
+  return "generate_seedance2_mini_video";
 }
 
 function buildDefaultVideoPrompt(loopVideo: boolean, sourceImageCount = 1): string {
@@ -205,6 +212,49 @@ function sameStringArray(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 40);
+}
+
+// Auto-kick the storyboard sheet via GPT Image 2.0 edit (image-to-image) when a
+// plan is written without a kept storyboard asset. Mirrors clip_show's
+// materialize-at-write: create an img-* asset, enqueue generate_gpt_image with
+// the primary source image as the edit reference, and return the asset id (still
+// generating) so the caller can stamp it into the plan. Silent no-op when
+// KIE_API_KEY is unset or the source image can't be resolved — the UI's Generate
+// button remains as a manual fallback.
+async function createAndEnqueueStoryboardImage(
+  fs: VideocityFs,
+  projectSlug: string,
+  storyboardPrompt: string,
+  sourceImageAssetId: string,
+): Promise<string | null> {
+  if (!process.env.KIE_API_KEY) return null;
+  const resolved = await resolveImageSlugs(fs, [`@${sourceImageAssetId}`], projectSlug);
+  if (!resolved.ok) return null;
+  const base = slugify(storyboardPrompt) || "storyboard";
+  const created = await fs.createAsset("img", `storyboard-${base}-${Date.now().toString(36)}`, projectSlug);
+  if (!created.ok) return null;
+  const { assetId, path } = created.value;
+  const jobId = `storyboard-img-${assetId}-${Date.now()}`;
+  await queue.enqueue(jobId, {
+    type: "generate_gpt_image",
+    imgAssetId: assetId,
+    imgAssetDir: path,
+    imageInputs: resolved.inputs,
+    sourceImageIds: resolved.sourceImageIds,
+    projectSlug,
+    prompt: storyboardPrompt,
+    aspectRatio: "16:9",
+    resolution: "2K",
+  } as unknown as Record<string, unknown>);
+  return assetId;
+}
+
 export function buildStoryboardPromptFromAnalysis(
   analysis: StoryboardVideoSourceAnalysis,
   storyboardBrief = "",
@@ -364,7 +414,14 @@ export async function generateStoryboardVideoPlan(
   const storyboardPromptChanged = existing ? (existing.storyboard_prompt ?? "") !== nextStoryboardPrompt : true;
   const videoPromptChanged = existing ? (existing.video_prompt ?? "") !== nextVideoPrompt : true;
   const keepStoryboardAsset = sameSource && !directionChanged && !rebuildPrompts && !storyboardPromptChanged;
+  const existingStoryboardAssetId = keepStoryboardAsset ? existing?.storyboard_asset_id ?? null : null;
+  // Auto-generate the storyboard sheet (GPT Image 2.0 edit) when no asset is
+  // kept. Creates the img-* asset + enqueues the job; returns null (no-op) when
+  // KIE_API_KEY is unset, so manual UI generation stays the fallback.
+  const storyboardAssetId = existingStoryboardAssetId
+    ?? await createAndEnqueueStoryboardImage(fs, args.projectSlug, nextStoryboardPrompt, sourceImageAssetId);
   const keepVideoAsset = keepStoryboardAsset
+    && existingStoryboardAssetId !== null
     && !videoPromptChanged
     && !videoModelChanged
     && durationS === existing?.duration_s;
@@ -377,7 +434,7 @@ export async function generateStoryboardVideoPlan(
     loop_video: loopVideo,
     storyboard_prompt: nextStoryboardPrompt,
     video_prompt: nextVideoPrompt,
-    storyboard_asset_id: keepStoryboardAsset ? existing?.storyboard_asset_id ?? null : null,
+    storyboard_asset_id: storyboardAssetId,
     video_asset_id: keepVideoAsset ? existing?.video_asset_id ?? null : null,
     storyboard_model: "generate_gpt_image",
     video_model: nextVideoModel,

@@ -195,9 +195,9 @@ export type VideoModel = 'seedance-2-ref' | 'seedance-2-fast' | 'seedance-2-mini
 // Seedance Fast as the lighter alternative; the heavyweight Seedance 2 (ref)
 // and Grok Imagine were dropped from this flow.
 export const ALL_VIDEO_MODELS: VideoModel[] = ['seedance-2-mini', 'seedance-2-fast'];
-// Storyboard formula keeps the priced Seedance 2 (ref) + Fast pair — Mini is a
-// char_swap-only default for now.
-export const STORYBOARD_VIDEO_MODELS: VideoModel[] = ['seedance-2-ref', 'seedance-2-fast'];
+// Storyboard formula: Seedance 2 Mini is the default, with the priced
+// Seedance 2 (ref) + Fast pair available as higher-tier options.
+export const STORYBOARD_VIDEO_MODELS: VideoModel[] = ['seedance-2-mini', 'seedance-2-ref', 'seedance-2-fast'];
 
 export const TOOL_BY_VIDEO_MODEL: Record<VideoModel, string> = {
   'seedance-2-ref': 'generate_seedance2_video',

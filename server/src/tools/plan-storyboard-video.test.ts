@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createFs } from "videocity-engine";
 import type { VideocityFs } from "videocity-engine";
 import type { StoryboardVideoPlanSidecar, StoryboardVideoSourceAnalysis } from "../plan-types.js";
+import { queue } from "../queue.js";
 import { planStoryboardVideoDef } from "./plan-storyboard-video.js";
 import { replacePlanStoryboardVideoStoryboardDef } from "./replace-plan-storyboard-video-storyboard.js";
 import { replacePlanStoryboardVideoVideoDef } from "./replace-plan-storyboard-video-video.js";
@@ -81,7 +82,7 @@ describe("plan_storyboard_video tools", () => {
       storyboard_asset_id: null,
       video_asset_id: null,
       storyboard_model: "generate_gpt_image",
-      video_model: "generate_seedance2_video",
+      video_model: "generate_seedance2_mini_video",
       duration_s: 12,
       aspect_ratio: "16:9",
       resolution: "720p",
@@ -118,7 +119,7 @@ describe("plan_storyboard_video tools", () => {
     expect(sidecar.video_prompt).not.toContain("@[storyboard ref]");
   });
 
-  it("falls back to Seedance when Grok is requested for storyboard video", async () => {
+  it("falls back to the default Seedance variant when Grok is requested for storyboard video", async () => {
     const sourceId = await createImage("removed-grok-video-source");
     const result = await planStoryboardVideoDef(fs).handler({
       project_slug: PROJECT,
@@ -128,12 +129,52 @@ describe("plan_storyboard_video tools", () => {
 
     expect(result.isError).toBeFalsy();
     const sidecar = parseSidecar(result.content);
-    expect(sidecar.video_model).toBe("generate_seedance2_video");
+    expect(sidecar.video_model).toBe("generate_seedance2_mini_video");
     expect(sidecar.video_prompt).toContain("Reference images are sent in this exact order");
     expect(sidecar.video_prompt).not.toContain("Grok Imagine 1.5");
   });
 
-  it("migrates stale Grok storyboard plans back to Seedance", async () => {
+  it("defaults to Seedance 2 Mini when no video model is requested", async () => {
+    const sourceId = await createImage("default-mini-source");
+    const result = await planStoryboardVideoDef(fs).handler({
+      project_slug: PROJECT,
+      source_image_asset_id: sourceId,
+      storyboard_prompt: "Create a compact storyboard sheet.",
+      video_prompt: "Use [Image 1] and [Image 2].",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const sidecar = parseSidecar(result.content);
+    expect(sidecar.video_model).toBe("generate_seedance2_mini_video");
+  });
+
+  it("round-trips an explicit Seedance 2 Mini video model", async () => {
+    const sourceId = await createImage("explicit-mini-source");
+    const result = await planStoryboardVideoDef(fs).handler({
+      project_slug: PROJECT,
+      source_image_asset_id: sourceId,
+      video_model: "generate_seedance2_mini_video",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const sidecar = parseSidecar(result.content);
+    expect(sidecar.video_model).toBe("generate_seedance2_mini_video");
+  });
+
+  it("preserves an explicit full Seedance 2 video model", async () => {
+    const sourceId = await createImage("explicit-ref-source");
+    const result = await planStoryboardVideoDef(fs).handler({
+      project_slug: PROJECT,
+      source_image_asset_id: sourceId,
+      video_model: "generate_seedance2_video",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const sidecar = parseSidecar(result.content);
+    expect(sidecar.video_model).toBe("generate_seedance2_video");
+  });
+
+  it("migrates stale Grok storyboard plans back to the default Seedance variant", async () => {
     const sourceId = await createImage("stale-grok-source");
     const first = await planStoryboardVideoDef(fs).handler({
       project_slug: PROJECT,
@@ -141,7 +182,7 @@ describe("plan_storyboard_video tools", () => {
     });
     expect(first.isError).toBeFalsy();
     const firstSidecar = parseSidecar(first.content);
-    expect(firstSidecar.video_model).toBe("generate_seedance2_video");
+    expect(firstSidecar.video_model).toBe("generate_seedance2_mini_video");
     unwrap(await fs.writeFile("plan", ".plan.json", JSON.stringify({
       ...firstSidecar,
       video_model: "generate_grok_imagine_video",
@@ -159,7 +200,7 @@ End on a clean final beat.`,
 
     expect(second.isError).toBeFalsy();
     const secondSidecar = parseSidecar(second.content);
-    expect(secondSidecar.video_model).toBe("generate_seedance2_video");
+    expect(secondSidecar.video_model).toBe("generate_seedance2_mini_video");
     expect(secondSidecar.video_prompt).toContain("Reference images are sent in this exact order");
     expect(secondSidecar.video_prompt).not.toContain("Grok Imagine 1.5");
     expect(secondSidecar.video_asset_id).toBeNull();
@@ -379,5 +420,82 @@ End on a clean final beat.`,
     expect(videoResult.isError).toBe(true);
     expect((storyboardResult.content as TextContent)[0].text).toContain("img-*");
     expect((videoResult.content as TextContent)[0].text).toContain("vid-*");
+  });
+
+  it("auto-enqueues a GPT Image 2 storyboard sheet when the plan is created with KIE_API_KEY", async () => {
+    process.env.KIE_API_KEY = "test-key";
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    try {
+      const sourceId = await createImage("auto-storyboard-source");
+      const result = await planStoryboardVideoDef(fs).handler({
+        project_slug: PROJECT,
+        source_image_asset_id: sourceId,
+      });
+
+      expect(result.isError).toBeFalsy();
+      const sidecar = parseSidecar(result.content);
+      expect(sidecar.storyboard_asset_id).toBeTruthy();
+      expect(sidecar.storyboard_asset_id).toMatch(/^img-/);
+      expect(enqueue).toHaveBeenCalledTimes(1);
+      const payload = enqueue.mock.calls[0][1] as Record<string, unknown>;
+      expect(payload.type).toBe("generate_gpt_image");
+      expect(payload.prompt).toBe(sidecar.storyboard_prompt);
+      expect(payload.aspectRatio).toBe("16:9");
+      expect(payload.resolution).toBe("2K");
+      expect(payload.projectSlug).toBe(PROJECT);
+      const manifest = await fs.getManifest(sidecar.storyboard_asset_id as string, PROJECT);
+      expect(manifest.ok).toBe(true);
+    } finally {
+      delete process.env.KIE_API_KEY;
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("does not auto-generate the storyboard when KIE_API_KEY is unset", async () => {
+    delete process.env.KIE_API_KEY;
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    try {
+      const sourceId = await createImage("no-auto-storyboard-source");
+      const result = await planStoryboardVideoDef(fs).handler({
+        project_slug: PROJECT,
+        source_image_asset_id: sourceId,
+      });
+
+      expect(result.isError).toBeFalsy();
+      const sidecar = parseSidecar(result.content);
+      expect(sidecar.storyboard_asset_id).toBeNull();
+      expect(enqueue).not.toHaveBeenCalled();
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("does not re-enqueue when a storyboard asset is already kept", async () => {
+    process.env.KIE_API_KEY = "test-key";
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    try {
+      const sourceId = await createImage("kept-storyboard-source");
+      const first = await planStoryboardVideoDef(fs).handler({
+        project_slug: PROJECT,
+        source_image_asset_id: sourceId,
+      });
+      expect(first.isError).toBeFalsy();
+      expect(enqueue).toHaveBeenCalledTimes(1);
+      const firstSidecar = parseSidecar(first.content);
+      expect(firstSidecar.storyboard_asset_id).toBeTruthy();
+
+      const second = await planStoryboardVideoDef(fs).handler({
+        project_slug: PROJECT,
+        source_image_asset_id: sourceId,
+      });
+
+      expect(second.isError).toBeFalsy();
+      const secondSidecar = parseSidecar(second.content);
+      expect(secondSidecar.storyboard_asset_id).toBe(firstSidecar.storyboard_asset_id);
+      expect(enqueue).toHaveBeenCalledTimes(1);
+    } finally {
+      delete process.env.KIE_API_KEY;
+      vi.restoreAllMocks();
+    }
   });
 });
