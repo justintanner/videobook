@@ -18,12 +18,13 @@ const OPS = [
   "reorder_osg", // move osg_index → to_index within the joke
   "remove_joke",
   "reorder_joke", // move segment_index → to_index
+  "add_joke",
 ] as const;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
   op: z.enum(OPS).describe("Edit operation to perform"),
-  segment_index: z.number().int().min(0).describe("Zero-based joke (segment) index"),
+  segment_index: z.number().int().min(0).describe("Zero-based joke index, or insertion index for add_joke"),
   osg_index: z.number().int().min(0).optional().describe("Zero-based OSG index within the joke (for OSG ops)"),
   to_index: z.number().int().min(0).optional().describe("Destination index for reorder ops"),
   joke: z.string().optional().describe("Updated spoken joke text (set_joke)"),
@@ -86,6 +87,30 @@ function applyOsgPatch(osg: ClipShowOsg, args: Args): ClipShowOsg {
   };
 }
 
+function createJoke(sidecar: ClipShowPlanSidecar, index: number): ClipShowSegment {
+  const anchor = sidecar.segments[Math.min(index, sidecar.segments.length - 1)];
+  const sourceIds = anchor?.source_image_asset_ids ?? [];
+  const sourceImageId = sourceIds[0]
+    ?? anchor?.osgs.find((osg) => osg.source === "upload" && osg.image_asset_id)?.image_asset_id
+    ?? null;
+  return {
+    source_image_asset_ids: sourceIds,
+    source_summary: anchor?.source_summary ?? "",
+    joke: "",
+    joke_type: anchor?.joke_type ?? "auto",
+    osgs: [{
+      source: sourceImageId ? "upload" : "generated",
+      image_asset_id: sourceImageId,
+      image_prompt: null,
+      treatment: sourceImageId ? "photo" : "title_card",
+      beat_text: "",
+      caption: null,
+      duration_ms: 1500,
+    }],
+    audio_asset_id: null,
+  };
+}
+
 // Apply one op to a single joke (segment). Returns the new segment.
 function editSegment(segment: ClipShowSegment, args: Args): ClipShowSegment {
   switch (args.op) {
@@ -145,28 +170,35 @@ export function replacePlanClipShowAssetDef(fs: VideocityFs): ToolDef {
   return {
     name: "replace_plan_clip_show_asset",
     description:
-      "Structurally edit the active Clip Show plan (no GPT): set a joke's text or voiceover, edit/add/remove/reorder its on-screen graphics (OSGs), swap an OSG image to an uploaded img-*, or remove/reorder a whole joke. One op per call. Writes plan/index.md and plan/.plan.json.",
+      "Structurally edit the active Clip Show plan (no GPT): add, remove, reorder, or edit jokes and their voiceovers or on-screen graphics. One op per call. Writes plan/index.md and plan/.plan.json.",
     schema,
     handler: async (rawArgs) => {
       const args = rawArgs as Args;
       try {
         const sidecar = await readClipShowPlan(fs, args.project_slug);
-        const segment = sidecar.segments[args.segment_index];
-        if (!segment) throw new Error(`Clip Show joke ${args.segment_index} not found`);
-        if (!Array.isArray(segment.osgs)) {
-          throw new Error("This Clip Show plan uses the old format — regenerate it from /templates before editing.");
-        }
 
         let next: ClipShowPlanSidecar;
-        if (args.op === "remove_joke") {
-          if (sidecar.segments.length <= 1) throw new Error("A plan must keep at least one joke");
-          next = { ...sidecar, segments: sidecar.segments.filter((_, i) => i !== args.segment_index) };
-        } else if (args.op === "reorder_joke") {
-          if (args.to_index === undefined) throw new Error("to_index is required");
-          next = { ...sidecar, segments: move(sidecar.segments, args.segment_index, args.to_index) };
+        if (args.op === "add_joke") {
+          const insertAt = Math.min(args.segment_index, sidecar.segments.length);
+          const segments = sidecar.segments.slice();
+          segments.splice(insertAt, 0, createJoke(sidecar, insertAt));
+          next = { ...sidecar, segments };
         } else {
-          const edited = editSegment(segment, args);
-          next = { ...sidecar, segments: sidecar.segments.map((s, i) => (i === args.segment_index ? edited : s)) };
+          const segment = sidecar.segments[args.segment_index];
+          if (!segment) throw new Error(`Clip Show joke ${args.segment_index} not found`);
+          if (!Array.isArray(segment.osgs)) {
+            throw new Error("This Clip Show plan uses the old format — regenerate it from /templates before editing.");
+          }
+          if (args.op === "remove_joke") {
+            if (sidecar.segments.length <= 1) throw new Error("A plan must keep at least one joke");
+            next = { ...sidecar, segments: sidecar.segments.filter((_, i) => i !== args.segment_index) };
+          } else if (args.op === "reorder_joke") {
+            if (args.to_index === undefined) throw new Error("to_index is required");
+            next = { ...sidecar, segments: move(sidecar.segments, args.segment_index, args.to_index) };
+          } else {
+            const edited = editSegment(segment, args);
+            next = { ...sidecar, segments: sidecar.segments.map((s, i) => (i === args.segment_index ? edited : s)) };
+          }
         }
 
         await writeClipShowPlan(fs, args.project_slug, next);

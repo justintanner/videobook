@@ -22,6 +22,8 @@ import { usePromptHistory } from '@/hooks/usePromptHistory';
 import { GenSection } from '@/components/gen/ui/GenSection';
 import { PromptSection } from '@/components/gen/ui/PromptSection';
 import { genThemes } from '@/components/gen/ui/gen-themes';
+import { createGenerationRequestId } from '@/lib/generation-lifecycle';
+import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle';
 
 export interface GenPreviewPanelHandle {
   setField: (name: string, value: string) => void;
@@ -39,9 +41,7 @@ interface GenPreviewPanelProps {
   /** True while a generation of this category is still running in the
    *  background — dims the /generate button (kept clickable). */
   pendingGeneration?: boolean;
-  /** Fired the moment a generation is enqueued, with the freshly-created asset
-   *  id, so the host can show an optimistic ghost tile in the clips bar. */
-  onGenerationSubmitted?: (g: { assetId: string; category: 'video' | 'image'; prompt: string }) => void;
+  onGenerationLifecycle?: OnGenerationLifecycle;
 }
 
 function getPreviewToolName(cat: 'video' | 'image'): string {
@@ -97,7 +97,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   callTool,
   projectSlug,
   pendingGeneration,
-  onGenerationSubmitted,
+  onGenerationLifecycle,
 }, ref) {
   useMountKey('gen');
 
@@ -513,6 +513,14 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const handleGenerate = useCallback(async () => {
     if (!selectedOption || !projectSlug) return;
+    const requestId = createGenerationRequestId(category);
+    const submittedPrompt = typeof formValues.prompt === 'string' ? formValues.prompt : '';
+    onGenerationLifecycle?.({
+      phase: 'started',
+      requestId,
+      category,
+      prompt: submittedPrompt,
+    });
     setGenState('submitting');
     // Persist settings for next generation
     const fields: Record<string, unknown> = {};
@@ -529,25 +537,30 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       const args: Record<string, unknown> = { ...formValues, project_slug: projectSlug, _provider: selectedProviderKey };
       const result = await callToolRef.current(selectedOption.tool_name, args);
       if (result.isError) {
+        onGenerationLifecycle?.({ phase: 'failed', requestId });
         setGenState(undefined);
         const content = result.content as Array<{ type: string; text: string }>;
         setError(content[0]?.text ?? 'Generation failed');
       } else {
-        const submittedPrompt = typeof formValues.prompt === 'string' ? formValues.prompt : '';
         if (submittedPrompt.trim()) {
           promptHistory.push(submittedPrompt, {
             model: selectedModelKey,
             provider: selectedProviderKey,
           });
         }
-        // Surface an optimistic ghost tile immediately, keyed on the freshly
-        // enqueued asset id, so the new clip shows before the next sync poll.
         const content = result.content as Array<{ type: string; text: string }>;
+        let assetId: string | undefined;
         try {
           const parsed = JSON.parse(content[0]?.text ?? '{}') as { vid_asset_id?: string; img_asset_id?: string };
-          const assetId = parsed.vid_asset_id ?? parsed.img_asset_id;
-          if (assetId) onGenerationSubmitted?.({ assetId, category, prompt: submittedPrompt });
-        } catch { /* result wasn't the expected JSON — skip the ghost tile */ }
+          assetId = parsed.vid_asset_id ?? parsed.img_asset_id;
+        } catch {
+          assetId = undefined;
+        }
+        if (assetId) {
+          onGenerationLifecycle?.({ phase: 'submitted', requestId, assetId });
+        } else {
+          onGenerationLifecycle?.({ phase: 'failed', requestId });
+        }
         setGenState('success');
         if (successTimerRef.current) clearTimeout(successTimerRef.current);
         successTimerRef.current = setTimeout(() => {
@@ -556,10 +569,11 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         }, 1200);
       }
     } catch (e) {
+      onGenerationLifecycle?.({ phase: 'failed', requestId });
       setGenState(undefined);
       setError(e instanceof Error ? e.message : 'Generation failed');
     }
-  }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets, promptHistory, onGenerationSubmitted]);
+  }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets, promptHistory, onGenerationLifecycle]);
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;

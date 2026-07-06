@@ -48,6 +48,9 @@
      (uploading / rendering / transcribing / ready). Mirrors STATE_CYAN_RGB in
      src/components/sidebar/stateColors.ts. Distinct from the image domain cyan. */
   --state-cyan-rgb: 0, 255, 255;
+  --state-green-rgb: 34, 197, 94;
+  --state-blue-rgb: 59, 130, 246;
+  --state-ice-rgb: 136, 212, 255;
 
   --radius-sm: 2px;
   --radius-md: 4px;
@@ -136,8 +139,8 @@
       0deg,
       transparent,
       transparent 2px,
-      rgba(0, 255, 255, 0.03) 2px,
-      rgba(0, 255, 255, 0.03) 4px
+      rgba(var(--state-cyan-rgb), 0.03) 2px,
+      rgba(var(--state-cyan-rgb), 0.03) 4px
     );
   }
 
@@ -185,23 +188,23 @@
   }
 
   .clip-state-generating {
-    --clip-state-rgb: var(--card-state-rgb, 34, 197, 94);
-    border: 2px solid var(--card-state-border, rgba(34, 197, 94, 0.4));
-    border-bottom-color: var(--card-state-color, rgba(34, 197, 94, 0.7));
+    --clip-state-rgb: var(--card-state-rgb, var(--state-green-rgb));
+    border: 2px solid var(--card-state-border, rgba(var(--state-green-rgb), 0.4));
+    border-bottom-color: var(--card-state-color, rgba(var(--state-green-rgb), 0.7));
     animation: clip-generating-pulse 2s ease-in-out infinite;
   }
 
   .clip-state-downloading {
-    --clip-state-rgb: var(--card-state-rgb, 34, 197, 94);
-    border: 2px solid var(--card-state-border, rgba(34, 197, 94, 0.4));
-    border-bottom-color: var(--card-state-color, rgba(34, 197, 94, 0.7));
+    --clip-state-rgb: var(--card-state-rgb, var(--state-green-rgb));
+    border: 2px solid var(--card-state-border, rgba(var(--state-green-rgb), 0.4));
+    border-bottom-color: var(--card-state-color, rgba(var(--state-green-rgb), 0.7));
     animation: clip-generating-pulse 2s ease-in-out infinite;
   }
 
   .clip-state-generating-image {
-    --clip-state-rgb: var(--card-state-rgb, 59, 130, 246);
-    border: 2px solid var(--card-state-border, rgba(59, 130, 246, 0.4));
-    border-bottom-color: var(--card-state-color, rgba(59, 130, 246, 0.7));
+    --clip-state-rgb: var(--card-state-rgb, var(--state-blue-rgb));
+    border: 2px solid var(--card-state-border, rgba(var(--state-blue-rgb), 0.4));
+    border-bottom-color: var(--card-state-color, rgba(var(--state-blue-rgb), 0.7));
     animation: clip-generating-image-pulse 2s ease-in-out infinite;
   }
 
@@ -212,8 +215,8 @@
   }
 
   .clip-state-loading {
-    --clip-state-rgb: var(--card-state-rgb, 136, 212, 255);
-    border: 2px solid var(--card-state-border, rgba(136, 212, 255, 0.4));
+    --clip-state-rgb: var(--card-state-rgb, var(--state-ice-rgb));
+    border: 2px solid var(--card-state-border, rgba(var(--state-ice-rgb), 0.4));
     animation: clip-ice-pulse 2s ease-in-out infinite;
   }
 
@@ -253,8 +256,8 @@
 
   .downloading-pixel-grid {
     background-image:
-      linear-gradient(rgba(var(--card-state-rgb, 34, 197, 94), 0.2) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(var(--card-state-rgb, 34, 197, 94), 0.2) 1px, transparent 1px);
+      linear-gradient(rgba(var(--card-state-rgb, var(--state-green-rgb)), 0.2) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(var(--card-state-rgb, var(--state-green-rgb)), 0.2) 1px, transparent 1px);
     background-size: 4px 4px;
   }
 
@@ -263,8 +266,8 @@
       0deg,
       transparent,
       transparent 2px,
-      rgba(var(--card-state-rgb, 34, 197, 94), 0.06) 2px,
-      rgba(var(--card-state-rgb, 34, 197, 94), 0.06) 4px
+      rgba(var(--card-state-rgb, var(--state-green-rgb)), 0.06) 2px,
+      rgba(var(--card-state-rgb, var(--state-green-rgb)), 0.06) 4px
     );
   }
 
@@ -305,12 +308,12 @@
   /* Chat input — animate-type glow */
   .chat-input-animating {
     animation: chat-input-animate-glow 1.5s ease-in-out infinite;
-    border-color: rgba(0, 255, 255, 0.5);
+    border-color: rgba(var(--state-cyan-rgb), 0.5);
   }
 
   .chat-input-transmitting {
     animation: chat-input-transmit-pulse 1.5s ease-in-out infinite;
-    border-color: rgba(0, 255, 255, 0.6);
+    border-color: rgba(var(--state-cyan-rgb), 0.6);
   }
 
   .chat-input-accepted {
@@ -328,9 +331,9 @@
     background: linear-gradient(
       90deg,
       transparent,
-      rgba(0, 255, 255, 0.08),
-      rgba(0, 255, 255, 0.15),
-      rgba(0, 255, 255, 0.08),
+      rgba(var(--state-cyan-rgb), 0.08),
+      rgba(var(--state-cyan-rgb), 0.15),
+      rgba(var(--state-cyan-rgb), 0.08),
       transparent
     );
   }
@@ -403,13 +406,13 @@
   0%,
   100% {
     box-shadow:
-      inset 0 0 20px rgba(var(--clip-state-rgb, 0, 255, 255), 0.15),
-      0 0 15px rgba(var(--clip-state-rgb, 0, 255, 255), 0.25);
+      inset 0 0 20px rgba(var(--clip-state-rgb, var(--state-cyan-rgb)), 0.15),
+      0 0 15px rgba(var(--clip-state-rgb, var(--state-cyan-rgb)), 0.25);
   }
   50% {
     box-shadow:
-      inset 0 0 35px rgba(var(--clip-state-rgb, 0, 255, 255), 0.3),
-      0 0 30px rgba(var(--clip-state-rgb, 0, 255, 255), 0.45);
+      inset 0 0 35px rgba(var(--clip-state-rgb, var(--state-cyan-rgb)), 0.3),
+      0 0 30px rgba(var(--clip-state-rgb, var(--state-cyan-rgb)), 0.45);
   }
 }
 
@@ -418,15 +421,15 @@
   0%,
   100% {
     box-shadow:
-      inset 0 0 20px rgba(var(--clip-state-rgb, 136, 212, 255), 0.15),
-      0 0 15px rgba(var(--clip-state-rgb, 136, 212, 255), 0.25);
-    border-color: var(--card-state-border, rgba(136, 212, 255, 0.4));
+      inset 0 0 20px rgba(var(--clip-state-rgb, var(--state-ice-rgb)), 0.15),
+      0 0 15px rgba(var(--clip-state-rgb, var(--state-ice-rgb)), 0.25);
+    border-color: var(--card-state-border, rgba(var(--state-ice-rgb), 0.4));
   }
   50% {
     box-shadow:
-      inset 0 0 35px rgba(var(--clip-state-rgb, 136, 212, 255), 0.3),
-      0 0 30px rgba(var(--clip-state-rgb, 136, 212, 255), 0.45);
-    border-color: var(--card-state-color, rgba(136, 212, 255, 0.7));
+      inset 0 0 35px rgba(var(--clip-state-rgb, var(--state-ice-rgb)), 0.3),
+      0 0 30px rgba(var(--clip-state-rgb, var(--state-ice-rgb)), 0.45);
+    border-color: var(--card-state-color, rgba(var(--state-ice-rgb), 0.7));
   }
 }
 
@@ -464,10 +467,10 @@
 @keyframes clip-ready-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(var(--card-state-rgb, 0, 255, 255), 0);
+    box-shadow: 0 0 0 0 rgba(var(--card-state-rgb, var(--state-cyan-rgb)), 0);
   }
   50% {
-    box-shadow: 0 0 12px 2px rgba(var(--card-state-rgb, 0, 255, 255), 0.5);
+    box-shadow: 0 0 12px 2px rgba(var(--card-state-rgb, var(--state-cyan-rgb)), 0.5);
   }
 }
 
@@ -491,13 +494,13 @@
   0%,
   100% {
     box-shadow:
-      inset 0 0 20px rgba(var(--clip-state-rgb, 34, 197, 94), 0.15),
-      0 0 15px rgba(var(--clip-state-rgb, 34, 197, 94), 0.25);
+      inset 0 0 20px rgba(var(--clip-state-rgb, var(--state-green-rgb)), 0.15),
+      0 0 15px rgba(var(--clip-state-rgb, var(--state-green-rgb)), 0.25);
   }
   50% {
     box-shadow:
-      inset 0 0 35px rgba(var(--clip-state-rgb, 34, 197, 94), 0.3),
-      0 0 30px rgba(var(--clip-state-rgb, 34, 197, 94), 0.45);
+      inset 0 0 35px rgba(var(--clip-state-rgb, var(--state-green-rgb)), 0.3),
+      0 0 30px rgba(var(--clip-state-rgb, var(--state-green-rgb)), 0.45);
   }
 }
 
@@ -506,13 +509,13 @@
   0%,
   100% {
     box-shadow:
-      inset 0 0 20px rgba(var(--clip-state-rgb, 59, 130, 246), 0.15),
-      0 0 15px rgba(var(--clip-state-rgb, 59, 130, 246), 0.25);
+      inset 0 0 20px rgba(var(--clip-state-rgb, var(--state-blue-rgb)), 0.15),
+      0 0 15px rgba(var(--clip-state-rgb, var(--state-blue-rgb)), 0.25);
   }
   50% {
     box-shadow:
-      inset 0 0 35px rgba(var(--clip-state-rgb, 59, 130, 246), 0.3),
-      0 0 30px rgba(var(--clip-state-rgb, 59, 130, 246), 0.45);
+      inset 0 0 35px rgba(var(--clip-state-rgb, var(--state-blue-rgb)), 0.3),
+      0 0 30px rgba(var(--clip-state-rgb, var(--state-blue-rgb)), 0.45);
   }
 }
 
@@ -596,13 +599,13 @@
   0%,
   100% {
     box-shadow:
-      inset 0 0 12px rgba(var(--clip-state-rgb, 0, 255, 255), 0.08),
-      0 0 4px rgba(var(--clip-state-rgb, 0, 255, 255), 0.1);
+      inset 0 0 12px rgba(var(--clip-state-rgb, var(--state-cyan-rgb)), 0.08),
+      0 0 4px rgba(var(--clip-state-rgb, var(--state-cyan-rgb)), 0.1);
   }
   50% {
     box-shadow:
-      inset 0 0 18px rgba(var(--clip-state-rgb, 0, 255, 255), 0.15),
-      0 0 8px rgba(var(--clip-state-rgb, 0, 255, 255), 0.18);
+      inset 0 0 18px rgba(var(--clip-state-rgb, var(--state-cyan-rgb)), 0.15),
+      0 0 8px rgba(var(--clip-state-rgb, var(--state-cyan-rgb)), 0.18);
   }
 }
 
@@ -820,8 +823,8 @@
 }
 
 @keyframes showcase-slot-ready {
-  0%, 100% { box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.1); }
-  50% { box-shadow: inset 0 0 20px rgba(0, 255, 255, 0.2); }
+  0%, 100% { box-shadow: inset 0 0 10px rgba(var(--state-cyan-rgb), 0.1); }
+  50% { box-shadow: inset 0 0 20px rgba(var(--state-cyan-rgb), 0.2); }
 }
 
 /* ==================== TOAST EFFECTS ==================== */
@@ -879,19 +882,19 @@
 
 @keyframes v4-hex-pulse {
   0%, 100% { background-color: transparent; }
-  50% { background-color: rgba(0, 255, 255, 0.02); }
+  50% { background-color: rgba(var(--state-cyan-rgb), 0.02); }
 }
 
 @keyframes v4-hud-glow {
   0%, 100% {
     box-shadow:
-      inset 0 0 8px rgba(0, 255, 255, 0.08),
-      0 0 10px rgba(0, 255, 255, 0.1);
+      inset 0 0 8px rgba(var(--state-cyan-rgb), 0.08),
+      0 0 10px rgba(var(--state-cyan-rgb), 0.1);
   }
   50% {
     box-shadow:
-      inset 0 0 15px rgba(0, 255, 255, 0.15),
-      0 0 20px rgba(0, 255, 255, 0.18);
+      inset 0 0 15px rgba(var(--state-cyan-rgb), 0.15),
+      0 0 20px rgba(var(--state-cyan-rgb), 0.18);
   }
 }
 
@@ -1026,35 +1029,35 @@
 @keyframes chat-input-animate-glow {
   0%, 100% {
     box-shadow:
-      inset 0 0 8px rgba(0, 255, 255, 0.1),
-      0 0 10px rgba(0, 255, 255, 0.15);
-    border-color: rgba(0, 255, 255, 0.4);
+      inset 0 0 8px rgba(var(--state-cyan-rgb), 0.1),
+      0 0 10px rgba(var(--state-cyan-rgb), 0.15);
+    border-color: rgba(var(--state-cyan-rgb), 0.4);
   }
   50% {
     box-shadow:
-      inset 0 0 15px rgba(0, 255, 255, 0.2),
-      0 0 20px rgba(0, 255, 255, 0.3);
-    border-color: rgba(0, 255, 255, 0.6);
+      inset 0 0 15px rgba(var(--state-cyan-rgb), 0.2),
+      0 0 20px rgba(var(--state-cyan-rgb), 0.3);
+    border-color: rgba(var(--state-cyan-rgb), 0.6);
   }
 }
 
 @keyframes chat-input-transmit-pulse {
   0%, 100% {
-    box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.15), 0 0 12px rgba(0, 255, 255, 0.2);
-    border-color: rgba(0, 255, 255, 0.5);
+    box-shadow: inset 0 0 10px rgba(var(--state-cyan-rgb), 0.15), 0 0 12px rgba(var(--state-cyan-rgb), 0.2);
+    border-color: rgba(var(--state-cyan-rgb), 0.5);
   }
   50% {
-    box-shadow: inset 0 0 18px rgba(0, 255, 255, 0.25), 0 0 25px rgba(0, 255, 255, 0.4);
-    border-color: rgba(0, 255, 255, 0.7);
+    box-shadow: inset 0 0 18px rgba(var(--state-cyan-rgb), 0.25), 0 0 25px rgba(var(--state-cyan-rgb), 0.4);
+    border-color: rgba(var(--state-cyan-rgb), 0.7);
   }
 }
 
 @keyframes chat-input-idle-glow {
   0%, 100% {
-    box-shadow: inset 0 0 6px rgba(0, 255, 255, 0.03), 0 0 4px rgba(0, 255, 255, 0.05);
+    box-shadow: inset 0 0 6px rgba(var(--state-cyan-rgb), 0.03), 0 0 4px rgba(var(--state-cyan-rgb), 0.05);
   }
   50% {
-    box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.06), 0 0 8px rgba(0, 255, 255, 0.1);
+    box-shadow: inset 0 0 10px rgba(var(--state-cyan-rgb), 0.06), 0 0 8px rgba(var(--state-cyan-rgb), 0.1);
   }
 }
 
@@ -1074,10 +1077,10 @@
       0 0 15px rgba(52, 211, 153, 0.25);
   }
   100% {
-    border-color: rgba(0, 255, 255, 0.3);
+    border-color: rgba(var(--state-cyan-rgb), 0.3);
     box-shadow:
-      inset 0 0 6px rgba(0, 255, 255, 0.03),
-      0 0 4px rgba(0, 255, 255, 0.05);
+      inset 0 0 6px rgba(var(--state-cyan-rgb), 0.03),
+      0 0 4px rgba(var(--state-cyan-rgb), 0.05);
   }
 }
 
@@ -1100,7 +1103,7 @@
     box-shadow:
       inset 0 0 20px rgba(244, 63, 94, 0.3),
       0 0 25px rgba(244, 63, 94, 0.5),
-      -3px 0 15px rgba(0, 255, 255, 0.15),
+      -3px 0 15px rgba(var(--state-cyan-rgb), 0.15),
       3px 0 15px rgba(255, 0, 128, 0.15);
   }
   25% {
@@ -1108,14 +1111,14 @@
     box-shadow:
       inset 0 0 15px rgba(244, 63, 94, 0.2),
       0 0 18px rgba(244, 63, 94, 0.3),
-      -2px 0 10px rgba(0, 255, 255, 0.1),
+      -2px 0 10px rgba(var(--state-cyan-rgb), 0.1),
       2px 0 10px rgba(255, 0, 128, 0.1);
   }
   100% {
-    border-color: rgba(0, 255, 255, 0.3);
+    border-color: rgba(var(--state-cyan-rgb), 0.3);
     box-shadow:
-      inset 0 0 6px rgba(0, 255, 255, 0.03),
-      0 0 4px rgba(0, 255, 255, 0.05);
+      inset 0 0 6px rgba(var(--state-cyan-rgb), 0.03),
+      0 0 4px rgba(var(--state-cyan-rgb), 0.05);
   }
 }
 

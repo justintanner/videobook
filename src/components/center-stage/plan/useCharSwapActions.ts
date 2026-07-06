@@ -13,6 +13,8 @@ import type { UseMcpResult } from 'use-mcp/react';
 import type { MediaItem } from '@/components/sidebar/types';
 import type { SourceAspect } from '@/lib/plan-aspect';
 import { toast } from '@/hooks/useToast';
+import { createGenerationRequestId } from '@/lib/generation-lifecycle';
+import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle';
 import {
   LABEL_BY_VIDEO_MODEL,
   PLAN_ASSET_ID,
@@ -81,8 +83,9 @@ export function useCharSwapActions(params: {
   sourceAspect: SourceAspect;
   callTool: UseMcpResult['callTool'];
   onSidecarUpdate: (sidecar: PlanSidecar) => void;
+  onGenerationLifecycle?: OnGenerationLifecycle;
 }): CharSwapActions {
-  const { sidecar, mediaItems, projectSlug, sourceAspect, callTool, onSidecarUpdate } = params;
+  const { sidecar, mediaItems, projectSlug, sourceAspect, callTool, onSidecarUpdate, onGenerationLifecycle } = params;
 
   // In-flight tags `${sceneIndex}:${frameIndex}:${variantKey}` and scene-index
   // set for video submits — drive per-node spinners before the asset appears.
@@ -152,6 +155,14 @@ export function useCharSwapActions(params: {
     const clipSlug = `${PLAN_ASSET_ID}/${scene.clip_filename}`;
     const audioSlug = `${PLAN_ASSET_ID}/${scene.audio_filename}`;
     const toolArgs = buildSeedanceToolArgs(scene, sceneIndex, sidecar.characters, mediaItems, clipSlug, audioSlug, prompt, sourceAspect);
+    const requestId = createGenerationRequestId('video');
+    onGenerationLifecycle?.({
+      phase: 'started',
+      requestId,
+      category: 'video',
+      prompt,
+    });
+    let submitted = false;
     setVideoScenes((prev) => new Set(prev).add(sceneIndex));
     try {
       const result = await callTool(TOOL_BY_VIDEO_MODEL[videoModel], { project_slug: projectSlug, ...toolArgs });
@@ -170,6 +181,12 @@ export function useCharSwapActions(params: {
         }
       }
       if (newVidAssetId) {
+        submitted = true;
+        onGenerationLifecycle?.({
+          phase: 'submitted',
+          requestId,
+          assetId: newVidAssetId,
+        });
         const persist = await callTool('replace_plan_scene_video_swap', {
           project_slug: projectSlug,
           scene_index: sceneIndex,
@@ -177,15 +194,15 @@ export function useCharSwapActions(params: {
         });
         if (!persist.isError) applySidecar(persist);
       }
-      toast({ title: `Scene ${sceneIndex + 1} enqueued`, description: `${LABEL_BY_VIDEO_MODEL[videoModel]} (kie) · 720p`, duration: 2500 });
     } finally {
+      if (!submitted) onGenerationLifecycle?.({ phase: 'failed', requestId });
       setVideoScenes((prev) => {
         const next = new Set(prev);
         next.delete(sceneIndex);
         return next;
       });
     }
-  }, [callTool, projectSlug, sidecar, mediaItems, sourceAspect, videoScenes, applySidecar]);
+  }, [callTool, projectSlug, sidecar, mediaItems, sourceAspect, videoScenes, applySidecar, onGenerationLifecycle]);
 
   const runVideoReplace = useCallback<CharSwapActions['runVideoReplace']>(async (sceneIndex, assetId) => {
     const result = await callTool('replace_plan_scene_video_swap', {

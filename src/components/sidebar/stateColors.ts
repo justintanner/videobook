@@ -52,6 +52,9 @@ const DELETING_RAW = 'rgba(239, 68, 68, 0.4)';
 // distinct from the image *domain* cyan in domains.ts. Defined once here instead
 // of repeating the literal across every state tone below.
 const STATE_CYAN_RGB = '0, 255, 255';
+const STATE_GREEN_RGB = '34, 197, 94';
+const STATE_BLUE_RGB = '59, 130, 246';
+const STATE_ICE_RGB = '136, 212, 255';
 const rgba = (rgb: string, alpha: number): string => `rgba(${rgb}, ${alpha})`;
 
 const TONE_STYLES: Record<CardTone, {
@@ -102,29 +105,29 @@ const TONE_STYLES: Record<CardTone, {
   },
   generating: {
     color: '#22c55e',
-    rgb: '34, 197, 94',
-    border: 'rgba(34, 197, 94, 0.5)',
-    glow: 'rgba(34, 197, 94, 0.45)',
-    soft: 'rgba(34, 197, 94, 0.16)',
-    faint: 'rgba(34, 197, 94, 0.07)',
+    rgb: STATE_GREEN_RGB,
+    border: rgba(STATE_GREEN_RGB, 0.5),
+    glow: rgba(STATE_GREEN_RGB, 0.45),
+    soft: rgba(STATE_GREEN_RGB, 0.16),
+    faint: rgba(STATE_GREEN_RGB, 0.07),
     dot: GENERATING_DOT,
   },
   'generating-image': {
     color: '#3b82f6',
-    rgb: '59, 130, 246',
-    border: 'rgba(59, 130, 246, 0.55)',
-    glow: 'rgba(59, 130, 246, 0.45)',
-    soft: 'rgba(59, 130, 246, 0.17)',
-    faint: 'rgba(59, 130, 246, 0.07)',
+    rgb: STATE_BLUE_RGB,
+    border: rgba(STATE_BLUE_RGB, 0.55),
+    glow: rgba(STATE_BLUE_RGB, 0.45),
+    soft: rgba(STATE_BLUE_RGB, 0.17),
+    faint: rgba(STATE_BLUE_RGB, 0.07),
     dot: IMAGE_GENERATING_DOT,
   },
   downloading: {
     color: '#22c55e',
-    rgb: '34, 197, 94',
-    border: 'rgba(34, 197, 94, 0.5)',
-    glow: 'rgba(34, 197, 94, 0.45)',
-    soft: 'rgba(34, 197, 94, 0.16)',
-    faint: 'rgba(34, 197, 94, 0.07)',
+    rgb: STATE_GREEN_RGB,
+    border: rgba(STATE_GREEN_RGB, 0.5),
+    glow: rgba(STATE_GREEN_RGB, 0.45),
+    soft: rgba(STATE_GREEN_RGB, 0.16),
+    faint: rgba(STATE_GREEN_RGB, 0.07),
     dot: GENERATING_DOT,
   },
   rendering: {
@@ -147,11 +150,11 @@ const TONE_STYLES: Record<CardTone, {
   },
   loading: {
     color: '#88d4ff',
-    rgb: '136, 212, 255',
-    border: 'rgba(136, 212, 255, 0.45)',
-    glow: 'rgba(136, 212, 255, 0.45)',
-    soft: 'rgba(136, 212, 255, 0.16)',
-    faint: 'rgba(136, 212, 255, 0.07)',
+    rgb: STATE_ICE_RGB,
+    border: rgba(STATE_ICE_RGB, 0.45),
+    glow: rgba(STATE_ICE_RGB, 0.45),
+    soft: rgba(STATE_ICE_RGB, 0.16),
+    faint: rgba(STATE_ICE_RGB, 0.07),
     dot: PROCESSING_DOT,
   },
   deleting: {

@@ -21,6 +21,8 @@ import { FlowConnector } from './plan/flow/FlowConnector';
 import { RichPromptField } from '@/components/ui/RichPromptField';
 import type { ChipThumb } from '@/components/ui/AssetThumbChip';
 import type { RichToken } from '@/components/ui/richPromptTokens';
+import { createGenerationRequestId } from '@/lib/generation-lifecycle';
+import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle';
 import { NodeFrame } from './plan/nodes/nodeUi';
 import {
   KIE_MODEL_NAME_BY_VIDEO,
@@ -169,9 +171,10 @@ interface PlanViewerProps {
   // Open the /templates marketplace (a separate center stage) to create or
   // replace this project's plan. Plan generation now lives there, not here.
   onBackToTemplates: () => void;
+  onGenerationLifecycle?: OnGenerationLifecycle;
 }
 
-export function PlanViewer({ item, mediaItems, projectSlug, callTool, resetKey, onClose, onBackToTemplates }: PlanViewerProps) {
+export function PlanViewer({ item, mediaItems, projectSlug, callTool, resetKey, onClose, onBackToTemplates, onGenerationLifecycle }: PlanViewerProps) {
   useMountKey('viewer');
   return (
     <PlanBody
@@ -182,6 +185,7 @@ export function PlanViewer({ item, mediaItems, projectSlug, callTool, resetKey, 
       resetKey={resetKey}
       onClose={onClose}
       onBackToTemplates={onBackToTemplates}
+      onGenerationLifecycle={onGenerationLifecycle}
     />
   );
 }
@@ -217,7 +221,7 @@ function PlanShell({ title, slug, onClose, children }: {
   );
 }
 
-function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose, onBackToTemplates }: {
+function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose, onBackToTemplates, onGenerationLifecycle }: {
   item: MediaItem | null;
   mediaItems: MediaItem[];
   projectSlug: string;
@@ -225,6 +229,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose, 
   resetKey?: number;
   onClose: () => void;
   onBackToTemplates: () => void;
+  onGenerationLifecycle?: OnGenerationLifecycle;
 }) {
   const [sidecar, setSidecar] = useState<AnyPlanSidecar | null>(null);
   const [loadingPlan, setLoadingPlan] = useState(true);
@@ -312,6 +317,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose, 
                   sourceAspect={charSourceAspect}
                   callTool={callTool}
                   onSidecarUpdate={(next) => setSidecar(next)}
+                  onGenerationLifecycle={onGenerationLifecycle}
                 />
               ) : formula === 'storyboard_video' ? (
                 <StoryboardVideoPlanFormula
@@ -320,6 +326,7 @@ function PlanBody({ item, mediaItems, projectSlug, callTool, resetKey, onClose, 
                   projectSlug={projectSlug}
                   callTool={callTool}
                   onSidecarUpdate={(next) => setSidecar(next)}
+                  onGenerationLifecycle={onGenerationLifecycle}
                 />
               ) : (
                 <ClipShowWork
@@ -420,12 +427,13 @@ function buildStoryboardVideoPayload(
 // Work area for the storyboard_video plan (rendered in /plan). Setup + plan
 // creation live in StoryboardSetup (the /templates marketplace). Reads its
 // config from the sidecar; per-step storyboard/video generation stays here.
-function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpdate }: {
+function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpdate, onGenerationLifecycle }: {
   sidecar: StoryboardVideoPlanSidecar | null;
   mediaItems: MediaItem[];
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
   onSidecarUpdate: (sidecar: StoryboardVideoPlanSidecar) => void;
+  onGenerationLifecycle?: OnGenerationLifecycle;
 }) {
   const [sourceImageIds, setSourceImageIds] = useState<string[]>(() => storyboardSourceImageIds(sidecar));
   const [storyboardBrief, setStoryboardBrief] = useState(() => sidecar?.storyboard_brief ?? '');
@@ -441,6 +449,8 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
   const [generatingVideo, setGeneratingVideo] = useState(false);
   const [replacingStoryboard, setReplacingStoryboard] = useState(false);
   const [replacingVideo, setReplacingVideo] = useState(false);
+  const [sourceEditorOpen, setSourceEditorOpen] = useState(false);
+  const [sourceDraftIds, setSourceDraftIds] = useState<string[]>([]);
 
   const sidecarKey = [
     sidecar?.source_image_asset_id ?? '',
@@ -492,6 +502,40 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
     setVideoPromptEdited(true);
   }, []);
 
+  const sourceDraftItems = useMemo(
+    () => sourceDraftIds.map((id) => {
+      const item = mediaItems.find((candidate) => candidate.id === id) ?? null;
+      return {
+        id,
+        src: item?.thumbnailSrc ?? item?.filePath ?? null,
+        label: item?.slug ?? `@${id}`,
+        aspect: sourceAspectFromDimensions(item?.width, item?.height),
+      };
+    }),
+    [sourceDraftIds, mediaItems],
+  );
+
+  const openSourceEditor = useCallback(() => {
+    setSourceDraftIds(sourceImageIds);
+    setSourceEditorOpen(true);
+  }, [sourceImageIds]);
+
+  const addSourceDraft = useCallback((assetId: string) => {
+    if (!assetId.startsWith('img-')) {
+      toast({ title: 'Wrong asset type', description: `Drop an img-* source image, got ${assetId}.`, duration: 3000 });
+      return;
+    }
+    setSourceDraftIds((current) => current.includes(assetId) ? current : [...current, assetId]);
+  }, []);
+
+  const removeSourceDraft = useCallback((assetId: string) => {
+    setSourceDraftIds((current) => current.length <= 1 ? current : current.filter((id) => id !== assetId));
+  }, []);
+
+  const promoteSourceDraft = useCallback((assetId: string) => {
+    setSourceDraftIds((current) => current[0] === assetId ? current : [assetId, ...current.filter((id) => id !== assetId)]);
+  }, []);
+
   const savePlan = useCallback(async (nextSourceImageIds: string[], opts?: { resetPrompts?: boolean }) => {
     const primarySourceImageId = nextSourceImageIds[0];
     if (!primarySourceImageId) return null;
@@ -536,6 +580,12 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
       setSavingPlan(false);
     }
   }, [callTool, projectSlug, storyboardBrief, loopVideo, selectedVideoModel, durationS, storyboardPromptEdited, storyboardPrompt, videoPromptEdited, videoPrompt, onSidecarUpdate]);
+
+  const applySourceDraft = useCallback(async () => {
+    if (sourceDraftIds.length === 0) return;
+    const plan = await savePlan(sourceDraftIds, { resetPrompts: true });
+    if (plan) setSourceEditorOpen(false);
+  }, [sourceDraftIds, savePlan]);
 
   const persistStoryboard = useCallback(async (assetId: string) => {
     const result = await callTool('replace_plan_storyboard_video_storyboard', {
@@ -610,6 +660,14 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
 
   const handleGenerateVideo = useCallback(async () => {
     if (sourceImageIds.length === 0 || generatingVideo) return;
+    const requestId = createGenerationRequestId('video');
+    onGenerationLifecycle?.({
+      phase: 'started',
+      requestId,
+      category: 'video',
+      prompt: videoPrompt,
+    });
+    let submitted = false;
     setGeneratingVideo(true);
     try {
       const plan = await savePlan(sourceImageIds);
@@ -639,13 +697,21 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
       }
       const text = (result.content as Array<{ type: string; text: string }>)[0].text;
       const parsed = JSON.parse(text) as { vid_asset_id?: string };
-      if (parsed.vid_asset_id) await persistVideo(parsed.vid_asset_id);
+      if (parsed.vid_asset_id) {
+        submitted = true;
+        onGenerationLifecycle?.({
+          phase: 'submitted',
+          requestId,
+          assetId: parsed.vid_asset_id,
+        });
+        await persistVideo(parsed.vid_asset_id);
+      }
       await callTool('sync', { project_slug: projectSlug });
-      toast({ title: 'Video enqueued', description: selectedVideoModel, duration: 2500 });
     } finally {
+      if (!submitted) onGenerationLifecycle?.({ phase: 'failed', requestId });
       setGeneratingVideo(false);
     }
-  }, [sourceImageIds, generatingVideo, savePlan, selectedVideoModel, callTool, projectSlug, persistVideo]);
+  }, [sourceImageIds, generatingVideo, onGenerationLifecycle, videoPrompt, savePlan, selectedVideoModel, callTool, projectSlug, persistVideo]);
 
   const handleStoryboardReplace = useCallback(async (assetId: string) => {
     setReplacingStoryboard(true);
@@ -724,7 +790,41 @@ function StoryboardVideoPlanFormula({ sidecar, mediaItems, projectSlug, callTool
         </section>
       </FlowStep>
 
-      <FlowConnector />
+      <FlowConnector onAdd={openSourceEditor} addTitle="Add source image" />
+
+      {sourceEditorOpen && (
+        <>
+          <FlowStep>
+            <section className="w-full rounded border border-emerald-500/25 bg-zinc-950/55 p-3 space-y-3">
+              <StoryboardSourceDropZone
+                sources={sourceDraftItems}
+                onDropSource={addSourceDraft}
+                onRemoveSource={removeSourceDraft}
+                onPromoteSource={promoteSourceDraft}
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSourceEditorOpen(false)}
+                  disabled={savingPlan}
+                  className="h-7 px-2.5 rounded border border-zinc-700 bg-zinc-900 text-[10px] font-mono uppercase tracking-wider text-zinc-300 hover:text-white disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { void applySourceDraft(); }}
+                  disabled={savingPlan || sourceDraftIds.length === 0}
+                  className="h-7 px-2.5 rounded border border-emerald-500/40 bg-emerald-500/10 text-[10px] font-mono uppercase tracking-wider text-emerald-300 hover:bg-emerald-500/20 hover:text-white disabled:opacity-50"
+                >
+                  {savingPlan ? 'Applying…' : 'Apply sources'}
+                </button>
+              </div>
+            </section>
+          </FlowStep>
+          <FlowConnector />
+        </>
+      )}
 
       <FlowStep>
         <section className="w-full border border-zinc-800/60 rounded bg-zinc-950/40 overflow-hidden">
@@ -982,6 +1082,29 @@ function ClipShowWork({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpd
   callTool: UseMcpResult['callTool'];
   onSidecarUpdate: (sidecar: ClipShowPlanSidecar) => void;
 }) {
+  const [addingJoke, setAddingJoke] = useState(false);
+  const addJoke = useCallback(async (index: number) => {
+    if (addingJoke) return;
+    setAddingJoke(true);
+    try {
+      const result = await callTool('replace_plan_clip_show_asset', {
+        project_slug: projectSlug,
+        op: 'add_joke',
+        segment_index: index,
+      });
+      if (result.isError) {
+        const message = (result.content as Array<{ type: string; text: string }> | undefined)?.[0]?.text ?? 'Add joke failed';
+        toast({ title: 'Add joke failed', description: message, duration: 5000 });
+        return;
+      }
+      const text = (result.content as Array<{ type: string; text: string }>)[0].text;
+      const parsed = JSON.parse(text) as { sidecar?: ClipShowPlanSidecar };
+      if (parsed.sidecar) onSidecarUpdate(parsed.sidecar);
+    } finally {
+      setAddingJoke(false);
+    }
+  }, [addingJoke, callTool, projectSlug, onSidecarUpdate]);
+
   if (!sidecar) {
     return (
       <div className="rounded border border-dashed border-emerald-500/25 bg-zinc-950/40 p-6 text-center">
@@ -1039,7 +1162,7 @@ function ClipShowWork({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpd
       </FlowStep>
       {sidecar.segments.map((segment, index) => (
         <Fragment key={index}>
-          <FlowConnector />
+          <FlowConnector onAdd={() => { void addJoke(index); }} addTitle="Add joke here" />
           <FlowStep>
             <ClipShowSegmentBlock
               sidecar={sidecar}
@@ -1053,6 +1176,7 @@ function ClipShowWork({ sidecar, mediaItems, projectSlug, callTool, onSidecarUpd
           </FlowStep>
         </Fragment>
       ))}
+      <FlowConnector onAdd={() => { void addJoke(sidecar.segments.length); }} addTitle="Add joke" />
     </FlowColumn>
   );
 }

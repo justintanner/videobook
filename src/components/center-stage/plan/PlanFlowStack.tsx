@@ -24,6 +24,7 @@ import { SourceFrameNode } from './nodes/SourceFrameNode';
 import { SwapGenNode } from './nodes/SwapGenNode';
 import { SceneVideoNode } from './nodes/SceneVideoNode';
 import { PlanInputsNode, type PlanInputs } from './nodes/PlanInputsNode';
+import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle';
 
 interface PlanFlowStackProps {
   sidecar: PlanSidecar;
@@ -32,6 +33,7 @@ interface PlanFlowStackProps {
   sourceAspect: SourceAspect;
   callTool: UseMcpResult['callTool'];
   onSidecarUpdate: (sidecar: PlanSidecar) => void;
+  onGenerationLifecycle?: OnGenerationLifecycle;
 }
 
 // Source + cast fingerprint. Used to detect when a regenerate's new plan has
@@ -60,8 +62,9 @@ export function PlanFlowStack({
   sourceAspect,
   callTool,
   onSidecarUpdate,
+  onGenerationLifecycle,
 }: PlanFlowStackProps) {
-  const actions = useCharSwapActions({ sidecar, mediaItems, projectSlug, sourceAspect, callTool, onSidecarUpdate });
+  const actions = useCharSwapActions({ sidecar, mediaItems, projectSlug, sourceAspect, callTool, onSidecarUpdate, onGenerationLifecycle });
   // Extract per-scene clips/audio so video gens have their references (no-ops
   // until scenes exist; module-deduped against the source asset).
   useSceneFilesBootstrap({ sidecar, projectSlug, callTool });

@@ -57,6 +57,7 @@ import { toast } from '@/hooks/useToast';
 import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
+import type { GenerationLifecycleEvent } from '@/lib/generation-lifecycle';
 import type { MediaItem, AssetType, ClipState, PendingState, OsgInfo } from '@/components/sidebar/types';
 import { DEFAULT_RENDER_SETTINGS, getDefaultRenderSettings, isOsgPosition, isSubtitleLanguage, parseOsgPosition, storedToRenderSettings, type TranscriptInfo } from '@/components/center-stage/render-settings-types';
 import type { RenderSettings } from '@/components/center-stage/render-settings-types';
@@ -141,7 +142,7 @@ export function HomePage() {
   // Optimistic placeholder tiles for just-enqueued generations, shown in the
   // clips bar until the real asset surfaces via sync (or the safety expiry).
   const [ghostClips, setGhostClips] = useState<
-    { id: string; category: 'video' | 'image'; prompt: string; startedAt: number }[]
+    { requestId: string; assetId?: string; category: 'video' | 'image'; prompt: string; startedAt: number }[]
   >([]);
   const [characterDialog, setCharacterDialog] = useState<{
     initialSlug: string | null;
@@ -353,29 +354,38 @@ export function HomePage() {
     const ids = new Set(mediaItems.map((m) => m.id));
     const cutoff = Date.now() - 90_000;
     setGhostClips((gs) => {
-      const next = gs.filter((g) => !ids.has(g.id) && g.startedAt > cutoff);
+      const next = gs.filter((g) => (!g.assetId || !ids.has(g.assetId)) && g.startedAt > cutoff);
       return next.length === gs.length ? gs : next;
     });
   }, [mediaItems, ghostClips.length]);
 
-  const handleGenerationSubmitted = useCallback(
-    (g: { assetId: string; category: 'video' | 'image'; prompt: string }) => {
-      setGhostClips((gs) =>
-        gs.some((x) => x.id === g.assetId)
-          ? gs
-          : [...gs, { id: g.assetId, category: g.category, prompt: g.prompt, startedAt: Date.now() }]);
-    },
-    [],
-  );
+  const handleGenerationLifecycle = useCallback((event: GenerationLifecycleEvent) => {
+    setGhostClips((ghosts) => {
+      if (event.phase === 'started') {
+        if (ghosts.some((ghost) => ghost.requestId === event.requestId)) return ghosts;
+        return [...ghosts, {
+          requestId: event.requestId,
+          category: event.category,
+          prompt: event.prompt,
+          startedAt: Date.now(),
+        }];
+      }
+      if (event.phase === 'failed') {
+        return ghosts.filter((ghost) => ghost.requestId !== event.requestId);
+      }
+      return ghosts.map((ghost) =>
+        ghost.requestId === event.requestId ? { ...ghost, assetId: event.assetId } : ghost);
+    });
+  }, []);
 
   // Ghosts still awaiting their real card, split by where they render.
   const videoGhosts = useMemo(() => {
     const ids = new Set(clips.map((c) => c.id));
-    return ghostClips.filter((g) => g.category === 'video' && !ids.has(g.id));
+    return ghostClips.filter((g) => g.category === 'video' && (!g.assetId || !ids.has(g.assetId)));
   }, [ghostClips, clips]);
   const imageGhosts = useMemo(() => {
     const ids = new Set(assets.map((a) => a.id));
-    return ghostClips.filter((g) => g.category === 'image' && !ids.has(g.id));
+    return ghostClips.filter((g) => g.category === 'image' && (!g.assetId || !ids.has(g.assetId)));
   }, [ghostClips, assets]);
 
   // Whether a generation of the open panel's category is still running —
@@ -1572,14 +1582,14 @@ export function HomePage() {
                     </div>
                   )}
                   {sortOrder === 'newest' && imageGhosts.map((g) => (
-                    <div key={g.id} className="w-full">
-                      <GhostClipCard id={g.id} type="image" prompt={g.prompt} startedAt={g.startedAt} />
+                    <div key={g.requestId} className="w-full">
+                      <GhostClipCard id={g.assetId ?? g.requestId} type="image" prompt={g.prompt} startedAt={g.startedAt} />
                     </div>
                   ))}
                   {nonPlanAssets.map(renderAssetCard)}
                   {sortOrder === 'oldest' && imageGhosts.map((g) => (
-                    <div key={g.id} className="w-full">
-                      <GhostClipCard id={g.id} type="image" prompt={g.prompt} startedAt={g.startedAt} />
+                    <div key={g.requestId} className="w-full">
+                      <GhostClipCard id={g.assetId ?? g.requestId} type="image" prompt={g.prompt} startedAt={g.startedAt} />
                     </div>
                   ))}
                   <UploadSlot onClick={triggerUpload} />
@@ -1611,7 +1621,7 @@ export function HomePage() {
                     callTool={callTool}
                     projectSlug={projectSlug}
                     pendingGeneration={pendingGenForPanel}
-                    onGenerationSubmitted={handleGenerationSubmitted}
+                    onGenerationLifecycle={handleGenerationLifecycle}
                   />
                 ) : archiveOpen ? (
                   <ArchiveBrowser
@@ -1655,6 +1665,7 @@ export function HomePage() {
                     osgTarget={osgTarget}
                     onOsgConsumed={() => setOsgTarget(null)}
                     onOsgApply={handleOsgApply}
+                    onGenerationLifecycle={handleGenerationLifecycle}
                   />
                 ) : templatesOpen ? (
                   <TemplatesViewer
@@ -1673,6 +1684,7 @@ export function HomePage() {
                     resetKey={planOpenKey}
                     onClose={() => setPlanEmptyOverride(false)}
                     onBackToTemplates={openTemplates}
+                    onGenerationLifecycle={handleGenerationLifecycle}
                   />
                 ) : timelineSlotIndex != null ? (
                   <TimelinePlayer
@@ -1724,8 +1736,8 @@ export function HomePage() {
               ) : (
                 <div className="flex-1 overflow-y-auto space-y-2 mt-2 pr-2">
                   {sortOrder === 'newest' && videoGhosts.map((g) => (
-                    <div key={g.id} className="w-full">
-                      <GhostClipCard id={g.id} type="video" prompt={g.prompt} startedAt={g.startedAt} />
+                    <div key={g.requestId} className="w-full">
+                      <GhostClipCard id={g.assetId ?? g.requestId} type="video" prompt={g.prompt} startedAt={g.startedAt} />
                     </div>
                   ))}
                   {clips.map((item) => {
@@ -1748,13 +1760,13 @@ export function HomePage() {
                     return (
                       <div key={item.id} className="w-full">
                         {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} onAudioDropped={(audioId, audioSlug) => handleAudioDroppedOnVideo(item, audioId, audioSlug)} onImageDropped={(imageId) => handleAnimateCommand(`/osg @${item.id} @${imageId}`)} onEditOsg={() => handleAnimateCommand(`/osg @${item.id}`)} />}
-                        {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
+                        {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} onImageDropped={(imageId) => handleAnimateCommand(`/osg @${item.id} @${imageId}`)} onEditOsg={() => handleAnimateCommand(`/osg @${item.id}`)} />}
                       </div>
                     );
                   })}
                   {sortOrder === 'oldest' && videoGhosts.map((g) => (
-                    <div key={g.id} className="w-full">
-                      <GhostClipCard id={g.id} type="video" prompt={g.prompt} startedAt={g.startedAt} />
+                    <div key={g.requestId} className="w-full">
+                      <GhostClipCard id={g.assetId ?? g.requestId} type="video" prompt={g.prompt} startedAt={g.startedAt} />
                     </div>
                   ))}
                   <UploadSlot onClick={triggerUpload} />
