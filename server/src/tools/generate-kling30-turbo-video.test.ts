@@ -1,0 +1,98 @@
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { createFs } from "videocity-engine";
+import sharp from "sharp";
+import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { createTestClient } from "../test-client.js";
+
+type TextContent = Array<{ type: string; text: string }>;
+
+function makePng(): Promise<Buffer> {
+  return sharp({
+    create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
+  }).png().toBuffer();
+}
+
+describe("generate_kling30_turbo_video tool", () => {
+  let client: Client;
+  let tempDir: string;
+  const originalKey = process.env.KIE_API_KEY;
+
+  beforeEach(async () => {
+    process.env.KIE_API_KEY = "test-key";
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-kling30-turbo-test-"));
+    client = await createTestClient(tempDir);
+    await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: "test-proj" },
+    });
+  });
+
+  afterEach(async () => {
+    if (originalKey) {
+      process.env.KIE_API_KEY = originalKey;
+    } else {
+      delete process.env.KIE_API_KEY;
+    }
+    await client?.close();
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  it("returns error when KIE_API_KEY is not set", async () => {
+    delete process.env.KIE_API_KEY;
+    const result = await client.callTool({
+      name: "generate_kling30_turbo_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "a futuristic city",
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("KIE_API_KEY environment variable is not set");
+  });
+
+  it("enqueues kling30_turbo job (text-to-video)", async () => {
+    const result = await client.callTool({
+      name: "generate_kling30_turbo_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "a futuristic city",
+        duration: "5",
+        resolution: "720p",
+        aspect_ratio: "16:9",
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.status).toBe("enqueued");
+    expect(parsed.vid_asset_id).toMatch(/^vid-/);
+    expect(parsed.source_images).toEqual([]);
+    expect(parsed.job_id).toBeDefined();
+  });
+
+  it("enqueues kling30_turbo job (image-to-video)", async () => {
+    const fs = createFs({ projectsDir: tempDir });
+    const imageAsset = await fs.createAsset("img", "source-img", "test-proj");
+    if (!imageAsset.ok) throw new Error("Failed to create image asset");
+    await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
+
+    const result = await client.callTool({
+      name: "generate_kling30_turbo_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "animate this image",
+        image_slugs: [`@${imageAsset.value.assetId}`],
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.status).toBe("enqueued");
+    expect(parsed.vid_asset_id).toMatch(/^vid-/);
+    expect(parsed.source_images).toEqual([imageAsset.value.assetId]);
+    expect(parsed.job_id).toBeDefined();
+  });
+});

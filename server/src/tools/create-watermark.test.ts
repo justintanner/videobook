@@ -110,8 +110,10 @@ describe("create_watermark tool", () => {
       arguments: {},
     });
     expect(cfgResult.isError).not.toBe(true);
-    const exposed = JSON.parse(resultText(cfgResult)) as { savedHandle: string | null; recent: string[] };
+    const exposed = JSON.parse(resultText(cfgResult)) as { savedHandle: string | null; recent: string[]; authenticatedHandle: string | null };
     expect(exposed.savedHandle).toBe("alice");
     expect(exposed.recent).toEqual(["bob", "alice"]);
+    // authenticatedHandle is null in tests because no X access token is configured.
+    expect(exposed.authenticatedHandle).toBeNull();
   });
 });

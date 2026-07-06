@@ -171,6 +171,15 @@ const ADAPTERS: Record<string, CostAdapter> = {
   // the paygate via COST_TABLE_PENDING_MODELS. See docs/apicity-gaps.md §12.
   generate_kling30_video: kieKling30Video,
   generate_kling30_motion_control_video: kieKling30MotionControl,
+  generate_kling30_turbo_video: (args: Record<string, unknown>) => {
+    const imageSlugs = (args.image_slugs as string[] | undefined) ?? [];
+    const model = imageSlugs.length > 0 ? "kling/v3-turbo-image-to-video" : "kling/v3-turbo-text-to-video";
+    return kieResolutionVideo(model, "720p")(args);
+  },
+
+  // --- KIE Veo 3 / Veo 3 Fast (flat per-second, priced in cost@0.7.0) ---
+  generate_veo3_video: kieFlatVideo("veo3"),
+  generate_veo3_fast_video: kieFlatVideo("veo3_fast"),
 
   // --- KIE Wan 2.7 video (flat $0.10/s across all four endpoints) ---
   generate_wan27_t2v_video: kieFlatVideo("wan/2-7-text-to-video"),

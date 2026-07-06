@@ -2,9 +2,10 @@
  * Persisted watermark handle preferences.
  *
  * The /watermark dialog remembers the X handles you've used so it can default to
- * your last-used (or explicitly saved) handle instead of asking every time. We
- * can't read the connected X username (the @apicity/x provider exposes no
- * users/me endpoint), so this small local store is the source of truth.
+ * your last-used (or explicitly saved) handle instead of asking every time. The
+ * authenticated user's handle is read live via @apicity/x's /2/users/me endpoint
+ * (see x/authenticated-handle.ts); `authenticatedHandle` below is a read-through
+ * cache so the dialog still pre-fills when the API is unreachable.
  *
  * Stored at ~/.videocity/watermark-config.json (override WATERMARK_CONFIG_PATH),
  * mirroring the atomic-write pattern in x/x-tokens.ts.
@@ -19,9 +20,10 @@ const RECENT_LIMIT = 8;
 export interface WatermarkConfig {
   savedHandle: string | null;
   recent: string[];
+  authenticatedHandle: string | null;
 }
 
-const EMPTY_CONFIG: WatermarkConfig = { savedHandle: null, recent: [] };
+const EMPTY_CONFIG: WatermarkConfig = { savedHandle: null, recent: [], authenticatedHandle: null };
 
 function configFilePath(): string {
   return (
@@ -57,7 +59,8 @@ export async function readWatermarkConfig(): Promise<WatermarkConfig> {
       ? parsed.recent.filter((h): h is string => typeof h === "string")
       : [];
     const savedHandle = typeof parsed.savedHandle === "string" ? parsed.savedHandle : null;
-    return { savedHandle, recent };
+    const authenticatedHandle = typeof parsed.authenticatedHandle === "string" ? parsed.authenticatedHandle : null;
+    return { savedHandle, recent, authenticatedHandle };
   } catch {
     return { ...EMPTY_CONFIG };
   }
@@ -88,6 +91,22 @@ export async function recordHandle(
   const next: WatermarkConfig = {
     savedHandle: opts.saveDefault ? normalized : current.savedHandle,
     recent: [normalized, ...deduped].slice(0, RECENT_LIMIT),
+    authenticatedHandle: current.authenticatedHandle,
+  };
+  await writeWatermarkConfig(next);
+  return next;
+}
+
+/** Cache the authenticated X handle (read-through fallback when the API is
+ *  unreachable). Pass null to clear. No-op when the value is unchanged. */
+export async function setAuthenticatedHandle(handle: string | null): Promise<WatermarkConfig> {
+  const normalized = handle === null ? null : normalizeHandle(handle);
+  const current = await readWatermarkConfig();
+  if (current.authenticatedHandle === normalized) return current;
+  const next: WatermarkConfig = {
+    savedHandle: current.savedHandle,
+    recent: current.recent,
+    authenticatedHandle: normalized,
   };
   await writeWatermarkConfig(next);
   return next;

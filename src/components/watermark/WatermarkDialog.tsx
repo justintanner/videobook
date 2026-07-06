@@ -31,6 +31,7 @@ interface ToolTextResult {
 interface WatermarkConfig {
   savedHandle: string | null;
   recent: string[];
+  authenticatedHandle?: string | null;
 }
 
 function extractText(result: unknown): string | null {
@@ -66,10 +67,10 @@ export function WatermarkDialog({ open, onOpenChange, item, projectSlug, callToo
         const res = await callTool('get_watermark_config', {});
         const r = res as ToolTextResult;
         const text = r.isError ? null : extractText(res);
-        const cfg = text ? (JSON.parse(text) as WatermarkConfig) : { savedHandle: null, recent: [] };
+        const cfg = text ? (JSON.parse(text) as WatermarkConfig) : { savedHandle: null, recent: [], authenticatedHandle: null };
         if (cancelled) return;
         setRecent(cfg.recent ?? []);
-        setHandle(cfg.savedHandle ?? cfg.recent?.[0] ?? '');
+        setHandle(cfg.savedHandle ?? cfg.authenticatedHandle ?? cfg.recent?.[0] ?? '');
       } catch {
         if (!cancelled) { setRecent([]); setHandle(''); }
       } finally {

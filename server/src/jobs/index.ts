@@ -30,6 +30,8 @@ import { registerGenerateSeedance2VideoJob } from "./generate-seedance2-video.js
 import { registerGenerateSeedance2FastVideoJob } from "./generate-seedance2-fast-video.js";
 import { registerGenerateSeedance2MiniVideoJob } from "./generate-seedance2-mini-video.js";
 import { registerGenerateGeminiOmniVideoJob } from "./generate-gemini-omni-video.js";
+import { registerGenerateVeo3VideoJob } from "./generate-veo3-video.js";
+import { registerGenerateKling30TurboVideoJob } from "./generate-kling30-turbo-video.js";
 import { registerGenerateWan27T2vVideoJob } from "./generate-wan27-t2v-video.js";
 import { registerGenerateWan27I2vVideoJob } from "./generate-wan27-i2v-video.js";
 import { registerGenerateWan27VideoeditVideoJob } from "./generate-wan27-videoedit-video.js";
@@ -91,6 +93,8 @@ import { registerGenerateNanoBananaFalJob } from "./generate-nano-banana-fal.js"
 import { registerGenerateNanoBananaEditFalJob } from "./generate-nano-banana-edit-fal.js";
 import { registerGenerateNanoBanana2FalJob } from "./generate-nano-banana-2-fal.js";
 import { registerGenerateNanoBanana2EditFalJob } from "./generate-nano-banana-2-edit-fal.js";
+import { registerGenerateNanoBanana2LiteFalJob } from "./generate-nano-banana-2-lite-fal.js";
+import { registerGenerateNanoBanana2LiteEditFalJob } from "./generate-nano-banana-2-lite-edit-fal.js";
 import { registerGenerateQwenImageFalJob } from "./generate-qwen-image-fal.js";
 import { registerGenerateQwenImageEditFalJob } from "./generate-qwen-image-edit-fal.js";
 import { registerGenerateSeedance2FastT2vFalJob } from "./generate-seedance2-fast-t2v-fal.js";
@@ -142,6 +146,8 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerGenerateSeedance2FastVideoJob(fs);
   registerGenerateSeedance2MiniVideoJob(fs);
   registerGenerateGeminiOmniVideoJob(fs);
+  registerGenerateVeo3VideoJob(fs);
+  registerGenerateKling30TurboVideoJob(fs);
   registerGenerateWan27T2vVideoJob(fs);
   registerGenerateWan27I2vVideoJob(fs);
   registerGenerateWan27VideoeditVideoJob(fs);
@@ -206,6 +212,8 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerGenerateNanoBananaEditFalJob(fs);
   registerGenerateNanoBanana2FalJob(fs);
   registerGenerateNanoBanana2EditFalJob(fs);
+  registerGenerateNanoBanana2LiteFalJob(fs);
+  registerGenerateNanoBanana2LiteEditFalJob(fs);
   registerGenerateQwenImageFalJob(fs);
   registerGenerateQwenImageEditFalJob(fs);
   registerGenerateSeedance2FastT2vFalJob(fs);

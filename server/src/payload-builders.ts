@@ -61,6 +61,13 @@ import type {
   GeminiOmniVideoDuration,
   GeminiOmniVideoAspectRatio,
   GeminiOmniVideoResolution,
+  VeoGenerateRequest,
+  VeoModel,
+  KlingV3TurboImageToVideoRequest,
+  KlingV3TurboTextToVideoRequest,
+  KlingV3TurboDuration,
+  KlingV3TurboResolution,
+  KlingV3TurboAspectRatio,
 } from "@apicity/kie";
 import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest, XaiImageReference } from "@apicity/xai";
 import type {
@@ -128,6 +135,39 @@ function buildKling30VideoPayload(
       ...(elements.length > 0 ? { kling_elements: elements } : {}),
     } as KlingVideoRequest["input"],
   };
+}
+
+export function buildKlingV3TurboVideoPayload(
+  args: {
+    prompt: string;
+    duration?: string;
+    resolution?: KlingV3TurboResolution;
+    aspect_ratio?: KlingV3TurboAspectRatio;
+  },
+  imageUrls: string[],
+): KlingV3TurboImageToVideoRequest | KlingV3TurboTextToVideoRequest {
+  const isI2V = imageUrls.length > 0;
+  if (isI2V) {
+    return {
+      model: "kling/v3-turbo-image-to-video",
+      input: {
+        prompt: args.prompt,
+        image_urls: imageUrls,
+        duration: (args.duration ?? "5") as KlingV3TurboDuration,
+        resolution: "720p",
+      },
+    } as KlingV3TurboImageToVideoRequest;
+  } else {
+    return {
+      model: "kling/v3-turbo-text-to-video",
+      input: {
+        prompt: args.prompt,
+        duration: (args.duration ?? "5") as KlingV3TurboDuration,
+        resolution: (args.resolution ?? "720p") as KlingV3TurboResolution,
+        aspect_ratio: (args.aspect_ratio ?? "16:9") as KlingV3TurboAspectRatio,
+      },
+    } as KlingV3TurboTextToVideoRequest;
+  }
 }
 
 type Kling30MotionControlArgs = {
@@ -411,6 +451,35 @@ function buildGeminiOmniVideoPayload(
       ...(args.seed !== undefined ? { seed: args.seed } : {}),
       ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
     },
+  };
+}
+
+// Veo 3 / Veo 3 Fast: Google's video model exposed via kie's separate veo
+// namespace (kie.veo.post.api.v1.veo.generate). Flat request shape — no nested
+// `input` object. generationType is inferred from whether reference images are
+// supplied (REFERENCE_2_VIDEO vs TEXT_2_VIDEO).
+type Veo3VideoArgs = {
+  prompt: string;
+  aspect_ratio?: "16:9" | "9:16" | "Auto";
+  seed?: number;
+};
+
+type Veo3VideoOpts = {
+  imageUrls?: string[];
+};
+
+function buildVeo3VideoPayload(
+  model: VeoModel,
+  args: Veo3VideoArgs,
+  opts: Veo3VideoOpts,
+): VeoGenerateRequest {
+  const hasImages = opts.imageUrls !== undefined && opts.imageUrls.length > 0;
+  return {
+    prompt: args.prompt,
+    model,
+    ...(args.aspect_ratio !== undefined ? { aspectRatio: args.aspect_ratio } : {}),
+    ...(hasImages ? { generationType: "REFERENCE_2_VIDEO" as const, imageUrls: opts.imageUrls } : { generationType: "TEXT_2_VIDEO" as const }),
+    ...(args.seed !== undefined ? { seeds: args.seed } : {}),
   };
 }
 
@@ -1172,6 +1241,13 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_kling30_turbo_video": {
+      const payload = buildKlingV3TurboVideoPayload(
+        args as unknown as { prompt: string; duration?: string; resolution?: KlingV3TurboResolution; aspect_ratio?: KlingV3TurboAspectRatio },
+        imageSlugs,
+      );
+      return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
+    }
     case "generate_grok_imagine_video": {
       if (isXaiProvider(provider)) {
         const payload = buildXaiGrokImagineVideoPayload(args as GrokImagineVideoArgs, imageSlugs);
@@ -1434,7 +1510,8 @@ function translateToolPayload(
 // ---------------------------------------------------------------------------
 
 const VIDEO_TOOLS = new Set([
-  "generate_kling30_video", "generate_kling30_motion_control_video",
+  "generate_kling30_video", "generate_kling30_motion_control_video", "generate_kling30_turbo_video",
+  "generate_veo3_video", "generate_veo3_fast_video",
   "generate_seedance2_video", "generate_seedance2_fast_video", "generate_seedance2_mini_video",
   "generate_gemini_omni_video",
   "generate_grok_imagine_video", "generate_grok_imagine_t2v_video", "generate_grok_imagine_ref_video",
@@ -1484,6 +1561,7 @@ export {
   buildSeedance2VideoPayload,
   buildSeedance2MiniVideoPayload,
   buildGeminiOmniVideoPayload,
+  buildVeo3VideoPayload,
   buildWan27TextToVideoPayload,
   buildWan27FramesVideoPayload,
   buildWan27ReferenceVideoPayload,

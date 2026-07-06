@@ -57,6 +57,8 @@ import { generateSeedance2VideoDef } from "./generate-seedance2-video.js";
 import { generateSeedance2FastVideoDef } from "./generate-seedance2-fast-video.js";
 import { generateSeedance2MiniVideoDef } from "./generate-seedance2-mini-video.js";
 import { generateGeminiOmniVideoDef } from "./generate-gemini-omni-video.js";
+import { generateVeo3VideoDef, generateVeo3FastVideoDef } from "./generate-veo3-video.js";
+import { generateKling30TurboVideoDef } from "./generate-kling30-turbo-video.js";
 import { generateWan27T2vVideoDef } from "./generate-wan27-t2v-video.js";
 import { generateWan27I2vVideoDef } from "./generate-wan27-i2v-video.js";
 import { generateWan27VideoeditVideoDef } from "./generate-wan27-videoedit-video.js";
@@ -133,6 +135,8 @@ import { generateNanoBananaFalDef } from "./generate-nano-banana-fal.js";
 import { generateNanoBananaEditFalDef } from "./generate-nano-banana-edit-fal.js";
 import { generateNanoBanana2FalDef } from "./generate-nano-banana-2-fal.js";
 import { generateNanoBanana2EditFalDef } from "./generate-nano-banana-2-edit-fal.js";
+import { generateNanoBanana2LiteFalDef } from "./generate-nano-banana-2-lite-fal.js";
+import { generateNanoBanana2LiteEditFalDef } from "./generate-nano-banana-2-lite-edit-fal.js";
 import { generateQwenImageFalDef } from "./generate-qwen-image-fal.js";
 import { generateQwenImageEditFalDef } from "./generate-qwen-image-edit-fal.js";
 import { generateSeedance2FastT2vFalDef } from "./generate-seedance2-fast-t2v-fal.js";
@@ -258,6 +262,9 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     generateSeedance2FastVideoDef(fs),
     generateSeedance2MiniVideoDef(fs),
     generateGeminiOmniVideoDef(fs),
+    generateVeo3VideoDef(fs),
+    generateVeo3FastVideoDef(fs),
+    generateKling30TurboVideoDef(fs),
     generateWan27T2vVideoDef(fs),
     generateWan27I2vVideoDef(fs),
     generateWan27VideoeditVideoDef(fs),
@@ -336,6 +343,8 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     generateNanoBananaEditFalDef(fs),
     generateNanoBanana2FalDef(fs),
     generateNanoBanana2EditFalDef(fs),
+    generateNanoBanana2LiteFalDef(fs),
+    generateNanoBanana2LiteEditFalDef(fs),
     generateQwenImageFalDef(fs),
     generateQwenImageEditFalDef(fs),
     generateSeedance2FastT2vFalDef(fs),

@@ -131,7 +131,12 @@ function metaPrompt(meta: Record<string, unknown> | undefined): string | null {
   return typeof p === "string" ? p : null;
 }
 
+function isVeoPendingTask(task: PendingTask): boolean {
+  return typeof task.meta?.veoModel === "string";
+}
+
 function isKiePendingTask(task: PendingTask): boolean {
+  if (isVeoPendingTask(task)) return false;
   return !task.taskType.startsWith("xai_") && !task.taskType.startsWith("fal_") && !task.taskType.startsWith("alibaba_");
 }
 
@@ -595,6 +600,70 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
         result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
         if (e instanceof KieError) {
           // TS narrowing on `e` is unreliable here, use an explicit assertion.
+          const kieErr = e as KieError;
+          if (kieErr.status >= 400 && kieErr.status < 500) {
+            await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
+          }
+        }
+      }
+    }));
+  }
+
+  // Poll KIE Veo tasks (separate namespace: kie.veo.get.api.v1.veo.recordInfo)
+  const veoTasks = pollableTasks.filter(isVeoPendingTask);
+  if (kieApiKey && veoTasks.length > 0) {
+    const provider = createKie({ apiKey: kieApiKey, timeout: 30_000 });
+
+    await Promise.all(veoTasks.map(async (task) => {
+      const prompt = metaPrompt(task.meta);
+      try {
+        const recordInfo = await provider.veo.get.api.v1.veo.recordInfo(task.taskId);
+        const data = recordInfo.data;
+        // Veo successFlag: 0=submitted/pending, 1=success, 2=fail, 3=processing
+        if (data?.successFlag === 1) {
+          const urls = data.response?.resultUrls ?? [];
+          if (urls.length === 0) {
+            const failMsg = "Veo task succeeded but returned no resultUrls";
+            result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+            await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
+            return;
+          }
+          const assetDirResult = await fs.resolveAssetDir(task.assetId, project_slug);
+          if (!assetDirResult.ok) {
+            await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: `Asset not found: ${task.assetId}`, prompt });
+            return;
+          }
+          await fs.pendingTasks.markCompleting(project_slug, task.assetId);
+          const jobId = `complete-veo-${task.assetId}-${Date.now()}`;
+          await queue.enqueue(jobId, {
+            type: "complete_kie_task",
+            taskId: task.taskId,
+            taskType: task.taskType,
+            assetId: task.assetId,
+            assetDir: assetDirResult.value,
+            projectSlug: project_slug,
+            meta: task.meta,
+            resultUrls: urls,
+          } as unknown as Record<string, unknown>);
+          result.completed.push({ assetId: task.assetId, taskType: task.taskType, jobId });
+        } else if (data?.successFlag === 2) {
+          const failMsg = data.errorMessage ?? "Veo task failed";
+          result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+          await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
+        } else {
+          result.pending.push({
+            assetId: task.assetId,
+            taskType: task.taskType,
+            progress: 0,
+            state: data?.successFlag === 3 ? "processing" : "waiting",
+            prompt,
+            startedAt: Math.round(task.createdAt * 1000),
+          });
+        }
+      } catch (e) {
+        const failMsg = e instanceof Error ? e.message : "Veo poll failed";
+        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+        if (e instanceof KieError) {
           const kieErr = e as KieError;
           if (kieErr.status >= 400 && kieErr.status < 500) {
             await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });

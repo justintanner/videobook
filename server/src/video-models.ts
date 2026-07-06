@@ -25,6 +25,9 @@ import {
   VolcengineVideoToVideoLipSyncRequestSchema,
   Omnihuman15RequestSchema,
   GeminiOmniVideoRequestSchema,
+  VeoGenerateRequestSchema,
+  KlingV3TurboImageToVideoRequestSchema,
+  KlingV3TurboTextToVideoRequestSchema,
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import { AlibabaVideoSynthesisModelSchema, AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
@@ -162,6 +165,36 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
       "duration", "aspect_ratio", "resolution", "seed",
     ],
     defaults: {},
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
+    ],
+  },
+  veo3: {
+    label: "Veo 3",
+    tool_name: "generate_veo3_video",
+    description: "Google Veo 3 — text-to-video or image-to-video from reference images (kie veo namespace)",
+    params: ["prompt", "image_slugs", "aspect_ratio", "seed"],
+    defaults: {},
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.veo.post.api.v1.veo.generate(request, { otp })", envKey: "KIE_API_KEY" },
+    ],
+  },
+  veo3_fast: {
+    label: "Veo 3 Fast",
+    tool_name: "generate_veo3_fast_video",
+    description: "Google Veo 3 Fast — text-to-video or image-to-video from reference images (kie veo namespace)",
+    params: ["prompt", "image_slugs", "aspect_ratio", "seed"],
+    defaults: {},
+    providers: [
+      { key: "kie", label: "Kie", provider_path: "kie.veo.post.api.v1.veo.generate(request, { otp })", envKey: "KIE_API_KEY" },
+    ],
+  },
+  kling30_turbo: {
+    label: "Kling 3.0 Turbo",
+    tool_name: "generate_kling30_turbo_video",
+    description: "Kling Video v3 Turbo tier via KIE (text- or image-to-video)",
+    params: ["prompt", "image_slugs", "duration", "resolution", "aspect_ratio"],
+    defaults: { duration: "5", resolution: "720p" },
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
@@ -487,6 +520,9 @@ const IMAGE_FIELD_SCHEMAS: Record<string, ZodLike> = {
   generate_seedance2_mini_video: Seedance2MiniInputSchema.shape.reference_image_urls,
   generate_gemini_omni_video: GeminiOmniVideoRequestSchema.shape.input.shape.image_urls,
   generate_grok_imagine_video: GrokImageToVideoRequestSchema.shape.input.shape.image_urls,
+  generate_veo3_video: VeoGenerateRequestSchema.shape.imageUrls,
+  generate_veo3_fast_video: VeoGenerateRequestSchema.shape.imageUrls,
+  generate_kling30_turbo_video: KlingV3TurboImageToVideoRequestSchema.shape.input.shape.image_urls,
   generate_grok_imagine_ref_video: XaiVideoGenerateRequestSchema.shape.reference_images,
   generate_wan27_r2v_video: Wan27RefToVideoRequestSchema.shape.input.shape.reference_image,
   generate_happyhorse_ref_video: HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.reference_image,
@@ -566,6 +602,22 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     duration: XaiVideoGenerateRequestSchema.shape.duration,
     resolution: XaiVideoGenerateRequestSchema.shape.resolution,
     aspect_ratio: XaiVideoGenerateRequestSchema.shape.aspect_ratio,
+  },
+  generate_veo3_video: {
+    prompt: VeoGenerateRequestSchema.shape.prompt,
+    aspect_ratio: VeoGenerateRequestSchema.shape.aspectRatio,
+    seed: VeoGenerateRequestSchema.shape.seeds,
+  },
+  generate_veo3_fast_video: {
+    prompt: VeoGenerateRequestSchema.shape.prompt,
+    aspect_ratio: VeoGenerateRequestSchema.shape.aspectRatio,
+    seed: VeoGenerateRequestSchema.shape.seeds,
+  },
+  generate_kling30_turbo_video: {
+    prompt: KlingV3TurboTextToVideoRequestSchema.shape.input.shape.prompt,
+    duration: KlingV3TurboTextToVideoRequestSchema.shape.input.shape.duration,
+    resolution: KlingV3TurboTextToVideoRequestSchema.shape.input.shape.resolution,
+    aspect_ratio: KlingV3TurboTextToVideoRequestSchema.shape.input.shape.aspect_ratio,
   },
   extend_grok_imagine_video: {
     extend_at: GrokVideoExtendRequestSchema.shape.input.shape.extend_at,
@@ -836,8 +888,9 @@ function normalizeDefaultForParam(prop: ParamSchema, value: unknown): unknown {
 const APICITY_DERIVE_SKIP: Record<string, ReadonlySet<string>> = {
   // grok image-to-video rejects "spicy" though the Apicity mode enum includes it.
   generate_grok_imagine_video: new Set(["mode"]),
-  // Apicity Wan27VideoEditRequestSchema.duration is an unbounded int; the
-  // "0"/2-10 set is provider knowledge absent from the schema.
+  // Apicity Wan27VideoEditDurationSchema now bounds 0-10, but a custom refine
+  // excludes 1 (allowed: 0, 2-10). zodNumberRange cannot introspect refines, so
+  // auto-deriving would offer "1" which the endpoint rejects. Override stays.
   generate_wan27_videoedit_video: new Set(["duration"]),
   // Apicity allows duration 0 (full-source) but reference-to-video has no source
   // clip, so the app restricts to >= 2.
@@ -970,7 +1023,8 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "image_slug") prop.description = "Reference image for character/style guidance (e.g., @img-outfit)";
       if (param === "resolution") prop.description = "Video resolution: 720p / 1080p";
       if (param === "aspect_ratio") prop.description = "Video aspect ratio (omit to match source)";
-      // Apicity types this duration as an unbounded int; the "0"/2-10 set is provider knowledge (APICITY_DERIVE_SKIP).
+      // Apicity bounds 0-10 but a refine excludes 1; zodNumberRange can't read
+      // refines, so the enum stays hand-typed (APICITY_DERIVE_SKIP). See gap §8.
       if (param === "duration") { prop.enum = ["0", "2", "3", "4", "5", "6", "7", "8", "9", "10"]; prop.description = "Video duration: 0 (full source) or 2-10 seconds"; }
       if (param === "audio_setting") prop.description = "Audio: auto (model decides) or origin (keep original)";
       if (param === "watermark") { prop.type = "boolean"; prop.description = "Add 'AI generated' watermark to lower-right corner (default false)"; }

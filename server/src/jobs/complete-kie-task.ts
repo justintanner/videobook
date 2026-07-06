@@ -12,7 +12,7 @@ const LOCK_DURATION_MS = 300_000;
 type CompleteKieTaskPayload = {
   type: "complete_kie_task";
   taskId: string;
-  taskType: "nano_banana_image" | "qwen2_image_edit" | "seedream_text_image" | "seedream_image" | "grok_imagine_video" | "grok_imagine_t2v_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "gpt_image_text" | "kling30_video" | "kling30_motion_control_video" | "seedance2_video" | "wan27_t2v_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "happyhorse_t2v_video" | "happyhorse_i2v_video" | "happyhorse_ref_video" | "happyhorse_videoedit_video" | "volcengine_lipsync_video" | "omnihuman_video" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "grok_imagine_upscale_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_seedance2_r2v" | "fal_seedance2_fast_i2v" | "fal_seedance2_fast_t2v" | "fal_seedance2_fast_r2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_nano_banana" | "fal_nano_banana_edit" | "fal_nano_banana_2" | "fal_nano_banana_2_edit" | "fal_qwen_image" | "fal_qwen_image_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_wan27_t2v" | "fal_wan27_i2v" | "fal_wan27_r2v" | "fal_wan27_videoedit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_kling_v3_pro_i2v" | "fal_kling_v3_pro_t2v" | "fal_kling_v3_standard_i2v" | "fal_kling_v3_standard_t2v" | "fal_grok_imagine_video_i2v" | "fal_grok_imagine_video_r2v" | "fal_grok_imagine_video_extend" | "fal_grok_imagine_video_edit";
+  taskType: "nano_banana_image" | "qwen2_image_edit" | "seedream_text_image" | "seedream_image" | "grok_imagine_video" | "grok_imagine_t2v_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "gpt_image_text" | "kling30_video" | "kling30_motion_control_video" | "seedance2_video" | "wan27_t2v_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "happyhorse_t2v_video" | "happyhorse_i2v_video" | "happyhorse_ref_video" | "happyhorse_videoedit_video" | "volcengine_lipsync_video" | "omnihuman_video" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "grok_imagine_upscale_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_seedance2_r2v" | "fal_seedance2_fast_i2v" | "fal_seedance2_fast_t2v" | "fal_seedance2_fast_r2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_nano_banana" | "fal_nano_banana_edit" | "fal_nano_banana_2" | "fal_nano_banana_2_edit" | "fal_nano_banana_2_lite" | "fal_nano_banana_2_lite_edit" | "fal_qwen_image" | "fal_qwen_image_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_wan27_t2v" | "fal_wan27_i2v" | "fal_wan27_r2v" | "fal_wan27_videoedit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_kling_v3_pro_i2v" | "fal_kling_v3_pro_t2v" | "fal_kling_v3_standard_i2v" | "fal_kling_v3_standard_t2v" | "fal_grok_imagine_video_i2v" | "fal_grok_imagine_video_r2v" | "fal_grok_imagine_video_extend" | "fal_grok_imagine_video_edit";
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -69,7 +69,7 @@ export function registerCompleteKieTaskJob(fs: VideocityFs): void {
 
     try {
       if (taskType === "nano_banana_image") {
-        await completeNanoBananaImage(fs, assetId, projectSlug, meta, resultUrls);
+        await completeNanoBananaImage(fs, assetId, projectSlug, meta, resultUrls, taskType);
       } else if (taskType === "qwen2_image_edit") {
         await completeQwen2ImageEdit(fs, assetId, projectSlug, meta, resultUrls);
       } else if (taskType === "seedream_text_image" || taskType === "seedream_image") {
@@ -117,8 +117,13 @@ export function registerCompleteKieTaskJob(fs: VideocityFs): void {
           || taskType === "fal_grok_imagine_video_edit"
         ) {
           await completeSeedance2Video(fs, assetId, assetDir, projectSlug, meta, urls, taskId);
-        } else if (taskType === "fal_nano_banana_pro" || taskType === "fal_nano_banana_pro_edit") {
-          await completeNanoBananaImage(fs, assetId, projectSlug, meta, urls);
+        } else if (
+          taskType === "fal_nano_banana_pro" || taskType === "fal_nano_banana_pro_edit" ||
+          taskType === "fal_nano_banana" || taskType === "fal_nano_banana_edit" ||
+          taskType === "fal_nano_banana_2" || taskType === "fal_nano_banana_2_edit" ||
+          taskType === "fal_nano_banana_2_lite" || taskType === "fal_nano_banana_2_lite_edit"
+        ) {
+          await completeNanoBananaImage(fs, assetId, projectSlug, meta, urls, taskType);
         } else if (
           taskType === "fal_wan27" || taskType === "fal_wan27_edit" ||
           taskType === "fal_wan27_pro" || taskType === "fal_wan27_pro_edit"
@@ -241,6 +246,7 @@ async function completeNanoBananaImage(
   projectSlug: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
+  taskType: string,
 ): Promise<void> {
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
@@ -248,9 +254,20 @@ async function completeNanoBananaImage(
   const ext = (meta.outputFormat as string) ?? "png";
   const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, projectSlug, { kind: "image" });
 
+  let model = "nano-banana-pro";
+  if (taskType.includes("banana_2_lite")) {
+    model = "nano-banana-2-lite";
+  } else if (taskType.includes("banana_2")) {
+    model = "nano-banana-2";
+  } else if (taskType.includes("banana_pro")) {
+    model = "nano-banana-pro";
+  } else if (taskType.includes("banana")) {
+    model = "nano-banana";
+  }
+
   const origin = {
     source_assets: meta.sourceImageIds,
-    model: "nano-banana-pro",
+    model,
     prompt: meta.prompt,
     download_url: imageUrl,
     download_url_content_hash: contentHash(buffer),

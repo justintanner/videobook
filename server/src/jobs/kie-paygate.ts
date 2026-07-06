@@ -1,5 +1,5 @@
-import type { MediaGenerationRequest } from "@apicity/kie";
-import { createKie, submitMediaJob } from "@apicity/kie";
+import type { MediaGenerationRequest, VeoGenerateRequest } from "@apicity/kie";
+import { createKie, submitMediaJob, KieError } from "@apicity/kie";
 import { computeEstimate, mintOtp } from "@apicity/cost";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -11,6 +11,7 @@ import type { PendingTask, TaskType, VideocityFs } from "videocity-engine";
 import { requireApiKey } from "../api-key.js";
 
 export const KIE_PAYGATE_DOT_PATH = "api.v1.jobs.createTask";
+export const VEO_PAYGATE_DOT_PATH = "api.v1.veo.generate";
 
 // Local shim: @apicity/cost has no rate for the Volcengine v2v lip-sync,
 // OmniHuman 1.5, or Gemini Omni Video models shipped in @apicity/kie, so
@@ -66,21 +67,29 @@ export function ensurePaygateSecret(): string {
   return secret;
 }
 
-export function mintKieOtp(request: MediaGenerationRequest, ttlSeconds = 10 * 60): string {
+export function mintKieOtp(
+  request: MediaGenerationRequest,
+  ttlSeconds = 10 * 60,
+  dotPath: string = KIE_PAYGATE_DOT_PATH,
+): string {
   const payload = request as unknown as Record<string, unknown>;
-  const model = typeof payload.model === "string" ? payload.model : "";
   const estimate = computeEstimate({ provider: "kie", payload });
-  if (estimate.warnings.length > 0 && !COST_TABLE_PENDING_MODELS.has(model)) {
+  if (estimate.warnings.length > 0 && !COST_TABLE_PENDING_MODELS.has(modelOf(payload))) {
     throw new Error(`KIE cost estimate is not bounded: ${estimate.warnings.join("; ")}`);
   }
 
   return mintOtp(ensurePaygateSecret(), {
     provider: "kie",
     method: "POST",
-    dotPath: KIE_PAYGATE_DOT_PATH,
+    dotPath,
     request: payload,
     ttl: ttlSeconds,
   });
+}
+
+function modelOf(payload: Record<string, unknown>): string {
+  const model = payload.model;
+  return typeof model === "string" ? model : "";
 }
 
 function createKieProvider(apiKey: string) {
@@ -145,4 +154,51 @@ export async function submitQueuedKieTask(
 
   await fs.writeMetadata(task.assetId, "kie-task-id", { taskId }, projectSlug);
   return writeResult.value.pendingTask;
+}
+
+type SubmitVeoTaskArgs = {
+  request: VeoGenerateRequest;
+  assetId: string;
+  assetDir: string;
+  projectSlug: string;
+  taskType: TaskType;
+  meta: Record<string, unknown>;
+};
+
+/** Submit a Veo 3 / Veo 3 Fast generation task. Veo uses a separate kie
+ *  namespace (`kie.veo.post.api.v1.veo.generate`) and paygate dotPath
+ *  (`api.v1.veo.generate`) from the standard `jobs.createTask` path. */
+export async function submitVeoTask(
+  fs: VideocityFs,
+  ctx: JobHandlerContext,
+  args: SubmitVeoTaskArgs,
+): Promise<string> {
+  const apiKey = requireApiKey("KIE_API_KEY");
+  await fs.writeMetadata(args.assetId, "generation-payload", args.request, args.projectSlug);
+  const provider = createKieProvider(apiKey);
+
+  const result = await provider.veo.post.api.v1.veo.generate(args.request, {
+    otp: mintKieOtp(args.request as unknown as MediaGenerationRequest, 10 * 60, VEO_PAYGATE_DOT_PATH),
+  });
+  if (!result.data?.taskId) {
+    throw new KieError(
+      `veo.generate failed: ${result.code} ${typeof result === "object" && result !== null && "msg" in result ? String((result as { msg?: unknown }).msg) : "no taskId in response"}`,
+      result.code,
+    );
+  }
+  const taskId = result.data.taskId;
+
+  const pendingResult = await fs.pendingTasks.write(args.projectSlug, {
+    taskId,
+    taskType: args.taskType,
+    assetId: args.assetId,
+    assetDir: args.assetDir,
+    meta: args.meta,
+  }, ctx.getOwnerId());
+  if (!pendingResult.ok) throw new Error(`Failed to write pending-task for ${args.assetId}: ${pendingResult.error.message}`);
+  if (pendingResult.value === null) throw new Error(`Lost local lease while writing pending-task`);
+
+  await fs.writeMetadata(args.assetId, "kie-task-id", { taskId }, args.projectSlug);
+  ctx.setLease({ kind: "task", taskId });
+  return taskId;
 }

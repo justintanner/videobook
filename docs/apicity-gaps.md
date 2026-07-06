@@ -122,16 +122,16 @@ derived from the per-request `duration` field).
 
 ---
 
-## 7. (gap) `@apicity/x` exposes no `users/me` endpoint
+## 7. (gap) ~~`@apicity/x` exposes no `users/me` endpoint~~ — RESOLVED in 0.7.0
 
-There is no way to read the authenticated X user's handle programmatically.
-
-**Workaround:** `server/src/watermark-config.ts` keeps a local
-`~/.videocity/watermark-config.json` store of previously-used handles. Comment at
-`watermark-config.ts:4-6` documents it.
-
-**Ask apicity:** add a `users/me` / `getAuthenticatedUser()` endpoint to
-`@apicity/x`.
+**Resolved by `@apicity/x@0.7.0`:** the provider now exposes
+`x.get.v2.users.me()` (`XUsersMeMethod`), returning `{ data: { id, name, username, ... } }`.
+The watermark dialog reads the authenticated handle live via
+`server/src/x/authenticated-handle.ts` → `fetchAuthenticatedXHandle()`, with a
+read-through cache in `watermark-config.ts` (`authenticatedHandle` field) so the
+dialog still pre-fills when the API is unreachable. The local
+`~/.videocity/watermark-config.json` store remains for explicit user preferences
+(`savedHandle`, `recent`) and as the fallback cache.
 
 ---
 
@@ -145,7 +145,7 @@ flagged here for confirmation:
 | Where | videocity value | apicity says | Likely reason |
 |---|---|---|---|
 | `generate_grok_imagine_video.prompt` max length | 4096 | 5000 | unclear — codebase uses 4096 in two places; confirm real endpoint cap |
-| `generate_wan27_videoedit_video.duration` | `"0"/2-10` string enum | unbounded `int` | apicity provides no bound; "0 = full source" is provider knowledge |
+| `generate_wan27_videoedit_video.duration` | `"0"/2-10` string enum | `Wan27VideoEditDurationSchema` (0-10 int + refine excluding 1) | bound now exported; refine excluding 1 is not introspectable by `zodNumberRange` (opaque custom check), so derive-skip stays |
 | `generate_wan27_r2v_fal_video.duration` | int `2-10` | int `0-10` | r2v has no source clip, so `0` (full-source) is intentionally excluded |
 | `generate_grok_imagine_ref_video.duration` | `6`/`10` (kie enum) | unbounded number (xAI schema) | xAI schema is loose; real endpoint only accepts 6 or 10 |
 
