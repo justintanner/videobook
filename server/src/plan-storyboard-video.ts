@@ -317,6 +317,24 @@ function renderMarkdown(sidecar: StoryboardVideoPlanSidecar): string {
   ].join("\n");
 }
 
+// Idempotent plan-file write: skip when the content is unchanged. The engine
+// commits each write scoped to its file path, and a scoped commit with no diff
+// fails (git exits non-zero) when the repo is otherwise dirty — which routine
+// asset work (and the storyboard auto-gen) makes it. Mirrors plan-clip-show's
+// writePlanFileIfChanged so no-op plan edits succeed instead of throwing
+// "Failed to commit file write".
+async function writePlanFileIfChanged(
+  fs: VideocityFs,
+  projectSlug: string,
+  fileName: string,
+  content: string,
+): Promise<void> {
+  const existing = await fs.readFile("plan", fileName, projectSlug);
+  if (existing.ok && Buffer.from(existing.value).toString("utf-8") === content) return;
+  const written = await fs.writeFile("plan", fileName, content, projectSlug);
+  if (!written.ok) throw new Error(`Failed to write ${fileName}: ${written.error.message}`);
+}
+
 export async function writeStoryboardVideoPlan(
   fs: VideocityFs,
   projectSlug: string,
@@ -326,11 +344,8 @@ export async function writeStoryboardVideoPlan(
   if (!projectResult.ok) throw new Error(projectResult.error.message);
   await mkdir(join(projectResult.value.path, "plan"), { recursive: true });
 
-  const writeMd = await fs.writeFile("plan", "index.md", renderMarkdown(sidecar), projectSlug);
-  if (!writeMd.ok) throw new Error(`Failed to write index.md: ${writeMd.error.message}`);
-
-  const writeJson = await fs.writeFile("plan", ".plan.json", JSON.stringify(sidecar, null, 2), projectSlug);
-  if (!writeJson.ok) throw new Error(`Failed to write .plan.json: ${writeJson.error.message}`);
+  await writePlanFileIfChanged(fs, projectSlug, "index.md", renderMarkdown(sidecar));
+  await writePlanFileIfChanged(fs, projectSlug, ".plan.json", JSON.stringify(sidecar, null, 2));
 }
 
 export async function readStoryboardVideoPlan(

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createFs } from "videocity-engine";
@@ -7,6 +7,7 @@ import type { VideocityFs } from "videocity-engine";
 import type { StoryboardVideoPlanSidecar, StoryboardVideoSourceAnalysis } from "../plan-types.js";
 import { queue } from "../queue.js";
 import { planStoryboardVideoDef } from "./plan-storyboard-video.js";
+import { writeStoryboardVideoPlan } from "../plan-storyboard-video.js";
 import { replacePlanStoryboardVideoStoryboardDef } from "./replace-plan-storyboard-video-storyboard.js";
 import { replacePlanStoryboardVideoVideoDef } from "./replace-plan-storyboard-video-video.js";
 
@@ -497,5 +498,28 @@ End on a clean final beat.`,
       delete process.env.KIE_API_KEY;
       vi.restoreAllMocks();
     }
+  });
+
+  // Regression: the engine commits each write scoped to its file path, and a
+  // scoped commit with no diff fails (git exits non-zero) when the repo is
+  // otherwise dirty — which the storyboard auto-gen's asset creation (and
+  // routine asset work) makes it. A no-op plan re-write (e.g. the savePlan that
+  // precedes "Generate video" when nothing changed) must be a graceful no-op,
+  // not a thrown "Failed to write index.md: Failed to commit file write".
+  it("re-writing an identical plan while the repo is dirty does not throw", async () => {
+    const sourceId = await createImage("dirty-repo-source");
+    const first = await planStoryboardVideoDef(fs).handler({
+      project_slug: PROJECT,
+      source_image_asset_id: sourceId,
+      storyboard_prompt: "Create a compact storyboard sheet.",
+      video_prompt: "Use [Image 1] and [Image 2].",
+    });
+    expect(first.isError).toBeFalsy();
+    const sidecar = parseSidecar(first.content);
+
+    // Leave an uncommitted file so a scoped no-op commit would otherwise fail.
+    await writeFile(join(tempDir, PROJECT, "stray-dirty.txt"), "uncommitted");
+
+    await expect(writeStoryboardVideoPlan(fs, PROJECT, sidecar)).resolves.toBeUndefined();
   });
 });
