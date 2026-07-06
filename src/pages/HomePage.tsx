@@ -329,6 +329,14 @@ export function HomePage() {
     mediaItems.filter((m) => ASSET_TYPES.has(m.type)),
   [mediaItems]);
 
+  const planAssets = useMemo(() =>
+    assets.filter((asset) => asset.type === 'plan'),
+  [assets]);
+
+  const nonPlanAssets = useMemo(() =>
+    assets.filter((asset) => asset.type !== 'plan'),
+  [assets]);
+
   const clips = useMemo(() =>
     mediaItems.filter((m) => CLIP_TYPES.has(m.type)),
   [mediaItems]);
@@ -1442,6 +1450,39 @@ export function HomePage() {
     open_slot_player: handleOpenSlotPlayer,
   }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, viewerSize, applySubsSetting, applyAudioSetting, applyOsgSetting, activeSelection, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openTemplates]);
 
+  const renderAssetCard = (item: MediaItem) => {
+    const canExtractSkeleton = (item.type === 'image' || item.type === 'character') && !!item.filePath && !!projectSlug;
+    const itemFilePath = item.filePath;
+    const isUnseen = item.seenAt == null && (item.status ?? 'ready') === 'ready';
+    const onMarkSeen = isUnseen && projectSlug ? () => handleMarkSeen(item.id) : undefined;
+    const canProjectExport = !!projectSlug && projects.some((project) => project.slug !== projectSlug);
+    const menu = (
+      <AssetMenu
+        slug={item.slug}
+        filePath={item.filePath}
+        itemType={item.type}
+        onAnimateCommand={handleAnimateCommand}
+        onAnimateEdit={handleAnimateEdit}
+        onExtractSkeleton={canExtractSkeleton && itemFilePath && projectSlug
+          ? () => extractSkeleton({ projectSlug, sourceAssetId: item.id, sourceImageUrl: itemFilePath })
+          : undefined}
+        onMarkSeen={onMarkSeen}
+        onOpenProjectExport={canProjectExport ? () => setProjectExportAssetId(item.id) : undefined}
+        viewerSize={viewerSize}
+        MenuItem={ContextMenuItem}
+      />
+    );
+
+    return (
+      <div key={item.id} className="w-full">
+        {(item.type === 'image' || item.type === 'character') && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
+        {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
+        {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
+        {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
+      </div>
+    );
+  };
+
   return (
     <MountKeyProvider>
     <CommandRegistryProvider callTool={callTool} state={state} projectSlug={projectSlug} uiActions={uiActions} onAfterDispatch={handleAfterDispatch}>
@@ -1525,42 +1566,17 @@ export function HomePage() {
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                  {planAssets.length > 0 && (
+                    <div className="sticky top-0 z-20 space-y-2 bg-background/95 pb-2 backdrop-blur-sm">
+                      {planAssets.map(renderAssetCard)}
+                    </div>
+                  )}
                   {sortOrder === 'newest' && imageGhosts.map((g) => (
                     <div key={g.id} className="w-full">
                       <GhostClipCard id={g.id} type="image" prompt={g.prompt} startedAt={g.startedAt} />
                     </div>
                   ))}
-                  {assets.map((item) => {
-                    const canExtractSkeleton = (item.type === 'image' || item.type === 'character') && !!item.filePath && !!projectSlug;
-                    const itemFilePath = item.filePath;
-                    const isUnseen = item.seenAt == null && (item.status ?? 'ready') === 'ready';
-                    const onMarkSeen = isUnseen && projectSlug ? () => handleMarkSeen(item.id) : undefined;
-                    const canProjectExport = !!projectSlug && projects.some((p) => p.slug !== projectSlug);
-                    const menu = (
-                      <AssetMenu
-                        slug={item.slug}
-                        filePath={item.filePath}
-                        itemType={item.type}
-                        onAnimateCommand={handleAnimateCommand}
-                        onAnimateEdit={handleAnimateEdit}
-                        onExtractSkeleton={canExtractSkeleton && itemFilePath && projectSlug
-                          ? () => extractSkeleton({ projectSlug, sourceAssetId: item.id, sourceImageUrl: itemFilePath })
-                          : undefined}
-                        onMarkSeen={onMarkSeen}
-                        onOpenProjectExport={canProjectExport ? () => setProjectExportAssetId(item.id) : undefined}
-                        viewerSize={viewerSize}
-                        MenuItem={ContextMenuItem}
-                      />
-                    );
-                    return (
-                      <div key={item.id} className="w-full">
-                        {(item.type === 'image' || item.type === 'character') && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
-                        {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
-                        {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
-                        {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
-                      </div>
-                    );
-                  })}
+                  {nonPlanAssets.map(renderAssetCard)}
                   {sortOrder === 'oldest' && imageGhosts.map((g) => (
                     <div key={g.id} className="w-full">
                       <GhostClipCard id={g.id} type="image" prompt={g.prompt} startedAt={g.startedAt} />
