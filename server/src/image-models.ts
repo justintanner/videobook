@@ -77,6 +77,9 @@ type ImageModelConfig = {
    *  Tool name is picked by image-slug count at submit time: withRefs when
    *  one or more reference images are present, noRefs otherwise. */
   falToolNames?: { noRefs?: string; withRefs?: string };
+  /** Optional Google Flow (useapi.net) routing — when set, adds "google" as a
+   *  provider option, resolved like falToolNames. */
+  googleToolNames?: { noRefs?: string; withRefs?: string };
 };
 
 const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
@@ -94,6 +97,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
       output_format: NanoBananaProRequestSchema.shape.input.shape.output_format,
     },
     falToolNames: { noRefs: "generate_nano_banana_pro_fal", withRefs: "generate_nano_banana_pro_edit_fal" },
+    googleToolNames: { noRefs: "generate_nano_banana_pro_google", withRefs: "generate_nano_banana_pro_google" },
   },
   {
     key: "grok_imagine_image",
@@ -474,15 +478,31 @@ function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
     });
   }
 
+  if (config.googleToolNames) {
+    providers.push({
+      key: "google",
+      label: "Google Flow",
+      provider_path: "google.v1.googleFlow.images()",
+      envKey: "GOOGLE_FLOW_API_KEY",
+    });
+  }
+
   return providers;
 }
 
-function resolveFalToolName(config: ImageModelConfig, imageSlugCount: number): string | null {
-  const names = config.falToolNames;
+function resolveSwapToolName(names: { noRefs?: string; withRefs?: string } | undefined, imageSlugCount: number): string | null {
   if (!names) return null;
   if (imageSlugCount > 0 && names.withRefs) return names.withRefs;
   if (imageSlugCount === 0 && names.noRefs) return names.noRefs;
   return names.withRefs ?? names.noRefs ?? null;
+}
+
+function resolveFalToolName(config: ImageModelConfig, imageSlugCount: number): string | null {
+  return resolveSwapToolName(config.falToolNames, imageSlugCount);
+}
+
+function resolveGoogleToolName(config: ImageModelConfig, imageSlugCount: number): string | null {
+  return resolveSwapToolName(config.googleToolNames, imageSlugCount);
 }
 
 function getImageModels(): Record<string, ImageModelInfo> {
@@ -713,11 +733,13 @@ function buildImageModelOption(
       : providerList[0].key;
 
   let effectiveToolName = toolName;
-  if (selectedProvider === "fal") {
+  if (selectedProvider === "fal" || selectedProvider === "google") {
     const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName);
     const slugCount = Array.isArray(params.image_slugs) ? (params.image_slugs as unknown[]).length : 0;
-    const falName = config ? resolveFalToolName(config, slugCount) : null;
-    if (falName) effectiveToolName = falName;
+    const swapName = config
+      ? (selectedProvider === "fal" ? resolveFalToolName(config, slugCount) : resolveGoogleToolName(config, slugCount))
+      : null;
+    if (swapName) effectiveToolName = swapName;
   }
 
   return {

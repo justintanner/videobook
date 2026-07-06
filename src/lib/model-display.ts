@@ -24,6 +24,13 @@ const MODEL_DISPLAY: Record<string, Record<string, string>> = {
     'qwen-image-2.0': 'Qwen Image 2.0',
     'qwen-image-edit': 'Qwen Image Edit',
   },
+  google: {
+    'veo-3.1-quality': 'Veo 3.1',
+    'veo-3.1-fast': 'Veo 3.1 Fast',
+    'veo-3.1-lite': 'Veo 3.1 Lite',
+    'omni-flash': 'Gemini Omni Video',
+    'nano-banana-pro': 'Nano Banana Pro',
+  },
 }
 
 export function modelDisplay(provider: string, model: string): string {

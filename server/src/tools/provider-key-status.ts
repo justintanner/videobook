@@ -24,6 +24,7 @@ type ProviderGroup =
   | "kimicoding"
   | "fal"
   | "dashscope"
+  | "google"
   | "b2";
 type LiveLookup = "kie-credits" | "elevenlabs-credits" | "openai-tokens" | "xai-tokens";
 
@@ -83,6 +84,7 @@ const KEY_REGISTRY: Record<ManagedEnvKey, KeyRegistryEntry> = {
   KIMI_CODING_API_KEY: { provider: "kimicoding", label: "Kimi Coding" },
   FAL_API_KEY: { provider: "fal", label: "FAL" },
   DASHSCOPE_API_KEY: { provider: "dashscope", label: "DashScope" },
+  GOOGLE_FLOW_API_KEY: { provider: "google", label: "Google Flow" },
   B2_ACCESS_KEY_ID: { provider: "b2", label: "Backblaze B2" },
   B2_SECRET_ACCESS_KEY: { provider: "b2", label: "Backblaze B2" },
   B2_REGION: { provider: "b2", label: "Backblaze B2" },
@@ -101,6 +103,7 @@ const ROW_ORDER: readonly ManagedEnvKey[] = [
   "KIMI_CODING_API_KEY",
   "FAL_API_KEY",
   "DASHSCOPE_API_KEY",
+  "GOOGLE_FLOW_API_KEY",
   "B2_ACCESS_KEY_ID",
   "B2_SECRET_ACCESS_KEY",
   "B2_REGION",

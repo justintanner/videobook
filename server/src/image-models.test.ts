@@ -411,3 +411,45 @@ describe("getImageModels", () => {
     expect(models.gpt_image.providers.some((p) => p.key === "xai")).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Google Flow provider (Nano Banana Pro)
+// ---------------------------------------------------------------------------
+
+describe("google flow image provider", () => {
+  it("nano_banana lists google as a provider", () => {
+    const models = getImageModels();
+    const google = models.nano_banana.providers.find((p) => p.key === "google");
+    expect(google).toBeDefined();
+    expect(google!.envKey).toBe("GOOGLE_FLOW_API_KEY");
+  });
+
+  it("selecting the google provider swaps the tool name with and without refs", () => {
+    const originalGoogle = process.env.GOOGLE_FLOW_API_KEY;
+    const originalKie = process.env.KIE_API_KEY;
+    process.env.GOOGLE_FLOW_API_KEY = "real-google-key";
+    process.env.KIE_API_KEY = "real-kie-key";
+    try {
+      const models = getImageModels();
+      const noRefs = buildImageModelOption("nano_banana", models.nano_banana, { prompt: "x" }, [], undefined, "google");
+      expect(noRefs.selected_provider).toBe("google");
+      expect(noRefs.tool_name).toBe("generate_nano_banana_pro_google");
+
+      const withRefs = buildImageModelOption("nano_banana", models.nano_banana, { prompt: "x" }, [
+        { tag: "@img-ref", asset_id: "img-ref", asset_type: "image", file_path: "/p/ref.png", asset_dir: "/p" },
+      ], undefined, "google");
+      expect(withRefs.tool_name).toBe("generate_nano_banana_pro_google");
+    } finally {
+      if (originalGoogle === undefined) delete process.env.GOOGLE_FLOW_API_KEY;
+      else process.env.GOOGLE_FLOW_API_KEY = originalGoogle;
+      if (originalKie === undefined) delete process.env.KIE_API_KEY;
+      else process.env.KIE_API_KEY = originalKie;
+    }
+  });
+
+  it("kie selection keeps the base nano banana tool", () => {
+    const models = getImageModels();
+    const option = buildImageModelOption("nano_banana", models.nano_banana, { prompt: "x" }, [], undefined, "kie");
+    expect(option.tool_name).toBe("generate_nano_banana_image");
+  });
+});

@@ -31,6 +31,9 @@ import { registerGenerateSeedance2FastVideoJob } from "./generate-seedance2-fast
 import { registerGenerateSeedance2MiniVideoJob } from "./generate-seedance2-mini-video.js";
 import { registerGenerateGeminiOmniVideoJob } from "./generate-gemini-omni-video.js";
 import { registerGenerateVeo3VideoJob } from "./generate-veo3-video.js";
+import { registerGenerateVeo31VideoJob } from "./generate-veo31-video.js";
+import { registerGenerateGoogleOmniVideoJob } from "./generate-google-omni-video.js";
+import { registerGenerateNanoBananaProGoogleJob } from "./generate-nano-banana-pro-google.js";
 import { registerGenerateKling30TurboVideoJob } from "./generate-kling30-turbo-video.js";
 import { registerGenerateWan27T2vVideoJob } from "./generate-wan27-t2v-video.js";
 import { registerGenerateWan27I2vVideoJob } from "./generate-wan27-i2v-video.js";
@@ -147,6 +150,9 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerGenerateSeedance2MiniVideoJob(fs);
   registerGenerateGeminiOmniVideoJob(fs);
   registerGenerateVeo3VideoJob(fs);
+  registerGenerateVeo31VideoJob(fs);
+  registerGenerateGoogleOmniVideoJob(fs);
+  registerGenerateNanoBananaProGoogleJob(fs);
   registerGenerateKling30TurboVideoJob(fs);
   registerGenerateWan27T2vVideoJob(fs);
   registerGenerateWan27I2vVideoJob(fs);

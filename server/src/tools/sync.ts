@@ -8,6 +8,7 @@ import type { KieTaskInfo, KieTaskInfoData } from "@apicity/kie";
 import { createXai, XaiError } from "@apicity/xai";
 import { createAlibaba, AlibabaError } from "@apicity/alibaba";
 import { createFal, FalError } from "@apicity/fal";
+import { createGoogle, GoogleError } from "@apicity/google";
 import { queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import {
@@ -135,9 +136,32 @@ function isVeoPendingTask(task: PendingTask): boolean {
   return typeof task.meta?.veoModel === "string";
 }
 
+// Google Flow tasks ride shared taskTypes (the engine's TaskType union has no
+// google literals), so the submit helper stamps meta.googleFlow instead.
+function isGoogleFlowPendingTask(task: PendingTask): boolean {
+  return task.meta?.googleFlow === true;
+}
+
 function isKiePendingTask(task: PendingTask): boolean {
   if (isVeoPendingTask(task)) return false;
+  if (isGoogleFlowPendingTask(task)) return false;
   return !task.taskType.startsWith("xai_") && !task.taskType.startsWith("fal_") && !task.taskType.startsWith("alibaba_");
+}
+
+// A completed GET /google-flow/jobs/{jobId} carries the generated clips at
+// response.media[].videoUrl (signed URLs, ~24h validity).
+function googleFlowResultUrls(job: Record<string, unknown>): string[] {
+  const response = job.response;
+  if (!response || typeof response !== "object") return [];
+  const media = (response as Record<string, unknown>).media;
+  if (!Array.isArray(media)) return [];
+  const urls: string[] = [];
+  for (const entry of media) {
+    if (!entry || typeof entry !== "object") continue;
+    const url = (entry as Record<string, unknown>).videoUrl;
+    if (typeof url === "string" && url !== "") urls.push(url);
+  }
+  return urls;
 }
 
 function isQueuedKiePendingTask(task: PendingTask): boolean {
@@ -666,6 +690,71 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
         if (e instanceof KieError) {
           const kieErr = e as KieError;
           if (kieErr.status >= 400 && kieErr.status < 500) {
+            await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
+          }
+        }
+      }
+    }));
+  }
+
+  // Poll Google Flow tasks (useapi.net async jobs; only if API key is set)
+  const googleFlowTasks = pollableTasks.filter(isGoogleFlowPendingTask);
+  const googleFlowKey = getApiKey("GOOGLE_FLOW_API_KEY");
+  if (googleFlowKey && googleFlowTasks.length > 0) {
+    const provider = createGoogle({ apiKey: googleFlowKey, flowApiKey: googleFlowKey, timeout: 30_000 });
+
+    await Promise.all(googleFlowTasks.map(async (task) => {
+      const prompt = metaPrompt(task.meta);
+      try {
+        const job = await provider.get.v1.googleFlow.jobs.retrieve({ jobId: task.taskId });
+        const status = typeof job.status === "string" ? job.status : "";
+        if (status === "completed") {
+          const urls = googleFlowResultUrls(job);
+          if (urls.length === 0) {
+            const failMsg = "Google Flow job completed but returned no media URLs";
+            result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+            await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
+            return;
+          }
+          const assetDirResult = await fs.resolveAssetDir(task.assetId, project_slug);
+          if (!assetDirResult.ok) {
+            await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: `Asset not found: ${task.assetId}`, prompt });
+            return;
+          }
+          await fs.pendingTasks.markCompleting(project_slug, task.assetId);
+          const jobId = `complete-google-flow-${task.assetId}-${Date.now()}`;
+          await queue.enqueue(jobId, {
+            type: "complete_kie_task",
+            taskId: task.taskId,
+            taskType: task.taskType,
+            assetId: task.assetId,
+            assetDir: assetDirResult.value,
+            projectSlug: project_slug,
+            meta: task.meta,
+            resultUrls: urls,
+          } as unknown as Record<string, unknown>);
+          result.completed.push({ assetId: task.assetId, taskType: task.taskType, jobId });
+        } else if (status === "failed") {
+          const failMsg = typeof job.error === "string" ? job.error : "Google Flow job failed";
+          result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+          await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
+        } else {
+          result.pending.push({
+            assetId: task.assetId,
+            taskType: task.taskType,
+            progress: 0,
+            state: status === "started" ? "processing" : "waiting",
+            prompt,
+            startedAt: Math.round(task.createdAt * 1000),
+          });
+        }
+      } catch (e) {
+        const failMsg = e instanceof Error ? e.message : "Google Flow poll failed";
+        result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
+        if (e instanceof GoogleError) {
+          const googleErr = e as GoogleError;
+          // 4xx is permanent (bad/expired/foreign job id) except 429 rate limits.
+          if (googleErr.status >= 400 && googleErr.status < 500 && googleErr.status !== 429) {
             await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
           }
         }

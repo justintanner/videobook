@@ -302,3 +302,66 @@ reference video clip.
 **Ask apicity:** (a) add a `gemini-omni-character` create endpoint so character
 IDs can be produced; (b) once both create flows exist, videocity can add an
 audio/character asset-minting flow and surface `audio_ids` / `character_ids`.
+
+---
+
+## 14. (gap) `@apicity/google` flow request schemas carry no enums/ranges or reference slots
+
+`@apicity/google@0.7.0`'s google-flow request schemas
+(`GoogleFlowImagesRequestSchema`, `GoogleFlowVideosRequestSchema`) type
+`model`, `aspectRatio`, `duration`, `count`, and `seed` as plain optional
+strings/numbers — no enums, no `.min()/.max()`. The positional reference
+fields the API accepts (`startImage`, `endImage`, `referenceImage_1..7`,
+`reference_1..10`, `referenceVideo_1`, `startFrameIndex_1`/`endFrameIndex_1`)
+are absent from the schemas entirely (they survive only because the objects
+are `$loose`). Nothing exists for `applyApicityConstraints` / `apicityField`
+to derive from.
+
+**Workaround (`generate_veo31_*`, `generate_google_omni_video`,
+`generate_nano_banana_pro_google`):**
+
+- Tool schemas and the `getVideoToolSchema` per-tool blocks in
+  `server/src/video-models.ts` hand-type the allowed values from the
+  useapi.net Google Flow docs (video models `veo-3.1-quality/-fast/-lite`,
+  `omni-flash`; image model `nano-banana-pro`; video aspect
+  `landscape`/`portrait`/`1:1`/`4:3`/`3:4`; veo durations 4/6/8; omni
+  durations 4/6/8/10; image aspect `16:9`/`4:3`/`1:1`/`3:4`/`9:16`/`auto`).
+- These tools are intentionally **not** registered in
+  `VIDEO_PARAM_ZOD_SCHEMAS` — there is nothing to derive, and deriving later
+  would clobber the app-side ratio-string → `landscape`/`portrait` mapping in
+  `payload-builders.ts` (`googleFlowVideoAspect`).
+- Reference assets are spread into the positional `referenceImage_N` /
+  `reference_N` keys by `googleFlowReferenceSlots` in `payload-builders.ts`;
+  image-slot limits are hand-set in `IMAGE_SLOT_OVERRIDES`.
+- The nested asset-upload response (`mediaGenerationId.mediaGenerationId`) is
+  unwrapped defensively in `server/src/jobs/_google-flow.ts`.
+
+**Ask apicity:** add model/aspect/duration enums and typed reference-slot
+fields to the google-flow schemas (plus a `GoogleFlowVideosResponse` /
+`GoogleFlowJobResponse` shape — today every response is `GoogleFlowResponse =
+Record<string, unknown>`).
+
+---
+
+## 15. (gap) `@apicity/cost` has no `google` provider — Google Flow models unpriced
+
+`@apicity/cost@0.7.0`'s `PRICING` covers `openai, anthropic, xai, kimicoding,
+fireworks, alibaba, elevenlabs, kie` — no `google`. useapi.net bills Google
+Flow in plan credits (veo-3.1-quality 100, -fast 20, -lite 10, omni-flash
+15-30 per clip), not USD, so `modelSlug("google", …)` throws and no estimate
+is possible.
+
+**Workaround (`generate_veo31_*`, `generate_google_omni_video`,
+`generate_nano_banana_pro_google`):**
+
+- **No `cost-adapters.ts` entries** → the UI shows `—` (same treatment as the
+  fal-backed tools).
+- Asset/job **naming** uses literal slugs (`veo31`, `veo31-fast`,
+  `veo31-lite`, `google-omni`; the image tool borrows the kie
+  `nano-banana-pro` slug `nbp` for cross-provider consistency).
+- No paygate involvement — the kie OTP paygate does not apply to google-flow
+  requests.
+
+**Ask apicity:** add a `google` provider to `@apicity/cost` with
+credits-based rates (or a credits→USD conversion) for the google-flow
+models, plus `MODEL_SLUGS.google` entries.

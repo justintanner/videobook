@@ -75,6 +75,9 @@ type VideoModelInfo = {
    *  picked at submit time by image-slug count: withRefs when one or more
    *  reference images are present, noRefs otherwise. */
   falToolNames?: { noRefs?: string; withRefs?: string };
+  /** When set, exposes "google" (Google Flow via useapi.net) as a provider
+   *  option; selecting it swaps the effective tool to this name. */
+  googleToolName?: string;
 };
 
 const VIDEO_MODELS: Record<string, VideoModelInfo> = {
@@ -168,6 +171,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
+    googleToolName: "generate_google_omni_video",
   },
   veo3: {
     label: "Veo 3",
@@ -187,6 +191,36 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     defaults: {},
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.veo.post.api.v1.veo.generate(request, { otp })", envKey: "KIE_API_KEY" },
+    ],
+  },
+  veo31: {
+    label: "Veo 3.1",
+    tool_name: "generate_veo31_video",
+    description: "Google Veo 3.1 quality tier — text-to-video or image-to-video from start/end frames, 8s output (Google Flow)",
+    params: ["prompt", "first_frame_slug", "last_frame_slug", "aspect_ratio", "seed"],
+    defaults: {},
+    providers: [
+      { key: "google", label: "Google Flow", provider_path: "google.v1.googleFlow.videos({ async: true })", envKey: "GOOGLE_FLOW_API_KEY" },
+    ],
+  },
+  veo31_fast: {
+    label: "Veo 3.1 Fast",
+    tool_name: "generate_veo31_fast_video",
+    description: "Google Veo 3.1 Fast — text-to-video, start/end-frame image-to-video, or reference images (Google Flow)",
+    params: ["prompt", "first_frame_slug", "last_frame_slug", "image_slugs", "aspect_ratio", "duration", "seed"],
+    defaults: {},
+    providers: [
+      { key: "google", label: "Google Flow", provider_path: "google.v1.googleFlow.videos({ async: true })", envKey: "GOOGLE_FLOW_API_KEY" },
+    ],
+  },
+  veo31_lite: {
+    label: "Veo 3.1 Lite",
+    tool_name: "generate_veo31_lite_video",
+    description: "Google Veo 3.1 Lite — cheapest Veo 3.1 tier: text-to-video, start/end frames, or reference images (Google Flow)",
+    params: ["prompt", "first_frame_slug", "last_frame_slug", "image_slugs", "aspect_ratio", "duration", "seed"],
+    defaults: {},
+    providers: [
+      { key: "google", label: "Google Flow", provider_path: "google.v1.googleFlow.videos({ async: true })", envKey: "GOOGLE_FLOW_API_KEY" },
     ],
   },
   kling30_turbo: {
@@ -532,6 +566,10 @@ const IMAGE_FIELD_SCHEMAS: Record<string, ZodLike> = {
 
 const IMAGE_SLOT_OVERRIDES: Record<string, SlotConstraints> = {
   generate_grok_imagine_video: { min: 1, max: 7 },
+  // Google Flow veo 3.1 reference slots are positional referenceImage_1..3
+  // keys with no array field in @apicity/google to read (gaps doc §14).
+  generate_veo31_fast_video: { min: 0, max: 3 },
+  generate_veo31_lite_video: { min: 0, max: 3 },
 };
 
 const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
@@ -1007,6 +1045,23 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "resolution") prop.description = "Output resolution: 720p / 1080p / 4k (default 720p)";
       if (param === "seed") prop.description = "Random seed (0-2147483647)";
     }
+    if (toolName === "generate_veo31_video" || toolName === "generate_veo31_fast_video" || toolName === "generate_veo31_lite_video") {
+      // @apicity/google's flow schemas carry no enums/ranges to derive, so
+      // allowed values are hand-typed from the useapi.net Google Flow docs
+      // (docs/apicity-gaps.md §14).
+      if (param === "prompt") prop.description = "Video description";
+      if (param === "first_frame_slug") prop.description = "Start frame image asset for image-to-video (e.g., @img-start)";
+      if (param === "last_frame_slug") prop.description = "End frame image asset (requires first_frame_slug, e.g., @img-end)";
+      if (param === "image_slugs") { prop.description = "Reference image assets (0-3; not combinable with first/last frame)"; prop.maxItems = 3; }
+      if (param === "aspect_ratio") { prop.enum = ["16:9", "9:16", "1:1", "4:3", "3:4"]; prop.description = "Output aspect ratio (default 16:9)"; }
+      if (param === "duration") {
+        prop.enum = ["4", "6", "8"];
+        prop.default = "8";
+        defaults[param] = "8";
+        prop.description = "Video duration in seconds (default 8; 4/6 require an Ultra plan)";
+      }
+      if (param === "seed") prop.description = "Random seed for reproducibility";
+    }
     if (toolName === "generate_wan27_t2v_video") {
       if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
       if (param === "audio_slug") prop.description = "Optional custom audio asset (e.g., @aud-music)";
@@ -1306,6 +1361,25 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
+  if (toolName === "generate_veo31_video" || toolName === "generate_veo31_fast_video" || toolName === "generate_veo31_lite_video") {
+    const firstFrame = params.first_frame_slug as string | undefined;
+    const lastFrame = params.last_frame_slug as string | undefined;
+    if (lastFrame && !firstFrame) {
+      warnings.push("Veo 3.1 last_frame_slug requires first_frame_slug");
+    }
+    // Only Fast/Lite expose image_slugs; the quality tool auto-populates it
+    // from context but never sends it, so ref warnings there would be noise.
+    const exposesRefs = toolName !== "generate_veo31_video";
+    if (exposesRefs) {
+      if (totalImages > 0 && firstFrame) {
+        warnings.push("Veo 3.1 reference images cannot be combined with a start frame — pick one mode");
+      }
+      if (totalImages > 3) {
+        warnings.push(`Veo 3.1 supports up to 3 reference images (got ${totalImages})`);
+      }
+    }
+  }
+
   if (toolName === "generate_seedance2_video" || toolName === "generate_seedance2_fast_video") {
     const audioSlugs = params.audio_slugs as string[] | undefined;
     const firstFrame = params.first_frame_slug as string | undefined;
@@ -1409,6 +1483,7 @@ ROUTING PREFERENCES:
 - Use generate_seedance2_fast_video when user mentions "seedance fast" or 480p/720p is acceptable (faster/cheaper). Same input flexibility as the full variant
 - Use generate_seedance2_mini_video when user mentions "seedance mini". Text prompt plus optional reference images/videos/audio; no first/last frame; 480p/720p
 - Use generate_gemini_omni_video ONLY when user explicitly mentions "gemini" or "omni" for video. Multimodal text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes
+- Use generate_veo31_fast_video when user mentions "veo" or "veo 3.1"; pick generate_veo31_video for "veo quality" and generate_veo31_lite_video for "veo lite" (Google Flow). Text-to-video, first/last frame image-to-video, or reference images (fast/lite only)
 - Use generate_wan27_i2v_video ONLY when user mentions "wan" with first/last frame or clip continuation
 - Use generate_wan27_videoedit_video ONLY when user mentions "wan" with video editing or modifying an existing video
 - Use generate_wan27_r2v_video ONLY when user mentions "wan" with reference images, reference videos, or voice
@@ -1423,6 +1498,8 @@ KEY CONSTRAINTS:
 - For generate_seedance2_video and generate_seedance2_fast_video: duration "4"-"15", aspect_ratio includes "adaptive"; full variant accepts "480p"/"720p"/"1080p", fast variant accepts "480p"/"720p" only. Inputs are all optional and free to mix: first_frame_slug, last_frame_slug, image_slugs (0-9), video_slugs (0-3, total ≤15s), audio_slugs (0-3, total ≤15s). Pure text prompt is fine too
 - For generate_seedance2_mini_video: duration "4"-"15" (default 15), aspect_ratio includes "adaptive", resolution "480p"/"720p". No first/last frame; mix prompt with image_slugs, video_slugs (0-3, total ≤15s), audio_slugs (0-3, total ≤15s). Prompt is optional when references are supplied
 - For generate_gemini_omni_video: REQUIRES prompt and duration "4"/"6"/"8"/"10"; aspect_ratio "16:9"/"9:16"; resolution "720p"/"1080p"/"4k" (default 720p); seed integer. Optional image_slugs (0-7) and one video_slug with video_clip_start/video_clip_ends (ends > start and < start+10s)
+- For generate_veo31_video: 8s output only; optional first_frame_slug/last_frame_slug (last requires first); aspect_ratio "16:9"/"9:16"/"1:1"/"4:3"/"3:4"; NO reference images
+- For generate_veo31_fast_video and generate_veo31_lite_video: duration "4"/"6"/"8" (default "8"); image_slugs (0-3) OR first_frame_slug/last_frame_slug, not both; aspect_ratio "16:9"/"9:16"/"1:1"/"4:3"/"3:4"
 - For generate_grok_imagine_video: REQUIRES at least one image, mode "fun"/"normal", duration 6-30 (integer seconds), aspect_ratio "2:3"/"3:2"/"1:1"/"16:9"/"9:16"
 - For extend_grok_imagine_video: REQUIRES video_slug, prompt, extend_at, and extend_times "6"/"10"
 - For generate_wan27_i2v_video: REQUIRES at least one of first_frame_slug / last_frame_slug / first_clip_slug, duration "2"-"15", resolution "720p"/"1080p"
@@ -1463,10 +1540,15 @@ function actionNameToToolName(action: string): string | null {
 const NON_PARAM_KEYS = new Set(["project_slug"]);
 
 function buildProvidersForModel(info: VideoModelInfo): ProviderRoute[] {
-  if (!info.falToolNames) return info.providers;
+  if (!info.falToolNames && !info.googleToolName) return info.providers;
   return [
     ...info.providers,
-    { key: "fal", label: "Fal", provider_path: "fal.post.v1.queue.submit()", envKey: "FAL_API_KEY" },
+    ...(info.googleToolName
+      ? [{ key: "google", label: "Google Flow", provider_path: "google.v1.googleFlow.videos({ async: true })", envKey: "GOOGLE_FLOW_API_KEY" }]
+      : []),
+    ...(info.falToolNames
+      ? [{ key: "fal", label: "Fal", provider_path: "fal.post.v1.queue.submit()", envKey: "FAL_API_KEY" }]
+      : []),
   ];
 }
 
@@ -1667,6 +1749,8 @@ function buildModelOption(
       : (typeof params.first_frame_slug === "string" && params.first_frame_slug !== "" ? 1 : 0);
     const falName = resolveFalVideoToolName(modelInfo, slugCount);
     if (falName) effectiveToolName = falName;
+  } else if (selectedProvider === "google" && modelInfo.googleToolName) {
+    effectiveToolName = modelInfo.googleToolName;
   }
 
   return {

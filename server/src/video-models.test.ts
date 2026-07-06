@@ -640,3 +640,87 @@ describe("buildModelOption resolved assets and coercion", () => {
     expect(typeof option.validation.valid).toBe("boolean");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Google Flow models (Veo 3.1 + gemini_omni google provider)
+// ---------------------------------------------------------------------------
+
+describe("google flow video models", () => {
+  it("veo31 fast: hand-typed enums, duration default 8, ref slots capped at 3", () => {
+    const schema = getVideoToolSchema("generate_veo31_fast_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.required).toContain("prompt");
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "9:16", "1:1", "4:3", "3:4"]);
+    expect(schema!.properties.duration.enum).toEqual(["4", "6", "8"]);
+    expect(schema!.defaults).toEqual({ duration: "8" });
+    expect(schema!.properties.image_slugs.maxItems).toBe(3);
+
+    const validation = validateVideoParams("generate_veo31_fast_video", { prompt: "a sunset" });
+    expect(validation.image_slots).toEqual({ min: 0, max: 3 });
+  });
+
+  it("veo31 quality: no image_slugs or duration params, image_slots null", () => {
+    const schema = getVideoToolSchema("generate_veo31_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.properties.image_slugs).toBeUndefined();
+    expect(schema!.properties.duration).toBeUndefined();
+    expect(schema!.properties.first_frame_slug).toBeDefined();
+    expect(schema!.properties.last_frame_slug).toBeDefined();
+
+    const validation = validateVideoParams("generate_veo31_video", { prompt: "a sunset" });
+    expect(validation.valid).toBe(true);
+    expect(validation.image_slots).toBeNull();
+  });
+
+  it("veo31: warns on last frame without first frame and refs with start frame", () => {
+    const lastOnly = validateVideoParams("generate_veo31_fast_video", { prompt: "x", last_frame_slug: "@img-end" });
+    expect(lastOnly.warnings.some((w) => w.includes("requires first_frame_slug"))).toBe(true);
+
+    const refsWithFrame = validateVideoParams("generate_veo31_fast_video", {
+      prompt: "x", first_frame_slug: "@img-start", image_slugs: ["@img-a"],
+    });
+    expect(refsWithFrame.warnings.some((w) => w.includes("pick one mode"))).toBe(true);
+
+    const tooManyRefs = validateVideoParams("generate_veo31_lite_video", {
+      prompt: "x", image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d"],
+    });
+    expect(tooManyRefs.warnings.some((w) => w.includes("up to 3 reference images"))).toBe(true);
+
+    // The quality tier does not expose image_slugs, so auto-populated context
+    // images must not raise a ref warning.
+    const qualityRefs = validateVideoParams("generate_veo31_video", { prompt: "x", image_slugs: ["@img-a"] });
+    expect(qualityRefs.warnings.some((w) => w.includes("reference images"))).toBe(false);
+  });
+
+  it("veo31 models route through the google provider only", () => {
+    for (const key of ["veo31", "veo31_fast", "veo31_lite"]) {
+      const info = VIDEO_MODELS[key];
+      expect(info.providers).toHaveLength(1);
+      expect(info.providers[0].key).toBe("google");
+      expect(info.providers[0].envKey).toBe("GOOGLE_FLOW_API_KEY");
+    }
+  });
+
+  it("gemini_omni exposes google as a second provider and swaps the tool name", () => {
+    const originalGoogle = process.env.GOOGLE_FLOW_API_KEY;
+    const originalKie = process.env.KIE_API_KEY;
+    process.env.GOOGLE_FLOW_API_KEY = "real-google-key";
+    process.env.KIE_API_KEY = "real-kie-key";
+    try {
+      const option = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, { prompt: "x" }, [], undefined, "google");
+      expect(option.providers.map((p) => p.key)).toEqual(expect.arrayContaining(["kie", "google"]));
+      expect(option.selected_provider).toBe("google");
+      expect(option.tool_name).toBe("generate_google_omni_video");
+    } finally {
+      if (originalGoogle === undefined) delete process.env.GOOGLE_FLOW_API_KEY;
+      else process.env.GOOGLE_FLOW_API_KEY = originalGoogle;
+      if (originalKie === undefined) delete process.env.KIE_API_KEY;
+      else process.env.KIE_API_KEY = originalKie;
+    }
+  });
+
+  it("gemini_omni keeps the kie tool when kie is selected", () => {
+    const option = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, { prompt: "x" }, [], undefined, "kie");
+    expect(option.tool_name).toBe("generate_gemini_omni_video");
+  });
+});

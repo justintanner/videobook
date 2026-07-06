@@ -1,0 +1,69 @@
+import type { VideocityFs } from "videocity-engine";
+import { registerJobHandler } from "../queue.js";
+import { buildGoogleOmniVideoPayload, type GoogleOmniVideoArgs } from "../payload-builders.js";
+import { createGoogleFlowProvider, submitGoogleFlowVideoTask, uploadAssetToGoogleFlow } from "./_google-flow.js";
+import type { RefInput } from "../tools/_seedance2-shared.js";
+
+type GenerateGoogleOmniVideoPayload = {
+  type: "generate_google_omni_video";
+  vidAssetId: string;
+  vidAssetDir: string;
+  projectSlug: string;
+  imageInputs: RefInput[];
+  videoInput?: RefInput;
+  sourceImageIds: string[];
+  sourceVideoIds: string[];
+  prompt: string;
+  duration: GoogleOmniVideoArgs["duration"];
+  aspect_ratio?: GoogleOmniVideoArgs["aspect_ratio"];
+  seed?: number;
+  video_clip_start?: number;
+  video_clip_ends?: number;
+};
+
+export function registerGenerateGoogleOmniVideoJob(fs: VideocityFs): void {
+  registerJobHandler("generate_google_omni_video", async (payload, ctx) => {
+    const p = payload as GenerateGoogleOmniVideoPayload;
+    const provider = createGoogleFlowProvider();
+
+    const referenceImageIds: string[] = [];
+    for (const input of p.imageInputs) {
+      referenceImageIds.push(await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, p.projectSlug));
+    }
+    const referenceVideoId = p.videoInput
+      ? await uploadAssetToGoogleFlow(provider, fs, p.videoInput.assetId, p.videoInput.filename, p.projectSlug)
+      : undefined;
+
+    const request = buildGoogleOmniVideoPayload(
+      {
+        prompt: p.prompt,
+        duration: p.duration,
+        ...(p.aspect_ratio !== undefined ? { aspect_ratio: p.aspect_ratio } : {}),
+        ...(p.seed !== undefined ? { seed: p.seed } : {}),
+        ...(p.video_clip_start !== undefined ? { video_clip_start: p.video_clip_start } : {}),
+        ...(p.video_clip_ends !== undefined ? { video_clip_ends: p.video_clip_ends } : {}),
+      },
+      {
+        ...(referenceImageIds.length > 0 ? { referenceImageIds } : {}),
+        ...(referenceVideoId !== undefined ? { referenceVideoId } : {}),
+      },
+    );
+
+    const taskId = await submitGoogleFlowVideoTask(fs, ctx, {
+      request,
+      assetId: p.vidAssetId,
+      assetDir: p.vidAssetDir,
+      projectSlug: p.projectSlug,
+      // Rides the shared single-mp4 completion (see generate-veo31-video.ts).
+      taskType: "seedance2_video",
+      meta: {
+        apiModel: "omni-flash",
+        sourceImageIds: p.sourceImageIds,
+        sourceVideoIds: p.sourceVideoIds,
+        prompt: p.prompt,
+      },
+    });
+
+    return { success: true, taskId };
+  });
+}

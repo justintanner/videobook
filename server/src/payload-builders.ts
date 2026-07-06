@@ -70,6 +70,7 @@ import type {
   KlingV3TurboAspectRatio,
 } from "@apicity/kie";
 import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest, XaiImageReference } from "@apicity/xai";
+import type { GoogleFlowImagesRequest, GoogleFlowVideosRequest } from "@apicity/google";
 import type {
   AlibabaImageGenerationRequest,
   AlibabaVideoSynthesisRequest,
@@ -480,6 +481,140 @@ function buildVeo3VideoPayload(
     ...(args.aspect_ratio !== undefined ? { aspectRatio: args.aspect_ratio } : {}),
     ...(hasImages ? { generationType: "REFERENCE_2_VIDEO" as const, imageUrls: opts.imageUrls } : { generationType: "TEXT_2_VIDEO" as const }),
     ...(args.seed !== undefined ? { seeds: args.seed } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Google Flow (useapi.net) — @apicity/google
+//
+// Veo 3.1 / Omni Flash video and Nano Banana Pro image generation ride the
+// google-flow endpoints. @apicity/google's request schemas are $loose objects
+// with no enums/ranges (docs/apicity-gaps.md §14), so allowed values are
+// hand-typed from the useapi.net docs and reference assets are spread into
+// the positional referenceImage_N / reference_N keys the API expects. Refs
+// are mediaGenerationIds from prior POST /google-flow/assets uploads, not
+// URLs.
+// ---------------------------------------------------------------------------
+
+type GoogleVeo31Model = "veo-3.1-quality" | "veo-3.1-fast" | "veo-3.1-lite";
+type GoogleFlowVideoAspectRatio = "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
+
+// The videos endpoint takes landscape/portrait keywords where the rest of the
+// app uses ratio strings; 1:1 / 4:3 / 3:4 pass through unchanged.
+function googleFlowVideoAspect(ratio: GoogleFlowVideoAspectRatio): string {
+  if (ratio === "16:9") return "landscape";
+  if (ratio === "9:16") return "portrait";
+  return ratio;
+}
+
+function googleFlowReferenceSlots(prefix: string, ids: readonly string[]): Record<string, string> {
+  const slots: Record<string, string> = {};
+  ids.forEach((id, index) => { slots[`${prefix}_${index + 1}`] = id; });
+  return slots;
+}
+
+type Veo31VideoArgs = {
+  prompt: string;
+  aspect_ratio?: GoogleFlowVideoAspectRatio;
+  duration?: "4" | "6" | "8";
+  seed?: number;
+};
+
+type Veo31VideoOpts = {
+  startImageId?: string;
+  endImageId?: string;
+  referenceImageIds?: string[];
+};
+
+function buildVeo31VideoPayload(
+  model: GoogleVeo31Model,
+  args: Veo31VideoArgs,
+  opts: Veo31VideoOpts,
+): GoogleFlowVideosRequest {
+  return {
+    prompt: args.prompt,
+    model,
+    ...(args.aspect_ratio !== undefined ? { aspectRatio: googleFlowVideoAspect(args.aspect_ratio) } : {}),
+    ...(args.duration !== undefined ? { duration: Number(args.duration) } : {}),
+    ...(args.seed !== undefined ? { seed: args.seed } : {}),
+    ...(opts.startImageId !== undefined ? { startImage: opts.startImageId } : {}),
+    ...(opts.endImageId !== undefined ? { endImage: opts.endImageId } : {}),
+    ...googleFlowReferenceSlots("referenceImage", opts.referenceImageIds ?? []),
+  };
+}
+
+type GoogleOmniVideoArgs = {
+  prompt: string;
+  duration: "4" | "6" | "8" | "10";
+  aspect_ratio?: "16:9" | "9:16";
+  seed?: number;
+  video_clip_start?: number;
+  video_clip_ends?: number;
+};
+
+type GoogleOmniVideoOpts = {
+  referenceImageIds?: string[];
+  referenceVideoId?: string;
+};
+
+// Omni Flash trims the reference clip on a 24fps frame timeline capped at
+// 240 frames (10s); the tool contract stays in seconds like the kie
+// gemini-omni tool, converted here.
+const OMNI_FLASH_FPS = 24;
+const OMNI_FLASH_MAX_FRAME = 240;
+
+function buildGoogleOmniVideoPayload(
+  args: GoogleOmniVideoArgs,
+  opts: GoogleOmniVideoOpts,
+): GoogleFlowVideosRequest {
+  const hasVideo = opts.referenceVideoId !== undefined;
+  let clipSlots: Record<string, unknown> = {};
+  if (hasVideo) {
+    const startFrame = Math.min(
+      Math.max(Math.round((args.video_clip_start ?? 0) * OMNI_FLASH_FPS), 0),
+      OMNI_FLASH_MAX_FRAME - 1,
+    );
+    const endFrame = Math.min(
+      Math.max(Math.round((args.video_clip_ends ?? 0) * OMNI_FLASH_FPS), startFrame + 1),
+      OMNI_FLASH_MAX_FRAME,
+    );
+    clipSlots = {
+      referenceVideo_1: opts.referenceVideoId,
+      startFrameIndex_1: startFrame,
+      endFrameIndex_1: endFrame,
+    };
+  }
+  return {
+    prompt: args.prompt,
+    model: "omni-flash",
+    // V2V edit rejects duration — the output length matches the trimmed clip.
+    ...(!hasVideo ? { duration: Number(args.duration) } : {}),
+    ...(args.aspect_ratio !== undefined ? { aspectRatio: googleFlowVideoAspect(args.aspect_ratio) } : {}),
+    ...(args.seed !== undefined ? { seed: args.seed } : {}),
+    ...googleFlowReferenceSlots("referenceImage", opts.referenceImageIds ?? []),
+    ...clipSlots,
+  };
+}
+
+type GoogleNbpImageArgs = {
+  prompt: string;
+  aspect_ratio?: "16:9" | "4:3" | "1:1" | "3:4" | "9:16" | "auto";
+  seed?: number;
+};
+
+function buildGoogleNbpImagePayload(
+  args: GoogleNbpImageArgs,
+  referenceIds: readonly string[],
+): GoogleFlowImagesRequest {
+  return {
+    prompt: args.prompt,
+    model: "nano-banana-pro",
+    // The endpoint defaults to 4 variations; videocity persists exactly one
+    // image per asset, so pin count to 1 (4x credits otherwise).
+    count: 1,
+    ...(args.aspect_ratio !== undefined ? { aspectRatio: args.aspect_ratio } : {}),
+    ...(args.seed !== undefined ? { seed: args.seed } : {}),
+    ...googleFlowReferenceSlots("reference", referenceIds),
   };
 }
 
@@ -1315,6 +1450,35 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
+    case "generate_veo31_video":
+    case "generate_veo31_fast_video":
+    case "generate_veo31_lite_video": {
+      const model: GoogleVeo31Model = toolName === "generate_veo31_video"
+        ? "veo-3.1-quality"
+        : toolName === "generate_veo31_fast_video"
+          ? "veo-3.1-fast"
+          : "veo-3.1-lite";
+      const startImage = args.first_frame_slug as string | undefined;
+      const endImage = args.last_frame_slug as string | undefined;
+      const payload = buildVeo31VideoPayload(model, args as Veo31VideoArgs, {
+        ...(startImage !== undefined && startImage.trim() !== "" ? { startImageId: startImage } : {}),
+        ...(endImage !== undefined && endImage.trim() !== "" ? { endImageId: endImage } : {}),
+        ...(imageSlugs.length > 0 ? { referenceImageIds: imageSlugs } : {}),
+      });
+      return { provider_path: "google.v1.googleFlow.videos({ async: true })", payload: payload as unknown as Record<string, unknown> };
+    }
+    case "generate_google_omni_video": {
+      const videoSlug = args.video_slug as string | undefined;
+      const payload = buildGoogleOmniVideoPayload(args as GoogleOmniVideoArgs, {
+        ...(imageSlugs.length > 0 ? { referenceImageIds: imageSlugs } : {}),
+        ...(videoSlug !== undefined && videoSlug.trim() !== "" ? { referenceVideoId: videoSlug } : {}),
+      });
+      return { provider_path: "google.v1.googleFlow.videos({ async: true })", payload: payload as unknown as Record<string, unknown> };
+    }
+    case "generate_nano_banana_pro_google": {
+      const payload = buildGoogleNbpImagePayload(args as GoogleNbpImageArgs, imageSlugs);
+      return { provider_path: "google.v1.googleFlow.images()", payload: payload as unknown as Record<string, unknown> };
+    }
     case "generate_grok_imagine_text_image": {
       if (isXaiProvider(provider)) {
         const payload: XaiImageGenerateRequest = {
@@ -1512,6 +1676,7 @@ function translateToolPayload(
 const VIDEO_TOOLS = new Set([
   "generate_kling30_video", "generate_kling30_motion_control_video", "generate_kling30_turbo_video",
   "generate_veo3_video", "generate_veo3_fast_video",
+  "generate_veo31_video", "generate_veo31_fast_video", "generate_veo31_lite_video",
   "generate_seedance2_video", "generate_seedance2_fast_video", "generate_seedance2_mini_video",
   "generate_gemini_omni_video",
   "generate_grok_imagine_video", "generate_grok_imagine_t2v_video", "generate_grok_imagine_ref_video",
@@ -1562,6 +1727,9 @@ export {
   buildSeedance2MiniVideoPayload,
   buildGeminiOmniVideoPayload,
   buildVeo3VideoPayload,
+  buildVeo31VideoPayload,
+  buildGoogleOmniVideoPayload,
+  buildGoogleNbpImagePayload,
   buildWan27TextToVideoPayload,
   buildWan27FramesVideoPayload,
   buildWan27ReferenceVideoPayload,
@@ -1577,4 +1745,4 @@ export {
   translateToolPayload,
   getValidationWarnings,
 };
-export type { TranslateResult, Seedance2VideoArgs, Seedance2VideoOpts, Seedance2MiniVideoArgs, Seedance2MiniVideoOpts, Wan27FramesVideoArgs, Wan27FramesVideoOpts, Wan27ReferenceVideoArgs, Wan27ReferenceVideoOpts };
+export type { TranslateResult, Seedance2VideoArgs, Seedance2VideoOpts, Seedance2MiniVideoArgs, Seedance2MiniVideoOpts, Wan27FramesVideoArgs, Wan27FramesVideoOpts, Wan27ReferenceVideoArgs, Wan27ReferenceVideoOpts, GoogleVeo31Model, Veo31VideoArgs, Veo31VideoOpts, GoogleOmniVideoArgs, GoogleOmniVideoOpts, GoogleNbpImageArgs };
