@@ -505,6 +505,8 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
 };
 
+const DEFAULT_VIDEO_MODEL_KEY = "grok_imagine";
+
 // ---------------------------------------------------------------------------
 // Image slot schemas — source of truth is the Apicity Zod request schema.
 // Tools absent from this map have no image-array field; their `image_slots`
@@ -1402,8 +1404,7 @@ Given a user query (possibly with @asset references), determine:
 2. params: Parameters to pass to the tool
 
 ROUTING PREFERENCES:
-- PREFER generate_kling30_video as the DEFAULT for ALL video generation requests
-- Use generate_grok_imagine_video ONLY when user explicitly mentions "grok" for video
+- PREFER ${VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name} as the DEFAULT for ALL video generation requests
 - Use generate_seedance2_video when user mentions "seedance" or "bytedance" and wants 1080p, or just defaults to the higher-quality variant. Accepts any input combination: text-only, first/last frame, reference images/videos/audio
 - Use generate_seedance2_fast_video when user mentions "seedance fast" or 480p/720p is acceptable (faster/cheaper). Same input flexibility as the full variant
 - Use generate_seedance2_mini_video when user mentions "seedance mini". Text prompt plus optional reference images/videos/audio; no first/last frame; 480p/720p
@@ -1684,6 +1685,7 @@ function buildModelOption(
 }
 
 export {
+  DEFAULT_VIDEO_MODEL_KEY,
   VIDEO_MODELS,
   IMAGE_FIELD_SCHEMAS,
   PARAM_SCHEMAS,

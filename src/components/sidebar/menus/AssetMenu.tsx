@@ -14,6 +14,7 @@ interface AssetMenuProps {
   slug: string
   filePath?: string
   itemType?: string
+  prompt?: string | null
   onAnimateCommand?: (text: string) => void
   onAnimateEdit?: (text: string) => void
   onExtractSkeleton?: () => void
@@ -159,6 +160,15 @@ function copySlugToClipboard(slug: string) {
   toast({ title: 'Copied', description: slug, duration: 2000 })
 }
 
+async function copyPromptToClipboard(prompt: string) {
+  try {
+    await navigator.clipboard.writeText(prompt)
+    toast({ title: 'Copied', description: 'Prompt copied to clipboard', duration: 2000 })
+  } catch {
+    toast({ title: 'Error', description: 'Failed to copy prompt', duration: 3000 })
+  }
+}
+
 export function ProjectExportPicker({
   assetId,
   projectSlug,
@@ -282,6 +292,7 @@ export function AssetMenu({
   slug,
   filePath,
   itemType,
+  prompt,
   onAnimateCommand,
   onAnimateEdit,
   onExtractSkeleton,
@@ -399,6 +410,13 @@ export function AssetMenu({
       title: 'Copy Slug',
       onSelect: () => copySlugToClipboard(slug),
     },
+    ...((itemType === 'video' || itemType === 'image') && prompt
+      ? [{
+          command: '/copy-prompt',
+          title: 'Copy Prompt',
+          onSelect: () => { void copyPromptToClipboard(prompt) },
+        }]
+      : []),
     ...((itemType === 'image' || itemType === 'character') && filePath
       ? [{
           command: '/copy-image',

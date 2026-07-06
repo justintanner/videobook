@@ -8,6 +8,7 @@ import { z } from "zod";
 import { createOpenAi, firstContent } from "@apicity/openai";
 import { resolveAllAssets, expandSlotRefs } from "videocity-engine";
 import {
+  DEFAULT_VIDEO_MODEL_KEY,
   VIDEO_MODELS,
   buildVideoRoutingPrompt,
   buildModelOption,
@@ -53,7 +54,7 @@ export function previewVideoGenDef(fs: VideocityFs): ToolDef {
       const { resolved: resolvedAssets, unresolved } = await resolveAllAssets(expandedPrompt, fs, slug);
 
       // 3. Route prompt via GPT-4o-mini (skip when model explicitly selected)
-      let routedToolName = "generate_kling30_video"; // fallback default
+      let routedToolName = VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name;
       let routedParams: Record<string, unknown> = {};
 
       if (modelOverride) {
@@ -117,7 +118,7 @@ Determine which video generation tool to use and what parameters to pass.`;
             routedParams = decision.params ?? {};
           }
         } catch {
-          // LLM routing failure — fall through to kling30 default
+          // LLM routing failure — fall through to the default model
         }
       }
 
@@ -150,7 +151,7 @@ Determine which video generation tool to use and what parameters to pass.`;
       // 6. Use explicit override, then last-used model from history, then routed
       //    If the chosen model doesn't support the requested provider, pick the first that does.
       const historicalModel = extractLastUsedModel(historyEntries);
-      let selectedModel = modelOverride ?? historicalModel ?? findSelectedModel(routedToolName) ?? "kling30";
+      let selectedModel = modelOverride ?? historicalModel ?? findSelectedModel(routedToolName) ?? DEFAULT_VIDEO_MODEL_KEY;
       if (providerOverride) {
         const chosen = modelOptions.find((o) => o.key === selectedModel);
         const supportsProvider = chosen?.providers.some((p) => p.key === providerOverride);
@@ -202,4 +203,3 @@ Determine which video generation tool to use and what parameters to pass.`;
     },
   };
 }
-

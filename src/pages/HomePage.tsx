@@ -1471,6 +1471,7 @@ export function HomePage() {
         slug={item.slug}
         filePath={item.filePath}
         itemType={item.type}
+        prompt={item.prompt}
         onAnimateCommand={handleAnimateCommand}
         onAnimateEdit={handleAnimateEdit}
         onExtractSkeleton={canExtractSkeleton && itemFilePath && projectSlug
@@ -1749,6 +1750,7 @@ export function HomePage() {
                         slug={item.slug}
                         filePath={item.filePath}
                         itemType={item.type}
+                        prompt={item.prompt}
                         onAnimateCommand={handleAnimateCommand}
                         onAnimateEdit={handleAnimateEdit}
                         onMarkSeen={onMarkSeen}

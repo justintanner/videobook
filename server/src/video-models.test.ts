@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  DEFAULT_VIDEO_MODEL_KEY,
   extractLastSettingsPerModel,
   extractLastUsedModel,
   buildModelOption,
@@ -527,6 +528,11 @@ describe("applyVideoToolConstraints", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildVideoRoutingPrompt", () => {
+  it("defaults video generation to Grok Imagine 1.5", () => {
+    expect(DEFAULT_VIDEO_MODEL_KEY).toBe("grok_imagine");
+    expect(VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name).toBe("generate_grok_imagine_video");
+  });
+
   it("returns a non-empty string", () => {
     const prompt = buildVideoRoutingPrompt();
     expect(prompt.length).toBeGreaterThan(0);
@@ -543,7 +549,7 @@ describe("buildVideoRoutingPrompt", () => {
   it("includes routing preferences", () => {
     const prompt = buildVideoRoutingPrompt();
     expect(prompt).toContain("ROUTING PREFERENCES");
-    expect(prompt).toContain("PREFER generate_kling30_video");
+    expect(prompt).toContain("PREFER generate_grok_imagine_video");
   });
 
   it("includes JSON response format instruction", () => {
