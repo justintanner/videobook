@@ -12,13 +12,30 @@ export const GOOGLE_FLOW_ENV_KEY = "GOOGLE_FLOW_API_KEY";
 // returning 408 — so the client timeout must comfortably cover that window.
 const GOOGLE_FLOW_TIMEOUT_MS = 10 * 60_000;
 
+// @apicity/googleflow@0.7.1 percent-encodes path IDs (encodeURIComponent on
+// jobId / mediaGenerationId / email / ref), but useapi.net IDs carry ':' and
+// '@' that must reach the server RAW — an encoded jobid returns 400 "Invalid
+// job ID format". This fetch hook undoes the over-encoding on the pathname so
+// jobs.retrieve polling works. Upstream bug; see docs/apicity-gaps.md §16.
+export function googleFlowFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  if (typeof input === "string") {
+    try {
+      const u = new URL(input);
+      const rawPath = decodeURIComponent(u.pathname);
+      if (rawPath !== u.pathname) input = `${u.origin}${rawPath}${u.search}`;
+    } catch {
+      // not a parseable URL — pass through untouched
+    }
+  }
+  return fetch(input, init);
+}
 // @apicity/googleflow is the dedicated useapi.net Google Flow provider (split
 // out of @apicity/google in 0.7.1, which now hosts only Vertex express-mode
 // / Gemini content calls). It takes a single apiKey — the same useapi.net
 // GOOGLE_FLOW_API_KEY token — for every Flow endpoint.
 export function createGoogleFlowProvider(timeoutMs: number = GOOGLE_FLOW_TIMEOUT_MS): GoogleFlowProvider {
   const apiKey = requireApiKey(GOOGLE_FLOW_ENV_KEY);
-  return createGoogleFlow({ apiKey, timeout: timeoutMs });
+  return createGoogleFlow({ apiKey, timeout: timeoutMs, fetch: googleFlowFetch });
 }
 
 // POST /google-flow/assets nests the reference id one level down:

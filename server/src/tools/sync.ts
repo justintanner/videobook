@@ -9,6 +9,7 @@ import { createXai, XaiError } from "@apicity/xai";
 import { createAlibaba, AlibabaError } from "@apicity/alibaba";
 import { createFal, FalError } from "@apicity/fal";
 import { createGoogleFlow, GoogleFlowError } from "@apicity/googleflow";
+import { googleFlowFetch } from "../jobs/_google-flow.js";
 import { queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import {
@@ -701,7 +702,7 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
   const googleFlowTasks = pollableTasks.filter(isGoogleFlowPendingTask);
   const googleFlowKey = getApiKey("GOOGLE_FLOW_API_KEY");
   if (googleFlowKey && googleFlowTasks.length > 0) {
-    const provider = createGoogleFlow({ apiKey: googleFlowKey, timeout: 30_000 });
+    const provider = createGoogleFlow({ apiKey: googleFlowKey, timeout: 30_000, fetch: googleFlowFetch });
 
     await Promise.all(googleFlowTasks.map(async (task) => {
       const prompt = metaPrompt(task.meta);

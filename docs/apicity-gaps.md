@@ -368,3 +368,29 @@ is possible.
 **Ask apicity:** add a `google`/`googleflow` provider to `@apicity/cost` with
 credits-based rates (or a credits→USD conversion) for the google-flow
 models, plus `MODEL_SLUGS.google` entries.
+
+---
+
+## 16. (bug) `@apicity/googleflow` percent-encodes path IDs — useapi.net requires them raw
+
+`@apicity/googleflow@0.7.1` builds its GET path segments with
+`encodeURIComponent` (`google.js`: `jobs.retrieve`, `assets.retrieve`,
+`accounts.retrieve`, `characters.retrieve`, `voices.retrieve`). useapi.net IDs
+carry `:` and `@` — e.g. a job id is
+`j0707051013179185608v-u2935-email:justinwtanner@gmail.com-bot:google-flow` —
+and the server expects them **RAW**: an encoded job id returns
+`400 Invalid job ID format`. Confirmed by direct probe (raw unencoded `fetch`
+→ `200`; package `provider.get.v1.jobs.retrieve` → `400`).
+
+**Workaround (`server/src/jobs/_google-flow.ts`):** a `googleFlowFetch` hook
+passed via `createGoogleFlow({ fetch })` (the provider's sanctioned fetch
+override) decodes the over-encoded pathname back to raw before the request
+leaves the process. Wired into both provider construction sites
+(`createGoogleFlowProvider` and the `sync.ts` poll branch). POST endpoints are
+unaffected (the job id travels in the response body, not the path), so submit
+and asset upload worked without it; only `jobs.retrieve` polling broke.
+
+**Ask apicity:** stop `encodeURIComponent`-ing path IDs (or use an encoding
+that preserves `:` / `@`, which useapi.net accepts verbatim). Note
+`assets.retrieve` (`mediaGenerationId`) carries `:` too, so it would break the
+same way if ever wired.
