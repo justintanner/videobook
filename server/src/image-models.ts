@@ -482,7 +482,7 @@ function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
     providers.push({
       key: "google",
       label: "Google Flow",
-      provider_path: "google.v1.googleFlow.images()",
+      provider_path: "googleflow.v1.images()",
       envKey: "GOOGLE_FLOW_API_KEY",
     });
   }

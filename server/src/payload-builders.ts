@@ -70,7 +70,7 @@ import type {
   KlingV3TurboAspectRatio,
 } from "@apicity/kie";
 import type { XaiImageEditRequest, XaiImageGenerateRequest, XaiVideoGenerateRequest, XaiImageReference } from "@apicity/xai";
-import type { GoogleFlowImagesRequest, GoogleFlowVideosRequest } from "@apicity/google";
+import type { GoogleFlowImagesRequest, GoogleFlowVideosRequest } from "@apicity/googleflow";
 import type {
   AlibabaImageGenerationRequest,
   AlibabaVideoSynthesisRequest,
@@ -485,10 +485,10 @@ function buildVeo3VideoPayload(
 }
 
 // ---------------------------------------------------------------------------
-// Google Flow (useapi.net) — @apicity/google
+// Google Flow (useapi.net) — @apicity/googleflow
 //
 // Veo 3.1 / Omni Flash video and Nano Banana Pro image generation ride the
-// google-flow endpoints. @apicity/google's request schemas are $loose objects
+// google-flow endpoints. @apicity/googleflow's request schemas are $loose objects
 // with no enums/ranges (docs/apicity-gaps.md §14), so allowed values are
 // hand-typed from the useapi.net docs and reference assets are spread into
 // the positional referenceImage_N / reference_N keys the API expects. Refs
@@ -1465,7 +1465,7 @@ function translateToolPayload(
         ...(endImage !== undefined && endImage.trim() !== "" ? { endImageId: endImage } : {}),
         ...(imageSlugs.length > 0 ? { referenceImageIds: imageSlugs } : {}),
       });
-      return { provider_path: "google.v1.googleFlow.videos({ async: true })", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "googleflow.v1.videos({ async: true })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_google_omni_video": {
       const videoSlug = args.video_slug as string | undefined;
@@ -1473,11 +1473,11 @@ function translateToolPayload(
         ...(imageSlugs.length > 0 ? { referenceImageIds: imageSlugs } : {}),
         ...(videoSlug !== undefined && videoSlug.trim() !== "" ? { referenceVideoId: videoSlug } : {}),
       });
-      return { provider_path: "google.v1.googleFlow.videos({ async: true })", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "googleflow.v1.videos({ async: true })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_nano_banana_pro_google": {
       const payload = buildGoogleNbpImagePayload(args as GoogleNbpImageArgs, imageSlugs);
-      return { provider_path: "google.v1.googleFlow.images()", payload: payload as unknown as Record<string, unknown> };
+      return { provider_path: "googleflow.v1.images()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_grok_imagine_text_image": {
       if (isXaiProvider(provider)) {

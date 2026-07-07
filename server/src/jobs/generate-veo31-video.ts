@@ -1,5 +1,5 @@
 import type { VideocityFs } from "videocity-engine";
-import type { GoogleProvider } from "@apicity/google";
+import type { GoogleFlowProvider } from "@apicity/googleflow";
 import { registerJobHandler } from "../queue.js";
 import { buildVeo31VideoPayload, type GoogleVeo31Model, type Veo31VideoArgs } from "../payload-builders.js";
 import { createGoogleFlowProvider, submitGoogleFlowVideoTask, uploadAssetToGoogleFlow } from "./_google-flow.js";
@@ -21,7 +21,7 @@ type GenerateVeo31VideoPayload = {
   seed?: number;
 };
 
-async function uploadRef(provider: GoogleProvider, fs: VideocityFs, input: RefInput, projectSlug: string): Promise<string> {
+async function uploadRef(provider: GoogleFlowProvider, fs: VideocityFs, input: RefInput, projectSlug: string): Promise<string> {
   return uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, projectSlug);
 }
 

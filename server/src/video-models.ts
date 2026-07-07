@@ -200,7 +200,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: ["prompt", "first_frame_slug", "last_frame_slug", "aspect_ratio", "seed"],
     defaults: {},
     providers: [
-      { key: "google", label: "Google Flow", provider_path: "google.v1.googleFlow.videos({ async: true })", envKey: "GOOGLE_FLOW_API_KEY" },
+      { key: "google", label: "Google Flow", provider_path: "googleflow.v1.videos({ async: true })", envKey: "GOOGLE_FLOW_API_KEY" },
     ],
   },
   veo31_fast: {
@@ -210,7 +210,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: ["prompt", "first_frame_slug", "last_frame_slug", "image_slugs", "aspect_ratio", "duration", "seed"],
     defaults: {},
     providers: [
-      { key: "google", label: "Google Flow", provider_path: "google.v1.googleFlow.videos({ async: true })", envKey: "GOOGLE_FLOW_API_KEY" },
+      { key: "google", label: "Google Flow", provider_path: "googleflow.v1.videos({ async: true })", envKey: "GOOGLE_FLOW_API_KEY" },
     ],
   },
   veo31_lite: {
@@ -220,7 +220,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     params: ["prompt", "first_frame_slug", "last_frame_slug", "image_slugs", "aspect_ratio", "duration", "seed"],
     defaults: {},
     providers: [
-      { key: "google", label: "Google Flow", provider_path: "google.v1.googleFlow.videos({ async: true })", envKey: "GOOGLE_FLOW_API_KEY" },
+      { key: "google", label: "Google Flow", provider_path: "googleflow.v1.videos({ async: true })", envKey: "GOOGLE_FLOW_API_KEY" },
     ],
   },
   kling30_turbo: {
@@ -567,7 +567,7 @@ const IMAGE_FIELD_SCHEMAS: Record<string, ZodLike> = {
 const IMAGE_SLOT_OVERRIDES: Record<string, SlotConstraints> = {
   generate_grok_imagine_video: { min: 1, max: 7 },
   // Google Flow veo 3.1 reference slots are positional referenceImage_1..3
-  // keys with no array field in @apicity/google to read (gaps doc §14).
+  // keys with no array field in @apicity/googleflow to read (gaps doc §14).
   generate_veo31_fast_video: { min: 0, max: 3 },
   generate_veo31_lite_video: { min: 0, max: 3 },
 };
@@ -1046,7 +1046,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "seed") prop.description = "Random seed (0-2147483647)";
     }
     if (toolName === "generate_veo31_video" || toolName === "generate_veo31_fast_video" || toolName === "generate_veo31_lite_video") {
-      // @apicity/google's flow schemas carry no enums/ranges to derive, so
+      // @apicity/googleflow's flow schemas carry no enums/ranges to derive, so
       // allowed values are hand-typed from the useapi.net Google Flow docs
       // (docs/apicity-gaps.md §14).
       if (param === "prompt") prop.description = "Video description";
@@ -1544,7 +1544,7 @@ function buildProvidersForModel(info: VideoModelInfo): ProviderRoute[] {
   return [
     ...info.providers,
     ...(info.googleToolName
-      ? [{ key: "google", label: "Google Flow", provider_path: "google.v1.googleFlow.videos({ async: true })", envKey: "GOOGLE_FLOW_API_KEY" }]
+      ? [{ key: "google", label: "Google Flow", provider_path: "googleflow.v1.videos({ async: true })", envKey: "GOOGLE_FLOW_API_KEY" }]
       : []),
     ...(info.falToolNames
       ? [{ key: "fal", label: "Fal", provider_path: "fal.post.v1.queue.submit()", envKey: "FAL_API_KEY" }]

@@ -68,7 +68,7 @@ export function registerGenerateNanoBananaProGoogleJob(fs: VideocityFs): void {
     );
     await fs.writeMetadata(p.imgAssetId, "generation-payload", request, p.projectSlug);
 
-    const res = await provider.v1.googleFlow.images(request);
+    const res = await provider.v1.images(request);
     const imageUrl = readFirstImageUrl(res as Record<string, unknown>);
     if (!imageUrl) throw new Error("Google Flow image generation returned no image URL");
 

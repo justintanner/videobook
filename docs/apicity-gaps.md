@@ -305,17 +305,20 @@ audio/character asset-minting flow and surface `audio_ids` / `character_ids`.
 
 ---
 
-## 14. (gap) `@apicity/google` flow request schemas carry no enums/ranges or reference slots
+## 14. (gap) `@apicity/googleflow` schemas carry reference slots but no enums/ranges or response types
 
-`@apicity/google@0.7.0`'s google-flow request schemas
-(`GoogleFlowImagesRequestSchema`, `GoogleFlowVideosRequestSchema`) type
-`model`, `aspectRatio`, `duration`, `count`, and `seed` as plain optional
-strings/numbers — no enums, no `.min()/.max()`. The positional reference
-fields the API accepts (`startImage`, `endImage`, `referenceImage_1..7`,
-`reference_1..10`, `referenceVideo_1`, `startFrameIndex_1`/`endFrameIndex_1`)
-are absent from the schemas entirely (they survive only because the objects
-are `$loose`). Nothing exists for `applyApicityConstraints` / `apicityField`
-to derive from.
+The google-flow endpoints moved to a dedicated `@apicity/googleflow` package
+in 0.7.1 (split out of `@apicity/google`, which now hosts only Vertex
+express-mode / Gemini content calls — the `@apicity/google@0.7.1` Flow removal
+is resolved by the split provider). `@apicity/googleflow@0.7.1`'s request
+schemas (`GoogleFlowImagesRequestSchema`, `GoogleFlowVideosRequestSchema`)
+**do** now type the positional reference fields as named optional strings —
+`startImage`, `endImage`, `referenceImage_1..7`, `reference_1..10`,
+`referenceVideo_1`, `startFrameIndex_1`/`endFrameIndex_1`, `character_1..7`,
+`referenceAudio_1..5`. But `model`, `aspectRatio`, `duration`, `count`, and
+`seed` are still plain optional strings/numbers — no enums, no `.min()/.max()`
+— and every response is still `GoogleFlowResponse = Record<string, unknown>`.
+Nothing exists for `applyApicityConstraints` / `apicityField` to derive from.
 
 **Workaround (`generate_veo31_*`, `generate_google_omni_video`,
 `generate_nano_banana_pro_google`):**
@@ -330,22 +333,22 @@ to derive from.
   `VIDEO_PARAM_ZOD_SCHEMAS` — there is nothing to derive, and deriving later
   would clobber the app-side ratio-string → `landscape`/`portrait` mapping in
   `payload-builders.ts` (`googleFlowVideoAspect`).
-- Reference assets are spread into the positional `referenceImage_N` /
+- Reference assets are spread into the named `referenceImage_N` /
   `reference_N` keys by `googleFlowReferenceSlots` in `payload-builders.ts`;
   image-slot limits are hand-set in `IMAGE_SLOT_OVERRIDES`.
 - The nested asset-upload response (`mediaGenerationId.mediaGenerationId`) is
   unwrapped defensively in `server/src/jobs/_google-flow.ts`.
 
-**Ask apicity:** add model/aspect/duration enums and typed reference-slot
-fields to the google-flow schemas (plus a `GoogleFlowVideosResponse` /
-`GoogleFlowJobResponse` shape — today every response is `GoogleFlowResponse =
-Record<string, unknown>`).
+**Ask apicity:** add model/aspect/duration enums and ranges to the googleflow
+schemas (the positional reference-slot fields landed in 0.7.1), plus a
+`GoogleFlowVideosResponse` / `GoogleFlowJobResponse` shape — today every
+response is still `GoogleFlowResponse = Record<string, unknown>`.
 
 ---
 
 ## 15. (gap) `@apicity/cost` has no `google` provider — Google Flow models unpriced
 
-`@apicity/cost@0.7.0`'s `PRICING` covers `openai, anthropic, xai, kimicoding,
+`@apicity/cost@0.7.1`'s `PRICING` covers `openai, anthropic, xai, kimicoding,
 fireworks, alibaba, elevenlabs, kie` — no `google`. useapi.net bills Google
 Flow in plan credits (veo-3.1-quality 100, -fast 20, -lite 10, omni-flash
 15-30 per clip), not USD, so `modelSlug("google", …)` throws and no estimate
@@ -362,6 +365,6 @@ is possible.
 - No paygate involvement — the kie OTP paygate does not apply to google-flow
   requests.
 
-**Ask apicity:** add a `google` provider to `@apicity/cost` with
+**Ask apicity:** add a `google`/`googleflow` provider to `@apicity/cost` with
 credits-based rates (or a credits→USD conversion) for the google-flow
 models, plus `MODEL_SLUGS.google` entries.

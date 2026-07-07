@@ -10,7 +10,7 @@ const SLUG = "google-omni";
 
 // Omni Flash V2V edit accepts at most 5 reference images alongside the clip
 // (R2V without a clip allows 7). Enums are hand-typed from the useapi.net
-// docs — @apicity/google's flow schemas carry no enums (docs/apicity-gaps.md
+// docs — @apicity/googleflow's flow schemas carry no enums (docs/apicity-gaps.md
 // §14) — and mirror the kie gemini-omni tool's values so provider switching
 // keeps prefilled params valid.
 const OMNI_V2V_MAX_IMAGES = 5;

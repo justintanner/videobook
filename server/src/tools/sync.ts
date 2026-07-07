@@ -8,7 +8,7 @@ import type { KieTaskInfo, KieTaskInfoData } from "@apicity/kie";
 import { createXai, XaiError } from "@apicity/xai";
 import { createAlibaba, AlibabaError } from "@apicity/alibaba";
 import { createFal, FalError } from "@apicity/fal";
-import { createGoogle, GoogleError } from "@apicity/google";
+import { createGoogleFlow, GoogleFlowError } from "@apicity/googleflow";
 import { queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import {
@@ -701,12 +701,12 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
   const googleFlowTasks = pollableTasks.filter(isGoogleFlowPendingTask);
   const googleFlowKey = getApiKey("GOOGLE_FLOW_API_KEY");
   if (googleFlowKey && googleFlowTasks.length > 0) {
-    const provider = createGoogle({ apiKey: googleFlowKey, flowApiKey: googleFlowKey, timeout: 30_000 });
+    const provider = createGoogleFlow({ apiKey: googleFlowKey, timeout: 30_000 });
 
     await Promise.all(googleFlowTasks.map(async (task) => {
       const prompt = metaPrompt(task.meta);
       try {
-        const job = await provider.get.v1.googleFlow.jobs.retrieve({ jobId: task.taskId });
+        const job = await provider.get.v1.jobs.retrieve({ jobId: task.taskId });
         const status = typeof job.status === "string" ? job.status : "";
         if (status === "completed") {
           const urls = googleFlowResultUrls(job);
@@ -751,8 +751,8 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
       } catch (e) {
         const failMsg = e instanceof Error ? e.message : "Google Flow poll failed";
         result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-        if (e instanceof GoogleError) {
-          const googleErr = e as GoogleError;
+        if (e instanceof GoogleFlowError) {
+          const googleErr = e as GoogleFlowError;
           // 4xx is permanent (bad/expired/foreign job id) except 429 rate limits.
           if (googleErr.status >= 400 && googleErr.status < 500 && googleErr.status !== 429) {
             await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });

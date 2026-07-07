@@ -1,5 +1,5 @@
-import { createGoogle } from "@apicity/google";
-import type { GoogleFlowVideosRequest, GoogleProvider } from "@apicity/google";
+import { createGoogleFlow } from "@apicity/googleflow";
+import type { GoogleFlowVideosRequest, GoogleFlowProvider } from "@apicity/googleflow";
 import type { TaskType, VideocityFs } from "videocity-engine";
 import type { JobHandlerContext } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -12,13 +12,13 @@ export const GOOGLE_FLOW_ENV_KEY = "GOOGLE_FLOW_API_KEY";
 // returning 408 — so the client timeout must comfortably cover that window.
 const GOOGLE_FLOW_TIMEOUT_MS = 10 * 60_000;
 
-// @apicity/google reads `apiKey` for the Vertex express-mode host and
-// `flowApiKey` for the useapi.net Google Flow host (falling back to `apiKey`).
-// Only the flow endpoints are wired here, so the single useapi.net token
-// serves both options.
-export function createGoogleFlowProvider(timeoutMs: number = GOOGLE_FLOW_TIMEOUT_MS): GoogleProvider {
+// @apicity/googleflow is the dedicated useapi.net Google Flow provider (split
+// out of @apicity/google in 0.7.1, which now hosts only Vertex express-mode
+// / Gemini content calls). It takes a single apiKey — the same useapi.net
+// GOOGLE_FLOW_API_KEY token — for every Flow endpoint.
+export function createGoogleFlowProvider(timeoutMs: number = GOOGLE_FLOW_TIMEOUT_MS): GoogleFlowProvider {
   const apiKey = requireApiKey(GOOGLE_FLOW_ENV_KEY);
-  return createGoogle({ apiKey, flowApiKey: apiKey, timeout: timeoutMs });
+  return createGoogleFlow({ apiKey, timeout: timeoutMs });
 }
 
 // POST /google-flow/assets nests the reference id one level down:
@@ -34,13 +34,13 @@ function readMediaGenerationId(res: Record<string, unknown>): string | null {
 }
 
 async function uploadBytesToGoogleFlow(
-  provider: GoogleProvider,
+  provider: GoogleFlowProvider,
   data: Uint8Array,
   contentType: string,
   label: string,
 ): Promise<string> {
   const body = new Blob([new Uint8Array(data)], { type: contentType });
-  const res = await provider.v1.googleFlow.assets({ body, contentType });
+  const res = await provider.v1.assets({ body, contentType });
   const mediaGenerationId = readMediaGenerationId(res as Record<string, unknown>);
   if (!mediaGenerationId) {
     throw new Error(`Google Flow asset upload returned no mediaGenerationId for ${label}`);
@@ -52,7 +52,7 @@ async function uploadBytesToGoogleFlow(
 // kie/fal upload helpers this returns a mediaGenerationId, not a URL —
 // google-flow requests reference prior uploads by id.
 export async function uploadAssetToGoogleFlow(
-  provider: GoogleProvider,
+  provider: GoogleFlowProvider,
   fs: VideocityFs,
   assetId: string,
   filename: string,
@@ -64,7 +64,7 @@ export async function uploadAssetToGoogleFlow(
 
 // Upload an external http(s) image (ephemeral inputs that never became
 // project assets) by fetching its bytes first.
-export async function uploadUrlToGoogleFlow(provider: GoogleProvider, url: string): Promise<string> {
+export async function uploadUrlToGoogleFlow(provider: GoogleFlowProvider, url: string): Promise<string> {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch reference image ${url}: ${response.status} ${response.statusText}`);
@@ -103,7 +103,7 @@ export async function submitGoogleFlowVideoTask(
   const provider = createGoogleFlowProvider();
   await fs.writeMetadata(args.assetId, "generation-payload", args.request, args.projectSlug);
 
-  const res = await provider.v1.googleFlow.videos({ ...args.request, async: true });
+  const res = await provider.v1.videos({ ...args.request, async: true });
   const taskId = readJobId(res as Record<string, unknown>);
   if (!taskId) throw new Error("Google Flow video submit returned no job id");
 
