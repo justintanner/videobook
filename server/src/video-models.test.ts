@@ -711,12 +711,79 @@ describe("google flow video models", () => {
       expect(option.providers.map((p) => p.key)).toEqual(expect.arrayContaining(["kie", "google"]));
       expect(option.selected_provider).toBe("google");
       expect(option.tool_name).toBe("generate_google_omni_video");
+      expect(option.schema!.properties.first_frame_slug).toBeDefined();
+      expect(option.schema!.properties.resolution).toBeUndefined();
+      expect(option.schema!.properties.duration.enum).toEqual(["4", "6", "8", "10"]);
+      expect(option.schema!.defaults.duration).toBe("8");
+      expect(option.validation.image_slots).toEqual({ min: 0, max: 7 });
     } finally {
       if (originalGoogle === undefined) delete process.env.GOOGLE_FLOW_API_KEY;
       else process.env.GOOGLE_FLOW_API_KEY = originalGoogle;
       if (originalKie === undefined) delete process.env.KIE_API_KEY;
       else process.env.KIE_API_KEY = originalKie;
     }
+  });
+
+  it("google omni schema is provider-specific", () => {
+    const schema = getVideoToolSchema("generate_google_omni_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.required).toContain("prompt");
+    expect(schema!.required).not.toContain("duration");
+    expect(schema!.properties.first_frame_slug).toBeDefined();
+    expect(schema!.properties.resolution).toBeUndefined();
+    expect(schema!.properties.duration.enum).toEqual(["4", "6", "8", "10"]);
+    expect(schema!.properties.duration.default).toBe("8");
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "9:16"]);
+    expect(schema!.properties.video_clip_start.maximum).toBe(10);
+    expect(schema!.properties.video_clip_ends.maximum).toBe(10);
+  });
+
+  it("google omni validates I2V/R2V/V2V mode constraints", () => {
+    const valid = validateVideoParams("generate_google_omni_video", { prompt: "x", video_slug: "@vid-a" });
+    expect(valid.valid).toBe(true);
+    expect(valid.warnings).toHaveLength(0);
+
+    const firstWithRefs = validateVideoParams("generate_google_omni_video", {
+      prompt: "x", first_frame_slug: "@img-start", image_slugs: ["@img-a"],
+    });
+    expect(firstWithRefs.warnings.some((w) => w.includes("first_frame_slug cannot be combined with image_slugs"))).toBe(true);
+
+    const firstWithVideo = validateVideoParams("generate_google_omni_video", {
+      prompt: "x", first_frame_slug: "@img-start", video_slug: "@vid-a",
+    });
+    expect(firstWithVideo.warnings.some((w) => w.includes("first_frame_slug cannot be combined with video_slug"))).toBe(true);
+
+    const tooManyV2vRefs = validateVideoParams("generate_google_omni_video", {
+      prompt: "x",
+      video_slug: "@vid-a",
+      image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e", "@img-f"],
+    });
+    expect(tooManyV2vRefs.warnings.some((w) => w.includes("up to 5 reference images"))).toBe(true);
+
+    const badClip = validateVideoParams("generate_google_omni_video", {
+      prompt: "x", video_slug: "@vid-a", video_clip_start: 2, video_clip_ends: 12,
+    });
+    expect(badClip.warnings.some((w) => w.includes("<= 10s"))).toBe(true);
+  });
+
+  it("google omni history aliases back to the shared model with google selected", () => {
+    const history: ActionLogEntry[] = [{
+      hash: "abc123",
+      action: "tool-generate-google-omni-video",
+      payload: { project_slug: "p", _provider: "google", prompt: "old", first_frame_slug: "@img-start" },
+      date: "2026-07-07T00:00:00Z",
+    }];
+
+    expect(extractLastSettingsPerModel(history).get("generate_gemini_omni_video")).toMatchObject({
+      _provider: "google",
+      first_frame_slug: "@img-start",
+    });
+    expect(extractLastUsedModel(history)).toBe("gemini_omni");
+
+    const option = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, [], history);
+    expect(option.selected_provider).toBe("google");
+    expect(option.tool_name).toBe("generate_google_omni_video");
+    expect(option.prefilled_values.first_frame_slug).toBe("@img-start");
   });
 
   it("gemini_omni keeps the kie tool when kie is selected", () => {

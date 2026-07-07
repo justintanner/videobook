@@ -9,12 +9,13 @@ type GenerateGoogleOmniVideoPayload = {
   vidAssetId: string;
   vidAssetDir: string;
   projectSlug: string;
+  firstFrame?: RefInput;
   imageInputs: RefInput[];
   videoInput?: RefInput;
   sourceImageIds: string[];
   sourceVideoIds: string[];
   prompt: string;
-  duration: GoogleOmniVideoArgs["duration"];
+  duration?: GoogleOmniVideoArgs["duration"];
   aspect_ratio?: GoogleOmniVideoArgs["aspect_ratio"];
   seed?: number;
   video_clip_start?: number;
@@ -30,6 +31,9 @@ export function registerGenerateGoogleOmniVideoJob(fs: VideocityFs): void {
     for (const input of p.imageInputs) {
       referenceImageIds.push(await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, p.projectSlug));
     }
+    const startImageId = p.firstFrame
+      ? await uploadAssetToGoogleFlow(provider, fs, p.firstFrame.assetId, p.firstFrame.filename, p.projectSlug)
+      : undefined;
     const referenceVideoId = p.videoInput
       ? await uploadAssetToGoogleFlow(provider, fs, p.videoInput.assetId, p.videoInput.filename, p.projectSlug)
       : undefined;
@@ -37,13 +41,14 @@ export function registerGenerateGoogleOmniVideoJob(fs: VideocityFs): void {
     const request = buildGoogleOmniVideoPayload(
       {
         prompt: p.prompt,
-        duration: p.duration,
+        ...(p.duration !== undefined ? { duration: p.duration } : {}),
         ...(p.aspect_ratio !== undefined ? { aspect_ratio: p.aspect_ratio } : {}),
         ...(p.seed !== undefined ? { seed: p.seed } : {}),
         ...(p.video_clip_start !== undefined ? { video_clip_start: p.video_clip_start } : {}),
         ...(p.video_clip_ends !== undefined ? { video_clip_ends: p.video_clip_ends } : {}),
       },
       {
+        ...(startImageId !== undefined ? { startImageId } : {}),
         ...(referenceImageIds.length > 0 ? { referenceImageIds } : {}),
         ...(referenceVideoId !== undefined ? { referenceVideoId } : {}),
       },

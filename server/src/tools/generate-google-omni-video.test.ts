@@ -60,7 +60,7 @@ describe("generate_google_omni_video tool", () => {
         image_slugs: [`@${imageAsset.value.assetId}`],
         video_slug: `@${videoAsset.value.assetId}`,
         video_clip_start: 0,
-        video_clip_ends: 9.97,
+        video_clip_ends: 10,
         duration: "10",
       },
     });
@@ -73,7 +73,53 @@ describe("generate_google_omni_video tool", () => {
     expect(parsed.source_videos).toEqual([videoAsset.value.assetId]);
   });
 
-  it("rejects a reference clip window at or over 10 seconds", async () => {
+  it("enqueues with a first-frame image slug before provider upload", async () => {
+    const fs = createFs({ projectsDir: tempDir });
+    const imageAsset = await fs.createAsset("img", "start-frame", "test-proj");
+    if (!imageAsset.ok) throw new Error("Failed to create image asset");
+
+    await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
+
+    const result = await client.callTool({
+      name: "generate_google_omni_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "animate this frame",
+        first_frame_slug: `@${imageAsset.value.assetId}`,
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.status).toBe("enqueued");
+    expect(parsed.source_first_frame).toBe(imageAsset.value.assetId);
+    expect(parsed.source_images).toEqual([]);
+    expect(parsed.source_videos).toEqual([]);
+  });
+
+  it("enqueues a reference clip without explicit trim timecodes", async () => {
+    const fs = createFs({ projectsDir: tempDir });
+    const videoAsset = await fs.createAsset("vid", "source-video", "test-proj");
+    if (!videoAsset.ok) throw new Error("Failed to create video asset");
+
+    await fs.writeFile(videoAsset.value.assetId, "original.mp4", Buffer.from("fake mp4"), "test-proj");
+
+    const result = await client.callTool({
+      name: "generate_google_omni_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "edit this",
+        video_slug: `@${videoAsset.value.assetId}`,
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.status).toBe("enqueued");
+    expect(parsed.source_videos).toEqual([videoAsset.value.assetId]);
+  });
+
+  it("rejects a reference clip window over 10 seconds", async () => {
     const result = await client.callTool({
       name: "generate_google_omni_video",
       arguments: {
@@ -87,6 +133,32 @@ describe("generate_google_omni_video tool", () => {
     });
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("video_clip_ends");
+  });
+
+  it("rejects first-frame mode combined with reference images or video", async () => {
+    const refsResult = await client.callTool({
+      name: "generate_google_omni_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "animate this",
+        first_frame_slug: "@img-start",
+        image_slugs: ["@img-ref"],
+      },
+    });
+    expect(refsResult.isError).toBe(true);
+    expect((refsResult.content as TextContent)[0].text).toContain("first_frame_slug cannot be combined with image_slugs");
+
+    const videoResult = await client.callTool({
+      name: "generate_google_omni_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "animate this",
+        first_frame_slug: "@img-start",
+        video_slug: "@vid-motion",
+      },
+    });
+    expect(videoResult.isError).toBe(true);
+    expect((videoResult.content as TextContent)[0].text).toContain("first_frame_slug cannot be combined with video_slug");
   });
 
   it("rejects more than 5 reference images alongside a clip", async () => {

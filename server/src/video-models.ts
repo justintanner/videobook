@@ -541,6 +541,31 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
 
 const DEFAULT_VIDEO_MODEL_KEY = "grok_imagine";
 
+// Google Flow provider aliases: a base video tool can expose a "google"
+// provider (see VideoModelInfo.googleToolName) whose effective tool name and
+// param surface differ from the base. These aliases let getVideoToolSchema,
+// validateVideoParams, history extraction, and buildModelOption treat the
+// google tool name as a first-class entry while routing/selection still keys
+// off the single base model.
+const GOOGLE_VIDEO_ALIASES: Record<string, string> = {
+  generate_google_omni_video: "generate_gemini_omni_video",
+};
+
+// Google Omni ("Omni Flash") drops the Kie-only `resolution` and adds an I2V
+// `first_frame_slug` (mapped to the provider's startImage) ahead of the
+// reference images. R2V reference images cap at 7 (5 alongside a clip).
+const GOOGLE_VIDEO_PARAMS: Record<string, readonly string[]> = {
+  generate_google_omni_video: [
+    "prompt",
+    "first_frame_slug",
+    "image_slugs", "video_slug", "video_clip_start", "video_clip_ends",
+    "duration", "aspect_ratio", "seed",
+  ],
+};
+
+const GOOGLE_OMNI_DURATIONS = ["4", "6", "8", "10"];
+const GOOGLE_OMNI_ASPECT_RATIOS = ["16:9", "9:16"];
+
 // ---------------------------------------------------------------------------
 // Image slot schemas — source of truth is the Apicity Zod request schema.
 // Tools absent from this map have no image-array field; their `image_slots`
@@ -568,6 +593,7 @@ const IMAGE_SLOT_OVERRIDES: Record<string, SlotConstraints> = {
   generate_grok_imagine_video: { min: 1, max: 7 },
   // Google Flow veo 3.1 reference slots are positional referenceImage_1..3
   // keys with no array field in @apicity/googleflow to read (gaps doc §14).
+  generate_google_omni_video: { min: 0, max: 7 },
   generate_veo31_fast_video: { min: 0, max: 3 },
   generate_veo31_lite_video: { min: 0, max: 3 },
 };
@@ -974,15 +1000,18 @@ function applyApicityConstraints(prop: ParamSchema, schema: ZodLike): void {
 }
 
 function getVideoToolSchema(toolName: string): ToolSchema | null {
-  const model = Object.values(VIDEO_MODELS).find((m) => m.tool_name === toolName);
+  const baseName = GOOGLE_VIDEO_ALIASES[toolName] ?? toolName;
+  const isAlias = toolName !== baseName;
+  const model = Object.values(VIDEO_MODELS).find((m) => m.tool_name === baseName);
   if (!model) return null;
 
   const properties: Record<string, ParamSchema> = {};
   const required = new Set<string>();
   const defaults: Record<string, unknown> = {};
-  const zodSchemas = VIDEO_PARAM_ZOD_SCHEMAS[toolName] ?? {};
+  const zodSchemas = isAlias ? {} : VIDEO_PARAM_ZOD_SCHEMAS[baseName] ?? {};
 
-  for (const param of model.params) {
+  const paramList = isAlias ? (GOOGLE_VIDEO_PARAMS[toolName] ?? model.params) : model.params;
+  for (const param of paramList) {
     const base = PARAM_SCHEMAS[param];
     if (!base) continue;
 
@@ -1032,18 +1061,41 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "audio_slugs") prop.description = "Reference audio assets (0-3, total ≤15s, e.g., @aud-music)";
       if (param === "nsfw_checker") prop.description = "Content safety filter (default true)";
     }
-    if (toolName === "generate_gemini_omni_video") {
+    if (baseName === "generate_gemini_omni_video") {
       // Enum/range/default for prompt, duration, aspect_ratio, resolution, seed
       // auto-derive from VIDEO_PARAM_ZOD_SCHEMAS; only descriptions are set here.
       if (param === "prompt") { prop.description = "Multimodal video generation prompt (max 20000 characters)"; prop.maxLength = 20000; }
+      if (param === "first_frame_slug") prop.description = "First-frame image asset for image-to-video (e.g., @img-start); not combinable with image_slugs or video_slug";
       if (param === "image_slugs") { prop.description = "Reference image assets (0-7, each ≤20MB, e.g., @img-style)"; prop.maxItems = 7; }
       if (param === "video_slug") prop.description = "Reference video clip asset (one clip, e.g., @vid-motion)";
-      if (param === "video_clip_start") prop.description = "Reference clip start time in seconds (requires video_slug)";
-      if (param === "video_clip_ends") prop.description = "Reference clip end time in seconds; must be > start and < start+10s (requires video_slug)";
+      if (param === "video_clip_start") {
+        prop.description = isAlias
+          ? "Reference clip start time in seconds on a 10s timeline (requires video_slug)"
+          : "Reference clip start time in seconds (requires video_slug)";
+        if (isAlias) prop.maximum = 10;
+      }
+      if (param === "video_clip_ends") {
+        prop.description = isAlias
+          ? "Reference clip end time in seconds on a 10s timeline; must be > start (requires video_slug)"
+          : "Reference clip end time in seconds; must be > start and < start+10s (requires video_slug)";
+        if (isAlias) prop.maximum = 10;
+      }
       if (param === "duration") prop.description = "Output duration: 4 / 6 / 8 / 10 seconds (ignored when a reference video clip is supplied)";
       if (param === "aspect_ratio") prop.description = "Output aspect ratio: 16:9 / 9:16";
-      if (param === "resolution") prop.description = "Output resolution: 720p / 1080p / 4k (default 720p)";
+      if (!isAlias && param === "resolution") prop.description = "Output resolution: 720p / 1080p / 4k (default 720p)";
       if (param === "seed") prop.description = "Random seed (0-2147483647)";
+      if (isAlias && param === "duration") {
+        prop.enum = GOOGLE_OMNI_DURATIONS;
+        prop.default = "8";
+        defaults[param] = "8";
+        prop.description = "Output duration: 4 / 6 / 8 / 10 seconds (default 8; omitted for reference-video V2V)";
+      }
+      if (isAlias && param === "aspect_ratio") {
+        prop.enum = GOOGLE_OMNI_ASPECT_RATIOS;
+      }
+      if (isAlias && param === "seed") {
+        prop.minimum = 0;
+      }
     }
     if (toolName === "generate_veo31_video" || toolName === "generate_veo31_fast_video" || toolName === "generate_veo31_lite_video") {
       // @apicity/googleflow's flow schemas carry no enums/ranges to derive, so
@@ -1361,6 +1413,37 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
+  if (toolName === "generate_google_omni_video") {
+    if (totalImages > 7) {
+      warnings.push(`Google Omni supports up to 7 reference images (got ${totalImages})`);
+    }
+    const firstFrame = params.first_frame_slug as string | undefined;
+    const videoSlug = params.video_slug as string | undefined;
+    const clipStart = params.video_clip_start as number | undefined;
+    const clipEnds = params.video_clip_ends as number | undefined;
+    if (firstFrame && totalImages > 0) {
+      warnings.push("Google Omni first_frame_slug cannot be combined with image_slugs");
+    }
+    if (firstFrame && videoSlug) {
+      warnings.push("Google Omni first_frame_slug cannot be combined with video_slug");
+    }
+    if (!videoSlug && (clipStart !== undefined || clipEnds !== undefined)) {
+      warnings.push("video_clip_start/video_clip_ends require a video_slug");
+    }
+    if (videoSlug) {
+      if (totalImages > 5) {
+        warnings.push(`Google Omni video edit supports up to 5 reference images alongside the clip (got ${totalImages})`);
+      }
+      if (clipStart !== undefined && clipStart >= 10) {
+        warnings.push("Google Omni video_clip_start must be less than 10 seconds");
+      }
+      const start = clipStart ?? 0;
+      if (clipEnds !== undefined && (!(clipEnds > start) || clipEnds > 10)) {
+        warnings.push("Google Omni reference clip must satisfy video_clip_ends > video_clip_start and <= 10s");
+      }
+    }
+  }
+
   if (toolName === "generate_veo31_video" || toolName === "generate_veo31_fast_video" || toolName === "generate_veo31_lite_video") {
     const firstFrame = params.first_frame_slug as string | undefined;
     const lastFrame = params.last_frame_slug as string | undefined;
@@ -1534,7 +1617,10 @@ type ActionLogEntry = {
 function actionNameToToolName(action: string): string | null {
   if (!action.startsWith("tool-")) return null;
   const toolName = action.slice(5).replace(/-/g, "_");
-  return Object.values(VIDEO_MODELS).some((m) => m.tool_name === toolName) ? toolName : null;
+  const direct = Object.values(VIDEO_MODELS).find((m) => m.tool_name === toolName);
+  if (direct) return direct.tool_name;
+  const google = Object.values(VIDEO_MODELS).find((m) => m.googleToolName === toolName);
+  return google?.tool_name ?? null;
 }
 
 const NON_PARAM_KEYS = new Set(["project_slug"]);
@@ -1637,26 +1723,47 @@ function buildModelOption(
   projectAssetTags?: Set<string>,
 ): ModelOption {
   const toolName = modelInfo.tool_name;
-  // Only carry over base params that belong to this model's param list
-  const allowedParams = new Set(modelInfo.params);
+  let historicalProvider: string | undefined;
+  let historical: Record<string, unknown> | undefined;
+  if (historyEntries) {
+    const settingsMap = extractLastSettingsPerModel(historyEntries);
+    historical = settingsMap.get(toolName);
+    if (historical) {
+      historicalProvider = historical._provider as string | undefined;
+    }
+  }
+
+  const allProviders = buildProvidersForModel(modelInfo);
+  const availableProviders = allProviders.filter((p) => process.env[p.envKey]);
+  const providerList = availableProviders.length > 0 ? availableProviders : allProviders;
+  const selectedProvider = (providerOverride && providerList.some((p) => p.key === providerOverride))
+    ? providerOverride
+    : (historicalProvider && providerList.some((p) => p.key === historicalProvider))
+      ? historicalProvider
+      : providerList[0].key;
+
+  let effectiveToolName = toolName;
+  if (selectedProvider === "fal") {
+    const imageSlugCount = Array.isArray(baseParams.image_slugs)
+      ? (baseParams.image_slugs as unknown[]).length
+      : resolvedAssets.filter((a) => a.asset_type === "image" && a.file_path).length
+        || (typeof baseParams.first_frame_slug === "string" && baseParams.first_frame_slug !== "" ? 1 : 0);
+    const falName = resolveFalVideoToolName(modelInfo, imageSlugCount);
+    if (falName) effectiveToolName = falName;
+  } else if (selectedProvider === "google" && modelInfo.googleToolName) {
+    effectiveToolName = modelInfo.googleToolName;
+  }
+
+  const schema = getVideoToolSchema(effectiveToolName);
+  const allowedParams = new Set(schema ? Object.keys(schema.properties) : modelInfo.params);
   const params: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(baseParams)) {
     if (allowedParams.has(k)) params[k] = v;
   }
-
-  // Prefill from most recent historical usage of this tool —
-  // historical settings OVERRIDE router params so the user's last-used
-  // settings persist as defaults across sessions.
-  let historicalProvider: string | undefined;
-  if (historyEntries) {
-    const settingsMap = extractLastSettingsPerModel(historyEntries);
-    const historical = settingsMap.get(toolName);
-    if (historical) {
-      historicalProvider = historical._provider as string | undefined;
-      for (const [k, v] of Object.entries(historical)) {
-        if (allowedParams.has(k)) {
-          params[k] = v;
-        }
+  if (historical) {
+    for (const [k, v] of Object.entries(historical)) {
+      if (allowedParams.has(k)) {
+        params[k] = v;
       }
     }
   }
@@ -1707,8 +1814,6 @@ function buildModelOption(
     }
   }
 
-  const schema = getVideoToolSchema(toolName);
-
   // Apply model defaults where not already set
   for (const [k, v] of Object.entries(schema?.defaults ?? {})) {
     params[k] ??= v;
@@ -1727,31 +1832,10 @@ function buildModelOption(
         params[k] = String(v);
       }
     }
-    applyVideoToolConstraints(toolName, schema, params);
+    applyVideoToolConstraints(effectiveToolName, schema, params);
   }
 
-  const validation = validateVideoParams(toolName, params);
-
-  // Filter providers to those with available API keys
-  const allProviders = buildProvidersForModel(modelInfo);
-  const availableProviders = allProviders.filter((p) => process.env[p.envKey]);
-  const providerList = availableProviders.length > 0 ? availableProviders : allProviders;
-  const selectedProvider = (providerOverride && providerList.some((p) => p.key === providerOverride))
-    ? providerOverride
-    : (historicalProvider && providerList.some((p) => p.key === historicalProvider))
-      ? historicalProvider
-      : providerList[0].key;
-
-  let effectiveToolName = toolName;
-  if (selectedProvider === "fal") {
-    const slugCount = Array.isArray(params.image_slugs)
-      ? (params.image_slugs as unknown[]).length
-      : (typeof params.first_frame_slug === "string" && params.first_frame_slug !== "" ? 1 : 0);
-    const falName = resolveFalVideoToolName(modelInfo, slugCount);
-    if (falName) effectiveToolName = falName;
-  } else if (selectedProvider === "google" && modelInfo.googleToolName) {
-    effectiveToolName = modelInfo.googleToolName;
-  }
+  const validation = validateVideoParams(effectiveToolName, params);
 
   return {
     key: modelKey,

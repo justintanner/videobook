@@ -545,7 +545,7 @@ function buildVeo31VideoPayload(
 
 type GoogleOmniVideoArgs = {
   prompt: string;
-  duration: "4" | "6" | "8" | "10";
+  duration?: "4" | "6" | "8" | "10";
   aspect_ratio?: "16:9" | "9:16";
   seed?: number;
   video_clip_start?: number;
@@ -553,6 +553,7 @@ type GoogleOmniVideoArgs = {
 };
 
 type GoogleOmniVideoOpts = {
+  startImageId?: string;
   referenceImageIds?: string[];
   referenceVideoId?: string;
 };
@@ -570,27 +571,34 @@ function buildGoogleOmniVideoPayload(
   const hasVideo = opts.referenceVideoId !== undefined;
   let clipSlots: Record<string, unknown> = {};
   if (hasVideo) {
-    const startFrame = Math.min(
-      Math.max(Math.round((args.video_clip_start ?? 0) * OMNI_FLASH_FPS), 0),
-      OMNI_FLASH_MAX_FRAME - 1,
-    );
-    const endFrame = Math.min(
-      Math.max(Math.round((args.video_clip_ends ?? 0) * OMNI_FLASH_FPS), startFrame + 1),
-      OMNI_FLASH_MAX_FRAME,
-    );
     clipSlots = {
       referenceVideo_1: opts.referenceVideoId,
-      startFrameIndex_1: startFrame,
-      endFrameIndex_1: endFrame,
+      ...(args.video_clip_start !== undefined
+        ? {
+            startFrameIndex_1: Math.min(
+              Math.max(Math.round(args.video_clip_start * OMNI_FLASH_FPS), 0),
+              OMNI_FLASH_MAX_FRAME - 1,
+            ),
+          }
+        : {}),
+      ...(args.video_clip_ends !== undefined
+        ? {
+            endFrameIndex_1: Math.min(
+              Math.max(Math.round(args.video_clip_ends * OMNI_FLASH_FPS), 1),
+              OMNI_FLASH_MAX_FRAME,
+            ),
+          }
+        : {}),
     };
   }
   return {
     prompt: args.prompt,
     model: "omni-flash",
     // V2V edit rejects duration — the output length matches the trimmed clip.
-    ...(!hasVideo ? { duration: Number(args.duration) } : {}),
+    ...(!hasVideo ? { duration: Number(args.duration ?? "8") } : {}),
     ...(args.aspect_ratio !== undefined ? { aspectRatio: googleFlowVideoAspect(args.aspect_ratio) } : {}),
     ...(args.seed !== undefined ? { seed: args.seed } : {}),
+    ...(opts.startImageId !== undefined ? { startImage: opts.startImageId } : {}),
     ...googleFlowReferenceSlots("referenceImage", opts.referenceImageIds ?? []),
     ...clipSlots,
   };
@@ -1468,8 +1476,10 @@ function translateToolPayload(
       return { provider_path: "googleflow.v1.videos({ async: true })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_google_omni_video": {
+      const startImage = args.first_frame_slug as string | undefined;
       const videoSlug = args.video_slug as string | undefined;
       const payload = buildGoogleOmniVideoPayload(args as GoogleOmniVideoArgs, {
+        ...(startImage !== undefined && startImage.trim() !== "" ? { startImageId: startImage } : {}),
         ...(imageSlugs.length > 0 ? { referenceImageIds: imageSlugs } : {}),
         ...(videoSlug !== undefined && videoSlug.trim() !== "" ? { referenceVideoId: videoSlug } : {}),
       });

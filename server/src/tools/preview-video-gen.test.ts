@@ -11,6 +11,7 @@ describe("preview_video tool", () => {
   let client: Client;
   let tempDir: string;
   const origKey = process.env.OPENAI_API_KEY;
+  const origGoogleKey = process.env.GOOGLE_FLOW_API_KEY;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
@@ -24,6 +25,8 @@ describe("preview_video tool", () => {
   afterEach(async () => {
     if (origKey) process.env.OPENAI_API_KEY = origKey;
     else delete process.env.OPENAI_API_KEY;
+    if (origGoogleKey) process.env.GOOGLE_FLOW_API_KEY = origGoogleKey;
+    else delete process.env.GOOGLE_FLOW_API_KEY;
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
@@ -102,5 +105,31 @@ describe("preview_video tool", () => {
     const parsed = JSON.parse(content[0].text);
 
     expect(parsed.validation.warnings.some((w: string) => w.includes("Unresolved @tag"))).toBe(true);
+  });
+
+  it("returns the Google Omni provider-specific schema when google is selected", async () => {
+    process.env.GOOGLE_FLOW_API_KEY = "test-google-key";
+
+    const result = await client.callTool({
+      name: "preview_video",
+      arguments: {
+        prompt: "generate with omni",
+        project_slug: "test-proj",
+        selected_model: "gemini_omni",
+        selected_provider: "google",
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const content = result.content as TextContent;
+    const parsed = JSON.parse(content[0].text);
+
+    expect(parsed.selected_model).toBe("gemini_omni");
+    expect(parsed.selected_provider).toBe("google");
+    expect(parsed.tool_name).toBe("generate_google_omni_video");
+    expect(parsed.schema.properties.first_frame_slug).toBeDefined();
+    expect(parsed.schema.properties.resolution).toBeUndefined();
+    expect(parsed.schema.required).not.toContain("duration");
+    expect(parsed.schema.defaults.duration).toBe("8");
   });
 });

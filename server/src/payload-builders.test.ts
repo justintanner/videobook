@@ -67,4 +67,73 @@ describe("translateToolPayload", () => {
     });
     expect(Seedance2MiniRequestSchema.safeParse(result?.payload).success).toBe(true);
   });
+
+  it("builds Google Omni I2V payload with startImage", () => {
+    const result = translateToolPayload("generate_google_omni_video", {
+      prompt: "animate the first frame",
+      first_frame_slug: "user:123-email:test-image:start",
+      duration: "6",
+      aspect_ratio: "9:16",
+    });
+
+    expect(result?.provider_path).toBe("googleflow.v1.videos({ async: true })");
+    expect(result?.payload).toEqual({
+      prompt: "animate the first frame",
+      model: "omni-flash",
+      duration: 6,
+      aspectRatio: "portrait",
+      startImage: "user:123-email:test-image:start",
+    });
+  });
+
+  it("builds Google Omni R2V payload with reference images and default duration", () => {
+    const result = translateToolPayload("generate_google_omni_video", {
+      prompt: "use these references",
+      image_slugs: ["ref-1", "ref-2"],
+      aspect_ratio: "16:9",
+    });
+
+    expect(result?.payload).toEqual({
+      prompt: "use these references",
+      model: "omni-flash",
+      duration: 8,
+      aspectRatio: "landscape",
+      referenceImage_1: "ref-1",
+      referenceImage_2: "ref-2",
+    });
+  });
+
+  it("builds Google Omni V2V payload without duration and with explicit frame indexes", () => {
+    const result = translateToolPayload("generate_google_omni_video", {
+      prompt: "edit the clip",
+      video_slug: "user:123-email:test-video:clip",
+      image_slugs: ["ref-1"],
+      duration: "10",
+      video_clip_start: 2,
+      video_clip_ends: 10,
+    });
+
+    expect(result?.payload).toEqual({
+      prompt: "edit the clip",
+      model: "omni-flash",
+      referenceImage_1: "ref-1",
+      referenceVideo_1: "user:123-email:test-video:clip",
+      startFrameIndex_1: 48,
+      endFrameIndex_1: 240,
+    });
+  });
+
+  it("builds Google Omni V2V payload without fabricated trim indexes", () => {
+    const result = translateToolPayload("generate_google_omni_video", {
+      prompt: "edit the clip",
+      video_slug: "user:123-email:test-video:clip",
+      duration: "8",
+    });
+
+    expect(result?.payload).toEqual({
+      prompt: "edit the clip",
+      model: "omni-flash",
+      referenceVideo_1: "user:123-email:test-video:clip",
+    });
+  });
 });

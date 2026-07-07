@@ -20,6 +20,7 @@ import type { ToolDef } from "./tool-def.js";
 function findSelectedModel(toolName: string): string | null {
   for (const [key, info] of Object.entries(VIDEO_MODELS)) {
     if (info.tool_name === toolName) return key;
+    if (info.googleToolName === toolName) return key;
   }
   return null;
 }
