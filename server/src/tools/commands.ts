@@ -446,6 +446,18 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "detect_scenes", autoInject: ["project_slug"] },
   },
   {
+    command: "/rename-all",
+    description: "Bulk-rename vid-*/img-* assets with an explicit dry run: GPT-5.5 proposes descriptive names from each asset's stored context, you edit them in a side-by-side preview, then confirm to apply (updates timeline slots, OSG metadata, and plan/.plan.json references).",
+    example: "/rename-all",
+    category: "action",
+    icon: "Tags",
+    size: "default",
+    variant: "blue",
+    chevron: "right",
+    params: [],
+    uiAction: "open_rename_all",
+  },
+  {
     command: "/watermark",
     description: "Open the watermark dialog to add a QR + 'X: <handle>' end-card to a video (shows over the last 2 seconds at render)",
     example: "/watermark @vid-hero",

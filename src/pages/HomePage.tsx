@@ -13,7 +13,7 @@ import { GhostClipCard } from '@/components/sidebar/cards/GhostClipCard';
 import { SidebarMicroThumb } from '@/components/sidebar/SidebarMicroThumb';
 import { ContextMenuItem } from '@/components/ui/context-menu';
 import { AssetMenu, ProjectExportPicker } from '@/components/sidebar/menus/AssetMenu';
-import { IdleScreen, AssetViewer, PlanViewer, TemplatesViewer, ArchiveBrowser } from '@/components/center-stage';
+import { IdleScreen, AssetViewer, PlanViewer, TemplatesViewer, ArchiveBrowser, RenameAllPanel } from '@/components/center-stage';
 import type { ArchiveSearchResponse, RestoreResponse, ViewerSize } from '@/components/center-stage';
 import { TimelinePlayer } from '@/components/timeline/TimelinePlayer';
 import { useTimelinePreview } from '@/hooks/useTimelinePreview';
@@ -155,6 +155,7 @@ export function HomePage() {
   const [planEmptyOverride, setPlanEmptyOverride] = useState(false);
   const [planOpenKey, setPlanOpenKey] = useState(0);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [renameAllOpen, setRenameAllOpen] = useState(false);
   const [audioReplace, setAudioReplace] = useState<{ videoId: string; videoSlug: string; audioId: string; audioSlug: string } | null>(null);
   const [audioReplaceSubmitting, setAudioReplaceSubmitting] = useState(false);
   const chatInputRef = useRef<ChatInputHandle>(null);
@@ -429,6 +430,7 @@ export function HomePage() {
     setSettingsOpen(false);
     setArchiveOpen(false);
     setTemplatesOpen(false);
+    setRenameAllOpen(false);
     setSelectedItem(item);
     setGenPanel(null);
     setTimelineSlotIndex(null);
@@ -443,11 +445,24 @@ export function HomePage() {
   const openTemplates = useCallback(() => {
     setSettingsOpen(false);
     setArchiveOpen(false);
+    setRenameAllOpen(false);
     setSelectedItem(null);
     setGenPanel(null);
     setTimelineSlotIndex(null);
     setPlanEmptyOverride(false);
     setTemplatesOpen(true);
+  }, []);
+
+  // Open the /rename-all bulk rename panel, clearing the other center-stage views.
+  const openRenameAll = useCallback(() => {
+    setSettingsOpen(false);
+    setArchiveOpen(false);
+    setTemplatesOpen(false);
+    setSelectedItem(null);
+    setGenPanel(null);
+    setTimelineSlotIndex(null);
+    setPlanEmptyOverride(false);
+    setRenameAllOpen(true);
   }, []);
 
   // After a plan is generated from a /templates preview, leave the marketplace
@@ -1055,6 +1070,14 @@ export function HomePage() {
     });
   }, [projectSlug, sync, listAssets, sortOrder]);
 
+  // After /rename-all applies: refresh assets + timeline so the new slugs surface.
+  const handleRenameAllApplied = useCallback(() => {
+    if (!projectSlug) return;
+    sync(projectSlug);
+    void listAssets(projectSlug, sortOrder);
+    void fetchTimeline(projectSlug);
+  }, [projectSlug, sync, listAssets, sortOrder, fetchTimeline]);
+
   const handleCreateProject = useCallback(async (slug: string) => {
     const cleaned = slug.trim();
     if (!cleaned) return;
@@ -1429,6 +1452,7 @@ export function HomePage() {
       }
     },
     open_templates: openTemplates,
+    open_rename_all: openRenameAll,
     open_projects: () => setProjectsOpen(true),
     create_project: (slug: string) => { void handleCreateProject(slug); },
     rename_project: (newSlug: string) => { void handleRenameProject(newSlug); },
@@ -1458,7 +1482,7 @@ export function HomePage() {
     show_voices: handleShowVoices,
     x_connect: () => { void connectX(); },
     open_slot_player: handleOpenSlotPlayer,
-  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, viewerSize, applySubsSetting, applyAudioSetting, applyOsgSetting, activeSelection, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openTemplates]);
+  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, viewerSize, applySubsSetting, applyAudioSetting, applyOsgSetting, activeSelection, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openTemplates, openRenameAll]);
 
   const renderAssetCard = (item: MediaItem) => {
     const canExtractSkeleton = (item.type === 'image' || item.type === 'character') && !!item.filePath && !!projectSlug;
@@ -1675,6 +1699,13 @@ export function HomePage() {
                     callTool={callTool}
                     onGenerated={handlePlanGenerated}
                     onClose={() => setTemplatesOpen(false)}
+                  />
+                ) : renameAllOpen ? (
+                  <RenameAllPanel
+                    projectSlug={projectSlug ?? ''}
+                    callTool={callTool}
+                    onApplied={handleRenameAllApplied}
+                    onClose={() => setRenameAllOpen(false)}
                   />
                 ) : planEmptyOverride ? (
                   <PlanViewer

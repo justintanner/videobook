@@ -18,6 +18,7 @@ import { clearFailedTasksDef } from "./clear-failed-tasks.js";
 import { recoverAssetDef } from "./recover-asset.js";
 import { doctorDef } from "./doctor.js";
 import { renameAssetDef } from "./rename-asset.js";
+import { renameAllDef } from "./rename-all.js";
 import { markAssetSeenDef } from "./mark-asset-seen.js";
 import { duplicateAssetDef } from "./duplicate-asset.js";
 import { exportAssetDef } from "./export-asset.js";
@@ -226,6 +227,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     recoverAssetDef(fs),
     doctorDef(fs),
     renameAssetDef(fs),
+    renameAllDef(fs),
     markAssetSeenDef(fs),
     duplicateAssetDef(fs),
     exportAssetDef(fs),

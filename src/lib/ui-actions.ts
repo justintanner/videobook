@@ -39,6 +39,7 @@ export interface UiActionCallbacks {
   open_post_composer: (assetSlug: string, text: string) => void;
   open_plan: () => void;
   open_templates: () => void;
+  open_rename_all: () => void;
   open_projects: () => void;
   create_project: (slug: string) => void;
   rename_project: (newSlug: string) => void;
