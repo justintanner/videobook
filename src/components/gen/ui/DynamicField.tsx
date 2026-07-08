@@ -2,6 +2,7 @@ import { GenField, GenTextarea } from '@/components/ui/GenField';
 import { GenToggle } from '@/components/ui/GenToggle';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import type { JSONSchemaProperty } from '../types';
+import { isAssetField } from './fieldHelpers';
 import type { GenTheme } from './gen-themes';
 import { genThemes } from './gen-themes';
 import { cn } from '@/lib/utils';
@@ -60,9 +61,34 @@ export function DynamicField({
 }: DynamicFieldProps) {
   const label = labelOverride || formatLabel(name);
 
-  // Handle array types (image_slugs) - render as AssetDropSlot for string arrays
+  // Handle array types. Asset slug arrays (image_slugs) render as an
+  // AssetDropSlot; non-asset string arrays (e.g. voice_refs / character_refs —
+  // free-form provider ref lists) render as a comma/newline-separated textarea.
   if (schema.type === 'array') {
     if (schema.items?.type === 'string' || !schema.items?.type) {
+      if (!isAssetField(name)) {
+        const list = Array.isArray(value) ? (value as unknown[]).map(String) : [];
+        return (
+          <GenField label={label} required={required} theme={theme} className="w-full">
+            <GenTextarea
+              value={list.join(', ')}
+              onChange={(text) =>
+                onChange(
+                  text
+                    .split(/[\n,]+/)
+                    .map((entry) => entry.trim())
+                    .filter(Boolean),
+                )
+              }
+              placeholder={placeholderOverride ?? schema.description}
+              disabled={disabled}
+              rows={2}
+              theme={theme}
+            />
+          </GenField>
+        );
+      }
+
       const slug = Array.isArray(value) && value.length > 0 ? String(value[0]) : null;
 
       return (

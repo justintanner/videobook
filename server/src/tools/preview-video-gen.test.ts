@@ -131,5 +131,9 @@ describe("preview_video tool", () => {
     expect(parsed.schema.properties.resolution).toBeUndefined();
     expect(parsed.schema.required).not.toContain("duration");
     expect(parsed.schema.defaults.duration).toBe("8");
+    expect(parsed.schema.properties.voice_refs).toBeDefined();
+    expect(parsed.schema.properties.character_refs).toBeDefined();
+    expect(parsed.schema.required).not.toContain("voice_refs");
+    expect(parsed.schema.required).not.toContain("character_refs");
   });
 });

@@ -303,22 +303,49 @@ reference video clip.
 IDs can be produced; (b) once both create flows exist, videocity can add an
 audio/character asset-minting flow and surface `audio_ids` / `character_ids`.
 
+**Note:** the **Google Flow** (`omni-flash`) side of this *is* now wired — its
+`referenceAudio_1..5` (voices) and `character_1..7` refs are minted by the
+`create_google_flow_voice` / `create_google_flow_character` tools and surfaced on
+`generate_google_omni_video` as `voice_refs` / `character_refs`. Only the
+kie-proxied `gemini-omni-video` side remains unwired (no create flow there).
+
 ---
 
-## 14. (gap) `@apicity/googleflow` schemas carry reference slots but no enums/ranges or response types
+## 14. (gap) `@apicity/googleflow` schemas carry reference slots but weak enums and no response types — PARTIALLY RESOLVED in 0.7.2
 
 The google-flow endpoints moved to a dedicated `@apicity/googleflow` package
 in 0.7.1 (split out of `@apicity/google`, which now hosts only Vertex
 express-mode / Gemini content calls — the `@apicity/google@0.7.1` Flow removal
 is resolved by the split provider). `@apicity/googleflow@0.7.1`'s request
 schemas (`GoogleFlowImagesRequestSchema`, `GoogleFlowVideosRequestSchema`)
-**do** now type the positional reference fields as named optional strings —
+**do** type the positional reference fields as named optional strings —
 `startImage`, `endImage`, `referenceImage_1..7`, `reference_1..10`,
 `referenceVideo_1`, `startFrameIndex_1`/`endFrameIndex_1`, `character_1..7`,
-`referenceAudio_1..5`. But `model`, `aspectRatio`, `duration`, `count`, and
-`seed` are still plain optional strings/numbers — no enums, no `.min()/.max()`
-— and every response is still `GoogleFlowResponse = Record<string, unknown>`.
-Nothing exists for `applyApicityConstraints` / `apicityField` to derive from.
+`referenceAudio_1..5`.
+
+**0.7.2 tightened some fields but not enough to derive from:**
+- `videos.model` / `videos.aspectRatio` / `images.model` gained
+  `z.enum([...]).or(z.string())` — still **loose** (arbitrary strings accepted),
+  so `zodEnumOptionsOrNull` reads nothing, and deriving `aspectRatio` would
+  clobber the app-side ratio-string → `landscape`/`portrait` mapping anyway.
+- `videos.duration` **tightened to `z.union([literal(4), literal(6), literal(8),
+  literal(10)])`** — a numeric-literal union, not a derivable enum-of-strings. The
+  app keeps duration as a string enum per tool and converts via the
+  `GOOGLE_FLOW_DURATION_SECONDS` map in `payload-builders.ts`.
+- `videos.startFrameIndex_1` / `endFrameIndex_1` gained int ranges (0-239 / 1-240);
+  the omni payload builder already clamps to exactly that.
+- `images.aspectRatio` became a **strict** enum (`16:9/4:3/1:1/3:4/9:16/auto/
+  landscape/portrait`); the app only ever sends the first six.
+- New `GoogleFlowVoicePresetSchema` (30 named presets) — exported **only from the
+  `@apicity/googleflow/zod` subpath**, not the package root — is consumed via
+  `apicityField` in `create_google_flow_voice`.
+- `videos.trimStart`/`trimEnd` were **removed** from the exported type (the app
+  never used them; omni trims via the frame-index fields).
+
+Still weak: `seed`/`count` remain plain optional numbers, the loose model/aspect
+enums can't be derived, and **every response is still
+`GoogleFlowResponse = Record<string, unknown>`** (see the tolerant readers in
+`server/src/jobs/_google-flow.ts` and `server/src/tools/_google-flow-entities.ts`).
 
 **Workaround (`generate_veo31_*`, `generate_google_omni_video`,
 `generate_nano_banana_pro_google`):**
@@ -339,10 +366,11 @@ Nothing exists for `applyApicityConstraints` / `apicityField` to derive from.
 - The nested asset-upload response (`mediaGenerationId.mediaGenerationId`) is
   unwrapped defensively in `server/src/jobs/_google-flow.ts`.
 
-**Ask apicity:** add model/aspect/duration enums and ranges to the googleflow
-schemas (the positional reference-slot fields landed in 0.7.1), plus a
-`GoogleFlowVideosResponse` / `GoogleFlowJobResponse` shape — today every
-response is still `GoogleFlowResponse = Record<string, unknown>`.
+**Ask apicity:** make the loose `model`/`aspectRatio` enums strict (drop the
+`.or(z.string())`), and add a `GoogleFlowVideosResponse` / `GoogleFlowJobResponse`
+/ `GoogleFlowVoiceResponse` / `GoogleFlowCharacterResponse` shape — today every
+response is still `GoogleFlowResponse = Record<string, unknown>`, which is why
+the voices/characters/accounts tools ship hand-written tolerant readers.
 
 ---
 
@@ -373,9 +401,11 @@ models, plus `MODEL_SLUGS.google` entries.
 
 ## 16. (bug) `@apicity/googleflow` percent-encodes path IDs — useapi.net requires them raw
 
-`@apicity/googleflow@0.7.1` builds its GET path segments with
-`encodeURIComponent` (`google.js`: `jobs.retrieve`, `assets.retrieve`,
-`accounts.retrieve`, `characters.retrieve`, `voices.retrieve`). useapi.net IDs
+`@apicity/googleflow@0.7.1` **and 0.7.2** (still unfixed — re-verify on each
+upgrade; the `google.js` URL builders are byte-identical between the two) build
+their GET/DELETE path segments with `encodeURIComponent` (`google.js`:
+`jobs.retrieve`, `assets.retrieve`, `accounts.retrieve`, `characters.retrieve`,
+`voices.retrieve`, and the DELETE-by-ref routes). useapi.net IDs
 carry `:` and `@` — e.g. a job id is
 `j0707051013179185608v-u2935-email:justinwtanner@gmail.com-bot:google-flow` —
 and the server expects them **RAW**: an encoded job id returns
@@ -388,9 +418,35 @@ override) decodes the over-encoded pathname back to raw before the request
 leaves the process. Wired into both provider construction sites
 (`createGoogleFlowProvider` and the `sync.ts` poll branch). POST endpoints are
 unaffected (the job id travels in the response body, not the path), so submit
-and asset upload worked without it; only `jobs.retrieve` polling broke.
+and asset upload worked without it; `jobs.retrieve` polling broke, and the same
+hook now also covers the `voices`/`characters` GET-list-item and DELETE-by-ref
+paths (their refs carry `:`/`@` too).
 
 **Ask apicity:** stop `encodeURIComponent`-ing path IDs (or use an encoding
 that preserves `:` / `@`, which useapi.net accepts verbatim). Note
 `assets.retrieve` (`mediaGenerationId`) carries `:` too, so it would break the
 same way if ever wired.
+
+---
+
+## 17. (gap) `@apicity/googleflow@0.7.2` requires `email` on voices create/list and characters list — useapi.net defaults it
+
+`GoogleFlowVoicesCreateRequestSchema`, `GoogleFlowVoicesListRequestSchema`, and
+`GoogleFlowCharactersListRequestSchema` all declare `email: z.string()`
+(**required**), so the provider's client-side `safeParse` throws a 400 before the
+request leaves the process if `email` is omitted. But useapi.net treats `email`
+as optional — it defaults to the single configured account — and the omni
+**generation** endpoints (`videos`, `images`, `assets`, `characters` *create*)
+correctly leave `email` optional. The asymmetry is inconsistent: `characters`
+create has no `email` field at all, yet `characters` list requires it.
+
+**Workaround (`server/src/tools/_google-flow-entities.ts`):**
+`resolveGoogleFlowEmail(provider, explicit?)` — an explicit `email` wins;
+otherwise it calls `GET /accounts` and uses the sole configured account (erroring
+with the account list when zero or several exist). The voice/character list and
+voice create tools resolve `email` this way before calling the provider, so the
+common single-account case needs no `email` argument.
+
+**Ask apicity:** make `email` optional on `voices` create/list and `characters`
+list (matching the generation endpoints and useapi.net's own default-account
+behavior).

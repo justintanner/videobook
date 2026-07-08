@@ -5,6 +5,16 @@ import { apiStatusDef } from "./api-status.js";
 import { providerKeyStatusDef } from "./provider-key-status.js";
 import { setEnvSecretDef } from "./set-env-secret.js";
 import { listElevenLabsVoicesDef } from "./list-elevenlabs-voices.js";
+import {
+  createGoogleFlowVoiceDef,
+  listGoogleFlowVoicesDef,
+  deleteGoogleFlowVoiceDef,
+} from "./google-flow-voices.js";
+import {
+  createGoogleFlowCharacterDef,
+  listGoogleFlowCharactersDef,
+  deleteGoogleFlowCharacterDef,
+} from "./google-flow-characters.js";
 import { createProjectDef } from "./create-project.js";
 import { renameProjectDef } from "./rename-project.js";
 import { deleteProjectDef } from "./delete-project.js";
@@ -213,6 +223,12 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     providerKeyStatusDef(),
     setEnvSecretDef(),
     listElevenLabsVoicesDef(),
+    createGoogleFlowVoiceDef(),
+    listGoogleFlowVoicesDef(),
+    deleteGoogleFlowVoiceDef(),
+    createGoogleFlowCharacterDef(fs),
+    listGoogleFlowCharactersDef(),
+    deleteGoogleFlowCharacterDef(),
     estimateCostDef(fs),
     createProjectDef(fs),
     renameProjectDef(fs),

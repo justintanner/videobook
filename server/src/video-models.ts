@@ -559,6 +559,7 @@ const GOOGLE_VIDEO_PARAMS: Record<string, readonly string[]> = {
     "prompt",
     "first_frame_slug",
     "image_slugs", "video_slug", "video_clip_start", "video_clip_ends",
+    "voice_refs", "character_refs",
     "duration", "aspect_ratio", "seed",
   ],
 };
@@ -928,6 +929,8 @@ const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   pe_fast_mode: { type: "boolean", description: "Prompt-enhance fast mode" },
   video_clip_start: { type: "number", description: "Reference clip start time in seconds", minimum: 0 },
   video_clip_ends: { type: "number", description: "Reference clip end time in seconds (must be > start and < start+10s)", minimum: 0 },
+  voice_refs: { type: "array", items: { type: "string" }, description: "Google Flow voice refs (from create_google_flow_voice)" },
+  character_refs: { type: "array", items: { type: "string" }, description: "Google Flow character refs (from create_google_flow_character)" },
 };
 
 // ---------------------------------------------------------------------------
@@ -1096,11 +1099,19 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (isAlias && param === "seed") {
         prop.minimum = 0;
       }
+      if (isAlias && param === "voice_refs") {
+        prop.maxItems = 5;
+        prop.description = "Google Flow voice refs (0-5; 0-3 with a reference clip), sent as referenceAudio_1..5";
+      }
+      if (isAlias && param === "character_refs") {
+        prop.maxItems = 7;
+        prop.description = "Google Flow character refs (0-7); character images share the 7-image reference budget with image_slugs";
+      }
     }
     if (toolName === "generate_veo31_video" || toolName === "generate_veo31_fast_video" || toolName === "generate_veo31_lite_video") {
-      // @apicity/googleflow's flow schemas carry no enums/ranges to derive, so
-      // allowed values are hand-typed from the useapi.net Google Flow docs
-      // (docs/apicity-gaps.md §14).
+      // The 0.7.2 @apicity/googleflow schemas carry only loose `.or(z.string())`
+      // model/aspect enums, not the per-model restrictions, so allowed values are
+      // hand-typed from the useapi.net Google Flow docs (docs/apicity-gaps.md §14).
       if (param === "prompt") prop.description = "Video description";
       if (param === "first_frame_slug") prop.description = "Start frame image asset for image-to-video (e.g., @img-start)";
       if (param === "last_frame_slug") prop.description = "End frame image asset (requires first_frame_slug, e.g., @img-end)";
@@ -1441,6 +1452,23 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
       if (clipEnds !== undefined && (!(clipEnds > start) || clipEnds > 10)) {
         warnings.push("Google Omni reference clip must satisfy video_clip_ends > video_clip_start and <= 10s");
       }
+    }
+    const voiceCount = (params.voice_refs as string[] | undefined)?.filter(Boolean).length ?? 0;
+    const charCount = (params.character_refs as string[] | undefined)?.filter(Boolean).length ?? 0;
+    if (voiceCount > 5) {
+      warnings.push(`Google Omni supports up to 5 voice refs (got ${voiceCount})`);
+    }
+    if (videoSlug && voiceCount > 3) {
+      warnings.push(`Google Omni video edit supports up to 3 voice refs alongside the clip (got ${voiceCount})`);
+    }
+    if (charCount > 7) {
+      warnings.push(`Google Omni supports up to 7 character refs (got ${charCount})`);
+    }
+    if (firstFrame && charCount > 0) {
+      warnings.push("Google Omni first_frame_slug cannot be combined with character_refs");
+    }
+    if (charCount > 0 && totalImages + charCount > 7) {
+      warnings.push(`Google Omni reference budget exceeded: ${totalImages} images + ${charCount} characters > 7 (characters with two images tighten this further)`);
     }
   }
 

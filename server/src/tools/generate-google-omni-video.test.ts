@@ -177,4 +177,77 @@ describe("generate_google_omni_video tool", () => {
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("at most 5 reference images");
   });
+
+  it("enqueues with voice and character refs echoed back", async () => {
+    const result = await client.callTool({
+      name: "generate_google_omni_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "cast the scene",
+        voice_refs: ["voice:aaa"],
+        character_refs: ["character:bbb"],
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.status).toBe("enqueued");
+    expect(parsed.voice_refs).toEqual(["voice:aaa"]);
+    expect(parsed.character_refs).toEqual(["character:bbb"]);
+  });
+
+  it("rejects more than 5 voice refs at the schema layer", async () => {
+    const result = await client.callTool({
+      name: "generate_google_omni_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "x",
+        voice_refs: ["v1", "v2", "v3", "v4", "v5", "v6"],
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("voice_refs");
+  });
+
+  it("rejects more than 3 voice refs alongside a reference clip", async () => {
+    const result = await client.callTool({
+      name: "generate_google_omni_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "x",
+        video_slug: "@vid-motion",
+        voice_refs: ["v1", "v2", "v3", "v4"],
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("at most 3 voice refs");
+  });
+
+  it("rejects character refs combined with a first frame", async () => {
+    const result = await client.callTool({
+      name: "generate_google_omni_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "x",
+        first_frame_slug: "@img-start",
+        character_refs: ["character:bbb"],
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("first_frame_slug cannot be combined with character_refs");
+  });
+
+  it("rejects an image + character reference budget over 7", async () => {
+    const result = await client.callTool({
+      name: "generate_google_omni_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "x",
+        image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d"],
+        character_refs: ["c1", "c2", "c3", "c4"],
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("reference budget");
+  });
 });

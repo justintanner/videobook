@@ -263,6 +263,16 @@ describe("getImageToolSchema", () => {
     expect(schema!.properties.output_format.enum).toEqual(["png", "jpg"]);
   });
 
+  it("google nano_banana: only exposes params sent to Google Flow", () => {
+    const schema = getImageToolSchema("generate_nano_banana_pro_google");
+    expect(schema).not.toBeNull();
+    expect(schema!.required).toEqual(["prompt"]);
+    expect(Object.keys(schema!.properties)).toEqual(["prompt", "image_slugs", "aspect_ratio", "seed"]);
+    expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "4:3", "1:1", "3:4", "9:16", "auto"]);
+    expect(schema!.properties).not.toHaveProperty("resolution");
+    expect(schema!.properties).not.toHaveProperty("output_format");
+  });
+
   it("grok_imagine_image: prompt NOT required, image_slugs required", () => {
     const schema = getImageToolSchema("generate_grok_imagine_image");
     expect(schema).not.toBeNull();
@@ -431,9 +441,20 @@ describe("google flow image provider", () => {
     process.env.KIE_API_KEY = "real-kie-key";
     try {
       const models = getImageModels();
-      const noRefs = buildImageModelOption("nano_banana", models.nano_banana, { prompt: "x" }, [], undefined, "google");
+      const noRefs = buildImageModelOption(
+        "nano_banana",
+        models.nano_banana,
+        { prompt: "x", resolution: "4K", output_format: "jpg" },
+        [],
+        undefined,
+        "google",
+      );
       expect(noRefs.selected_provider).toBe("google");
       expect(noRefs.tool_name).toBe("generate_nano_banana_pro_google");
+      expect(Object.keys(noRefs.schema!.properties)).toEqual(["prompt", "image_slugs", "aspect_ratio", "seed"]);
+      expect(noRefs.prefilled_values).not.toHaveProperty("resolution");
+      expect(noRefs.prefilled_values).not.toHaveProperty("output_format");
+      expect(noRefs.image_slots).toEqual({ min: 0, max: 10 });
 
       const withRefs = buildImageModelOption("nano_banana", models.nano_banana, { prompt: "x" }, [
         { tag: "@img-ref", asset_id: "img-ref", asset_type: "image", file_path: "/p/ref.png", asset_dir: "/p" },

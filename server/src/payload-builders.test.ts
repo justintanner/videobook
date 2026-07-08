@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Seedance2MiniRequestSchema } from "@apicity/kie/zod";
+import { GoogleFlowVideosRequestSchema } from "@apicity/googleflow/zod";
 import { translateToolPayload } from "./payload-builders.js";
 
 describe("translateToolPayload", () => {
@@ -135,5 +136,46 @@ describe("translateToolPayload", () => {
       model: "omni-flash",
       referenceVideo_1: "user:123-email:test-video:clip",
     });
+  });
+
+  it("builds Google Omni R2V payload with voice refs (referenceAudio_N) and character refs (character_N)", () => {
+    const result = translateToolPayload("generate_google_omni_video", {
+      prompt: "cast these",
+      image_slugs: ["ref-1"],
+      voice_refs: ["voice:aaa", "voice:bbb"],
+      character_refs: ["character:ccc"],
+      aspect_ratio: "16:9",
+    });
+
+    expect(result?.payload).toEqual({
+      prompt: "cast these",
+      model: "omni-flash",
+      duration: 8,
+      aspectRatio: "landscape",
+      referenceImage_1: "ref-1",
+      referenceAudio_1: "voice:aaa",
+      referenceAudio_2: "voice:bbb",
+      character_1: "character:ccc",
+    });
+    // Payload validates against the tightened 0.7.2 videos request schema
+    // (numeric-literal duration, named ref slots).
+    expect(GoogleFlowVideosRequestSchema.safeParse(result?.payload).success).toBe(true);
+  });
+
+  it("builds Google Omni V2V payload with voice refs and no duration", () => {
+    const result = translateToolPayload("generate_google_omni_video", {
+      prompt: "edit with narration",
+      video_slug: "user:123-email:test-video:clip",
+      voice_refs: ["voice:aaa"],
+      duration: "8",
+    });
+
+    expect(result?.payload).toEqual({
+      prompt: "edit with narration",
+      model: "omni-flash",
+      referenceVideo_1: "user:123-email:test-video:clip",
+      referenceAudio_1: "voice:aaa",
+    });
+    expect(GoogleFlowVideosRequestSchema.safeParse(result?.payload).success).toBe(true);
   });
 });

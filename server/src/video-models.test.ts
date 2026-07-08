@@ -736,6 +736,19 @@ describe("google flow video models", () => {
     expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "9:16"]);
     expect(schema!.properties.video_clip_start.maximum).toBe(10);
     expect(schema!.properties.video_clip_ends.maximum).toBe(10);
+    expect(schema!.properties.voice_refs).toBeDefined();
+    expect(schema!.properties.voice_refs.maxItems).toBe(5);
+    expect(schema!.required).not.toContain("voice_refs");
+    expect(schema!.properties.character_refs).toBeDefined();
+    expect(schema!.properties.character_refs.maxItems).toBe(7);
+    expect(schema!.required).not.toContain("character_refs");
+  });
+
+  it("the kie gemini_omni sibling schema does not expose voice/character refs", () => {
+    const schema = getVideoToolSchema("generate_gemini_omni_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.properties.voice_refs).toBeUndefined();
+    expect(schema!.properties.character_refs).toBeUndefined();
   });
 
   it("google omni validates I2V/R2V/V2V mode constraints", () => {
@@ -764,6 +777,33 @@ describe("google flow video models", () => {
       prompt: "x", video_slug: "@vid-a", video_clip_start: 2, video_clip_ends: 12,
     });
     expect(badClip.warnings.some((w) => w.includes("<= 10s"))).toBe(true);
+  });
+
+  it("google omni validates voice_refs / character_refs budgets", () => {
+    const tooManyVoices = validateVideoParams("generate_google_omni_video", {
+      prompt: "x", voice_refs: ["v1", "v2", "v3", "v4", "v5", "v6"],
+    });
+    expect(tooManyVoices.warnings.some((w) => w.includes("up to 5 voice refs"))).toBe(true);
+
+    const voicesWithClip = validateVideoParams("generate_google_omni_video", {
+      prompt: "x", video_slug: "@vid-a", voice_refs: ["v1", "v2", "v3", "v4"],
+    });
+    expect(voicesWithClip.warnings.some((w) => w.includes("up to 3 voice refs alongside the clip"))).toBe(true);
+
+    const tooManyChars = validateVideoParams("generate_google_omni_video", {
+      prompt: "x", character_refs: ["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"],
+    });
+    expect(tooManyChars.warnings.some((w) => w.includes("up to 7 character refs"))).toBe(true);
+
+    const firstWithChars = validateVideoParams("generate_google_omni_video", {
+      prompt: "x", first_frame_slug: "@img-start", character_refs: ["c1"],
+    });
+    expect(firstWithChars.warnings.some((w) => w.includes("first_frame_slug cannot be combined with character_refs"))).toBe(true);
+
+    const budgetBust = validateVideoParams("generate_google_omni_video", {
+      prompt: "x", image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d"], character_refs: ["c1", "c2", "c3", "c4"],
+    });
+    expect(budgetBust.warnings.some((w) => w.includes("reference budget exceeded"))).toBe(true);
   });
 
   it("google omni history aliases back to the shared model with google selected", () => {

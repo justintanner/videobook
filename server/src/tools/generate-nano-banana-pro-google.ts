@@ -6,8 +6,9 @@ import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs } from "./_image-inputs.js";
 import { slugify } from "./_seedance2-shared.js";
 
-// Allowed values are hand-typed from the useapi.net Google Flow docs —
-// @apicity/googleflow's flow schemas carry no enums (docs/apicity-gaps.md §14).
+// Allowed values are hand-typed from the useapi.net Google Flow docs — the
+// 0.7.2 @apicity/googleflow images.aspectRatio enum mixes ratio + keyword forms
+// and images.model stays loose, so the app pins its own set (docs/apicity-gaps.md §14).
 // "auto" derives the ratio from the reference images, so it is only valid
 // when references are supplied.
 const NBP_GOOGLE_ASPECT_RATIOS = ["16:9", "4:3", "1:1", "3:4", "9:16", "auto"] as const;

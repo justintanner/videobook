@@ -20,6 +20,8 @@ type GenerateGoogleOmniVideoPayload = {
   seed?: number;
   video_clip_start?: number;
   video_clip_ends?: number;
+  voice_refs?: string[];
+  character_refs?: string[];
 };
 
 export function registerGenerateGoogleOmniVideoJob(fs: VideocityFs): void {
@@ -51,6 +53,10 @@ export function registerGenerateGoogleOmniVideoJob(fs: VideocityFs): void {
         ...(startImageId !== undefined ? { startImageId } : {}),
         ...(referenceImageIds.length > 0 ? { referenceImageIds } : {}),
         ...(referenceVideoId !== undefined ? { referenceVideoId } : {}),
+        // Voice/character refs are provider-side ids (from create_google_flow_*)
+        // — no upload needed, pass them straight through.
+        ...(p.voice_refs && p.voice_refs.length > 0 ? { voiceRefs: p.voice_refs } : {}),
+        ...(p.character_refs && p.character_refs.length > 0 ? { characterRefs: p.character_refs } : {}),
       },
     );
 

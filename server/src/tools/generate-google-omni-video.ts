@@ -8,19 +8,35 @@ import { resolveImageSlug, resolveVideoSlug, slugify, type RefInput } from "./_s
 // would throw (docs/apicity-gaps.md §15).
 const SLUG = "google-omni";
 
-// Omni Flash V2V edit accepts at most 5 reference images alongside the clip
-// (R2V without a clip allows 7). Enums are hand-typed from the useapi.net
-// docs — @apicity/googleflow's flow schemas carry no enums (docs/apicity-gaps.md
-// §14) — and mirror the kie gemini-omni tool's values so provider switching
-// keeps prefilled params valid.
+// Omni Flash reference budgets (useapi.net docs): R2V allows 7 reference
+// images; a V2V edit clip allows 5 alongside it. Voices feed referenceAudio_1..5
+// (3 alongside a clip); characters feed character_1..7, whose own images share
+// the 7-image budget with image_slugs. Enums are hand-typed — the 0.7.2
+// @apicity/googleflow schemas carry only loose `.or(z.string())` model/aspect
+// enums, not the per-model restrictions (docs/apicity-gaps.md §14) — and mirror
+// the kie gemini-omni tool's values so provider switching keeps params valid.
 const OMNI_V2V_MAX_IMAGES = 5;
+const OMNI_MAX_VOICES = 5;
+const OMNI_V2V_MAX_VOICES = 3;
+const OMNI_MAX_CHARACTERS = 7;
+const OMNI_MAX_REFERENCE_IMAGES = 7;
 const GOOGLE_OMNI_DURATIONS = ["4", "6", "8", "10"] as const;
 const GOOGLE_OMNI_ASPECT_RATIOS = ["16:9", "9:16"] as const;
 
 // Gemini Omni ("Omni Flash") on Google Flow: multimodal text/image/clip-to-
 // video, the direct-Google alternative to the kie-proxied
-// generate_gemini_omni_video. Voice/character references exist upstream but
-// need Google Flow account-level create flows videocity does not wire.
+// generate_gemini_omni_video.
+//
+// Deliberately not exposed (all valid upstream, intentionally omitted):
+//   - endImage (last frame) — veo-only; omni-flash rejects it.
+//   - count (1-4 variations) — videocity persists exactly one asset per
+//     generation; the provider default is 1.
+//   - email — single configured account; multi-account routing is out of scope.
+//   - captchaToken / captchaRetry / captchaOrder — captcha-solver plumbing
+//     configured account-side on useapi.net.
+//   - replyUrl / replyRef — webhook completion; videocity polls via sync.ts.
+//   - trimStart / trimEnd — removed from the videos type in 0.7.2; omni trims
+//     via startFrameIndex_1 / endFrameIndex_1 (derived from the clip timecodes).
 const generateGoogleOmniVideoSchema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().max(20000).describe("Multimodal video generation prompt (max 20000 characters)"),
@@ -30,8 +46,10 @@ const generateGoogleOmniVideoSchema = {
   video_clip_start: z.number().min(0).max(10).optional().describe("Reference clip start time in seconds on a 10s timeline (requires video_slug)"),
   video_clip_ends: z.number().min(0).max(10).optional().describe("Reference clip end time in seconds on a 10s timeline; must be > start (requires video_slug)"),
   duration: z.enum(GOOGLE_OMNI_DURATIONS).optional().describe("Output duration in seconds: 4 / 6 / 8 / 10 (ignored when a reference video clip is supplied; default 8)"),
-  aspect_ratio: z.enum(GOOGLE_OMNI_ASPECT_RATIOS).optional().describe("Output aspect ratio: 16:9 / 9:16"),
+  aspect_ratio: z.enum(GOOGLE_OMNI_ASPECT_RATIOS).optional().describe("Output aspect ratio: 16:9 / 9:16 (sent as landscape / portrait)"),
   seed: z.number().int().min(0).optional().describe("Random seed for reproducibility"),
+  voice_refs: z.array(z.string()).max(OMNI_MAX_VOICES).optional().describe("Google Flow voice refs from create_google_flow_voice (up to 5; up to 3 alongside a reference clip); sent as referenceAudio_1..5"),
+  character_refs: z.array(z.string()).max(OMNI_MAX_CHARACTERS).optional().describe("Google Flow character refs from create_google_flow_character (up to 7); each character's 1-2 images share the 7-image reference budget with image_slugs; not combinable with first_frame_slug"),
   _provider: z.string().optional().describe("Provider key (e.g., 'google')"),
 } satisfies ZodRawShape;
 
@@ -49,6 +67,7 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
         first_frame_slug, image_slugs, video_slug,
         video_clip_start, video_clip_ends,
         duration, aspect_ratio, seed,
+        voice_refs, character_refs,
       } = raw;
       const blank = (v: unknown): v is "" => typeof v === "string" && v.trim() === "";
 
@@ -59,10 +78,13 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
       const imgs = (image_slugs ?? []).filter((s) => !blank(s));
       const videoSlug = blank(video_slug) ? undefined : video_slug;
       const firstFrameSlug = blank(first_frame_slug) ? undefined : first_frame_slug;
+      const voiceRefs = (voice_refs ?? []).filter((s) => !blank(s));
+      const charRefs = (character_refs ?? []).filter((s) => !blank(s));
 
       // Omni Flash modes are mutually exclusive: startImage I2V
       // (first_frame_slug) cannot combine with referenceImage_* (image_slugs)
-      // or referenceVideo_1 V2V (video_slug).
+      // or referenceVideo_1 V2V (video_slug). Characters are reference-mode
+      // inputs, so they cannot ride start-image I2V either.
       if (firstFrameSlug !== undefined) {
         if (imgs.length > 0) {
           return { isError: true as const, content: [{ type: "text" as const, text: "first_frame_slug cannot be combined with image_slugs — Omni Flash start-image I2V does not accept reference images" }] };
@@ -70,6 +92,26 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
         if (videoSlug !== undefined) {
           return { isError: true as const, content: [{ type: "text" as const, text: "first_frame_slug cannot be combined with video_slug — Omni Flash start-image I2V and reference-video V2V are mutually exclusive" }] };
         }
+        if (charRefs.length > 0) {
+          return { isError: true as const, content: [{ type: "text" as const, text: "first_frame_slug cannot be combined with character_refs — Omni Flash characters are reference-mode inputs" }] };
+        }
+      }
+
+      // Voice/character budgets. Each character carries 1-2 images that share
+      // the 7-image reference budget with image_slugs; we can only enforce the
+      // floor (one image per character) — two-image characters that still
+      // overflow are left to the provider (documented in the descriptions).
+      if (voiceRefs.length > OMNI_MAX_VOICES) {
+        return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash supports at most ${OMNI_MAX_VOICES} voice refs (got ${voiceRefs.length})` }] };
+      }
+      if (videoSlug !== undefined && voiceRefs.length > OMNI_V2V_MAX_VOICES) {
+        return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash video edit supports at most ${OMNI_V2V_MAX_VOICES} voice refs alongside the clip (got ${voiceRefs.length})` }] };
+      }
+      if (charRefs.length > OMNI_MAX_CHARACTERS) {
+        return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash supports at most ${OMNI_MAX_CHARACTERS} character refs (got ${charRefs.length})` }] };
+      }
+      if (charRefs.length > 0 && imgs.length + charRefs.length > OMNI_MAX_REFERENCE_IMAGES) {
+        return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash reference budget: image_slugs plus character images must total at most ${OMNI_MAX_REFERENCE_IMAGES} (got ${imgs.length} images + ${charRefs.length} characters; characters with two images tighten this further)` }] };
       }
 
       // Clip-timing pre-check mirroring the kie gemini-omni tool. Omni Flash
@@ -138,6 +180,8 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
         ...(seed !== undefined ? { seed } : {}),
         ...(video_clip_start !== undefined ? { video_clip_start } : {}),
         ...(video_clip_ends !== undefined ? { video_clip_ends } : {}),
+        ...(voiceRefs.length > 0 ? { voice_refs: voiceRefs } : {}),
+        ...(charRefs.length > 0 ? { character_refs: charRefs } : {}),
       } as unknown as Record<string, unknown>);
 
       return {
@@ -148,6 +192,8 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
             source_first_frame: sourceFirstFrameId ?? null,
             source_images: sourceImageIds,
             source_videos: sourceVideoIds,
+            voice_refs: voiceRefs,
+            character_refs: charRefs,
             job_id: jobId,
             status: "enqueued",
           }),

@@ -35,6 +35,8 @@ import { readSlotConstraints, zodDefault, type SlotConstraints } from "./zod-slo
 // AlibabaQwenImageEditImageSlotsSchema = .min(1).max(3)).
 const QWEN_GENERATION_MODEL_VALUES = ["qwen-image-2.0-pro", "qwen-image-2.0"] as const;
 const QWEN_EDIT_MODEL_VALUES = ["qwen-image-edit-plus", "qwen-image-edit-max", "qwen-image-edit"] as const;
+const GOOGLE_NBP_ASPECT_RATIOS = ["16:9", "4:3", "1:1", "3:4", "9:16", "auto"] as const;
+const GOOGLE_NBP_IMAGE_SLOTS: SlotConstraints = { min: 0, max: 10 };
 
 // ---------------------------------------------------------------------------
 // Provider route shape consumed by the model-listing tool.
@@ -260,6 +262,18 @@ function getImageSlotsForConfig(config: ImageModelConfig): SlotConstraints | nul
   return readSlotConstraints(config.imageFieldSchema);
 }
 
+function getImageSlotsForToolName(toolName: string): SlotConstraints | null {
+  if (toolName === "generate_nano_banana_pro_google") return GOOGLE_NBP_IMAGE_SLOTS;
+  const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName);
+  return config ? getImageSlotsForConfig(config) : null;
+}
+
+function getImageToolLabel(toolName: string, config: ImageModelConfig | undefined): string {
+  if (config) return config.label;
+  if (toolName === "generate_nano_banana_pro_google") return "Nano Banana Pro";
+  return toolName;
+}
+
 function getImageDefaultsForConfig(config: ImageModelConfig): Record<string, unknown> {
   const defaults: Record<string, unknown> = {};
   for (const [fieldName, schema] of Object.entries(config.defaultSchemas ?? {})) {
@@ -337,6 +351,28 @@ function imageSlotsDescription(slots: SlotConstraints | null): string {
 // ---------------------------------------------------------------------------
 
 function getImageToolSchema(toolName: string): ToolSchema | null {
+  if (toolName === "generate_nano_banana_pro_google") {
+    return {
+      type: "object",
+      properties: {
+        prompt: { type: "string", description: "Image description" },
+        image_slugs: {
+          type: "array",
+          items: { type: "string" },
+          description: imageSlotsDescription(GOOGLE_NBP_IMAGE_SLOTS),
+        },
+        aspect_ratio: {
+          type: "string",
+          description: "Output aspect ratio ('auto' only with reference images; default 16:9)",
+          enum: [...GOOGLE_NBP_ASPECT_RATIOS],
+        },
+        seed: { type: "integer", description: "Random seed for reproducibility", minimum: 0 },
+      },
+      required: ["prompt"],
+      defaults: {},
+    };
+  }
+
   const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName);
   if (!config) return null;
   const defaults = getImageDefaultsForConfig(config);
@@ -572,16 +608,17 @@ function validateImageParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
-  const imageSlots = config ? getImageSlotsForConfig(config) : null;
+  const imageSlots = getImageSlotsForToolName(toolName);
+  const label = getImageToolLabel(toolName, config);
   const imageSlugs = params.image_slugs as string[] | undefined;
   const totalImages = imageSlugs?.length ?? 0;
 
   if (imageSlots && imageSlots.min > 0 && totalImages < imageSlots.min) {
-    warnings.push(`${config!.label} requires at least ${imageSlots.min} reference image${imageSlots.min > 1 ? "s" : ""}`);
+    warnings.push(`${label} requires at least ${imageSlots.min} reference image${imageSlots.min > 1 ? "s" : ""}`);
   }
   if (imageSlots && imageSlots.max !== null && totalImages > imageSlots.max) {
     const range = imageSlots.min === imageSlots.max ? `${imageSlots.max}` : `${imageSlots.min}-${imageSlots.max}`;
-    warnings.push(`${config!.label} supports ${range} images (got ${totalImages})`);
+    warnings.push(`${label} supports ${range} images (got ${totalImages})`);
   }
 
   return { valid: missing.length === 0, missing_required: missing, warnings, image_slots: imageSlots };
@@ -601,7 +638,14 @@ type ActionLogEntry = {
 function imageActionNameToToolName(action: string): string | null {
   if (!action.startsWith("tool-")) return null;
   const toolName = action.slice(5).replace(/-/g, "_");
-  return IMAGE_MODEL_CONFIGS.some((c) => c.tool_name === toolName) ? toolName : null;
+  const config = IMAGE_MODEL_CONFIGS.find((c) =>
+    c.tool_name === toolName ||
+    c.falToolNames?.noRefs === toolName ||
+    c.falToolNames?.withRefs === toolName ||
+    c.googleToolNames?.noRefs === toolName ||
+    c.googleToolNames?.withRefs === toolName
+  );
+  return config?.tool_name ?? null;
 }
 
 const NON_PARAM_KEYS = new Set(["project_slug"]);
@@ -677,7 +721,7 @@ function buildImageModelOption(
   projectAssetTags?: Set<string>,
 ): ModelOption {
   const toolName = modelInfo.tool_name;
-  const allowedParams = new Set(modelInfo.params);
+  const baseAllowedParams = new Set(modelInfo.params);
   const params: Record<string, unknown> = {};
 
   let historicalProvider: string | undefined;
@@ -687,7 +731,7 @@ function buildImageModelOption(
     if (historical) {
       historicalProvider = historical._provider as string | undefined;
       for (const [k, v] of Object.entries(historical)) {
-        if (allowedParams.has(k)) {
+        if (baseAllowedParams.has(k)) {
           params[k] = v;
         }
       }
@@ -695,34 +739,13 @@ function buildImageModelOption(
   }
 
   for (const [k, v] of Object.entries(baseParams)) {
-    if (allowedParams.has(k)) params[k] = v;
+    if (baseAllowedParams.has(k)) params[k] = v;
   }
 
   const imageTags = resolvedAssets
     .filter((a) => a.asset_type === "image" && a.file_path)
     .map((a) => a.tag);
   params.image_slugs = imageTags.length > 0 ? imageTags : [];
-
-  for (const [k, v] of Object.entries(modelInfo.defaults)) {
-    params[k] ??= v;
-  }
-
-  // Strip slug references that don't exist in the current project
-  if (projectAssetTags) {
-    filterInvalidSlugs(params, projectAssetTags);
-  }
-
-  const schema = getImageToolSchema(toolName);
-  if (schema) {
-    for (const [k, v] of Object.entries(params)) {
-      const prop = schema.properties[k];
-      if (prop?.type === "string" && prop.enum && typeof v === "number") {
-        params[k] = String(v);
-      }
-    }
-  }
-
-  const validation = validateImageParams(toolName, params);
 
   const availableProviders = modelInfo.providers.filter((p) => process.env[p.envKey]);
   const providerList = availableProviders.length > 0 ? availableProviders : modelInfo.providers;
@@ -741,6 +764,31 @@ function buildImageModelOption(
       : null;
     if (swapName) effectiveToolName = swapName;
   }
+
+  const schema = getImageToolSchema(effectiveToolName);
+  const effectiveAllowedParams = schema ? new Set(Object.keys(schema.properties)) : baseAllowedParams;
+  for (const key of Object.keys(params)) {
+    if (!effectiveAllowedParams.has(key)) delete params[key];
+  }
+
+  for (const [k, v] of Object.entries(schema?.defaults ?? modelInfo.defaults)) {
+    params[k] ??= v;
+  }
+
+  if (projectAssetTags) {
+    filterInvalidSlugs(params, projectAssetTags);
+  }
+
+  if (schema) {
+    for (const [k, v] of Object.entries(params)) {
+      const prop = schema.properties[k];
+      if (prop?.type === "string" && prop.enum && typeof v === "number") {
+        params[k] = String(v);
+      }
+    }
+  }
+
+  const validation = validateImageParams(effectiveToolName, params);
 
   return {
     key: modelKey,

@@ -513,6 +513,12 @@ function googleFlowReferenceSlots(prefix: string, ids: readonly string[]): Recor
   return slots;
 }
 
+// @apicity/googleflow@0.7.2 tightened videos.duration to the numeric-literal
+// union 4|6|8|10; the app's tool contracts carry the value as a string enum, so
+// map it back to the exact literal the request type demands.
+type GoogleFlowDurationString = "4" | "6" | "8" | "10";
+const GOOGLE_FLOW_DURATION_SECONDS = { "4": 4, "6": 6, "8": 8, "10": 10 } as const satisfies Record<GoogleFlowDurationString, 4 | 6 | 8 | 10>;
+
 type Veo31VideoArgs = {
   prompt: string;
   aspect_ratio?: GoogleFlowVideoAspectRatio;
@@ -535,7 +541,7 @@ function buildVeo31VideoPayload(
     prompt: args.prompt,
     model,
     ...(args.aspect_ratio !== undefined ? { aspectRatio: googleFlowVideoAspect(args.aspect_ratio) } : {}),
-    ...(args.duration !== undefined ? { duration: Number(args.duration) } : {}),
+    ...(args.duration !== undefined ? { duration: GOOGLE_FLOW_DURATION_SECONDS[args.duration] } : {}),
     ...(args.seed !== undefined ? { seed: args.seed } : {}),
     ...(opts.startImageId !== undefined ? { startImage: opts.startImageId } : {}),
     ...(opts.endImageId !== undefined ? { endImage: opts.endImageId } : {}),
@@ -556,6 +562,8 @@ type GoogleOmniVideoOpts = {
   startImageId?: string;
   referenceImageIds?: string[];
   referenceVideoId?: string;
+  voiceRefs?: string[];
+  characterRefs?: string[];
 };
 
 // Omni Flash trims the reference clip on a 24fps frame timeline capped at
@@ -595,11 +603,15 @@ function buildGoogleOmniVideoPayload(
     prompt: args.prompt,
     model: "omni-flash",
     // V2V edit rejects duration — the output length matches the trimmed clip.
-    ...(!hasVideo ? { duration: Number(args.duration ?? "8") } : {}),
+    ...(!hasVideo ? { duration: GOOGLE_FLOW_DURATION_SECONDS[args.duration ?? "8"] } : {}),
     ...(args.aspect_ratio !== undefined ? { aspectRatio: googleFlowVideoAspect(args.aspect_ratio) } : {}),
     ...(args.seed !== undefined ? { seed: args.seed } : {}),
     ...(opts.startImageId !== undefined ? { startImage: opts.startImageId } : {}),
     ...googleFlowReferenceSlots("referenceImage", opts.referenceImageIds ?? []),
+    // Voice refs (from create_google_flow_voice) → referenceAudio_1..5;
+    // character refs (from create_google_flow_character) → character_1..7.
+    ...googleFlowReferenceSlots("referenceAudio", opts.voiceRefs ?? []),
+    ...googleFlowReferenceSlots("character", opts.characterRefs ?? []),
     ...clipSlots,
   };
 }
@@ -1478,10 +1490,14 @@ function translateToolPayload(
     case "generate_google_omni_video": {
       const startImage = args.first_frame_slug as string | undefined;
       const videoSlug = args.video_slug as string | undefined;
+      const voiceRefs = ((args.voice_refs as string[] | undefined) ?? []).filter((s) => s.trim() !== "");
+      const characterRefs = ((args.character_refs as string[] | undefined) ?? []).filter((s) => s.trim() !== "");
       const payload = buildGoogleOmniVideoPayload(args as GoogleOmniVideoArgs, {
         ...(startImage !== undefined && startImage.trim() !== "" ? { startImageId: startImage } : {}),
         ...(imageSlugs.length > 0 ? { referenceImageIds: imageSlugs } : {}),
         ...(videoSlug !== undefined && videoSlug.trim() !== "" ? { referenceVideoId: videoSlug } : {}),
+        ...(voiceRefs.length > 0 ? { voiceRefs } : {}),
+        ...(characterRefs.length > 0 ? { characterRefs } : {}),
       });
       return { provider_path: "googleflow.v1.videos({ async: true })", payload: payload as unknown as Record<string, unknown> };
     }
