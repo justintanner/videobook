@@ -182,6 +182,42 @@ describe("estimate_cost tool", () => {
     );
   });
 
+  it("enriches motion-control duration when motion slug has a leading @", async () => {
+    const fs = createFsForTest(tempDir);
+    const projectResult = await fs.createProject("est-at-proj");
+    expect(projectResult.ok).toBe(true);
+
+    const assetResult = await fs.createAsset("vid", "at-motion", "est-at-proj");
+    expect(assetResult.ok).toBe(true);
+    if (!assetResult.ok) return;
+    const motionAssetId = assetResult.value.assetId;
+
+    const ACTUAL_DURATION = 24;
+    const writeMeta = await fs.writeMetadata(
+      motionAssetId,
+      "original",
+      { duration: ACTUAL_DURATION, width: 720, height: 1280 },
+      "est-at-proj",
+    );
+    expect(writeMeta.ok).toBe(true);
+
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "generate_kling30_motion_control_video",
+          input: {
+            mode: "1080p",
+            motion_video_slugs: [`@${motionAssetId}`],
+            project_slug: "est-at-proj",
+          },
+        }],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.estimate.breakdown.units).toBe(ACTUAL_DURATION);
+  });
+
   it("sums multiple calls into one summed estimate", async () => {
     const result = await client.callTool({
       name: "estimate_cost",

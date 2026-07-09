@@ -35,19 +35,41 @@ interface UseListAssetsResult {
   markAssetSeenLocal: (assetId: string) => void;
 }
 
+/** Whether a list_assets response should update UI state (guards stale races). */
+export function shouldApplyListAssetsResult(
+  requestSeq: number,
+  latestSeq: number,
+  requestProject: string,
+  activeProject: string | null,
+): boolean {
+  return requestSeq === latestSeq && activeProject === requestProject;
+}
+
 export function useListAssets(callTool: UseMcpResult["callTool"]): UseListAssetsResult {
   const [assets, setAssets] = useState<ListAsset[] | undefined>();
   const callToolRef = useRef(callTool);
   useEffect(() => { callToolRef.current = callTool; }, [callTool]);
   const prevJsonRef = useRef<string>('');
+  const requestSeqRef = useRef(0);
+  const activeProjectRef = useRef<string | null>(null);
 
   const listAssets = useCallback(async (projectSlug: string, sort?: "newest" | "oldest"): Promise<ListAsset[] | null> => {
+    const requestSeq = ++requestSeqRef.current;
+    activeProjectRef.current = projectSlug;
     try {
       const result = await callToolRef.current("list_assets", { project_slug: projectSlug, sort });
       if (result.isError) return null;
       const content = result.content as Array<{ type: string; text: string }>;
       const json = content[0].text;
       const parsed: { assets: ListAsset[] } = JSON.parse(json);
+      if (!shouldApplyListAssetsResult(
+        requestSeq,
+        requestSeqRef.current,
+        projectSlug,
+        activeProjectRef.current,
+      )) {
+        return parsed.assets;
+      }
       // Only update state when the asset data actually changed to avoid
       // breaking useMemo chains and causing unnecessary re-renders.
       if (json !== prevJsonRef.current) {
@@ -63,6 +85,8 @@ export function useListAssets(callTool: UseMcpResult["callTool"]): UseListAssets
 
   const clearAssets = useCallback(() => {
     setAssets(undefined);
+    prevJsonRef.current = '';
+    activeProjectRef.current = null;
   }, []);
 
   const removeAsset = useCallback((assetId: string) => {

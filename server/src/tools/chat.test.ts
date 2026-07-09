@@ -3,6 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
+import { createFsForTest } from "../fs.js";
+import { loadScriptContentsForChat } from "./chat.js";
+import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -114,5 +117,69 @@ describe("chat tool", () => {
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toContain("KIE_API_KEY");
+  });
+});
+
+describe("loadScriptContentsForChat", () => {
+  let tempDir: string;
+
+  afterEach(async () => {
+    if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  it("reads script body from original.md (not index.md)", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-chat-script-"));
+    const fs = createFsForTest(tempDir);
+    const project = await fs.createProject("chat-script-proj");
+    expect(project.ok).toBe(true);
+
+    const script = await fs.createAsset("script", "scene-one", "chat-script-proj");
+    expect(script.ok).toBe(true);
+    if (!script.ok) return;
+
+    const body = "A pig sits upright on a red stool.";
+    const wrote = await fs.writeFile(script.value.assetId, SCRIPT_FILENAME, body, "chat-script-proj");
+    expect(wrote.ok).toBe(true);
+
+    const decoy = await fs.writeFile(script.value.assetId, "index.md", "WRONG PLAN FILE", "chat-script-proj");
+    expect(decoy.ok).toBe(true);
+
+    const contents = await loadScriptContentsForChat(
+      fs,
+      [{
+        tag: script.value.assetId,
+        asset_type: "script",
+        asset_id: script.value.assetId,
+        file_path: join(script.value.path, SCRIPT_FILENAME),
+      }],
+      "chat-script-proj",
+    );
+
+    expect(contents).toEqual([{ tag: script.value.assetId, content: body }]);
+    expect(contents[0]?.content).not.toContain("WRONG PLAN FILE");
+    fs.close();
+  });
+
+  it("returns empty when only index.md exists (legacy wrong path)", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-chat-script-bad-"));
+    const fs = createFsForTest(tempDir);
+    await fs.createProject("chat-script-proj");
+    const script = await fs.createAsset("script", "orphan", "chat-script-proj");
+    if (!script.ok) throw new Error(script.error.message);
+    await fs.writeFile(script.value.assetId, "index.md", "should not be loaded", "chat-script-proj");
+
+    const contents = await loadScriptContentsForChat(
+      fs,
+      [{
+        tag: script.value.assetId,
+        asset_type: "script",
+        asset_id: script.value.assetId,
+        file_path: join(script.value.path, "index.md"),
+      }],
+      "chat-script-proj",
+    );
+
+    expect(contents).toEqual([]);
+    fs.close();
   });
 });

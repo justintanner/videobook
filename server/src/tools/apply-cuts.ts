@@ -3,7 +3,16 @@ import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videocity-engine";
+import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
+
+export async function resolveHasAudioForCuts(
+  metaHasAudio: boolean | undefined,
+  inputPath: string,
+): Promise<boolean> {
+  if (typeof metaHasAudio === "boolean") return metaHasAudio;
+  return (await probeVideo(inputPath)).hasAudio;
+}
 
 type Cut = { cut_start: number; cut_end: number };
 
@@ -82,9 +91,9 @@ export function applyCutsDef(fs: VideocityFs): ToolDef {
       const duration = metaResult.ok && typeof metaResult.value.duration === "number"
         ? metaResult.value.duration
         : null;
-      const hasAudio = metaResult.ok && typeof metaResult.value.hasAudio === "boolean"
+      const metaHasAudio = metaResult.ok && typeof metaResult.value.hasAudio === "boolean"
         ? metaResult.value.hasAudio
-        : true;
+        : undefined;
 
       const validated = validateCuts(cuts, duration);
       if (!validated.ok) {
@@ -96,6 +105,7 @@ export function applyCutsDef(fs: VideocityFs): ToolDef {
 
       const assetDir = manifest.path;
       const inputPath = join(assetDir, videoFile.name);
+      const hasAudio = await resolveHasAudioForCuts(metaHasAudio, inputPath);
       const outputPath = join(assetDir, "original_cuts.mp4");
       const jobId = `apply-cuts-${assetId}-${Date.now()}`;
 

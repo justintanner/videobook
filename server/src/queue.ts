@@ -72,13 +72,14 @@ function extractProjectSlug(payload: Record<string, unknown>): string | null {
   return null;
 }
 
-function extractAssetId(payload: Record<string, unknown>): string | null {
+export function extractAssetId(payload: Record<string, unknown>): string | null {
   if (typeof payload.imgAssetId === "string") return payload.imgAssetId;
   if (typeof payload.vidAssetId === "string") return payload.vidAssetId;
   if (typeof payload.assetId === "string") return payload.assetId;
   if (typeof payload.imageAssetId === "string") return payload.imageAssetId;
   if (typeof payload.audioAssetId === "string") return payload.audioAssetId;
   if (typeof payload.audAssetId === "string") return payload.audAssetId;
+  if (typeof payload.charAssetId === "string") return payload.charAssetId;
   return null;
 }
 

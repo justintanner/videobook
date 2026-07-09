@@ -42,7 +42,12 @@ type RenderTimelinePayload = {
   resolvedAudio?: ResolvedAudioOverlay[];
 };
 
-function buildAudioFilter(index: number, slot: ResolvedSlot, duration: number): string {
+export function buildAudioFilter(
+  index: number,
+  slot: ResolvedSlot,
+  duration: number,
+  hasAudio = true,
+): string {
   const filters: string[] = ["aresample=48000", "aformat=sample_fmts=fltp:channel_layouts=stereo"];
   const vol = slot.volume / 100;
   if (vol !== 1) {
@@ -57,7 +62,10 @@ function buildAudioFilter(index: number, slot: ResolvedSlot, duration: number): 
     const startTime = Math.max(0, duration - fadeOutSec);
     filters.push(`afade=t=out:st=${startTime}:d=${fadeOutSec}`);
   }
-  return `[${index}:a:0]${filters.join(",")}[a${index}]`;
+  if (hasAudio) {
+    return `[${index}:a:0]${filters.join(",")}[a${index}]`;
+  }
+  return `anullsrc=channel_layout=stereo:sample_rate=48000,atrim=0:${duration},asetpts=PTS-STARTPTS,${filters.join(",")}[a${index}]`;
 }
 
 function buildOverlayAudioFilter(inputIndex: number, overlay: ResolvedAudioOverlay, label: string): string {
@@ -115,12 +123,14 @@ export function registerRenderTimelineJob(fs: VideocityFs): void {
 
       const inputPaths: string[] = [];
       const durations: number[] = [];
+      const hasAudioFlags: boolean[] = [];
 
       for (const slot of resolvedSlots) {
         const inputPath = join(slot.assetDir, renderFilename);
         inputPaths.push(inputPath);
         const probe = await probeVideo(inputPath);
         durations.push(probe.duration);
+        hasAudioFlags.push(probe.hasAudio);
       }
 
       const n = resolvedSlots.length;
@@ -162,7 +172,7 @@ export function registerRenderTimelineJob(fs: VideocityFs): void {
           const filterParts: string[] = [];
           for (let i = 0; i < n; i++) {
             // Input indices for the per-slot reopens start at 1.
-            filterParts.push(buildAudioFilter(i + 1, resolvedSlots[i], durations[i]));
+            filterParts.push(buildAudioFilter(i + 1, resolvedSlots[i], durations[i], hasAudioFlags[i]));
           }
           const concatInputs = Array.from({ length: n }, (_, i) => `[a${i + 1}]`).join("");
           const concatLabel = hasOverlays ? "[concatA]" : "[outa]";

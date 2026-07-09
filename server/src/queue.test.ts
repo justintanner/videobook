@@ -8,6 +8,7 @@ import {
   queue as appQueue,
   registerJobHandler,
   setProjectsDir,
+  extractAssetId,
 } from "./queue.js";
 import { withProviderHandoff } from "./jobs/_lease.js";
 
@@ -193,5 +194,28 @@ describe("server queue (sqlite-backed)", () => {
 
     await appQueue.stop();
     cfs.close();
+  });
+});
+
+
+describe("extractAssetId", () => {
+  it("reads charAssetId for extract_character payloads", () => {
+    expect(extractAssetId({
+      type: "extract_character",
+      projectSlug: "p",
+      charAssetId: "char-hero",
+    })).toBe("char-hero");
+  });
+
+  it("prefers imgAssetId over other keys when present", () => {
+    expect(extractAssetId({
+      imgAssetId: "img-a",
+      assetId: "vid-b",
+      charAssetId: "char-c",
+    })).toBe("img-a");
+  });
+
+  it("returns null when no known asset id key is present", () => {
+    expect(extractAssetId({ type: "extract_character", projectSlug: "p" })).toBeNull();
   });
 });

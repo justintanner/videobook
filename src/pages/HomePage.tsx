@@ -253,15 +253,15 @@ export function HomePage() {
     return () => document.removeEventListener('mousedown', handler);
   }, [statusOpen, settingsOpen, archiveOpen, genPanel]);
 
-  // Refresh assets after each sync or sort change; clear optimistic overrides
   useEffect(() => {
     if (!projectSlug || syncCount === 0) return;
     listAssets(projectSlug, sortOrder);
-    return () => {
-      setRenderingOverrides(new Map());
-      setDeletingIds(new Set());
-    };
   }, [projectSlug, syncCount, sortOrder, listAssets]);
+
+  useEffect(() => {
+    setRenderingOverrides(new Map());
+    setDeletingIds(new Set());
+  }, [projectSlug]);
 
   // Refresh timeline after each sync
   useEffect(() => {

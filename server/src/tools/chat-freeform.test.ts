@@ -495,7 +495,7 @@ describe("freeform chat commands", () => {
       const fs = createFs({ projectsDir: tempDir });
       const scriptResult = await fs.createAsset("script", "my-scene", "test-proj");
       if (!scriptResult.ok) throw new Error("Failed to create script asset");
-      await fs.writeFile(scriptResult.value.assetId, "index.md", "A beautiful sunset over the ocean", "test-proj");
+      await fs.writeFile(scriptResult.value.assetId, "original.md", "A beautiful sunset over the ocean", "test-proj");
 
       const result = await client.callTool({
         name: "chat",

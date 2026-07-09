@@ -51,7 +51,8 @@ async function enrichInput(
     : [];
   if (!projectSlug || motionSlugs.length === 0) return input;
 
-  const meta = await fs.readMetadata(motionSlugs[0], "original", projectSlug);
+  const motionSlug = motionSlugs[0].replace(/^@/, "");
+  const meta = await fs.readMetadata(motionSlug, "original", projectSlug);
   if (!meta.ok) return input;
   const duration = (meta.value as { duration?: unknown }).duration;
   if (typeof duration !== "number" || duration <= 0) return input;

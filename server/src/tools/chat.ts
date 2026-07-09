@@ -11,12 +11,38 @@ import { withLogging } from "./log-wrapper.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { callGeminiFlashJson, geminiTextPart } from "../kie-gemini.js";
 import { getApiKey } from "../api-key.js";
+import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
 
 type ChatDecision = {
   tool: string;
   params: Record<string, unknown>;
   message: string;
 };
+
+export type ChatResolvedAsset = {
+  tag: string;
+  asset_type: string;
+  asset_id: string;
+  file_path: string | null;
+};
+
+export async function loadScriptContentsForChat(
+  fs: VideocityFs,
+  resolvedAssets: ChatResolvedAsset[],
+  slug: string,
+): Promise<Array<{ tag: string; content: string }>> {
+  const scriptContents: Array<{ tag: string; content: string }> = [];
+  for (const asset of resolvedAssets) {
+    if (asset.asset_type !== "script" || !asset.file_path) continue;
+    const readResult = await fs.readFile(asset.asset_id, SCRIPT_FILENAME, slug);
+    if (!readResult.ok) continue;
+    const content = typeof readResult.value === "string"
+      ? readResult.value
+      : new TextDecoder().decode(readResult.value);
+    scriptContents.push({ tag: asset.tag, content });
+  }
+  return scriptContents;
+}
 
 export function chatDef(fs: VideocityFs): ToolDef {
   return {
@@ -63,18 +89,7 @@ export function chatDef(fs: VideocityFs): ToolDef {
         .map((a) => a.file_path)
         .filter(Boolean);
 
-      const scriptContents: Array<{ tag: string; content: string }> = [];
-      for (const asset of resolvedAssets) {
-        if (asset.asset_type === "script" && asset.file_path) {
-          const readResult = await fs.readFile(asset.asset_id, "index.md", slug);
-          if (readResult.ok) {
-            const content = typeof readResult.value === "string"
-              ? readResult.value
-              : new TextDecoder().decode(readResult.value);
-            scriptContents.push({ tag: asset.tag, content });
-          }
-        }
-      }
+      const scriptContents = await loadScriptContentsForChat(fs, resolvedAssets, slug);
 
       // 4. Read recent history for context
       const historyLines = await getRecentHistory(fs, slug);

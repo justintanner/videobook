@@ -9,6 +9,7 @@ import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
 import { queue } from "../queue.js";
 import { probeVideo } from "../ffmpeg.js";
+import { resolveHasAudioForCuts } from "./apply-cuts.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -24,6 +25,16 @@ async function generateTestVideo(outputPath: string): Promise<void> {
     "-f", "lavfi", "-i", "sine=frequency=440:duration=3",
     "-c:v", "libx264", "-pix_fmt", "yuv420p",
     "-c:a", "aac", "-shortest",
+    outputPath,
+  ]);
+}
+
+async function generateSilentVideo(outputPath: string): Promise<void> {
+  await execFileAsync(FFMPEG, [
+    "-y",
+    "-f", "lavfi", "-i", "testsrc=duration=3:size=320x240:rate=10",
+    "-c:v", "libx264", "-pix_fmt", "yuv420p",
+    "-an",
     outputPath,
   ]);
 }
@@ -225,4 +236,61 @@ describe("apply_cuts tool", () => {
     const content = result.content as TextContent;
     expect(content[0].text).toContain("No video file");
   });
+
+  it("cuts a silent video when metadata omits hasAudio (probes file)", async () => {
+    const silentPath = join(fixtureDir, "silent-source.mp4");
+    await generateSilentVideo(silentPath);
+    const uploaded = await placeVideo(tempDir, "cuts-proj", silentPath);
+
+    // Metadata has duration but deliberately no hasAudio — old code assumed true and failed.
+    const fs = createFsForTest(tempDir);
+    await fs.writeMetadata(
+      uploaded.assetId,
+      "original",
+      { width: 320, height: 240, duration: 3 },
+      "cuts-proj",
+    );
+
+    const result = await client.callTool({
+      name: "apply_cuts",
+      arguments: {
+        asset_id: uploaded.assetId,
+        project_slug: "cuts-proj",
+        cuts: [{ cut_start: 1, cut_end: 2 }],
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const probe = await probeVideo(join(uploaded.path, "original.mp4"));
+    expect(probe.duration).toBeGreaterThan(1.7);
+    expect(probe.duration).toBeLessThan(2.3);
+    expect(probe.hasAudio).toBe(false);
+  }, 60_000);
+});
+
+describe("resolveHasAudioForCuts", () => {
+  let fixtureDir: string;
+
+  beforeAll(async () => {
+    fixtureDir = await mkdtemp(join(tmpdir(), "videocity-hasaudio-"));
+  }, 30_000);
+
+  afterAll(async () => {
+    await rm(fixtureDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  it("returns metadata boolean without probing when present", async () => {
+    await expect(resolveHasAudioForCuts(false, "/nonexistent/path.mp4")).resolves.toBe(false);
+    await expect(resolveHasAudioForCuts(true, "/nonexistent/path.mp4")).resolves.toBe(true);
+  });
+
+  it("probes the file when metadata hasAudio is missing", async () => {
+    const silentPath = join(fixtureDir, "probe-silent.mp4");
+    await generateSilentVideo(silentPath);
+    await expect(resolveHasAudioForCuts(undefined, silentPath)).resolves.toBe(false);
+
+    const withAudio = join(fixtureDir, "probe-audio.mp4");
+    await generateTestVideo(withAudio);
+    await expect(resolveHasAudioForCuts(undefined, withAudio)).resolves.toBe(true);
+  }, 60_000);
 });
