@@ -62,7 +62,7 @@
 }
 
 /* Stacking scale (Tailwind arbitrary z-[N] values across components):
-     100/101  overlay + panel (drawers, dialogs: ActivityLogDrawer, TrimEditor, PostComposerDialog)
+     100/101  overlay + panel (drawers, dialogs: ActivityLogDrawer, SplitEditor, PostComposerDialog)
      120      nested modals opened from a dialog (AssetPickerModal)
      130      menus / popovers (AssetMenu)
      140      toasts — always topmost (toast.tsx)
@@ -70,6 +70,43 @@
      150ms    color/small controls (icon buttons, toggles, tabs)
      200ms    medium layout shifts (drop slots, input focus)
      300ms    large command buttons only (scale + gradient states) */
+
+/* Split editor genie open/close — sucks in from bottom-center like a macOS genie */
+.split-genie {
+  transform-origin: 50% 100%;
+  will-change: transform, opacity, clip-path;
+}
+.split-genie-open {
+  animation: split-genie-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.split-genie-closed {
+  animation: split-genie-out 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  pointer-events: none;
+}
+@keyframes split-genie-in {
+  from {
+    opacity: 0;
+    transform: scale(0.72, 0.08) translateY(12%);
+    clip-path: inset(88% 28% 0 28%);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1, 1) translateY(0);
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes split-genie-out {
+  from {
+    opacity: 1;
+    transform: scale(1, 1) translateY(0);
+    clip-path: inset(0 0 0 0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.72, 0.08) translateY(12%);
+    clip-path: inset(88% 28% 0 28%);
+  }
+}
 
 @layer base {
   * {

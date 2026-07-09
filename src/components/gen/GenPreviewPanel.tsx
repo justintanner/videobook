@@ -1014,6 +1014,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                               mcpState={mcpState}
                               projectSlug={projectSlug}
                               imageSlugCandidates={imageSlugCandidates}
+                              resolvedAssets={preview.resolved_assets}
+                              droppedAssets={droppedAssets}
                             />
                           ))}
                       </div>

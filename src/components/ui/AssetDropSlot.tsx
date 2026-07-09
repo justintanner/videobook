@@ -20,6 +20,8 @@ interface AssetDropSlotProps {
   acceptTypes?: ('image' | 'video' | 'audio' | 'character')[];
   emptyIcon?: React.ReactNode;
   compact?: boolean;
+  /** Portrait-style square frame (default is 16:9 video). */
+  square?: boolean;
   variant?: 'image' | 'video';
 }
 
@@ -53,7 +55,7 @@ const themes = {
   },
 } as const;
 
-export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image'], emptyIcon, compact, variant = 'image' }: AssetDropSlotProps) {
+export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image'], emptyIcon, compact, square, variant = 'image' }: AssetDropSlotProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
   const isVideoOnly = acceptTypes.length === 1 && acceptTypes[0] === 'video';
@@ -105,7 +107,7 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
     <div
       className={cn(
         'relative overflow-hidden rounded border transition-all duration-200',
-        compact ? 'h-10' : 'aspect-video',
+        compact ? 'h-10' : square ? 'aspect-square' : 'aspect-video',
         t.controlBg,
         disabled && 'opacity-30 pointer-events-none',
         isDragOver && !disabled

@@ -23,7 +23,9 @@ import { HomeHeaderBar } from '@/components/layout/HomeHeaderBar';
 import { ProviderKeysScreen } from '@/components/settings/ProviderKeysScreen';
 import { ActivityLogDrawer } from '@/components/commands';
 import { useProjectActivity } from '@/hooks/useProjectActivity';
-import { TrimEditor } from '@/components/commands/trim/TrimEditor';
+import { SplitEditor } from '@/components/commands/split/SplitEditor';
+import type { SplitTarget } from '@/components/commands/split/types';
+import { parseTimestamp } from '@/components/commands/split/utils';
 import { GenPreviewPanel } from '@/components/gen/GenPreviewPanel';
 import type { GenPreviewPanelHandle } from '@/components/gen/GenPreviewPanel';
 import { CharacterDialog } from '@/components/character/CharacterDialog';
@@ -124,7 +126,7 @@ export function HomePage() {
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [deleteProjectTarget, setDeleteProjectTarget] = useState<string | null>(null);
   const [deleteProjectSubmitting, setDeleteProjectSubmitting] = useState(false);
-  const [trimAssetId, setTrimAssetId] = useState<string | null>(null);
+  const [splitTarget, setSplitTarget] = useState<SplitTarget | null>(null);
   const [cropTarget, setCropTarget] = useState<{ assetId: string; ratio?: string } | null>(null);
   const [osgTarget, setOsgTarget] = useState<{ assetId: string; osgAssetId?: string } | null>(null);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
@@ -401,9 +403,11 @@ export function HomePage() {
     return live || ghostClips.some((g) => g.category === cat);
   }, [genPanel, mediaItems, ghostClips]);
 
-  const trimItem = useMemo(() =>
-    trimAssetId ? mediaItems.find(m => m.id === trimAssetId) ?? null : null,
-  [mediaItems, trimAssetId]);
+  const splitItem = useMemo(() =>
+    splitTarget
+      ? mediaItems.find(m => m.id === splitTarget.assetId || m.slug === `@${splitTarget.assetId}` || m.slug === splitTarget.assetId) ?? null
+      : null,
+  [mediaItems, splitTarget]);
 
 
   // Derive the active selection — clear if item was removed from list
@@ -600,7 +604,7 @@ export function HomePage() {
       }
       removeAsset(video.id);
       setSelectedItem((current) => current?.id === video.id ? null : current);
-      setTrimAssetId((current) => current === video.id ? null : current);
+      setSplitTarget((current) => current?.assetId === video.id ? null : current);
       await Promise.all([
         fetchTimeline(projectSlug),
         listAssets(projectSlug, sortOrder),
@@ -666,7 +670,7 @@ export function HomePage() {
     setArchiveInitialResponse(null);
     setArchiveInitialError(null);
     setArchiveInitialLoading(false);
-    setTrimAssetId(null);
+    setSplitTarget(null);
     setCropTarget(null);
     setOsgTarget(null);
     setSelectedItem(null);
@@ -1150,7 +1154,7 @@ export function HomePage() {
     setTimelineSlotIndex(null);
     setArchiveOpen(false);
     setSettingsOpen(false);
-    setTrimAssetId(null);
+    setSplitTarget(null);
     setCropTarget(null);
     setOsgTarget(null);
     setViewerFlipped(false);
@@ -1315,7 +1319,13 @@ export function HomePage() {
     open_upload: triggerUpload,
     open_inbox: () => setStatusOpen(true),
     open_status: () => setStatusOpen(true),
-    open_trim: (assetId: string) => setTrimAssetId(assetId),
+    open_split: (assetId: string, at?: string) => {
+      const cleaned = assetId.trim().replace(/^@/, '');
+      if (!cleaned) return;
+      const item = mediaItems.find((m) => m.id === cleaned || m.slug === `@${cleaned}` || m.slug === cleaned);
+      const atSec = at ? parseTimestamp(at) : undefined;
+      setSplitTarget({ assetId: item?.id ?? cleaned, ...(atSec !== undefined ? { atSec } : {}) });
+    },
     open_crop: (assetId: string, ratio?: string) => {
       const cleaned = assetId.trim().replace(/^@/, '');
       const target = cleaned || selectedItem?.id || '';
@@ -1546,11 +1556,13 @@ export function HomePage() {
           projectSlug={projectSlug}
           onRewound={handleActivityRewound}
         />
-        <TrimEditor
-          open={trimAssetId != null}
-          assetId={trimAssetId}
-          item={trimItem}
-          onClose={() => setTrimAssetId(null)}
+        <SplitEditor
+          key={splitTarget?.assetId ?? 'split-closed'}
+          open={splitTarget != null}
+          assetId={splitTarget?.assetId ?? null}
+          initialAtSec={splitTarget?.atSec}
+          item={splitItem}
+          onClose={() => setSplitTarget(null)}
           assetSlugs={assetSlugs}
           callTool={callTool}
           projectSlug={projectSlug}

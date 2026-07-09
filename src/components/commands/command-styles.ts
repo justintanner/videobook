@@ -40,8 +40,7 @@ export const sizes = {
 } as const;
 
 // Chip variants — keyed by Domain. The `fuchsia` semantic variant is kept
-// for the trim editor's split-mode button until trim's mode-color scheme is
-// redesigned; it has no Domain mapping.
+// for the split editor action button; it has no Domain mapping.
 
 const fuchsia: ChipVariantStyle = {
   bg: 'bg-fuchsia-500/20 border-fuchsia-500/30',

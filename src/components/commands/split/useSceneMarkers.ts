@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { SnapMarker } from './types';
+import type { SceneMarker } from './types';
 
 interface AnalysisScene {
   timestamp?: number;
@@ -10,12 +10,12 @@ interface AnalysisJson {
   scenes?: AnalysisScene[];
 }
 
-export function useAnalysisMarkers(
+export function useSceneMarkers(
   open: boolean,
   assetId: string | null,
   projectSlug: string | undefined,
-): SnapMarker[] {
-  const [markers, setMarkers] = useState<SnapMarker[]>([]);
+): SceneMarker[] {
+  const [markers, setMarkers] = useState<SceneMarker[]>([]);
 
   useEffect(() => {
     if (!open || !assetId || !projectSlug) {

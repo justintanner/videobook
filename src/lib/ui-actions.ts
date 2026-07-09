@@ -8,7 +8,7 @@ export interface UiActionCallbacks {
   copy_clipboard: (raw: string) => void;
   show_history: (assetId: string) => void;
   open_asset: (assetId: string) => void;
-  open_trim: (assetId: string) => void;
+  open_split: (assetId: string, at?: string) => void;
   open_crop: (assetId: string, ratio?: string) => void;
   open_osg: (assetId: string, imageId?: string) => void;
   switch_project: (slug: string) => void;
@@ -81,8 +81,8 @@ export function executeUiAction(
     case 'open_asset':
       (fn as UiActionCallbacks['open_asset'])(ctx.args.asset_id ?? ctx.raw);
       break;
-    case 'open_trim':
-      (fn as UiActionCallbacks['open_trim'])(ctx.args.asset_id ?? ctx.raw);
+    case 'open_split':
+      (fn as UiActionCallbacks['open_split'])(ctx.args.asset_id ?? ctx.raw, ctx.args.at);
       break;
     case 'open_crop':
       (fn as UiActionCallbacks['open_crop'])(ctx.args.asset_id ?? ctx.raw, ctx.args.ratio);

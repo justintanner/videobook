@@ -98,7 +98,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/trim",
-    description: "Trim video clip",
+    description: "Trim video clip (chat-routed to trim_video MCP)",
     example: "/trim @hero-intro 0:05 0:12",
     category: "action",
     icon: "Scissors",
@@ -110,7 +110,6 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "start", type: "string", required: false, description: "Start timestamp" },
       { name: "end", type: "string", required: false, description: "End timestamp" },
     ],
-    uiAction: "open_trim",
   },
   {
     command: "/crop",
@@ -1347,7 +1346,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/split",
-    description: "Split a video into two assets at a timestamp (seconds). Original preserved.",
+    description: "Open frame-accurate split editor; creates two video assets. Original preserved.",
     example: "/split @vid-clip 10",
     category: "context_menu",
     icon: "Scissors",
@@ -1356,10 +1355,9 @@ const HARDCODED_COMMANDS: Command[] = [
     chevron: "right",
     params: [
       { name: "asset_id", type: "string", required: true, description: "Video asset to split" },
-      { name: "chunk_a_end", type: "number", required: true, description: "Split point in seconds (end of first chunk)" },
-      { name: "chunk_b_start", type: "number", required: false, description: "Start of second chunk in seconds (default: split point; smaller = overlap)" },
+      { name: "at", type: "string", required: false, description: "Initial split point (seconds or m:ss)" },
     ],
-    mcpTool: { tool: "split_video", autoInject: ["project_slug"] },
+    uiAction: "open_split",
   },
   {
     command: "/export-to",

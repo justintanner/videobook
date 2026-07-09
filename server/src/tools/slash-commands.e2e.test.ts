@@ -786,16 +786,34 @@ describe("slash commands e2e", () => {
       expect(cmd.mcpTool).toBeUndefined();
     });
 
-    it("/trim opens the trim editor via uiAction", () => {
+    it("/trim has no mcpTool or uiAction (falls to chat)", () => {
       const cmd = findCommand("/trim");
-      expect(cmd.uiAction).toBe("open_trim");
       expect(cmd.mcpTool).toBeUndefined();
+      expect(cmd.uiAction).toBeUndefined();
     });
 
     it("/trim-audio has no mcpTool or uiAction (falls to chat)", () => {
       const cmd = findCommand("/trim-audio");
       expect(cmd.mcpTool).toBeUndefined();
       expect(cmd.uiAction).toBeUndefined();
+    });
+
+    it("/split opens the split editor via uiAction", () => {
+      const cmd = findCommand("/split");
+      expect(cmd.uiAction).toBe("open_split");
+      expect(cmd.mcpTool).toBeUndefined();
+    });
+
+    it("parses '/split @vid-clip 10'", () => {
+      const args = simulateParse("/split", "@vid-clip 10");
+      expect(args.asset_id).toBe("vid-clip");
+      expect(args.at).toBe("10");
+    });
+
+    it("parses '/split @vid-clip' (no at)", () => {
+      const args = simulateParse("/split", "@vid-clip");
+      expect(args.asset_id).toBe("vid-clip");
+      expect(args.at).toBeUndefined();
     });
 
     it("/final dispatches render_timeline via mcpTool", () => {

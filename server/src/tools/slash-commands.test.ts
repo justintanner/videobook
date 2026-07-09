@@ -240,7 +240,7 @@ describe("slash_commands tool", () => {
       (c) => !c.mcpTool && !c.uiAction,
     );
     // These should be known fallback commands
-    const expectedFallbacks = ["/trim-audio"];
+    const expectedFallbacks = ["/trim", "/trim-audio"];
     for (const cmd of chatFallbackCommands) {
       expect(
         expectedFallbacks.includes(cmd.command),

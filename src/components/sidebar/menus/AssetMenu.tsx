@@ -355,9 +355,11 @@ export function AssetMenu({
           onSelect: () => onAnimateCommand?.(`/video ${slug}`),
         },
         {
-          command: `/trim ${slug}`,
-          title: 'Trim Video',
-          onSelect: () => onAnimateCommand?.(`/trim ${slug}`),
+          command: `/split ${slug}`,
+          title: 'Split Video',
+          titleClassName: 'text-violet-400',
+          accentColor: 'border-l-violet-500/50 focus:border-l-violet-500/80',
+          onSelect: () => onAnimateCommand?.(`/split ${slug}`),
         },
         {
           command: `/extract-first-frame ${slug}`,

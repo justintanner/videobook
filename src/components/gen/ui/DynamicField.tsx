@@ -1,7 +1,7 @@
 import { GenField, GenTextarea } from '@/components/ui/GenField';
 import { GenToggle } from '@/components/ui/GenToggle';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
-import type { JSONSchemaProperty } from '../types';
+import type { JSONSchemaProperty, ResolvedAsset } from '../types';
 import { isAssetField } from './fieldHelpers';
 import type { GenTheme } from './gen-themes';
 import { genThemes } from './gen-themes';
@@ -25,6 +25,8 @@ interface DynamicFieldProps {
   projectSlug?: string;
   /** Image @slugs available for Google Flow character create (image_slugs + first_frame). */
   imageSlugCandidates?: string[];
+  resolvedAssets?: ResolvedAsset[];
+  droppedAssets?: Map<string, ResolvedAsset>;
 }
 
 // Convert field name to display label
@@ -69,6 +71,8 @@ export function DynamicField({
   mcpState,
   projectSlug,
   imageSlugCandidates,
+  resolvedAssets,
+  droppedAssets,
 }: DynamicFieldProps) {
   const label = labelOverride || formatLabel(name);
 
@@ -95,6 +99,8 @@ export function DynamicField({
               mcpState={mcpState}
               projectSlug={projectSlug}
               imageSlugCandidates={imageSlugCandidates}
+              resolvedAssets={resolvedAssets}
+              droppedAssets={droppedAssets}
               description={placeholderOverride ?? schema.description}
             />
           );
