@@ -9,7 +9,7 @@ import { createXai, XaiError } from "@apicity/xai";
 import { createAlibaba, AlibabaError } from "@apicity/alibaba";
 import { createFal, FalError } from "@apicity/fal";
 import { createGoogleFlow, GoogleFlowError } from "@apicity/googleflow";
-import { googleFlowFetch } from "../jobs/_google-flow.js";
+import { formatGoogleFlowJobError, googleFlowFetch } from "../jobs/_google-flow.js";
 import { queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import {
@@ -736,7 +736,7 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
           } as unknown as Record<string, unknown>);
           result.completed.push({ assetId: task.assetId, taskType: task.taskType, jobId });
         } else if (status === "failed") {
-          const failMsg = typeof job.error === "string" ? job.error : "Google Flow job failed";
+          const failMsg = formatGoogleFlowJobError(job as Record<string, unknown>);
           result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
           await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
         } else {

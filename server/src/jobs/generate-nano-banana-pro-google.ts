@@ -2,7 +2,14 @@ import type { VideocityFs } from "videocity-engine";
 import { queue, registerJobHandler } from "../queue.js";
 import { contentHash } from "../upload.js";
 import { buildGoogleNbpImagePayload, type GoogleNbpImageArgs } from "../payload-builders.js";
-import { createGoogleFlowProvider, uploadAssetToGoogleFlow, uploadUrlToGoogleFlow } from "./_google-flow.js";
+import type { GoogleFlowImagesRequest } from "@apicity/googleflow";
+import {
+  callGoogleFlowWithCaptchaRetry,
+  createGoogleFlowProvider,
+  uploadAssetToGoogleFlow,
+  uploadUrlToGoogleFlow,
+  withGoogleFlowCaptchaDefaults,
+} from "./_google-flow.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
 
 type GenerateNanoBananaProGooglePayload = {
@@ -58,17 +65,22 @@ export function registerGenerateNanoBananaProGoogleJob(fs: VideocityFs): void {
       );
     }
 
-    const request = buildGoogleNbpImagePayload(
-      {
-        prompt: p.prompt,
-        ...(p.aspect_ratio !== undefined ? { aspect_ratio: p.aspect_ratio } : {}),
-        ...(p.seed !== undefined ? { seed: p.seed } : {}),
-      },
-      referenceIds,
-    );
+    const request = withGoogleFlowCaptchaDefaults(
+      buildGoogleNbpImagePayload(
+        {
+          prompt: p.prompt,
+          ...(p.aspect_ratio !== undefined ? { aspect_ratio: p.aspect_ratio } : {}),
+          ...(p.seed !== undefined ? { seed: p.seed } : {}),
+        },
+        referenceIds,
+      ) as Record<string, unknown>,
+    ) as GoogleFlowImagesRequest;
     await fs.writeMetadata(p.imgAssetId, "generation-payload", request, p.projectSlug);
 
-    const res = await provider.v1.images(request);
+    const res = await callGoogleFlowWithCaptchaRetry(
+      (body) => provider.v1.images(body as GoogleFlowImagesRequest),
+      request as Record<string, unknown>,
+    );
     const imageUrl = readFirstImageUrl(res as Record<string, unknown>);
     if (!imageUrl) throw new Error("Google Flow image generation returned no image URL");
 

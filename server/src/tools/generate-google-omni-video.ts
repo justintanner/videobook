@@ -32,8 +32,9 @@ const GOOGLE_OMNI_ASPECT_RATIOS = ["16:9", "9:16"] as const;
 //   - count (1-4 variations) — videocity persists exactly one asset per
 //     generation; the provider default is 1.
 //   - email — single configured account; multi-account routing is out of scope.
-//   - captchaToken / captchaRetry / captchaOrder — captcha-solver plumbing
-//     configured account-side on useapi.net.
+//   - captchaToken — user-supplied reCAPTCHA tokens (provider-side
+//     captchaRetry is applied in jobs/_google-flow.ts; captchaOrder via
+//     GOOGLE_FLOW_CAPTCHA_ORDER).
 //   - replyUrl / replyRef — webhook completion; videocity polls via sync.ts.
 //   - trimStart / trimEnd — removed from the videos type in 0.7.2; omni trims
 //     via startFrameIndex_1 / endFrameIndex_1 (derived from the clip timecodes).
