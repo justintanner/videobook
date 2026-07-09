@@ -22,6 +22,9 @@ interface DynamicFieldProps {
   theme?: GenTheme;
   callTool?: UseMcpResult['callTool'];
   mcpState?: UseMcpResult['state'];
+  projectSlug?: string;
+  /** Image @slugs available for Google Flow character create (image_slugs + first_frame). */
+  imageSlugCandidates?: string[];
 }
 
 // Convert field name to display label
@@ -64,6 +67,8 @@ export function DynamicField({
   theme,
   callTool,
   mcpState,
+  projectSlug,
+  imageSlugCandidates,
 }: DynamicFieldProps) {
   const label = labelOverride || formatLabel(name);
 
@@ -88,6 +93,8 @@ export function DynamicField({
               theme={theme}
               callTool={callTool}
               mcpState={mcpState}
+              projectSlug={projectSlug}
+              imageSlugCandidates={imageSlugCandidates}
               description={placeholderOverride ?? schema.description}
             />
           );

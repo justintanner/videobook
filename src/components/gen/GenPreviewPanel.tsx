@@ -8,6 +8,7 @@ import { DynamicField } from '@/components/gen/ui/DynamicField';
 import { ImageParamSlots } from '@/components/gen/ImageParamSlots';
 import { ElementGroupEditor } from '@/components/gen/ElementGroupEditor';
 import { sortFields, isAssetField, isElementField } from '@/components/gen/ui/fieldHelpers';
+import { pickImageSlugCandidates } from '@/hooks/useGoogleFlowEntities';
 import { stripAssetTagsFromText, stripSlugPrefix } from '@/lib/slugs';
 import { ErrorPage } from '@/components/gen/state/ErrorPage';
 import { JsonNode } from '@/components/ui/JsonNode';
@@ -643,6 +644,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     : [];
 
   const regularFields = fields.filter(([name]) => !isAssetField(name) && !isElementField(name));
+  const imageSlugCandidates = pickImageSlugCandidates(formValues);
   const assetFields = fields.filter(([name]) => isAssetField(name));
   const elementIndices = new Set<number>();
   const elementSchemas = new Map<string, JSONSchemaProperty>();
@@ -820,6 +822,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                               theme={panelTheme}
                               callTool={callTool}
                               mcpState={mcpState}
+                              projectSlug={projectSlug}
+                              imageSlugCandidates={imageSlugCandidates}
                             />
                           ))}
                       </div>
