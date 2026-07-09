@@ -37,6 +37,8 @@ interface GenPreviewPanelProps {
   prompt: string;
   onClose: () => void;
   callTool: UseMcpResult['callTool'];
+  /** MCP connection state — used by list-tool pickers (voice/character refs). */
+  mcpState?: UseMcpResult['state'];
   projectSlug: string | undefined;
   /** True while a generation of this category is still running in the
    *  background — dims the /generate button (kept clickable). */
@@ -95,6 +97,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   prompt: initialPrompt,
   onClose,
   callTool,
+  mcpState,
   projectSlug,
   pendingGeneration,
   onGenerationLifecycle,
@@ -815,6 +818,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                               required={schema?.required?.includes(name)}
                               disabled={isDisabled}
                               theme={panelTheme}
+                              callTool={callTool}
+                              mcpState={mcpState}
                             />
                           ))}
                       </div>

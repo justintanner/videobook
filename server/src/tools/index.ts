@@ -70,7 +70,12 @@ import { generateSeedance2MiniVideoDef } from "./generate-seedance2-mini-video.j
 import { generateGeminiOmniVideoDef } from "./generate-gemini-omni-video.js";
 import { generateGoogleOmniVideoDef } from "./generate-google-omni-video.js";
 import { generateVeo3VideoDef, generateVeo3FastVideoDef } from "./generate-veo3-video.js";
-import { generateVeo31VideoDef, generateVeo31FastVideoDef, generateVeo31LiteVideoDef } from "./generate-veo31-video.js";
+import {
+  generateVeo31VideoDef,
+  generateVeo31FastVideoDef,
+  generateVeo31LiteVideoDef,
+  generateVeo31LiteLowPriorityVideoDef,
+} from "./generate-veo31-video.js";
 import { generateNanoBananaProGoogleDef } from "./generate-nano-banana-pro-google.js";
 import { generateKling30TurboVideoDef } from "./generate-kling30-turbo-video.js";
 import { generateWan27T2vVideoDef } from "./generate-wan27-t2v-video.js";
@@ -289,6 +294,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     generateVeo31VideoDef(fs),
     generateVeo31FastVideoDef(fs),
     generateVeo31LiteVideoDef(fs),
+    generateVeo31LiteLowPriorityVideoDef(fs),
     generateNanoBananaProGoogleDef(fs),
     generateKling30TurboVideoDef(fs),
     generateWan27T2vVideoDef(fs),

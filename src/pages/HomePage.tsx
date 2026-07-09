@@ -1644,6 +1644,7 @@ export function HomePage() {
                     prompt={genPanel.prompt}
                     onClose={() => setGenPanel(null)}
                     callTool={callTool}
+                    mcpState={state}
                     projectSlug={projectSlug}
                     pendingGeneration={pendingGenForPanel}
                     onGenerationLifecycle={handleGenerationLifecycle}

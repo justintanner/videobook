@@ -69,6 +69,24 @@ describe("translateToolPayload", () => {
     expect(Seedance2MiniRequestSchema.safeParse(result?.payload).success).toBe(true);
   });
 
+  it("builds Veo 3.1 lite-low-priority payload with model literal", () => {
+    const result = translateToolPayload("generate_veo31_lite_low_priority_video", {
+      prompt: "slow clouds",
+      duration: "4",
+      aspect_ratio: "16:9",
+      image_slugs: ["ref-1"],
+    });
+    expect(result?.provider_path).toBe("googleflow.v1.videos({ async: true })");
+    expect(result?.payload).toEqual({
+      prompt: "slow clouds",
+      model: "veo-3.1-lite-low-priority",
+      duration: 4,
+      aspectRatio: "landscape",
+      referenceImage_1: "ref-1",
+    });
+    expect(GoogleFlowVideosRequestSchema.safeParse(result?.payload).success).toBe(true);
+  });
+
   it("builds Google Omni I2V payload with startImage", () => {
     const result = translateToolPayload("generate_google_omni_video", {
       prompt: "animate the first frame",

@@ -28,6 +28,7 @@ const MODEL_DISPLAY: Record<string, Record<string, string>> = {
     'veo-3.1-quality': 'Veo 3.1',
     'veo-3.1-fast': 'Veo 3.1 Fast',
     'veo-3.1-lite': 'Veo 3.1 Lite',
+    'veo-3.1-lite-low-priority': 'Veo 3.1 Lite LP',
     'omni-flash': 'Gemini Omni Video',
     'nano-banana-pro': 'Nano Banana Pro',
   },

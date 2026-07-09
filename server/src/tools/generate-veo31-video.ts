@@ -17,6 +17,7 @@ const VEO31_SLUGS: Record<GoogleVeo31Model, string> = {
   "veo-3.1-quality": "veo31",
   "veo-3.1-fast": "veo31-fast",
   "veo-3.1-lite": "veo31-lite",
+  "veo-3.1-lite-low-priority": "veo31-lite-lp",
 };
 
 function buildVeo31Schema(allowRefs: boolean) {
@@ -159,4 +160,11 @@ export const generateVeo31LiteVideoDef = makeVeo31VideoTool(
   "veo-3.1-lite",
   true,
   "Generate a video using Google Veo 3.1 Lite (Google Flow). Cheapest Veo 3.1 tier: text-to-video, start/end frames, or up to 3 reference images. Creates a new vid- asset and enqueues a background job.",
+);
+
+export const generateVeo31LiteLowPriorityVideoDef = makeVeo31VideoTool(
+  "generate_veo31_lite_low_priority_video",
+  "veo-3.1-lite-low-priority",
+  true,
+  "Generate a video using Google Veo 3.1 Lite Lower Priority (Google Flow, Ultra $199 only, 0 credits). Same modes as Lite (T2V / start-end I2V / up to 3 refs) with lower queue priority. Creates a new vid- asset and enqueues a background job.",
 );

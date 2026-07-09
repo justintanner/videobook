@@ -4,6 +4,7 @@ import {
   callGoogleFlowWithCaptchaRetry,
   DEFAULT_GOOGLE_FLOW_CAPTCHA_RETRY,
   formatGoogleFlowJobError,
+  googleFlowFetch,
   isCaptchaQualityGoogleFlowError,
   resolveGoogleFlowCaptchaRetry,
   withGoogleFlowCaptchaDefaults,
@@ -104,6 +105,53 @@ describe("formatGoogleFlowJobError", () => {
   it("falls back when there is no nested detail", () => {
     expect(formatGoogleFlowJobError({ error: "All operations failed" })).toBe("All operations failed");
     expect(formatGoogleFlowJobError({})).toBe("Google Flow job failed");
+  });
+});
+
+describe("googleFlowFetch path-ID decode (vc-4e8z)", () => {
+  it("decodes percent-encoded : and @ in job/asset path segments before fetch", async () => {
+    const seen: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      seen.push(typeof input === "string" ? input : input instanceof URL ? input.href : String(input));
+      return new Response(JSON.stringify({ status: "completed" }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const encodedJob =
+        "https://api.useapi.net/v1/google-flow/jobs/"
+        + encodeURIComponent("j0707v-u2935-email:justin@gmail.com-bot:google-flow");
+      const encodedAsset =
+        "https://api.useapi.net/v1/google-flow/assets/"
+        + encodeURIComponent("user:2935-email:abc-image:3ba11e5c-fd2c");
+      await googleFlowFetch(encodedJob);
+      await googleFlowFetch(encodedAsset);
+      expect(seen[0]).toBe(
+        "https://api.useapi.net/v1/google-flow/jobs/j0707v-u2935-email:justin@gmail.com-bot:google-flow",
+      );
+      expect(seen[0]).toContain("email:justin@gmail.com");
+      expect(seen[0]).not.toContain("%3A");
+      expect(seen[0]).not.toContain("%40");
+      expect(seen[1]).toContain("user:2935-email:abc-image:");
+      expect(seen[1]).not.toContain("%3A");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("leaves already-raw path IDs unchanged (no-op when package stops over-encoding)", async () => {
+    const seen: string[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      seen.push(typeof input === "string" ? input : String(input));
+      return new Response("{}", { status: 200 });
+    }) as typeof fetch;
+    try {
+      const raw = "https://api.useapi.net/v1/google-flow/jobs/j0707v-u2935-email:justin@gmail.com-bot:google-flow";
+      await googleFlowFetch(raw);
+      expect(seen[0]).toBe(raw);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 

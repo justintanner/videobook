@@ -79,6 +79,22 @@ describe("generate_veo31_video tools", () => {
     expect((result.content as TextContent)[0].text).toContain("requires first_frame_slug");
   });
 
+  it("enqueues a lite-low-priority job", async () => {
+    const result = await client.callTool({
+      name: "generate_veo31_lite_low_priority_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "a fog bank rolling over hills",
+        aspect_ratio: "16:9",
+        duration: "4",
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.status).toBe("enqueued");
+    expect(parsed.vid_asset_id).toMatch(/^vid-veo31-lite-lp-/);
+  });
+
   it("rejects reference images combined with a start frame", async () => {
     const result = await client.callTool({
       name: "generate_veo31_lite_video",

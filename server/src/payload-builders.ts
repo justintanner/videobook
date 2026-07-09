@@ -496,7 +496,7 @@ function buildVeo3VideoPayload(
 // URLs.
 // ---------------------------------------------------------------------------
 
-type GoogleVeo31Model = "veo-3.1-quality" | "veo-3.1-fast" | "veo-3.1-lite";
+type GoogleVeo31Model = "veo-3.1-quality" | "veo-3.1-fast" | "veo-3.1-lite" | "veo-3.1-lite-low-priority";
 type GoogleFlowVideoAspectRatio = "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
 
 // The videos endpoint takes landscape/portrait keywords where the rest of the
@@ -1472,12 +1472,15 @@ function translateToolPayload(
     }
     case "generate_veo31_video":
     case "generate_veo31_fast_video":
-    case "generate_veo31_lite_video": {
+    case "generate_veo31_lite_video":
+    case "generate_veo31_lite_low_priority_video": {
       const model: GoogleVeo31Model = toolName === "generate_veo31_video"
         ? "veo-3.1-quality"
         : toolName === "generate_veo31_fast_video"
           ? "veo-3.1-fast"
-          : "veo-3.1-lite";
+          : toolName === "generate_veo31_lite_low_priority_video"
+            ? "veo-3.1-lite-low-priority"
+            : "veo-3.1-lite";
       const startImage = args.first_frame_slug as string | undefined;
       const endImage = args.last_frame_slug as string | undefined;
       const payload = buildVeo31VideoPayload(model, args as Veo31VideoArgs, {
@@ -1702,7 +1705,7 @@ function translateToolPayload(
 const VIDEO_TOOLS = new Set([
   "generate_kling30_video", "generate_kling30_motion_control_video", "generate_kling30_turbo_video",
   "generate_veo3_video", "generate_veo3_fast_video",
-  "generate_veo31_video", "generate_veo31_fast_video", "generate_veo31_lite_video",
+  "generate_veo31_video", "generate_veo31_fast_video", "generate_veo31_lite_video", "generate_veo31_lite_low_priority_video",
   "generate_seedance2_video", "generate_seedance2_fast_video", "generate_seedance2_mini_video",
   "generate_gemini_omni_video",
   "generate_grok_imagine_video", "generate_grok_imagine_t2v_video", "generate_grok_imagine_ref_video",

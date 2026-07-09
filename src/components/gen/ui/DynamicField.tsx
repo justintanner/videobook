@@ -6,6 +6,8 @@ import { isAssetField } from './fieldHelpers';
 import type { GenTheme } from './gen-themes';
 import { genThemes } from './gen-themes';
 import { cn } from '@/lib/utils';
+import { GoogleFlowRefPicker } from './GoogleFlowRefPicker';
+import type { UseMcpResult } from 'use-mcp/react';
 
 interface DynamicFieldProps {
   name: string;
@@ -18,6 +20,8 @@ interface DynamicFieldProps {
   placeholderOverride?: string;
   autoFocus?: boolean;
   theme?: GenTheme;
+  callTool?: UseMcpResult['callTool'];
+  mcpState?: UseMcpResult['state'];
 }
 
 // Convert field name to display label
@@ -58,16 +62,36 @@ export function DynamicField({
   placeholderOverride,
   autoFocus,
   theme,
+  callTool,
+  mcpState,
 }: DynamicFieldProps) {
   const label = labelOverride || formatLabel(name);
 
   // Handle array types. Asset slug arrays (image_slugs) render as an
-  // AssetDropSlot; non-asset string arrays (e.g. voice_refs / character_refs —
-  // free-form provider ref lists) render as a comma/newline-separated textarea.
+  // AssetDropSlot; Google Flow voice/character refs use list-tool pickers;
+  // other non-asset string arrays fall back to comma/newline textarea.
   if (schema.type === 'array') {
     if (schema.items?.type === 'string' || !schema.items?.type) {
       if (!isAssetField(name)) {
         const list = Array.isArray(value) ? (value as unknown[]).map(String) : [];
+        if (name === 'voice_refs' || name === 'character_refs') {
+          const kind = name === 'voice_refs' ? 'voice' : 'character';
+          return (
+            <GoogleFlowRefPicker
+              kind={kind}
+              label={label}
+              value={list}
+              onChange={(refs) => onChange(refs)}
+              maxItems={schema.maxItems ?? (kind === 'voice' ? 5 : 7)}
+              required={required}
+              disabled={disabled}
+              theme={theme}
+              callTool={callTool}
+              mcpState={mcpState}
+              description={placeholderOverride ?? schema.description}
+            />
+          );
+        }
         return (
           <GenField label={label} required={required} theme={theme} className="w-full">
             <GenTextarea

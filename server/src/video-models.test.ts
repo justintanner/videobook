@@ -692,8 +692,19 @@ describe("google flow video models", () => {
     expect(qualityRefs.warnings.some((w) => w.includes("reference images"))).toBe(false);
   });
 
+  it("veo31 lite-low-priority: same ref slots as lite, distinct tool", () => {
+    const schema = getVideoToolSchema("generate_veo31_lite_low_priority_video");
+    expect(schema).toBeDefined();
+    expect(schema!.properties.image_slugs).toBeDefined();
+    expect(schema!.properties.image_slugs.maxItems).toBe(3);
+    expect(schema!.properties.duration.enum).toEqual(["4", "6", "8"]);
+    const validation = validateVideoParams("generate_veo31_lite_low_priority_video", { prompt: "a sunset" });
+    expect(validation.valid).toBe(true);
+    expect(VIDEO_MODELS.veo31_lite_low_priority.tool_name).toBe("generate_veo31_lite_low_priority_video");
+  });
+
   it("veo31 models route through the google provider only", () => {
-    for (const key of ["veo31", "veo31_fast", "veo31_lite"]) {
+    for (const key of ["veo31", "veo31_fast", "veo31_lite", "veo31_lite_low_priority"]) {
       const info = VIDEO_MODELS[key];
       expect(info.providers).toHaveLength(1);
       expect(info.providers[0].key).toBe("google");
