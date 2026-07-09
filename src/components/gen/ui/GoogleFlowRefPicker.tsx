@@ -398,127 +398,6 @@ export function GoogleFlowRefPicker({
             </div>
           )}
 
-          {/* Create form */}
-          {!atCap && (
-            <div className="flex flex-col gap-1.5">
-              {!createOpen ? (
-                <button
-                  type="button"
-                  disabled={disabled || !callTool || !projectSlug}
-                  onClick={openCreate}
-                  className={cn(
-                    'inline-flex items-center gap-1.5 self-start px-2.5 py-1.5 rounded border text-[10px] font-mono uppercase tracking-wider',
-                    t.controlBorder,
-                    t.inactiveText,
-                    'hover:opacity-90 transition-opacity',
-                    'disabled:opacity-40 disabled:cursor-not-allowed',
-                  )}
-                >
-                  <Plus className="w-3 h-3" />
-                  Add character
-                </button>
-              ) : (
-                <div className={cn('flex flex-col gap-2 p-2.5 rounded border', t.controlBorder, 'bg-black/40')}>
-                  <div className={cn('text-[10px] font-mono uppercase tracking-wider', t.activeText)}>
-                    {selected.length === 0 ? 'Add character' : 'New character'}
-                  </div>
-
-                  <label className="block">
-                    <div className={cn('text-[9px] font-mono uppercase tracking-wider mb-1', t.inactiveText)}>
-                      Name
-                    </div>
-                    <input
-                      type="text"
-                      value={createName}
-                      onChange={(e) => setCreateName(e.target.value)}
-                      placeholder="Display name"
-                      disabled={disabled || creating}
-                      className={cn(
-                        'w-full px-2 py-1.5 bg-black/60 rounded font-mono text-xs',
-                        theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
-                        'focus:outline-none',
-                        theme?.focusBorder ?? 'focus:border-primary/60',
-                      )}
-                    />
-                  </label>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="min-w-0">
-                      <div className={cn('text-[9px] font-mono uppercase tracking-wider mb-1', t.inactiveText)}>
-                        Image 1
-                      </div>
-                      <AssetDropSlot
-                        value={primarySlot}
-                        onChange={(asset) => {
-                          setPrimarySlot(asset)
-                          if (asset && !createName.trim()) {
-                            setCreateName(nameFromAsset(asset))
-                          }
-                        }}
-                        disabled={disabled || creating}
-                        acceptTypes={['image', 'character']}
-                        square
-                        variant="video"
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <div className={cn('text-[9px] font-mono uppercase tracking-wider mb-1', t.inactiveText)}>
-                        Image 2 (optional)
-                      </div>
-                      <AssetDropSlot
-                        value={altSlot}
-                        onChange={setAltSlot}
-                        disabled={disabled || creating}
-                        acceptTypes={['image', 'character']}
-                        square
-                        variant="video"
-                      />
-                    </div>
-                  </div>
-
-                  <div className={cn('text-[9px] font-mono', t.inactiveText)}>
-                    Drop 1–2 reference images from the sidebar. Image 1 is required.
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      disabled={!canCreate}
-                      onClick={() => void handleCreateCharacter()}
-                      className={cn(
-                        'inline-flex items-center gap-1.5 px-3 py-1.5 rounded border text-[10px] font-mono uppercase tracking-wider transition-colors',
-                        canCreate
-                          ? cn(t.activeBg, t.activeBorder, t.activeText, 'hover:opacity-90')
-                          : 'border-zinc-700 text-zinc-500 cursor-not-allowed bg-zinc-900/40',
-                      )}
-                    >
-                      {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
-                      {creating ? 'Creating…' : 'Create character'}
-                    </button>
-                    {selected.length > 0 && (
-                      <button
-                        type="button"
-                        disabled={creating}
-                        onClick={closeCreate}
-                        className={cn(
-                          'px-2 py-1.5 rounded text-[10px] font-mono uppercase tracking-wider',
-                          t.inactiveText,
-                          'hover:opacity-90',
-                        )}
-                      >
-                        Cancel
-                      </button>
-                    )}
-                  </div>
-
-                  {createError && (
-                    <div className="text-[9px] font-mono text-amber-300/80">{createError}</div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Your characters library */}
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between gap-2">
@@ -548,7 +427,7 @@ export function GoogleFlowRefPicker({
             {loaded && available.length === 0 && (
               <div className={cn('text-[10px] font-mono', t.inactiveText)}>
                 {entities.length === 0
-                  ? 'None yet — create one above'
+                  ? 'None yet — create one below'
                   : atCap
                     ? `Max ${maxItems} selected`
                     : 'All characters are already selected'}
@@ -618,6 +497,127 @@ export function GoogleFlowRefPicker({
               </div>
             )}
           </div>
+
+          {/* Create form */}
+          {!atCap && (
+            <div className="flex flex-col gap-1.5">
+              {!createOpen ? (
+                <button
+                  type="button"
+                  disabled={disabled || !callTool || !projectSlug}
+                  onClick={openCreate}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 self-start px-2.5 py-1.5 rounded border text-[10px] font-mono uppercase tracking-wider',
+                    t.controlBorder,
+                    t.inactiveText,
+                    'hover:opacity-90 transition-opacity',
+                    'disabled:opacity-40 disabled:cursor-not-allowed',
+                  )}
+                >
+                  <Plus className="w-3 h-3" />
+                  Add character
+                </button>
+              ) : (
+                <div className={cn('flex flex-col gap-2 p-2.5 rounded border', t.controlBorder, 'bg-black/40')}>
+                  <div className={cn('text-[10px] font-mono uppercase tracking-wider', t.activeText)}>
+                    {selected.length === 0 ? 'Add character' : 'New character'}
+                  </div>
+
+                  <label className="block">
+                    <div className={cn('text-[9px] font-mono uppercase tracking-wider mb-1', t.inactiveText)}>
+                      Name
+                    </div>
+                    <input
+                      type="text"
+                      value={createName}
+                      onChange={(e) => setCreateName(e.target.value)}
+                      placeholder="Display name"
+                      disabled={disabled || creating}
+                      className={cn(
+                        'w-full px-2 py-1.5 bg-black/60 rounded font-mono text-xs',
+                        theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
+                        'focus:outline-none',
+                        theme?.focusBorder ?? 'focus:border-primary/60',
+                      )}
+                    />
+                  </label>
+
+                  <div className="flex gap-2">
+                    <div className="w-20 shrink-0">
+                      <div className={cn('text-[9px] font-mono uppercase tracking-wider mb-1', t.inactiveText)}>
+                        Image 1
+                      </div>
+                      <AssetDropSlot
+                        value={primarySlot}
+                        onChange={(asset) => {
+                          setPrimarySlot(asset)
+                          if (asset && !createName.trim()) {
+                            setCreateName(nameFromAsset(asset))
+                          }
+                        }}
+                        disabled={disabled || creating}
+                        acceptTypes={['image', 'character']}
+                        square
+                        variant="video"
+                      />
+                    </div>
+                    <div className="w-20 shrink-0">
+                      <div className={cn('text-[9px] font-mono uppercase tracking-wider mb-1', t.inactiveText)}>
+                        Image 2 (optional)
+                      </div>
+                      <AssetDropSlot
+                        value={altSlot}
+                        onChange={setAltSlot}
+                        disabled={disabled || creating}
+                        acceptTypes={['image', 'character']}
+                        square
+                        variant="video"
+                      />
+                    </div>
+                  </div>
+
+                  <div className={cn('text-[9px] font-mono', t.inactiveText)}>
+                    Drop 1–2 reference images from the sidebar. Image 1 is required.
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={!canCreate}
+                      onClick={() => void handleCreateCharacter()}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 px-3 py-1.5 rounded border text-[10px] font-mono uppercase tracking-wider transition-colors',
+                        canCreate
+                          ? cn(t.activeBg, t.activeBorder, t.activeText, 'hover:opacity-90')
+                          : 'border-zinc-700 text-zinc-500 cursor-not-allowed bg-zinc-900/40',
+                      )}
+                    >
+                      {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                      {creating ? 'Creating…' : 'Create character'}
+                    </button>
+                    {selected.length > 0 && (
+                      <button
+                        type="button"
+                        disabled={creating}
+                        onClick={closeCreate}
+                        className={cn(
+                          'px-2 py-1.5 rounded text-[10px] font-mono uppercase tracking-wider',
+                          t.inactiveText,
+                          'hover:opacity-90',
+                        )}
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+
+                  {createError && (
+                    <div className="text-[9px] font-mono text-amber-300/80">{createError}</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {(deleteError || error || description) && (
             <div className={cn('text-[9px] font-mono', (deleteError || error) ? 'text-amber-300/80' : 'text-muted-foreground/70')}>
