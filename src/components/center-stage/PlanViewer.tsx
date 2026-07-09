@@ -2598,6 +2598,7 @@ function PromptEditor({ value, onChange, mediaItems, projectSlug, imageRefs = []
         };
       }
       if (token.kind === 'character-ref') return null;
+      if (token.kind !== 'slug') return null;
       const thumb = resolveSlugThumb(token.slug, mediaItems, projectSlug);
       if (!thumb || thumb.kind !== 'image' || !thumb.src) return null;
       return { thumbnailSrc: thumb.src, type: 'image', label: token.slug };

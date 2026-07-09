@@ -1,19 +1,26 @@
 // Tokenizer for the transparent rich-prompt overlay. Prompts reference assets
-// three ways: positional "[Image N]" tokens (produced by normalizeStoryboardVideoPrompt
+// several ways: positional "[Image N]" tokens (produced by normalizeStoryboardVideoPrompt
 // and rewriteVisualWithImageTokens), "@slug" mentions (only confirmed against the
-// known asset slugs so stray "@foo" stays plain text), and "@<handle>" character
-// mentions (handles derived from the selected characters' display names). All
-// render as inline micro-thumbs. Tokens are re-derived from the text every render
-// (pattern-based, no stored positions), which keeps editing dead simple.
+// known asset slugs so stray "@foo" stays plain text), "@<handle>" character
+// mentions (handles derived from the selected characters' display names), and
+// literal Google Flow positional markers "@character_N", "@referenceImage_N",
+// "@referenceAudio_N" (case-insensitive, matching the API's inline @-mention
+// syntax). All render as inline micro-thumbs. Tokens are re-derived from the
+// text every render (pattern-based, no stored positions), which keeps editing
+// dead simple.
 //
 // Characters are user-facing as "@<handle>" (e.g. "@jane"); the positional
-// "@character_N" form is produced only at submit by rewriteCharacterMentions,
-// never stored in the prompt the user edits.
+// "@character_N" form is produced at submit by rewriteCharacterMentions. The
+// literal "@character_N" form is also tokenized when it appears in the text
+// (pasted prompts, round-tripped content).
 
 export type RichToken =
   | { kind: 'slug'; slug: string }
   | { kind: 'image-ref'; n: number }
-  | { kind: 'character-ref'; handle: string };
+  | { kind: 'character-ref'; handle: string }
+  | { kind: 'character-slot'; n: number }
+  | { kind: 'reference-image-slot'; n: number }
+  | { kind: 'reference-audio-slot'; n: number };
 
 export interface RichSegment {
   type: 'text' | 'token';
@@ -59,6 +66,15 @@ export function rewriteCharacterMentions(text: string, refs: { handle: string; n
 // form's lookbehind keeps it from re-matching inside the bracket/@ forms.
 const IMAGE_REF_RE = /\[Image\s*(\d+)\]|@Image\s*(\d+)|(?<![@[\w])Image\s*(\d+)\b/gi;
 
+// Google Flow positional @-mention markers (case-insensitive per API docs).
+// These are grounding hints — they tell the model WHERE in the prompt to place
+// each reference. Body params (character_N, referenceImage_N, referenceAudio_N)
+// are still required and built server-side from array positions. The regexes
+// match any digit; the resolver decides whether the slot is valid (N in range).
+const CHARACTER_SLOT_RE = /@character_(\d+)\b/gi;
+const REFERENCE_IMAGE_SLOT_RE = /@referenceImage_(\d+)\b/gi;
+const REFERENCE_AUDIO_SLOT_RE = /@referenceAudio_(\d+)\b/gi;
+
 // Find every image ref, @character-handle and @slug occurrence. Handles and slugs
 // only match known values (longest-first so e.g. "@vid-intro" wins over a
 // hypothetical "@vid"); character handles take precedence over slugs when both
@@ -85,6 +101,30 @@ export function extractRichTokens(text: string, assetSlugs: string[], characterH
       if (matches.some((x) => start < x.end && end > x.start)) continue; // overlap → skip
       matches.push({ start, end, token: { kind: 'character-ref', handle } });
     }
+  }
+
+  // Literal positional markers: @character_N, @referenceImage_N, @referenceAudio_N.
+  // These don't collide with @<handle> because the handle regex uses (?![\w-])
+  // lookahead — "_1" after "character" is \w, so @character_1 never matches as a
+  // handle. Order: character → image → audio (all checked before slugs so a slug
+  // named "referenceimage" can't shadow the positional form).
+  for (const m of text.matchAll(CHARACTER_SLOT_RE)) {
+    const start = m.index ?? 0;
+    const end = start + m[0].length;
+    if (matches.some((x) => start < x.end && end > x.start)) continue;
+    matches.push({ start, end, token: { kind: 'character-slot', n: Number(m[1]) } });
+  }
+  for (const m of text.matchAll(REFERENCE_IMAGE_SLOT_RE)) {
+    const start = m.index ?? 0;
+    const end = start + m[0].length;
+    if (matches.some((x) => start < x.end && end > x.start)) continue;
+    matches.push({ start, end, token: { kind: 'reference-image-slot', n: Number(m[1]) } });
+  }
+  for (const m of text.matchAll(REFERENCE_AUDIO_SLOT_RE)) {
+    const start = m.index ?? 0;
+    const end = start + m[0].length;
+    if (matches.some((x) => start < x.end && end > x.start)) continue;
+    matches.push({ start, end, token: { kind: 'reference-audio-slot', n: Number(m[1]) } });
   }
 
   const slugs = [...new Set(assetSlugs)].sort((a, b) => b.length - a.length);
@@ -124,4 +164,24 @@ export function parseRichSegments(text: string, matches: TokenMatch[]): RichSegm
   }
   if (cursor < text.length) segments.push({ type: 'text', value: text.slice(cursor) });
   return segments;
+}
+
+// Remove positional @-mention markers that have no matching body slot (N out of
+// range). Called at submit AFTER rewriteCharacterMentions so both @<handle>-derived
+// and literal @character_N forms are covered. Markers within range are preserved.
+// Case-insensitive to match the API's marker syntax.
+export function stripOrphanedReferenceMarkers(
+  text: string,
+  counts: { character: number; referenceImage: number; referenceAudio: number },
+): string {
+  const stripKind = (input: string, re: RegExp, max: number): string =>
+    input.replace(re, (full, digits: string) => {
+      const n = Number(digits);
+      return n < 1 || n > max ? '' : full;
+    });
+
+  let out = stripKind(text, CHARACTER_SLOT_RE, counts.character);
+  out = stripKind(out, REFERENCE_IMAGE_SLOT_RE, counts.referenceImage);
+  out = stripKind(out, REFERENCE_AUDIO_SLOT_RE, counts.referenceAudio);
+  return out;
 }

@@ -66,6 +66,7 @@ function SceneVideoNodeImpl({ data }: { data: SceneVideoNodeData }) {
         return { thumbnailSrc: item?.thumbnailSrc ?? item?.filePath ?? null, type: 'character', label: c.name, badge: String(token.n) };
       }
       if (token.kind === 'character-ref') return null;
+      if (token.kind !== 'slug') return null;
       const item = mediaItems.find((m) => m.slug === token.slug);
       if (!item) return null;
       return {

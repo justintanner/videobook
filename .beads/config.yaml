@@ -54,4 +54,6 @@
 # - linear.api_key  → use LINEAR_API_KEY env var instead
 # - github.token    → use GITHUB_TOKEN env var instead
 
-sync.remote: "git+https://github.com/justintanner/videocity.git"
+# sync.remote disabled — use the local embedded Dolt store (avoids the
+# remote-backed write block from the v49->v53 schema migration conflict).
+# sync.remote: "git+https://github.com/justintanner/videocity.git"

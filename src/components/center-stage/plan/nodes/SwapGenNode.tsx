@@ -246,6 +246,7 @@ function SwapGenNodeImpl({ data }: { data: SwapGenNodeData }) {
         return { thumbnailSrc: t.src, type: t.kind === 'char' ? 'character' : 'image', label: t.title, badge: String(token.n) };
       }
       if (token.kind === 'character-ref') return null;
+      if (token.kind !== 'slug') return null;
       const item = mediaItems.find((m) => m.slug === token.slug);
       if (!item) return null;
       return {

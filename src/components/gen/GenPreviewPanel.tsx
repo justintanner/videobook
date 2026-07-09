@@ -36,7 +36,7 @@ import { GenSection } from '@/components/gen/ui/GenSection';
 import { PromptSection } from '@/components/gen/ui/PromptSection';
 import { genThemes } from '@/components/gen/ui/gen-themes';
 import type { RichToken } from '@/components/ui/richPromptTokens';
-import { characterHandle, rewriteCharacterMentions } from '@/components/ui/richPromptTokens';
+import { characterHandle, rewriteCharacterMentions, stripOrphanedReferenceMarkers } from '@/components/ui/richPromptTokens';
 import type { ChipThumb } from '@/components/ui/AssetThumbChip';
 import { createGenerationRequestId } from '@/lib/generation-lifecycle';
 import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle';
@@ -495,6 +495,47 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     },
     [formValues.character_refs, handleFieldChange],
   );
+  const voiceEntities = useGoogleFlowEntities('voice', category === 'video' ? callTool : undefined, mcpState);
+  const voiceMap = useMemo(
+    () => new Map(voiceEntities.entities.map((e) => [e.ref, e])),
+    [voiceEntities.entities],
+  );
+  const imageSlugs = useMemo(
+    () =>
+      Array.isArray(formValues.image_slugs)
+        ? (formValues.image_slugs as string[]).filter((s) => s.trim() !== '')
+        : [],
+    [formValues.image_slugs],
+  );
+  const voiceRefs = useMemo(
+    () =>
+      Array.isArray(formValues.voice_refs)
+        ? (formValues.voice_refs as string[]).filter((s) => s.trim() !== '')
+        : [],
+    [formValues.voice_refs],
+  );
+  const resolvedAssetMap = useMemo(() => {
+    const m = new Map<string, ResolvedAsset>();
+    for (const a of preview?.resolved_assets ?? []) m.set(a.slug, a);
+    for (const [, a] of droppedAssets) m.set(a.slug, a);
+    return m;
+  }, [preview?.resolved_assets, droppedAssets]);
+  const referenceImageSlots = useMemo(
+    () =>
+      imageSlugs.map((slug, i) => {
+        const asset = resolvedAssetMap.get(slug);
+        return { n: i + 1, slug, thumbnailSrc: asset?.thumbnailSrc ?? null, label: slug };
+      }),
+    [imageSlugs, resolvedAssetMap],
+  );
+  const referenceVoiceSlots = useMemo(
+    () =>
+      voiceRefs.map((ref, i) => {
+        const voice = voiceMap.get(ref);
+        return { n: i + 1, ref, label: voice?.displayName ?? ref };
+      }),
+    [voiceRefs, voiceMap],
+  );
   const promptResolveRef = useCallback(
     (token: RichToken): ChipThumb | null => {
       if (token.kind === 'character-ref') {
@@ -507,9 +548,39 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
           badge: String(m.n),
         };
       }
+      if (token.kind === 'character-slot') {
+        const m = charMentions.find((c) => c.n === token.n);
+        if (!m) return null;
+        return {
+          thumbnailSrc: charMap.get(m.ref)?.thumbnailUrl ?? null,
+          type: 'character',
+          label: m.label !== m.ref ? m.label : `Character ${m.n}`,
+          badge: String(m.n),
+        };
+      }
+      if (token.kind === 'reference-image-slot') {
+        const slot = referenceImageSlots.find((s) => s.n === token.n);
+        if (!slot) return null;
+        return {
+          thumbnailSrc: slot.thumbnailSrc,
+          type: 'image',
+          label: slot.label,
+          badge: String(slot.n),
+        };
+      }
+      if (token.kind === 'reference-audio-slot') {
+        const slot = referenceVoiceSlots.find((s) => s.n === token.n);
+        if (!slot) return null;
+        return {
+          thumbnailSrc: null,
+          type: 'audio',
+          label: slot.label,
+          badge: String(slot.n),
+        };
+      }
       return null;
     },
-    [charMentions, charMap],
+    [charMentions, charMap, referenceImageSlots, referenceVoiceSlots],
   );
 
   // Live validation warnings derived from current form values
@@ -661,7 +732,21 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         typeof outValues.prompt === 'string' ? outValues.prompt : '',
         charMentions.map((c) => ({ handle: c.handle, n: c.n })),
       );
-      const args: Record<string, unknown> = { ...outValues, prompt: rewrittenPrompt, project_slug: projectSlug, _provider: selectedProviderKey };
+      const outImageSlugs = Array.isArray(outValues.image_slugs)
+        ? (outValues.image_slugs as string[]).filter((s) => s.trim() !== '')
+        : [];
+      const outCharacterRefs = Array.isArray(outValues.character_refs)
+        ? (outValues.character_refs as string[]).filter((s) => s.trim() !== '')
+        : [];
+      const outVoiceRefs = Array.isArray(outValues.voice_refs)
+        ? (outValues.voice_refs as string[]).filter((s) => s.trim() !== '')
+        : [];
+      const cleanedPrompt = stripOrphanedReferenceMarkers(rewrittenPrompt, {
+        character: outCharacterRefs.length,
+        referenceImage: outImageSlugs.length,
+        referenceAudio: outVoiceRefs.length,
+      });
+      const args: Record<string, unknown> = { ...outValues, prompt: cleanedPrompt, project_slug: projectSlug, _provider: selectedProviderKey };
       const result = await callToolRef.current(outToolName, args);
       if (result.isError) {
         onGenerationLifecycle?.({ phase: 'failed', requestId });
@@ -928,6 +1013,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                       characterMentions={allCharMentions}
                       characterHandles={charHandles}
                       onPickCharacter={handlePickCharacter}
+                      referenceImageSlots={referenceImageSlots}
+                      referenceVoiceSlots={referenceVoiceSlots}
                     />
                   );
                 })()}

@@ -26,6 +26,10 @@ export interface RichPromptFieldProps {
   characterMentions?: { handle: string; label: string; ref: string }[]; // @<handle> character autocomplete options
   onPickCharacter?: (ref: string) => void; // fired when a character mention is inserted (auto-add to refs)
   characterHandles?: string[]; // handles whose "@<handle>" mentions should chip
+  // Reference image slots for @referenceImage_N autocomplete + chips.
+  referenceImageSlots?: { n: number; slug: string; thumbnailSrc: string | null; label: string }[];
+  // Voice slots for @referenceAudio_N autocomplete + chips.
+  referenceVoiceSlots?: { n: number; ref: string; label: string }[];
   rows?: number;
   // Fill the parent's height instead of sizing to `rows`. The wrapper becomes a
   // flex column that grows (flex-1) and the textarea stretches to fill it, so the
@@ -60,6 +64,8 @@ export function RichPromptField({
   characterMentions = [],
   characterHandles = [],
   onPickCharacter,
+  referenceImageSlots = [],
+  referenceVoiceSlots = [],
   rows = 4,
   fill = false,
   disabled,
@@ -103,11 +109,29 @@ export function RichPromptField({
         description: cm.label,
         colorScheme: 'violet' as const,
       }));
+    const refImageItems: AutocompleteItem[] = (referenceImageSlots ?? [])
+      .filter((s) => `referenceimage_${s.n}`.includes(f) || s.label.toLowerCase().includes(f))
+      .map((s) => ({
+        type: 'slug' as const,
+        value: `@referenceImage_${s.n}`,
+        label: `referenceImage_${s.n}`,
+        description: s.label,
+        colorScheme: 'cyan' as const,
+      }));
+    const refVoiceItems: AutocompleteItem[] = (referenceVoiceSlots ?? [])
+      .filter((s) => `referenceaudio_${s.n}`.includes(f) || s.label.toLowerCase().includes(f))
+      .map((s) => ({
+        type: 'slug' as const,
+        value: `@referenceAudio_${s.n}`,
+        label: `referenceAudio_${s.n}`,
+        description: s.label,
+        colorScheme: 'amber' as const,
+      }));
     const slugItems = (assetSlugs ?? [])
       .filter((s) => s.toLowerCase().includes(f))
       .map((s) => ({ type: 'slug' as const, value: `@${s}`, label: s, description: '', colorScheme: 'cyan' as const }));
-    return [...charItems, ...slugItems].slice(0, 30);
-  }, [trigger, characterMentions, assetSlugs]);
+    return [...charItems, ...refImageItems, ...refVoiceItems, ...slugItems].slice(0, 30);
+  }, [trigger, characterMentions, referenceImageSlots, referenceVoiceSlots, assetSlugs]);
 
   // Reset the dropdown selection/dismissal as the trigger text changes (mirrors
   // ChatInput; setState-in-render is the same pattern it uses).
