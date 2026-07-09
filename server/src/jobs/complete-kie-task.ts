@@ -135,6 +135,10 @@ export function registerCompleteKieTaskJob(fs: VideocityFs): void {
           await completeGrokImagineImage(fs, assetId, projectSlug, meta, urls);
         } else if (taskType === "fal_seedream_v5_lite" || taskType === "fal_seedream_v5_lite_edit") {
           await completeSeedreamV5LiteImage(fs, assetId, projectSlug, meta, urls, taskType);
+        } else if (taskType === "fal_qwen_image" || taskType === "fal_qwen_image_edit") {
+          await completeQwen2ImageEdit(fs, assetId, projectSlug, meta, urls, taskType);
+        } else {
+          throw new Error(`Unhandled FAL task type in complete_kie_task: ${taskType}`);
         }
       }
 
@@ -326,6 +330,7 @@ async function completeQwen2ImageEdit(
   projectSlug: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
+  taskType?: string,
 ): Promise<void> {
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
@@ -333,9 +338,12 @@ async function completeQwen2ImageEdit(
   const ext = (meta.outputFormat as string) ?? "png";
   const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, projectSlug, { kind: "image" });
 
+  const model =
+    taskType === "fal_qwen_image" ? "qwen2/text-to-image" : "qwen2/image-edit";
+
   const origin = {
     source_assets: meta.sourceImageIds,
-    model: "qwen2/image-edit",
+    model,
     prompt: meta.prompt,
     download_url: imageUrl,
     download_url_content_hash: contentHash(buffer),
