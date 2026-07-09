@@ -48,6 +48,7 @@ import {
   zodNumberRange,
   type SlotConstraints,
 } from "./zod-slots.js";
+import { totalOmniReferenceImages } from "./google-flow-refs.js";
 
 // ---------------------------------------------------------------------------
 // Provider routes
@@ -1570,7 +1571,8 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
       }
     }
     const voiceCount = (params.voice_refs as string[] | undefined)?.filter(Boolean).length ?? 0;
-    const charCount = (params.character_refs as string[] | undefined)?.filter(Boolean).length ?? 0;
+    const charRefs = ((params.character_refs as string[] | undefined) ?? []).filter(Boolean);
+    const charCount = charRefs.length;
     if (voiceCount > 5) {
       warnings.push(`Google Omni supports up to 5 voice refs (got ${voiceCount})`);
     }
@@ -1583,8 +1585,12 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     if (firstFrame && charCount > 0) {
       warnings.push("Google Omni first_frame_slug cannot be combined with character_refs");
     }
-    if (charCount > 0 && totalImages + charCount > 7) {
-      warnings.push(`Google Omni reference budget exceeded: ${totalImages} images + ${charCount} characters > 7 (characters with two images tighten this further)`);
+    if (charCount > 0) {
+      const omniRefTotal = totalOmniReferenceImages(totalImages, charRefs);
+      if (omniRefTotal > 7) {
+        warnings.push(`Google Omni reference budget exceeded: image_slugs plus character images must total at most 7 reference images (got ${omniRefTotal}: ${totalImages} image_slugs + ${omniRefTotal - totalImages} from ${charCount} character ref${charCount === 1 ? "" : "s"})`);
+      }
+      warnings.push("Google may block generations whose character photos depict identifiable real people (PROMINENT_PEOPLE safety filter). Stylized or AI-generated character images are more reliable.");
     }
   }
 

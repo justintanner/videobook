@@ -40,6 +40,9 @@ export interface CardShellProps {
    *  successful drag-drop (dropEffect !== 'none'). HomePage wires this to the
    *  optimistic local update + the `mark_asset_seen` MCP tool. */
   onMarkSeen?: () => void;
+  /** Fires when the user clicks the always-visible Retry pill on a failed
+   *  card. Only video cards wire this (retry_generation). */
+  onRetry?: (item: MediaItem) => void;
 }
 
 // Pipeline states that all reuse GeneratingOverlay with a custom label.
@@ -57,7 +60,7 @@ const PIPELINE_STATE_LABELS: Partial<Record<ClipState, string>> = {
   archiving: 'ARCHIVING',
 };
 
-function StateOverlay({ item }: { item: MediaItem }) {
+function StateOverlay({ item, onRetry }: { item: MediaItem; onRetry?: (item: MediaItem) => void }) {
   const status = item.status;
   const type = item.type;
   if (!status) return null;
@@ -67,7 +70,7 @@ function StateOverlay({ item }: { item: MediaItem }) {
   if (status === 'generating' && type !== 'final') return <GeneratingOverlay item={item} />;
   if (isRenderingState(status)) return type === 'final' ? <ElfBuildingOverlay item={item} /> : <RenderingOverlay item={item} />;
   if (status === 'transcribing' && (type === 'video' || type === 'audio')) return <TranscribingOverlay item={item} />;
-  if (status === 'error') return <FailedOverlay item={item} />;
+  if (status === 'error') return <FailedOverlay item={item} onRetry={onRetry} />;
   if (status === 'loading') return <LoadingOverlay item={item} />;
   if (status === 'deleting') return <DeletingOverlay item={item} />;
   const pipelineLabel = PIPELINE_STATE_LABELS[status];
@@ -76,7 +79,7 @@ function StateOverlay({ item }: { item: MediaItem }) {
   return null;
 }
 
-export function CardShell({ item, children, contextMenuContent, selected, onClick, draggable, dragData, onMarkSeen }: CardShellProps) {
+export function CardShell({ item, children, contextMenuContent, selected, onClick, draggable, dragData, onMarkSeen, onRetry }: CardShellProps) {
   const visual = getCardVisualState(item);
   const isUnseen = visual.isReady && !visual.isError && item.seenAt == null;
   const isArchived = visual.isReady && item.archiveId != null;
@@ -140,7 +143,7 @@ export function CardShell({ item, children, contextMenuContent, selected, onClic
       <div className={accentClasses} style={{ backgroundColor: visual.color }} />
 
       {/* State overlay */}
-      <StateOverlay item={item} />
+      <StateOverlay item={item} onRetry={onRetry} />
 
       {(isArchived || isUnseen) && (
         <div className="absolute top-2 right-2 z-30 flex flex-col items-end gap-1 pointer-events-none">

@@ -86,14 +86,39 @@ export function isCaptchaQualityGoogleFlowError(error: unknown): boolean {
   return false;
 }
 
-function extractGoogleFlowOperationErrors(job: Record<string, unknown>): string[] {
+export type GoogleFlowFailureDetail = { code: string; reasons: string[] };
+
+/** Collect structured failure details from a Google Flow job body.
+ *
+ *  Collection order (dedup by code; tolerant `Record<string, unknown>` walks):
+ *    ① `response.operations[].operation.error.message` — generic operation
+ *       failures (code only, no reasons).
+ *    ② `response.media[].mediaMetadata.mediaStatus` — omni-flash media failures
+ *       live here: `error.message` → code, `failureReasons[]` → reasons
+ *       (reason === code excluded; only entries whose `mediaGenerationStatus`
+ *       is absent or `MEDIA_GENERATION_STATUS_FAILED`).
+ *    ③ fallback (only when ①/② yield nothing): `response.error.details[].reason`
+ *       then `response.error.message` — content-policy rejections. */
+export function extractGoogleFlowFailureDetails(job: Record<string, unknown>): GoogleFlowFailureDetail[] {
   const response = job.response;
   if (!response || typeof response !== "object") return [];
   const res = response as Record<string, unknown>;
 
+  const details: GoogleFlowFailureDetail[] = [];
+  const seen = new Set<string>();
+  const push = (code: string, rawReasons: unknown[]): void => {
+    const c = code.trim();
+    if (c === "" || seen.has(c)) return;
+    seen.add(c);
+    const reasons = rawReasons
+      .filter((r): r is string => typeof r === "string")
+      .map((r) => r.trim())
+      .filter((r) => r !== "" && r !== c);
+    details.push({ code: c, reasons });
+  };
+
   const operations = res.operations;
   if (Array.isArray(operations)) {
-    const msgs: string[] = [];
     for (const entry of operations) {
       if (!entry || typeof entry !== "object") continue;
       const operation = (entry as Record<string, unknown>).operation;
@@ -101,42 +126,116 @@ function extractGoogleFlowOperationErrors(job: Record<string, unknown>): string[
       const err = (operation as Record<string, unknown>).error;
       if (!err || typeof err !== "object") continue;
       const message = (err as Record<string, unknown>).message;
-      if (typeof message === "string" && message.trim() !== "") msgs.push(message.trim());
+      if (typeof message === "string") push(message, []);
     }
-    if (msgs.length > 0) return msgs;
   }
+
+  const media = res.media;
+  if (Array.isArray(media)) {
+    for (const entry of media) {
+      if (!entry || typeof entry !== "object") continue;
+      const metadata = (entry as Record<string, unknown>).mediaMetadata;
+      if (!metadata || typeof metadata !== "object") continue;
+      const mdRec = metadata as Record<string, unknown>;
+      const genStatus = mdRec.mediaGenerationStatus;
+      if (typeof genStatus === "string" && genStatus !== "MEDIA_GENERATION_STATUS_FAILED") continue;
+      const status = mdRec.mediaStatus;
+      if (!status || typeof status !== "object") continue;
+      const sRec = status as Record<string, unknown>;
+      const errorObj = sRec.error;
+      if (!errorObj || typeof errorObj !== "object") continue;
+      const message = (errorObj as Record<string, unknown>).message;
+      if (typeof message === "string") push(message, Array.isArray(sRec.failureReasons) ? sRec.failureReasons : []);
+    }
+  }
+
+  if (details.length > 0) return details;
 
   const nested = res.error;
   if (nested && typeof nested === "object") {
-    const details = (nested as Record<string, unknown>).details;
-    if (Array.isArray(details)) {
-      const reasons: string[] = [];
-      for (const d of details) {
-        if (!d || typeof d !== "object") continue;
-        const reason = (d as Record<string, unknown>).reason;
-        if (typeof reason === "string" && reason.trim() !== "") reasons.push(reason.trim());
+    const nRec = nested as Record<string, unknown>;
+    const d = nRec.details;
+    if (Array.isArray(d)) {
+      for (const item of d) {
+        if (!item || typeof item !== "object") continue;
+        const reason = (item as Record<string, unknown>).reason;
+        if (typeof reason === "string") push(reason, []);
       }
-      if (reasons.length > 0) return reasons;
     }
-    const message = (nested as Record<string, unknown>).message;
-    if (typeof message === "string" && message.trim() !== "") return [message.trim()];
+    if (details.length === 0) {
+      const message = nRec.message;
+      if (typeof message === "string") push(message, []);
+    }
   }
 
-  return [];
+  return details;
+}
+
+const GOOGLE_FLOW_GUIDANCE: { match: string; guidance: string }[] = [
+  {
+    match: "PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED",
+    guidance: "Google blocked this: the character/reference photos appear to contain an identifiable real person. Use stylized or AI-generated character images, remove the character refs, or try a different provider.",
+  },
+  {
+    match: "IDENTIFIABLE_PERSON_SAFETY",
+    guidance: "Google blocked this: the character/reference photos appear to contain an identifiable real person. Use stylized or AI-generated character images, remove the character refs, or try a different provider.",
+  },
+  {
+    match: "PUBLIC_ERROR_MINOR",
+    guidance: "Google blocked this: the inputs or output appear to depict a minor. Remove images of children or reword the prompt.",
+  },
+  {
+    match: "PUBLIC_ERROR_UNSAFE_GENERATION",
+    guidance: "Google's safety filter rejected the generated content. Reword the prompt or swap the reference images.",
+  },
+  {
+    match: "PUBLIC_ERROR_UNUSUAL_ACTIVITY_TOO_MUCH_TRAFFIC",
+    guidance: "Google rate-limited this request. Wait a minute and retry.",
+  },
+];
+
+function findGoogleFlowGuidance(details: GoogleFlowFailureDetail[]): string | undefined {
+  for (const d of details) {
+    const tokens = [d.code, ...d.reasons];
+    for (const token of tokens) {
+      for (const entry of GOOGLE_FLOW_GUIDANCE) {
+        if (token === entry.match) return entry.guidance;
+      }
+    }
+  }
+  return undefined;
+}
+
+function renderFailureDetails(details: GoogleFlowFailureDetail[]): string {
+  return details
+    .map((d) => (d.reasons.length > 0 ? `${d.code} (${d.reasons.join(", ")})` : d.code))
+    .join("; ");
 }
 
 /** Prefer the top-level job.error string, then append nested operation /
  *  policy reasons (e.g. PUBLIC_ERROR_MINOR) so cards show more than
- *  "All operations failed". */
+ *  "All operations failed". Renders each detail as `CODE (REASON1, REASON2)`. */
 export function formatGoogleFlowJobError(job: Record<string, unknown>): string {
   const base = typeof job.error === "string" && job.error.trim() !== ""
     ? job.error.trim()
     : "Google Flow job failed";
-  const nested = extractGoogleFlowOperationErrors(job);
-  if (nested.length === 0) return base;
-  const detail = nested.join("; ");
+  const details = extractGoogleFlowFailureDetails(job);
+  if (details.length === 0) return base;
+  const detail = renderFailureDetails(details);
   if (base.includes(detail)) return base;
   return `${base}: ${detail}`;
+}
+
+/** Technical error string + plain-English guidance suffix for the first matching
+ *  code/reason. `failCode` is the first detail's code (for generation_errors).
+ *  Unmapped codes degrade to the technical string with no suffix. */
+export function describeGoogleFlowJobFailure(job: Record<string, unknown>): { message: string; failCode?: string } {
+  const technical = formatGoogleFlowJobError(job);
+  const details = extractGoogleFlowFailureDetails(job);
+  const guidance = findGoogleFlowGuidance(details);
+  const message = guidance ? `${technical} — ${guidance}` : technical;
+  const failCode = details.length > 0 ? details[0].code : undefined;
+  return { message, ...(failCode !== undefined ? { failCode } : {}) };
 }
 
 function sleep(ms: number): Promise<void> {

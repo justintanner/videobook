@@ -194,6 +194,16 @@ describe("generate_google_omni_video tool", () => {
     expect(parsed.status).toBe("enqueued");
     expect(parsed.voice_refs).toEqual(["voice:aaa"]);
     expect(parsed.character_refs).toEqual(["character:bbb"]);
+
+    // The exact enqueued payload is persisted for retry_generation replay.
+    const fs = createFs({ projectsDir: tempDir });
+    const meta = await fs.readMetadata<{ type: string; vidAssetId: string; prompt: string }>(
+      parsed.vid_asset_id, "generation-request", "test-proj",
+    );
+    expect(meta.ok && meta.value).toBeTruthy();
+    expect(meta.value!.type).toBe("generate_google_omni_video");
+    expect(meta.value!.vidAssetId).toBe(parsed.vid_asset_id);
+    expect(meta.value!.prompt).toBe("cast the scene");
   });
 
   it("rejects more than 5 voice refs at the schema layer", async () => {
@@ -249,5 +259,50 @@ describe("generate_google_omni_video tool", () => {
     });
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("reference budget");
+  });
+
+  it("rejects a budget over 7 counting two-image characters (-imgs:2)", async () => {
+    const fs = createFs({ projectsDir: tempDir });
+    const imageAssets: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const a = await fs.createAsset("img", `img-${i}`, "test-proj");
+      if (!a.ok) throw new Error("createAsset failed");
+      await fs.writeFile(a.value.assetId, "original.png", await makePng(), "test-proj");
+      imageAssets.push(a.value.assetId);
+    }
+    const result = await client.callTool({
+      name: "generate_google_omni_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "x",
+        image_slugs: imageAssets.map((id) => `@${id}`),
+        character_refs: ["character:a-imgs:2", "character:b-imgs:2"],
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("reference budget");
+  });
+
+  it("enqueues when 3 images + two two-image characters exactly hit 7", async () => {
+    const fs = createFs({ projectsDir: tempDir });
+    const imageAssets: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const a = await fs.createAsset("img", `img-${i}`, "test-proj");
+      if (!a.ok) throw new Error("createAsset failed");
+      await fs.writeFile(a.value.assetId, "original.png", await makePng(), "test-proj");
+      imageAssets.push(a.value.assetId);
+    }
+    const result = await client.callTool({
+      name: "generate_google_omni_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "x",
+        image_slugs: imageAssets.map((id) => `@${id}`),
+        character_refs: ["character:a-imgs:2", "character:b-imgs:2"],
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.status).toBe("enqueued");
   });
 });

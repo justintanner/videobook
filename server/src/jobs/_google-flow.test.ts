@@ -3,6 +3,8 @@ import { GoogleFlowError } from "@apicity/googleflow";
 import {
   callGoogleFlowWithCaptchaRetry,
   DEFAULT_GOOGLE_FLOW_CAPTCHA_RETRY,
+  describeGoogleFlowJobFailure,
+  extractGoogleFlowFailureDetails,
   formatGoogleFlowJobError,
   googleFlowFetch,
   isCaptchaQualityGoogleFlowError,
@@ -105,6 +107,123 @@ describe("formatGoogleFlowJobError", () => {
   it("falls back when there is no nested detail", () => {
     expect(formatGoogleFlowJobError({ error: "All operations failed" })).toBe("All operations failed");
     expect(formatGoogleFlowJobError({})).toBe("Google Flow job failed");
+  });
+});
+
+// Real captured job body from a failed omni-flash generation in projects/pilot:
+// Google's PROMINENT_PEOPLE safety filter blocked the character reference photos.
+// The actionable failure lives in response.media[].mediaMetadata.mediaStatus,
+// NOT in response.operations[] or response.error — the case the original
+// extractor missed (cards showed bare "All operations failed").
+const PROMINENT_PEOPLE_JOB = {
+  status: "failed",
+  error: "All operations failed",
+  response: {
+    media: [
+      {
+        mediaMetadata: {
+          mediaGenerationStatus: "MEDIA_GENERATION_STATUS_FAILED",
+          mediaStatus: {
+            error: { code: 3, message: "PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED" },
+            failureReasons: ["IDENTIFIABLE_PERSON_SAFETY"],
+          },
+        },
+      },
+    ],
+  },
+};
+
+describe("extractGoogleFlowFailureDetails / formatGoogleFlowJobError (mediaStatus path)", () => {
+  it("extracts code + reasons from media[].mediaMetadata.mediaStatus", () => {
+    expect(formatGoogleFlowJobError(PROMINENT_PEOPLE_JOB)).toBe(
+      "All operations failed: PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED (IDENTIFIABLE_PERSON_SAFETY)",
+    );
+  });
+
+  it("dedups a code that appears in both operations and mediaStatus", () => {
+    expect(extractGoogleFlowFailureDetails({
+      response: {
+        operations: [
+          { operation: { error: { message: "PUBLIC_ERROR_MINOR" } } },
+        ],
+        media: [
+          { mediaMetadata: { mediaStatus: { error: { message: "PUBLIC_ERROR_MINOR" } } } },
+        ],
+      },
+    })).toEqual([{ code: "PUBLIC_ERROR_MINOR", reasons: [] }]);
+  });
+
+  it("excludes a reason equal to the code", () => {
+    const details = extractGoogleFlowFailureDetails({
+      response: {
+        media: [{
+          mediaMetadata: {
+            mediaStatus: {
+              error: { message: "PUBLIC_ERROR_X" },
+              failureReasons: ["PUBLIC_ERROR_X", "EXTRA"],
+            },
+          },
+        }],
+      },
+    });
+    expect(details).toEqual([{ code: "PUBLIC_ERROR_X", reasons: ["EXTRA"] }]);
+  });
+
+  it("ignores mediaStatus on a non-failed media item", () => {
+    expect(extractGoogleFlowFailureDetails({
+      response: {
+        media: [{
+          mediaMetadata: {
+            mediaGenerationStatus: "MEDIA_GENERATION_STATUS_SUCCEEDED",
+            mediaStatus: { error: { message: "SHOULD_NOT_APPEAR" } },
+          },
+        }],
+      },
+    })).toEqual([]);
+  });
+});
+
+describe("describeGoogleFlowJobFailure", () => {
+  it("appends friendly guidance + sets failCode for the prominent-people case", () => {
+    const { message, failCode } = describeGoogleFlowJobFailure(PROMINENT_PEOPLE_JOB);
+    expect(failCode).toBe("PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED");
+    expect(message).toBe(
+      "All operations failed: PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED (IDENTIFIABLE_PERSON_SAFETY) — "
+      + "Google blocked this: the character/reference photos appear to contain an identifiable real person. "
+      + "Use stylized or AI-generated character images, remove the character refs, or try a different provider.",
+    );
+  });
+
+  it("matches on the IDENTIFIABLE_PERSON_SAFETY reason too", () => {
+    const { message } = describeGoogleFlowJobFailure({
+      error: "All operations failed",
+      response: {
+        media: [{
+          mediaMetadata: {
+            mediaStatus: {
+              error: { message: "SOME_OTHER_CODE" },
+              failureReasons: ["IDENTIFIABLE_PERSON_SAFETY"],
+            },
+          },
+        }],
+      },
+    });
+    expect(message).toContain("Google blocked this: the character/reference photos");
+  });
+
+  it("degrades to the technical string for unmapped codes", () => {
+    const { message, failCode } = describeGoogleFlowJobFailure({
+      error: "All operations failed",
+      response: { operations: [{ operation: { error: { message: "UNKNOWN_ERROR_CODE" } } }] },
+    });
+    expect(failCode).toBe("UNKNOWN_ERROR_CODE");
+    expect(message).toBe("All operations failed: UNKNOWN_ERROR_CODE");
+  });
+
+  it("returns no failCode when there are no details", () => {
+    expect(describeGoogleFlowJobFailure({ error: "All operations failed" })).toEqual({
+      message: "All operations failed",
+    });
   });
 });
 

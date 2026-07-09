@@ -35,7 +35,7 @@ export function duplicateAssetDef(fs: VideocityFs): ToolDef {
 
       const newAssetId = createResult.value.assetId;
 
-      const SKIP_FILES = new Set([".kie-task.json", ".generation-error.json"]);
+      const SKIP_FILES = new Set([".kie-task.json", ".generation-error.json", ".generation-request.json"]);
 
       for (const file of manifestResult.value.files) {
         if (SKIP_FILES.has(file.name)) continue;

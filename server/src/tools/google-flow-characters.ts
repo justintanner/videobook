@@ -10,6 +10,7 @@ import { toolError } from "./_shared.js";
 import { resolveImageSlug } from "./_seedance2-shared.js";
 import type { SchemaArgs, ToolDef, ToolResult } from "./tool-def.js";
 import {
+  readCharacterImageCount,
   readCharacterThumbnailUrl,
   readCreatedRef,
   readEntityList,
@@ -75,6 +76,7 @@ export async function getGoogleFlowCharacter(
     ref: characterRef,
     display_name: displayName,
     thumbnail_url: readCharacterThumbnailUrl(res),
+    image_count: readCharacterImageCount(res),
     raw: res,
   };
 }

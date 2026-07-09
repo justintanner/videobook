@@ -1,6 +1,7 @@
 import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
+import { totalOmniReferenceImages } from "../google-flow-refs.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlug, resolveVideoSlug, slugify, type RefInput } from "./_seedance2-shared.js";
 
@@ -98,10 +99,10 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
         }
       }
 
-      // Voice/character budgets. Each character carries 1-2 images that share
-      // the 7-image reference budget with image_slugs; we can only enforce the
-      // floor (one image per character) — two-image characters that still
-      // overflow are left to the provider (documented in the descriptions).
+      // Voice/character budgets. Each character carries 1-2 images (useapi.net
+      // `-imgs:N` suffix) that share the 7-image reference budget with
+      // image_slugs; totalOmniReferenceImages sums the exact per-character
+      // counts so two-image characters are enforced here, not deferred.
       if (voiceRefs.length > OMNI_MAX_VOICES) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash supports at most ${OMNI_MAX_VOICES} voice refs (got ${voiceRefs.length})` }] };
       }
@@ -111,8 +112,10 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
       if (charRefs.length > OMNI_MAX_CHARACTERS) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash supports at most ${OMNI_MAX_CHARACTERS} character refs (got ${charRefs.length})` }] };
       }
-      if (charRefs.length > 0 && imgs.length + charRefs.length > OMNI_MAX_REFERENCE_IMAGES) {
-        return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash reference budget: image_slugs plus character images must total at most ${OMNI_MAX_REFERENCE_IMAGES} (got ${imgs.length} images + ${charRefs.length} characters; characters with two images tighten this further)` }] };
+      const omniRefTotal = totalOmniReferenceImages(imgs.length, charRefs);
+      if (omniRefTotal > OMNI_MAX_REFERENCE_IMAGES) {
+        const charImageTotal = omniRefTotal - imgs.length;
+        return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash reference budget exceeded: image_slugs plus character images must total at most ${OMNI_MAX_REFERENCE_IMAGES} reference images (got ${omniRefTotal}: ${imgs.length} image_slugs + ${charImageTotal} from ${charRefs.length} character ref${charRefs.length === 1 ? "" : "s"})` }] };
       }
 
       // Clip-timing pre-check mirroring the kie gemini-omni tool. Omni Flash
@@ -165,7 +168,7 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
       const sourceFirstFrameId = firstFrame ? firstFrame.assetId : undefined;
       const jobId = `${SLUG}-${vidAssetId}-${Date.now()}`;
 
-      await queue.enqueue(jobId, {
+      const jobPayload = {
         type: "generate_google_omni_video",
         vidAssetId,
         vidAssetDir,
@@ -183,7 +186,13 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
         ...(video_clip_ends !== undefined ? { video_clip_ends } : {}),
         ...(voiceRefs.length > 0 ? { voice_refs: voiceRefs } : {}),
         ...(charRefs.length > 0 ? { character_refs: charRefs } : {}),
-      } as unknown as Record<string, unknown>);
+      } as unknown as Record<string, unknown>;
+
+      // Persist the exact enqueued payload so retry_generation can replay it
+      // after a failure without re-resolving inputs.
+      await fs.writeMetadata(vidAssetId, "generation-request", jobPayload, project_slug);
+
+      await queue.enqueue(jobId, jobPayload);
 
       return {
         content: [{

@@ -9,7 +9,7 @@ import { createXai, XaiError } from "@apicity/xai";
 import { createAlibaba, AlibabaError } from "@apicity/alibaba";
 import { createFal, FalError } from "@apicity/fal";
 import { createGoogleFlow, GoogleFlowError } from "@apicity/googleflow";
-import { formatGoogleFlowJobError, googleFlowFetch } from "../jobs/_google-flow.js";
+import { describeGoogleFlowJobFailure, googleFlowFetch } from "../jobs/_google-flow.js";
 import { queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import {
@@ -713,6 +713,7 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
           const urls = googleFlowResultUrls(job);
           if (urls.length === 0) {
             const failMsg = "Google Flow job completed but returned no media URLs";
+            await fs.writeMetadata(task.assetId, "generation-error", job, project_slug).catch(() => {});
             result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
             await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
             return;
@@ -736,9 +737,10 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
           } as unknown as Record<string, unknown>);
           result.completed.push({ assetId: task.assetId, taskType: task.taskType, jobId });
         } else if (status === "failed") {
-          const failMsg = formatGoogleFlowJobError(job as Record<string, unknown>);
+          const { message: failMsg, failCode } = describeGoogleFlowJobFailure(job as Record<string, unknown>);
+          await fs.writeMetadata(task.assetId, "generation-error", job, project_slug).catch(() => {});
           result.failed.push({ assetId: task.assetId, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-          await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt });
+          await failPendingTaskAndLog(fs, project_slug, task.assetId, task.taskId, { message: failMsg, prompt, ...(failCode !== undefined ? { failCode } : {}) });
         } else {
           result.pending.push({
             assetId: task.assetId,

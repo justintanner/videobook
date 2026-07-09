@@ -45,6 +45,9 @@ export type GoogleFlowEntity = {
   display_name: string | null;
   /** Signed preview URL when available (character retrieve / enriched list). */
   thumbnail_url: string | null;
+  /** Number of reference images a character carries (1-2); feeds the client
+   *  media-strip budget meter and ×N badge. */
+  image_count: number | null;
   raw: unknown;
 };
 
@@ -70,15 +73,28 @@ function readEntityItem(item: unknown, refKey: "voice" | "character"): GoogleFlo
       ref: typeof item === "string" ? item : null,
       display_name: null,
       thumbnail_url: null,
+      image_count: null,
       raw: item,
     };
   }
+  const imageCount = readCharacterImageCount(rec);
   return {
     ref: readCreatedRef(rec, refKey),
     display_name: firstString(rec.displayName, rec.display_name, rec.name),
     thumbnail_url: refKey === "character" ? readCharacterThumbnailUrl(rec) : null,
+    image_count: refKey === "character" ? imageCount : null,
     raw: item,
   };
+}
+
+/** Count of reference images a character carries, from imageReferences length
+ *  (tolerant of the alias shape). Clamped to 1..2; null when absent. */
+export function readCharacterImageCount(rec: Record<string, unknown>): number | null {
+  const images = rec.imageReferences ?? rec.image_references;
+  if (!Array.isArray(images)) return null;
+  const n = images.length;
+  if (!Number.isFinite(n)) return null;
+  return Math.min(2, Math.max(1, Math.trunc(n)));
 }
 
 /**

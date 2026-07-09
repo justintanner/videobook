@@ -3,7 +3,7 @@ import { Zap, Loader2, Settings, ImageIcon, Film } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import { GenPanel } from '@/components/gen/ui/GenPanel';
-import { ModelSelector, ProviderSelector } from '@/components/gen/ui/ModelSelector';
+import { ModelProviderSelector } from '@/components/gen/ui/ModelSelector';
 import { DynamicField } from '@/components/gen/ui/DynamicField';
 import { ImageParamSlots } from '@/components/gen/ImageParamSlots';
 import { ElementGroupEditor } from '@/components/gen/ElementGroupEditor';
@@ -14,7 +14,6 @@ import { ErrorPage } from '@/components/gen/state/ErrorPage';
 import { JsonNode } from '@/components/ui/JsonNode';
 import { ELEMENT_FIELD_RE } from '@/components/gen/types';
 import type { FullPreviewResponse, ModelOption, JSONSchemaProperty, ResolvedAsset, ModeSpec } from '@/components/gen/types';
-import { ModeTabs } from '@/components/gen/ui/ModeTabs';
 import type { ExplicitAssetSlot } from '@/components/gen/ImageParamSlots';
 import {
   getMode,
@@ -25,7 +24,6 @@ import {
   modeAssetParams,
   modeBudgetWarnings,
   effectiveToolName as resolveEffectiveToolName,
-  isEmptyModeValue,
 } from '@/components/gen/modes';
 import type { ExecuteButtonState } from '@/components/commands/types';
 import type { UseMcpResult } from 'use-mcp/react';
@@ -130,9 +128,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const [selectedProviderKey, setSelectedProviderKey] = useState('');
   const [formValues, setFormValues] = useState<Record<string, unknown>>({});
   const [droppedAssets, setDroppedAssets] = useState<Map<string, ResolvedAsset>>(new Map());
-  // Active input mode for models that ship a modes contract. UI intent —
-  // initialized by inference on preview load, then user-driven via the tabs.
-  const [activeModeKey, setActiveModeKey] = useState<string | null>(null);
   const [genState, setGenState] = useState<ExecuteButtonState | undefined>(undefined);
   const [flipped, setFlipped] = useState(false);
   const [translatedPayload, setTranslatedPayload] = useState<Record<string, unknown> | null>(null);
@@ -145,8 +140,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   callToolRef.current = callTool;
   const formValuesRef = useRef(formValues);
   formValuesRef.current = formValues;
-  const activeModeKeyRef = useRef(activeModeKey);
-  activeModeKeyRef.current = activeModeKey;
   const refreshIdRef = useRef(0);
   const savedRef = useRef(loadGenSettings(category, projectSlug));
   const appliedSavedRef = useRef(false);
@@ -210,9 +203,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       }
       const mergedValues = { ...prefilled, ...preservedSlugFields, prompt: seededPrompt };
       setFormValues(mergedValues);
-      // Seed the active mode from the merged values (not committed state, which
-      // is still stale here). Covers mount, model switch, and provider flip.
-      setActiveModeKey(option?.modes ? inferModeKey(option.modes, mergedValues) : null);
       if (!isRefresh) setDroppedAssets(new Map());
     } catch (e) {
       if (thisRequest !== refreshIdRef.current) return;
@@ -259,63 +249,31 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     if (saved.droppedAssets?.length) {
       setDroppedAssets(new Map(saved.droppedAssets.map(a => [a.slug, a])));
     }
-    // Restore the saved mode when still valid, else re-infer from the values
-    // just merged in (prefilled defaults plus the restored overrides).
-    if (option.modes) {
-      const merged = { ...formValuesRef.current, ...overrides };
-      const validSaved = saved.mode && option.modes.modes.some(m => m.key === saved.mode);
-      setActiveModeKey(validSaved ? saved.mode! : inferModeKey(option.modes, merged));
-    }
   }, [preview, selectedModelKey]);
 
-  const handleModelChange = useCallback((modelKey: string) => {
+  const handleModelProviderChange = useCallback((modelKey: string, providerKey: string) => {
     setSelectedModelKey(modelKey);
-    fetchPreview(category, initialPrompt, {
-      selected_model: modelKey,
-      selected_provider: selectedProviderKey || undefined,
-    });
-  }, [category, initialPrompt, selectedProviderKey, fetchPreview]);
-
-  const handleProviderChange = useCallback((label: string) => {
-    const allProviders = preview?.model_options.flatMap((o) => o.providers ?? []) ?? [];
-    const match = allProviders.find((p) => p.label === label);
-    if (!match) return;
-    setSelectedProviderKey(match.key);
+    setSelectedProviderKey(providerKey);
     setGenState(undefined);
     setFlipped(false);
     setTranslatedPayload(null);
     setTranslateLoading(false);
     fetchPreview(category, initialPrompt, {
-      selected_model: selectedModelKey || undefined,
-      selected_provider: match.key,
+      selected_model: modelKey || undefined,
+      selected_provider: providerKey || undefined,
     });
-  }, [category, initialPrompt, preview, selectedModelKey, fetchPreview]);
-
-  // Switch to a mode that shows `param` if the active mode hides it — so a chat
-  // ui-action never writes a value into a tab where the user can't see it.
-  const revealParamMode = useCallback((param: string) => {
-    const opt = preview?.model_options.find((o) => o.key === selectedModelKey);
-    const m = opt?.modes;
-    if (!m) return;
-    if (visibleParams(m, getMode(m, activeModeKeyRef.current).key).has(param)) return;
-    const target = m.modes.find(
-      (mode) => mode.params.includes(param) || m.shared_params.includes(param),
-    );
-    if (target) setActiveModeKey(target.key);
-  }, [preview, selectedModelKey]);
+  }, [category, initialPrompt, fetchPreview]);
 
   useImperativeHandle(ref, () => ({
     setField: (name: string, value: string) => {
       setFormValues((prev) => ({ ...prev, [name]: value }));
-      revealParamMode(name);
     },
     setModel: (key: string) => {
-      handleModelChange(key);
+      handleModelProviderChange(key, selectedProviderKey);
     },
     setImages: (slugs: string) => {
       const slugList = slugs.split(/\s+/).map((s) => s.startsWith('@') ? s : `@${s}`).filter(Boolean);
       setFormValues((prev) => ({ ...prev, image_slugs: slugList }));
-      revealParamMode('image_slugs');
     },
     setElement: (index: string, field: string, value: string) => {
       const key = `element${index}_${field === 'slugs' ? 'slugs' : field === 'name' ? 'name' : 'desc'}`;
@@ -326,7 +284,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         setFormValues((prev) => ({ ...prev, [key]: value }));
       }
     },
-  }), [handleModelChange, revealParamMode]);
+  }), [handleModelProviderChange, selectedProviderKey]);
 
   const handleFieldChange = useCallback((fieldName: string, value: unknown, dropped?: ResolvedAsset) => {
     setFormValues((prev) => ({ ...prev, [fieldName]: value }));
@@ -369,6 +327,12 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   // --- Mode derivation (only meaningful when the option ships a modes contract) ---
   const modes = selectedOption?.modes ?? null;
+  // Active mode is DERIVED from filled values (video → edit, images/characters
+  // → refs, pinned first-frame → i2v, else t2v) — no user-driven tabs.
+  const activeModeKey = useMemo(
+    () => (modes ? inferModeKey(modes, formValues) : null),
+    [modes, formValues],
+  );
   const activeMode: ModeSpec | null = modes ? getMode(modes, activeModeKey) : null;
   const modeVisible = useMemo(
     () => (modes && activeMode ? visibleParams(modes, activeMode.key) : null),
@@ -442,29 +406,11 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     });
   }, [preview, droppedAssets, selectedOption, isAssetParam]);
 
-  // Global provider list (union across all models) and models filtered by selected provider
-  const allProviderLabels = useMemo(() => {
-    if (!preview) return ['Kie'];
-    const seen = new Set<string>();
-    const labels: string[] = [];
-    for (const opt of preview.model_options) {
-      for (const p of opt.providers ?? []) {
-        if (!seen.has(p.key)) {
-          seen.add(p.key);
-          labels.push(p.label);
-        }
-      }
-    }
-    return labels.length > 0 ? labels : ['Kie'];
-  }, [preview]);
-
-  const filteredModelOptions = useMemo(() => {
+  // All video/image models (sorted) feed the fused model·provider dropdown.
+  const sortedModelOptions = useMemo(() => {
     if (!preview) return [];
-    return preview.model_options
-      .filter((o) => o.providers?.some((p) => p.key === selectedProviderKey))
-      .slice()
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [preview, selectedProviderKey]);
+    return preview.model_options.slice().sort((a, b) => a.label.localeCompare(b.label));
+  }, [preview]);
 
   const jsonPayload = useMemo(() => {
     if (!selectedOption || !submitToolName) return null;
@@ -681,7 +627,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     const droppedArr = Array.from(droppedAssets.entries()).map(([, a]) => ({
       slug: a.slug, src: a.src, thumbnailSrc: a.thumbnailSrc ?? null, type: a.type,
     }));
-    saveGenSettings(category, projectSlug, { model: selectedModelKey, provider: selectedProviderKey, mode: activeModeKey ?? undefined, fields, droppedAssets: droppedArr });
+    saveGenSettings(category, projectSlug, { model: selectedModelKey, provider: selectedProviderKey, fields, droppedAssets: droppedArr });
     try {
       // Filter to the active mode's params (no-op for non-moded models) and
       // resolve the mode's tool. The wire payload stays byte-identical since
@@ -847,18 +793,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const imageSlots = selectedOption?.validation.image_slots ?? null;
 
-  // Per-mode tab value hints: a non-active mode owns a filled param that isn't
-  // visible now (a value "hidden" behind another tab).
-  const modeValueHints: Record<string, boolean> = {};
-  if (modes && activeMode) {
-    for (const m of modes.modes) {
-      if (m.key === activeMode.key) continue;
-      modeValueHints[m.key] = m.params.some(
-        (p) => !isEmptyModeValue(formValues[p]) && !modeVisible?.has(p),
-      );
-    }
-  }
-
   const isDisabled = genState === 'submitting' || genState === 'processing' || refreshing;
 
   // Everything that isn't prompt-specific renders inside /settings.
@@ -892,20 +826,11 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       footer={
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <ModelSelector
+            <ModelProviderSelector
               selectedModelKey={selectedModelKey}
-              modelOptions={filteredModelOptions}
-              onChange={handleModelChange}
-              disabled={isDisabled}
-              variant={panelDomain}
-            />
-            <ProviderSelector
-              selectedProvider={
-                preview.model_options.flatMap((o) => o.providers ?? []).find((p) => p.key === selectedProviderKey)?.label
-                ?? allProviderLabels[0]
-              }
-              providers={allProviderLabels}
-              onChange={handleProviderChange}
+              selectedProviderKey={selectedProviderKey}
+              modelOptions={sortedModelOptions}
+              onChange={handleModelProviderChange}
               disabled={isDisabled}
               variant={panelDomain}
             />
@@ -965,19 +890,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
             {error && (
               <div className="mb-3 px-3 py-2 rounded border border-red-500/30 bg-red-500/10 text-red-400 text-xs font-mono">
                 {error}
-              </div>
-            )}
-
-            {modes && activeMode && (
-              <div className="mb-2">
-                <ModeTabs
-                  modes={modes.modes}
-                  activeKey={activeMode.key}
-                  onChange={setActiveModeKey}
-                  disabled={isDisabled}
-                  theme={panelTheme}
-                  valueHints={modeValueHints}
-                />
               </div>
             )}
 

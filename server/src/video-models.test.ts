@@ -906,4 +906,16 @@ describe("google flow video models", () => {
     const option = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, { prompt: "x" }, [], undefined, "kie");
     expect(option.tool_name).toBe("generate_gemini_omni_video");
   });
+
+  it("surfaces the PROMINENT_PEOPLE advisory when omni+google carries character_refs", () => {
+    const history: ActionLogEntry[] = [{
+      hash: "abc456",
+      action: "tool-generate-google-omni-video",
+      payload: { project_slug: "p", _provider: "google", prompt: "cast", character_refs: ["character:abc"] },
+      date: "2026-07-08T00:00:00Z",
+    }];
+    const option = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, [], history, "google");
+    expect(option.tool_name).toBe("generate_google_omni_video");
+    expect(option.validation.warnings.some((w) => w.includes("PROMINENT_PEOPLE safety filter"))).toBe(true);
+  });
 });

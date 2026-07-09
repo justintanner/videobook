@@ -18,6 +18,9 @@ interface VideoCardProps {
   /** Fires when the user recovers a failed card. HomePage clears the asset's
    *  persisted error (recover_asset) and re-syncs, returning it to ready. */
   onRecover?: (item: MediaItem) => void;
+  /** Fires when the user clicks the always-visible Retry pill on a failed
+   *  card. HomePage replays the generation (retry_generation) and re-syncs. */
+  onRetry?: (item: MediaItem) => void;
   /** Fires when an aud-* card is dropped onto this video. HomePage uses this
    *  to surface a "replace audio?" confirm before invoking replace_video_audio. */
   onAudioDropped?: (audioAssetId: string, audioSlug: string) => void;
@@ -28,7 +31,7 @@ interface VideoCardProps {
   onEditOsg?: () => void;
 }
 
-export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkSeen, onDelete, onRecover, onAudioDropped, onImageDropped, onEditOsg }: VideoCardProps) {
+export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkSeen, onDelete, onRecover, onRetry, onAudioDropped, onImageDropped, onEditOsg }: VideoCardProps) {
   const status = item.status ?? 'ready';
   const isError = status === 'error';
   const isCorrupt = false;
@@ -100,7 +103,7 @@ export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkS
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: thumbSrc, type: item.type } as DragData}>
+      <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen} onRetry={onRetry} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: thumbSrc, type: item.type } as DragData}>
       {/* CONTENT - Thumbnail */}
       {showThumb && (
         <img

@@ -637,6 +637,21 @@ export function HomePage() {
     }
   }, [callTool, listAssets, projectSlug, sortOrder, sync]);
 
+  const handleRetryClip = useCallback(async (video: MediaItem) => {
+    if (!projectSlug) return;
+    try {
+      const result = await callTool('retry_generation', { asset_id: video.id, project_slug: projectSlug });
+      if (result.isError) {
+        const content = result.content as Array<{ type: string; text: string }> | undefined;
+        toast({ title: 'Retry failed', description: content?.[0]?.text ?? 'retry_generation failed', duration: 5000 });
+        return;
+      }
+      sync(projectSlug);
+    } catch (error) {
+      toast({ title: 'Retry failed', description: error instanceof Error ? error.message : String(error), duration: 5000 });
+    }
+  }, [callTool, projectSlug, sync]);
+
   const handleAudioDroppedOnVideo = useCallback((video: MediaItem, audioId: string, audioSlug: string) => {
     setAudioReplace({ videoId: video.id, videoSlug: video.slug, audioId, audioSlug });
   }, []);
@@ -1805,7 +1820,7 @@ export function HomePage() {
                     );
                     return (
                       <div key={item.id} className="w-full">
-                        {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} onAudioDropped={(audioId, audioSlug) => handleAudioDroppedOnVideo(item, audioId, audioSlug)} onImageDropped={(imageId) => handleAnimateCommand(`/osg @${item.id} @${imageId}`)} onEditOsg={() => handleAnimateCommand(`/osg @${item.id}`)} />}
+                        {item.type === 'video' && <VideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} onRetry={handleRetryClip} onAudioDropped={(audioId, audioSlug) => handleAudioDroppedOnVideo(item, audioId, audioSlug)} onImageDropped={(imageId) => handleAnimateCommand(`/osg @${item.id} @${imageId}`)} onEditOsg={() => handleAnimateCommand(`/osg @${item.id}`)} />}
                         {item.type === 'final' && <FinalVideoCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} onImageDropped={(imageId) => handleAnimateCommand(`/osg @${item.id} @${imageId}`)} onEditOsg={() => handleAnimateCommand(`/osg @${item.id}`)} />}
                       </div>
                     );
