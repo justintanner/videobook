@@ -28,7 +28,8 @@ export interface PromptSectionProps {
   onRewriteSubmit?: (submit: ImagePromptRewriteSubmit) => void;
   rewriteDisabled?: boolean;
   resolveRef?: (token: RichToken) => ChipThumb | null;
-  characterMentions?: { n: number; label: string }[];
+  characterMentions?: { handle: string; label: string }[];
+  characterHandles?: string[];
 }
 
 // Per-domain class strings. Sourced from the canonical 5-domain palette in
@@ -130,6 +131,7 @@ export function PromptSection({
   rewriteDisabled,
   resolveRef = () => null,
   characterMentions = [],
+  characterHandles = [],
 }: PromptSectionProps) {
   const showRewrite = category === 'image' && setRewriteOpen && onRewriteSubmit;
 
@@ -202,6 +204,7 @@ export function PromptSection({
         }}
         resolveRef={resolveRef}
         characterMentions={characterMentions}
+        characterHandles={characterHandles}
         disabled={disabled}
         autoFocus
         rows={4}

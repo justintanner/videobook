@@ -37,6 +37,7 @@ import { GenSection } from '@/components/gen/ui/GenSection';
 import { PromptSection } from '@/components/gen/ui/PromptSection';
 import { genThemes } from '@/components/gen/ui/gen-themes';
 import type { RichToken } from '@/components/ui/richPromptTokens';
+import { characterHandle, rewriteCharacterMentions } from '@/components/ui/richPromptTokens';
 import type { ChipThumb } from '@/components/ui/AssetThumbChip';
 import { createGenerationRequestId } from '@/lib/generation-lifecycle';
 import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle';
@@ -496,26 +497,30 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     () => new Map(charEntities.entities.map((e) => [e.ref, e])),
     [charEntities.entities],
   );
+  const charMentions = useMemo(
+    () =>
+      characterRefs.map((ref, i) => {
+        const name = charMap.get(ref)?.displayName ?? ref;
+        return { ref, handle: characterHandle(name), label: name, n: i + 1 };
+      }),
+    [characterRefs, charMap],
+  );
+  const charHandles = useMemo(() => charMentions.map((c) => c.handle), [charMentions]);
   const promptResolveRef = useCallback(
     (token: RichToken): ChipThumb | null => {
       if (token.kind === 'character-ref') {
-        const ref = characterRefs[token.n - 1];
-        if (!ref) return null;
-        const e = charMap.get(ref);
+        const m = charMentions.find((c) => c.handle === token.handle);
+        if (!m) return null;
         return {
-          thumbnailSrc: e?.thumbnailUrl ?? null,
+          thumbnailSrc: charMap.get(m.ref)?.thumbnailUrl ?? null,
           type: 'character',
-          label: e && e.displayName !== ref ? e.displayName : `Character ${token.n}`,
-          badge: String(token.n),
+          label: m.label !== m.ref ? m.label : `Character ${m.n}`,
+          badge: String(m.n),
         };
       }
       return null;
     },
-    [characterRefs, charMap],
-  );
-  const characterMentions = useMemo(
-    () => characterRefs.map((ref, i) => ({ n: i + 1, label: charMap.get(ref)?.displayName ?? ref })),
-    [characterRefs, charMap],
+    [charMentions, charMap],
   );
 
   // Live validation warnings derived from current form values
@@ -663,7 +668,11 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       // the omni tool coalesces absent/blank identically.
       const outValues = modes && activeMode ? filterValuesForMode(modes, activeMode.key, formValues) : formValues;
       const outToolName = resolveEffectiveToolName(selectedOption, activeModeKey);
-      const args: Record<string, unknown> = { ...outValues, project_slug: projectSlug, _provider: selectedProviderKey };
+      const rewrittenPrompt = rewriteCharacterMentions(
+        typeof outValues.prompt === 'string' ? outValues.prompt : '',
+        charMentions.map((c) => ({ handle: c.handle, n: c.n })),
+      );
+      const args: Record<string, unknown> = { ...outValues, prompt: rewrittenPrompt, project_slug: projectSlug, _provider: selectedProviderKey };
       const result = await callToolRef.current(outToolName, args);
       if (result.isError) {
         onGenerationLifecycle?.({ phase: 'failed', requestId });
@@ -702,7 +711,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setGenState(undefined);
       setError(e instanceof Error ? e.message : 'Generation failed');
     }
-  }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets, promptHistory, onGenerationLifecycle, modes, activeMode, activeModeKey]);
+  }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets, promptHistory, onGenerationLifecycle, modes, activeMode, activeModeKey, charMentions]);
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
@@ -979,7 +988,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                       onRewriteSubmit={handleRewriteImagePromptSubmit}
                       rewriteDisabled={rewriteDisabled}
                       resolveRef={promptResolveRef}
-                      characterMentions={characterMentions}
+                      characterMentions={charMentions}
+                      characterHandles={charHandles}
                     />
                   );
                 })()}

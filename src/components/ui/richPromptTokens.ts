@@ -1,15 +1,19 @@
 // Tokenizer for the transparent rich-prompt overlay. Prompts reference assets
-// two ways: positional "[Image N]" tokens (produced by normalizeStoryboardVideoPrompt
-// and rewriteVisualWithImageTokens) and "@slug" mentions (only confirmed against
-// the known asset slugs so stray "@foo" stays plain text). Both render as inline
-// micro-thumbs. Tokens are re-derived from the text every render (pattern-based,
-// no stored positions), which keeps editing dead simple — there is no token state
-// to keep in sync with the caret.
+// three ways: positional "[Image N]" tokens (produced by normalizeStoryboardVideoPrompt
+// and rewriteVisualWithImageTokens), "@slug" mentions (only confirmed against the
+// known asset slugs so stray "@foo" stays plain text), and "@<handle>" character
+// mentions (handles derived from the selected characters' display names). All
+// render as inline micro-thumbs. Tokens are re-derived from the text every render
+// (pattern-based, no stored positions), which keeps editing dead simple.
+//
+// Characters are user-facing as "@<handle>" (e.g. "@jane"); the positional
+// "@character_N" form is produced only at submit by rewriteCharacterMentions,
+// never stored in the prompt the user edits.
 
 export type RichToken =
   | { kind: 'slug'; slug: string }
   | { kind: 'image-ref'; n: number }
-  | { kind: 'character-ref'; n: number };
+  | { kind: 'character-ref'; handle: string };
 
 export interface RichSegment {
   type: 'text' | 'token';
@@ -25,6 +29,28 @@ interface TokenMatch {
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// Derive an @-mention handle from a character display name: lowercase, runs of
+// non-word chars collapse to a single dash, trimmed. "@jane-doe" reads back as a
+// chip and drives the "@<handle>" → "@character_N" rewrite at submit.
+export function characterHandle(name: string): string {
+  return name.trim().toLowerCase().replace(/[^\w]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+// Rewrite user-facing "@<handle>" mentions to useapi's positional "@character_N"
+// form, using the refs' character_refs order. Longest handles first so e.g.
+// "jane-doe" wins over a hypothetical "jane". The boundary mirrors extractRichTokens
+// so a typed mention rewrites exactly where it chips.
+export function rewriteCharacterMentions(text: string, refs: { handle: string; n: number }[]): string {
+  let out = text;
+  const ordered = [...refs]
+    .filter((r) => r.handle)
+    .sort((a, b) => b.handle.length - a.handle.length);
+  for (const { handle, n } of ordered) {
+    out = out.replace(new RegExp(`@${escapeRe(handle)}(?![\\w-])`, 'g'), `@character_${n}`);
+  }
+  return out;
+}
+
 // Positional image refs come in three flavours across the formulas: "[Image N]"
 // (storyboard, normalizeStoryboardVideoPrompt), "@ImageN" (char_swap video,
 // rewriteVisualWithImageTokens), and bare "Image N" (char_swap swap prompt,
@@ -33,16 +59,11 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // form's lookbehind keeps it from re-matching inside the bracket/@ forms.
 const IMAGE_REF_RE = /\[Image\s*(\d+)\]|@Image\s*(\d+)|(?<![@[\w])Image\s*(\d+)\b/gi;
 
-// Positional character refs mirror image refs: useapi's Google Flow prompt accepts
-// inline "@character_1".."@character_7" that bind to the character_1..7 body params
-// videocity already sends from character_refs. Bracketed "[Character N]" and bare
-// "character N" forms resolve to the same token; the bare lookbehind keeps it from
-// re-matching inside the bracket/@ forms.
-const CHARACTER_REF_RE = /\[Character\s*(\d+)\]|@character[_\s]*(\d+)|(?<![@[\w])character[_\s]*(\d+)\b/gi;
-
-// Find every image ref, character ref and @slug occurrence. @slug only matches a
-// slug we know about (longest-first so e.g. "@vid-intro" wins over a hypothetical "@vid").
-export function extractRichTokens(text: string, assetSlugs: string[]): TokenMatch[] {
+// Find every image ref, @character-handle and @slug occurrence. Handles and slugs
+// only match known values (longest-first so e.g. "@vid-intro" wins over a
+// hypothetical "@vid"); character handles take precedence over slugs when both
+// could match the same span.
+export function extractRichTokens(text: string, assetSlugs: string[], characterHandles: string[] = []): TokenMatch[] {
   const matches: TokenMatch[] = [];
 
   for (const m of text.matchAll(IMAGE_REF_RE)) {
@@ -54,15 +75,16 @@ export function extractRichTokens(text: string, assetSlugs: string[]): TokenMatc
     });
   }
 
-  for (const m of text.matchAll(CHARACTER_REF_RE)) {
-    const start = m.index ?? 0;
-    const end = start + m[0].length;
-    if (matches.some((x) => start < x.end && end > x.start)) continue; // overlap → skip
-    matches.push({
-      start,
-      end,
-      token: { kind: 'character-ref', n: Number(m[1] ?? m[2] ?? m[3]) },
-    });
+  const handles = [...new Set(characterHandles)].sort((a, b) => b.length - a.length);
+  for (const handle of handles) {
+    if (!handle) continue;
+    const re = new RegExp(`@${escapeRe(handle)}(?![\\w-])`, 'g');
+    for (const m of text.matchAll(re)) {
+      const start = m.index ?? 0;
+      const end = start + m[0].length;
+      if (matches.some((x) => start < x.end && end > x.start)) continue; // overlap → skip
+      matches.push({ start, end, token: { kind: 'character-ref', handle } });
+    }
   }
 
   const slugs = [...new Set(assetSlugs)].sort((a, b) => b.length - a.length);

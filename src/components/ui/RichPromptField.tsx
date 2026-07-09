@@ -23,7 +23,8 @@ export interface RichPromptFieldProps {
   resolveRef: (token: RichToken) => ChipThumb | null;
   assetSlugs?: string[]; // candidates for @-mention matching + autocomplete
   slugForAssetId?: (id: string) => string | null; // drag-drop: asset id → slug
-  characterMentions?: { n: number; label: string }[]; // @character_N options for @-autocomplete
+  characterMentions?: { handle: string; label: string }[]; // @<handle> character autocomplete options
+  characterHandles?: string[]; // handles whose "@<handle>" mentions should chip
   rows?: number;
   // Fill the parent's height instead of sizing to `rows`. The wrapper becomes a
   // flex column that grows (flex-1) and the textarea stretches to fill it, so the
@@ -56,6 +57,7 @@ export function RichPromptField({
   assetSlugs = [],
   slugForAssetId,
   characterMentions = [],
+  characterHandles = [],
   rows = 4,
   fill = false,
   disabled,
@@ -75,8 +77,8 @@ export function RichPromptField({
   const [dropActive, setDropActive] = useState(false);
 
   const segments = useMemo(
-    () => parseRichSegments(value, extractRichTokens(value, assetSlugs)),
-    [value, assetSlugs],
+    () => parseRichSegments(value, extractRichTokens(value, assetSlugs, characterHandles)),
+    [value, assetSlugs, characterHandles],
   );
 
   // Active "@…" trigger immediately left of the caret.
@@ -91,11 +93,11 @@ export function RichPromptField({
     if (!trigger) return [];
     const f = trigger.filter.toLowerCase();
     const charItems: AutocompleteItem[] = (characterMentions ?? [])
-      .filter((cm) => `character_${cm.n}`.toLowerCase().includes(f) || cm.label.toLowerCase().includes(f))
+      .filter((cm) => cm.handle.toLowerCase().includes(f) || cm.label.toLowerCase().includes(f))
       .map((cm) => ({
         type: 'slug' as const,
-        value: `@character_${cm.n}`,
-        label: `character_${cm.n}`,
+        value: `@${cm.handle}`,
+        label: cm.handle,
         description: cm.label,
         colorScheme: 'violet' as const,
       }));
