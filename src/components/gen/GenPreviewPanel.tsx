@@ -36,7 +36,7 @@ import { GenSection } from '@/components/gen/ui/GenSection';
 import { PromptSection } from '@/components/gen/ui/PromptSection';
 import { genThemes } from '@/components/gen/ui/gen-themes';
 import type { RichToken } from '@/components/ui/richPromptTokens';
-import { characterHandle, rewriteCharacterMentions, stripOrphanedReferenceMarkers } from '@/components/ui/richPromptTokens';
+import { characterHandle, rewriteCharacterMentions, stripOrphanedReferenceMarkers, renumberReferenceImageMarkers } from '@/components/ui/richPromptTokens';
 import type { ChipThumb } from '@/components/ui/AssetThumbChip';
 import { createGenerationRequestId } from '@/lib/generation-lifecycle';
 import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle';
@@ -60,6 +60,9 @@ interface GenPreviewPanelProps {
    *  background — dims the /generate button (kept clickable). */
   pendingGeneration?: boolean;
   onGenerationLifecycle?: OnGenerationLifecycle;
+  /** Project image assets offered in the prompt's @ autocomplete (picking one
+   *  appends it to image_slugs and inserts @referenceImage_N). */
+  imageAssets?: { slug: string; filePath: string; thumbnailSrc: string | null }[];
 }
 
 function getPreviewToolName(cat: 'video' | 'image'): string {
@@ -118,6 +121,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   projectSlug,
   pendingGeneration,
   onGenerationLifecycle,
+  imageAssets,
 }, ref) {
   useMountKey('gen');
 
@@ -297,6 +301,54 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       });
     }
   }, []);
+
+  // Appends an image asset to image_slugs (or returns its existing 1-based
+  // index if already a ref) for the prompt @ autocomplete. The resolved asset
+  // is registered in droppedAssets so its thumbnail resolves and it survives
+  // the stale-slug pruning effect even when absent from preview.resolved_assets.
+  const handlePickImageAsset = useCallback((slug: string): number | null => {
+    const clean = slug.startsWith('@') ? slug : `@${slug}`;
+    const current = Array.isArray(formValues.image_slugs) ? (formValues.image_slugs as string[]) : [];
+    const existingIdx = current.indexOf(clean);
+    if (existingIdx >= 0) return existingIdx + 1;
+    const next = [...current, clean];
+    const matched = imageAssets?.find((a) => a.slug === slug || a.slug === clean);
+    const dropped: ResolvedAsset | undefined = matched
+      ? { slug: clean, src: matched.filePath, thumbnailSrc: matched.thumbnailSrc ?? null, type: 'image' }
+      : undefined;
+    handleFieldChange('image_slugs', next, dropped);
+    return next.length;
+  }, [formValues.image_slugs, imageAssets, handleFieldChange]);
+
+  // Wrap the media strip's onChange so removing an image_slugs entry (shrink by
+  // exactly one) renumbers @referenceImage_N markers in the prompt to match.
+  // Every other field falls through to handleFieldChange. The submit-time
+  // stripOrphanedReferenceMarkers remains the safety net.
+  const handleStripChange = useCallback((field: string, value: unknown, dropped?: ResolvedAsset) => {
+    if (field === 'image_slugs') {
+      const prev = Array.isArray(formValues.image_slugs) ? (formValues.image_slugs as string[]) : [];
+      const next = Array.isArray(value) ? (value as string[]) : [];
+      if (next.length === prev.length - 1) {
+        let removedIdx = -1;
+        for (let i = 0; i < prev.length; i++) {
+          if (prev[i] !== next[i]) { removedIdx = i; break; }
+        }
+        if (removedIdx === -1) removedIdx = prev.length - 1;
+        const currentPrompt = typeof formValues.prompt === 'string' ? formValues.prompt : '';
+        const renumbered = renumberReferenceImageMarkers(currentPrompt, removedIdx + 1);
+        setFormValues((p) => ({ ...p, image_slugs: next, prompt: renumbered }));
+        if (dropped) {
+          setDroppedAssets((prevMap) => {
+            const m = new Map(prevMap);
+            m.set(dropped.slug, dropped);
+            return m;
+          });
+        }
+        return;
+      }
+    }
+    handleFieldChange(field, value, dropped);
+  }, [formValues.image_slugs, formValues.prompt, handleFieldChange]);
 
   const handleRewriteImagePromptSubmit = useCallback(async (
     submit: { platform?: 'ig' | 'tiktok' | 'youtube'; customPrompt?: string },
@@ -1015,6 +1067,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                       onPickCharacter={handlePickCharacter}
                       referenceImageSlots={referenceImageSlots}
                       referenceVoiceSlots={referenceVoiceSlots}
+                      assetMentions={imageAssets?.map((a) => ({ slug: a.slug, thumbnailSrc: a.thumbnailSrc }))}
+                      onPickAsset={handlePickImageAsset}
                     />
                   );
                 })()}
@@ -1025,7 +1079,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                     formValues={formValues}
                     resolvedAssets={preview.resolved_assets ?? []}
                     droppedAssets={droppedAssets}
-                    onChange={handleFieldChange}
+                    onChange={handleStripChange}
                     disabled={isDisabled}
                     domain={panelDomain}
                     characters={characterPills}

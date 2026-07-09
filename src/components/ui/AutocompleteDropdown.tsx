@@ -14,6 +14,11 @@ interface AutocompleteItem {
   category?: 'action' | 'project' | 'context_menu' | 'viewer';
   icon?: string;
   colorScheme: ColorScheme;
+  // Optional right-aligned thumbnail (e.g. project image assets in the @ menu).
+  thumbnailSrc?: string | null;
+  // When set, this item is a project image asset; committing it appends a ref
+  // and inserts @referenceImage_N (handled by the consumer via onPickAsset).
+  assetSlug?: string;
 }
 
 interface AutocompleteDropdownProps {
@@ -60,7 +65,15 @@ function AutocompleteDropdown({ items, selectedIndex, onSelect, onHover }: Autoc
               ) : (
                 <span className="text-muted-foreground text-xs truncate">{item.description}</span>
               )}
-              {Icon && <Icon className="ml-auto h-3 w-3 shrink-0 opacity-50" />}
+              {item.thumbnailSrc && (
+                <img
+                  src={item.thumbnailSrc}
+                  alt=""
+                  className="ml-auto h-5 w-5 shrink-0 rounded object-cover border border-primary/20"
+                  draggable={false}
+                />
+              )}
+              {Icon && !item.thumbnailSrc && <Icon className="ml-auto h-3 w-3 shrink-0 opacity-50" />}
             </button>
           );
         })}

@@ -8,6 +8,7 @@ import { stripSlugPrefix } from '@/lib/slugs';
 import {
   deriveStripSlots,
   combinedRefBudget,
+  imageRefMax,
   routeDrop,
   appendImageSlug,
   toggleFirstFramePin,
@@ -31,6 +32,16 @@ const MODE_LABEL: Record<Domain, string> = {
   video: 'text-violet-400/30',
   plan: 'text-emerald-400/30',
   final: 'text-amber-400/30',
+};
+
+// Drag-over highlight uses the domain accent so the cyan image panel doesn't
+// glow violet. Mirrors the BUDGET_OK per-domain palette.
+const DRAGOVER_CLASS: Record<Domain, string> = {
+  projects: 'border-zinc-400/60 bg-zinc-400/5',
+  image: 'border-cyan-400/60 bg-cyan-400/5',
+  video: 'border-violet-400/60 bg-violet-400/5',
+  plan: 'border-emerald-400/60 bg-emerald-400/5',
+  final: 'border-amber-400/60 bg-amber-400/5',
 };
 
 function videoThumbFallback(asset: ResolvedAsset): string {
@@ -101,6 +112,11 @@ export function MediaStrip({
 
   const slots = useMemo(() => deriveStripSlots(option), [option]);
 
+  // Accepted drop kinds are derived from the model's slots so the image panel
+  // (image-only slots) doesn't accept video/audio, and the trailing drop square
+  // matches the container guard.
+  const acceptedKinds = useMemo(() => new Set<StripSlot['kind']>(slots.map((s) => s.kind)), [slots]);
+
   const charEntityMap = useMemo(() => {
     const m: Record<string, CharacterEntity | null> = {};
     for (const c of characters) m[c.ref] = { image_count: c.imageCount };
@@ -108,29 +124,50 @@ export function MediaStrip({
   }, [characters]);
 
   const characterRefs = characters.map((c) => c.ref);
+  const maxImages = useMemo(() => imageRefMax(option, activeMode), [option, activeMode]);
   const budget = useMemo(
-    () => combinedRefBudget(formValues, characterRefs, activeMode, charEntityMap),
-    [formValues, characterRefs, activeMode, charEntityMap],
+    () => combinedRefBudget(formValues, characterRefs, activeMode, maxImages, charEntityMap),
+    [formValues, characterRefs, activeMode, maxImages, charEntityMap],
   );
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const raw = e.dataTransfer.getData('text/plain');
+    const raw = e.dataTransfer.getData('application/json');
     if (!raw) return;
-    const parsed = JSON.parse(raw) as { slug?: string; type?: string };
+    let parsed: { slug?: string; type?: string; filePath?: string; thumbnailSrc?: string | null };
+    try {
+      parsed = JSON.parse(raw) as { slug?: string; type?: string; filePath?: string; thumbnailSrc?: string | null };
+    } catch {
+      return;
+    }
     if (!parsed.slug || !parsed.type) return;
-    const kind = (parsed.type === 'video' ? 'video' : parsed.type === 'audio' ? 'audio' : 'image') as 'image' | 'video' | 'audio';
+    const kind = (parsed.type === 'video' ? 'video' : parsed.type === 'audio' ? 'audio' : 'image') as StripSlot['kind'];
+    if (!acceptedKinds.has(kind)) return;
     const route = routeDrop(kind, slots);
+    // Resolve a thumbnail: prefer preview.resolved_assets, then a previously
+    // dropped asset, else build one from the drag payload (CardShell's DragData)
+    // so a dropped asset absent from resolved_assets still chips and survives
+    // the stale-slug pruning effect.
+    const resolved: ResolvedAsset = (() => {
+      const existing = resolvedAssets.find((a) => a.slug === parsed.slug);
+      if (existing) return existing;
+      const dropped = droppedAssets.get(parsed.slug);
+      if (dropped) return dropped;
+      return {
+        slug: parsed.slug,
+        src: parsed.filePath ?? '',
+        thumbnailSrc: parsed.thumbnailSrc ?? null,
+        type: kind,
+      };
+    })();
     if (route.action === 'append') {
       const updated = appendImageSlug(formValues, parsed.slug);
-      onChange('image_slugs', updated);
+      onChange('image_slugs', updated, resolved);
     } else if (route.param) {
-      const resolved = resolvedAssets.find((a) => a.slug === parsed.slug);
-      const dropped = droppedAssets.get(parsed.slug);
-      onChange(route.param, parsed.slug, resolved ?? dropped);
+      onChange(route.param, parsed.slug, resolved);
     }
-  }, [slots, formValues, onChange, resolvedAssets, droppedAssets]);
+  }, [acceptedKinds, slots, formValues, onChange, resolvedAssets, droppedAssets]);
 
   const handleTogglePin = useCallback((slug: string) => {
     const result = toggleFirstFramePin(formValues, slug);
@@ -141,9 +178,27 @@ export function MediaStrip({
 
   const pinnedSlug = typeof formValues.first_frame_slug === 'string' ? formValues.first_frame_slug : '';
 
-  const budgetClass = budget.blocking ? BUDGET_OVER : budget.used > budget.max - 2 ? BUDGET_WARN : BUDGET_OK[domain];
+  // Warn when within 1 of a finite limit AND already using refs (the old
+  // `used > max - 2` painted amber on an empty strip when max <= 2). A null max
+  // is never warn/blocking.
+  const budgetClass = budget.blocking
+    ? BUDGET_OVER
+    : budget.max != null && budget.used > 0 && budget.used >= budget.max - 1
+      ? BUDGET_WARN
+      : BUDGET_OK[domain];
 
-  const hasPinnableImage = slots.some((s) => s.kind === 'image' && s.param !== 'first_frame_slug');
+  // Pin only applies to models whose schema has a first_frame_slug field, so
+  // image tools (no such field) never render the destructive pin.
+  const hasPinnableImage =
+    slots.some((s) => s.kind === 'image' && s.param !== 'first_frame_slug') &&
+    'first_frame_slug' in option.schema.properties;
+
+  const hasChips = slots.some((slot) => {
+    const value = formValues[slot.param];
+    if (slot.kind === 'image' && Array.isArray(value)) return (value as string[]).length > 0;
+    return typeof value === 'string' && value.length > 0;
+  });
+  const showEmptyHint = !hasChips && characters.length === 0;
 
   return (
     <div
@@ -152,7 +207,7 @@ export function MediaStrip({
       onDrop={handleDrop}
       className={cn(
         'rounded border transition-colors duration-150',
-        dragOver ? 'border-violet-400/60 bg-violet-400/5' : 'border-primary/20',
+        dragOver ? DRAGOVER_CLASS[domain] : 'border-primary/20',
         domain === 'video' ? 'bg-black/40' : 'bg-black/40',
       )}
     >
@@ -177,6 +232,7 @@ export function MediaStrip({
                 pinned={pinnedSlug === slug}
                 disabled={disabled}
                 icon={slotIcon(slot.kind)}
+                badge={slot.param === 'image_slugs' ? String(i + 1) : undefined}
               />
             ));
           }
@@ -210,24 +266,31 @@ export function MediaStrip({
         ))}
 
         {/* Empty drop zone */}
-        <AssetDropSlot
-          value={null}
-          onChange={(asset) => {
-            if (!asset) return;
-            const kind = asset.type === 'video' ? 'video' : asset.type === 'audio' ? 'audio' : 'image';
-            const route = routeDrop(kind, slots);
-            if (route.action === 'append') {
-              const updated = appendImageSlug(formValues, asset.slug);
-              onChange('image_slugs', updated, asset);
-            } else if (route.param) {
-              onChange(route.param, asset.slug, asset);
-            }
-          }}
-          disabled={disabled}
-          acceptTypes={['image', 'video', 'audio', 'character']}
-          compact
-          variant={domain === 'video' ? 'video' : 'image'}
-        />
+        <div className="flex items-center gap-1.5 shrink-0">
+          <AssetDropSlot
+            value={null}
+            onChange={(asset) => {
+              if (!asset) return;
+              const kind = asset.type === 'video' ? 'video' : asset.type === 'audio' ? 'audio' : 'image';
+              const route = routeDrop(kind, slots);
+              if (route.action === 'append') {
+                const updated = appendImageSlug(formValues, asset.slug);
+                onChange('image_slugs', updated, asset);
+              } else if (route.param) {
+                onChange(route.param, asset.slug, asset);
+              }
+            }}
+            disabled={disabled}
+            acceptTypes={Array.from(acceptedKinds) as ('image' | 'video' | 'audio' | 'character')[]}
+            compact
+            variant={domain === 'video' ? 'video' : 'image'}
+          />
+          {showEmptyHint && (
+            <span className="text-[10px] font-mono text-primary/25 whitespace-nowrap select-none">
+              drag images here · type @ in the prompt
+            </span>
+          )}
+        </div>
 
         {/* Budget meter + mode label (right-aligned) */}
         <div className="ml-auto flex items-center gap-3 shrink-0 pl-2">
@@ -273,6 +336,7 @@ function StripChip({
   pinned,
   disabled,
   icon,
+  badge,
 }: {
   slug: string;
   label: string;
@@ -283,6 +347,7 @@ function StripChip({
   pinned?: boolean;
   disabled?: boolean;
   icon?: React.ReactNode;
+  badge?: string;
 }) {
   const thumb = findThumbnail(slug, resolvedAssets, droppedAssets);
   return (
@@ -291,7 +356,7 @@ function StripChip({
         'group relative shrink-0 w-10 h-10 rounded overflow-hidden border',
         pinned ? 'border-amber-400/60 ring-1 ring-amber-400/40' : 'border-primary/30',
       )}
-      title={label}
+      title={badge ? `@referenceImage_${badge} · ${stripSlugPrefix(slug)}` : label}
     >
       {thumb ? (
         <img src={thumb} alt={label} className="w-full h-full object-cover" />
@@ -300,13 +365,19 @@ function StripChip({
           {icon ?? <ImageIcon className="w-3 h-3" />}
         </div>
       )}
+      {/* Positional index badge (matches @referenceImage_N order) */}
+      {badge && (
+        <span className="absolute left-0 top-0 z-10 rounded-br-[3px] bg-black/80 px-[2px] text-[9px] font-mono font-bold leading-none text-cyan-300">
+          {badge}
+        </span>
+      )}
       {/* Pin button */}
       {onPin && !disabled && (
         <button
           type="button"
           onClick={onPin}
           className={cn(
-            'absolute top-0 left-0 w-4 h-4 flex items-center justify-center',
+            'absolute top-0 left-0 w-4 h-4 z-20 flex items-center justify-center',
             'opacity-0 group-hover:opacity-100 transition-opacity',
             pinned ? 'opacity-100 text-amber-400' : 'text-primary/40 hover:text-amber-400',
           )}

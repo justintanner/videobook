@@ -30,6 +30,10 @@ export interface RichPromptFieldProps {
   referenceImageSlots?: { n: number; slug: string; thumbnailSrc: string | null; label: string }[];
   // Voice slots for @referenceAudio_N autocomplete + chips.
   referenceVoiceSlots?: { n: number; ref: string; label: string }[];
+  // Project image assets offered in the @ menu. Picking one appends a ref
+  // (onPickAsset) and inserts @referenceImage_N rather than a raw @slug mention.
+  assetMentions?: { slug: string; thumbnailSrc: string | null }[];
+  onPickAsset?: (slug: string) => number | null;
   rows?: number;
   // Fill the parent's height instead of sizing to `rows`. The wrapper becomes a
   // flex column that grows (flex-1) and the textarea stretches to fill it, so the
@@ -66,6 +70,8 @@ export function RichPromptField({
   onPickCharacter,
   referenceImageSlots = [],
   referenceVoiceSlots = [],
+  assetMentions = [],
+  onPickAsset,
   rows = 4,
   fill = false,
   disabled,
@@ -127,11 +133,22 @@ export function RichPromptField({
         description: s.label,
         colorScheme: 'amber' as const,
       }));
+    const assetItems: AutocompleteItem[] = (assetMentions ?? [])
+      .filter((a) => a.slug.toLowerCase().includes(f))
+      .map((a) => ({
+        type: 'slug' as const,
+        value: `@${a.slug}`,
+        label: a.slug,
+        description: 'image',
+        colorScheme: 'cyan' as const,
+        thumbnailSrc: a.thumbnailSrc,
+        assetSlug: a.slug,
+      }));
     const slugItems = (assetSlugs ?? [])
       .filter((s) => s.toLowerCase().includes(f))
       .map((s) => ({ type: 'slug' as const, value: `@${s}`, label: s, description: '', colorScheme: 'cyan' as const }));
-    return [...charItems, ...refImageItems, ...refVoiceItems, ...slugItems].slice(0, 30);
-  }, [trigger, characterMentions, referenceImageSlots, referenceVoiceSlots, assetSlugs]);
+    return [...charItems, ...refImageItems, ...refVoiceItems, ...assetItems, ...slugItems].slice(0, 30);
+  }, [trigger, characterMentions, referenceImageSlots, referenceVoiceSlots, assetMentions, assetSlugs]);
 
   // Reset the dropdown selection/dismissal as the trigger text changes (mirrors
   // ChatInput; setState-in-render is the same pattern it uses).
@@ -174,9 +191,16 @@ export function RichPromptField({
         const cm = (characterMentions ?? []).find((c) => c.handle === item.label);
         if (cm) onPickCharacter?.(cm.ref);
       }
+      if (item.assetSlug && onPickAsset) {
+        const n = onPickAsset(item.assetSlug);
+        if (n != null) {
+          insertSlug(`referenceImage_${n}`);
+          return;
+        }
+      }
       insertSlug(item.label);
     },
-    [characterMentions, onPickCharacter, insertSlug],
+    [characterMentions, onPickCharacter, onPickAsset, insertSlug],
   );
 
   const onDrop = useCallback(

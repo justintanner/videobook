@@ -26,23 +26,44 @@ export function characterImageCount(ref: string, entity?: CharacterEntity | null
 export interface RefBudget {
   /** image_slugs + per-character image counts. */
   used: number;
-  /** 5 alongside a reference clip (edit), else 7. */
-  max: number;
-  /** true when used > max — mirrors the server A4 rule and blocks Generate. */
+  /** per-model cap (active-mode image_slugs slot max, else validation cap),
+   *  or null for a count-only meter that never blocks. */
+  max: number | null;
+  /** true when max is set and used > max — mirrors the server A4 rule. */
   blocking: boolean;
-  /** meter text, e.g. "refs · 3/7" or "edit · 2/5". */
+  /** meter text, e.g. "refs · 3/7", or count-only "refs · 2" when unbounded. */
   meter: string;
   /** human message when over budget (mirrors server text). */
   message?: string;
 }
 
-/** Combined omni reference-image budget. Returns the used/max meter plus a
- *  blocking flag when image_slugs + character images exceed the limit. The
- *  `max` tightens to 5 in the edit (V2V) mode. */
+/** Per-model reference-image cap. The active mode's `image_slugs` asset-slot
+ *  max wins (omni r2v 7, edit 5); else the server-shipped
+ *  `validation.image_slots.max` (Nano Banana Pro 10, omni t2v/i2v 7 via
+ *  IMAGE_SLOT_OVERRIDES, Grok 1, …); else null (count-only, non-blocking). */
+export function imageRefMax(
+  option: Pick<ModelOption, 'modes' | 'validation'>,
+  mode: ModeSpec | null,
+): number | null {
+  if (mode?.asset_slots) {
+    const slot = mode.asset_slots.find((s) => s.param === 'image_slugs');
+    if (slot?.max != null) return slot.max;
+  }
+  if (option.validation?.image_slots?.max != null) {
+    return option.validation.image_slots.max;
+  }
+  return null;
+}
+
+/** Combined reference-image budget. Returns the used/max meter plus a blocking
+ *  flag when image_slugs + character images exceed `max`. `max` is sourced from
+ *  imageRefMax; null makes the meter count-only and never blocking. Character
+ *  image counting stays (nonzero only for video). */
 export function combinedRefBudget(
   values: Record<string, unknown>,
   characterRefs: string[],
   mode: ModeSpec | null,
+  max: number | null,
   entities?: Record<string, CharacterEntity | null>,
 ): RefBudget {
   const imageCount = Array.isArray(values.image_slugs) ? values.image_slugs.length : 0;
@@ -51,9 +72,10 @@ export function combinedRefBudget(
     return sum + characterImageCount(ref, e);
   }, 0);
   const used = imageCount + charTotal;
-  const max = mode?.key === 'edit' ? 5 : 7;
-  const blocking = used > max;
-  const meter = `${mode?.label?.toLowerCase() ?? 'refs'} · ${used}/${max}`;
+  const blocking = max != null && used > max;
+  const meter = max != null
+    ? `${mode?.label?.toLowerCase() ?? 'refs'} · ${used}/${max}`
+    : `${mode?.label?.toLowerCase() ?? 'refs'} · ${used}`;
   const message = blocking
     ? `Reference budget exceeded: ${used}/${max} images (characters with two images count twice). Remove an image or character.`
     : undefined;

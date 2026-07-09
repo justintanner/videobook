@@ -3,6 +3,7 @@ import {
   characterHandle,
   extractRichTokens,
   parseRichSegments,
+  renumberReferenceImageMarkers,
   rewriteCharacterMentions,
   stripOrphanedReferenceMarkers,
 } from './richPromptTokens'
@@ -272,5 +273,39 @@ describe('stripOrphanedReferenceMarkers', () => {
     expect(
       stripOrphanedReferenceMarkers('', { character: 5, referenceImage: 5, referenceAudio: 5 }),
     ).toBe('')
+  })
+})
+
+describe('renumberReferenceImageMarkers', () => {
+  it('deletes the removed marker', () => {
+    expect(renumberReferenceImageMarkers('@referenceImage_2', 2)).toBe('')
+  })
+
+  it('decrements markers greater than removedN', () => {
+    expect(
+      renumberReferenceImageMarkers('@referenceImage_1 @referenceImage_3 @referenceImage_4', 2),
+    ).toBe('@referenceImage_1 @referenceImage_2 @referenceImage_3')
+  })
+
+  it('leaves lower markers untouched', () => {
+    expect(renumberReferenceImageMarkers('@referenceImage_1 @referenceImage_2', 2)).toBe('@referenceImage_1 ')
+  })
+
+  it('leaves other @-mention kinds untouched', () => {
+    expect(
+      renumberReferenceImageMarkers('@character_1 @referenceImage_2 @referenceAudio_1', 2),
+    ).toBe('@character_1  @referenceAudio_1')
+  })
+
+  it('is case-insensitive and normalizes to lowercase', () => {
+    expect(renumberReferenceImageMarkers('@ReferenceImage_3', 1)).toBe('@referenceImage_2')
+  })
+
+  it('is a no-op when the removed marker is absent', () => {
+    expect(renumberReferenceImageMarkers('@referenceImage_1 @referenceImage_2', 5)).toBe('@referenceImage_1 @referenceImage_2')
+  })
+
+  it('handles empty text', () => {
+    expect(renumberReferenceImageMarkers('', 1)).toBe('')
   })
 })

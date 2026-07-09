@@ -185,3 +185,17 @@ export function stripOrphanedReferenceMarkers(
   out = stripKind(out, REFERENCE_AUDIO_SLOT_RE, counts.referenceAudio);
   return out;
 }
+
+// Renumber @referenceImage_N markers after the slot at `removedN` (1-based) is
+// removed: the removed marker is deleted, and every marker with N greater than
+// removedN is decremented so it still points at the same image. Case-insensitive
+// (reuses REFERENCE_IMAGE_SLOT_RE); output is normalized to the canonical
+// lowercase form. Lower/other markers are left untouched.
+export function renumberReferenceImageMarkers(text: string, removedN: number): string {
+  return text.replace(REFERENCE_IMAGE_SLOT_RE, (_full, digits: string) => {
+    const n = Number(digits);
+    if (n === removedN) return '';
+    if (n > removedN) return `@referenceImage_${n - 1}`;
+    return `@referenceImage_${n}`;
+  });
+}

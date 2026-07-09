@@ -341,6 +341,13 @@ export function HomePage() {
     assets.filter((asset) => asset.type !== 'plan'),
   [assets]);
 
+  // Ready image assets offered in the gen panel prompt's @ autocomplete.
+  const genImageAssets = useMemo(() =>
+    assets
+      .filter((a) => a.type === 'image' && (a.status ?? 'ready') === 'ready')
+      .map((a) => ({ slug: a.slug, filePath: a.filePath, thumbnailSrc: a.thumbnailSrc ?? null })),
+    [assets]);
+
   const clips = useMemo(() =>
     mediaItems.filter((m) => CLIP_TYPES.has(m.type)),
   [mediaItems]);
@@ -1675,6 +1682,7 @@ export function HomePage() {
                     projectSlug={projectSlug}
                     pendingGeneration={pendingGenForPanel}
                     onGenerationLifecycle={handleGenerationLifecycle}
+                    imageAssets={genImageAssets}
                   />
                 ) : archiveOpen ? (
                   <ArchiveBrowser

@@ -33,6 +33,8 @@ export interface PromptSectionProps {
   onPickCharacter?: (ref: string) => void;
   referenceImageSlots?: { n: number; slug: string; thumbnailSrc: string | null; label: string }[];
   referenceVoiceSlots?: { n: number; ref: string; label: string }[];
+  assetMentions?: { slug: string; thumbnailSrc: string | null }[];
+  onPickAsset?: (slug: string) => number | null;
 }
 
 // Per-domain class strings. Sourced from the canonical 5-domain palette in
@@ -138,6 +140,8 @@ export function PromptSection({
   onPickCharacter,
   referenceImageSlots = [],
   referenceVoiceSlots = [],
+  assetMentions = [],
+  onPickAsset,
 }: PromptSectionProps) {
   const showRewrite = category === 'image' && setRewriteOpen && onRewriteSubmit;
 
@@ -214,6 +218,8 @@ export function PromptSection({
         onPickCharacter={onPickCharacter}
         referenceImageSlots={referenceImageSlots}
         referenceVoiceSlots={referenceVoiceSlots}
+        assetMentions={assetMentions}
+        onPickAsset={onPickAsset}
         disabled={disabled}
         autoFocus
         rows={4}

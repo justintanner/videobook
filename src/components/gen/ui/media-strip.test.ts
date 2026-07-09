@@ -5,6 +5,7 @@ import {
   characterImageCount,
   combinedRefBudget,
   deriveStripSlots,
+  imageRefMax,
   routeDrop,
   toggleFirstFramePin,
 } from '@/components/gen/ui/media-strip';
@@ -38,11 +39,41 @@ describe('characterImageCount', () => {
   });
 });
 
+describe('imageRefMax', () => {
+  const option = (overrides: Partial<Pick<ModelOption, 'modes' | 'validation'>> = {}): Pick<ModelOption, 'modes' | 'validation'> => ({
+    modes: null,
+    validation: { valid: true, missing_required: [], warnings: [] },
+    ...overrides,
+  });
+
+  it('uses the active mode image_slugs slot max when present', () => {
+    const r2v = omniModes.modes[2];
+    expect(imageRefMax(option({ modes: omniModes }), r2v)).toBe(7);
+    const edit = omniModes.modes[3];
+    expect(imageRefMax(option({ modes: omniModes }), edit)).toBe(5);
+  });
+
+  it('falls back to validation.image_slots.max when the mode has no image_slugs slot', () => {
+    const t2v = omniModes.modes[0];
+    expect(imageRefMax(option({ modes: omniModes, validation: { valid: true, missing_required: [], warnings: [], image_slots: { min: 0, max: 7 } } }), t2v)).toBe(7);
+  });
+
+  it('uses validation.image_slots.max for a flat (non-moded) model', () => {
+    expect(imageRefMax(option({ validation: { valid: true, missing_required: [], warnings: [], image_slots: { min: 0, max: 10 } } }), null)).toBe(10);
+  });
+
+  it('returns null when no cap is available', () => {
+    expect(imageRefMax(option(), null)).toBeNull();
+    const t2v = omniModes.modes[0];
+    expect(imageRefMax(option({ modes: omniModes }), t2v)).toBeNull();
+  });
+});
+
 describe('combinedRefBudget', () => {
   const refsMode = omniModes.modes[2];
 
   it('sums images + character counts and stays within 7', () => {
-    const budget = combinedRefBudget({ image_slugs: ['@a', '@b', '@c'] }, ['character:x-imgs:2', 'character:y-imgs:2'], refsMode);
+    const budget = combinedRefBudget({ image_slugs: ['@a', '@b', '@c'] }, ['character:x-imgs:2', 'character:y-imgs:2'], refsMode, 7);
     expect(budget.used).toBe(7);
     expect(budget.max).toBe(7);
     expect(budget.blocking).toBe(false);
@@ -50,7 +81,7 @@ describe('combinedRefBudget', () => {
   });
 
   it('blocks at 8/7', () => {
-    const budget = combinedRefBudget({ image_slugs: ['@a', '@b', '@c', '@d'] }, ['character:x-imgs:2', 'character:y-imgs:2'], refsMode);
+    const budget = combinedRefBudget({ image_slugs: ['@a', '@b', '@c', '@d'] }, ['character:x-imgs:2', 'character:y-imgs:2'], refsMode, 7);
     expect(budget.used).toBe(8);
     expect(budget.blocking).toBe(true);
     expect(budget.message).toContain('budget exceeded');
@@ -58,14 +89,22 @@ describe('combinedRefBudget', () => {
 
   it('tightens the cap to 5 in edit mode', () => {
     const editMode = omniModes.modes[3];
-    const budget = combinedRefBudget({ image_slugs: ['@a', '@b', '@c'] }, [], editMode);
+    const budget = combinedRefBudget({ image_slugs: ['@a', '@b', '@c'] }, [], editMode, 5);
     expect(budget.max).toBe(5);
     expect(budget.meter).toBe('edit · 3/5');
   });
 
   it('counts suffix-less characters as one image each', () => {
-    const budget = combinedRefBudget({ image_slugs: ['@a', '@b'] }, ['character:a', 'character:b'], refsMode);
+    const budget = combinedRefBudget({ image_slugs: ['@a', '@b'] }, ['character:a', 'character:b'], refsMode, 7);
     expect(budget.used).toBe(4);
+  });
+
+  it('renders a count-only meter and never blocks when max is null', () => {
+    const budget = combinedRefBudget({ image_slugs: ['@a', '@b', '@c', '@d'] }, ['character:x-imgs:2', 'character:y-imgs:2'], refsMode, null);
+    expect(budget.max).toBeNull();
+    expect(budget.blocking).toBe(false);
+    expect(budget.message).toBeUndefined();
+    expect(budget.meter).toBe('refs · 8');
   });
 });
 
