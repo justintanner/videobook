@@ -15,10 +15,7 @@ import { JsonNode } from '@/components/ui/JsonNode';
 import { ELEMENT_FIELD_RE } from '@/components/gen/types';
 import type { FullPreviewResponse, ModelOption, JSONSchemaProperty, ResolvedAsset, ModeSpec } from '@/components/gen/types';
 import { ModeTabs } from '@/components/gen/ui/ModeTabs';
-import { GenResultsStrip } from '@/components/gen/GenResultsStrip';
-import type { ResultGhost, ResultTile } from '@/components/gen/resultTiles';
 import type { ExplicitAssetSlot } from '@/components/gen/ImageParamSlots';
-import type { MediaItem } from '@/components/sidebar/types';
 import {
   getMode,
   visibleParams,
@@ -28,8 +25,6 @@ import {
   modeAssetParams,
   modeBudgetWarnings,
   effectiveToolName as resolveEffectiveToolName,
-  tailClipWindow,
-  findExtendModeKey,
   isEmptyModeValue,
 } from '@/components/gen/modes';
 import type { ExecuteButtonState } from '@/components/commands/types';
@@ -63,11 +58,6 @@ interface GenPreviewPanelProps {
    *  background — dims the /generate button (kept clickable). */
   pendingGeneration?: boolean;
   onGenerationLifecycle?: OnGenerationLifecycle;
-  /** Recent clips (video category) for the in-panel results strip. Sync-driven
-   *  from HomePage; undefined for the image panel. */
-  resultClips?: MediaItem[];
-  /** In-flight generation ghosts for the results strip. */
-  resultGhosts?: ResultGhost[];
 }
 
 function getPreviewToolName(cat: 'video' | 'image'): string {
@@ -126,8 +116,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   projectSlug,
   pendingGeneration,
   onGenerationLifecycle,
-  resultClips,
-  resultGhosts,
 }, ref) {
   useMountKey('gen');
 
@@ -681,42 +669,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     }
   }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets, promptHistory, onGenerationLifecycle, modes, activeMode, activeModeKey]);
 
-  // Whether the active model can take a video input (drives the results-strip
-  // extend affordance and gates handleExtendClip).
-  const extendEnabled = !!selectedOption && (
-    modes ? findExtendModeKey(modes) != null : 'video_slug' in (selectedOption.schema?.properties ?? {})
-  );
-
-  // Feed a finished clip into the active model's video-edit input: set the clip,
-  // default the trim window to its tail (last ~2s), switch to the edit mode, and
-  // register it so slot thumbnails resolve. Leaves the prompt untouched.
-  const handleExtendClip = useCallback((tile: ResultTile) => {
-    const opt = preview?.model_options.find((o) => o.key === selectedModelKey);
-    if (!opt || !tile.slug) return;
-    const m = opt.modes ?? null;
-    const supportsVideo = m ? findExtendModeKey(m) != null : 'video_slug' in (opt.schema?.properties ?? {});
-    if (!supportsVideo) return;
-    const win = tailClipWindow(tile.duration);
-    setFormValues((prev) => {
-      const next: Record<string, unknown> = { ...prev, video_slug: tile.slug };
-      if (win) {
-        next.video_clip_start = win.start;
-        next.video_clip_ends = win.ends;
-      } else {
-        delete next.video_clip_start;
-        delete next.video_clip_ends;
-      }
-      return next;
-    });
-    setDroppedAssets((prev) => {
-      const nextMap = new Map(prev);
-      nextMap.set(tile.slug, { slug: tile.slug, src: tile.videoSrc, thumbnailSrc: tile.thumbSrc, type: 'video' });
-      return nextMap;
-    });
-    const extendKey = findExtendModeKey(m);
-    if (extendKey) setActiveModeKey(extendKey);
-  }, [preview, selectedModelKey]);
-
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
   const buttonVariant = category === 'video' ? 'video' as const : 'image' as const;
@@ -1058,18 +1010,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
             </div>
         </div>}
       </div>
-      {category === 'video' && resultClips && (
-        <div className="shrink-0 px-3 pb-2 pt-1">
-          <GenResultsStrip
-            clips={resultClips}
-            ghosts={resultGhosts ?? []}
-            onExtend={handleExtendClip}
-            extendEnabled={extendEnabled}
-            extendHint="Switch to a model that accepts a source clip to extend"
-            disabled={isDisabled}
-          />
-        </div>
-      )}
     </GenPanel>
   );
 });

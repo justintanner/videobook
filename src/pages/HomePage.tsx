@@ -1660,8 +1660,6 @@ export function HomePage() {
                     projectSlug={projectSlug}
                     pendingGeneration={pendingGenForPanel}
                     onGenerationLifecycle={handleGenerationLifecycle}
-                    resultClips={genPanel.category === 'video' ? clips : undefined}
-                    resultGhosts={videoGhosts}
                   />
                 ) : archiveOpen ? (
                   <ArchiveBrowser
