@@ -506,6 +506,26 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     [characterRefs, charMap],
   );
   const charHandles = useMemo(() => charMentions.map((c) => c.handle), [charMentions]);
+  const allCharMentions = useMemo(
+    () =>
+      charEntities.entities.map((e) => ({
+        handle: characterHandle(e.displayName),
+        label: e.displayName,
+        ref: e.ref,
+      })),
+    [charEntities.entities],
+  );
+  const handlePickCharacter = useCallback(
+    (ref: string) => {
+      if (!ref) return;
+      const current = Array.isArray(formValues.character_refs)
+        ? (formValues.character_refs as string[]).filter((s) => s.trim() !== '')
+        : [];
+      if (current.includes(ref)) return;
+      handleFieldChange('character_refs', [...current, ref]);
+    },
+    [formValues.character_refs, handleFieldChange],
+  );
   const promptResolveRef = useCallback(
     (token: RichToken): ChipThumb | null => {
       if (token.kind === 'character-ref') {
@@ -988,8 +1008,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                       onRewriteSubmit={handleRewriteImagePromptSubmit}
                       rewriteDisabled={rewriteDisabled}
                       resolveRef={promptResolveRef}
-                      characterMentions={charMentions}
+                      characterMentions={allCharMentions}
                       characterHandles={charHandles}
+                      onPickCharacter={handlePickCharacter}
                     />
                   );
                 })()}

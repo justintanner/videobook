@@ -549,7 +549,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
 };
 
-const DEFAULT_VIDEO_MODEL_KEY = "grok_imagine";
+const DEFAULT_VIDEO_MODEL_KEY = "gemini_omni";
 
 // Google Flow provider aliases: a base video tool can expose a "google"
 // provider (see VideoModelInfo.googleToolName) whose effective tool name and
@@ -1714,7 +1714,7 @@ ROUTING PREFERENCES:
 - Use generate_seedance2_video when user mentions "seedance" or "bytedance" and wants 1080p, or just defaults to the higher-quality variant. Accepts any input combination: text-only, first/last frame, reference images/videos/audio
 - Use generate_seedance2_fast_video when user mentions "seedance fast" or 480p/720p is acceptable (faster/cheaper). Same input flexibility as the full variant
 - Use generate_seedance2_mini_video when user mentions "seedance mini". Text prompt plus optional reference images/videos/audio; no first/last frame; 480p/720p
-- Use generate_gemini_omni_video ONLY when user explicitly mentions "gemini" or "omni" for video. Multimodal text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes
+- generate_gemini_omni_video is Google Gemini Omni — the DEFAULT model; use it when no other model is clearly indicated. Multimodal text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes
 - Use generate_veo31_fast_video when user mentions "veo" or "veo 3.1"; pick generate_veo31_video for "veo quality", generate_veo31_lite_video for "veo lite", and generate_veo31_lite_low_priority_video for "veo lite low priority" / "veo lp" (Google Flow). Text-to-video, first/last frame image-to-video, or reference images (fast/lite/lite-lp only)
 - Use generate_wan27_i2v_video ONLY when user mentions "wan" with first/last frame or clip continuation
 - Use generate_wan27_videoedit_video ONLY when user mentions "wan" with video editing or modifying an existing video
@@ -1777,10 +1777,10 @@ const NON_PARAM_KEYS = new Set(["project_slug"]);
 function buildProvidersForModel(info: VideoModelInfo): ProviderRoute[] {
   if (!info.falToolNames && !info.googleToolName) return info.providers;
   return [
-    ...info.providers,
     ...(info.googleToolName
       ? [{ key: "google", label: "Google Flow", provider_path: "googleflow.v1.videos({ async: true })", envKey: "GOOGLE_FLOW_API_KEY" }]
       : []),
+    ...info.providers,
     ...(info.falToolNames
       ? [{ key: "fal", label: "Fal", provider_path: "fal.post.v1.queue.submit()", envKey: "FAL_API_KEY" }]
       : []),

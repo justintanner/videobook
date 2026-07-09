@@ -529,9 +529,9 @@ describe("applyVideoToolConstraints", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildVideoRoutingPrompt", () => {
-  it("defaults video generation to Grok Imagine 1.5", () => {
-    expect(DEFAULT_VIDEO_MODEL_KEY).toBe("grok_imagine");
-    expect(VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name).toBe("generate_grok_imagine_video");
+  it("defaults video generation to Google Flow Gemini Omni Video", () => {
+    expect(DEFAULT_VIDEO_MODEL_KEY).toBe("gemini_omni");
+    expect(VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name).toBe("generate_gemini_omni_video");
   });
 
   it("returns a non-empty string", () => {
@@ -550,7 +550,7 @@ describe("buildVideoRoutingPrompt", () => {
   it("includes routing preferences", () => {
     const prompt = buildVideoRoutingPrompt();
     expect(prompt).toContain("ROUTING PREFERENCES");
-    expect(prompt).toContain("PREFER generate_grok_imagine_video");
+    expect(prompt).toContain("PREFER generate_gemini_omni_video");
   });
 
   it("includes JSON response format instruction", () => {

@@ -23,7 +23,8 @@ export interface RichPromptFieldProps {
   resolveRef: (token: RichToken) => ChipThumb | null;
   assetSlugs?: string[]; // candidates for @-mention matching + autocomplete
   slugForAssetId?: (id: string) => string | null; // drag-drop: asset id → slug
-  characterMentions?: { handle: string; label: string }[]; // @<handle> character autocomplete options
+  characterMentions?: { handle: string; label: string; ref: string }[]; // @<handle> character autocomplete options
+  onPickCharacter?: (ref: string) => void; // fired when a character mention is inserted (auto-add to refs)
   characterHandles?: string[]; // handles whose "@<handle>" mentions should chip
   rows?: number;
   // Fill the parent's height instead of sizing to `rows`. The wrapper becomes a
@@ -58,6 +59,7 @@ export function RichPromptField({
   slugForAssetId,
   characterMentions = [],
   characterHandles = [],
+  onPickCharacter,
   rows = 4,
   fill = false,
   disabled,
@@ -142,6 +144,17 @@ export function RichPromptField({
     [trigger, value, caret, onChange],
   );
 
+  const commitItem = useCallback(
+    (item: AutocompleteItem) => {
+      if ((characterMentions ?? []).some((c) => c.handle === item.label)) {
+        const cm = (characterMentions ?? []).find((c) => c.handle === item.label);
+        if (cm) onPickCharacter?.(cm.ref);
+      }
+      insertSlug(item.label);
+    },
+    [characterMentions, onPickCharacter, insertSlug],
+  );
+
   const onDrop = useCallback(
     (e: React.DragEvent) => {
       const json = e.dataTransfer.getData('application/json');
@@ -181,7 +194,7 @@ export function RichPromptField({
         }
         if (e.key === 'Enter' || e.key === 'Tab') {
           e.preventDefault();
-          insertSlug(items[selectedIndex].label);
+          commitItem(items[selectedIndex]);
           return;
         }
         if (e.key === 'Escape') {
@@ -192,7 +205,7 @@ export function RichPromptField({
       }
       if (onKeyDownExtra?.(e)) return;
     },
-    [showSuggestions, items, selectedIndex, insertSlug, onKeyDownExtra],
+    [showSuggestions, items, selectedIndex, commitItem, onKeyDownExtra],
   );
 
   return (
@@ -201,7 +214,7 @@ export function RichPromptField({
         <AutocompleteDropdown
           items={items}
           selectedIndex={selectedIndex}
-          onSelect={(item) => insertSlug(item.label)}
+          onSelect={(item) => commitItem(item)}
           onHover={setSelectedIndex}
         />
       )}
