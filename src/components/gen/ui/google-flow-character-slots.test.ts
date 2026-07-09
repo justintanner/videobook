@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveSlugToAsset, seedSlotsFromCandidates } from './google-flow-character-slots'
+import { nameFromAsset, resolveSlugToAsset, seedSlotsFromCandidates } from './google-flow-character-slots'
 
 describe('resolveSlugToAsset', () => {
   it('returns null for blank slug', () => {
@@ -66,5 +66,22 @@ describe('seedSlotsFromCandidates', () => {
     const seeded = seedSlotsFromCandidates(['@img-a', '@img-a'])
     expect(seeded.primary?.slug).toBe('@img-a')
     expect(seeded.alt).toBeNull()
+  })
+})
+
+describe('nameFromAsset', () => {
+  it('strips @ and img- prefix from a descriptive slug', () => {
+    expect(nameFromAsset({ slug: '@img-hero', src: '', type: 'image' as const })).toBe('hero')
+    expect(nameFromAsset({ slug: '@img-hero-portrait', src: '', type: 'image' as const })).toBe('hero-portrait')
+  })
+
+  it('returns empty for degenerate slugs so they are never used as a name', () => {
+    expect(nameFromAsset({ slug: '@img-n', src: '', type: 'image' as const })).toBe('')
+    expect(nameFromAsset({ slug: '@img-j', src: '', type: 'image' as const })).toBe('')
+    expect(nameFromAsset({ slug: '@img-ab', src: '', type: 'image' as const })).toBe('')
+  })
+
+  it('returns empty for null asset', () => {
+    expect(nameFromAsset(null)).toBe('')
   })
 })

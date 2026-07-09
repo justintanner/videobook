@@ -86,5 +86,6 @@ export function seedSlotsFromCandidates(
 
 export function nameFromAsset(asset: SlotAsset | null): string {
   if (!asset) return ''
-  return stripSlugPrefix(asset.slug).replace(/^img-/, '') || ''
+  const stem = stripSlugPrefix(asset.slug).replace(/^img-/, '').trim()
+  return stem.length >= 3 ? stem : ''
 }
