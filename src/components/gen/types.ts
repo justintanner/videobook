@@ -21,6 +21,42 @@ export interface SlotConstraints {
   max: number | null;
 }
 
+// Generation modes — client mirror of the server contract in video-models.ts.
+// A model that ships `modes` renders as mutually-exclusive tabs; each tab shows
+// only its own params plus the shared params. Options without `modes` render as
+// a flat form exactly as before.
+export type ModeAssetSlotKind = 'image' | 'video' | 'audio';
+
+export interface ModeAssetSlot {
+  param: string;
+  kind: ModeAssetSlotKind;
+  label: string;
+  min?: number;
+  max?: number | null;
+}
+
+export interface ModeSpec {
+  key: string;
+  label: string;
+  description?: string;
+  /** Mode-owned params (beyond the shared set). Only these drive inference. */
+  params: string[];
+  /** Shared params suppressed in this mode (e.g. duration in a V2V edit). */
+  hidden_shared_params?: string[];
+  required?: string[];
+  asset_slots?: ModeAssetSlot[];
+  param_overrides?: Record<string, { maxItems?: number; description?: string }>;
+  /** Reserved for tool-per-mode models; unset today. Submit resolves
+   *  `mode.tool_name ?? option.tool_name`. */
+  tool_name?: string;
+}
+
+export interface ModelModes {
+  shared_params: string[];
+  default_mode: string;
+  modes: ModeSpec[];
+}
+
 export interface ModelOption {
   key: string;
   label: string;
@@ -36,6 +72,7 @@ export interface ModelOption {
   };
   providers?: Array<{ key: string; label: string }>;
   selected_provider?: string;
+  modes?: ModelModes | null;
 }
 
 export interface DynamicGenerationPreview {

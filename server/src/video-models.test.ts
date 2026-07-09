@@ -11,6 +11,7 @@ import {
   buildVideoRoutingPrompt,
   IMAGE_FIELD_SCHEMAS,
   PARAM_SCHEMAS,
+  VIDEO_TOOL_MODES,
 } from "./video-models.js";
 import type { ActionLogEntry } from "./video-models.js";
 
@@ -614,6 +615,70 @@ describe("buildModelOption resolved assets and coercion", () => {
     ];
     const option = buildModelOption("wan27_extend", VIDEO_MODELS.wan27_extend, {}, resolvedAssets);
     expect(option.prefilled_values.video_slug).toBe("@vid-clip");
+  });
+
+  it("gemini_omni prefills video_slug from a prompt-referenced video (both providers)", () => {
+    const resolvedAssets = [
+      { tag: "@vid-clip", asset_id: "vid-clip", asset_type: "video", file_path: "/path/clip.mp4", asset_dir: "/path" },
+    ];
+    const kie = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, resolvedAssets, undefined, "kie");
+    expect(kie.prefilled_values.video_slug).toBe("@vid-clip");
+    const google = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, resolvedAssets, undefined, "google");
+    expect(google.prefilled_values.video_slug).toBe("@vid-clip");
+  });
+
+  it("gemini_omni leaves video_slug unset with no prompt-referenced video", () => {
+    const option = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, [], undefined, "google");
+    expect(option.prefilled_values.video_slug).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Generation modes contract
+// ---------------------------------------------------------------------------
+
+describe("VIDEO_TOOL_MODES contract", () => {
+  it("every mode's params/slots/required are backed by the tool schema", () => {
+    for (const [toolName, modes] of Object.entries(VIDEO_TOOL_MODES)) {
+      const schema = getVideoToolSchema(toolName);
+      expect(schema, toolName).not.toBeNull();
+      const props = new Set(Object.keys(schema!.properties));
+      // default_mode exists
+      expect(modes.modes.some((m) => m.key === modes.default_mode)).toBe(true);
+      for (const p of modes.shared_params) expect(props.has(p), `${toolName} shared ${p}`).toBe(true);
+      for (const mode of modes.modes) {
+        for (const p of mode.params) expect(props.has(p), `${toolName}/${mode.key} param ${p}`).toBe(true);
+        for (const p of mode.required ?? []) {
+          expect(props.has(p), `${toolName}/${mode.key} required ${p}`).toBe(true);
+        }
+        for (const slot of mode.asset_slots ?? []) {
+          expect(props.has(slot.param), `${toolName}/${mode.key} slot ${slot.param}`).toBe(true);
+          expect(mode.params.includes(slot.param), `${toolName}/${mode.key} slot ${slot.param} in params`).toBe(true);
+        }
+        for (const hidden of mode.hidden_shared_params ?? []) {
+          expect(modes.shared_params.includes(hidden), `${toolName}/${mode.key} hides shared ${hidden}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("buildModelOption attaches omni modes only under the google provider", () => {
+    const google = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, [], undefined, "google");
+    expect(google.modes).not.toBeNull();
+    expect(google.modes!.modes.map((m) => m.key)).toEqual(["t2v", "i2v", "r2v", "edit"]);
+    const edit = google.modes!.modes.find((m) => m.key === "edit")!;
+    expect(edit.required).toEqual(["video_slug"]);
+    expect(edit.param_overrides?.voice_refs?.maxItems).toBe(3);
+    const imageSlot = edit.asset_slots?.find((s) => s.param === "image_slugs");
+    expect(imageSlot?.max).toBe(5);
+
+    const kie = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, [], undefined, "kie");
+    expect(kie.modes).toBeNull();
+  });
+
+  it("non-moded models carry no modes", () => {
+    const kling = buildModelOption("kling30", VIDEO_MODELS.kling30, {}, []);
+    expect(kling.modes).toBeNull();
   });
 
   it("coerces numeric duration to string for kling30", () => {

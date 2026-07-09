@@ -13,7 +13,25 @@ import { stripAssetTagsFromText, stripSlugPrefix } from '@/lib/slugs';
 import { ErrorPage } from '@/components/gen/state/ErrorPage';
 import { JsonNode } from '@/components/ui/JsonNode';
 import { ELEMENT_FIELD_RE } from '@/components/gen/types';
-import type { FullPreviewResponse, ModelOption, JSONSchemaProperty, ResolvedAsset } from '@/components/gen/types';
+import type { FullPreviewResponse, ModelOption, JSONSchemaProperty, ResolvedAsset, ModeSpec } from '@/components/gen/types';
+import { ModeTabs } from '@/components/gen/ui/ModeTabs';
+import { GenResultsStrip } from '@/components/gen/GenResultsStrip';
+import type { ResultGhost, ResultTile } from '@/components/gen/resultTiles';
+import type { ExplicitAssetSlot } from '@/components/gen/ImageParamSlots';
+import type { MediaItem } from '@/components/sidebar/types';
+import {
+  getMode,
+  visibleParams,
+  inferModeKey,
+  filterValuesForMode,
+  modeRequiredMissing,
+  modeAssetParams,
+  modeBudgetWarnings,
+  effectiveToolName as resolveEffectiveToolName,
+  tailClipWindow,
+  findExtendModeKey,
+  isEmptyModeValue,
+} from '@/components/gen/modes';
 import type { ExecuteButtonState } from '@/components/commands/types';
 import type { UseMcpResult } from 'use-mcp/react';
 import { useRewriteImagePrompt, type ImagePromptGuideModel } from '@/hooks/useRewriteImagePrompt';
@@ -45,6 +63,11 @@ interface GenPreviewPanelProps {
    *  background — dims the /generate button (kept clickable). */
   pendingGeneration?: boolean;
   onGenerationLifecycle?: OnGenerationLifecycle;
+  /** Recent clips (video category) for the in-panel results strip. Sync-driven
+   *  from HomePage; undefined for the image panel. */
+  resultClips?: MediaItem[];
+  /** In-flight generation ghosts for the results strip. */
+  resultGhosts?: ResultGhost[];
 }
 
 function getPreviewToolName(cat: 'video' | 'image'): string {
@@ -70,6 +93,7 @@ function guideModelFor(imageModelKey: string | undefined): ImagePromptGuideModel
 interface SavedGenSettings {
   model: string;
   provider: string;
+  mode?: string;
   fields: Record<string, unknown>;
   droppedAssets?: Array<{ slug: string; src: string; thumbnailSrc?: string | null; type: 'image' | 'video' | 'audio' | 'character' }>;
 }
@@ -102,6 +126,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   projectSlug,
   pendingGeneration,
   onGenerationLifecycle,
+  resultClips,
+  resultGhosts,
 }, ref) {
   useMountKey('gen');
 
@@ -113,6 +139,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const [selectedProviderKey, setSelectedProviderKey] = useState('');
   const [formValues, setFormValues] = useState<Record<string, unknown>>({});
   const [droppedAssets, setDroppedAssets] = useState<Map<string, ResolvedAsset>>(new Map());
+  // Active input mode for models that ship a modes contract. UI intent —
+  // initialized by inference on preview load, then user-driven via the tabs.
+  const [activeModeKey, setActiveModeKey] = useState<string | null>(null);
   const [genState, setGenState] = useState<ExecuteButtonState | undefined>(undefined);
   const [flipped, setFlipped] = useState(false);
   const [translatedPayload, setTranslatedPayload] = useState<Record<string, unknown> | null>(null);
@@ -125,6 +154,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   callToolRef.current = callTool;
   const formValuesRef = useRef(formValues);
   formValuesRef.current = formValues;
+  const activeModeKeyRef = useRef(activeModeKey);
+  activeModeKeyRef.current = activeModeKey;
   const refreshIdRef = useRef(0);
   const savedRef = useRef(loadGenSettings(category, projectSlug));
   const appliedSavedRef = useRef(false);
@@ -177,13 +208,20 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         ?? stripAssetTagsFromText(prompt ?? '');
       const preservedSlugFields: Record<string, unknown> = {};
       if (isRefresh) {
+        const modeSlugParams = option?.modes ? modeAssetParams(option.modes) : null;
+        const isSlugField = (k: string): boolean =>
+          (modeSlugParams?.has(k) ?? isAssetField(k)) || /^element\d+_slugs$/.test(k);
         for (const [k, v] of Object.entries(currentValues)) {
-          if (isAssetField(k) || /^element\d+_slugs$/.test(k)) {
+          if (isSlugField(k)) {
             preservedSlugFields[k] = v;
           }
         }
       }
-      setFormValues({ ...prefilled, ...preservedSlugFields, prompt: seededPrompt });
+      const mergedValues = { ...prefilled, ...preservedSlugFields, prompt: seededPrompt };
+      setFormValues(mergedValues);
+      // Seed the active mode from the merged values (not committed state, which
+      // is still stale here). Covers mount, model switch, and provider flip.
+      setActiveModeKey(option?.modes ? inferModeKey(option.modes, mergedValues) : null);
       if (!isRefresh) setDroppedAssets(new Map());
     } catch (e) {
       if (thisRequest !== refreshIdRef.current) return;
@@ -230,6 +268,13 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     if (saved.droppedAssets?.length) {
       setDroppedAssets(new Map(saved.droppedAssets.map(a => [a.slug, a])));
     }
+    // Restore the saved mode when still valid, else re-infer from the values
+    // just merged in (prefilled defaults plus the restored overrides).
+    if (option.modes) {
+      const merged = { ...formValuesRef.current, ...overrides };
+      const validSaved = saved.mode && option.modes.modes.some(m => m.key === saved.mode);
+      setActiveModeKey(validSaved ? saved.mode! : inferModeKey(option.modes, merged));
+    }
   }, [preview, selectedModelKey]);
 
   const handleModelChange = useCallback((modelKey: string) => {
@@ -255,9 +300,23 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     });
   }, [category, initialPrompt, preview, selectedModelKey, fetchPreview]);
 
+  // Switch to a mode that shows `param` if the active mode hides it — so a chat
+  // ui-action never writes a value into a tab where the user can't see it.
+  const revealParamMode = useCallback((param: string) => {
+    const opt = preview?.model_options.find((o) => o.key === selectedModelKey);
+    const m = opt?.modes;
+    if (!m) return;
+    if (visibleParams(m, getMode(m, activeModeKeyRef.current).key).has(param)) return;
+    const target = m.modes.find(
+      (mode) => mode.params.includes(param) || m.shared_params.includes(param),
+    );
+    if (target) setActiveModeKey(target.key);
+  }, [preview, selectedModelKey]);
+
   useImperativeHandle(ref, () => ({
     setField: (name: string, value: string) => {
       setFormValues((prev) => ({ ...prev, [name]: value }));
+      revealParamMode(name);
     },
     setModel: (key: string) => {
       handleModelChange(key);
@@ -265,6 +324,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     setImages: (slugs: string) => {
       const slugList = slugs.split(/\s+/).map((s) => s.startsWith('@') ? s : `@${s}`).filter(Boolean);
       setFormValues((prev) => ({ ...prev, image_slugs: slugList }));
+      revealParamMode('image_slugs');
     },
     setElement: (index: string, field: string, value: string) => {
       const key = `element${index}_${field === 'slugs' ? 'slugs' : field === 'name' ? 'name' : 'desc'}`;
@@ -275,7 +335,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         setFormValues((prev) => ({ ...prev, [key]: value }));
       }
     },
-  }), [handleModelChange]);
+  }), [handleModelChange, revealParamMode]);
 
   const handleFieldChange = useCallback((fieldName: string, value: unknown, dropped?: ResolvedAsset) => {
     setFormValues((prev) => ({ ...prev, [fieldName]: value }));
@@ -316,6 +376,32 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     (o) => o.key === selectedModelKey,
   );
 
+  // --- Mode derivation (only meaningful when the option ships a modes contract) ---
+  const modes = selectedOption?.modes ?? null;
+  const activeMode: ModeSpec | null = modes ? getMode(modes, activeModeKey) : null;
+  const modeVisible = useMemo(
+    () => (modes && activeMode ? visibleParams(modes, activeMode.key) : null),
+    [modes, activeMode],
+  );
+  // Params filtered to the active mode drive submit, cost, and the flip view.
+  const submitValues = useMemo(
+    () => (modes && activeMode ? filterValuesForMode(modes, activeMode.key, formValues) : formValues),
+    [modes, activeMode, formValues],
+  );
+  const submitToolName = selectedOption
+    ? resolveEffectiveToolName(selectedOption, activeModeKey)
+    : undefined;
+  // Union of every asset-slot param across the model's modes — used to
+  // generalize slug preservation/pruning off the field-name allowlist.
+  const optionAssetParams = useMemo(
+    () => (modes ? modeAssetParams(modes) : null),
+    [modes],
+  );
+  const isAssetParam = useCallback(
+    (name: string): boolean => optionAssetParams?.has(name) ?? isAssetField(name),
+    [optionAssetParams],
+  );
+
   // Drop slug values that can't be resolved against the current preview's
   // resolved_assets (or local droppedAssets). Stale slugs — restored from
   // localStorage or leftover from a prior preview — otherwise render as
@@ -340,7 +426,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       });
     };
     const isSlugField = (name: string): boolean =>
-      isAssetField(name) || /^element\d+_slugs$/.test(name);
+      isAssetParam(name) || /^element\d+_slugs$/.test(name);
 
     setFormValues((prev) => {
       let changed = false;
@@ -363,7 +449,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       }
       return changed ? next : prev;
     });
-  }, [preview, droppedAssets, selectedOption]);
+  }, [preview, droppedAssets, selectedOption, isAssetParam]);
 
   // Global provider list (union across all models) and models filtered by selected provider
   const allProviderLabels = useMemo(() => {
@@ -390,23 +476,23 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   }, [preview, selectedProviderKey]);
 
   const jsonPayload = useMemo(() => {
-    if (!selectedOption) return null;
+    if (!selectedOption || !submitToolName) return null;
     return {
-      tool_name: selectedOption.tool_name,
-      args: { ...formValues, project_slug: projectSlug, _provider: selectedProviderKey },
+      tool_name: submitToolName,
+      args: { ...submitValues, project_slug: projectSlug, _provider: selectedProviderKey },
     };
-  }, [selectedOption, formValues, projectSlug, selectedProviderKey]);
+  }, [selectedOption, submitToolName, submitValues, projectSlug, selectedProviderKey]);
 
   const estimateCalls = useMemo<EstimateCall[] | null>(() => {
-    if (!selectedOption) return null;
+    if (!selectedOption || !submitToolName) return null;
     // project_slug lets the server resolve duration-priced models like
     // kling-3.0/motion-control where the billable seconds come from the input
     // motion video, not a user-typed parameter.
     const input: Record<string, unknown> = projectSlug
-      ? { ...formValues, project_slug: projectSlug }
-      : formValues;
-    return [{ toolName: selectedOption.tool_name, input }];
-  }, [selectedOption, formValues, projectSlug]);
+      ? { ...submitValues, project_slug: projectSlug }
+      : submitValues;
+    return [{ toolName: submitToolName, input }];
+  }, [selectedOption, submitToolName, submitValues, projectSlug]);
   const cost = useEstimateCost(callTool, { calls: estimateCalls });
 
   // Live validation warnings derived from current form values
@@ -431,14 +517,25 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         warnings.push('Seedance 2 does not support reference audio combined with first/last frame — pick one or the other.');
       }
     }
+    // Data-driven per-mode budget overflow (e.g. 7 refs carried into a mode
+    // that caps them at 5). Server validation remains authoritative at submit.
+    if (activeMode) {
+      warnings.push(...modeBudgetWarnings(activeMode, formValues));
+    }
     return warnings;
-  }, [selectedOption?.tool_name, formValues.first_clip_slug, formValues.first_frame_slug, formValues.last_frame_slug, formValues.audio_slugs]);
+  }, [selectedOption?.tool_name, activeMode, formValues]);
 
   // Live required-field check derived from current form values. The server
   // computes validation.missing_required once at preview time; this recomputes
   // against the latest formValues so disabling tracks user input live.
   const liveMissingRequired = useMemo(() => {
-    const required = selectedOption?.schema.required ?? [];
+    // Base schema requireds, plus the active mode's requireds, restricted to
+    // params visible in the current mode (a hidden mode's required slug must
+    // not block generation).
+    const schemaRequired = (selectedOption?.schema.required ?? [])
+      .filter((name) => !modeVisible || modeVisible.has(name));
+    const modeRequired = activeMode ? modeRequiredMissing(activeMode, formValues) : [];
+    const required = Array.from(new Set([...schemaRequired, ...modeRequired]));
     const missing: string[] = [];
     for (const name of required) {
       if (name === 'project_slug') continue;
@@ -447,7 +544,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       else if (Array.isArray(v) && v.length === 0) missing.push(name);
     }
     return missing;
-  }, [selectedOption?.schema.required, formValues]);
+  }, [selectedOption?.schema.required, activeMode, modeVisible, formValues]);
 
   const missingRequiredLabel = (name: string): string =>
     name.replace(/_slugs?$/, '').replace(/_/g, ' ');
@@ -536,10 +633,15 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     const droppedArr = Array.from(droppedAssets.entries()).map(([, a]) => ({
       slug: a.slug, src: a.src, thumbnailSrc: a.thumbnailSrc ?? null, type: a.type,
     }));
-    saveGenSettings(category, projectSlug, { model: selectedModelKey, provider: selectedProviderKey, fields, droppedAssets: droppedArr });
+    saveGenSettings(category, projectSlug, { model: selectedModelKey, provider: selectedProviderKey, mode: activeModeKey ?? undefined, fields, droppedAssets: droppedArr });
     try {
-      const args: Record<string, unknown> = { ...formValues, project_slug: projectSlug, _provider: selectedProviderKey };
-      const result = await callToolRef.current(selectedOption.tool_name, args);
+      // Filter to the active mode's params (no-op for non-moded models) and
+      // resolve the mode's tool. The wire payload stays byte-identical since
+      // the omni tool coalesces absent/blank identically.
+      const outValues = modes && activeMode ? filterValuesForMode(modes, activeMode.key, formValues) : formValues;
+      const outToolName = resolveEffectiveToolName(selectedOption, activeModeKey);
+      const args: Record<string, unknown> = { ...outValues, project_slug: projectSlug, _provider: selectedProviderKey };
+      const result = await callToolRef.current(outToolName, args);
       if (result.isError) {
         onGenerationLifecycle?.({ phase: 'failed', requestId });
         setGenState(undefined);
@@ -577,7 +679,43 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setGenState(undefined);
       setError(e instanceof Error ? e.message : 'Generation failed');
     }
-  }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets, promptHistory, onGenerationLifecycle]);
+  }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets, promptHistory, onGenerationLifecycle, modes, activeMode, activeModeKey]);
+
+  // Whether the active model can take a video input (drives the results-strip
+  // extend affordance and gates handleExtendClip).
+  const extendEnabled = !!selectedOption && (
+    modes ? findExtendModeKey(modes) != null : 'video_slug' in (selectedOption.schema?.properties ?? {})
+  );
+
+  // Feed a finished clip into the active model's video-edit input: set the clip,
+  // default the trim window to its tail (last ~2s), switch to the edit mode, and
+  // register it so slot thumbnails resolve. Leaves the prompt untouched.
+  const handleExtendClip = useCallback((tile: ResultTile) => {
+    const opt = preview?.model_options.find((o) => o.key === selectedModelKey);
+    if (!opt || !tile.slug) return;
+    const m = opt.modes ?? null;
+    const supportsVideo = m ? findExtendModeKey(m) != null : 'video_slug' in (opt.schema?.properties ?? {});
+    if (!supportsVideo) return;
+    const win = tailClipWindow(tile.duration);
+    setFormValues((prev) => {
+      const next: Record<string, unknown> = { ...prev, video_slug: tile.slug };
+      if (win) {
+        next.video_clip_start = win.start;
+        next.video_clip_ends = win.ends;
+      } else {
+        delete next.video_clip_start;
+        delete next.video_clip_ends;
+      }
+      return next;
+    });
+    setDroppedAssets((prev) => {
+      const nextMap = new Map(prev);
+      nextMap.set(tile.slug, { slug: tile.slug, src: tile.videoSrc, thumbnailSrc: tile.thumbSrc, type: 'video' });
+      return nextMap;
+    });
+    const extendKey = findExtendModeKey(m);
+    if (extendKey) setActiveModeKey(extendKey);
+  }, [preview, selectedModelKey]);
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
@@ -635,7 +773,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   // -- Full preview form --
   const schema = selectedOption?.schema;
-  const fields = schema
+  const allFields = schema
     ? sortFields(
         Object.entries(schema.properties).filter(
           ([name]) => name !== 'project_slug',
@@ -643,9 +781,36 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       )
     : [];
 
-  const regularFields = fields.filter(([name]) => !isAssetField(name) && !isElementField(name));
+  // Moded models restrict fields to the active mode and route its asset slots
+  // through explicit slot metadata. Non-moded models keep the heuristic split.
+  const slotParamNames = new Set<string>((activeMode?.asset_slots ?? []).map((s) => s.param));
+  const fields = modeVisible ? allFields.filter(([name]) => modeVisible.has(name)) : allFields;
+
+  const applyOverride = (name: string, s: JSONSchemaProperty): JSONSchemaProperty => {
+    const ov = activeMode?.param_overrides?.[name];
+    if (!ov) return s;
+    return { ...s, maxItems: ov.maxItems ?? s.maxItems, description: ov.description ?? s.description };
+  };
+
+  const regularFields = fields.filter(
+    ([name]) => !isElementField(name) && (modes ? !slotParamNames.has(name) : !isAssetField(name)),
+  );
   const imageSlugCandidates = pickImageSlugCandidates(formValues);
-  const assetFields = fields.filter(([name]) => isAssetField(name));
+  const assetFields = modes ? [] : fields.filter(([name]) => isAssetField(name));
+
+  const modeSlots: ExplicitAssetSlot[] | undefined = modes && activeMode
+    ? (activeMode.asset_slots ?? []).map((slot) => ({
+        name: slot.param,
+        kind: slot.kind,
+        label: slot.label,
+        min: slot.min,
+        max: slot.max,
+        isArray: schema?.properties[slot.param]?.type === 'array',
+        value: formValues[slot.param],
+        required: activeMode.required?.includes(slot.param),
+      }))
+    : undefined;
+
   const elementIndices = new Set<number>();
   const elementSchemas = new Map<string, JSONSchemaProperty>();
   for (const [name, s] of fields) {
@@ -665,6 +830,18 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   }));
 
   const imageSlots = selectedOption?.validation.image_slots ?? null;
+
+  // Per-mode tab value hints: a non-active mode owns a filled param that isn't
+  // visible now (a value "hidden" behind another tab).
+  const modeValueHints: Record<string, boolean> = {};
+  if (modes && activeMode) {
+    for (const m of modes.modes) {
+      if (m.key === activeMode.key) continue;
+      modeValueHints[m.key] = m.params.some(
+        (p) => !isEmptyModeValue(formValues[p]) && !modeVisible?.has(p),
+      );
+    }
+  }
 
   const isDisabled = genState === 'submitting' || genState === 'processing' || refreshing;
 
@@ -775,6 +952,19 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
               </div>
             )}
 
+            {modes && activeMode && (
+              <div className="mb-2">
+                <ModeTabs
+                  modes={modes.modes}
+                  activeKey={activeMode.key}
+                  onChange={setActiveModeKey}
+                  disabled={isDisabled}
+                  theme={panelTheme}
+                  valueHints={modeValueHints}
+                />
+              </div>
+            )}
+
             <div className="flex gap-2">
               {/* Left column: prompt + inline params */}
               <div className="flex-1 space-y-2">
@@ -814,7 +1004,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                             <DynamicField
                               key={name}
                               name={name}
-                              schema={s}
+                              schema={applyOverride(name, s)}
                               value={formValues[name]}
                               onChange={(v) => handleFieldChange(name, v)}
                               required={schema?.required?.includes(name)}
@@ -833,11 +1023,12 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
               </div>
 
               {/* Right column: asset slots + element groups */}
-              {(assetFieldInfos.length > 0 || sortedElementIndices.length > 0) && (
+              {(assetFieldInfos.length > 0 || (modeSlots && modeSlots.length > 0) || sortedElementIndices.length > 0) && (
                 <div className="w-56 shrink-0 space-y-2">
-                  {assetFieldInfos.length > 0 && (
+                  {(assetFieldInfos.length > 0 || (modeSlots && modeSlots.length > 0)) && (
                     <ImageParamSlots
                       assetFields={assetFieldInfos}
+                      slots={modeSlots}
                       resolvedAssets={preview.resolved_assets}
                       droppedAssets={droppedAssets}
                       imageSlots={imageSlots}
@@ -865,6 +1056,18 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
             </div>
         </div>}
       </div>
+      {category === 'video' && resultClips && (
+        <div className="shrink-0 px-3 pb-2 pt-1">
+          <GenResultsStrip
+            clips={resultClips}
+            ghosts={resultGhosts ?? []}
+            onExtend={handleExtendClip}
+            extendEnabled={extendEnabled}
+            extendHint="Switch to a model that accepts a source clip to extend"
+            disabled={isDisabled}
+          />
+        </div>
+      )}
     </GenPanel>
   );
 });

@@ -135,5 +135,12 @@ describe("preview_video tool", () => {
     expect(parsed.schema.properties.character_refs).toBeDefined();
     expect(parsed.schema.required).not.toContain("voice_refs");
     expect(parsed.schema.required).not.toContain("character_refs");
+
+    // The omni option ships a modes contract; the kie option does not.
+    const omniOption = parsed.model_options.find((o: { key: string }) => o.key === "gemini_omni");
+    expect(omniOption.modes).not.toBeNull();
+    expect(omniOption.modes.modes.map((m: { key: string }) => m.key)).toEqual(["t2v", "i2v", "r2v", "edit"]);
+    const nonModed = parsed.model_options.find((o: { key: string }) => o.key === "kling30");
+    expect(nonModed.modes).toBeNull();
   });
 });

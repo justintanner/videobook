@@ -142,6 +142,27 @@ describe("translateToolPayload", () => {
     });
   });
 
+  it("edit-mode-filtered args (no duration key) produce the same V2V wire as duration-present", () => {
+    // The client's mode filter OMITS duration in edit mode; the builder drops
+    // it anyway when a clip is present. Both must yield the identical payload.
+    const result = translateToolPayload("generate_google_omni_video", {
+      prompt: "edit the clip",
+      video_slug: "user:123-email:test-video:clip",
+      image_slugs: ["ref-1"],
+      video_clip_start: 2,
+      video_clip_ends: 10,
+    });
+
+    expect(result?.payload).toEqual({
+      prompt: "edit the clip",
+      model: "omni-flash",
+      referenceImage_1: "ref-1",
+      referenceVideo_1: "user:123-email:test-video:clip",
+      startFrameIndex_1: 48,
+      endFrameIndex_1: 240,
+    });
+  });
+
   it("builds Google Omni V2V payload without fabricated trim indexes", () => {
     const result = translateToolPayload("generate_google_omni_video", {
       prompt: "edit the clip",

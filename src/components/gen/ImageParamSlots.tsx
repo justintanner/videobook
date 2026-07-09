@@ -61,6 +61,19 @@ interface AssetFieldInfo {
   required?: boolean;
 }
 
+/** Explicit slot descriptor for moded models — mode metadata drives the label,
+ *  accepted asset kind, and per-mode min/max instead of field-name heuristics. */
+export interface ExplicitAssetSlot {
+  name: string;
+  kind: 'image' | 'video' | 'audio';
+  label: string;
+  min?: number;
+  max?: number | null;
+  isArray: boolean;
+  value: unknown;
+  required?: boolean;
+}
+
 interface ImageParamSlotsProps {
   assetFields: AssetFieldInfo[];
   resolvedAssets?: ResolvedAsset[];
@@ -71,6 +84,81 @@ interface ImageParamSlotsProps {
   inline?: boolean;
   modelKey?: string;
   domain?: Domain;
+  /** When set (moded models), render these slots explicitly and skip the
+   *  field-name heuristic layout entirely. */
+  slots?: ExplicitAssetSlot[];
+}
+
+interface ExplicitSlotsProps {
+  slots: ExplicitAssetSlot[];
+  resolvedAssets?: ResolvedAsset[];
+  droppedAssets?: Map<string, ResolvedAsset>;
+  onChange: (fieldName: string, value: unknown, droppedAsset?: ResolvedAsset) => void;
+  disabled?: boolean;
+  inline?: boolean;
+  domain: Domain;
+}
+
+function ExplicitSlots({
+  slots,
+  resolvedAssets,
+  droppedAssets,
+  onChange,
+  disabled,
+  inline,
+  domain,
+}: ExplicitSlotsProps) {
+  return (
+    <div className="space-y-2">
+      {slots.map((slot) => {
+        if (slot.isArray) {
+          return (
+            <ArraySlotSection
+              key={slot.name}
+              field={{ name: slot.name, schema: { type: 'array' }, value: slot.value, required: slot.required }}
+              imageSlots={{ min: slot.min ?? (slot.required ? 1 : 0), max: slot.max ?? null }}
+              resolvedAssets={resolvedAssets}
+              droppedAssets={droppedAssets}
+              onChange={onChange}
+              disabled={disabled}
+              inline={inline}
+              domain={domain}
+              labelOverride={slot.label}
+              assetKindOverride={slot.kind}
+            />
+          );
+        }
+        const slug = typeof slot.value === 'string' ? slot.value : '';
+        return (
+          <GenSection
+            key={slot.name}
+            label={slot.label.toLowerCase().replace(/\s+/g, '-')}
+            color={domain}
+            required={slot.required}
+          >
+            <AssetDropSlot
+              value={slug ? { slug, src: findThumbnail(slug, resolvedAssets, droppedAssets), type: slot.kind } : null}
+              onChange={(asset) => {
+                if (asset) {
+                  onChange(slot.name, asset.slug, {
+                    slug: asset.slug,
+                    src: asset.src,
+                    thumbnailSrc: asset.thumbnailSrc,
+                    type: asset.type,
+                  });
+                } else {
+                  onChange(slot.name, '');
+                }
+              }}
+              disabled={disabled}
+              acceptTypes={acceptsForImageType(slot.kind)}
+              variant={domain === 'video' ? 'video' : 'image'}
+            />
+          </GenSection>
+        );
+      })}
+    </div>
+  );
 }
 
 function videoThumbFallback(asset: ResolvedAsset): string {
@@ -196,6 +284,10 @@ interface ArraySlotSectionProps {
   disabled?: boolean;
   inline?: boolean;
   domain: Domain;
+  /** Explicit-slots path (moded models) supplies label/kind from mode metadata
+   *  instead of the field-name heuristics. */
+  labelOverride?: string;
+  assetKindOverride?: 'image' | 'video' | 'audio';
 }
 
 function ArraySlotSection({
@@ -207,9 +299,11 @@ function ArraySlotSection({
   disabled,
   inline,
   domain,
+  labelOverride,
+  assetKindOverride,
 }: ArraySlotSectionProps) {
-  const fieldAssetType = slugFieldAssetType(field.name);
-  const sectionLabel = `/${prettifySlugFieldName(field.name).toLowerCase().replace(/\s+/g, '-')}`;
+  const fieldAssetType = assetKindOverride ?? slugFieldAssetType(field.name);
+  const sectionLabel = `/${(labelOverride ?? prettifySlugFieldName(field.name)).toLowerCase().replace(/\s+/g, '-')}`;
   const currentSlugs = Array.isArray(field.value) ? field.value.map(String).filter(Boolean) : [];
   const minSlots = imageSlots?.min ?? (field.required ? 1 : 0);
   const maxSlotsRaw = imageSlots?.max;
@@ -307,7 +401,25 @@ export function ImageParamSlots({
   inline,
   modelKey,
   domain = 'image',
+  slots,
 }: ImageParamSlotsProps) {
+  // Explicit-slots path: moded models supply slot metadata directly, bypassing
+  // the field-name heuristics below.
+  if (slots) {
+    if (slots.length === 0) return null;
+    return (
+      <ExplicitSlots
+        slots={slots}
+        resolvedAssets={resolvedAssets}
+        droppedAssets={droppedAssets}
+        onChange={onChange}
+        disabled={disabled}
+        inline={inline}
+        domain={domain}
+      />
+    );
+  }
+
   if (assetFields.length === 0) {
     return null;
   }
@@ -432,10 +544,10 @@ export function ImageParamSlots({
     }
   };
 
-  const slots: Array<{ slug: string | null; index: number; required: boolean }> = [];
+  const slotList: Array<{ slug: string | null; index: number; required: boolean }> = [];
 
   currentSlugs.forEach((slug, idx) => {
-    slots.push({ slug, index: idx, required: idx < minSlots });
+    slotList.push({ slug, index: idx, required: idx < minSlots });
   });
 
   const emptySlotCount = Math.max(
@@ -445,7 +557,7 @@ export function ImageParamSlots({
 
   for (let i = 0; i < emptySlotCount; i++) {
     const idx = filledCount + i;
-    slots.push({ slug: null, index: idx, required: idx < minSlots });
+    slotList.push({ slug: null, index: idx, required: idx < minSlots });
   }
 
   const slotCountLabel = formatSlotCount(filledCount, minSlots, maxSlots);
@@ -463,7 +575,7 @@ export function ImageParamSlots({
     >
       {needsMore && <p className={cn('text-[10px] font-mono italic', NEEDS_MORE_LABEL[domain])}>{minSlots - filledCount} more required</p>}
       <div className={inline ? 'flex flex-wrap gap-2' : 'flex flex-col gap-2'}>
-        {slots.map(({ slug, index, required }) => (
+        {slotList.map(({ slug, index, required }) => (
           <div
             key={`slot-${index}`}
             className={cn('relative', required && !slug && cn('ring-1 rounded', NEEDS_MORE_RING[domain]))}

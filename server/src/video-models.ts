@@ -578,6 +578,106 @@ const GOOGLE_OMNI_DURATIONS = ["4", "6", "8", "10"];
 const GOOGLE_OMNI_ASPECT_RATIOS = ["16:9", "9:16"];
 
 // ---------------------------------------------------------------------------
+// Generation modes — a server-defined, client-generic contract that lets one
+// tool expose several mutually-exclusive input modes as UI tabs. Delivered as
+// optional data on ModelOption; only tools listed in VIDEO_TOOL_MODES ship
+// modes, and the client renders exactly as before for every option without
+// them. This encodes a tool's exclusivity matrix STRUCTURALLY (params that
+// can't co-exist never share a mode) instead of policing it with warnings.
+//
+// Params not owned by any mode's `params` come from `shared_params` (visible
+// in every mode). `asset_slots` carry the slot metadata the client would
+// otherwise infer from field-name heuristics; `param_overrides` express
+// per-mode budget/description tweaks (e.g. tighter caps alongside a clip).
+// `tool_name` on a mode is reserved for future tool-per-mode models (e.g.
+// collapsing wan27's five entries); unset today, the client falls back to the
+// option's own tool_name.
+// ---------------------------------------------------------------------------
+
+type ModeAssetSlotKind = "image" | "video" | "audio";
+
+type ModeAssetSlot = {
+  param: string;
+  kind: ModeAssetSlotKind;
+  label: string;
+  min?: number;
+  max?: number | null;
+};
+
+type ModeSpec = {
+  key: string;
+  label: string;
+  description?: string;
+  /** Mode-owned params, beyond the shared set. Only these drive mode
+   *  inference, so keep pure settings (duration, seed) in shared_params. */
+  params: string[];
+  /** Shared params suppressed in this mode (e.g. duration in a V2V edit,
+   *  whose output length is fixed by the clip window). */
+  hidden_shared_params?: string[];
+  required?: string[];
+  asset_slots?: ModeAssetSlot[];
+  param_overrides?: Record<string, { maxItems?: number; description?: string }>;
+  tool_name?: string;
+};
+
+type ModelModes = {
+  shared_params: string[];
+  default_mode: string;
+  modes: ModeSpec[];
+};
+
+// Keyed by EFFECTIVE tool name. Google Omni's four modes mirror the
+// exclusivity matrix in tools/generate-google-omni-video.ts: first_frame_slug
+// (I2V) never shares a tab with reference images, a clip, or characters;
+// duration is absent from "edit" (the builder derives output length from the
+// clip window); voice_refs is legal in every mode (shared) but capped at 3
+// alongside a clip; image_slugs caps at 7 for pure references and 5 alongside
+// a clip. The kie sibling generate_gemini_omni_video is deliberately NOT here
+// (it legally combines image_slugs + a clip, which tabs would misrepresent).
+const VIDEO_TOOL_MODES: Record<string, ModelModes> = {
+  generate_google_omni_video: {
+    shared_params: ["prompt", "aspect_ratio", "seed", "voice_refs", "duration"],
+    default_mode: "t2v",
+    modes: [
+      {
+        key: "t2v",
+        label: "text",
+        description: "Prompt-only generation",
+        params: [],
+      },
+      {
+        key: "i2v",
+        label: "first-frame",
+        description: "Animate a start image (no references, characters, or clip)",
+        params: ["first_frame_slug"],
+        required: ["first_frame_slug"],
+        asset_slots: [{ param: "first_frame_slug", kind: "image", label: "First Frame" }],
+      },
+      {
+        key: "r2v",
+        label: "refs",
+        description: "Guide with reference images and characters (7-image shared budget)",
+        params: ["image_slugs", "character_refs"],
+        asset_slots: [{ param: "image_slugs", kind: "image", label: "References", min: 0, max: 7 }],
+      },
+      {
+        key: "edit",
+        label: "video-edit",
+        description: "Re-render or extend a source clip window (output length = the clip window)",
+        params: ["video_slug", "video_clip_start", "video_clip_ends", "image_slugs", "character_refs"],
+        hidden_shared_params: ["duration"],
+        required: ["video_slug"],
+        asset_slots: [
+          { param: "video_slug", kind: "video", label: "Source Clip" },
+          { param: "image_slugs", kind: "image", label: "References", min: 0, max: 5 },
+        ],
+        param_overrides: { voice_refs: { maxItems: 3, description: "Up to 3 voice refs alongside a clip" } },
+      },
+    ],
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Image slot schemas — source of truth is the Apicity Zod request schema.
 // Tools absent from this map have no image-array field; their `image_slots`
 // resolves to null and the UI omits the /images panel.
@@ -1742,6 +1842,7 @@ type ModelOption = {
   validation: ValidationResult;
   image_slots: SlotConstraints | null;
   multi_prompt_slots: number | null;
+  modes: ModelModes | null;
   providers: Array<{ key: string; label: string }>;
   selected_provider: string;
 };
@@ -1834,8 +1935,15 @@ function buildModelOption(
     params.multi_shots ??= false;
   }
 
-  // For video extension tools, prefill video_slug from video assets
-  if (toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video") {
+  // For video extension tools — and Gemini Omni, whose "edit" mode is a V2V
+  // extend — prefill video_slug from a prompt-referenced video asset. Omni
+  // uses the base tool name so both providers benefit; a fresh panel (no @vid
+  // in the prompt) leaves it unset and mode inference stays on t2v.
+  if (
+    toolName === "extend_grok_imagine_video"
+    || toolName === "extend_wan27_video"
+    || toolName === "generate_gemini_omni_video"
+  ) {
     const videoAssets = resolvedAssets.filter((a) => a.asset_type === "video");
     if (videoAssets.length > 0) {
       params.video_slug = videoAssets[0].tag;
@@ -1896,6 +2004,7 @@ function buildModelOption(
     validation,
     image_slots: validation.image_slots,
     multi_prompt_slots: validation.multi_prompt_slots,
+    modes: VIDEO_TOOL_MODES[effectiveToolName] ?? null,
     providers: providerList.map((p) => ({ key: p.key, label: p.label })),
     selected_provider: selectedProvider,
   };
@@ -1906,6 +2015,7 @@ export {
   VIDEO_MODELS,
   IMAGE_FIELD_SCHEMAS,
   PARAM_SCHEMAS,
+  VIDEO_TOOL_MODES,
   getVideoToolSchema,
   validateVideoParams,
   applyVideoToolConstraints,
@@ -1914,4 +2024,15 @@ export {
   extractLastSettingsPerModel,
   extractLastUsedModel,
 };
-export type { VideoModelInfo, ToolSchema, ValidationResult, ModelOption, ActionLogEntry, ProviderRoute };
+export type {
+  VideoModelInfo,
+  ToolSchema,
+  ValidationResult,
+  ModelOption,
+  ModelModes,
+  ModeSpec,
+  ModeAssetSlot,
+  ModeAssetSlotKind,
+  ActionLogEntry,
+  ProviderRoute,
+};
