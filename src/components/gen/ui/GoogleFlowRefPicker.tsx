@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Plus, RefreshCw, User, X } from 'lucide-react'
+import { Loader2, Plus, RefreshCw, Trash2, User, X } from 'lucide-react'
 import { GenField } from '@/components/ui/GenField'
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot'
 import type { GenTheme } from './gen-themes'
@@ -149,6 +149,9 @@ export function GoogleFlowRefPicker({
   const [localMeta, setLocalMeta] = useState<
     Map<string, { displayName?: string; thumbnailUrl?: string | null }>
   >(() => new Map())
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const t = theme ?? genThemes.video
 
@@ -267,6 +270,33 @@ export function GoogleFlowRefPicker({
     }
   }
 
+  async function handleDelete(ref: string) {
+    if (!callTool || !ref) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      const result = await callTool('delete_google_flow_character', { ref })
+      if (result.isError) {
+        const content = result.content as Array<{ type: string; text: string }> | undefined
+        setDeleteError(content?.[0]?.text ?? 'delete_google_flow_character failed')
+        return
+      }
+      if (selectedSet.has(ref)) onChange(selected.filter((r) => r !== ref))
+      setLocalMeta((prev) => {
+        if (!prev.has(ref)) return prev
+        const next = new Map(prev)
+        next.delete(ref)
+        return next
+      })
+      setPendingDelete(null)
+      await refresh()
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const canCreate =
     !disabled
     && !creating
@@ -306,23 +336,61 @@ export function GoogleFlowRefPicker({
                         'bg-black/40',
                       )}
                     >
-                      <CharacterThumb name={name} src={thumb} theme={t} />
-                      <span className={cn('truncate text-xs font-mono max-w-[9rem]', t.activeText)}>
-                        {name}
-                      </span>
-                      <button
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => removeRef(ref)}
-                        aria-label={`Remove ${name}`}
-                        className={cn(
-                          'shrink-0 opacity-60 hover:opacity-100 rounded p-0.5',
-                          'hover:bg-red-500/30',
-                          t.inactiveText,
-                        )}
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
+                      {pendingDelete === ref ? (
+                        <>
+                          <span className={cn('truncate text-[10px] font-mono', t.activeText)}>Delete?</span>
+                          <button
+                            type="button"
+                            disabled={deleting}
+                            onClick={() => void handleDelete(ref)}
+                            className={cn('shrink-0 rounded p-0.5 hover:bg-red-500/30', 'text-red-300/90')}
+                          >
+                            {deleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={deleting}
+                            onClick={() => setPendingDelete(null)}
+                            className={cn('shrink-0 opacity-60 hover:opacity-100 rounded p-0.5', t.inactiveText)}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <CharacterThumb name={name} src={thumb} theme={t} />
+                          <span className={cn('truncate text-xs font-mono max-w-[9rem]', t.activeText)}>
+                            {name}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => removeRef(ref)}
+                            aria-label={`Remove ${name}`}
+                            className={cn(
+                              'shrink-0 opacity-60 hover:opacity-100 rounded p-0.5',
+                              'hover:bg-red-500/30',
+                              t.inactiveText,
+                            )}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={disabled || deleting}
+                            onClick={(e) => { e.stopPropagation(); setPendingDelete(ref) }}
+                            aria-label={`Delete ${name}`}
+                            title="Delete from Google Flow"
+                            className={cn(
+                              'shrink-0 opacity-60 hover:opacity-100 rounded p-0.5',
+                              'hover:bg-red-500/30',
+                              t.inactiveText,
+                            )}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   )
                 })}
@@ -492,33 +560,68 @@ export function GoogleFlowRefPicker({
                 {available.map((e) => {
                   const name = e.displayName && e.displayName !== e.ref ? e.displayName : 'Character'
                   return (
-                    <button
-                      key={e.ref}
-                      type="button"
-                      disabled={disabled || atCap}
-                      title={e.ref}
-                      onClick={() => addRef(e.ref)}
-                      className={cn(
-                        'inline-flex items-center gap-2 max-w-full pl-0.5 pr-2 py-0.5 rounded border text-left',
-                        t.controlBorder,
-                        'bg-black/30 hover:opacity-90 transition-opacity',
-                        'disabled:opacity-40 disabled:cursor-not-allowed',
-                      )}
-                    >
-                      <CharacterThumb name={name} src={e.thumbnailUrl ?? null} theme={t} />
-                      <span className={cn('truncate text-xs font-mono max-w-[9rem]', t.valueText)}>
-                        {name}
-                      </span>
-                    </button>
+                    pendingDelete === e.ref ? (
+                        <div
+                          className={cn(
+                            'inline-flex items-center gap-2 max-w-full pl-0.5 pr-1.5 py-0.5 rounded border',
+                            t.controlBorder,
+                            'bg-black/40',
+                          )}
+                        >
+                          <span className={cn('truncate text-[10px] font-mono', t.valueText)}>Delete?</span>
+                          <button
+                            type="button"
+                            disabled={deleting}
+                            onClick={() => void handleDelete(e.ref)}
+                            className={cn('shrink-0 rounded p-0.5 hover:bg-red-500/30', 'text-red-300/90')}
+                          >
+                            {deleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={deleting}
+                            onClick={() => setPendingDelete(null)}
+                            className={cn('shrink-0 opacity-60 hover:opacity-100 rounded p-0.5', t.inactiveText)}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div
+                          title={e.ref}
+                          onClick={() => { if (!disabled && !atCap) addRef(e.ref) }}
+                          className={cn(
+                            'inline-flex items-center gap-2 max-w-full pl-0.5 pr-1.5 py-0.5 rounded border text-left cursor-pointer',
+                            t.controlBorder,
+                            'bg-black/30 hover:opacity-90 transition-opacity',
+                            (disabled || atCap) && 'opacity-40 cursor-not-allowed',
+                          )}
+                        >
+                          <CharacterThumb name={name} src={e.thumbnailUrl ?? null} theme={t} />
+                          <span className={cn('truncate text-xs font-mono max-w-[9rem]', t.valueText)}>
+                            {name}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={deleting}
+                            onClick={(ev) => { ev.stopPropagation(); setPendingDelete(e.ref) }}
+                            aria-label={`Delete ${name}`}
+                            title="Delete from Google Flow"
+                            className={cn('shrink-0 opacity-60 hover:opacity-100 rounded p-0.5 hover:bg-red-500/30', t.inactiveText)}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                    )
                   )
                 })}
               </div>
             )}
           </div>
 
-          {(error || description) && (
-            <div className={cn('text-[9px] font-mono', error ? 'text-amber-300/80' : 'text-muted-foreground/70')}>
-              {error ?? description}
+          {(deleteError || error || description) && (
+            <div className={cn('text-[9px] font-mono', (deleteError || error) ? 'text-amber-300/80' : 'text-muted-foreground/70')}>
+              {deleteError ?? error ?? description}
             </div>
           )}
         </div>

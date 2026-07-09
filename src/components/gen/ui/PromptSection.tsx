@@ -6,6 +6,8 @@ import { PromptHistoryArrows } from '@/components/ui/PromptHistoryArrows';
 import { ImagePromptRewritePopover, type ImagePromptRewriteSubmit } from '@/components/gen/ImagePromptRewritePopover';
 import type { UsePromptHistoryResult } from '@/hooks/usePromptHistory';
 import type { UseMcpResult } from 'use-mcp/react';
+import type { RichToken } from '@/components/ui/richPromptTokens';
+import type { ChipThumb } from '@/components/ui/AssetThumbChip';
 
 export interface PromptSectionProps {
   value: string;
@@ -25,6 +27,8 @@ export interface PromptSectionProps {
   rewriting?: boolean;
   onRewriteSubmit?: (submit: ImagePromptRewriteSubmit) => void;
   rewriteDisabled?: boolean;
+  resolveRef?: (token: RichToken) => ChipThumb | null;
+  characterMentions?: { n: number; label: string }[];
 }
 
 // Per-domain class strings. Sourced from the canonical 5-domain palette in
@@ -124,6 +128,8 @@ export function PromptSection({
   rewriting = false,
   onRewriteSubmit,
   rewriteDisabled,
+  resolveRef = () => null,
+  characterMentions = [],
 }: PromptSectionProps) {
   const showRewrite = category === 'image' && setRewriteOpen && onRewriteSubmit;
 
@@ -194,7 +200,8 @@ export function PromptSection({
           onChange(next);
           promptHistory.reset();
         }}
-        resolveRef={() => null}
+        resolveRef={resolveRef}
+        characterMentions={characterMentions}
         disabled={disabled}
         autoFocus
         rows={4}

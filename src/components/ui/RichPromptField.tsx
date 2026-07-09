@@ -23,6 +23,7 @@ export interface RichPromptFieldProps {
   resolveRef: (token: RichToken) => ChipThumb | null;
   assetSlugs?: string[]; // candidates for @-mention matching + autocomplete
   slugForAssetId?: (id: string) => string | null; // drag-drop: asset id → slug
+  characterMentions?: { n: number; label: string }[]; // @character_N options for @-autocomplete
   rows?: number;
   // Fill the parent's height instead of sizing to `rows`. The wrapper becomes a
   // flex column that grows (flex-1) and the textarea stretches to fill it, so the
@@ -54,6 +55,7 @@ export function RichPromptField({
   resolveRef,
   assetSlugs = [],
   slugForAssetId,
+  characterMentions = [],
   rows = 4,
   fill = false,
   disabled,
@@ -88,11 +90,20 @@ export function RichPromptField({
   const items = useMemo<AutocompleteItem[]>(() => {
     if (!trigger) return [];
     const f = trigger.filter.toLowerCase();
-    return assetSlugs
+    const charItems: AutocompleteItem[] = (characterMentions ?? [])
+      .filter((cm) => `character_${cm.n}`.toLowerCase().includes(f) || cm.label.toLowerCase().includes(f))
+      .map((cm) => ({
+        type: 'slug' as const,
+        value: `@character_${cm.n}`,
+        label: `character_${cm.n}`,
+        description: cm.label,
+        colorScheme: 'violet' as const,
+      }));
+    const slugItems = (assetSlugs ?? [])
       .filter((s) => s.toLowerCase().includes(f))
-      .slice(0, 30)
       .map((s) => ({ type: 'slug' as const, value: `@${s}`, label: s, description: '', colorScheme: 'cyan' as const }));
-  }, [trigger, assetSlugs]);
+    return [...charItems, ...slugItems].slice(0, 30);
+  }, [trigger, characterMentions, assetSlugs]);
 
   // Reset the dropdown selection/dismissal as the trigger text changes (mirrors
   // ChatInput; setState-in-render is the same pattern it uses).

@@ -8,7 +8,8 @@
 
 export type RichToken =
   | { kind: 'slug'; slug: string }
-  | { kind: 'image-ref'; n: number };
+  | { kind: 'image-ref'; n: number }
+  | { kind: 'character-ref'; n: number };
 
 export interface RichSegment {
   type: 'text' | 'token';
@@ -32,8 +33,15 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // form's lookbehind keeps it from re-matching inside the bracket/@ forms.
 const IMAGE_REF_RE = /\[Image\s*(\d+)\]|@Image\s*(\d+)|(?<![@[\w])Image\s*(\d+)\b/gi;
 
-// Find every image ref and @slug occurrence. @slug only matches a slug we know
-// about (longest-first so e.g. "@vid-intro" wins over a hypothetical "@vid").
+// Positional character refs mirror image refs: useapi's Google Flow prompt accepts
+// inline "@character_1".."@character_7" that bind to the character_1..7 body params
+// videocity already sends from character_refs. Bracketed "[Character N]" and bare
+// "character N" forms resolve to the same token; the bare lookbehind keeps it from
+// re-matching inside the bracket/@ forms.
+const CHARACTER_REF_RE = /\[Character\s*(\d+)\]|@character[_\s]*(\d+)|(?<![@[\w])character[_\s]*(\d+)\b/gi;
+
+// Find every image ref, character ref and @slug occurrence. @slug only matches a
+// slug we know about (longest-first so e.g. "@vid-intro" wins over a hypothetical "@vid").
 export function extractRichTokens(text: string, assetSlugs: string[]): TokenMatch[] {
   const matches: TokenMatch[] = [];
 
@@ -43,6 +51,17 @@ export function extractRichTokens(text: string, assetSlugs: string[]): TokenMatc
       start,
       end: start + m[0].length,
       token: { kind: 'image-ref', n: Number(m[1] ?? m[2] ?? m[3]) },
+    });
+  }
+
+  for (const m of text.matchAll(CHARACTER_REF_RE)) {
+    const start = m.index ?? 0;
+    const end = start + m[0].length;
+    if (matches.some((x) => start < x.end && end > x.start)) continue; // overlap → skip
+    matches.push({
+      start,
+      end,
+      token: { kind: 'character-ref', n: Number(m[1] ?? m[2] ?? m[3]) },
     });
   }
 

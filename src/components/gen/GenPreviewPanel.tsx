@@ -8,7 +8,7 @@ import { DynamicField } from '@/components/gen/ui/DynamicField';
 import { ImageParamSlots } from '@/components/gen/ImageParamSlots';
 import { ElementGroupEditor } from '@/components/gen/ElementGroupEditor';
 import { sortFields, isAssetField, isElementField } from '@/components/gen/ui/fieldHelpers';
-import { pickImageSlugCandidates } from '@/hooks/useGoogleFlowEntities';
+import { pickImageSlugCandidates, useGoogleFlowEntities } from '@/hooks/useGoogleFlowEntities';
 import { stripAssetTagsFromText, stripSlugPrefix } from '@/lib/slugs';
 import { ErrorPage } from '@/components/gen/state/ErrorPage';
 import { JsonNode } from '@/components/ui/JsonNode';
@@ -36,6 +36,8 @@ import { usePromptHistory } from '@/hooks/usePromptHistory';
 import { GenSection } from '@/components/gen/ui/GenSection';
 import { PromptSection } from '@/components/gen/ui/PromptSection';
 import { genThemes } from '@/components/gen/ui/gen-themes';
+import type { RichToken } from '@/components/ui/richPromptTokens';
+import type { ChipThumb } from '@/components/ui/AssetThumbChip';
 import { createGenerationRequestId } from '@/lib/generation-lifecycle';
 import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle';
 
@@ -482,6 +484,39 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     return [{ toolName: submitToolName, input }];
   }, [selectedOption, submitToolName, submitValues, projectSlug]);
   const cost = useEstimateCost(callTool, { calls: estimateCalls });
+  const charEntities = useGoogleFlowEntities('character', category === 'video' ? callTool : undefined, mcpState);
+  const characterRefs = useMemo(
+    () =>
+      Array.isArray(formValues.character_refs)
+        ? (formValues.character_refs as string[]).filter((s) => s.trim() !== '')
+        : [],
+    [formValues.character_refs],
+  );
+  const charMap = useMemo(
+    () => new Map(charEntities.entities.map((e) => [e.ref, e])),
+    [charEntities.entities],
+  );
+  const promptResolveRef = useCallback(
+    (token: RichToken): ChipThumb | null => {
+      if (token.kind === 'character-ref') {
+        const ref = characterRefs[token.n - 1];
+        if (!ref) return null;
+        const e = charMap.get(ref);
+        return {
+          thumbnailSrc: e?.thumbnailUrl ?? null,
+          type: 'character',
+          label: e && e.displayName !== ref ? e.displayName : `Character ${token.n}`,
+          badge: String(token.n),
+        };
+      }
+      return null;
+    },
+    [characterRefs, charMap],
+  );
+  const characterMentions = useMemo(
+    () => characterRefs.map((ref, i) => ({ n: i + 1, label: charMap.get(ref)?.displayName ?? ref })),
+    [characterRefs, charMap],
+  );
 
   // Live validation warnings derived from current form values
   const liveWarnings = useMemo(() => {
@@ -943,6 +978,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                       rewriting={rewriting}
                       onRewriteSubmit={handleRewriteImagePromptSubmit}
                       rewriteDisabled={rewriteDisabled}
+                      resolveRef={promptResolveRef}
+                      characterMentions={characterMentions}
                     />
                   );
                 })()}

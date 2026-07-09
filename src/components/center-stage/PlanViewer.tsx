@@ -2597,6 +2597,7 @@ function PromptEditor({ value, onChange, mediaItems, projectSlug, imageRefs = []
           badge: String(token.n),
         };
       }
+      if (token.kind === 'character-ref') return null;
       const thumb = resolveSlugThumb(token.slug, mediaItems, projectSlug);
       if (!thumb || thumb.kind !== 'image' || !thumb.src) return null;
       return { thumbnailSrc: thumb.src, type: 'image', label: token.slug };
