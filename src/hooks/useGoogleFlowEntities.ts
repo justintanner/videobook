@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { UseMcpResult } from 'use-mcp/react'
 import { GOOGLE_FLOW_VOICE_PRESETS } from '@/lib/google-flow-voice-presets'
 
@@ -9,6 +9,8 @@ export interface GoogleFlowEntityOption {
   ref: string
   displayName: string
   source?: GoogleFlowEntitySource
+  /** Signed preview URL from list enrichment (characters only). */
+  thumbnailUrl?: string | null
 }
 
 interface UseGoogleFlowEntitiesResult {
@@ -68,6 +70,12 @@ export function normalizeGoogleFlowEntities(
             : typeof rec.baseVoice === 'string' && rec.baseVoice.trim()
               ? rec.baseVoice.trim()
               : ref
+    const thumbnailUrl =
+      typeof rec.thumbnail_url === 'string' && rec.thumbnail_url.trim()
+        ? rec.thumbnail_url.trim()
+        : typeof rec.thumbnailUrl === 'string' && rec.thumbnailUrl.trim()
+          ? rec.thumbnailUrl.trim()
+          : null
     const itemSource: GoogleFlowEntitySource | undefined =
       source
       ?? (rec.source === 'system' || rec.source === 'user' ? rec.source : undefined)
@@ -75,6 +83,7 @@ export function normalizeGoogleFlowEntities(
       ref,
       displayName,
       ...(itemSource ? { source: itemSource } : {}),
+      ...(kind === 'character' ? { thumbnailUrl } : {}),
     })
   }
   return out
@@ -220,6 +229,15 @@ export function useGoogleFlowEntities(
     if (loaded || loading) return
     await refresh()
   }, [loaded, loading, refresh])
+
+  // Characters need names/thumbs without waiting for a select focus.
+  useEffect(() => {
+    if (kind !== 'character') return
+    if (!callTool) return
+    if (state !== undefined && state !== 'ready') return
+    if (loaded || loading) return
+    void ensureLoaded()
+  }, [kind, callTool, state, loaded, loading, ensureLoaded])
 
   const systemEntities = useMemo(
     () => entities.filter((e) => e.source === 'system'),

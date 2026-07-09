@@ -10,6 +10,7 @@ import { toolError } from "./_shared.js";
 import { resolveImageSlug } from "./_seedance2-shared.js";
 import type { SchemaArgs, ToolDef, ToolResult } from "./tool-def.js";
 import {
+  readCharacterThumbnailUrl,
   readCreatedRef,
   readEntityList,
   resolveGoogleFlowEmail,
@@ -58,13 +59,72 @@ export async function createGoogleFlowCharacter(
   return { character_ref: ref, display_name: input.displayName, status: "created" };
 }
 
+/** Resolve one character with signed thumbnail (GET characters/ref). */
+export async function getGoogleFlowCharacter(
+  provider: GoogleFlowProvider,
+  ref: string,
+): Promise<GoogleFlowEntity> {
+  const res = await provider.get.v1.characters.retrieve({ ref }) as Record<string, unknown>;
+  const characterRef = readCreatedRef(res, "character") ?? ref;
+  const displayName =
+    (typeof res.displayName === "string" && res.displayName.trim())
+    || (typeof res.display_name === "string" && res.display_name.trim())
+    || (typeof res.name === "string" && res.name.trim())
+    || null;
+  return {
+    ref: characterRef,
+    display_name: displayName,
+    thumbnail_url: readCharacterThumbnailUrl(res),
+    raw: res,
+  };
+}
+
+const PREVIEW_BATCH = 8;
+
+/** Attach signed thumbnail_url via parallel retrieve when list omits media URLs. */
+export async function enrichCharactersWithPreviews(
+  provider: GoogleFlowProvider,
+  characters: GoogleFlowEntity[],
+): Promise<GoogleFlowEntity[]> {
+  if (characters.length === 0) return characters;
+  const out = characters.map((c) => ({ ...c }));
+  for (let i = 0; i < out.length; i += PREVIEW_BATCH) {
+    const batch = out.slice(i, i + PREVIEW_BATCH);
+    const results = await Promise.allSettled(
+      batch.map(async (c) => {
+        if (!c.ref) return c;
+        if (c.thumbnail_url) return c;
+        try {
+          const detail = await getGoogleFlowCharacter(provider, c.ref);
+          return {
+            ...c,
+            display_name: detail.display_name ?? c.display_name,
+            thumbnail_url: detail.thumbnail_url ?? c.thumbnail_url,
+            raw: detail.raw ?? c.raw,
+          };
+        } catch {
+          return c;
+        }
+      }),
+    );
+    for (let j = 0; j < results.length; j++) {
+      const r = results[j];
+      if (r.status === "fulfilled") out[i + j] = r.value;
+    }
+  }
+  return out;
+}
+
 export async function listGoogleFlowCharacters(
   provider: GoogleFlowProvider,
-  input: { email?: string },
+  input: { email?: string; includePreviews?: boolean },
 ): Promise<{ email: string; count: number; characters: GoogleFlowEntity[] }> {
   const email = await resolveGoogleFlowEmail(provider, input.email);
   const res = await provider.get.v1.characters({ email });
-  const characters = readEntityList(res as Record<string, unknown>, "characters", "character");
+  let characters = readEntityList(res as Record<string, unknown>, "characters", "character");
+  if (input.includePreviews !== false) {
+    characters = await enrichCharactersWithPreviews(provider, characters);
+  }
   return { email, count: characters.length, characters };
 }
 
@@ -155,12 +215,17 @@ export function createGoogleFlowCharacterDef(fs: VideocityFs): ToolDef {
 
 const listGoogleFlowCharactersSchema = {
   email: z.string().optional().describe("Google Flow account email; omit to use the single configured account"),
+  include_previews: z
+    .boolean()
+    .optional()
+    .describe("When true (default), resolve signed thumbnail_url for each character via GET characters/ref"),
 } satisfies ZodRawShape;
 
 export function listGoogleFlowCharactersDef(): ToolDef {
   return {
     name: "list_google_flow_characters",
-    description: "List Google Flow characters for an account.",
+    description:
+      "List Google Flow characters for an account (display names + optional signed thumbnail previews).",
     schema: listGoogleFlowCharactersSchema,
     handler: async (args): Promise<ToolResult> => {
       const a = args as SchemaArgs<typeof listGoogleFlowCharactersSchema>;
@@ -169,7 +234,10 @@ export function listGoogleFlowCharactersDef(): ToolDef {
       }
       try {
         const provider = createGoogleFlowProvider();
-        return jsonResult(await listGoogleFlowCharacters(provider, { ...(a.email ? { email: a.email } : {}) }));
+        return jsonResult(await listGoogleFlowCharacters(provider, {
+          ...(a.email ? { email: a.email } : {}),
+          includePreviews: a.include_previews !== false,
+        }));
       } catch (err) {
         return toolError(err instanceof Error ? err.message : String(err));
       }

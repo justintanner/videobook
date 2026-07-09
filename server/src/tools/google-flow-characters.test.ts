@@ -133,9 +133,42 @@ describe("google flow character cores — stubbed provider", () => {
 
   it("lists characters into normalized entities", async () => {
     const provider = stubProvider({ characters: [{ character: "c1", displayName: "Hero" }] });
-    const result = await listGoogleFlowCharacters(provider, { email: "acct@x.com" });
+    const result = await listGoogleFlowCharacters(provider, {
+      email: "acct@x.com",
+      includePreviews: false,
+    });
     expect(result).toMatchObject({ email: "acct@x.com", count: 1 });
-    expect(result.characters[0]).toMatchObject({ ref: "c1", display_name: "Hero" });
+    expect(result.characters[0]).toMatchObject({
+      ref: "c1",
+      display_name: "Hero",
+      thumbnail_url: null,
+    });
+  });
+
+  it("enriches list items with retrieve thumbnails and names", async () => {
+    const fetchFn: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.includes("/characters/") && !url.endsWith("/characters") && !url.includes("?")) {
+        return new Response(JSON.stringify({
+          character: "c1",
+          displayName: "Carol",
+          thumbnailUrl: "https://example.com/thumb.jpg",
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({
+        characters: [{ character: "c1", displayName: "Hero" }],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    const provider = createGoogleFlow({ apiKey: "test-token", fetch: fetchFn });
+    const result = await listGoogleFlowCharacters(provider, {
+      email: "acct@x.com",
+      includePreviews: true,
+    });
+    expect(result.characters[0]).toMatchObject({
+      ref: "c1",
+      display_name: "Carol",
+      thumbnail_url: "https://example.com/thumb.jpg",
+    });
   });
 
   it("deletes a character by ref", async () => {

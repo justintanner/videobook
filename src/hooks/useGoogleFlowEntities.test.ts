@@ -25,13 +25,20 @@ describe('normalizeGoogleFlowEntities', () => {
   it('reads list_google_flow_characters envelope and string items', () => {
     const text = JSON.stringify({
       characters: [
-        { ref: 'user:1-character:ccc', name: 'Hero' },
+        { ref: 'user:1-character:ccc', name: 'Hero', thumbnail_url: 'https://example.com/t.jpg' },
         'user:1-character:ddd',
       ],
     })
     expect(normalizeGoogleFlowEntities(text, 'character')).toEqual([
-      { ref: 'user:1-character:ccc', displayName: 'Hero' },
-      { ref: 'user:1-character:ddd', displayName: 'user:1-character:ddd' },
+      {
+        ref: 'user:1-character:ccc',
+        displayName: 'Hero',
+        thumbnailUrl: 'https://example.com/t.jpg',
+      },
+      {
+        ref: 'user:1-character:ddd',
+        displayName: 'user:1-character:ddd',
+      },
     ])
   })
 

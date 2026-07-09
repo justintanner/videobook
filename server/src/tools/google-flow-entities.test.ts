@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createGoogleFlow } from "@apicity/googleflow";
 import {
+  readCharacterThumbnailUrl,
   readCreatedRef,
   readEntityList,
   readGoogleFlowAccountEmails,
@@ -39,6 +40,25 @@ describe("readCreatedRef", () => {
   });
 });
 
+describe("readCharacterThumbnailUrl", () => {
+  it("prefers thumbnailUrl", () => {
+    expect(readCharacterThumbnailUrl({
+      thumbnailUrl: "https://example.com/t.jpg",
+      imageReferences: [{ previewUrl: "https://example.com/p.jpg" }],
+    })).toBe("https://example.com/t.jpg");
+  });
+
+  it("falls back to first imageReferences previewUrl", () => {
+    expect(readCharacterThumbnailUrl({
+      imageReferences: [{ previewUrl: "https://example.com/p.jpg" }],
+    })).toBe("https://example.com/p.jpg");
+  });
+
+  it("returns null when no media URLs are present", () => {
+    expect(readCharacterThumbnailUrl({ displayName: "Hero" })).toBeNull();
+  });
+});
+
 describe("readEntityList", () => {
   it("reads a list under the plural key", () => {
     const list = readEntityList(
@@ -47,8 +67,8 @@ describe("readEntityList", () => {
       "voice",
     );
     expect(list).toHaveLength(2);
-    expect(list[0]).toMatchObject({ ref: "v1", display_name: "Narrator" });
-    expect(list[1]).toMatchObject({ ref: "v2", display_name: "Villain" });
+    expect(list[0]).toMatchObject({ ref: "v1", display_name: "Narrator", thumbnail_url: null });
+    expect(list[1]).toMatchObject({ ref: "v2", display_name: "Villain", thumbnail_url: null });
   });
 
   it("falls back to the first array-valued property", () => {
@@ -57,9 +77,24 @@ describe("readEntityList", () => {
     expect(list[0].ref).toBe("c1");
   });
 
+  it("reads character thumbnail when present on list item", () => {
+    const list = readEntityList({
+      characters: [{
+        character: "c1",
+        displayName: "Hero",
+        thumbnailUrl: "https://example.com/t.jpg",
+      }],
+    }, "characters", "character");
+    expect(list[0]).toMatchObject({
+      ref: "c1",
+      display_name: "Hero",
+      thumbnail_url: "https://example.com/t.jpg",
+    });
+  });
+
   it("tolerates a bare-string list item", () => {
     const list = readEntityList({ voices: ["v1"] }, "voices", "voice");
-    expect(list[0]).toMatchObject({ ref: "v1", display_name: null });
+    expect(list[0]).toMatchObject({ ref: "v1", display_name: null, thumbnail_url: null });
   });
 
   it("returns an empty list when nothing array-shaped is present", () => {

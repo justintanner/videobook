@@ -43,17 +43,40 @@ export function readCreatedRef(res: Record<string, unknown>, key: "voice" | "cha
 export type GoogleFlowEntity = {
   ref: string | null;
   display_name: string | null;
+  /** Signed preview URL when available (character retrieve / enriched list). */
+  thumbnail_url: string | null;
   raw: unknown;
 };
+
+/** Pull a signed character thumbnail from a retrieve (or list-item) body. */
+export function readCharacterThumbnailUrl(res: Record<string, unknown>): string | null {
+  const direct = firstString(res.thumbnailUrl, res.thumbnail_url);
+  if (direct) return direct;
+  const images = res.imageReferences ?? res.image_references;
+  if (!Array.isArray(images)) return null;
+  for (const img of images) {
+    const rec = asRecord(img);
+    if (!rec) continue;
+    const url = firstString(rec.previewUrl, rec.preview_url, rec.url);
+    if (url) return url;
+  }
+  return null;
+}
 
 function readEntityItem(item: unknown, refKey: "voice" | "character"): GoogleFlowEntity {
   const rec = asRecord(item);
   if (!rec) {
-    return { ref: typeof item === "string" ? item : null, display_name: null, raw: item };
+    return {
+      ref: typeof item === "string" ? item : null,
+      display_name: null,
+      thumbnail_url: null,
+      raw: item,
+    };
   }
   return {
     ref: readCreatedRef(rec, refKey),
     display_name: firstString(rec.displayName, rec.display_name, rec.name),
+    thumbnail_url: refKey === "character" ? readCharacterThumbnailUrl(rec) : null,
     raw: item,
   };
 }

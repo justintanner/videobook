@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Loader2, Plus, RefreshCw, User, X, Swords } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Loader2, Plus, RefreshCw, User, X } from 'lucide-react'
 import { GenField } from '@/components/ui/GenField'
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot'
 import type { GenTheme } from './gen-themes'
@@ -14,6 +14,7 @@ import type { ResolvedAsset } from '@/components/gen/types'
 import type { UseMcpResult } from 'use-mcp/react'
 import {
   nameFromAsset,
+  resolveSlugToAsset,
   seedSlotsFromCandidates,
   type SlotAsset,
 } from './google-flow-character-slots'
@@ -31,7 +32,7 @@ interface GoogleFlowRefPickerProps {
   mcpState?: UseMcpResult['state']
   description?: string
   projectSlug?: string
-  /** Up to 2 image @slugs used to seed forge slots when opening create. */
+  /** Up to 2 image @slugs used to seed create slots when opening create. */
   imageSlugCandidates?: string[]
   resolvedAssets?: ResolvedAsset[]
   droppedAssets?: Map<string, ResolvedAsset>
@@ -44,18 +45,63 @@ function optionLabel(e: GoogleFlowEntityOption): string {
   return `${e.displayName} · ${short}`
 }
 
-function displayNameForRef(ref: string, entities: GoogleFlowEntityOption[]): string {
+function displayNameForRef(
+  ref: string,
+  entities: GoogleFlowEntityOption[],
+  overrides?: Map<string, { displayName?: string; thumbnailUrl?: string | null }>,
+): string {
+  const override = overrides?.get(ref)
+  if (override?.displayName?.trim()) return override.displayName.trim()
   const match = entities.find((e) => e.ref === ref)
   if (match?.displayName && match.displayName !== ref) return match.displayName
-  if (ref.length > 18) return `${ref.slice(0, 18)}…`
+  // Avoid showing raw user:… ids as the primary label while still loading.
+  if (ref.startsWith('user:') || ref.includes('-character:')) return 'Character'
+  if (ref.length > 22) return `${ref.slice(0, 22)}…`
   return ref
 }
 
-function portraitGlyph(name: string): string {
-  const trimmed = name.trim()
-  if (!trimmed) return '?'
-  const letter = trimmed.replace(/^@/, '')[0]
-  return letter ? letter.toUpperCase() : '?'
+function thumbForRef(
+  ref: string,
+  entities: GoogleFlowEntityOption[],
+  overrides?: Map<string, { displayName?: string; thumbnailUrl?: string | null }>,
+): string | null {
+  const override = overrides?.get(ref)
+  if (override?.thumbnailUrl) return override.thumbnailUrl
+  const match = entities.find((e) => e.ref === ref)
+  return match?.thumbnailUrl ?? null
+}
+
+function CharacterThumb({
+  name,
+  src,
+  theme,
+}: {
+  name: string
+  src: string | null
+  theme: GenTheme
+}) {
+  const [broken, setBroken] = useState(false)
+  const showImg = !!src && !broken
+  return (
+    <div
+      className={cn(
+        'w-10 h-10 shrink-0 rounded border overflow-hidden bg-black/60 flex items-center justify-center',
+        theme.controlBorder,
+      )}
+    >
+      {showImg ? (
+        <img
+          src={src}
+          alt=""
+          className="w-full h-full object-cover"
+          onError={() => setBroken(true)}
+        />
+      ) : (
+        <User className={cn('w-4 h-4', theme.inactiveText)} aria-hidden />
+      )}
+      <span className="sr-only">{name}</span>
+    </div>
+  )
 }
 
 export function GoogleFlowRefPicker({
@@ -93,14 +139,24 @@ export function GoogleFlowRefPicker({
   const availableSystem = systemEntities.filter((e) => !selectedSet.has(e.ref))
   const availableUser = userEntities.filter((e) => !selectedSet.has(e.ref))
 
-  const [createOpen, setCreateOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(() => kind === 'character' && selected.length === 0)
   const [createName, setCreateName] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [primarySlot, setPrimarySlot] = useState<SlotAsset | null>(null)
   const [altSlot, setAltSlot] = useState<SlotAsset | null>(null)
+  /** Local name/thumb overrides right after create (before list refresh). */
+  const [localMeta, setLocalMeta] = useState<
+    Map<string, { displayName?: string; thumbnailUrl?: string | null }>
+  >(() => new Map())
 
   const t = theme ?? genThemes.video
+
+  // Keep create open by default when nothing is selected.
+  useEffect(() => {
+    if (kind !== 'character') return
+    if (selected.length === 0) setCreateOpen(true)
+  }, [kind, selected.length])
 
   function addRef(ref: string) {
     if (!ref || selectedSet.has(ref) || atCap) return
@@ -109,9 +165,15 @@ export function GoogleFlowRefPicker({
 
   function removeRef(ref: string) {
     onChange(selected.filter((r) => r !== ref))
+    setLocalMeta((prev) => {
+      if (!prev.has(ref)) return prev
+      const next = new Map(prev)
+      next.delete(ref)
+      return next
+    })
   }
 
-  function openForge() {
+  function openCreate() {
     void ensureLoaded()
     const seeded = seedSlotsFromCandidates(
       imageSlugCandidates,
@@ -128,13 +190,13 @@ export function GoogleFlowRefPicker({
     setCreateOpen(true)
   }
 
-  function closeForge() {
+  function closeCreate() {
+    if (selected.length === 0) return
     setCreateOpen(false)
     setCreateError(null)
-    setCreating(false)
   }
 
-  function resetForgeSlots() {
+  function resetCreateSlots() {
     setPrimarySlot(null)
     setAltSlot(null)
     setCreateName('')
@@ -145,7 +207,7 @@ export function GoogleFlowRefPicker({
     if (!callTool || !projectSlug) return
     const images = [primarySlot?.slug, altSlot?.slug].filter((s): s is string => !!s && s.trim() !== '')
     if (images.length === 0) {
-      setCreateError('Drop a primary image into Slot 01')
+      setCreateError('Drop an image into Image 1')
       return
     }
     const displayName = createName.trim() || nameFromAsset(primarySlot) || 'Character'
@@ -167,14 +229,37 @@ export function GoogleFlowRefPicker({
         setCreateError('create_google_flow_character returned no data')
         return
       }
-      const parsed = JSON.parse(text) as { character_ref?: string }
-      const ref = typeof parsed.character_ref === 'string' ? parsed.character_ref : ''
-      await refresh()
-      if (ref && !selectedSet.has(ref) && !atCap) {
-        onChange([...selected, ref])
+      const parsed = JSON.parse(text) as {
+        character_ref?: string
+        display_name?: string
+        source_images?: string[]
       }
-      resetForgeSlots()
-      setCreateOpen(false)
+      const ref = typeof parsed.character_ref === 'string' ? parsed.character_ref : ''
+      const name = typeof parsed.display_name === 'string' && parsed.display_name.trim()
+        ? parsed.display_name.trim()
+        : displayName
+      let localThumb: string | null = null
+      const sourceId = Array.isArray(parsed.source_images) ? parsed.source_images[0] : undefined
+      if (sourceId) {
+        const asset = resolveSlugToAsset(sourceId, resolvedAssets, droppedAssets)
+          ?? (primarySlot ? primarySlot : null)
+        localThumb = asset?.thumbnailSrc || asset?.src || primarySlot?.thumbnailSrc || primarySlot?.src || null
+      } else if (primarySlot) {
+        localThumb = primarySlot.thumbnailSrc || primarySlot.src || null
+      }
+      if (ref) {
+        setLocalMeta((prev) => {
+          const next = new Map(prev)
+          next.set(ref, { displayName: name, thumbnailUrl: localThumb })
+          return next
+        })
+        if (!selectedSet.has(ref) && !atCap) {
+          onChange([...selected, ref])
+        }
+      }
+      await refresh()
+      resetCreateSlots()
+      if (selected.length > 0 || ref) setCreateOpen(false)
     } catch (e) {
       setCreateError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -182,20 +267,7 @@ export function GoogleFlowRefPicker({
     }
   }
 
-  const placeholder =
-    atCap
-      ? `Max ${maxItems}`
-      : loading
-        ? 'Loading…'
-        : loaded
-          ? kind === 'character'
-            ? 'Recruit character…'
-            : `Add ${kind}…`
-          : kind === 'character'
-            ? 'Load roster…'
-            : `Load ${kind}s…`
-
-  const canForge =
+  const canCreate =
     !disabled
     && !creating
     && !!callTool
@@ -203,193 +275,89 @@ export function GoogleFlowRefPicker({
     && !!primarySlot?.slug
     && !atCap
 
-  // ── Character: party roster + forge ──────────────────────────────────────
+  // ── Character: selected + create + library ───────────────────────────────
   if (kind === 'character') {
     return (
       <GenField label={label} required={required} theme={theme} className="w-full min-w-[280px]">
-        <div className="flex flex-col gap-2.5 w-full">
-          {/* Party header */}
-          <div className="flex items-center justify-between gap-2">
-            <div className={cn('text-[9px] font-mono uppercase tracking-[0.2em]', t.inactiveText)}>
-              Party
-            </div>
-            <div
-              className={cn(
-                'px-1.5 py-0.5 rounded border text-[9px] font-mono uppercase tracking-wider',
-                atCap ? cn(t.activeBg, t.activeBorder, t.activeText) : cn(t.controlBorder, t.inactiveText),
-              )}
-            >
-              {selected.length}/{maxItems}
-            </div>
-          </div>
-
-          {/* Party strip */}
-          <div className="flex flex-wrap gap-2">
-            {selected.map((ref) => {
-              const name = displayNameForRef(ref, entities)
-              return (
-                <div
-                  key={ref}
-                  title={ref}
-                  className={cn(
-                    'group relative flex flex-col items-center w-[4.5rem] rounded border overflow-hidden',
-                    t.activeBg,
-                    t.activeBorder,
-                    'bg-black/50',
-                  )}
-                  style={{ boxShadow: t.activeGlow }}
-                >
-                  <div
-                    className={cn(
-                      'w-full aspect-square flex items-center justify-center',
-                      'bg-gradient-to-b from-violet-500/20 to-black/80',
-                      'border-b',
-                      t.activeBorder,
-                    )}
-                  >
-                    <span className={cn('text-xl font-mono font-bold', t.activeText)}>
-                      {portraitGlyph(name)}
-                    </span>
-                  </div>
-                  <div className="w-full px-1 py-1 flex items-center gap-0.5">
-                    <span className={cn('flex-1 min-w-0 truncate text-[9px] font-mono font-bold', t.activeText)}>
-                      {name}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => removeRef(ref)}
-                      aria-label={`Remove ${name}`}
+        <div className="flex flex-col gap-3 w-full">
+          {/* Selected */}
+          {selected.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className={cn('text-[9px] font-mono uppercase tracking-wider', t.inactiveText)}>
+                  Selected
+                </div>
+                <div className={cn('text-[9px] font-mono', t.inactiveText)}>
+                  {selected.length}/{maxItems}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {selected.map((ref) => {
+                  const name = displayNameForRef(ref, entities, localMeta)
+                  const thumb = thumbForRef(ref, entities, localMeta)
+                  return (
+                    <div
+                      key={ref}
+                      title={ref}
                       className={cn(
-                        'shrink-0 opacity-60 hover:opacity-100 rounded p-0.5',
-                        'hover:bg-red-500/30',
-                        t.inactiveText,
+                        'inline-flex items-center gap-2 max-w-full pl-0.5 pr-1.5 py-0.5 rounded border',
+                        t.activeBg,
+                        t.activeBorder,
+                        'bg-black/40',
                       )}
                     >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-
-            {!atCap && (
-              <button
-                type="button"
-                disabled={disabled || !callTool || !projectSlug}
-                onClick={openForge}
-                title="Forge new character"
-                className={cn(
-                  'flex flex-col items-center justify-center w-[4.5rem] aspect-[3/4] rounded border border-dashed',
-                  t.controlBorder,
-                  t.inactiveText,
-                  'hover:border-violet-400/50 hover:text-violet-200/90 transition-colors',
-                  'disabled:opacity-40 disabled:cursor-not-allowed',
-                  'bg-black/30',
-                )}
-              >
-                <Plus className="w-4 h-4 mb-1" />
-                <span className="text-[8px] font-mono uppercase tracking-wider">Forge</span>
-              </button>
-            )}
-
-            {selected.length === 0 && (
-              <div className={cn('flex-1 min-w-[8rem] self-center text-[9px] font-mono', t.inactiveText)}>
-                No party members — forge one or recruit existing
+                      <CharacterThumb name={name} src={thumb} theme={t} />
+                      <span className={cn('truncate text-xs font-mono max-w-[9rem]', t.activeText)}>
+                        {name}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => removeRef(ref)}
+                        aria-label={`Remove ${name}`}
+                        className={cn(
+                          'shrink-0 opacity-60 hover:opacity-100 rounded p-0.5',
+                          'hover:bg-red-500/30',
+                          t.inactiveText,
+                        )}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )
+                })}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Recruit existing */}
-          <div className="flex items-center gap-1.5">
-            <select
-              value=""
-              disabled={disabled || atCap || !callTool}
-              onFocus={() => void ensureLoaded()}
-              onPointerDown={() => void ensureLoaded()}
-              onChange={(e) => {
-                const v = e.target.value
-                if (v) addRef(v)
-                e.target.value = ''
-              }}
-              className={cn(
-                'flex-1 min-w-0 px-2 py-1.5 bg-black/60 rounded font-mono text-xs appearance-none cursor-pointer',
-                theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
-                'focus:outline-none',
-                theme?.focusBorder ?? 'focus:border-primary/60',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-              )}
-            >
-              <option value="">{placeholder}</option>
-              {available.map((e) => (
-                <option key={e.ref} value={e.ref}>{optionLabel(e)}</option>
-              ))}
-              {loaded && available.length === 0 && (
-                <option value="" disabled>
-                  No characters yet — forge one below
-                </option>
-              )}
-            </select>
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              disabled={disabled || loading || !callTool}
-              title="Refresh roster"
-              className={cn(
-                'flex items-center justify-center w-7 h-7 rounded border shrink-0',
-                t.controlBorder,
-                t.inactiveText,
-                'hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed',
-              )}
-            >
-              {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-            </button>
-          </div>
-
-          {/* Forge panel */}
+          {/* Create form */}
           {!atCap && (
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               {!createOpen ? (
                 <button
                   type="button"
                   disabled={disabled || !callTool || !projectSlug}
-                  onClick={openForge}
+                  onClick={openCreate}
                   className={cn(
                     'inline-flex items-center gap-1.5 self-start px-2.5 py-1.5 rounded border text-[10px] font-mono uppercase tracking-wider',
                     t.controlBorder,
                     t.inactiveText,
-                    'hover:border-violet-400/50 hover:text-violet-100 transition-colors',
+                    'hover:opacity-90 transition-opacity',
                     'disabled:opacity-40 disabled:cursor-not-allowed',
                   )}
                 >
-                  <Swords className="w-3 h-3" />
-                  Forge character
+                  <Plus className="w-3 h-3" />
+                  Add character
                 </button>
               ) : (
-                <div
-                  className={cn(
-                    'relative flex flex-col gap-2.5 p-3 rounded border',
-                    t.controlBorder,
-                    'bg-black/50',
-                  )}
-                  style={primarySlot ? { boxShadow: t.activeGlow } : undefined}
-                >
-                  {/* Corner brackets */}
-                  <div className={cn('pointer-events-none absolute top-1 left-1 w-2 h-2 border-t border-l', t.activeBorder)} />
-                  <div className={cn('pointer-events-none absolute top-1 right-1 w-2 h-2 border-t border-r', t.activeBorder)} />
-                  <div className={cn('pointer-events-none absolute bottom-1 left-1 w-2 h-2 border-b border-l', t.activeBorder)} />
-                  <div className={cn('pointer-events-none absolute bottom-1 right-1 w-2 h-2 border-b border-r', t.activeBorder)} />
-
-                  <div className="flex items-center gap-2">
-                    <User className={cn('w-3.5 h-3.5', t.activeText)} />
-                    <span className={cn('text-[10px] font-mono font-bold uppercase tracking-[0.18em]', t.activeText)}>
-                      New character
-                    </span>
+                <div className={cn('flex flex-col gap-2 p-2.5 rounded border', t.controlBorder, 'bg-black/40')}>
+                  <div className={cn('text-[10px] font-mono uppercase tracking-wider', t.activeText)}>
+                    {selected.length === 0 ? 'Add character' : 'New character'}
                   </div>
 
                   <label className="block">
                     <div className={cn('text-[9px] font-mono uppercase tracking-wider mb-1', t.inactiveText)}>
-                      Name plate
+                      Name
                     </div>
                     <input
                       type="text"
@@ -397,7 +365,6 @@ export function GoogleFlowRefPicker({
                       onChange={(e) => setCreateName(e.target.value)}
                       placeholder="Display name"
                       disabled={disabled || creating}
-                      autoFocus
                       className={cn(
                         'w-full px-2 py-1.5 bg-black/60 rounded font-mono text-xs',
                         theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
@@ -409,8 +376,8 @@ export function GoogleFlowRefPicker({
 
                   <div className="grid grid-cols-2 gap-2">
                     <div className="min-w-0">
-                      <div className={cn('text-[9px] font-mono uppercase tracking-[0.16em] mb-1', t.inactiveText)}>
-                        Slot 01 · Primary
+                      <div className={cn('text-[9px] font-mono uppercase tracking-wider mb-1', t.inactiveText)}>
+                        Image 1
                       </div>
                       <AssetDropSlot
                         value={primarySlot}
@@ -427,8 +394,8 @@ export function GoogleFlowRefPicker({
                       />
                     </div>
                     <div className="min-w-0">
-                      <div className={cn('text-[9px] font-mono uppercase tracking-[0.16em] mb-1', t.inactiveText)}>
-                        Slot 02 · Alt
+                      <div className={cn('text-[9px] font-mono uppercase tracking-wider mb-1', t.inactiveText)}>
+                        Image 2 (optional)
                       </div>
                       <AssetDropSlot
                         value={altSlot}
@@ -442,36 +409,38 @@ export function GoogleFlowRefPicker({
                   </div>
 
                   <div className={cn('text-[9px] font-mono', t.inactiveText)}>
-                    Drop 1–2 reference angles from the sidebar. Primary required.
+                    Drop 1–2 reference images from the sidebar. Image 1 is required.
                   </div>
 
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
-                      disabled={!canForge}
+                      disabled={!canCreate}
                       onClick={() => void handleCreateCharacter()}
                       className={cn(
                         'inline-flex items-center gap-1.5 px-3 py-1.5 rounded border text-[10px] font-mono uppercase tracking-wider transition-colors',
-                        canForge
+                        canCreate
                           ? cn(t.activeBg, t.activeBorder, t.activeText, 'hover:opacity-90')
                           : 'border-zinc-700 text-zinc-500 cursor-not-allowed bg-zinc-900/40',
                       )}
                     >
-                      {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Swords className="w-3 h-3" />}
-                      {creating ? 'Forging…' : 'Forge'}
+                      {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                      {creating ? 'Creating…' : 'Create character'}
                     </button>
-                    <button
-                      type="button"
-                      disabled={creating}
-                      onClick={closeForge}
-                      className={cn(
-                        'px-2 py-1.5 rounded text-[10px] font-mono uppercase tracking-wider',
-                        t.inactiveText,
-                        'hover:opacity-90',
-                      )}
-                    >
-                      Cancel
-                    </button>
+                    {selected.length > 0 && (
+                      <button
+                        type="button"
+                        disabled={creating}
+                        onClick={closeCreate}
+                        className={cn(
+                          'px-2 py-1.5 rounded text-[10px] font-mono uppercase tracking-wider',
+                          t.inactiveText,
+                          'hover:opacity-90',
+                        )}
+                      >
+                        Cancel
+                      </button>
+                    )}
                   </div>
 
                   {createError && (
@@ -481,6 +450,71 @@ export function GoogleFlowRefPicker({
               )}
             </div>
           )}
+
+          {/* Your characters library */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className={cn('text-[9px] font-mono uppercase tracking-wider', t.inactiveText)}>
+                Your characters
+              </div>
+              <button
+                type="button"
+                onClick={() => void refresh()}
+                disabled={disabled || loading || !callTool}
+                title="Refresh characters"
+                className={cn(
+                  'flex items-center justify-center w-6 h-6 rounded border shrink-0',
+                  t.controlBorder,
+                  t.inactiveText,
+                  'hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed',
+                )}
+              >
+                {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              </button>
+            </div>
+
+            {loading && !loaded && (
+              <div className={cn('text-[10px] font-mono', t.inactiveText)}>Loading characters…</div>
+            )}
+
+            {loaded && available.length === 0 && (
+              <div className={cn('text-[10px] font-mono', t.inactiveText)}>
+                {entities.length === 0
+                  ? 'None yet — create one above'
+                  : atCap
+                    ? `Max ${maxItems} selected`
+                    : 'All characters are already selected'}
+              </div>
+            )}
+
+            {available.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {available.map((e) => {
+                  const name = e.displayName && e.displayName !== e.ref ? e.displayName : 'Character'
+                  return (
+                    <button
+                      key={e.ref}
+                      type="button"
+                      disabled={disabled || atCap}
+                      title={e.ref}
+                      onClick={() => addRef(e.ref)}
+                      className={cn(
+                        'inline-flex items-center gap-2 max-w-full pl-0.5 pr-2 py-0.5 rounded border text-left',
+                        t.controlBorder,
+                        'bg-black/30 hover:opacity-90 transition-opacity',
+                        'disabled:opacity-40 disabled:cursor-not-allowed',
+                      )}
+                    >
+                      <CharacterThumb name={name} src={e.thumbnailUrl ?? null} theme={t} />
+                      <span className={cn('truncate text-xs font-mono max-w-[9rem]', t.valueText)}>
+                        {name}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
 
           {(error || description) && (
             <div className={cn('text-[9px] font-mono', error ? 'text-amber-300/80' : 'text-muted-foreground/70')}>
@@ -492,7 +526,16 @@ export function GoogleFlowRefPicker({
     )
   }
 
-  // ── Voice (unchanged select + chips) ─────────────────────────────────────
+  // ── Voice (select + chips) ───────────────────────────────────────────────
+  const placeholder =
+    atCap
+      ? `Max ${maxItems}`
+      : loading
+        ? 'Loading…'
+        : loaded
+          ? `Add ${kind}…`
+          : `Load ${kind}s…`
+
   return (
     <GenField label={label} required={required} theme={theme} className="w-full min-w-[220px]">
       <div className="flex flex-col gap-1.5 w-full">
