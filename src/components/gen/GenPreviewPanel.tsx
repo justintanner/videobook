@@ -5,16 +5,17 @@ import { useMountKey } from '@/contexts/MountKeyContext';
 import { GenPanel } from '@/components/gen/ui/GenPanel';
 import { ModelProviderSelector } from '@/components/gen/ui/ModelSelector';
 import { DynamicField } from '@/components/gen/ui/DynamicField';
-import { ImageParamSlots } from '@/components/gen/ImageParamSlots';
 import { ElementGroupEditor } from '@/components/gen/ElementGroupEditor';
+import { MediaStrip, type CharacterPillData } from '@/components/gen/ui/MediaStrip';
+import { CharacterPickerPopover } from '@/components/gen/ui/CharacterPickerPopover';
+import { characterImageCount } from '@/components/gen/ui/media-strip';
 import { sortFields, isAssetField, isElementField } from '@/components/gen/ui/fieldHelpers';
-import { pickImageSlugCandidates, useGoogleFlowEntities } from '@/hooks/useGoogleFlowEntities';
+import { useGoogleFlowEntities } from '@/hooks/useGoogleFlowEntities';
 import { stripAssetTagsFromText, stripSlugPrefix } from '@/lib/slugs';
 import { ErrorPage } from '@/components/gen/state/ErrorPage';
 import { JsonNode } from '@/components/ui/JsonNode';
 import { ELEMENT_FIELD_RE } from '@/components/gen/types';
 import type { FullPreviewResponse, ModelOption, JSONSchemaProperty, ResolvedAsset, ModeSpec } from '@/components/gen/types';
-import type { ExplicitAssetSlot } from '@/components/gen/ImageParamSlots';
 import {
   getMode,
   visibleParams,
@@ -452,6 +453,19 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     [characterRefs, charMap],
   );
   const charHandles = useMemo(() => charMentions.map((c) => c.handle), [charMentions]);
+  const characterPills = useMemo<CharacterPillData[]>(
+    () =>
+      characterRefs.map((ref) => {
+        const e = charMap.get(ref);
+        return {
+          ref,
+          name: e?.displayName ?? ref,
+          thumbnailUrl: e?.thumbnailUrl ?? null,
+          imageCount: characterImageCount(ref, e ? { image_count: e.image_count } : null),
+        };
+      }),
+    [characterRefs, charMap],
+  );
   const allCharMentions = useMemo(
     () =>
       charEntities.entities.map((e) => ({
@@ -469,6 +483,15 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         : [];
       if (current.includes(ref)) return;
       handleFieldChange('character_refs', [...current, ref]);
+    },
+    [formValues.character_refs, handleFieldChange],
+  );
+  const handleRemoveCharacter = useCallback(
+    (ref: string) => {
+      const current = Array.isArray(formValues.character_refs)
+        ? (formValues.character_refs as string[]).filter((s) => s.trim() !== '')
+        : [];
+      handleFieldChange('character_refs', current.filter((r) => r !== ref));
     },
     [formValues.character_refs, handleFieldChange],
   );
@@ -755,23 +778,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   };
 
   const regularFields = fields.filter(
-    ([name]) => !isElementField(name) && (modes ? !slotParamNames.has(name) : !isAssetField(name)),
+    ([name]) => name !== 'character_refs' && !isElementField(name) && (modes ? !slotParamNames.has(name) : !isAssetField(name)),
   );
-  const imageSlugCandidates = pickImageSlugCandidates(formValues);
   const assetFields = modes ? [] : fields.filter(([name]) => isAssetField(name));
-
-  const modeSlots: ExplicitAssetSlot[] | undefined = modes && activeMode
-    ? (activeMode.asset_slots ?? []).map((slot) => ({
-        name: slot.param,
-        kind: slot.kind,
-        label: slot.label,
-        min: slot.min,
-        max: slot.max,
-        isArray: schema?.properties[slot.param]?.type === 'array',
-        value: formValues[slot.param],
-        required: activeMode.required?.includes(slot.param),
-      }))
-    : undefined;
 
   const elementIndices = new Set<number>();
   const elementSchemas = new Map<string, JSONSchemaProperty>();
@@ -790,8 +799,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     value: formValues[name],
     required: schema?.required?.includes(name),
   }));
-
-  const imageSlots = selectedOption?.validation.image_slots ?? null;
 
   const isDisabled = genState === 'submitting' || genState === 'processing' || refreshing;
 
@@ -893,9 +900,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
               </div>
             )}
 
-            <div className="flex gap-2">
-              {/* Left column: prompt + inline params */}
-              <div className="flex-1 space-y-2">
+            <div className="space-y-2">
                 {regularFields.some(([name]) => name === 'prompt') && (() => {
                   const promptValue = typeof formValues.prompt === 'string' ? (formValues.prompt as string) : '';
                   const slugsRaw = formValues.image_slugs;
@@ -926,6 +931,46 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                     />
                   );
                 })()}
+                {(assetFieldInfos.length > 0 || !!(activeMode?.asset_slots?.length) || characterPills.length > 0) && (
+                  <MediaStrip
+                    option={selectedOption!}
+                    activeMode={activeMode}
+                    formValues={formValues}
+                    resolvedAssets={preview.resolved_assets ?? []}
+                    droppedAssets={droppedAssets}
+                    onChange={handleFieldChange}
+                    disabled={isDisabled}
+                    domain={panelDomain}
+                    characters={characterPills}
+                    onRemoveCharacter={handleRemoveCharacter}
+                    warnings={routedWarnings.references}
+                  />
+                )}
+                {schema?.properties.character_refs && (
+                  <CharacterPickerPopover
+                    selectedRefs={characterRefs}
+                    onChange={(refs) => handleFieldChange('character_refs', refs)}
+                    maxItems={schema.properties.character_refs.maxItems ?? 7}
+                    disabled={isDisabled}
+                    callTool={callTool}
+                    mcpState={mcpState}
+                    projectSlug={projectSlug}
+                    domain={panelDomain}
+                  />
+                )}
+                {category === 'image' && sortedElementIndices.length > 0 && (
+                  <ElementGroupEditor
+                    elementGroupIndices={sortedElementIndices}
+                    elementSchemas={elementSchemas}
+                    formValues={formValues}
+                    resolvedAssets={preview.resolved_assets}
+                    droppedAssets={droppedAssets}
+                    assets={[]}
+                    onChange={handleFieldChange}
+                    disabled={isDisabled}
+                    domain={panelDomain}
+                  />
+                )}
                 {(regularFields.filter(([name]) => name !== 'prompt').length > 0 || settingsLevelWarnings.length > 0) && (
                   <GenSection label="settings" color={panelDomain} warning={settingsLevelWarnings}>
                     {regularFields.filter(([name]) => name !== 'prompt').length > 0 && (
@@ -945,48 +990,12 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                               callTool={callTool}
                               mcpState={mcpState}
                               projectSlug={projectSlug}
-                              imageSlugCandidates={imageSlugCandidates}
-                              resolvedAssets={preview.resolved_assets}
-                              droppedAssets={droppedAssets}
                             />
                           ))}
                       </div>
                     )}
                   </GenSection>
                 )}
-              </div>
-
-              {/* Right column: asset slots + element groups */}
-              {(assetFieldInfos.length > 0 || (modeSlots && modeSlots.length > 0) || sortedElementIndices.length > 0) && (
-                <div className="w-56 shrink-0 space-y-2">
-                  {(assetFieldInfos.length > 0 || (modeSlots && modeSlots.length > 0)) && (
-                    <ImageParamSlots
-                      assetFields={assetFieldInfos}
-                      slots={modeSlots}
-                      resolvedAssets={preview.resolved_assets}
-                      droppedAssets={droppedAssets}
-                      imageSlots={imageSlots}
-                      onChange={handleFieldChange}
-                      disabled={isDisabled}
-                      modelKey={selectedModelKey}
-                      domain={panelDomain}
-                    />
-                  )}
-                  {sortedElementIndices.length > 0 && (
-                    <ElementGroupEditor
-                      elementGroupIndices={sortedElementIndices}
-                      elementSchemas={elementSchemas}
-                      formValues={formValues}
-                      resolvedAssets={preview.resolved_assets}
-                      droppedAssets={droppedAssets}
-                      assets={[]}
-                      onChange={handleFieldChange}
-                      disabled={isDisabled}
-                      domain={panelDomain}
-                    />
-                  )}
-                </div>
-              )}
             </div>
         </div>}
       </div>

@@ -10,8 +10,6 @@ import {
   modeAssetParams,
   modeBudgetWarnings,
   effectiveToolName,
-  tailClipWindow,
-  findExtendModeKey,
 } from './modes';
 
 // Mirror of the server VIDEO_TOOL_MODES entry for generate_google_omni_video.
@@ -181,33 +179,5 @@ describe('effectiveToolName', () => {
   it('returns the option tool name when there are no modes', () => {
     expect(effectiveToolName({ tool_name: 'generate_kling30_video', modes: null }, null))
       .toBe('generate_kling30_video');
-  });
-});
-
-describe('tailClipWindow', () => {
-  it('covers the last 2s, capped at the 10s timeline', () => {
-    expect(tailClipWindow(8)).toEqual({ start: 6, ends: 8 });
-    expect(tailClipWindow(25)).toEqual({ start: 8, ends: 10 });
-    expect(tailClipWindow(1.5)).toEqual({ start: 0, ends: 1.5 });
-  });
-  it('returns null for unknown or non-positive durations', () => {
-    expect(tailClipWindow(null)).toBeNull();
-    expect(tailClipWindow(undefined)).toBeNull();
-    expect(tailClipWindow(0)).toBeNull();
-    expect(tailClipWindow(-3)).toBeNull();
-  });
-});
-
-describe('findExtendModeKey', () => {
-  it('finds the first mode owning video_slug', () => {
-    expect(findExtendModeKey(OMNI)).toBe('edit');
-  });
-  it('returns null when no mode takes a video or modes is absent', () => {
-    const noVideo: ModelModes = {
-      shared_params: ['prompt'], default_mode: 'a', modes: [{ key: 'a', label: 'A', params: [] }],
-    };
-    expect(findExtendModeKey(noVideo)).toBeNull();
-    expect(findExtendModeKey(null)).toBeNull();
-    expect(findExtendModeKey(undefined)).toBeNull();
   });
 });

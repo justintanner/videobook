@@ -34,6 +34,7 @@ describe('normalizeGoogleFlowEntities', () => {
         ref: 'user:1-character:ccc',
         displayName: 'Hero',
         thumbnailUrl: 'https://example.com/t.jpg',
+        image_count: null,
       },
       {
         ref: 'user:1-character:ddd',

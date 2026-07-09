@@ -113,24 +113,3 @@ export function effectiveToolName(
   }
   return option.tool_name;
 }
-
-/** Clip window covering the last ~2s of a source clip, for one-click extend.
- *  null when the duration is unknown/non-positive (the server then defaults to
- *  the full clip). Rounded to 2 decimals; capped at the 10s trim timeline. */
-export function tailClipWindow(
-  durationSeconds: number | null | undefined,
-): { start: number; ends: number } | null {
-  if (durationSeconds == null || !(durationSeconds > 0)) return null;
-  const round2 = (n: number): number => Math.round(n * 100) / 100;
-  const ends = Math.min(durationSeconds, 10);
-  const start = Math.max(0, ends - 2);
-  return { start: round2(start), ends: round2(ends) };
-}
-
-/** The mode an "extend this clip" action switches to: the first mode whose
- *  params include video_slug (omni's "edit"). null when the model has none. */
-export function findExtendModeKey(modes: ModelModes | null | undefined): string | null {
-  if (!modes) return null;
-  const mode = modes.modes.find((m) => m.params.includes('video_slug'));
-  return mode?.key ?? null;
-}

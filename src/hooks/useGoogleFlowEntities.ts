@@ -11,6 +11,8 @@ export interface GoogleFlowEntityOption {
   source?: GoogleFlowEntitySource
   /** Signed preview URL from list enrichment (characters only). */
   thumbnailUrl?: string | null
+  /** Number of source images (characters only, from server image_count). */
+  image_count?: number | null
 }
 
 interface UseGoogleFlowEntitiesResult {
@@ -79,11 +81,15 @@ export function normalizeGoogleFlowEntities(
     const itemSource: GoogleFlowEntitySource | undefined =
       source
       ?? (rec.source === 'system' || rec.source === 'user' ? rec.source : undefined)
+    const imageCount =
+      typeof rec.image_count === 'number' ? rec.image_count
+      : typeof rec.imageCount === 'number' ? rec.imageCount
+      : null
     out.push({
       ref,
       displayName,
       ...(itemSource ? { source: itemSource } : {}),
-      ...(kind === 'character' ? { thumbnailUrl } : {}),
+      ...(kind === 'character' ? { thumbnailUrl, image_count: imageCount } : {}),
     })
   }
   return out

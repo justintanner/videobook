@@ -1,7 +1,7 @@
 import { GenField, GenTextarea } from '@/components/ui/GenField';
 import { GenToggle } from '@/components/ui/GenToggle';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
-import type { JSONSchemaProperty, ResolvedAsset } from '../types';
+import type { JSONSchemaProperty } from '../types';
 import { isAssetField } from './fieldHelpers';
 import type { GenTheme } from './gen-themes';
 import { genThemes } from './gen-themes';
@@ -23,10 +23,6 @@ interface DynamicFieldProps {
   callTool?: UseMcpResult['callTool'];
   mcpState?: UseMcpResult['state'];
   projectSlug?: string;
-  /** Image @slugs available for Google Flow character create (image_slugs + first_frame). */
-  imageSlugCandidates?: string[];
-  resolvedAssets?: ResolvedAsset[];
-  droppedAssets?: Map<string, ResolvedAsset>;
 }
 
 // Convert field name to display label
@@ -70,9 +66,6 @@ export function DynamicField({
   callTool,
   mcpState,
   projectSlug,
-  imageSlugCandidates,
-  resolvedAssets,
-  droppedAssets,
 }: DynamicFieldProps) {
   const label = labelOverride || formatLabel(name);
 
@@ -83,24 +76,19 @@ export function DynamicField({
     if (schema.items?.type === 'string' || !schema.items?.type) {
       if (!isAssetField(name)) {
         const list = Array.isArray(value) ? (value as unknown[]).map(String) : [];
-        if (name === 'voice_refs' || name === 'character_refs') {
-          const kind = name === 'voice_refs' ? 'voice' : 'character';
+        if (name === 'voice_refs') {
           return (
             <GoogleFlowRefPicker
-              kind={kind}
               label={label}
               value={list}
               onChange={(refs) => onChange(refs)}
-              maxItems={schema.maxItems ?? (kind === 'voice' ? 5 : 7)}
+              maxItems={schema.maxItems ?? 5}
               required={required}
               disabled={disabled}
               theme={theme}
               callTool={callTool}
               mcpState={mcpState}
               projectSlug={projectSlug}
-              imageSlugCandidates={imageSlugCandidates}
-              resolvedAssets={resolvedAssets}
-              droppedAssets={droppedAssets}
               description={placeholderOverride ?? schema.description}
             />
           );
