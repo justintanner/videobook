@@ -11,6 +11,7 @@ import {
   buildApplyPayload,
   previewTargetSlug,
   statusLabel,
+  resolvePreviewUrls,
 } from "./rename-all-helpers";
 
 function row(overrides: Partial<RenameRow> = {}): RenameRow {
@@ -198,5 +199,41 @@ describe("statusLabel", () => {
     expect(statusLabel({ ...row(), status: "conflict", included: false } as never)).toBe("conflict");
     expect(statusLabel({ ...row(), status: "renamable", included: true } as never)).toBe("will rename");
     expect(statusLabel({ ...row(), status: "renamable", included: false } as never)).toBe("excluded");
+  });
+});
+
+describe("resolvePreviewUrls", () => {
+  it("picks first and last original_frames for videos", () => {
+    const urls = resolvePreviewUrls({
+      type: "video",
+      frameDirs: {
+        original_frames: [
+          "/files/p/vid-a/original_frames/9.91.jpg",
+          "/files/p/vid-a/original_frames/0.00.jpg",
+          "/files/p/vid-a/original_frames/4.95.jpg",
+        ],
+      },
+    });
+    expect(urls.first).toContain("0.00.jpg");
+    expect(urls.last).toContain("9.91.jpg");
+  });
+
+  it("falls back to poster when no frames", () => {
+    const urls = resolvePreviewUrls({
+      type: "video",
+      thumbnailSrc: "/files/p/vid-a/original.jpg",
+    });
+    expect(urls.first).toBe("/files/p/vid-a/original.jpg");
+    expect(urls.last).toBe("/files/p/vid-a/original.jpg");
+  });
+
+  it("uses thumbnail for images", () => {
+    const urls = resolvePreviewUrls({
+      type: "image",
+      thumbnailSrc: "/files/p/img-a/original.jpg",
+      filePath: "/files/p/img-a/original.png",
+    });
+    expect(urls.first).toBe("/files/p/img-a/original.jpg");
+    expect(urls.last).toBeNull();
   });
 });

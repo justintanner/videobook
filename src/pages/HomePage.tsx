@@ -1715,6 +1715,7 @@ export function HomePage() {
                   <RenameAllPanel
                     projectSlug={projectSlug ?? ''}
                     callTool={callTool}
+                    mediaItems={mediaItems}
                     onApplied={handleRenameAllApplied}
                     onClose={() => setRenameAllOpen(false)}
                   />

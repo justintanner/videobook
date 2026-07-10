@@ -1,8 +1,8 @@
 /**
  * Pure helpers for the RenameAllPanel UI: building editable rows from the
  * server dry-run response, recomputing target slugs on edit, gating the
- * confirm button, and assembling the apply payload. No React, no network —
- * fully unit-testable.
+ * confirm button, assembling the apply payload, and picking preview frames.
+ * No React, no network — fully unit-testable.
  */
 import type { RenameRow } from "./rename-all-server-types";
 
@@ -12,6 +12,61 @@ export interface EditableRow extends RenameRow {
   draftName: string;
   /** Whether this row has been edited since the last server revalidation. */
   dirty: boolean;
+}
+
+/** First/last still URLs for a video (or a single image URL). */
+export interface AssetPreviewUrls {
+  first: string | null;
+  last: string | null;
+}
+
+/** Parse `12.34.jpg` style frame filenames to a numeric timestamp. */
+export function parseFrameTimestamp(url: string): number {
+  const match = url.match(/(\d+(?:\.\d+)?)\.jpg(?:\?|$)/i);
+  return match ? parseFloat(match[1]) : 0;
+}
+
+/** Prefer original_frames, then landscape/portrait/square frame dirs. */
+export function pickFrameDir(
+  frameDirs?: Record<string, string[]> | null,
+): string[] {
+  if (!frameDirs) return [];
+  const preferred = ["original_frames", "landscape_frames", "portrait_frames", "square_frames"];
+  for (const key of preferred) {
+    const list = frameDirs[key];
+    if (list && list.length > 0) return list;
+  }
+  for (const list of Object.values(frameDirs)) {
+    if (list && list.length > 0) return list;
+  }
+  return [];
+}
+
+/** Resolve first + last frame URLs from frameDirs (videos) or a single
+ *  thumbnail/media URL (images). */
+export function resolvePreviewUrls(opts: {
+  type: "video" | "image" | string;
+  frameDirs?: Record<string, string[]> | null;
+  thumbnailSrc?: string | null;
+  filePath?: string | null;
+}): AssetPreviewUrls {
+  if (opts.type === "video") {
+    const frames = pickFrameDir(opts.frameDirs)
+      .filter((u) => /\.jpe?g(?:\?|$)/i.test(u))
+      .slice()
+      .sort((a, b) => parseFrameTimestamp(a) - parseFrameTimestamp(b));
+    if (frames.length > 0) {
+      return {
+        first: frames[0],
+        last: frames[frames.length - 1],
+      };
+    }
+    const poster = opts.thumbnailSrc || opts.filePath || null;
+    return { first: poster, last: poster };
+  }
+
+  const img = opts.thumbnailSrc || opts.filePath || null;
+  return { first: img, last: null };
 }
 
 export function toEditableRows(rows: RenameRow[]): EditableRow[] {

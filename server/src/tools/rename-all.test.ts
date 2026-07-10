@@ -17,6 +17,7 @@ import {
   parseSuggestionResponse,
   rewriteTimelineReferences,
   rewriteDeep,
+  isProcessOrigin,
 } from "../rename-helpers.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -212,6 +213,15 @@ describe("applyableRows", () => {
   });
 });
 
+describe("isProcessOrigin", () => {
+  it("flags pipeline labels that must not drive names", () => {
+    expect(isProcessOrigin("last_frame")).toBe(true);
+    expect(isProcessOrigin("first_frame")).toBe(true);
+    expect(isProcessOrigin("external")).toBe(true);
+    expect(isProcessOrigin("user-upload")).toBe(false);
+  });
+});
+
 describe("buildSuggestionPrompt", () => {
   it("lists each asset id, type, and context snippet", () => {
     const text = buildSuggestionPrompt([
@@ -220,15 +230,26 @@ describe("buildSuggestionPrompt", () => {
     expect(text).toContain("vid-abc (video)");
     expect(text).toContain("a dog running");
     expect(text).toContain("JSON object");
+    expect(text).toContain("last frame");
+    expect(text).toContain("VISUAL content");
   });
 
-  it("truncates long context to 600 chars", () => {
-    const long = "x".repeat(800);
+  it("truncates long context to 700 chars", () => {
+    const long = "x".repeat(900);
     const text = buildSuggestionPrompt([
       { asset_id: "vid-abc", type: "video", context_text: long },
     ]);
-    expect(text).toContain("x".repeat(600));
-    expect(text).not.toContain("x".repeat(601));
+    expect(text).toContain("x".repeat(700));
+    expect(text).not.toContain("x".repeat(701));
+  });
+
+  it("notes missing text context and optional preview images", () => {
+    const text = buildSuggestionPrompt(
+      [{ asset_id: "img-empty", type: "image", context_text: "" }],
+      { hasImages: true },
+    );
+    expect(text).toContain("no text context");
+    expect(text).toContain("Preview images follow");
   });
 });
 

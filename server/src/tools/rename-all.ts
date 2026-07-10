@@ -1,14 +1,17 @@
 /**
  * rename_all MCP tool — bulk rename vid/img assets with an explicit dry
  * run. Dry run uses GPT-5.5 (@apicity/openai) once over each asset's stored
- * context (videos: analysis/transcript text; images: prompt/origin metadata)
- * to propose descriptive names, then revalidates user edits and finally
- * applies via fs.renameAsset + first-class reference updates.
+ * context (videos: analysis/prompt/transcript; images: analysis/prompt +
+ * parent-video context for extracted frames) plus preview stills (vision),
+ * then revalidates user edits and finally applies via fs.renameAsset +
+ * first-class reference updates.
  */
 import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { createOpenAi, firstContent } from "@apicity/openai";
-import type { OpenAiMessage } from "@apicity/openai";
+import type { OpenAiContentPart, OpenAiMessage } from "@apicity/openai";
 import {
   isRenamable,
   humanizeSlug,
@@ -19,6 +22,7 @@ import {
   applyableRows,
   rewriteTimelineReferences,
   rewriteDeep,
+  isProcessOrigin,
   type RenameRow,
   type AssetContext,
   type EditedRename,
@@ -109,28 +113,38 @@ async function handleDryRunSuggest(
   }
 
   const candidates = assets.filter((a) => isRenamable(a.id));
-  const contexts: AssetContext[] = [];
-  for (const a of candidates) {
-    const ctx = await loadAssetContext(fs, a.id, a.type, projectSlug);
-    if (ctx) contexts.push(ctx);
-  }
-
-  if (contexts.length === 0) {
+  if (candidates.length === 0) {
     return {
       content: [{
         type: "text" as const,
         text: JSON.stringify({
           dry_run: true,
           rows: [],
-          note: "No vid/img assets with usable context text found.",
+          note: "No vid/img assets found.",
         }),
       }],
     };
   }
 
-  const provider = createOpenAi({ apiKey, timeout: 90_000 });
+  const contexts: AssetContext[] = [];
+  for (const a of candidates) {
+    const ctx = await loadAssetContext(fs, a.id, a.type, projectSlug);
+    contexts.push(
+      ctx ?? {
+        asset_id: a.id,
+        type: a.id.startsWith("vid-") ? "video" : "image",
+        context_text: "",
+      },
+    );
+  }
+
+  const previews = await loadPreviewStills(fs, contexts, projectSlug);
+  const hasImages = previews.some((p) => p.parts.length > 0);
+  const contentParts = buildMultimodalContent(contexts, previews, hasImages);
+
+  const provider = createOpenAi({ apiKey, timeout: 120_000 });
   const messages: OpenAiMessage[] = [
-    { role: "user", content: buildSuggestionPrompt(contexts) },
+    { role: "user", content: contentParts },
   ];
   const result = await provider.post.v1.chat.completions({
     model: MODEL,
@@ -231,8 +245,9 @@ async function handleApply(
 }
 
 /** Load the stored context text used to drive GPT's name suggestion.
- *  Videos: analysis summary + transcript text. Images: prompt + origin meta.
- *  Returns null when no useful text is available (skip the asset). */
+ *  Videos: visual analysis + generation prompt + short transcript.
+ *  Images: analysis, generation prompt, and parent-video context for
+ *  extracted frames. Returns null when no useful text is available. */
 async function loadAssetContext(
   fs: VideocityFs,
   assetId: string,
@@ -248,6 +263,38 @@ async function loadAssetContext(
   return null;
 }
 
+function decodeJsonBuffer(value: string | Buffer): string {
+  return typeof value === "string" ? value : new TextDecoder().decode(value);
+}
+
+/** Pull summary / subjects / setting / tags from `.original.analysis.json`. */
+async function readAnalysisParts(
+  fs: VideocityFs,
+  assetId: string,
+  projectSlug: string,
+): Promise<string[]> {
+  const parts: string[] = [];
+  const analysisRead = await fs.readFile(assetId, ".original.analysis.json", projectSlug);
+  if (!analysisRead.ok) return parts;
+  try {
+    const analysis = JSON.parse(decodeJsonBuffer(analysisRead.value)) as Record<string, unknown>;
+    const summary = typeof analysis.summary === "string" ? analysis.summary : "";
+    const subjects = Array.isArray(analysis.subjects) ? analysis.subjects.join(", ") : "";
+    const setting = typeof analysis.setting === "string" ? analysis.setting : "";
+    const tags = Array.isArray(analysis.tags) ? analysis.tags.join(", ") : "";
+    const prompt = typeof analysis.prompt === "string" ? analysis.prompt : "";
+    if (summary) parts.push(summary);
+    if (subjects) parts.push(`subjects: ${subjects}`);
+    if (setting) parts.push(`setting: ${setting}`);
+    if (tags) parts.push(`tags: ${tags}`);
+    // Image describe_image caches a reproduction prompt in analysis.
+    if (prompt && !summary) parts.push(prompt.slice(0, 400));
+  } catch {
+    // ignore parse errors
+  }
+  return parts;
+}
+
 async function loadVideoContext(
   fs: VideocityFs,
   assetId: string,
@@ -255,38 +302,32 @@ async function loadVideoContext(
 ): Promise<AssetContext | null> {
   const parts: string[] = [];
 
-  const analysisRead = await fs.readFile(assetId, ".original.analysis.json", projectSlug);
-  if (analysisRead.ok) {
-    try {
-      const analysis = JSON.parse(
-        typeof analysisRead.value === "string"
-          ? analysisRead.value
-          : new TextDecoder().decode(analysisRead.value),
-      ) as Record<string, unknown>;
-      const summary = typeof analysis.summary === "string" ? analysis.summary : "";
-      const subjects = Array.isArray(analysis.subjects) ? analysis.subjects.join(", ") : "";
-      const setting = typeof analysis.setting === "string" ? analysis.setting : "";
-      const tags = Array.isArray(analysis.tags) ? analysis.tags.join(", ") : "";
-      if (summary) parts.push(summary);
-      if (subjects) parts.push(`subjects: ${subjects}`);
-      if (setting) parts.push(`setting: ${setting}`);
-      if (tags) parts.push(`tags: ${tags}`);
-    } catch {
-      // ignore parse errors
+  parts.push(...(await readAnalysisParts(fs, assetId, projectSlug)));
+
+  // Generation prompt is often the richest description when analysis is missing.
+  const meta = await fs.readMetadata<Record<string, unknown>>(assetId, "original", projectSlug);
+  if (meta.ok) {
+    const prompt = typeof meta.value.prompt === "string" ? meta.value.prompt.trim() : "";
+    if (prompt) {
+      // Strip long @refs so the model focuses on the scene description.
+      const cleaned = prompt
+        .replace(/@\w[\w-]*/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 500);
+      if (cleaned) parts.push(`generation prompt: ${cleaned}`);
     }
   }
 
+  // Transcript is secondary — cap length so it doesn't drown out visuals.
   for (const transFile of [".analysis.gpt4otrans.json", "elevenlabs.json"]) {
     const transRead = await fs.readFile(assetId, transFile, projectSlug);
     if (!transRead.ok) continue;
     try {
-      const parsed = JSON.parse(
-        typeof transRead.value === "string"
-          ? transRead.value
-          : new TextDecoder().decode(transRead.value),
-      ) as { text?: string };
+      const parsed = JSON.parse(decodeJsonBuffer(transRead.value)) as { text?: string };
       if (parsed.text && parsed.text.trim()) {
-        parts.push(`transcript: ${parsed.text.trim()}`);
+        const snippet = parsed.text.trim().replace(/\s+/g, " ").slice(0, 220);
+        parts.push(`spoken: ${snippet}`);
         break;
       }
     } catch {
@@ -304,15 +345,207 @@ async function loadImageContext(
   projectSlug: string,
 ): Promise<AssetContext | null> {
   const parts: string[] = [];
+  parts.push(...(await readAnalysisParts(fs, assetId, projectSlug)));
+
   const meta = await fs.readMetadata<Record<string, unknown>>(assetId, "original", projectSlug);
   if (meta.ok) {
-    const prompt = typeof meta.value.prompt === "string" ? meta.value.prompt : "";
     const origin = typeof meta.value.origin === "string" ? meta.value.origin : "";
-    if (prompt) parts.push(prompt);
-    if (origin) parts.push(`origin: ${origin}`);
+    const prompt = typeof meta.value.prompt === "string" ? meta.value.prompt.trim() : "";
+    const sourceAsset =
+      typeof meta.value.source_asset === "string" ? meta.value.source_asset : "";
+    const sourceAssets = Array.isArray(meta.value.source_assets)
+      ? meta.value.source_assets.filter((s): s is string => typeof s === "string")
+      : [];
+
+    // Extracted frames: inherit the parent video's visual analysis, not "last_frame".
+    if (sourceAsset && origin && /_frame$/i.test(origin)) {
+      const parent = await loadVideoContext(fs, sourceAsset, projectSlug);
+      if (parent?.context_text) {
+        parts.push(`still from ${sourceAsset}: ${parent.context_text.slice(0, 400)}`);
+      }
+    } else if (sourceAssets.length > 0) {
+      // Composite / edit images: briefly describe source materials, then edit intent.
+      for (const src of sourceAssets.slice(0, 3)) {
+        if (src.startsWith("vid-")) {
+          const parent = await loadVideoContext(fs, src, projectSlug);
+          if (parent?.context_text) {
+            parts.push(`source ${src}: ${parent.context_text.slice(0, 200)}`);
+          }
+        } else if (src.startsWith("img-")) {
+          const srcAnalysis = await readAnalysisParts(fs, src, projectSlug);
+          if (srcAnalysis.length > 0) {
+            parts.push(`source ${src}: ${srcAnalysis.join(" ").slice(0, 200)}`);
+          } else {
+            const srcMeta = await fs.readMetadata<Record<string, unknown>>(
+              src,
+              "original",
+              projectSlug,
+            );
+            if (srcMeta.ok) {
+              const srcOrigin =
+                typeof srcMeta.value.origin === "string" ? srcMeta.value.origin : "";
+              const srcSource =
+                typeof srcMeta.value.source_asset === "string"
+                  ? srcMeta.value.source_asset
+                  : "";
+              if (srcSource && srcOrigin && /_frame$/i.test(srcOrigin)) {
+                const parent = await loadVideoContext(fs, srcSource, projectSlug);
+                if (parent?.context_text) {
+                  parts.push(`source ${src}: ${parent.context_text.slice(0, 200)}`);
+                }
+              }
+            }
+          }
+        }
+      }
+      if (prompt) {
+        parts.push(`edit intent: ${prompt.slice(0, 300)}`);
+      }
+    } else if (prompt) {
+      parts.push(prompt.slice(0, 500));
+    }
+
+    // Process origins (last_frame, external, …) are not naming signals.
+    if (origin && !isProcessOrigin(origin)) {
+      parts.push(`origin: ${origin}`);
+    }
   }
+
   if (parts.length === 0) return null;
   return { asset_id: assetId, type: "image", context_text: parts.join("\n") };
+}
+
+// --- Vision previews --------------------------------------------------------
+
+interface AssetPreview {
+  asset_id: string;
+  parts: OpenAiContentPart[];
+}
+
+const PREVIEW_CANDIDATES = [
+  "square.jpg",
+  "landscape.jpg",
+  "original.jpg",
+  "portrait.jpg",
+  "original.png",
+] as const;
+
+/** Prefer first/last original_frames for videos; fall back to poster jpg. */
+async function loadPreviewStills(
+  fs: VideocityFs,
+  contexts: AssetContext[],
+  projectSlug: string,
+): Promise<AssetPreview[]> {
+  const out: AssetPreview[] = [];
+  for (const ctx of contexts) {
+    const parts =
+      ctx.type === "video" || ctx.asset_id.startsWith("vid-")
+        ? await loadVideoPreviewParts(fs, ctx.asset_id, projectSlug)
+        : await loadImagePreviewParts(fs, ctx.asset_id, projectSlug);
+    out.push({ asset_id: ctx.asset_id, parts });
+  }
+  return out;
+}
+
+async function loadVideoPreviewParts(
+  fs: VideocityFs,
+  assetId: string,
+  projectSlug: string,
+): Promise<OpenAiContentPart[]> {
+  const frameParts = await loadEndFrameParts(fs, assetId, projectSlug);
+  if (frameParts.length > 0) return frameParts;
+  return loadImagePreviewParts(fs, assetId, projectSlug);
+}
+
+/** Read first + last jpg from original_frames via the asset dir on disk.
+ *  Nested frame paths are not readable through fs.readFile (filename safety). */
+async function loadEndFrameParts(
+  fs: VideocityFs,
+  assetId: string,
+  projectSlug: string,
+): Promise<OpenAiContentPart[]> {
+  const manifest = await fs.getManifest(assetId, projectSlug);
+  if (!manifest.ok) return [];
+  const frames = manifest.value.directories?.original_frames
+    ?? manifest.value.directories?.landscape_frames
+    ?? null;
+  if (!frames || frames.length === 0) return [];
+
+  const jpgs = frames.filter((f) => f.endsWith(".jpg")).sort((a, b) => {
+    const ta = parseFloat(a.replace(/\.jpg$/i, "")) || 0;
+    const tb = parseFloat(b.replace(/\.jpg$/i, "")) || 0;
+    return ta - tb;
+  });
+  if (jpgs.length === 0) return [];
+
+  const first = jpgs[0];
+  const last = jpgs[jpgs.length - 1];
+  const dirKey = manifest.value.directories?.original_frames
+    ? "original_frames"
+    : "landscape_frames";
+  const picks = first === last ? [first] : [first, last];
+  const parts: OpenAiContentPart[] = [];
+  for (const name of picks) {
+    try {
+      const buf = await readFile(join(manifest.value.path, dirKey, name));
+      parts.push(imagePartFromBuffer(buf, "image/jpeg"));
+    } catch {
+      // skip missing frame
+    }
+  }
+  return parts;
+}
+
+async function loadImagePreviewParts(
+  fs: VideocityFs,
+  assetId: string,
+  projectSlug: string,
+): Promise<OpenAiContentPart[]> {
+  for (const filename of PREVIEW_CANDIDATES) {
+    const read = await fs.readFile(assetId, filename, projectSlug);
+    if (!read.ok) continue;
+    const buf = Buffer.isBuffer(read.value)
+      ? read.value
+      : Buffer.from(read.value);
+    // Cap very large originals (~1.5MB decoded) so the request stays reasonable.
+    if (buf.length > 1_500_000) continue;
+    const mime = filename.endsWith(".png") ? "image/png" : "image/jpeg";
+    return [imagePartFromBuffer(buf, mime)];
+  }
+  return [];
+}
+
+function imagePartFromBuffer(buf: Buffer, mime: string): OpenAiContentPart {
+  return {
+    type: "image_url",
+    image_url: {
+      url: `data:${mime};base64,${buf.toString("base64")}`,
+      detail: "low",
+    },
+  };
+}
+
+/** Build multimodal chat content: instruction text + per-asset stills. */
+function buildMultimodalContent(
+  contexts: AssetContext[],
+  previews: AssetPreview[],
+  hasImages: boolean,
+): OpenAiContentPart[] | string {
+  const text = buildSuggestionPrompt(contexts, { hasImages });
+  if (!hasImages) return text;
+
+  const byId = new Map(previews.map((p) => [p.asset_id, p.parts]));
+  const parts: OpenAiContentPart[] = [{ type: "text", text }];
+  for (const ctx of contexts) {
+    const images = byId.get(ctx.asset_id) ?? [];
+    if (images.length === 0) continue;
+    parts.push({
+      type: "text",
+      text: `Preview for ${ctx.asset_id}:`,
+    });
+    parts.push(...images);
+  }
+  return parts;
 }
 
 /** Rewrite first-class references after a batch rename: timeline slots/audio,

@@ -303,23 +303,66 @@ export function applyableRows(rows: RenameRow[]): RenameRow[] {
 
 // --- GPT prompt construction (pure) -----------------------------------------
 
+/** Origins that describe how an image was produced, not what it shows. */
+export const PROCESS_ORIGINS = new Set([
+  "first_frame",
+  "last_frame",
+  "custom_frame",
+  "external",
+  "upload",
+  "apply_cuts",
+]);
+
+/** Whether a metadata origin is a process label (useless alone for naming). */
+export function isProcessOrigin(origin: string): boolean {
+  return PROCESS_ORIGINS.has(origin.trim().toLowerCase());
+}
+
 /** Build the single GPT-5.5 user message requesting a JSON map of
- *  asset_id → short descriptive name. Kept pure for unit testing. */
-export function buildSuggestionPrompt(assets: AssetContext[]): string {
+ *  asset_id → short descriptive name. Kept pure for unit testing.
+ *  When `hasImages` is true, the message notes that preview frames follow. */
+export function buildSuggestionPrompt(
+  assets: AssetContext[],
+  opts: { hasImages?: boolean } = {},
+): string {
   const entries = assets.map((a) => {
     const label = `${a.asset_id} (${a.type})`;
-    const snippet = a.context_text.slice(0, 600).replace(/\s+/g, " ").trim();
-    return `- ${label}: ${snippet}`;
+    const snippet = a.context_text.slice(0, 700).replace(/\s+/g, " ").trim();
+    return snippet
+      ? `- ${label}: ${snippet}`
+      : `- ${label}: (no text context — use the preview image)`;
   });
+
+  const imageNote = opts.hasImages
+    ? [
+        "Preview images follow this list: for each asset_id, one or more stills",
+        "(videos: first frame then last frame; images: the image itself).",
+        "Prefer what you SEE in the previews over process labels in the text.",
+        "",
+      ]
+    : [];
 
   return [
     "You rename video and image assets in a creative project so their slugs",
-    "describe their content. For each asset below, propose a SHORT (2-4 words)",
-    "descriptive name derived ONLY from the provided context text. Use plain",
-    "words a human would search for. Do not invent details not in the context.",
+    "describe their VISUAL content. For each asset, propose a SHORT (2-4 words)",
+    "descriptive name a human would search for later.",
     "",
+    "Rules:",
+    "- Name the subject, setting, action, or prop that is actually shown.",
+    "- Prefer concrete nouns (people, objects, places) over abstract process words.",
+    "- Do NOT invent details absent from the context text and preview images.",
+    "- Do NOT name after pipeline/meta labels: last frame, first frame, update,",
+    "  device image, locked off, fixed camera, external, upload, edit, regenerate.",
+    "- Do NOT copy typo-ridden edit prompts (\"updat ethe device...\") — describe",
+    "  the resulting image instead.",
+    "- Prefer analysis/summary/visual cues over raw transcript; use spoken words",
+    "  only when they name a distinctive prop or topic (e.g. a product brand).",
+    "- Make names distinct within this batch when assets look different.",
+    "- Keep names lowercase plain words (no punctuation, no asset ids).",
+    "",
+    ...imageNote,
     "Return ONLY a JSON object mapping each asset_id to the proposed name.",
-    "Example: {\"vid-abc123\": \"sunset beach run\", \"img-xyz\": \"neon fox portrait\"}",
+    "Example: {\"vid-abc123\": \"three men pitch gadget\", \"img-xyz\": \"green mmm device\"}",
     "",
     "Assets:",
     ...entries,

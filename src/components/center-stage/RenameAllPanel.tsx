@@ -6,6 +6,7 @@ import { toast } from '@/hooks/useToast';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import { CloseButton } from '@/components/ui/CloseButton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import type { MediaItem } from '@/components/sidebar/types';
 import { ViewerToolbar } from './viewer-shared';
 import {
   toEditableRows,
@@ -18,7 +19,9 @@ import {
   buildApplyPayload,
   previewTargetSlug,
   statusLabel,
+  resolvePreviewUrls,
   type EditableRow,
+  type AssetPreviewUrls,
 } from './rename-all-helpers';
 import type {
   RenameAllDryRunResponse,
@@ -30,18 +33,41 @@ type TextContent = Array<{ type: string; text: string }>;
 interface RenameAllPanelProps {
   projectSlug: string;
   callTool: UseMcpResult['callTool'];
+  mediaItems?: MediaItem[];
   onApplied: () => void;
   onClose: () => void;
 }
 
 type Phase = "loading" | "ready" | "revalidating" | "applying" | "done";
 
-export function RenameAllPanel({ projectSlug, callTool, onApplied, onClose }: RenameAllPanelProps) {
+export function RenameAllPanel({
+  projectSlug,
+  callTool,
+  mediaItems = [],
+  onApplied,
+  onClose,
+}: RenameAllPanelProps) {
   useMountKey("viewer");
   const [phase, setPhase] = useState<Phase>("loading");
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [applied, setApplied] = useState<RenameAllApplyResult | null>(null);
+
+  const previewById = useMemo(() => {
+    const map = new Map<string, AssetPreviewUrls>();
+    for (const item of mediaItems) {
+      map.set(
+        item.id,
+        resolvePreviewUrls({
+          type: item.type,
+          frameDirs: item.frameDirs,
+          thumbnailSrc: item.thumbnailSrc,
+          filePath: item.filePath,
+        }),
+      );
+    }
+    return map;
+  }, [mediaItems]);
 
   const applyDryRunResult = useCallback(
     (result: { isError?: boolean; content: TextContent }) => {
@@ -235,6 +261,7 @@ export function RenameAllPanel({ projectSlug, callTool, onApplied, onClose }: Re
                       <RenameRowCard
                         key={row.asset_id}
                         row={row}
+                        preview={previewById.get(row.asset_id)}
                         occupiedIds={occupiedIds}
                         disabled={phase !== "ready"}
                         onToggleIncluded={() =>
@@ -314,12 +341,14 @@ export function RenameAllPanel({ projectSlug, callTool, onApplied, onClose }: Re
 
 function RenameRowCard({
   row,
+  preview,
   occupiedIds,
   disabled,
   onToggleIncluded,
   onEditName,
 }: {
   row: EditableRow;
+  preview?: AssetPreviewUrls;
   occupiedIds: Set<string>;
   disabled: boolean;
   onToggleIncluded: () => void;
@@ -335,7 +364,7 @@ function RenameRowCard({
   return (
     <div
       className={cn(
-        "grid grid-cols-[auto_1fr_1fr] gap-3 items-center rounded border px-3 py-2.5 transition-colors",
+        "grid grid-cols-[auto_auto_1fr_1fr] gap-3 items-center rounded border px-3 py-2.5 transition-colors",
         isConflict
           ? "border-red-500/40 bg-red-500/5"
           : isSkipped
@@ -360,6 +389,8 @@ function RenameRowCard({
       >
         {row.included && <CheckCircle2 className="w-3.5 h-3.5" />}
       </button>
+
+      <AssetPreviewThumb type={row.type} preview={preview} />
 
       <div className="min-w-0 flex flex-col gap-0.5">
         <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/40">
@@ -426,6 +457,51 @@ function RenameRowCard({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/** First/last frame strip for videos; single still for images. */
+function AssetPreviewThumb({
+  type,
+  preview,
+}: {
+  type: string;
+  preview?: AssetPreviewUrls;
+}) {
+  const first = preview?.first ?? null;
+  const last = preview?.last ?? null;
+  const showSplit = type === "video" && first && last && first !== last;
+
+  if (!first && !last) {
+    return (
+      <div
+        className="w-20 h-12 rounded border border-zinc-800/80 bg-zinc-900/60 shrink-0"
+        aria-hidden
+      />
+    );
+  }
+
+  if (showSplit) {
+    return (
+      <div
+        className="w-20 h-12 rounded border border-zinc-700/70 overflow-hidden flex shrink-0 bg-black/40"
+        title="First and last frame"
+      >
+        <img src={first!} alt="" className="w-1/2 h-full object-cover" draggable={false} />
+        <div className="w-px shrink-0 bg-black/50" />
+        <img src={last!} alt="" className="w-1/2 h-full object-cover" draggable={false} />
+      </div>
+    );
+  }
+
+  const src = first ?? last!;
+  return (
+    <div
+      className="w-20 h-12 rounded border border-zinc-700/70 overflow-hidden shrink-0 bg-black/40"
+      title={type === "video" ? "Video poster" : "Image"}
+    >
+      <img src={src} alt="" className="w-full h-full object-cover" draggable={false} />
     </div>
   );
 }
