@@ -27,6 +27,7 @@ export interface PromptSectionProps {
   rewriting?: boolean;
   onRewriteSubmit?: (submit: ImagePromptRewriteSubmit) => void;
   rewriteDisabled?: boolean;
+  rewriteSupported?: boolean;
   resolveRef?: (token: RichToken) => ChipThumb | null;
   characterMentions?: { handle: string; label: string; ref: string }[];
   characterHandles?: string[];
@@ -134,6 +135,7 @@ export function PromptSection({
   rewriting = false,
   onRewriteSubmit,
   rewriteDisabled,
+  rewriteSupported,
   resolveRef = () => null,
   characterMentions = [],
   characterHandles = [],
@@ -143,7 +145,7 @@ export function PromptSection({
   assetMentions = [],
   onPickAsset,
 }: PromptSectionProps) {
-  const showRewrite = category === 'image' && setRewriteOpen && onRewriteSubmit;
+  const showRewrite = rewriteSupported === true && setRewriteOpen && onRewriteSubmit;
 
   const rightSlot = (
     <div className="flex items-center gap-3 h-6">
@@ -170,13 +172,16 @@ export function PromptSection({
           callTool={callTool}
           projectSlug={projectSlug}
           model={selectedModelKey}
+          variant={category === 'video' ? 'video' : 'image'}
           trigger={
             <button
               type="button"
               tabIndex={-1}
               onClick={() => setRewriteOpen((o) => !o)}
               disabled={rewriteDisabled}
-              title="Rewrite prompt to match a platform aesthetic (IG/TikTok/YouTube) and clean up artifacts"
+              title={category === 'video'
+                ? 'Rewrite prompt against the Google Flow provider docs (adapts around a prior failure if one exists)'
+                : 'Rewrite prompt to match a platform aesthetic (IG/TikTok/YouTube) and clean up artifacts'}
               className={cn(
                 'h-6 px-2 flex items-center gap-1.5 rounded',
                 'text-[10px] font-mono font-bold uppercase tracking-wider',

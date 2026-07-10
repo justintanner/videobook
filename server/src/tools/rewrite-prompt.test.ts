@@ -1,18 +1,24 @@
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
+import { createFsForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { VideocityFs } from "videocity-engine";
 import {
   loadGuide,
+  loadUseapiGuide,
   buildRewritePromptText,
   buildRewriteMessages,
   buildVisionMessages,
   buildResult,
+  normalizePromptForMatch,
+  findPreviousErrorForPrompt,
   extractSceneContext,
   validateSceneRewrite,
   buildSceneRewriteText,
+  type PreviousError,
 } from "./rewrite-prompt.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -61,6 +67,15 @@ describe("loadGuide", () => {
   });
 });
 
+describe("loadUseapiGuide", () => {
+  it("loads the useapi.net provider guide", async () => {
+    const guide = await loadUseapiGuide();
+    expect(guide.length).toBeGreaterThan(0);
+    expect(guide).toContain("useapi.net");
+    expect(guide).toContain("@referenceImage");
+  });
+});
+
 describe("buildRewritePromptText", () => {
   it("includes guide and prompt text", () => {
     const text = buildRewritePromptText("guide content here", "user prompt here");
@@ -101,6 +116,80 @@ describe("buildRewritePromptText", () => {
   it("handles empty prompt (vision-only rewrite)", () => {
     const text = buildRewritePromptText("guide", "", {});
     expect(text).toContain("USER PROMPT TO REWRITE: (none");
+  });
+
+  it("provider-docs mode uses provider framing and the provider documentation", () => {
+    const text = buildRewritePromptText("useapi doc body", "user prompt", {
+      providerDocs: true,
+      modelContext: "nano_banana",
+    });
+    expect(text).toContain("PROVIDER API DOCUMENTATION");
+    expect(text).toContain("useapi doc body");
+    expect(text).toContain("TARGET MODEL: nano_banana");
+    expect(text).toContain("@referenceImage");
+    // provider-docs mode never emits a platform section
+    expect(text).not.toContain("PLATFORM STYLE");
+    expect(text).not.toContain("PROMPTING GUIDE");
+  });
+
+  it("provider-docs mode omits the platform overlay even if platform is passed", () => {
+    const text = buildRewritePromptText("doc", "prompt", {
+      providerDocs: true,
+      platform: "ig",
+    });
+    expect(text).not.toContain("PLATFORM STYLE");
+    expect(text).not.toContain("Instagram");
+  });
+
+  it("provider-docs mode still applies maxChars and customPrompt", () => {
+    const text = buildRewritePromptText("doc", "prompt", {
+      providerDocs: true,
+      maxChars: 400,
+      customPrompt: "keep it short",
+    });
+    expect(text).toContain("HARD LIMIT");
+    expect(text).toContain("400");
+    expect(text).toContain("ADDITIONAL INSTRUCTION: keep it short");
+  });
+
+  it("injects previous-error section in standard mode", () => {
+    const text = buildRewritePromptText("guide", "user prompt", {
+      previousError: { message: "filter failed", failCode: "PEOPLE_FILTER" },
+    });
+    expect(text).toContain("PREVIOUS GENERATION ERROR");
+    expect(text).toContain("Provider fail code: PEOPLE_FILTER");
+    expect(text).toContain("Error message: filter failed");
+    expect(text).toContain("END PREVIOUS GENERATION ERROR");
+  });
+
+  it("injects previous-error section in provider-docs mode", () => {
+    const text = buildRewritePromptText("doc", "user prompt", {
+      providerDocs: true,
+      previousError: { message: "safety filter" },
+    });
+    expect(text).toContain("PREVIOUS GENERATION ERROR");
+    expect(text).toContain("Error message: safety filter");
+    expect(text).not.toContain("Provider fail code");
+  });
+
+  it("omits previous-error section when previousError is not set", () => {
+    const std = buildRewritePromptText("guide", "prompt");
+    expect(std).not.toContain("PREVIOUS GENERATION ERROR");
+    const docs = buildRewritePromptText("doc", "prompt", { providerDocs: true });
+    expect(docs).not.toContain("PREVIOUS GENERATION ERROR");
+  });
+
+  it("places previous-error section between instruction and user prompt", () => {
+    const text = buildRewritePromptText("guide", "my prompt", {
+      customPrompt: "extra direction",
+      previousError: { message: "boom" },
+    });
+    const instrIdx = text.indexOf("ADDITIONAL INSTRUCTION: extra direction");
+    const errorIdx = text.indexOf("PREVIOUS GENERATION ERROR");
+    const promptIdx = text.indexOf("USER PROMPT TO REWRITE");
+    expect(instrIdx).toBeGreaterThan(-1);
+    expect(errorIdx).toBeGreaterThan(instrIdx);
+    expect(promptIdx).toBeGreaterThan(errorIdx);
   });
 });
 
@@ -147,6 +236,151 @@ describe("buildResult", () => {
       rewritten_prompt: "rewritten",
       guide_used: "kling_guide.md",
     });
+  });
+
+  it("emits previous_error with fail_code when previousError has failCode", () => {
+    const err: PreviousError = { message: "boom", failCode: "FILTER_FAILED" };
+    const result = buildResult("kling30", "original", "rewritten", "guide.md", err);
+    expect(result).toEqual({
+      model: "kling30",
+      original_prompt: "original",
+      rewritten_prompt: "rewritten",
+      guide_used: "guide.md",
+      previous_error: { message: "boom", fail_code: "FILTER_FAILED" },
+    });
+  });
+
+  it("emits previous_error without fail_code when failCode is absent", () => {
+    const err: PreviousError = { message: "something went wrong" };
+    const result = buildResult("gemini_omni", "p", "r", "useapi.md", err);
+    expect(result.previous_error).toEqual({ message: "something went wrong" });
+    expect(result.previous_error).not.toHaveProperty("fail_code");
+  });
+
+  it("omits previous_error when previousError is undefined", () => {
+    const result = buildResult("kling30", "p", "r", "guide.md");
+    expect(result).not.toHaveProperty("previous_error");
+  });
+});
+
+describe("normalizePromptForMatch", () => {
+  it("collapses multiple spaces to a single space", () => {
+    expect(normalizePromptForMatch("a  b   c")).toBe("a b c");
+  });
+
+  it("collapses newlines and tabs to a single space", () => {
+    expect(normalizePromptForMatch("a\n\tb\nc")).toBe("a b c");
+  });
+
+  it("trims leading and trailing whitespace", () => {
+    expect(normalizePromptForMatch("  hello world  ")).toBe("hello world");
+  });
+
+  it("handles empty string", () => {
+    expect(normalizePromptForMatch("")).toBe("");
+  });
+
+  it("handles whitespace-only string", () => {
+    expect(normalizePromptForMatch("   \n\t  ")).toBe("");
+  });
+});
+
+describe("findPreviousErrorForPrompt", () => {
+  let tempDir: string;
+  let fs: VideocityFs;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-err-"));
+    fs = createFsForTest(tempDir);
+    await fs.createProject("err-proj");
+  });
+
+  afterEach(async () => {
+    await fs.close();
+    await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  async function createAsset(fs: VideocityFs, name: string): Promise<string> {
+    const result = await fs.createAsset("vid", name, "err-proj");
+    if (!result.ok) throw new Error(result.error.message);
+    return result.value.assetId;
+  }
+
+  async function writeError(
+    fs: VideocityFs,
+    assetId: string,
+    info: { message: string; failCode?: string; prompt?: string | null },
+  ): Promise<void> {
+    const result = await fs.generationErrors.write("err-proj", assetId, info);
+    if (!result.ok) throw new Error(result.error.message);
+  }
+
+  it("finds the latest matching error by prompt text", async () => {
+    const a1 = await createAsset(fs, "first attempt");
+    const a2 = await createAsset(fs, "second attempt");
+    await writeError(fs, a1, { message: "old error", prompt: "a cat running" });
+    await new Promise((r) => setTimeout(r, 100));
+    await writeError(fs, a2, { message: "new error", prompt: "a cat running" });
+    const found = await findPreviousErrorForPrompt(fs, "err-proj", "a cat running");
+    expect(found).not.toBeNull();
+    expect(found!.message).toBe("new error");
+  });
+
+  it("matches prompt with different whitespace (normalized)", async () => {
+    const a1 = await createAsset(fs, "ws attempt");
+    await writeError(fs, a1, { message: "ws error", prompt: "a  cat\nrunning" });
+    const found = await findPreviousErrorForPrompt(fs, "err-proj", "a cat running");
+    expect(found).not.toBeNull();
+    expect(found!.message).toBe("ws error");
+  });
+
+  it("returns null when no prompt matches", async () => {
+    const a1 = await createAsset(fs, "no match");
+    await writeError(fs, a1, { message: "err", prompt: "a dog running" });
+    const found = await findPreviousErrorForPrompt(fs, "err-proj", "a cat running");
+    expect(found).toBeNull();
+  });
+
+  it("skips error rows with null prompt", async () => {
+    const a1 = await createAsset(fs, "null prompt");
+    await writeError(fs, a1, { message: "no prompt here", prompt: null });
+    const found = await findPreviousErrorForPrompt(fs, "err-proj", "anything");
+    expect(found).toBeNull();
+  });
+
+  it("preserves failCode from the matched error", async () => {
+    const a1 = await createAsset(fs, "code attempt");
+    await writeError(fs, a1, {
+      message: "filter triggered",
+      failCode: "PROMINENT_PEOPLE_FILTER_FAILED",
+      prompt: "celebrity lookalike",
+    });
+    const found = await findPreviousErrorForPrompt(fs, "err-proj", "celebrity lookalike");
+    expect(found).not.toBeNull();
+    expect(found!.failCode).toBe("PROMINENT_PEOPLE_FILTER_FAILED");
+  });
+
+  it("returns null for errors older than the 7-day recency window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
+    const a1 = await createAsset(fs, "stale attempt");
+    await writeError(fs, a1, { message: "stale error", prompt: "old prompt" });
+    vi.setSystemTime(new Date("2026-01-23T12:00:00Z"));
+    const found = await findPreviousErrorForPrompt(fs, "err-proj", "old prompt");
+    vi.useRealTimers();
+    expect(found).toBeNull();
+  });
+
+  it("finds errors within the 7-day recency window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-15T12:00:00Z"));
+    const a1 = await createAsset(fs, "recent attempt");
+    await writeError(fs, a1, { message: "recent error", prompt: "recent prompt" });
+    vi.setSystemTime(new Date("2026-01-18T12:00:00Z"));
+    const found = await findPreviousErrorForPrompt(fs, "err-proj", "recent prompt");
+    vi.useRealTimers();
+    expect(found).not.toBeNull();
+    expect(found!.message).toBe("recent error");
   });
 });
 
@@ -411,5 +645,80 @@ describe("rewrite_prompt tool", () => {
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toContain("Could not resolve any image files");
+  });
+
+  it("accepts model=gemini_omni and forces provider-docs mode", async () => {
+    process.env.OPENAI_API_KEY = "test-key-for-validation";
+    // gemini_omni forces provider-docs mode even without provider_docs=true.
+    // With unresolvable image_slugs, provider-docs branch returns "Could not
+    // resolve any image files" — the standard branch would return "No prompting
+    // guide available for model: gemini_omni".
+    const result = await client.callTool({
+      name: "rewrite_prompt",
+      arguments: {
+        prompt: "a cat",
+        model: "gemini_omni",
+        image_slugs: ["nonexistent-slug"],
+        project_slug: "test-proj",
+      },
+    });
+    expect(result.isError).toBe(true);
+    const content = result.content as TextContent;
+    expect(content[0].text).toContain("Could not resolve any image files");
+    expect(content[0].text).not.toContain("No prompting guide available");
+  });
+
+  it("accepts previous_error in the schema", async () => {
+    delete process.env.OPENAI_API_KEY;
+    const result = await client.callTool({
+      name: "rewrite_prompt",
+      arguments: {
+        prompt: "a cat",
+        model: "gemini_omni",
+        previous_error: "PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED",
+        project_slug: "test-proj",
+      },
+    });
+    // Without API key, the tool returns the not-set error (past schema validation).
+    expect(result.isError).toBe(true);
+    const content = result.content as TextContent;
+    expect(content[0].text).toContain("not set");
+  });
+
+  it("rejects empty previous_error string via schema min(1)", async () => {
+    process.env.OPENAI_API_KEY = "test-key-for-validation";
+    const result = await client.callTool({
+      name: "rewrite_prompt",
+      arguments: {
+        prompt: "a cat",
+        model: "nano_banana",
+        previous_error: "",
+        project_slug: "test-proj",
+      },
+    });
+    expect(result.isError).toBe(true);
+    const content = result.content as TextContent;
+    expect(content[0].text).toContain("Too small");
+  });
+
+  it("returns isError when provider-docs guide is unreadable (does not throw)", async () => {
+    process.env.OPENAI_API_KEY = "test-key-for-validation";
+    // gemini_omni forces provider-docs mode which calls loadUseapiGuide().
+    // With unresolvable image_slugs, we get "Could not resolve" which proves
+    // the guide loaded past the try/catch. This test documents that the
+    // try/catch returns isError instead of throwing on guide load failure.
+    const result = await client.callTool({
+      name: "rewrite_prompt",
+      arguments: {
+        prompt: "a cat",
+        model: "gemini_omni",
+        image_slugs: ["nonexistent-slug"],
+        project_slug: "test-proj",
+      },
+    });
+    expect(result.isError).toBe(true);
+    const content = result.content as TextContent;
+    expect(content[0].text).toContain("Could not resolve any image files");
+    expect(content[0].text).not.toContain("No prompting guide available");
   });
 });

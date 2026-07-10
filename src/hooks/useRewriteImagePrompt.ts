@@ -8,7 +8,8 @@ export type ImagePromptGuideModel =
   | "gpt_image"
   | "kling30"
   | "grok_imagine"
-  | "grok_image";
+  | "grok_image"
+  | "gemini_omni";
 
 export interface RewriteImagePromptArgs {
   prompt: string;
@@ -16,6 +17,8 @@ export interface RewriteImagePromptArgs {
   imageSlugs?: string[];
   platform?: RewritePlatform;
   customPrompt?: string;
+  /** Rewrite against the useapi.net provider docs instead of a platform aesthetic. */
+  providerDocs?: boolean;
   projectSlug: string;
 }
 
@@ -32,10 +35,12 @@ interface ToolArgs {
   project_slug: string;
   platform?: RewritePlatform;
   custom_prompt?: string;
+  provider_docs?: boolean;
 }
 
 interface RewritePromptToolResult {
   rewritten_prompt?: string;
+  previous_error?: { message: string; fail_code?: string };
 }
 
 export function useRewriteImagePrompt(callTool: UseMcpResult["callTool"]): UseRewriteImagePromptResult {
@@ -68,7 +73,8 @@ export function useRewriteImagePrompt(callTool: UseMcpResult["callTool"]): UseRe
       };
       if (trimmedPrompt) toolArgs.prompt = trimmedPrompt;
       if (slugs.length > 0) toolArgs.image_slugs = slugs;
-      if (args.platform) toolArgs.platform = args.platform;
+      if (args.providerDocs) toolArgs.provider_docs = true;
+      else if (args.platform) toolArgs.platform = args.platform;
       if (args.customPrompt && args.customPrompt.trim().length > 0) {
         toolArgs.custom_prompt = args.customPrompt.trim();
       }
@@ -102,6 +108,10 @@ export function useRewriteImagePrompt(callTool: UseMcpResult["callTool"]): UseRe
         setError(msg);
         toast({ title: "Rewrite failed", description: msg, duration: 4000 });
         return null;
+      }
+      if (parsed.previous_error) {
+        const detail = parsed.previous_error.fail_code ?? parsed.previous_error.message;
+        toast({ title: "Adapted around previous failure", description: detail, duration: 4000 });
       }
       return rewritten;
     } catch (e: unknown) {

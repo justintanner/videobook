@@ -9,7 +9,7 @@
     "dev:server": "op run --env-file=.env.tpl -- tsx watch --exclude='**/node_modules/**' --exclude='**/dist/**' server/src/index.ts",
     "build": "tsc -b && vite build",
     "build:extension": "vite build --config extension/vite.config.ts",
-    "build:server": "cd server && tsc",
+    "build:server": "cd server && tsc && cp -r src/guides dist/guides",
     "lint": "eslint .",
     "preview": "vite preview",
     "use": "op run --env-file=.env.tpl -- tsx server/src/cli.ts",

@@ -29,6 +29,7 @@ import {
 import type { ExecuteButtonState } from '@/components/commands/types';
 import type { UseMcpResult } from 'use-mcp/react';
 import { useRewriteImagePrompt, type ImagePromptGuideModel } from '@/hooks/useRewriteImagePrompt';
+import type { ImagePromptRewriteSubmit } from '@/components/gen/ImagePromptRewritePopover';
 import { useEstimateCost, type EstimateCall } from '@/hooks/useEstimateCost';
 import { GenerateCommandButton } from '@/components/gen/GenerateCommandButton';
 import { usePromptHistory } from '@/hooks/usePromptHistory';
@@ -84,6 +85,8 @@ function guideModelFor(imageModelKey: string | undefined): ImagePromptGuideModel
   if (!imageModelKey) return 'gpt_image';
   return IMAGE_MODEL_TO_GUIDE[imageModelKey] ?? 'gpt_image';
 }
+
+const VIDEO_REWRITE_MODELS: ReadonlySet<string> = new Set(['gemini_omni']);
 
 interface SavedGenSettings {
   model: string;
@@ -350,30 +353,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     handleFieldChange(field, value, dropped);
   }, [formValues.image_slugs, formValues.prompt, handleFieldChange]);
 
-  const handleRewriteImagePromptSubmit = useCallback(async (
-    submit: { platform?: 'ig' | 'tiktok' | 'youtube'; customPrompt?: string },
-  ) => {
-    if (!projectSlug) return;
-    const currentValues = formValuesRef.current;
-    const currentPrompt = typeof currentValues.prompt === 'string' ? currentValues.prompt : '';
-    const rawSlugs = currentValues.image_slugs;
-    const currentImageSlugs = Array.isArray(rawSlugs)
-      ? (rawSlugs as unknown[]).filter((s): s is string => typeof s === 'string')
-      : [];
-    const rewritten = await rewriteImagePrompt({
-      prompt: currentPrompt,
-      model: guideModelFor(selectedModelKey),
-      imageSlugs: currentImageSlugs,
-      platform: submit.platform,
-      customPrompt: submit.customPrompt,
-      projectSlug,
-    });
-    if (rewritten) {
-      setFormValues((prev) => ({ ...prev, prompt: rewritten }));
-      setRewriteOpen(false);
-    }
-  }, [projectSlug, selectedModelKey, rewriteImagePrompt]);
-
   const selectedOption: ModelOption | undefined = preview?.model_options.find(
     (o) => o.key === selectedModelKey,
   );
@@ -505,6 +484,63 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     [characterRefs, charMap],
   );
   const charHandles = useMemo(() => charMentions.map((c) => c.handle), [charMentions]);
+
+  const handleRewritePromptSubmit = useCallback(async (
+    submit: ImagePromptRewriteSubmit,
+  ) => {
+    if (!projectSlug) return;
+    const currentValues = formValuesRef.current;
+    const currentPrompt = typeof currentValues.prompt === 'string' ? currentValues.prompt : '';
+    const rawSlugs = currentValues.image_slugs;
+    const currentImageSlugs = Array.isArray(rawSlugs)
+      ? (rawSlugs as unknown[]).filter((s): s is string => typeof s === 'string')
+      : [];
+
+    if (category === 'video' && VIDEO_REWRITE_MODELS.has(selectedModelKey)) {
+      const rewrittenMentions = rewriteCharacterMentions(currentPrompt, charMentions.map((c) => ({ handle: c.handle, n: c.n })));
+      const outImageSlugs = currentImageSlugs.filter((s) => s.trim() !== '');
+      const outCharacterRefs = Array.isArray(currentValues.character_refs)
+        ? (currentValues.character_refs as string[]).filter((s) => s.trim() !== '')
+        : [];
+      const outVoiceRefs = Array.isArray(currentValues.voice_refs)
+        ? (currentValues.voice_refs as string[]).filter((s) => s.trim() !== '')
+        : [];
+      const cleanedPrompt = stripOrphanedReferenceMarkers(rewrittenMentions, {
+        character: outCharacterRefs.length,
+        referenceImage: outImageSlugs.length,
+        referenceAudio: outVoiceRefs.length,
+      });
+      const rewritten = await rewriteImagePrompt({
+        prompt: cleanedPrompt,
+        model: selectedModelKey as ImagePromptGuideModel,
+        imageSlugs: outImageSlugs,
+        providerDocs: true,
+        customPrompt: submit.customPrompt,
+        projectSlug,
+      });
+      if (rewritten) {
+        setFormValues((prev) => ({ ...prev, prompt: rewritten }));
+        setRewriteOpen(false);
+      }
+      return;
+    }
+
+    const filteredImageSlugs = currentImageSlugs.filter((s) => s.trim() !== '');
+    const rewritten = await rewriteImagePrompt({
+      prompt: currentPrompt,
+      model: guideModelFor(selectedModelKey),
+      imageSlugs: filteredImageSlugs,
+      platform: submit.platform,
+      providerDocs: submit.providerDocs,
+      customPrompt: submit.customPrompt,
+      projectSlug,
+    });
+    if (rewritten) {
+      setFormValues((prev) => ({ ...prev, prompt: rewritten }));
+      setRewriteOpen(false);
+    }
+  }, [projectSlug, selectedModelKey, rewriteImagePrompt, category, charMentions]);
+
   const characterPills = useMemo<CharacterPillData[]>(
     () =>
       characterRefs.map((ref) => {
@@ -1059,8 +1095,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                       rewriteOpen={rewriteOpen}
                       setRewriteOpen={setRewriteOpen}
                       rewriting={rewriting}
-                      onRewriteSubmit={handleRewriteImagePromptSubmit}
+                      onRewriteSubmit={handleRewritePromptSubmit}
                       rewriteDisabled={rewriteDisabled}
+                      rewriteSupported={category === 'image' || VIDEO_REWRITE_MODELS.has(selectedModelKey)}
                       resolveRef={promptResolveRef}
                       characterMentions={allCharMentions}
                       characterHandles={charHandles}

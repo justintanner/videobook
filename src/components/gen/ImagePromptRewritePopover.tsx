@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, Zap, ChevronDown } from 'lucide-react';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { PLATFORM_OPTIONS } from '@/components/center-stage/rewrite-platforms';
 import type { RewritePlatform } from '@/hooks/useRewriteScript';
 import { usePromptHistory } from '@/hooks/usePromptHistory';
 import { useSlashCommandPicker } from '@/hooks/useSlashCommandPicker';
@@ -11,9 +10,65 @@ import type { UseMcpResult } from 'use-mcp/react';
 
 const CUSTOM_PROMPT_MAX = 500;
 
+// Style options for the rewrite. The dropdown doubles as the platform selector
+// (None/IG/TikTok/YouTube) plus a provider-docs mode that rewrites against the
+// useapi.net API documentation instead of a social-platform aesthetic. The two
+// modes are mutually exclusive.
+type RewriteStyle = RewritePlatform | 'useapi';
+
+const STYLE_OPTIONS: Array<{ value: RewriteStyle | ''; label: string }> = [
+  { value: '', label: 'None' },
+  { value: 'ig', label: 'Instagram' },
+  { value: 'tiktok', label: 'TikTok' },
+  { value: 'youtube', label: 'YouTube' },
+  { value: 'useapi', label: 'Provider docs (useapi.net)' },
+];
+
+const USEAPI_MODELS = new Set(['nano_banana', 'gemini_omni']);
+
+const VARIANT_STYLES = {
+  image: {
+    border: 'border-cyan-500/30',
+    text: 'text-cyan-200',
+    textBold: 'text-cyan-300/90',
+    label: 'text-cyan-500/70',
+    labelTextarea: 'text-cyan-500/50',
+    arrowColor: 'text-cyan-400/70',
+    selectBorder: 'border-cyan-500/30',
+    selectText: 'text-cyan-200',
+    selectHover: 'hover:border-cyan-400/60 focus:ring-cyan-400/60',
+    textareaBorder: 'border-cyan-500/30',
+    textareaText: 'text-cyan-100 placeholder:text-cyan-500/30',
+    textareaHover: 'hover:border-cyan-400/60 focus:ring-cyan-400/60',
+    hint: 'text-cyan-500/40',
+    btnText: 'text-cyan-200 hover:text-cyan-100',
+    btnBg: 'bg-cyan-500/15 hover:bg-cyan-500/25 border-cyan-400/50 hover:border-cyan-300/80',
+    chevron: 'text-cyan-400/70',
+  },
+  video: {
+    border: 'border-violet-500/30',
+    text: 'text-violet-200',
+    textBold: 'text-violet-300/90',
+    label: 'text-violet-500/70',
+    labelTextarea: 'text-violet-500/50',
+    arrowColor: 'text-violet-400/70',
+    selectBorder: 'border-violet-500/30',
+    selectText: 'text-violet-200',
+    selectHover: 'hover:border-violet-400/60 focus:ring-violet-400/60',
+    textareaBorder: 'border-violet-500/30',
+    textareaText: 'text-violet-100 placeholder:text-violet-500/30',
+    textareaHover: 'hover:border-violet-400/60 focus:ring-violet-400/60',
+    hint: 'text-violet-500/40',
+    btnText: 'text-violet-200 hover:text-violet-100',
+    btnBg: 'bg-violet-500/15 hover:bg-violet-500/25 border-violet-400/50 hover:border-violet-300/80',
+    chevron: 'text-violet-400/70',
+  },
+} as const;
+
 export interface ImagePromptRewriteSubmit {
   platform?: RewritePlatform;
   customPrompt?: string;
+  providerDocs?: boolean;
 }
 
 interface ImagePromptRewritePopoverProps {
@@ -26,6 +81,7 @@ interface ImagePromptRewritePopoverProps {
   callTool?: UseMcpResult['callTool'];
   projectSlug?: string;
   model?: string;
+  variant?: 'image' | 'video';
 }
 
 export function ImagePromptRewritePopover({
@@ -38,12 +94,19 @@ export function ImagePromptRewritePopover({
   callTool,
   projectSlug,
   model,
+  variant = 'image',
 }: ImagePromptRewritePopoverProps) {
-  const [platform, setPlatform] = useState<RewritePlatform | ''>('');
+  const isVideo = variant === 'video';
+  const s = VARIANT_STYLES[variant];
+  const [style, setStyle] = useState<RewriteStyle | ''>('');
   const [customPrompt, setCustomPrompt] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const history = usePromptHistory(callTool, 'image_rewrite', projectSlug);
+  const history = usePromptHistory(callTool, isVideo ? 'video_rewrite' : 'image_rewrite', projectSlug);
+
+  const visibleStyleOptions = model
+    ? STYLE_OPTIONS.filter((opt) => opt.value !== 'useapi' || USEAPI_MODELS.has(model))
+    : STYLE_OPTIONS;
 
   useEffect(() => {
     if (open) history.reset();
@@ -52,7 +115,7 @@ export function ImagePromptRewritePopover({
 
   const handleOpenChange = useCallback((next: boolean) => {
     if (!next) {
-      setPlatform('');
+      setStyle('');
       setCustomPrompt('');
       history.reset();
     }
@@ -69,17 +132,21 @@ export function ImagePromptRewritePopover({
   const submit = useCallback(() => {
     if (rewriting) return;
     const trimmed = customPrompt.trim();
+    const providerDocs = isVideo || style === 'useapi';
+    const platform = !providerDocs && style ? (style as RewritePlatform) : undefined;
     if (trimmed) {
       history.push(trimmed, {
         ...(model ? { model } : {}),
         ...(platform ? { platform } : {}),
+        ...(providerDocs ? { providerDocs: true } : {}),
       });
     }
     onSubmit({
-      platform: platform || undefined,
+      platform,
       customPrompt: trimmed || undefined,
+      providerDocs,
     });
-  }, [rewriting, onSubmit, platform, customPrompt, history, model]);
+  }, [rewriting, onSubmit, style, customPrompt, history, model, isVideo]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (slashPicker.onKeyDown(e)) return;
@@ -118,9 +185,9 @@ export function ImagePromptRewritePopover({
         sideOffset={6}
         className={cn(
           'w-96 p-0 rounded border',
-          'border-cyan-500/30',
+          s.border,
           'bg-black/95 backdrop-blur-sm',
-          'text-cyan-200',
+          s.text,
           'shadow-[0_0_24px_rgba(245,158,11,0.12)]',
         )}
         onOpenAutoFocus={(e) => {
@@ -129,39 +196,42 @@ export function ImagePromptRewritePopover({
         }}
       >
         <div className="flex flex-col gap-3 p-3">
-          <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-300/90">
+          <div className={cn('flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider',
+            s.textBold)}>
             <Zap className="w-3.5 h-3.5" />
-            Rewrite Image Prompt
+            {isVideo ? 'Rewrite Video Prompt' : 'Rewrite Image Prompt'}
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-500/70 w-14">Platform</span>
-            <div className="relative flex-1">
-              <select
-                value={platform}
-                onChange={(e) => setPlatform(e.target.value as RewritePlatform | '')}
-                disabled={disabled || rewriting}
-                className={cn(
-                  'w-full h-7 pl-2.5 pr-7 rounded border appearance-none',
-                  'border-cyan-500/30 bg-black/60',
-                  'text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-200',
-                  'hover:border-cyan-400/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/60',
-                  'disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer',
-                )}
-              >
-                {PLATFORM_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value} className="bg-black text-cyan-200">
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-cyan-400/70" />
+          {!isVideo && (
+            <div className="flex items-center gap-2">
+              <span className={cn('text-[10px] font-mono uppercase tracking-wider w-14', s.label)}>Style</span>
+              <div className="relative flex-1">
+                <select
+                  value={style}
+                  onChange={(e) => setStyle(e.target.value as RewriteStyle | '')}
+                  disabled={disabled || rewriting}
+                  className={cn(
+                    'w-full h-7 pl-2.5 pr-7 rounded border appearance-none',
+                    s.selectBorder,
+                    'bg-black/60',
+                    cn('text-[11px] font-mono font-bold uppercase tracking-wider', s.selectText),
+                    cn(s.selectHover, 'disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer'),
+                  )}
+                >
+                  {visibleStyleOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value} className="bg-black">
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className={cn('pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5', s.chevron)} />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex flex-col gap-1">
             <div className="flex items-baseline justify-between">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-500/70">Instruction (optional)</span>
+              <span className={cn('text-[10px] font-mono uppercase tracking-wider', s.label)}>Instruction (optional)</span>
               <div className="flex items-center gap-2">
                 <PromptHistoryArrows
                   cursor={history.cursor}
@@ -174,9 +244,9 @@ export function ImagePromptRewritePopover({
                     const next = history.navigateForward();
                     if (next !== null) setCustomPrompt(next.slice(0, CUSTOM_PROMPT_MAX));
                   }}
-                  colorClass="text-cyan-400/70"
+                  colorClass={s.arrowColor}
                 />
-                <span className="text-[10px] font-mono text-cyan-500/50 tabular-nums">
+                <span className={cn('text-[10px] font-mono tabular-nums', s.labelTextarea)}>
                   {customPrompt.length}/{CUSTOM_PROMPT_MAX}
                 </span>
               </div>
@@ -190,20 +260,22 @@ export function ImagePromptRewritePopover({
                 onKeyDown={handleKeyDown}
                 disabled={disabled || rewriting}
                 rows={3}
-                placeholder="e.g. keep the subject centered, remove the blue tint  (or /help)"
+                placeholder={isVideo
+                  ? 'e.g. reframe to avoid the filter, keep the cinematic feel  (or /help)'
+                  : 'e.g. keep the subject centered, remove the blue tint  (or /help)'}
                 className={cn(
                   'w-full px-2.5 py-1.5 rounded border resize-none',
-                  'border-cyan-500/30 bg-black/60',
-                  'text-[12px] font-mono text-cyan-100 placeholder:text-cyan-500/30',
-                  'hover:border-cyan-400/60 focus:outline-none focus:ring-1 focus:ring-cyan-400/60',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  s.textareaBorder,
+                  'bg-black/60',
+                  cn('text-[12px] font-mono', s.textareaText),
+                  cn(s.textareaHover, 'disabled:opacity-50 disabled:cursor-not-allowed'),
                 )}
               />
             </div>
           </div>
 
           <div className="flex items-center justify-between gap-2 pt-1">
-            <span className="text-[10px] font-mono text-cyan-500/40">⌘↵ to submit · ↑/↓ history</span>
+            <span className={cn('text-[10px] font-mono', s.hint)}>⌘↵ to submit · ↑/↓ history</span>
             <button
               type="button"
               onClick={submit}
@@ -211,8 +283,8 @@ export function ImagePromptRewritePopover({
               className={cn(
                 'h-7 px-3 flex items-center gap-1.5 rounded',
                 'text-[11px] font-mono font-bold uppercase tracking-wider',
-                'text-cyan-200 hover:text-cyan-100',
-                'bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/50 hover:border-cyan-300/80',
+                s.btnText,
+                s.btnBg,
                 'transition-colors duration-150',
                 'disabled:opacity-50 disabled:cursor-not-allowed',
               )}
