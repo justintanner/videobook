@@ -564,3 +564,71 @@ export function graphLayoutBounds(definition: NotebookPlanDefinition): GraphLayo
     }
   }, { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity })
 }
+
+const LAYOUT_TYPE_ORDER: Record<NotebookPlanStep['type'], number> = {
+  prompt: 0,
+  asset: 1,
+  image: 2,
+  video: 3,
+}
+
+const LAYOUT_COL_GAP = 48
+const LAYOUT_ROW_GAP = 72
+const LAYOUT_ORIGIN_X = 80
+const LAYOUT_ORIGIN_Y = 48
+
+export function autoLayout(definition: NotebookPlanDefinition): NotebookPlanDefinition {
+  if (definition.sequence.length === 0) return definition
+  const byId = new Map(definition.sequence.map((step) => [step.id, step]))
+  const parents = new Map<string, string[]>()
+  for (const step of definition.sequence) {
+    parents.set(
+      step.id,
+      stepInputs(step).filter((inputId) => byId.has(inputId)),
+    )
+  }
+
+  const layer = new Map<string, number>()
+  const depthOf = (id: string, stack: Set<string>): number => {
+    const cached = layer.get(id)
+    if (cached !== undefined) return cached
+    if (stack.has(id)) return 0
+    stack.add(id)
+    const parentIds = parents.get(id) ?? []
+    const depth = parentIds.length === 0
+      ? 0
+      : Math.max(...parentIds.map((parentId) => depthOf(parentId, stack))) + 1
+    stack.delete(id)
+    layer.set(id, depth)
+    return depth
+  }
+  for (const step of definition.sequence) depthOf(step.id, new Set())
+
+  const rows = new Map<number, NotebookPlanStep[]>()
+  for (const step of definition.sequence) {
+    const depth = layer.get(step.id) ?? 0
+    const row = rows.get(depth) ?? []
+    row.push(step)
+    rows.set(depth, row)
+  }
+
+  const moves: Array<{ id: string; position: StepPosition }> = []
+  let y = LAYOUT_ORIGIN_Y
+  const depths = [...rows.keys()].sort((left, right) => left - right)
+  for (const depth of depths) {
+    const row = (rows.get(depth) ?? []).slice().sort((left, right) => {
+      const typeDelta = LAYOUT_TYPE_ORDER[left.type] - LAYOUT_TYPE_ORDER[right.type]
+      return typeDelta !== 0 ? typeDelta : left.id.localeCompare(right.id)
+    })
+    let x = LAYOUT_ORIGIN_X
+    let rowHeight = 0
+    for (const step of row) {
+      const size = notebookNodeSizes[step.type]
+      moves.push({ id: step.id, position: { x, y } })
+      x += size.width + LAYOUT_COL_GAP
+      rowHeight = Math.max(rowHeight, size.height)
+    }
+    y += rowHeight + LAYOUT_ROW_GAP
+  }
+  return moveSteps(definition, moves)
+}

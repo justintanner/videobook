@@ -12,7 +12,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from '@xyflow/react'
-import { BookOpen, Loader2, Redo2, Undo2 } from 'lucide-react'
+import { BookOpen, Loader2, Network, Redo2, Undo2 } from 'lucide-react'
 import type { UseMcpResult } from 'use-mcp/react'
 import { CloseButton } from '@/components/ui/CloseButton'
 import type { MediaItem } from '@/components/sidebar/types'
@@ -20,6 +20,7 @@ import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle'
 import {
   addAssetStep,
   addStep,
+  autoLayout,
   canConnect,
   connectSteps,
   disconnectSteps,
@@ -67,6 +68,7 @@ interface NotebookCanvasProps {
   canRedo: boolean
   onUndo: () => void
   onRedo: () => void
+  onAutoLayout: () => void
 }
 
 function NotebookCanvas({
@@ -83,6 +85,7 @@ function NotebookCanvas({
   canRedo,
   onUndo,
   onRedo,
+  onAutoLayout,
 }: NotebookCanvasProps) {
   const reactFlow = useReactFlow()
   const onDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -126,6 +129,12 @@ function NotebookCanvas({
     const bounds = graphLayoutBounds(definition)
     onAddStep(type, { x: 320, y: bounds.maxY + 48 })
   }, [definition, onAddStep])
+  const handleAutoLayout = useCallback(() => {
+    onAutoLayout()
+    window.setTimeout(() => {
+      reactFlow.fitView({ padding: 0.18, duration: 280, maxZoom: 1 })
+    }, 60)
+  }, [onAutoLayout, reactFlow])
 
   return (
     <div
@@ -151,6 +160,7 @@ function NotebookCanvas({
         onSelectionChange={({ nodes }) => onSelectedStepIdChanged(nodes.length === 1 ? nodes[0].id : null)}
         onInit={onInit}
         deleteKeyCode={['Backspace', 'Delete']}
+        connectionRadius={28}
         minZoom={0.25}
         maxZoom={1.5}
         colorMode="dark"
@@ -159,8 +169,9 @@ function NotebookCanvas({
       >
         <Background variant={BackgroundVariant.Dots} gap={40} size={1} />
         <Controls showInteractive={false}>
-          <ControlButton onClick={onUndo} disabled={!canUndo}><Undo2 /></ControlButton>
-          <ControlButton onClick={onRedo} disabled={!canRedo}><Redo2 /></ControlButton>
+          <ControlButton onClick={onUndo} disabled={!canUndo} title="Undo"><Undo2 /></ControlButton>
+          <ControlButton onClick={onRedo} disabled={!canRedo} title="Redo"><Redo2 /></ControlButton>
+          <ControlButton onClick={handleAutoLayout} title="Auto organize"><Network /></ControlButton>
         </Controls>
         <NotebookToolbox onAdd={addBelow} />
       </ReactFlow>
@@ -236,6 +247,11 @@ export function PlanNotebook({
     if (!current) return
     commit(moveSteps(current, nodes.map((node) => ({ id: node.id, position: node.position }))))
   }, [commit, getDefinition])
+  const handleAutoLayout = useCallback(() => {
+    const current = getDefinition()
+    if (!current) return
+    commit(autoLayout(current))
+  }, [commit, getDefinition])
   const handleAddStep = useCallback((type: 'prompt' | 'image' | 'video', position: { x: number; y: number }) => {
     const current = getDefinition()
     const seed = toolboxStepSeeds.find((candidate) => candidate.type === type)
@@ -294,6 +310,7 @@ export function PlanNotebook({
               canRedo={history.canRedo}
               onUndo={history.undo}
               onRedo={history.redo}
+              onAutoLayout={handleAutoLayout}
             />
             <NotebookSidebar
               projectSlug={projectSlug}

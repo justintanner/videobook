@@ -5,6 +5,7 @@ import {
   addStep,
   appendRunAsset,
   assetSlugKind,
+  autoLayout,
   canConnect,
   connectSteps,
   createEmptyDefinition,
@@ -216,6 +217,34 @@ describe('notebook model', () => {
     expect(assetSlugKind('vid-clip')).toBe('video')
     expect(assetSlugKind('aud-bed')).toBe('audio')
     expect(assetSlugKind('char-ref')).toBe('character')
+  })
+
+  it('auto-layouts a connected graph top-to-bottom without overlapping rows', () => {
+    const graph: NotebookPlanDefinition = {
+      properties: {},
+      sequence: [
+        {
+          id: 'prompt', componentType: 'task', type: 'prompt', name: 'Prompt',
+          properties: { text: 'hi', position: { x: 900, y: 40 } },
+        },
+        {
+          id: 'asset', componentType: 'task', type: 'asset', name: 'Asset',
+          properties: { slug: '@img-source', position: { x: 10, y: 10 } },
+        },
+        {
+          id: 'target', componentType: 'task', type: 'image', name: 'Target',
+          properties: { inputs: ['prompt', 'asset'], position: { x: 40, y: 40 } },
+        },
+      ],
+    }
+    const laid = autoLayout(graph)
+    const promptPos = stepPosition(laid.sequence[0])!
+    const assetPos = stepPosition(laid.sequence[1])!
+    const targetPos = stepPosition(laid.sequence[2])!
+    expect(promptPos.y).toBe(assetPos.y)
+    expect(targetPos.y).toBeGreaterThan(promptPos.y)
+    expect(new Set([promptPos.x, assetPos.x]).size).toBe(2)
+    expect(autoLayout(createEmptyDefinition())).toEqual(createEmptyDefinition())
   })
 
   it('resolves input-owned values and reports readiness and validity', () => {

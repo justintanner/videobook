@@ -242,10 +242,27 @@
 }
 
 .vc-node-handle {
-  width: 0.65rem;
-  height: 0.65rem;
+  position: relative;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
   border: 2px solid rgb(6 18 14);
   background: rgb(52 211 153);
+  box-shadow: 0 0 0 2px rgb(52 211 153 / 0.18);
+}
+
+/* Invisible hit pad so edges are easier to grab without bloating the knobs. */
+.vc-node-handle::after {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 9999px;
+}
+
+.vc-notebook-canvas .react-flow__handle-connecting,
+.vc-notebook-canvas .react-flow__handle-valid {
+  background: rgb(110 231 183);
+  box-shadow: 0 0 0 3px rgb(52 211 153 / 0.35);
 }
 
 .vc-node-gen {
