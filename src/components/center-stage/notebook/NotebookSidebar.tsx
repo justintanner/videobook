@@ -1,14 +1,11 @@
 import { useMemo } from 'react'
-import { AlertCircle, Clock3, ImageIcon, Loader2, Pin, PinOff, Video, X } from 'lucide-react'
+import { AlertCircle, Clock3, ImageIcon, Loader2, Pin, PinOff, Play, Video, X } from 'lucide-react'
 import type { UseMcpResult } from 'use-mcp/react'
 import { CharacterPickerPopover } from '@/components/gen/ui/CharacterPickerPopover'
 import { DynamicField } from '@/components/gen/ui/DynamicField'
-import { GenerateCommandButton } from '@/components/gen/GenerateCommandButton'
 import { genThemes } from '@/components/gen/ui/gen-themes'
-import { effectiveToolName, getMode, inferModeKey, modeRequiredMissing } from '@/components/gen/modes'
+import { getMode, inferModeKey, modeRequiredMissing } from '@/components/gen/modes'
 import type { ModelOption } from '@/components/gen/types'
-import type { EstimateCall } from '@/hooks/useEstimateCost'
-import { useEstimateCost } from '@/hooks/useEstimateCost'
 import { usePromptHistory } from '@/hooks/usePromptHistory'
 import { RichPromptField } from '@/components/ui/RichPromptField'
 import { cn } from '@/lib/utils'
@@ -32,6 +29,7 @@ interface NotebookSidebarProps {
   definition: NotebookPlanDefinition
   selectedStepId: string | null
   mediaItems: MediaItem[]
+  stepCosts: ReadonlyMap<string, string>
   runningStepIds: ReadonlySet<string>
   errors: ReadonlyMap<string, string>
   updateDefinition: (next: NotebookPlanDefinition, coalesceKey?: string) => void
@@ -71,6 +69,7 @@ export function NotebookSidebar({
   definition,
   selectedStepId,
   mediaItems,
+  stepCosts,
   runningStepIds,
   errors,
   updateDefinition,
@@ -130,13 +129,13 @@ export function NotebookSidebar({
       definition={definition}
       step={selected}
       mediaItems={mediaItems}
+      costLabel={stepCosts.get(selected.id) ?? null}
       running={runningStepIds.has(selected.id)}
       error={errors.get(selected.id) ?? null}
       updateDefinition={updateDefinition}
       onDisconnect={onDisconnect}
       onSetFirstFrame={onSetFirstFrame}
       onRun={onRun}
-      onOpenAsset={onOpenAsset}
     />
   )
 }
@@ -176,13 +175,13 @@ interface GenerationSidebarProps {
   definition: NotebookPlanDefinition
   step: NotebookPlanStep
   mediaItems: MediaItem[]
+  costLabel: string | null
   running: boolean
   error: string | null
   updateDefinition: NotebookSidebarProps['updateDefinition']
   onDisconnect: NotebookSidebarProps['onDisconnect']
   onSetFirstFrame: NotebookSidebarProps['onSetFirstFrame']
   onRun: NotebookSidebarProps['onRun']
-  onOpenAsset?: (assetId: string) => void
 }
 
 function GenerationSidebar({
@@ -192,13 +191,13 @@ function GenerationSidebar({
   definition,
   step,
   mediaItems,
+  costLabel,
   running,
   error,
   updateDefinition,
   onDisconnect,
   onSetFirstFrame,
   onRun,
-  onOpenAsset,
 }: GenerationSidebarProps) {
   const category: 'image' | 'video' = step.type === 'video' ? 'video' : 'image'
   const model = typeof step.properties.model === 'string' ? step.properties.model : ''
@@ -216,11 +215,6 @@ function GenerationSidebar({
   const modeKey = option?.modes ? inferModeKey(option.modes, mergedValues) : null
   const activeMode = option?.modes && modeKey ? getMode(option.modes, modeKey) : null
   const history = usePromptHistory(callTool, category === 'image' ? 'image_generate' : 'video_generate', projectSlug)
-  const calls = useMemo<EstimateCall[] | null>(() => {
-    if (!option) return null
-    return [{ toolName: effectiveToolName(option, modeKey), input: { ...mergedValues, project_slug: projectSlug } }]
-  }, [option, modeKey, mergedValues, projectSlug])
-  const cost = useEstimateCost(callTool, { calls })
   const runStatus = stepRunStatus(step, mediaItems)
   const readiness = stepInputReadiness(definition, step, mediaItems)
   const requiredMissing = useMemo(() => {
@@ -365,15 +359,13 @@ function GenerationSidebar({
           </> : null}
           <RunStatus status={runStatus.state} />
           {error ? <div className="vc-notebook-error"><AlertCircle /> {error}</div> : null}
-          <GenerateCommandButton
-            variant="plan"
-            state={running ? 'submitting' : undefined}
+          <RunStepButton
+            running={running}
             disabled={requiredMissing.length > 0 || !readiness.ready || running || runStatus.state === 'pending'}
             disabledReason={disabledReason}
-            cost={cost}
+            cost={costLabel}
             onClick={() => onRun(step, option, preview.selectedProviderKey, mergedValues)}
           />
-          <OutputGallery step={step} mediaItems={mediaItems} onOpenAsset={onOpenAsset} />
         </>
       ) : null}
     </aside>
@@ -430,41 +422,37 @@ function InputList({
   )
 }
 
+function RunStepButton({
+  running,
+  disabled,
+  disabledReason,
+  cost,
+  onClick,
+}: {
+  running: boolean
+  disabled: boolean
+  disabledReason?: string
+  cost: string | null
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className={cn('vc-notebook-run', running && 'vc-notebook-run-busy')}
+      disabled={disabled}
+      title={disabled && disabledReason ? disabledReason : undefined}
+      onClick={onClick}
+    >
+      {running ? <Loader2 /> : <Play />}
+      <span>{running ? 'Running' : 'Run'}</span>
+      {cost ? <b>{cost}</b> : null}
+    </button>
+  )
+}
+
 function RunStatus({ status }: { status: NotebookRunState }) {
   if (status === 'idle' || status === 'ready') return null
   if (status === 'missing') return <div className="vc-notebook-status"><Clock3 /> Syncing</div>
   if (status === 'pending') return <div className="vc-notebook-status"><Clock3 /> Running</div>
   return <div className="vc-notebook-status"><AlertCircle /> Failed</div>
-}
-
-function OutputGallery({
-  step,
-  mediaItems,
-  onOpenAsset,
-}: {
-  step: NotebookPlanStep
-  mediaItems: MediaItem[]
-  onOpenAsset?: (assetId: string) => void
-}) {
-  const assetIds = stringArray(step.properties.asset_ids)
-  if (assetIds.length === 0) return null
-  return (
-    <div className="vc-notebook-output-gallery">
-      {assetIds.map((assetId) => {
-        const item = mediaItems.find((candidate) => candidate.id === assetId)
-        const failed = item?.status === 'error'
-        return (
-          <button
-            type="button"
-            key={assetId}
-            className={cn(failed && 'vc-notebook-output-error')}
-            title={item?.failedMessage ?? assetId}
-            onClick={() => onOpenAsset?.(assetId)}
-          >
-            {item?.thumbnailSrc ? <img src={item.thumbnailSrc} alt={item.title} /> : step.type === 'video' ? <Video /> : <ImageIcon />}
-          </button>
-        )
-      })}
-    </div>
-  )
 }

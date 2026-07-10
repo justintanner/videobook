@@ -302,6 +302,7 @@ export function PlanNotebook({
               definition={definition}
               selectedStepId={selectedStepId}
               mediaItems={mediaItems}
+              stepCosts={stepCosts}
               runningStepIds={run.runningStepIds}
               errors={run.errors}
               updateDefinition={updateDefinition}
