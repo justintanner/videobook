@@ -23,7 +23,28 @@ interface DynamicFieldProps {
   callTool?: UseMcpResult['callTool'];
   mcpState?: UseMcpResult['state'];
   projectSlug?: string;
+  /** Denser controls for settings rows (clip window, duration toggles). */
+  compact?: boolean;
 }
+
+const SLIDER_RANGE_DEFAULT =
+  'flex-1 min-w-[120px] h-1 cursor-pointer appearance-none bg-transparent ' +
+  '[&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full ' +
+  '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:-mt-[5px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer ' +
+  '[&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full ' +
+  '[&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer';
+
+const SLIDER_RANGE_COMPACT =
+  'flex-1 min-w-[72px] max-w-[140px] h-0.5 cursor-pointer appearance-none bg-transparent ' +
+  '[&::-webkit-slider-runnable-track]:h-0.5 [&::-webkit-slider-runnable-track]:rounded-full ' +
+  '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:-mt-[4px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer ' +
+  '[&::-moz-range-track]:h-0.5 [&::-moz-range-track]:rounded-full ' +
+  '[&::-moz-range-thumb]:h-2.5 [&::-moz-range-thumb]:w-2.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer';
+
+const SLIDER_NUM_DEFAULT =
+  'w-16 px-2 py-1 bg-black/60 rounded font-mono text-sm text-right tabular-nums shrink-0';
+const SLIDER_NUM_COMPACT =
+  'w-12 px-1 py-0.5 bg-black/60 rounded font-mono text-[11px] text-right tabular-nums shrink-0';
 
 // Convert field name to display label
 function formatLabel(name: string): string {
@@ -66,8 +87,11 @@ export function DynamicField({
   callTool,
   mcpState,
   projectSlug,
+  compact,
 }: DynamicFieldProps) {
   const label = labelOverride || formatLabel(name);
+  const rangeClass = compact ? SLIDER_RANGE_COMPACT : SLIDER_RANGE_DEFAULT;
+  const numClass = compact ? SLIDER_NUM_COMPACT : SLIDER_NUM_DEFAULT;
 
   // Handle array types. Asset slug arrays (image_slugs) render as an
   // AssetDropSlot; Google Flow voice/character refs use list-tool pickers;
@@ -164,7 +188,7 @@ export function DynamicField({
 
       return (
         <GenField label={label} required={required} theme={theme} horizontal>
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className={cn('flex items-center min-w-0 flex-1', compact ? 'gap-2' : 'gap-3')}>
             <input
               type="range"
               value={currentNum}
@@ -174,11 +198,7 @@ export function DynamicField({
               step={1}
               disabled={disabled}
               className={cn(
-                'flex-1 min-w-[120px] h-1 cursor-pointer appearance-none bg-transparent',
-                '[&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full',
-                '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:-mt-[5px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer',
-                '[&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full',
-                '[&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer',
+                rangeClass,
                 (theme ?? genThemes.image).sliderTrack,
                 (theme ?? genThemes.image).sliderThumb,
                 'disabled:opacity-50 disabled:cursor-not-allowed',
@@ -206,7 +226,7 @@ export function DynamicField({
               step={1}
               disabled={disabled}
               className={cn(
-                'w-16 px-2 py-1 bg-black/60 rounded font-mono text-sm text-right tabular-nums shrink-0',
+                numClass,
                 theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
                 'focus:outline-none',
                 theme?.focusBorder ?? 'focus:border-primary/60',
@@ -226,6 +246,7 @@ export function DynamicField({
             onChange={(v) => onChange(v)}
             options={options as readonly string[]}
             disabled={disabled}
+            compact={compact}
             theme={theme}
           />
         </GenField>
@@ -271,6 +292,7 @@ export function DynamicField({
             onChange={(v) => onChange(schema.type === 'integer' ? parseInt(v, 10) : parseFloat(v))}
             options={options as readonly string[]}
             disabled={disabled}
+            compact={compact}
             theme={theme}
           />
         </GenField>
@@ -317,7 +339,7 @@ export function DynamicField({
 
       return (
         <GenField label={label} required={required} theme={theme} horizontal>
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className={cn('flex items-center min-w-0 flex-1', compact ? 'gap-2' : 'gap-3')}>
             <input
               type="range"
               value={current}
@@ -327,11 +349,7 @@ export function DynamicField({
               step={step}
               disabled={disabled}
               className={cn(
-                'flex-1 min-w-[120px] h-1 cursor-pointer appearance-none bg-transparent',
-                '[&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full',
-                '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:-mt-[5px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer',
-                '[&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full',
-                '[&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer',
+                rangeClass,
                 (theme ?? genThemes.image).sliderTrack,
                 (theme ?? genThemes.image).sliderThumb,
                 'disabled:opacity-50 disabled:cursor-not-allowed',
@@ -359,7 +377,7 @@ export function DynamicField({
               step={step}
               disabled={disabled}
               className={cn(
-                'w-16 px-2 py-1 bg-black/60 rounded font-mono text-sm text-right tabular-nums shrink-0',
+                numClass,
                 theme ? cn(theme.controlBorder, 'border', theme.valueText) : 'border border-primary/30 text-primary/90',
                 'focus:outline-none',
                 theme?.focusBorder ?? 'focus:border-primary/60',
@@ -413,6 +431,7 @@ export function DynamicField({
           onChange={(v) => onChange(v === 'Unset' ? undefined : v === 'Yes')}
           options={options}
           disabled={disabled}
+          compact={compact}
           theme={theme}
         />
       </GenField>

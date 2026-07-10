@@ -120,7 +120,7 @@ export function MediaStrip({
 }: MediaStripProps) {
   const [dragOver, setDragOver] = useState(false);
 
-  const slots = useMemo(() => deriveStripSlots(option), [option]);
+  const slots = useMemo(() => deriveStripSlots(option, activeMode), [option, activeMode]);
 
   // Accepted drop kinds are derived from the model's slots so the image panel
   // (image-only slots) doesn't accept video/audio, and the trailing drop square

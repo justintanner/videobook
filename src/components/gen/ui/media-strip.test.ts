@@ -109,13 +109,24 @@ describe('combinedRefBudget', () => {
 });
 
 describe('deriveStripSlots', () => {
-  it('unions all mode asset slots for a moded model', () => {
+  it('unions all mode asset slots for a moded model when no active mode', () => {
     const option = { modes: omniModes, schema: { properties: {} } } as Pick<ModelOption, 'modes' | 'schema'>;
     const slots = deriveStripSlots(option);
     const params = slots.map((s) => s.param);
     expect(params).toEqual(expect.arrayContaining(['first_frame_slug', 'image_slugs', 'character_refs', 'video_slug']));
     // deduped: image_slugs appears in two modes but once
     expect(slots.filter((s) => s.param === 'image_slugs')).toHaveLength(1);
+  });
+
+  it('scopes slots to the active mode only', () => {
+    const option = { modes: omniModes, schema: { properties: {} } } as Pick<ModelOption, 'modes' | 'schema'>;
+    const t2v = deriveStripSlots(option, omniModes.modes[0]);
+    expect(t2v).toEqual([]);
+    const i2v = deriveStripSlots(option, omniModes.modes[1]);
+    expect(i2v.map((s) => s.param)).toEqual(['first_frame_slug']);
+    const edit = deriveStripSlots(option, omniModes.modes[3]);
+    expect(edit.map((s) => s.param)).toEqual(['video_slug', 'image_slugs']);
+    expect(edit.find((s) => s.param === 'image_slugs')?.max).toBe(5);
   });
 
   it('lists schema asset fields for a flat model', () => {

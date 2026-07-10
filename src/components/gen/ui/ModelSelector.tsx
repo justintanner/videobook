@@ -1,6 +1,6 @@
-import { Box, Globe } from 'lucide-react';
+import { Box, Globe, Layers } from 'lucide-react';
 import { CommandDropdown } from '@/components/commands/CommandDropdown';
-import type { ModelOption } from '../types';
+import type { ModelModes, ModelOption } from '../types';
 import type { Domain } from '@/theme/domains';
 
 interface ModelSelectorProps {
@@ -83,6 +83,31 @@ export function ModelProviderSelector({ selectedModelKey, selectedProviderKey, m
       }}
       disabled={disabled}
       icon={<Box className="w-3.5 h-3.5" />}
+      variant={variant}
+    />
+  );
+}
+
+interface ModeSelectorProps {
+  modes: ModelModes;
+  selectedModeKey: string;
+  onChange: (modeKey: string) => void;
+  disabled?: boolean;
+  variant?: Domain;
+}
+
+/** Generation-type picker for models that ship a modes contract (e.g. Omni
+ *  text / first-frame / refs / video-edit). Rendered next to the model
+ *  dropdown as `/type`. */
+export function ModeSelector({ modes, selectedModeKey, onChange, disabled, variant }: ModeSelectorProps) {
+  return (
+    <CommandDropdown
+      command="/type"
+      value={selectedModeKey}
+      options={modes.modes.map((m) => ({ value: m.key, label: m.label }))}
+      onChange={onChange}
+      disabled={disabled}
+      icon={<Layers className="w-3.5 h-3.5" />}
       variant={variant}
     />
   );

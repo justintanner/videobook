@@ -89,10 +89,25 @@ export interface StripSlot {
   max: number | null;
 }
 
-/** The media strip's slots: for a moded model, the union of every mode's asset
- *  slots (deduped by param); for a flat model, the schema's asset fields. */
-export function deriveStripSlots(option: Pick<ModelOption, 'modes' | 'schema'>): StripSlot[] {
+/** The media strip's slots.
+ *  - When `activeMode` is provided for a moded model: only that mode's asset_slots
+ *    (so explicit /type selection gates which chips/drops are available).
+ *  - When no active mode on a moded model: union of every mode's asset slots
+ *    (deduped by param) — legacy fallback.
+ *  - Flat models: schema asset fields. */
+export function deriveStripSlots(
+  option: Pick<ModelOption, 'modes' | 'schema'>,
+  activeMode?: ModeSpec | null,
+): StripSlot[] {
   if (option.modes) {
+    if (activeMode) {
+      return (activeMode.asset_slots ?? []).map((slot) => ({
+        param: slot.param,
+        kind: slot.kind,
+        label: slot.label,
+        max: slot.max ?? null,
+      }));
+    }
     const seen = new Set<string>();
     const out: StripSlot[] = [];
     for (const mode of option.modes.modes) {

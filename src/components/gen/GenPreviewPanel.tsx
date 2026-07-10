@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
-import { Zap, Loader2, Settings, ImageIcon, Film } from 'lucide-react';
+import { Zap, Loader2, Settings, ImageIcon, Film, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useMountKey } from '@/contexts/MountKeyContext';
 import { GenPanel } from '@/components/gen/ui/GenPanel';
-import { ModelProviderSelector } from '@/components/gen/ui/ModelSelector';
+import { ModelProviderSelector, ModeSelector } from '@/components/gen/ui/ModelSelector';
 import { DynamicField } from '@/components/gen/ui/DynamicField';
 import { ElementGroupEditor } from '@/components/gen/ElementGroupEditor';
 import { MediaStrip, type CharacterPillData } from '@/components/gen/ui/MediaStrip';
@@ -19,7 +19,6 @@ import type { FullPreviewResponse, ModelOption, JSONSchemaProperty, ResolvedAsse
 import {
   getMode,
   visibleParams,
-  inferModeKey,
   filterValuesForMode,
   modeRequiredMissing,
   modeAssetParams,
@@ -115,6 +114,37 @@ function saveGenSettings(category: string, projectSlug: string | undefined, data
   } catch { /* ignore quota errors */ }
 }
 
+function clearGenSettings(category: string, projectSlug?: string): void {
+  try {
+    localStorage.removeItem(genSettingsKey(category, projectSlug));
+  } catch { /* ignore */ }
+}
+
+/** Clean form defaults for the current model: settings from prefilled/schema,
+ *  empty prompt, no asset/slug refs. */
+function defaultsFromOption(option: ModelOption): Record<string, unknown> {
+  const modeSlugParams = option.modes ? modeAssetParams(option.modes) : null;
+  const isSlugOrAsset = (k: string): boolean =>
+    (modeSlugParams?.has(k) ?? isAssetField(k))
+    || k === 'character_refs'
+    || k === 'voice_refs'
+    || isElementField(k)
+    || /^element\d+_slugs$/.test(k);
+
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(option.prefilled_values ?? {})) {
+    if (k === 'prompt' || k === 'project_slug' || isSlugOrAsset(k)) continue;
+    out[k] = v;
+  }
+  for (const [k, prop] of Object.entries(option.schema.properties)) {
+    if (k === 'prompt' || k === 'project_slug' || isSlugOrAsset(k)) continue;
+    if (k in out) continue;
+    if (prop.default !== undefined) out[k] = prop.default;
+  }
+  out.prompt = '';
+  return out;
+}
+
 export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanelProps>(function GenPreviewPanel({
   category,
   prompt: initialPrompt,
@@ -134,6 +164,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const [error, setError] = useState<string | null>(null);
   const [selectedModelKey, setSelectedModelKey] = useState('');
   const [selectedProviderKey, setSelectedProviderKey] = useState('');
+  /** Explicit generation type for moded models (Omni text/first-frame/refs/edit). */
+  const [selectedModeKey, setSelectedModeKey] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, unknown>>({});
   const [droppedAssets, setDroppedAssets] = useState<Map<string, ResolvedAsset>>(new Map());
   const [genState, setGenState] = useState<ExecuteButtonState | undefined>(undefined);
@@ -191,6 +223,16 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setSelectedModelKey(data.selected_model);
       const option = data.model_options.find((o) => o.key === data.selected_model);
       setSelectedProviderKey(option?.selected_provider ?? data.selected_provider ?? '');
+      // Seed /type for moded models. Initial load may be overwritten by the
+      // saved-settings restore effect; model switches land here after clear.
+      if (option?.modes) {
+        setSelectedModeKey((prev) => {
+          if (prev && option.modes!.modes.some((m) => m.key === prev)) return prev;
+          return option.modes!.default_mode;
+        });
+      } else {
+        setSelectedModeKey(null);
+      }
       const currentValues = formValuesRef.current;
       const currentPrompt = isRefresh ? currentValues.prompt : undefined;
       const prefilled = option?.prefilled_values ?? {};
@@ -240,8 +282,17 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     if (!preview || appliedSavedRef.current) return;
     appliedSavedRef.current = true;
     const saved = savedRef.current;
-    if (!saved?.fields) return;
     const option = preview.model_options.find(o => o.key === selectedModelKey);
+    if (option?.modes) {
+      const savedMode = saved?.mode;
+      const validSaved = savedMode && option.modes.modes.some((m) => m.key === savedMode)
+        ? savedMode
+        : null;
+      setSelectedModeKey(validSaved ?? option.modes.default_mode);
+    } else {
+      setSelectedModeKey(null);
+    }
+    if (!saved?.fields) return;
     if (!option?.schema) return;
     const overrides: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(saved.fields)) {
@@ -267,6 +318,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   const handleModelProviderChange = useCallback((modelKey: string, providerKey: string) => {
     setSelectedModelKey(modelKey);
     setSelectedProviderKey(providerKey);
+    setSelectedModeKey(null);
     setGenState(undefined);
     setFlipped(false);
     setTranslatedPayload(null);
@@ -362,14 +414,32 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     (o) => o.key === selectedModelKey,
   );
 
-  // --- Mode derivation (only meaningful when the option ships a modes contract) ---
+  const handleResetForm = useCallback(() => {
+    if (!selectedOption) return;
+    if (genState === 'submitting' || genState === 'processing' || refreshing) return;
+    setFormValues(defaultsFromOption(selectedOption));
+    setDroppedAssets(new Map());
+    setSelectedModeKey(selectedOption.modes?.default_mode ?? null);
+    setRewriteOpen(false);
+    setFlipped(false);
+    setTranslatedPayload(null);
+    setTranslateLoading(false);
+    setGenState(undefined);
+    setError(null);
+    clearGenSettings(category, projectSlug);
+    savedRef.current = null;
+  }, [selectedOption, genState, refreshing, category, projectSlug]);
+
+  // --- Mode selection (only when the option ships a modes contract) ---
   const modes = selectedOption?.modes ?? null;
-  // Active mode is DERIVED from filled values (video → edit, images/characters
-  // → refs, pinned first-frame → i2v, else t2v) — no user-driven tabs.
-  const activeModeKey = useMemo(
-    () => (modes ? inferModeKey(modes, formValues) : null),
-    [modes, formValues],
-  );
+  // Explicit /type selection; fall back to default when unset/invalid.
+  const activeModeKey = useMemo(() => {
+    if (!modes) return null;
+    if (selectedModeKey && modes.modes.some((m) => m.key === selectedModeKey)) {
+      return selectedModeKey;
+    }
+    return modes.default_mode;
+  }, [modes, selectedModeKey]);
   const activeMode: ModeSpec | null = modes ? getMode(modes, activeModeKey) : null;
   const modeVisible = useMemo(
     () => (modes && activeMode ? visibleParams(modes, activeMode.key) : null),
@@ -589,8 +659,10 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   }, [projectSlug, selectedModelKey, rewriteImagePrompt, category, charMentions]);
 
   const characterPills = useMemo<CharacterPillData[]>(
-    () =>
-      characterRefs.map((ref) => {
+    () => {
+      // Hide character chips when the active mode doesn't own character_refs.
+      if (modeVisible && !modeVisible.has('character_refs')) return [];
+      return characterRefs.map((ref) => {
         const e = charMap.get(ref);
         return {
           ref,
@@ -598,8 +670,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
           thumbnailUrl: e?.thumbnailUrl ?? null,
           imageCount: characterImageCount(ref, e ? { image_count: e.image_count } : null),
         };
-      }),
-    [characterRefs, charMap],
+      });
+    },
+    [characterRefs, charMap, modeVisible],
   );
   const allCharMentions = useMemo(
     () =>
@@ -630,24 +703,12 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     },
     [formValues.character_refs, handleFieldChange],
   );
-  const voiceEntities = useGoogleFlowEntities('voice', category === 'video' ? callTool : undefined, mcpState);
-  const voiceMap = useMemo(
-    () => new Map(voiceEntities.entities.map((e) => [e.ref, e])),
-    [voiceEntities.entities],
-  );
   const imageSlugs = useMemo(
     () =>
       Array.isArray(formValues.image_slugs)
         ? (formValues.image_slugs as string[]).filter((s) => s.trim() !== '')
         : [],
     [formValues.image_slugs],
-  );
-  const voiceRefs = useMemo(
-    () =>
-      Array.isArray(formValues.voice_refs)
-        ? (formValues.voice_refs as string[]).filter((s) => s.trim() !== '')
-        : [],
-    [formValues.voice_refs],
   );
   const resolvedAssetMap = useMemo(() => {
     const m = new Map<string, ResolvedAsset>();
@@ -662,14 +723,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         return { n: i + 1, slug, thumbnailSrc: asset?.thumbnailSrc ?? null, label: slug };
       }),
     [imageSlugs, resolvedAssetMap],
-  );
-  const referenceVoiceSlots = useMemo(
-    () =>
-      voiceRefs.map((ref, i) => {
-        const voice = voiceMap.get(ref);
-        return { n: i + 1, ref, label: voice?.displayName ?? ref };
-      }),
-    [voiceRefs, voiceMap],
   );
   const promptResolveRef = useCallback(
     (token: RichToken): ChipThumb | null => {
@@ -703,19 +756,11 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
           badge: String(slot.n),
         };
       }
-      if (token.kind === 'reference-audio-slot') {
-        const slot = referenceVoiceSlots.find((s) => s.n === token.n);
-        if (!slot) return null;
-        return {
-          thumbnailSrc: null,
-          type: 'audio',
-          label: slot.label,
-          badge: String(slot.n),
-        };
-      }
+      // voice_refs UI hidden for now — do not chip @referenceAudio_N
+      if (token.kind === 'reference-audio-slot') return null;
       return null;
     },
-    [charMentions, charMap, referenceImageSlots, referenceVoiceSlots],
+    [charMentions, charMap, referenceImageSlots],
   );
 
   // Live validation warnings derived from current form values
@@ -856,7 +901,13 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     const droppedArr = Array.from(droppedAssets.entries()).map(([, a]) => ({
       slug: a.slug, src: a.src, thumbnailSrc: a.thumbnailSrc ?? null, type: a.type,
     }));
-    saveGenSettings(category, projectSlug, { model: selectedModelKey, provider: selectedProviderKey, fields, droppedAssets: droppedArr });
+    saveGenSettings(category, projectSlug, {
+      model: selectedModelKey,
+      provider: selectedProviderKey,
+      mode: activeModeKey ?? undefined,
+      fields,
+      droppedAssets: droppedArr,
+    });
     try {
       // Filter to the active mode's params (no-op for non-moded models) and
       // resolve the mode's tool. The wire payload stays byte-identical since
@@ -997,9 +1048,17 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     return { ...s, maxItems: ov.maxItems ?? s.maxItems, description: ov.description ?? s.description };
   };
 
+  // voice_refs hidden for now (picker + autocomplete); server still accepts them.
   const regularFields = fields.filter(
-    ([name]) => name !== 'character_refs' && !isElementField(name) && (modes ? !slotParamNames.has(name) : !isAssetField(name)),
+    ([name]) =>
+      name !== 'character_refs' &&
+      name !== 'voice_refs' &&
+      !isElementField(name) &&
+      (modes ? !slotParamNames.has(name) : !isAssetField(name)),
   );
+  const showCharacterPicker =
+    !!schema?.properties.character_refs &&
+    (!modeVisible || modeVisible.has('character_refs'));
   const assetFields = modes ? [] : fields.filter(([name]) => isAssetField(name));
 
   const elementIndices = new Set<number>();
@@ -1037,22 +1096,37 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       closeDisabled={isDisabled}
       domain={panelDomain}
       headerExtra={
-        <button
-          tabIndex={-1}
-          onClick={() => {
-            const willFlip = !flipped;
-            setFlipped(willFlip);
-            if (willFlip) fetchTranslatedPayload();
-          }}
-          title={flipped ? 'Back to form' : 'View JSON payload'}
-          className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
-        >
-          <Settings className="w-3.5 h-3.5 stroke-[2.5]" />
-        </button>
+        <>
+          {category === 'video' && (
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={handleResetForm}
+              disabled={isDisabled || !selectedOption}
+              title="Reset form"
+              aria-label="Reset form"
+              className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10 disabled:opacity-40 disabled:pointer-events-none"
+            >
+              <RotateCcw className="w-3.5 h-3.5 stroke-[2.5]" />
+            </button>
+          )}
+          <button
+            tabIndex={-1}
+            onClick={() => {
+              const willFlip = !flipped;
+              setFlipped(willFlip);
+              if (willFlip) fetchTranslatedPayload();
+            }}
+            title={flipped ? 'Back to form' : 'View JSON payload'}
+            className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+          >
+            <Settings className="w-3.5 h-3.5 stroke-[2.5]" />
+          </button>
+        </>
       }
       footer={
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 flex-wrap min-w-0">
             <ModelProviderSelector
               selectedModelKey={selectedModelKey}
               selectedProviderKey={selectedProviderKey}
@@ -1061,6 +1135,15 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
               disabled={isDisabled}
               variant={panelDomain}
             />
+            {modes && activeModeKey && (
+              <ModeSelector
+                modes={modes}
+                selectedModeKey={activeModeKey}
+                onChange={setSelectedModeKey}
+                disabled={isDisabled}
+                variant={panelDomain}
+              />
+            )}
           </div>
           <GenerateCommandButton
             variant={buttonVariant}
@@ -1127,6 +1210,47 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
             )}
 
             <div className="space-y-2">
+                {(assetFieldInfos.length > 0 || !!(activeMode?.asset_slots?.length) || characterPills.length > 0) && (
+                  <MediaStrip
+                    option={selectedOption!}
+                    activeMode={activeMode}
+                    formValues={formValues}
+                    resolvedAssets={preview.resolved_assets ?? []}
+                    droppedAssets={droppedAssets}
+                    projectImages={imageAssets}
+                    onChange={handleStripChange}
+                    disabled={isDisabled}
+                    domain={panelDomain}
+                    characters={characterPills}
+                    onRemoveCharacter={handleRemoveCharacter}
+                    warnings={routedWarnings.references}
+                  />
+                )}
+                {showCharacterPicker && (
+                  <CharacterPickerPopover
+                    selectedRefs={characterRefs}
+                    onChange={(refs) => handleFieldChange('character_refs', refs)}
+                    maxItems={schema!.properties.character_refs.maxItems ?? 7}
+                    disabled={isDisabled}
+                    callTool={callTool}
+                    mcpState={mcpState}
+                    projectSlug={projectSlug}
+                    domain={panelDomain}
+                  />
+                )}
+                {category === 'image' && sortedElementIndices.length > 0 && (
+                  <ElementGroupEditor
+                    elementGroupIndices={sortedElementIndices}
+                    elementSchemas={elementSchemas}
+                    formValues={formValues}
+                    resolvedAssets={preview.resolved_assets}
+                    droppedAssets={droppedAssets}
+                    assets={[]}
+                    onChange={handleFieldChange}
+                    disabled={isDisabled}
+                    domain={panelDomain}
+                  />
+                )}
                 {regularFields.some(([name]) => name === 'prompt') && (() => {
                   const promptValue = typeof formValues.prompt === 'string' ? (formValues.prompt as string) : '';
                   const slugsRaw = formValues.image_slugs;
@@ -1156,57 +1280,15 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                       characterHandles={charHandles}
                       onPickCharacter={handlePickCharacter}
                       referenceImageSlots={referenceImageSlots}
-                      referenceVoiceSlots={referenceVoiceSlots}
                       assetMentions={imageAssets?.map((a) => ({ slug: a.slug, thumbnailSrc: a.thumbnailSrc }))}
                       onPickAsset={handlePickImageAsset}
                     />
                   );
                 })()}
-                {(assetFieldInfos.length > 0 || !!(activeMode?.asset_slots?.length) || characterPills.length > 0) && (
-                  <MediaStrip
-                    option={selectedOption!}
-                    activeMode={activeMode}
-                    formValues={formValues}
-                    resolvedAssets={preview.resolved_assets ?? []}
-                    droppedAssets={droppedAssets}
-                    projectImages={imageAssets}
-                    onChange={handleStripChange}
-                    disabled={isDisabled}
-                    domain={panelDomain}
-                    characters={characterPills}
-                    onRemoveCharacter={handleRemoveCharacter}
-                    warnings={routedWarnings.references}
-                  />
-                )}
-                {schema?.properties.character_refs && (
-                  <CharacterPickerPopover
-                    selectedRefs={characterRefs}
-                    onChange={(refs) => handleFieldChange('character_refs', refs)}
-                    maxItems={schema.properties.character_refs.maxItems ?? 7}
-                    disabled={isDisabled}
-                    callTool={callTool}
-                    mcpState={mcpState}
-                    projectSlug={projectSlug}
-                    domain={panelDomain}
-                  />
-                )}
-                {category === 'image' && sortedElementIndices.length > 0 && (
-                  <ElementGroupEditor
-                    elementGroupIndices={sortedElementIndices}
-                    elementSchemas={elementSchemas}
-                    formValues={formValues}
-                    resolvedAssets={preview.resolved_assets}
-                    droppedAssets={droppedAssets}
-                    assets={[]}
-                    onChange={handleFieldChange}
-                    disabled={isDisabled}
-                    domain={panelDomain}
-                  />
-                )}
                 {(regularFields.filter(([name]) => name !== 'prompt').length > 0 || settingsLevelWarnings.length > 0) && (
                   <GenSection label="settings" color={panelDomain} warning={settingsLevelWarnings}>
                     {regularFields.filter(([name]) => name !== 'prompt').length > 0 && (
-                      <div className="flex flex-wrap gap-x-6 gap-y-3">
+                      <div className="flex flex-wrap gap-x-4 gap-y-2">
                         {regularFields
                           .filter(([name]) => name !== 'prompt')
                           .map(([name, s]) => (
@@ -1222,6 +1304,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                               callTool={callTool}
                               mcpState={mcpState}
                               projectSlug={projectSlug}
+                              compact
                             />
                           ))}
                       </div>
