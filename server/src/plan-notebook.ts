@@ -7,7 +7,7 @@ import { z } from "zod";
 interface PlanStep {
   id: string;
   componentType: "task";
-  type: "prompt" | "image" | "video";
+  type: "prompt" | "image" | "video" | "asset";
   name: string;
   properties: Record<string, unknown>;
 }
@@ -26,7 +26,7 @@ interface NotebookPlanSidecar {
 const planStepSchema = z.object({
   id: z.string(),
   componentType: z.literal("task"),
-  type: z.enum(["prompt", "image", "video"]),
+  type: z.enum(["prompt", "image", "video", "asset"]),
   name: z.string(),
   properties: z.record(z.string(), z.unknown()),
 }).strict();
@@ -85,7 +85,23 @@ function renderPromptMarkdown(step: PlanStep): string[] {
   return text ? [`> ${text}`] : [];
 }
 
-function renderGenerationMarkdown(step: PlanStep): string[] {
+function renderInputReference(inputId: string, steps: PlanStep[]): string {
+  const inputIndex = steps.findIndex((step) => step.id === inputId);
+  if (inputIndex === -1) return inputId;
+  const input = steps[inputIndex];
+  if (input.type === "asset") {
+    const slug = stringProperty(input.properties, "slug");
+    return slug ? formatAssetRef(slug) : `#${inputIndex + 1} ${input.name}`;
+  }
+  return `#${inputIndex + 1} ${input.name}`;
+}
+
+function renderAssetMarkdown(step: PlanStep): string[] {
+  const slug = stringProperty(step.properties, "slug");
+  return [`- **Asset:** ${slug ? formatAssetRef(slug) : "—"}`];
+}
+
+function renderGenerationMarkdown(step: PlanStep, steps: PlanStep[]): string[] {
   const values = valuesProperty(step.properties);
   const refs = [
     ...stringArrayProperty(values, "image_slugs"),
@@ -93,11 +109,13 @@ function renderGenerationMarkdown(step: PlanStep): string[] {
       .filter((value): value is string => value !== null),
   ];
   const assetIds = stringArrayProperty(step.properties, "asset_ids");
+  const inputs = stringArrayProperty(step.properties, "inputs");
   const model = stringProperty(step.properties, "model") ?? "—";
   const prompt = stringProperty(values, "prompt");
 
   return [
     `- **Model:** ${model}`,
+    `- **Inputs:** ${inputs.length > 0 ? inputs.map((input) => renderInputReference(input, steps)).join(", ") : "—"}`,
     `- **Refs:** ${refs.length > 0 ? refs.join(", ") : "—"}`,
     `- **Produces:** ${assetIds.length > 0 ? assetIds.map(formatAssetRef).join(", ") : "—"}`,
     ...(prompt ? ["", `> ${prompt}`] : []),
@@ -117,7 +135,11 @@ function renderPlanMarkdown(definition: PlanDefinition): string {
     ...definition.sequence.flatMap((step, index) => [
       `## ${index + 1}. ${step.name} — ${step.type}`,
       "",
-      ...(step.type === "prompt" ? renderPromptMarkdown(step) : renderGenerationMarkdown(step)),
+      ...(step.type === "prompt"
+        ? renderPromptMarkdown(step)
+        : step.type === "asset"
+          ? renderAssetMarkdown(step)
+          : renderGenerationMarkdown(step, definition.sequence)),
       "",
     ]),
   ].join("\n");

@@ -12,7 +12,7 @@ interface PlanDefinition {
   sequence: Array<{
     id: string;
     componentType: "task";
-    type: "prompt" | "image" | "video";
+    type: "prompt" | "image" | "video" | "asset";
     name: string;
     properties: Record<string, unknown>;
   }>;
@@ -44,9 +44,17 @@ const NOTEBOOK_DEFINITION: PlanDefinition = {
       properties: {
         model: "nano-banana-pro",
         provider: "google",
+        inputs: ["asset-source"],
         values: { prompt: "A neon fox", image_slugs: ["@img-source"] },
         asset_ids: ["img-output"],
       },
+    },
+    {
+      id: "asset-source",
+      componentType: "task",
+      type: "asset",
+      name: "Source image",
+      properties: { slug: "@img-source" },
     },
   ],
 };

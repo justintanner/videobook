@@ -1,9 +1,8 @@
-import type { Definition, Step } from 'sequential-workflow-designer'
 import type { MediaItem } from '@/components/sidebar/types'
 
 export const NOTEBOOK_SCHEMA_VERSION = 1
 
-export type NotebookStepType = 'prompt' | 'image' | 'video'
+export type NotebookStepType = 'prompt' | 'image' | 'video' | 'asset'
 
 export type JsonValue =
   | string
@@ -17,13 +16,15 @@ export interface JsonRecord {
   [key: string]: JsonValue
 }
 
-export interface NotebookPlanStep extends Step {
+export interface NotebookPlanStep {
+  id: string
   componentType: 'task'
   type: NotebookStepType
+  name: string
   properties: JsonRecord
 }
 
-export interface NotebookPlanDefinition extends Definition {
+export interface NotebookPlanDefinition {
   properties: JsonRecord
   sequence: NotebookPlanStep[]
 }

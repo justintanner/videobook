@@ -1,4 +1,5 @@
 import type { VideocityFs } from "videocity-engine";
+import { registerJobHandler } from "../queue.js";
 import { registerTranscribeJob } from "./transcribe.js";
 import { registerTranslateTranscriptJob } from "./translate-transcript.js";
 import { registerDownloadVideoJob } from "./download-video.js";
@@ -229,4 +230,21 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerGenerateGrokImagineVideoEditFalJob(fs);
   registerGenerateElevenlabsT2aJob(fs);
   registerPostToXJob(fs);
+
+  // Formula plan jobs were removed in the plan-notebook rework, but project
+  // queues are persistent (.videocity/state.sqlite): a job enqueued before
+  // the upgrade would dispatch into "No handler for job type" on restart and
+  // flip its asset to a failed state. Drain them as no-ops instead.
+  for (const legacyType of [
+    "plan_visualization",
+    "ensure_plan_source_frames",
+    "match_plan_characters",
+    "plan_clip_show",
+    "regenerate_clip_show_segment",
+  ]) {
+    registerJobHandler(legacyType, async (payload) => {
+      console.warn(`[jobs] dropping legacy ${legacyType} job from before the plan-notebook rework`, payload.projectSlug ?? "");
+      return { dropped: true };
+    });
+  }
 }

@@ -102,9 +102,6 @@ interface MediaStripProps {
   characters: CharacterPillData[];
   onRemoveCharacter: (ref: string) => void;
   warnings: string[];
-  /** 'large' turns the thin strip into a prominent drop area (used by the
-   *  plan notebook sidebar). Defaults to the original compact strip. */
-  size?: 'default' | 'large';
 }
 
 export function MediaStrip({
@@ -120,7 +117,6 @@ export function MediaStrip({
   characters,
   onRemoveCharacter,
   warnings,
-  size = 'default',
 }: MediaStripProps) {
   const [dragOver, setDragOver] = useState(false);
 
@@ -215,11 +211,9 @@ export function MediaStrip({
   const showEmptyHint = !hasChips && characters.length === 0;
 
   // Empty-slot color follows the panel domain (fixes plan rendering cyan).
-  const slotVariant = domain === 'video' ? 'video' : domain === 'plan' ? 'plan' : 'image';
-  const chipSize = size === 'large' ? 'large' : 'default';
+  const slotVariant = domain === 'video' ? 'video' : 'image';
   const acceptTypesList = Array.from(acceptedKinds) as ('image' | 'video' | 'audio' | 'character')[];
 
-  // Shared drop routing for the trailing AssetDropSlot (both sizes).
   const routeDroppedAsset = (asset: ResolvedAsset | null) => {
     if (!asset) return;
     const kind = asset.type === 'video' ? 'video' : asset.type === 'audio' ? 'audio' : 'image';
@@ -238,7 +232,6 @@ export function MediaStrip({
       return slugs.map((slug, i) => (
         <StripChip
           key={`${slot.param}-${i}`}
-          size={chipSize}
           slug={slug}
           label={slot.label}
           resolvedAssets={resolvedAssets}
@@ -260,7 +253,6 @@ export function MediaStrip({
       return (
         <StripChip
           key={slot.param}
-          size={chipSize}
           slug={value}
           label={slot.label}
           resolvedAssets={resolvedAssets}
@@ -317,62 +309,6 @@ export function MediaStrip({
     onDrop: handleDrop,
   };
 
-  if (size === 'large') {
-    const hasContent = hasChips || characters.length > 0;
-    return (
-      <div
-        {...dragProps}
-        className={cn(
-          'rounded border transition-colors duration-150 bg-black/40',
-          dragOver ? DRAGOVER_CLASS[domain] : 'border-primary/20',
-        )}
-      >
-        {hasContent ? (
-          <div className="flex flex-wrap items-start gap-2 p-2">
-            {slotChips}
-            {characterChips}
-            <div className="w-16 shrink-0">
-              <AssetDropSlot
-                value={null}
-                onChange={routeDroppedAsset}
-                disabled={disabled}
-                acceptTypes={acceptTypesList}
-                square
-                variant={slotVariant}
-              />
-            </div>
-            {(meter || modeLabelNode) && (
-              <div className="ml-auto flex flex-col items-end gap-1 pl-2 pt-0.5">
-                {meter}
-                {modeLabelNode}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1.5 p-2">
-            <AssetDropSlot
-              value={null}
-              onChange={routeDroppedAsset}
-              disabled={disabled}
-              acceptTypes={acceptTypesList}
-              variant={slotVariant}
-            />
-            <div className="flex items-center justify-between gap-2 px-0.5">
-              <span className="text-[10px] font-mono text-primary/25 select-none">
-                drag from assets · type @ in the prompt
-              </span>
-              <div className="flex items-center gap-3 shrink-0">
-                {meter}
-                {modeLabelNode}
-              </div>
-            </div>
-          </div>
-        )}
-        {footer}
-      </div>
-    );
-  }
-
   return (
     <div
       {...dragProps}
@@ -426,7 +362,6 @@ function StripChip({
   disabled,
   icon,
   badge,
-  size = 'default',
 }: {
   slug: string;
   label: string;
@@ -439,14 +374,13 @@ function StripChip({
   disabled?: boolean;
   icon?: React.ReactNode;
   badge?: string;
-  size?: 'default' | 'large';
 }) {
   const thumb = findThumbnail(slug, resolvedAssets, droppedAssets, projectImages);
   return (
     <div
       className={cn(
         'group relative shrink-0 rounded overflow-hidden border',
-        size === 'large' ? 'w-16 h-16' : 'w-10 h-10',
+        'w-10 h-10',
         pinned ? 'border-amber-400/60 ring-1 ring-amber-400/40' : 'border-primary/30',
       )}
       title={badge ? `@referenceImage_${badge} · ${stripSlugPrefix(slug)}` : label}

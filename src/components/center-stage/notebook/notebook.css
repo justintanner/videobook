@@ -1,19 +1,3 @@
-/* ============================================================================
-   Plan notebook theme — restyles sequential-workflow-designer (SWD) 0.40 to
-   videocity's emerald terminal look. Loaded AFTER designer.css + designer-dark.css,
-   so equal-specificity rules win on source order.
-
-   SCOPING RULE:
-   - Panel chrome (toolbox / control bar / smart editor / workspace / grid /
-     placeholders / start-stop) lives inside .vc-notebook → scope `.vc-notebook …`.
-   - Step-card SVG, the drag ghost (.sqd-drag) and the context menu (.sqd-context-menu)
-     MOUNT ON document.body, outside .vc-notebook. The ghost renders the same card
-     factory as the canvas, so all card rules are scoped `.sqd-theme-dark …` (present
-     on the designer root AND on the body-mounted ghost/menu). There is exactly one
-     SWD instance in the app, so global `.sqd-theme-dark` rules are safe.
-   ========================================================================== */
-
-/* ── Frame + header ──────────────────────────────────────────────────────── */
 .vc-notebook {
   background: linear-gradient(180deg, rgb(6 18 14), rgb(8 12 11));
   color: rgb(209 250 229);
@@ -47,7 +31,6 @@
   color: rgb(161 161 170);
 }
 
-/* The "PLAN" kind badge — emerald with a soft glow, matching viewer chrome. */
 .vc-notebook-header > div:first-child > span:first-child {
   font-size: 0.72rem;
   font-weight: 700;
@@ -90,357 +73,313 @@
   color: rgb(252 165 165);
 }
 
-.vc-notebook-load-error {
+.vc-notebook-load-error,
+.vc-notebook-legacy-note {
   padding: 0.5rem 1rem;
   font-family: var(--font-mono);
   font-size: 0.75rem;
 }
 
 .vc-notebook-legacy-note {
-  padding: 0.5rem 1rem;
   border-bottom: 1px solid rgb(251 191 36 / 0.25);
   background: rgb(251 191 36 / 0.08);
   color: rgb(252 211 77);
-  font-family: var(--font-mono);
   font-size: 0.72rem;
 }
 
-/* ── Designer surface + grid (panel-scoped) ─────────────────────────────── */
-.vc-notebook .sqd-designer-react {
+.vc-notebook-body {
+  display: flex;
   flex: 1;
   min-height: 0;
 }
 
-.vc-notebook .sqd-designer {
-  height: 100%;
-  background: transparent;
+.vc-notebook-canvas {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.vc-notebook-canvas .react-flow {
+  --xy-background-color: transparent;
+  --xy-edge-stroke-default: rgb(52 211 153 / 0.72);
+  --xy-edge-stroke-width-default: 1.5;
+  --xy-handle-background-color-default: rgb(52 211 153);
+  --xy-handle-border-color-default: rgb(6 18 14);
+  --xy-controls-button-background-color-default: rgb(0 0 0 / 0.8);
+  --xy-controls-button-color-default: rgb(110 231 183);
+  --xy-controls-button-border-color-default: rgb(52 211 153 / 0.25);
+  background: radial-gradient(circle at top, rgb(16 59 42 / 0.35), transparent 45%);
   font-family: var(--font-mono);
 }
 
-.vc-notebook .sqd-workspace {
-  background: radial-gradient(circle at top, rgb(16 59 42 / 0.35), transparent 45%);
+.vc-notebook-canvas .react-flow__background pattern circle {
+  fill: rgb(52 211 153 / 0.18);
 }
 
-.vc-notebook .sqd-line-grid-path {
-  stroke: rgb(52 211 153 / 0.06);
+.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-prompt .react-flow__edge-path {
+  stroke: rgb(245 158 11 / 0.85);
 }
 
-.vc-notebook .sqd-join {
-  stroke: rgb(52 211 153 / 0.4);
+.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-ref .react-flow__edge-path {
+  stroke: rgb(52 211 153 / 0.85);
 }
 
-/* ── Toolbox ─────────────────────────────────────────────────────────────── */
-.vc-notebook .sqd-toolbox {
-  width: 176px;
-  background: rgb(3 12 9 / 0.92);
+.vc-notebook-canvas .react-flow__controls {
+  box-shadow: 0 0 18px rgb(0 0 0 / 0.35);
+}
+
+.vc-notebook-canvas .react-flow__controls-button:hover {
+  background: rgb(52 211 153 / 0.15);
+}
+
+.vc-notebook-toolbox {
+  position: absolute;
+  z-index: 5;
+  top: 0.75rem;
+  left: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 8.5rem;
+  padding: 0.4rem;
   border: 1px solid rgb(52 211 153 / 0.25);
-  border-radius: 8px;
+  border-radius: 0.5rem;
+  background: rgb(3 12 9 / 0.92);
   box-shadow: 0 0 20px rgb(0 0 0 / 0.4);
   backdrop-filter: blur(4px);
 }
 
-.vc-notebook .sqd-toolbox-header-title {
-  color: rgb(167 243 208);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.vc-notebook-toolbox button,
+.vc-notebook-input-button {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid rgb(52 211 153 / 0.25);
+  border-radius: 0.3rem;
+  background: rgb(0 0 0 / 0.45);
+  padding: 0.38rem 0.5rem;
+  color: rgb(209 250 229);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-align: left;
 }
 
-.vc-notebook .sqd-toolbox-filter-input {
-  background: rgb(0 0 0 / 0.5);
-  border: 1px solid rgb(52 211 153 / 0.25);
-  border-radius: 6px;
+.vc-notebook-toolbox button:hover,
+.vc-notebook-input-button:hover {
+  border-color: rgb(52 211 153 / 0.65);
+  background: rgb(52 211 153 / 0.12);
+}
+
+.vc-notebook-toolbox svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.vc-node {
+  position: relative;
+  overflow: visible;
+  border: 1px solid rgb(52 211 153 / 0.35);
+  border-radius: 0.55rem;
+  background: rgb(9 22 17 / 0.97);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.42);
   color: rgb(236 253 245);
+  font-family: var(--font-mono);
 }
 
-.vc-notebook .sqd-toolbox-filter-input:focus {
+.vc-node-selected {
   border-color: rgb(52 211 153);
+  box-shadow: 0 0 14px rgb(52 211 153 / 0.45);
 }
 
-.vc-notebook .sqd-toolbox-group-title {
-  background: rgb(52 211 153 / 0.08);
-  color: rgb(110 231 183 / 0.7);
-  border-radius: 4px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.vc-notebook .sqd-toolbox-item {
-  background: rgb(0 0 0 / 0.55);
-  color: rgb(228 228 231);
-  border: 1px solid rgb(52 211 153 / 0.25);
-  border-radius: 6px;
-}
-
-.vc-notebook .sqd-toolbox-item:hover {
-  background: rgb(52 211 153 / 0.12);
-  border-color: rgb(52 211 153 / 0.5);
-}
-
-/* Per-type accent so Prompt/Image/Video read at a glance. */
-.vc-notebook .sqd-toolbox-item.sqd-type-prompt {
-  border-color: rgb(245 158 11 / 0.4);
-}
-.vc-notebook .sqd-toolbox-item.sqd-type-prompt:hover {
-  background: rgb(245 158 11 / 0.12);
-}
-.vc-notebook .sqd-toolbox-item.sqd-type-image {
-  border-color: rgb(34 211 238 / 0.4);
-}
-.vc-notebook .sqd-toolbox-item.sqd-type-image:hover {
-  background: rgb(34 211 238 / 0.12);
-}
-.vc-notebook .sqd-toolbox-item.sqd-type-video {
-  border-color: rgb(167 139 250 / 0.4);
-}
-.vc-notebook .sqd-toolbox-item.sqd-type-video:hover {
-  background: rgb(167 139 250 / 0.12);
-}
-
-/* ── Control bar ─────────────────────────────────────────────────────────── */
-.vc-notebook .sqd-control-bar {
-  background: rgb(0 0 0 / 0.6);
-  border: 1px solid rgb(52 211 153 / 0.2);
-  border-radius: 8px;
-  backdrop-filter: blur(4px);
-}
-
-.vc-notebook .sqd-control-bar-button {
-  background: rgb(0 0 0 / 0.4);
-  border: 1px solid rgb(52 211 153 / 0.2);
-  border-radius: 5px;
-}
-
-.vc-notebook .sqd-control-bar-button:hover {
-  background: rgb(52 211 153 / 0.12);
-  border-color: rgb(52 211 153 / 0.5);
-}
-
-.vc-notebook .sqd-control-bar-button .sqd-icon-path {
-  fill: rgb(167 243 208);
-}
-
-.vc-notebook .sqd-control-bar-button.sqd-delete .sqd-icon-path {
-  fill: rgb(248 113 113);
-}
-
-/* ── Placeholders (drop targets) ────────────────────────────────────────── */
-.vc-notebook .sqd-placeholder .sqd-placeholder-rect {
-  fill: rgb(4 20 14 / 0.8);
-  stroke: rgb(52 211 153 / 0.35);
-  stroke-width: 1;
-  stroke-dasharray: 4;
-}
-
-.vc-notebook .sqd-placeholder.sqd-hover .sqd-placeholder-rect {
-  fill: rgb(52 211 153 / 0.3);
-  stroke: rgb(52 211 153);
-}
-
-.vc-notebook .sqd-placeholder-icon-path {
-  fill: rgb(52 211 153 / 0.5);
-}
-
-.vc-notebook .sqd-placeholder.sqd-hover .sqd-placeholder-icon-path {
-  fill: rgb(209 250 229);
-}
-
-/* ── Validation badge (stays amber, matches app accent) ─────────────────── */
-.vc-notebook .sqd-validation-error {
-  fill: rgb(251 191 36);
-}
-
-/* ── Smart editor (right sidebar) — widened to 420px ────────────────────── */
-.vc-notebook .sqd-smart-editor {
-  background: rgb(5 15 11 / 0.95);
-  border-left: 1px solid rgb(52 211 153 / 0.2);
-}
-
-/* SWD's editor slot grows to its content, so a tall form overflows the panel
-   and is clipped by the notebook window. Pin the height chain to the panel so
-   .vc-notebook-editor's overflow-y actually scrolls its own content. */
-.vc-notebook .sqd-editor,
-.vc-notebook .sqd-editor-react {
-  height: 100%;
-  min-height: 0;
-}
-
-.vc-notebook .sqd-layout-desktop .sqd-smart-editor {
-  width: 420px;
-}
-
-.vc-notebook .sqd-layout-desktop .sqd-smart-editor-toggle {
-  right: 420px;
-}
-
-/* Re-assert the collapsed position AFTER the width override at higher
-   specificity, else the 420px rule would also push the collapsed toggle. */
-.vc-notebook .sqd-layout-desktop .sqd-smart-editor-toggle.sqd-collapsed {
-  right: 0;
-}
-
-.vc-notebook .sqd-smart-editor-toggle {
-  background: rgb(0 0 0 / 0.7);
-  border: 1px solid rgb(52 211 153 / 0.25);
-}
-
-.vc-notebook .sqd-smart-editor-toggle-icon path {
-  fill: rgb(167 243 208);
-}
-
-/* ============================================================================
-   Step cards — GLOBAL `.sqd-theme-dark` scope (canvas + body-mounted drag ghost)
-   ========================================================================== */
-.sqd-theme-dark .sqd-step-task {
-  font-family: var(--font-mono);
-}
-
-/* Card body. Base fill + fallback stroke; per-type stroke follows. */
-.sqd-theme-dark .sqd-step-task .vc-card-rect {
-  fill: rgb(9 22 17 / 0.97);
-  stroke: rgb(52 211 153 / 0.35);
-  stroke-width: 1;
-  filter: drop-shadow(0 2px 6px rgb(0 0 0 / 0.35));
-}
-
-.sqd-theme-dark .sqd-type-prompt .vc-card-rect {
-  stroke: rgb(245 158 11 / 0.45);
-}
-.sqd-theme-dark .sqd-type-image .vc-card-rect {
-  stroke: rgb(34 211 238 / 0.45);
-}
-.sqd-theme-dark .sqd-type-video .vc-card-rect {
-  stroke: rgb(167 139 250 / 0.45);
-}
-
-/* Selection — one class on the <g> drives stroke + glow. */
-.sqd-theme-dark .sqd-step-task.sqd-selected .vc-card-rect {
-  stroke: rgb(52 211 153);
-  stroke-width: 2;
-}
-.sqd-theme-dark .sqd-step-task.sqd-selected {
-  filter: drop-shadow(0 0 10px rgb(52 211 153 / 0.45));
-}
-
-/* Card layers. */
-.sqd-theme-dark .vc-card-hero-bg {
-  fill: rgb(0 0 0 / 0.55);
-}
-.sqd-theme-dark .vc-card-divider {
-  stroke: rgb(52 211 153 / 0.18);
-  stroke-width: 1;
-}
-.sqd-theme-dark .vc-node-thumb {
-  display: none;
-}
-.sqd-theme-dark .vc-has-thumb .vc-node-thumb {
-  display: inline;
-}
-.sqd-theme-dark .vc-has-thumb .vc-card-icon {
-  display: none;
-}
-
-/* Card text. */
-.sqd-theme-dark .sqd-step-task .vc-card-name {
-  fill: rgb(236 253 245);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-.sqd-theme-dark .vc-card-excerpt {
-  fill: rgb(167 243 208 / 0.55);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  dominant-baseline: central;
-}
-/* Cost readout in the gen-card name bar; textContent set by useCanvasStepDecorations.
-   Not a .sqd-step-task-text, so it needs its own baseline centering. */
-.sqd-theme-dark .vc-card-cost {
-  fill: rgb(110 231 183 / 0.85);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  dominant-baseline: central;
-}
-.sqd-theme-dark .sqd-step-task.sqd-selected .vc-card-cost {
-  fill: rgb(167 243 208);
-}
-
-/* Connection dots. */
-.sqd-theme-dark .sqd-step-task .sqd-input {
-  fill: rgb(9 18 14);
-  stroke: rgb(52 211 153);
-  stroke-width: 2;
-}
-.sqd-theme-dark .sqd-step-task .sqd-output {
-  fill: rgb(52 211 153);
-  stroke-width: 0;
-}
-
-/* Belt-and-braces: the empty-icon fallback rect (unused by our factory). */
-.sqd-theme-dark .sqd-step-task .sqd-step-task-empty-icon {
-  fill: rgb(9 22 17);
-}
-
-/* Run-state decorations (canvas only, toggled by useCanvasStepDecorations). */
-.sqd-theme-dark .vc-step-running {
+.vc-node-invalid {
+  border-color: rgb(248 113 113);
   animation: vc-notebook-pulse 1.3s ease-in-out infinite;
 }
-.sqd-theme-dark .vc-step-error {
-  filter: drop-shadow(0 0 8px rgb(248 113 113 / 0.9));
-}
-.sqd-theme-dark .vc-step-ready .vc-card-rect {
-  stroke: rgb(52 211 153 / 0.6);
+
+.vc-node-handle {
+  width: 0.65rem;
+  height: 0.65rem;
+  border: 2px solid rgb(6 18 14);
+  background: rgb(52 211 153);
 }
 
-/* Drag ghost + context menu (body-mounted). */
-.sqd-drag,
-.sqd-context-menu {
-  font-family: var(--font-mono);
+.vc-node-gen {
+  width: 220px;
+  min-height: 248px;
 }
 
-.sqd-theme-dark.sqd-context-menu {
-  background: rgb(3 12 9 / 0.97);
-  border: 1px solid rgb(52 211 153 / 0.25);
-  border-radius: 6px;
+.vc-node-image {
+  border-color: rgb(34 211 238 / 0.55);
 }
 
-.sqd-theme-dark.sqd-context-menu .sqd-context-menu-group {
-  color: rgb(110 231 183 / 0.6);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.vc-node-video {
+  border-color: rgb(167 139 250 / 0.55);
 }
 
-.sqd-theme-dark.sqd-context-menu .sqd-context-menu-item {
-  color: rgb(236 253 245);
+.vc-node-hero {
+  position: relative;
+  display: flex;
+  height: 196px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 0.45rem 0.45rem 0 0;
+  background: rgb(0 0 0 / 0.55);
 }
 
-.sqd-theme-dark.sqd-context-menu .sqd-context-menu-item:hover {
-  background: rgb(52 211 153 / 0.15);
+.vc-node-hero img,
+.vc-node-asset img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-/* ── Step editor internals (right sidebar content) ──────────────────────── */
+.vc-node-hero > svg {
+  width: 2.3rem;
+  height: 2.3rem;
+  color: rgb(167 243 208 / 0.58);
+}
+
+.vc-node-status {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+  border: 1px solid rgb(52 211 153 / 0.48);
+  border-radius: 9999px;
+  background: rgb(0 0 0 / 0.74);
+}
+
+.vc-node-status svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.vc-node-status-running svg {
+  animation: vc-notebook-spin 1s linear infinite;
+}
+
+.vc-node-status-error {
+  color: rgb(248 113 113);
+  border-color: rgb(248 113 113 / 0.6);
+}
+
+.vc-node-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 0.55rem 0.65rem;
+  border-top: 1px solid rgb(52 211 153 / 0.16);
+  font-size: 0.66rem;
+}
+
+.vc-node-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgb(167 243 208 / 0.75);
+}
+
+.vc-node-meta b {
+  flex: none;
+  color: rgb(110 231 183);
+  font-weight: 600;
+}
+
+.vc-node-prompt {
+  display: flex;
+  width: 200px;
+  min-height: 124px;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.7rem;
+  border-color: rgb(245 158 11 / 0.58);
+}
+
+.vc-node-prompt-icon {
+  color: rgb(252 211 77);
+}
+
+.vc-node-prompt-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.vc-node-prompt p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: rgb(254 243 199 / 0.76);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.vc-node-asset {
+  display: flex;
+  width: 200px;
+  min-height: 142px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  overflow: hidden;
+  border-color: rgb(52 211 153 / 0.55);
+}
+
+.vc-node-asset > svg {
+  width: 2rem;
+  height: 2rem;
+  color: rgb(110 231 183 / 0.65);
+}
+
+.vc-node-asset > span {
+  width: 100%;
+  overflow: hidden;
+  padding: 0.45rem 0.6rem;
+  border-top: 1px solid rgb(52 211 153 / 0.16);
+  color: rgb(167 243 208 / 0.8);
+  font-size: 0.66rem;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vc-node-missing {
+  border-color: rgb(248 113 113 / 0.7);
+  background: rgb(69 10 10 / 0.3);
+}
+
+.vc-notebook-sidebar {
+  width: min(420px, 38vw);
+  flex: none;
+  border-left: 1px solid rgb(52 211 153 / 0.2);
+  background: rgb(5 15 11 / 0.95);
+}
+
 .vc-notebook-editor {
   display: flex;
+  min-height: 0;
   flex-direction: column;
   gap: 0.75rem;
-  padding: 0.85rem;
-  height: 100%;
   overflow-y: auto;
+  padding: 0.85rem;
 }
 
-.vc-notebook-editor label,
-.vc-notebook-prior-output > span {
+.vc-notebook-editor label {
   color: rgb(110 231 183 / 0.7);
   font-family: var(--font-mono);
   font-size: 0.7rem;
   text-transform: uppercase;
 }
 
-/* Cell-type header above the form. */
 .vc-notebook-cell-type {
   font-family: var(--font-mono);
   font-size: 0.72rem;
@@ -448,68 +387,154 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
 .vc-notebook-cell-type-prompt {
   color: rgb(245 158 11);
 }
+
 .vc-notebook-cell-type-image {
   color: rgb(34 211 238);
 }
+
 .vc-notebook-cell-type-video {
   color: rgb(167 139 250);
 }
 
-/* Scoped to the plain prompt-cell textarea only: RichPromptField's inner
-   textarea must keep padding/border identical to its highlight overlay. */
+.vc-notebook-cell-type-asset {
+  color: rgb(110 231 183);
+}
+
 .vc-notebook-editor textarea.vc-notebook-text,
-.vc-notebook-root-editor input {
-  min-height: 7rem;
-  resize: vertical;
+.vc-notebook-editor input.vc-notebook-text,
+.vc-notebook-select {
+  min-height: 2.4rem;
   border: 1px solid rgb(52 211 153 / 0.25);
   border-radius: 0.375rem;
   background: rgb(0 0 0 / 0.45);
-  padding: 0.75rem;
+  padding: 0.65rem 0.7rem;
   color: rgb(236 253 245);
   font-family: var(--font-mono);
+  font-size: 0.76rem;
 }
 
-.vc-notebook-copy-prompt {
-  align-self: flex-start;
-  border: 1px solid rgb(52 211 153 / 0.35);
-  border-radius: 0.375rem;
-  background: rgb(52 211 153 / 0.08);
-  padding: 0.4rem 0.6rem;
-  color: rgb(167 243 208);
+.vc-notebook-editor textarea.vc-notebook-text {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+.vc-notebook-select:focus,
+.vc-notebook-text:focus {
+  outline: 1px solid rgb(52 211 153 / 0.75);
+}
+
+.vc-notebook-hint {
+  margin: 0;
+  color: rgb(167 243 208 / 0.55);
   font-family: var(--font-mono);
   font-size: 0.7rem;
+  line-height: 1.5;
 }
 
-.vc-notebook-copy-prompt:hover {
-  background: rgb(52 211 153 / 0.16);
+.vc-notebook-asset-preview {
+  width: 100%;
+  max-height: 12rem;
+  object-fit: cover;
 }
 
-/* Prior-output reference strip — bigger 16:9 thumbs. */
-.vc-notebook-prior-output > div {
+.vc-notebook-linked-prompt {
+  border: 1px solid rgb(245 158 11 / 0.3);
+  border-radius: 0.4rem;
+  background: rgb(245 158 11 / 0.07);
+  padding: 0.65rem;
+}
+
+.vc-notebook-linked-prompt span {
+  color: rgb(252 211 77 / 0.8);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.vc-notebook-linked-prompt p {
+  margin: 0.45rem 0 0;
+  color: rgb(254 243 199 / 0.85);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+}
+
+.vc-notebook-input-list {
   display: flex;
-  gap: 0.4rem;
-  overflow-x: auto;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
-.vc-notebook-prior-output button {
-  flex-shrink: 0;
-  width: 6rem;
-  aspect-ratio: 16 / 9;
+.vc-notebook-input-chip {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgb(52 211 153 / 0.22);
+  border-radius: 0.35rem;
+  background: rgb(0 0 0 / 0.3);
+  padding: 0.28rem;
+}
+
+.vc-notebook-input-chip img {
+  width: 1.5rem;
+  height: 1.5rem;
+  object-fit: cover;
+}
+
+.vc-notebook-input-chip > svg {
+  width: 1rem;
+  height: 1rem;
+  color: rgb(167 243 208 / 0.55);
+}
+
+.vc-notebook-input-chip span {
+  flex: 1;
   overflow: hidden;
-  border: 1px solid rgb(52 211 153 / 0.25);
-  border-radius: 0.375rem;
-  background: rgb(0 0 0 / 0.4);
-  color: rgb(167 243 208);
+  color: rgb(209 250 229 / 0.82);
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.vc-notebook-prior-output button:hover {
-  border-color: rgb(52 211 153 / 0.6);
+.vc-notebook-input-chip button {
+  display: grid;
+  width: 1.45rem;
+  height: 1.45rem;
+  place-items: center;
+  border: 0;
+  border-radius: 0.25rem;
+  color: rgb(167 243 208 / 0.7);
 }
 
-/* Output gallery — 2-column grid of 16:9 result thumbs. */
+.vc-notebook-input-chip button:hover {
+  background: rgb(52 211 153 / 0.15);
+  color: rgb(236 253 245);
+}
+
+.vc-notebook-input-chip button svg {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.vc-notebook-warnings {
+  border-left: 2px solid rgb(251 191 36 / 0.75);
+  padding-left: 0.55rem;
+  color: rgb(252 211 77 / 0.85);
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+}
+
+.vc-notebook-warnings p {
+  margin: 0.2rem 0;
+}
+
 .vc-notebook-output-gallery {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -524,7 +549,6 @@
   border-radius: 0.375rem;
   background: rgb(0 0 0 / 0.4);
   color: rgb(167 243 208);
-  transition: box-shadow 150ms, border-color 150ms;
 }
 
 .vc-notebook-output-gallery button:hover {
@@ -532,7 +556,6 @@
   box-shadow: 0 0 12px rgb(52 211 153 / 0.25);
 }
 
-.vc-notebook-prior-output img,
 .vc-notebook-output-gallery img {
   width: 100%;
   height: 100%;
@@ -559,29 +582,6 @@
   color: rgb(110 231 183 / 0.75);
 }
 
-.vc-notebook-root-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  padding: 0.75rem;
-  color: rgb(167 243 208);
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-}
-
-.vc-notebook-root-editor label {
-  color: rgb(110 231 183 / 0.7);
-}
-
-.vc-notebook-root-editor input {
-  min-height: auto;
-}
-
-.vc-notebook-root-editor p {
-  margin: 0;
-  color: rgb(167 243 208 / 0.6);
-}
-
 @keyframes vc-notebook-spin {
   to {
     transform: rotate(360deg);
@@ -590,6 +590,6 @@
 
 @keyframes vc-notebook-pulse {
   50% {
-    filter: drop-shadow(0 0 12px rgb(52 211 153 / 0.9));
+    box-shadow: 0 0 12px rgb(248 113 113 / 0.72);
   }
 }

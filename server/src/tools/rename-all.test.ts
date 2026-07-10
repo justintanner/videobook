@@ -640,12 +640,19 @@ describe("rename_all tool", () => {
           properties: {
             model: "nano-banana-pro",
             values: {
-              prompt: "Use the reference image.",
+              prompt: `Match the lighting of @${assetId} exactly.`,
               image_slugs: [`@${assetId}`],
               first_frame_slug: `@${assetId}`,
             },
+            inputs: ["asset-source"],
             asset_ids: [assetId],
           },
+        }, {
+          id: "asset-source",
+          componentType: "task",
+          type: "asset",
+          name: "Source",
+          properties: { slug: `@${assetId}` },
         }],
       },
     }, null, 2));
@@ -664,12 +671,16 @@ describe("rename_all tool", () => {
     const renamed = "img-sunset-beach";
     const sidecar = JSON.parse(await readFile(join(planDir, ".plan.json"), "utf8")) as {
       definition: {
-        sequence: Array<{ properties: { values: Record<string, unknown>; asset_ids: string[] } }>;
+        sequence: Array<{ properties: { values?: Record<string, unknown>; asset_ids?: string[]; slug?: string } }>;
       };
     };
     expect(sidecar.definition.sequence[0].properties.values.image_slugs).toEqual([`@${renamed}`]);
     expect(sidecar.definition.sequence[0].properties.values.first_frame_slug).toBe(`@${renamed}`);
     expect(sidecar.definition.sequence[0].properties.asset_ids).toEqual([renamed]);
+    expect(sidecar.definition.sequence[0].properties.values.prompt).toBe(
+      `Match the lighting of @${renamed} exactly.`,
+    );
+    expect(sidecar.definition.sequence[1].properties.slug).toBe(`@${renamed}`);
     const markdown = await readFile(join(planDir, "index.md"), "utf8");
     expect(markdown).toContain(`@${renamed}`);
     expect(markdown).not.toContain(assetId);

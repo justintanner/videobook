@@ -4,6 +4,7 @@ import { effectiveToolName, inferModeKey } from '@/components/gen/modes'
 import type { FullPreviewResponse } from '@/components/gen/types'
 import type { CostEstimate } from '@/hooks/useEstimateCost'
 import { shortCostLabel } from '@/lib/format-cost'
+import { resolveEffectiveValues } from './model'
 import type { NotebookPlanDefinition, NotebookPlanStep } from './types'
 
 const ESTIMATE_DEBOUNCE_MS = 600
@@ -29,20 +30,18 @@ function responseText(result: Awaited<ReturnType<UseMcpResult['callTool']>>): st
  * fresh cell costs out exactly as running it would. Exported for unit tests.
  */
 export function deriveStepEstimateCall(
+  definition: NotebookPlanDefinition,
   step: NotebookPlanStep,
   preview: FullPreviewResponse | null,
   projectSlug: string,
 ): DerivedCall | null {
-  if (step.type === 'prompt' || !preview) return null
+  if (step.type === 'prompt' || step.type === 'asset' || !preview) return null
   const stepModel = typeof step.properties.model === 'string' ? step.properties.model : ''
   const model = stepModel || preview.selected_model
   const option = preview.model_options.find((candidate) => candidate.key === model)
   if (!option) return null
-  const values = step.properties.values
-  const stepValues = typeof values === 'object' && values !== null && !Array.isArray(values)
-    ? values as Record<string, unknown>
-    : {}
-  const merged = { ...option.prefilled_values, ...stepValues }
+  const resolved = resolveEffectiveValues(definition, step, option)
+  const merged = { ...option.prefilled_values, ...resolved.values }
   const modeKey = option.modes ? inferModeKey(option.modes, merged) : null
   const toolName = effectiveToolName(option, modeKey)
   const input = { ...merged, project_slug: projectSlug }
@@ -147,6 +146,7 @@ export function useCanvasCostEstimates(options: {
           const tuple = stepTuple(step)
           const preview = tuple ? previewsRef.current[tupleKey(tuple)] : undefined
           const derived = deriveStepEstimateCall(
+            definition,
             step,
             preview && preview !== 'pending' ? preview : null,
             projectSlug,

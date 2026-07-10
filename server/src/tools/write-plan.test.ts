@@ -12,7 +12,7 @@ interface PlanDefinition {
   sequence: Array<{
     id: string;
     componentType: "task";
-    type: "prompt" | "image" | "video";
+    type: "prompt" | "image" | "video" | "asset";
     name: string;
     properties: Record<string, unknown>;
   }>;
@@ -42,8 +42,16 @@ const NOTEBOOK_DEFINITION: PlanDefinition = {
           first_frame_slug: "@img-first",
           video_slug: "@vid-reference",
         },
+        inputs: ["prompt-1", "asset-source"],
         asset_ids: ["img-output"],
       },
+    },
+    {
+      id: "asset-source",
+      componentType: "task",
+      type: "asset",
+      name: "Source image",
+      properties: { slug: "@img-source" },
     },
     {
       id: "video-1",
@@ -90,7 +98,7 @@ describe("write_plan tool", () => {
     });
 
     expect(result.isError).toBeFalsy();
-    expect(JSON.parse(resultText(result))).toEqual({ ok: true, steps: 3 });
+    expect(JSON.parse(resultText(result))).toEqual({ ok: true, steps: 4 });
     const sidecar = await readFile(join(tempDir, "test-proj", "plan", ".plan.json"), "utf8");
     expect(JSON.parse(sidecar)).toEqual({
       format: "notebook",
@@ -101,6 +109,8 @@ describe("write_plan tool", () => {
     expect(markdown).toContain("Idea — prompt");
     expect(markdown).toContain("Key frame — image");
     expect(markdown).toContain("**Model:** nano-banana-pro");
+    expect(markdown).toContain("**Inputs:** #1 Idea, @img-source");
+    expect(markdown).toContain("**Asset:** @img-source");
     expect(markdown).toContain("@img-output");
     expect(markdown).toContain("> A neon fox in the rain");
 

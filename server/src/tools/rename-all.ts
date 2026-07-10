@@ -630,12 +630,41 @@ async function updatePlanReferences(
     planIdMap.set(`@${oldId}`, `@${newId}`);
   }
   plan = rewriteDeep(plan, planIdMap);
+  plan = rewriteInlineMentions(plan, idMap);
   if (JSON.stringify(plan) !== before) {
     await fs.writeFile("plan", ".plan.json", JSON.stringify(plan, null, 2), projectSlug);
     if (isNotebookSidecar(plan)) {
       await fs.writeFile("plan", "index.md", renderPlanMarkdown(plan.definition), projectSlug);
     }
   }
+}
+
+// rewriteDeep only swaps whole-string matches; notebook prompt text also
+// carries inline "@old-id" mentions (richPromptTokens renders them as chips),
+// so rewrite those substrings too. Asset ids are [a-z0-9-] slugs, so they are
+// regex-safe verbatim; the lookahead keeps prefix ids apart (img-fox vs
+// img-fox-2).
+function rewriteInlineMentions<T>(value: T, idMap: Map<string, string>): T {
+  if (typeof value === "string") {
+    let out: string = value;
+    for (const [oldId, newId] of idMap) {
+      out = out.replace(new RegExp(`@${oldId}(?![a-z0-9-])`, "g"), `@${newId}`);
+    }
+    return out as unknown as T;
+  }
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      value[i] = rewriteInlineMentions(value[i], idMap);
+    }
+    return value;
+  }
+  if (value && typeof value === "object") {
+    for (const key of Object.keys(value as Record<string, unknown>)) {
+      const v = (value as Record<string, unknown>)[key];
+      (value as Record<string, unknown>)[key] = rewriteInlineMentions(v, idMap);
+    }
+  }
+  return value;
 }
 
 /** Build the display name for an asset id (used by the UI; also exported for

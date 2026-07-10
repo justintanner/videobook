@@ -25,7 +25,7 @@ interface AssetDropSlotProps {
   variant?: SlotVariant;
 }
 
-type SlotVariant = 'image' | 'video' | 'plan';
+type SlotVariant = 'image' | 'video';
 
 // Theme tokens. Sourced from the canonical 5-domain palette in
 // src/theme/domains.ts.
@@ -47,19 +47,16 @@ function slotTheme(variant: SlotVariant) {
 const themes: Record<SlotVariant, ReturnType<typeof slotTheme>> = {
   image: slotTheme('image'),
   video: slotTheme('video'),
-  plan: slotTheme('plan'),
 };
 
 // Filled-state slug badge colors, per variant.
 const BADGE_TEXT: Record<SlotVariant, string> = {
   image: 'text-cyan-300',
   video: 'text-violet-300',
-  plan: 'text-emerald-300',
 };
 const BADGE_BORDER: Record<SlotVariant, string> = {
   image: 'rgba(34,211,238,0.2)',
   video: 'rgba(167,139,250,0.4)',
-  plan: 'rgba(52,211,153,0.3)',
 };
 
 export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image'], emptyIcon, compact, square, variant = 'image' }: AssetDropSlotProps) {

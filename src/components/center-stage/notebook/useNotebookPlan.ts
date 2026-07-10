@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { UseMcpResult } from 'use-mcp/react'
-import { wrapDefinition } from 'sequential-workflow-designer-react'
-import type { WrappedDefinition } from 'sequential-workflow-designer-react'
-import { createEmptyDefinition } from './model'
+import { createEmptyDefinition, normalizeDefinition } from './model'
 import type { NotebookPlanDefinition, NotebookPlanResponse } from './types'
 
 export type NotebookSaveState = 'loading' | 'saved' | 'saving' | 'error'
@@ -32,10 +30,12 @@ function toDefinition(value: unknown): NotebookPlanDefinition {
 }
 
 export function useNotebookPlan({ projectSlug, callTool, mcpState }: UseNotebookPlanOptions) {
-  const [wrapped, setWrapped] = useState<WrappedDefinition<NotebookPlanDefinition> | null>(null)
+  const [definition, setDefinitionState] = useState<NotebookPlanDefinition | null>(null)
   const [saveState, setSaveState] = useState<NotebookSaveState>('loading')
   const [error, setError] = useState<string | null>(null)
   const [legacy, setLegacy] = useState(false)
+  const [loadVersion, setLoadVersion] = useState(0)
+  const [loadedDefinition, setLoadedDefinition] = useState<NotebookPlanDefinition | null>(null)
   const callToolRef = useRef(callTool)
   const lastSavedJsonRef = useRef('')
   const pendingDefinitionRef = useRef<NotebookPlanDefinition | null>(null)
@@ -95,15 +95,16 @@ export function useNotebookPlan({ projectSlug, callTool, mcpState }: UseNotebook
     }, 1500)
   }, [write])
 
-  const onDefinitionChange = useCallback((next: WrappedDefinition<NotebookPlanDefinition>) => {
-    setWrapped(next)
-    scheduleSave(next.value)
+  const setDefinition = useCallback((next: NotebookPlanDefinition) => {
+    setDefinitionState(next)
+    scheduleSave(next)
   }, [scheduleSave])
 
   useEffect(() => {
     if (mcpState !== 'ready') return
     let cancelled = false
-    setWrapped(null)
+    setDefinitionState(null)
+    setLoadedDefinition(null)
     setSaveState('loading')
     setError(null)
     setLegacy(false)
@@ -114,16 +115,20 @@ export function useNotebookPlan({ projectSlug, callTool, mcpState }: UseNotebook
         const result = await callToolRef.current('read_plan', { project_slug: projectSlug })
         if (result.isError) throw new Error(responseText(result) || 'Unable to load Plan')
         const parsed = JSON.parse(responseText(result)) as unknown
-        const definition = toDefinition(parsed)
+        const loaded = toDefinition(parsed)
         if (cancelled) return
         const response = parsed as Partial<NotebookPlanResponse>
         setLegacy(response.legacy === true)
-        lastSavedJsonRef.current = JSON.stringify(definition)
-        setWrapped(wrapDefinition(definition))
+        const normalized = normalizeDefinition(loaded)
+        lastSavedJsonRef.current = JSON.stringify(loaded)
+        setDefinitionState(normalized.definition)
+        setLoadedDefinition(normalized.definition)
+        if (normalized.changed) scheduleSave(normalized.definition)
+        setLoadVersion((version) => version + 1)
         setSaveState('saved')
       } catch (cause) {
         if (cancelled) return
-        // Leave `wrapped` null: a failed load must not hand the user an
+        // Leave `definition` null: a failed load must not hand the user an
         // editable empty notebook whose first save overwrites the real plan.
         setSaveState('error')
         setError(cause instanceof Error ? cause.message : 'Unable to load Plan')
@@ -133,14 +138,16 @@ export function useNotebookPlan({ projectSlug, callTool, mcpState }: UseNotebook
       cancelled = true
       flush()
     }
-  }, [projectSlug, mcpState, flush])
+  }, [projectSlug, mcpState, flush, scheduleSave])
 
   return {
-    wrapped,
+    definition,
     saveState,
     error,
     legacy,
-    onDefinitionChange,
+    loadVersion,
+    loadedDefinition,
+    setDefinition,
     flush,
   }
 }
