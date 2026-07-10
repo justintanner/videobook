@@ -18,6 +18,8 @@ import {
   rewriteTimelineReferences,
   rewriteDeep,
   isProcessOrigin,
+  leadingMnemonicTokens,
+  withPreservedMnemonic,
 } from "../rename-helpers.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -143,6 +145,46 @@ describe("buildRenameRows", () => {
     expect(rows[0].target_asset_id).toBe("vid-sunset");
     expect(rows[1].target_asset_id).toBe("vid-sunset-2");
   });
+
+  it("preserves short img-nbp- mnemonic when the model omits it", () => {
+    const assetsNbp = [
+      { asset_id: "img-nbp-updat-ethe-device", type: "image", context_text: "green gadget" },
+    ];
+    const rows = buildRenameRows(
+      assetsNbp,
+      { "img-nbp-updat-ethe-device": "green device" },
+      ["img-nbp-updat-ethe-device"],
+    );
+    expect(rows[0].suggested_name).toBe("nbp green device");
+    expect(rows[0].target_asset_id).toBe("img-nbp-green-device");
+  });
+
+  it("does not duplicate an already-present mnemonic", () => {
+    const assetsNbp = [
+      { asset_id: "img-nbp-clear-table", type: "image", context_text: "table" },
+    ];
+    const rows = buildRenameRows(
+      assetsNbp,
+      { "img-nbp-clear-table": "nbp table" },
+      ["img-nbp-clear-table"],
+    );
+    expect(rows[0].suggested_name).toBe("nbp table");
+    expect(rows[0].target_asset_id).toBe("img-nbp-table");
+  });
+});
+
+describe("leadingMnemonicTokens / withPreservedMnemonic", () => {
+  it("extracts nbp and mmm-style codes", () => {
+    expect(leadingMnemonicTokens("img-nbp-updat-ethe-device")).toEqual(["nbp"]);
+    expect(leadingMnemonicTokens("img-mmm")).toEqual(["mmm"]);
+    expect(leadingMnemonicTokens("vid-google-omni-locked-off")).toEqual([]);
+    expect(leadingMnemonicTokens("img-replace-device-image")).toEqual([]);
+  });
+
+  it("prepends missing mnemonic once", () => {
+    expect(withPreservedMnemonic("green device", "img-nbp-old")).toBe("nbp green device");
+    expect(withPreservedMnemonic("nbp device", "img-nbp-old")).toBe("nbp device");
+  });
 });
 
 describe("validateEditedRenames", () => {
@@ -225,13 +267,22 @@ describe("isProcessOrigin", () => {
 describe("buildSuggestionPrompt", () => {
   it("lists each asset id, type, and context snippet", () => {
     const text = buildSuggestionPrompt([
-      { asset_id: "vid-abc", type: "video", context_text: "a dog running" },
+      { asset_id: "vid-beach-run", type: "video", context_text: "a dog running" },
     ]);
-    expect(text).toContain("vid-abc (video)");
+    expect(text).toContain("vid-beach-run (video)");
     expect(text).toContain("a dog running");
     expect(text).toContain("JSON object");
     expect(text).toContain("last frame");
     expect(text).toContain("VISUAL content");
+    expect(text).toContain("1–2 content words");
+  });
+
+  it("marks keep tokens for short mnemonics like nbp", () => {
+    const text = buildSuggestionPrompt([
+      { asset_id: "img-nbp-updat-ethe-device", type: "image", context_text: "gadget" },
+    ]);
+    expect(text).toContain("keep token: nbp");
+    expect(text).toContain("MUST start");
   });
 
   it("truncates long context to 700 chars", () => {

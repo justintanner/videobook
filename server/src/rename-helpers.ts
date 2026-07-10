@@ -95,6 +95,53 @@ export function isRenamable(assetId: string): boolean {
   return RENAME_PREFIXES.some((p) => assetId.startsWith(`${p}-`));
 }
 
+/** Generic first tokens that are not user/project mnemonics worth preserving. */
+const GENERIC_SLUG_TOKENS = new Set([
+  "untitled", "new", "copy", "final", "temp", "test", "image", "video",
+  "frame", "first", "last", "clip", "shot", "render", "export", "upload",
+]);
+
+/**
+ * Leading short mnemonic after the type prefix (e.g. `nbp` in
+ * `img-nbp-updat-ethe-device`, `mmm` in `img-mmm-device`). Letters only,
+ * 2–4 chars, not a stop/generic word — so digit stubs like `a1` are ignored.
+ */
+export function leadingMnemonicTokens(assetId: string): string[] {
+  const parts = assetId.toLowerCase().split("-").slice(1);
+  if (parts.length === 0) return [];
+  const part = parts[0];
+  if (
+    /^[a-z]{2,4}$/.test(part) &&
+    !STOP_WORDS.has(part) &&
+    !GENERIC_SLUG_TOKENS.has(part)
+  ) {
+    return [part];
+  }
+  return [];
+}
+
+/** Ensure AI-proposed names keep the short mnemonic from the current slug. */
+export function withPreservedMnemonic(
+  suggestedName: string,
+  assetId: string,
+): string {
+  const keep = leadingMnemonicTokens(assetId);
+  if (keep.length === 0) return suggestedName.trim();
+
+  const words = suggestedName
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/[\s-]+/)
+    .filter((w) => w.length > 0);
+
+  const present = new Set(words);
+  const missing = keep.filter((t) => !present.has(t));
+  if (missing.length === 0) return words.join(" ");
+
+  // Prepend missing mnemonics; prefer short names overall.
+  return [...missing, ...words].join(" ");
+}
+
 /** Predict the final target asset id for a proposed name, resolving only
  *  batch-internal collisions (two renames claiming the same slug) by suffixing.
  *  Collisions with pre-existing assets are NOT auto-suffixed here — callers
@@ -155,7 +202,7 @@ export function buildRenameRows(
       continue;
     }
 
-    const cleanedName = proposed.trim();
+    const cleanedName = withPreservedMnemonic(proposed, asset.asset_id);
     const base = slugifyName(cleanedName, prefix);
 
     if (base === asset.asset_id) {
@@ -326,7 +373,9 @@ export function buildSuggestionPrompt(
   opts: { hasImages?: boolean } = {},
 ): string {
   const entries = assets.map((a) => {
-    const label = `${a.asset_id} (${a.type})`;
+    const mnemonic = leadingMnemonicTokens(a.asset_id);
+    const keep = mnemonic.length > 0 ? `; keep token: ${mnemonic.join(" ")}` : "";
+    const label = `${a.asset_id} (${a.type}${keep})`;
     const snippet = a.context_text.slice(0, 700).replace(/\s+/g, " ").trim();
     return snippet
       ? `- ${label}: ${snippet}`
@@ -344,12 +393,12 @@ export function buildSuggestionPrompt(
 
   return [
     "You rename video and image assets in a creative project so their slugs",
-    "describe their VISUAL content. For each asset, propose a SHORT (2-4 words)",
-    "descriptive name a human would search for later.",
+    "describe their VISUAL content. For each asset, propose a VERY SHORT name:",
+    "prefer 1–2 content words (3 max). Think folder tags, not sentences.",
     "",
     "Rules:",
-    "- Name the subject, setting, action, or prop that is actually shown.",
-    "- Prefer concrete nouns (people, objects, places) over abstract process words.",
+    "- Name the main subject or prop only (e.g. \"gadget pitch\", \"green device\").",
+    "- Prefer concrete nouns over adjectives, settings, or abstract process words.",
     "- Do NOT invent details absent from the context text and preview images.",
     "- Do NOT name after pipeline/meta labels: last frame, first frame, update,",
     "  device image, locked off, fixed camera, external, upload, edit, regenerate.",
@@ -357,12 +406,14 @@ export function buildSuggestionPrompt(
     "  the resulting image instead.",
     "- Prefer analysis/summary/visual cues over raw transcript; use spoken words",
     "  only when they name a distinctive prop or topic (e.g. a product brand).",
+    "- If the entry says \"keep token: X\" (e.g. nbp, mmm), the name MUST start",
+    "  with that token, then 1–2 short content words: \"nbp device\", \"mmm gadget\".",
     "- Make names distinct within this batch when assets look different.",
-    "- Keep names lowercase plain words (no punctuation, no asset ids).",
+    "- Keep names lowercase plain words (no punctuation, no full asset ids).",
     "",
     ...imageNote,
     "Return ONLY a JSON object mapping each asset_id to the proposed name.",
-    "Example: {\"vid-abc123\": \"three men pitch gadget\", \"img-xyz\": \"green mmm device\"}",
+    "Example: {\"vid-abc123\": \"gadget pitch\", \"img-nbp-old\": \"nbp device\"}",
     "",
     "Assets:",
     ...entries,
