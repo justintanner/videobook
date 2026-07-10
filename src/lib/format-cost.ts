@@ -23,6 +23,14 @@ export function isUnknownEstimate(estimate: CostEstimate | null): boolean {
   );
 }
 
+// Compact readout shared by the /generate button and the canvas cards. "$?"
+// when the model has no USD pricing adapter (e.g. Google Flow bills in credits)
+// — honest, never a fabricated number.
+export function shortCostLabel(estimate: CostEstimate): string {
+  if (isUnknownEstimate(estimate)) return "$?";
+  return `${isHeuristic(estimate) ? "~" : ""}${formatUsd(estimate.usd)}`;
+}
+
 export function tooltipText(estimate: CostEstimate): string {
   const lines: string[] = [];
   lines.push(`Source: ${estimate.source}`);

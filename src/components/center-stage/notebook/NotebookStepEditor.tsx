@@ -1,12 +1,13 @@
 import { useMemo } from 'react'
-import { AlertCircle, CheckCircle2, Clock3, ImageIcon, Loader2, Video } from 'lucide-react'
+import { AlertCircle, Clock3, ImageIcon, Loader2, Video } from 'lucide-react'
 import { useStepEditor } from 'sequential-workflow-designer-react'
 import type { UseMcpResult } from 'use-mcp/react'
 import { CharacterPickerPopover } from '@/components/gen/ui/CharacterPickerPopover'
 import { DynamicField } from '@/components/gen/ui/DynamicField'
 import { GenerateCommandButton } from '@/components/gen/GenerateCommandButton'
+import { GenSection } from '@/components/gen/ui/GenSection'
 import { MediaStrip } from '@/components/gen/ui/MediaStrip'
-import { appendImageSlug } from '@/components/gen/ui/media-strip'
+import { appendImageSlug, deriveStripSlots } from '@/components/gen/ui/media-strip'
 import { ModelProviderSelector } from '@/components/gen/ui/ModelSelector'
 import { PromptSection } from '@/components/gen/ui/PromptSection'
 import { genThemes } from '@/components/gen/ui/gen-themes'
@@ -221,6 +222,8 @@ function GenerationCellEditor({
       name !== 'project_slug' && name !== 'prompt' && name !== 'character_refs' && !isAssetField(name),
     )
     : []
+  const stripSlots = selectedOption ? deriveStripSlots(selectedOption) : []
+  const hasRefs = stripSlots.length > 0 || Boolean(characterField)
 
   return (
     <div className="vc-notebook-editor">
@@ -284,47 +287,66 @@ function GenerationCellEditor({
               </div>
             </div>
           )}
-          <MediaStrip
-            option={selectedOption}
-            activeMode={activeMode}
-            formValues={mergedValues}
-            resolvedAssets={preview.preview?.resolved_assets ?? []}
-            droppedAssets={new Map()}
-            projectImages={imageAssets}
-            onChange={updateValues}
-            disabled={running}
-            domain="plan"
-            characters={[]}
-            onRemoveCharacter={() => {}}
-            warnings={selectedOption.validation.warnings ?? []}
-          />
-          {characterField && (
-            <CharacterPickerPopover
-              selectedRefs={characterRefs}
-              onChange={(refs) => updateValues('character_refs', refs)}
-              maxItems={characterField.maxItems ?? 7}
-              disabled={running}
-              callTool={callTool}
-              mcpState={mcpState}
-              projectSlug={projectSlug}
-              domain="plan"
-            />
+          {hasRefs && (
+            <GenSection
+              label="refs"
+              color="plan"
+              required={(selectedOption.schema.required ?? []).some((name) => isAssetField(name))}
+            >
+              <div className="space-y-2">
+                {stripSlots.length > 0 && (
+                  <MediaStrip
+                    size="large"
+                    option={selectedOption}
+                    activeMode={activeMode}
+                    formValues={mergedValues}
+                    resolvedAssets={preview.preview?.resolved_assets ?? []}
+                    droppedAssets={new Map()}
+                    projectImages={imageAssets}
+                    onChange={updateValues}
+                    disabled={running}
+                    domain="plan"
+                    characters={[]}
+                    onRemoveCharacter={() => {}}
+                    warnings={selectedOption.validation.warnings ?? []}
+                  />
+                )}
+                {characterField && (
+                  <CharacterPickerPopover
+                    selectedRefs={characterRefs}
+                    onChange={(refs) => updateValues('character_refs', refs)}
+                    maxItems={characterField.maxItems ?? 7}
+                    disabled={running}
+                    callTool={callTool}
+                    mcpState={mcpState}
+                    projectSlug={projectSlug}
+                    domain="plan"
+                  />
+                )}
+              </div>
+            </GenSection>
           )}
-          {fieldEntries.map(([name, schema]) => (
-            <DynamicField
-              key={name}
-              name={name}
-              schema={schema}
-              value={mergedValues[name]}
-              onChange={(value) => updateValues(name, value)}
-              required={(selectedOption.schema.required ?? []).includes(name)}
-              disabled={running}
-              theme={genThemes.plan}
-              callTool={callTool}
-              mcpState={mcpState}
-              projectSlug={projectSlug}
-            />
-          ))}
+          {fieldEntries.length > 0 && (
+            <GenSection label="options" color="plan">
+              <div className="flex flex-wrap gap-x-6 gap-y-3">
+                {fieldEntries.map(([name, schema]) => (
+                  <DynamicField
+                    key={name}
+                    name={name}
+                    schema={schema}
+                    value={mergedValues[name]}
+                    onChange={(value) => updateValues(name, value)}
+                    required={(selectedOption.schema.required ?? []).includes(name)}
+                    disabled={running}
+                    theme={genThemes.plan}
+                    callTool={callTool}
+                    mcpState={mcpState}
+                    projectSlug={projectSlug}
+                  />
+                ))}
+              </div>
+            </GenSection>
+          )}
           <RunStatus status={runStatus.state} />
           {error && <div className="vc-notebook-error"><AlertCircle /> {error}</div>}
           <GenerateCommandButton
@@ -346,7 +368,9 @@ function RunStatus({ status }: { status: NotebookRunState }) {
   if (status === 'idle') return null
   if (status === 'missing') return <div className="vc-notebook-status"><Clock3 /> Syncing</div>
   if (status === 'pending') return <div className="vc-notebook-status"><Clock3 /> Running</div>
-  if (status === 'ready') return <div className="vc-notebook-status"><CheckCircle2 /> Ready</div>
+  // 'ready' is intentionally silent: the card thumbnail + output gallery already
+  // signal completion, and the user asked to hide the redundant "Ready" chip.
+  if (status === 'ready') return null
   return <div className="vc-notebook-status"><AlertCircle /> Failed</div>
 }
 

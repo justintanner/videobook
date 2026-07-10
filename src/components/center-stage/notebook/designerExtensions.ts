@@ -1,11 +1,14 @@
 import {
+  CenteredViewportCalculator,
   ComponentDom,
+  DefaultViewportController,
   Dom,
   InputView,
   LineGridDesignerExtension,
   OutputView,
   RectPlaceholderDesignerExtension,
   StartStopRootComponentDesignerExtension,
+  Vector,
   getAbsolutePosition,
 } from 'sequential-workflow-designer'
 import type {
@@ -15,6 +18,10 @@ import type {
   StepComponentViewContext,
   StepContext,
   TextWidthMeasurer,
+  Viewport,
+  ViewportController,
+  ViewportControllerExtension,
+  WorkspaceApi,
 } from 'sequential-workflow-designer'
 import type { NotebookPlanStep } from './types'
 
@@ -30,6 +37,10 @@ const HERO_ICON_SIZE = 40
 const PROMPT_ICON_SIZE = 18
 const INPUT_SIZE = 14
 const OUTPUT_SIZE = 10
+// Right zone in the gen-card name bar reserved for the cost readout (e.g.
+// "~$0.0004", ≤8 mono chars). The name truncates before it; the cost text is
+// end-anchored inside it, populated later by useCanvasStepDecorations.
+const COST_ZONE_WIDTH = 54
 
 /**
  * Set `full` on `text`, then binary-search a truncation with a trailing
@@ -184,12 +195,21 @@ function createNotebookCardView(
 
     const name = Dom.svg('text', {
       class: 'sqd-step-task-text vc-card-name',
-      x: CARD_WIDTH / 2,
+      x: 12,
       y: HERO_HEIGHT + NAME_BAR_HEIGHT / 2,
-      'text-anchor': 'middle',
+      'text-anchor': 'start',
     })
     g.appendChild(name)
-    fitText(name, viewContext.getStepName(), CARD_WIDTH - 24, viewContext.textWidthMeasurer)
+    fitText(name, viewContext.getStepName(), CARD_WIDTH - 12 - COST_ZONE_WIDTH, viewContext.textWidthMeasurer)
+
+    // Cost readout — textContent ("~$0.09" / "$?") is set by
+    // useCanvasStepDecorations; empty (invisible) until an estimate lands.
+    g.appendChild(Dom.svg('text', {
+      class: 'vc-card-cost',
+      x: CARD_WIDTH - 10,
+      y: HERO_HEIGHT + NAME_BAR_HEIGHT / 2,
+      'text-anchor': 'end',
+    }))
   } else {
     if (iconUrl) {
       g.appendChild(Dom.svg('image', {
@@ -244,11 +264,70 @@ function createNotebookCardView(
   }
 }
 
+const VIEWPORT_PADDING = 40
+// Long flows must not shrink-to-fit: the reset view shows the TOP of the flow
+// at a readable scale and lets the tail scroll off the bottom. Stock centering
+// scales down to as little as 0.06 to fit everything, which is unreadable.
+const MIN_DEFAULT_SCALE = 0.5
+
+// Anchors the flow at the top of the canvas instead of vertically centering it.
+// Wraps the stock controller and overrides only getDefault() — the view SWD
+// resets to on initial render, the control-bar reset button, the context-menu
+// "Reset view", and folder navigation.
+class TopAnchoredViewportController implements ViewportController {
+  static create(api: WorkspaceApi): TopAnchoredViewportController {
+    return new TopAnchoredViewportController(api, DefaultViewportController.create(api))
+  }
+
+  readonly smoothDeltaYLimit: number
+  private readonly api: WorkspaceApi
+  private readonly inner: DefaultViewportController
+
+  private constructor(api: WorkspaceApi, inner: DefaultViewportController) {
+    this.api = api
+    this.inner = inner
+    this.smoothDeltaYLimit = inner.smoothDeltaYLimit
+  }
+
+  getDefault(): Viewport {
+    const canvasSize = this.api.getCanvasSize()
+    const rootSize = this.api.getRootComponentSize()
+    const centered = CenteredViewportCalculator.center(VIEWPORT_PADDING, canvasSize, rootSize)
+    const scale = Math.max(centered.scale, MIN_DEFAULT_SCALE)
+    const x = Math.max(0, (canvasSize.x - rootSize.x * scale) / 2)
+    return { position: new Vector(x, VIEWPORT_PADDING), scale }
+  }
+
+  getZoomed(direction: boolean): Viewport | null {
+    return this.inner.getZoomed(direction)
+  }
+
+  getFocusedOnComponent(componentPosition: Vector, componentSize: Vector): Viewport {
+    return this.inner.getFocusedOnComponent(componentPosition, componentSize)
+  }
+
+  getNextScale(scale: number, direction: boolean) {
+    return this.inner.getNextScale(scale, direction)
+  }
+
+  limitScale(scale: number): number {
+    return this.inner.limitScale(scale)
+  }
+}
+
+const topAnchoredViewportController: ViewportControllerExtension = {
+  create: (api: WorkspaceApi) => TopAnchoredViewportController.create(api),
+}
+
 // Module-level constant: the React wrapper applies `extensions` only when the
 // designer is (re)built, so a stable identity keeps behavior deterministic.
 export const notebookDesignerExtensions: DesignerExtension[] = [
   { steps: [{ componentType: 'task', createComponentView: createNotebookCardView }] },
   LineGridDesignerExtension.create({ gridSizeX: 40, gridSizeY: 40 }),
   RectPlaceholderDesignerExtension.create({ gapWidth: 200, gapHeight: 32, radius: 8, iconSize: 16 }),
-  StartStopRootComponentDesignerExtension.create({ view: { size: 36, defaultIconSize: 24 } }),
+  // size 0 + start:null neutralizes the play/stop terminals (they read as a
+  // "run everything" replay, which we don't want — generation is per-cell).
+  StartStopRootComponentDesignerExtension.create({ view: { size: 0, defaultIconSize: 0, start: null } }),
+  // Singular service: the last extension providing viewportController wins.
+  { viewportController: topAnchoredViewportController },
 ]

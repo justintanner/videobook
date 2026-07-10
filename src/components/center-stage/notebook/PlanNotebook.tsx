@@ -14,6 +14,7 @@ import type { ModelOption } from '@/components/gen/types'
 import { createEditorBridge } from './editorBridge'
 import { notebookDesignerExtensions } from './designerExtensions'
 import { notebookStepIcon } from './icons'
+import { useCanvasCostEstimates } from './useCanvasCostEstimates'
 import { toolboxStepSeeds } from './model'
 import { NotebookRootEditor } from './NotebookRootEditor'
 import { NotebookStepEditor } from './NotebookStepEditor'
@@ -117,7 +118,13 @@ export function PlanNotebook({
     openAssetRef.current?.(assetId)
   }, [])
 
-  useCanvasStepDecorations(rootRef, definition, mediaItems)
+  const stepCosts = useCanvasCostEstimates({
+    projectSlug,
+    callTool: stableCallTool,
+    definition,
+    enabled: mcpState === 'ready',
+  })
+  useCanvasStepDecorations(rootRef, definition, mediaItems, stepCosts)
 
   const title = typeof definition?.properties.title === 'string' && definition.properties.title.trim()
     ? definition.properties.title

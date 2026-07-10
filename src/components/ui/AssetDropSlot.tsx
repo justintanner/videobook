@@ -22,38 +22,45 @@ interface AssetDropSlotProps {
   compact?: boolean;
   /** Portrait-style square frame (default is 16:9 video). */
   square?: boolean;
-  variant?: 'image' | 'video';
+  variant?: SlotVariant;
 }
+
+type SlotVariant = 'image' | 'video' | 'plan';
 
 // Theme tokens. Sourced from the canonical 5-domain palette in
 // src/theme/domains.ts.
-const imageTheme = sectionTheme('image');
-const videoTheme = sectionTheme('video');
+function slotTheme(variant: SlotVariant) {
+  const t = sectionTheme(variant);
+  return {
+    controlBorder: t.controlBorder,
+    controlBg: t.controlBg,
+    controlText: t.controlText,
+    activeBorder: t.activeBorder,
+    activeText: t.activeText,
+    activeGlow: t.activeGlow,
+    inactiveText: t.inactiveText,
+    inactiveHoverBorder: t.inactiveHoverBorder,
+    labelText: t.labelText,
+  };
+}
 
-const themes = {
-  image: {
-    controlBorder: imageTheme.controlBorder,
-    controlBg: imageTheme.controlBg,
-    controlText: imageTheme.controlText,
-    activeBorder: imageTheme.activeBorder,
-    activeText: imageTheme.activeText,
-    activeGlow: imageTheme.activeGlow,
-    inactiveText: imageTheme.inactiveText,
-    inactiveHoverBorder: imageTheme.inactiveHoverBorder,
-    labelText: imageTheme.labelText,
-  },
-  video: {
-    controlBorder: videoTheme.controlBorder,
-    controlBg: videoTheme.controlBg,
-    controlText: videoTheme.controlText,
-    activeBorder: videoTheme.activeBorder,
-    activeText: videoTheme.activeText,
-    activeGlow: videoTheme.activeGlow,
-    inactiveText: videoTheme.inactiveText,
-    inactiveHoverBorder: videoTheme.inactiveHoverBorder,
-    labelText: videoTheme.labelText,
-  },
-} as const;
+const themes: Record<SlotVariant, ReturnType<typeof slotTheme>> = {
+  image: slotTheme('image'),
+  video: slotTheme('video'),
+  plan: slotTheme('plan'),
+};
+
+// Filled-state slug badge colors, per variant.
+const BADGE_TEXT: Record<SlotVariant, string> = {
+  image: 'text-cyan-300',
+  video: 'text-violet-300',
+  plan: 'text-emerald-300',
+};
+const BADGE_BORDER: Record<SlotVariant, string> = {
+  image: 'rgba(34,211,238,0.2)',
+  video: 'rgba(167,139,250,0.4)',
+  plan: 'rgba(52,211,153,0.3)',
+};
 
 export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image'], emptyIcon, compact, square, variant = 'image' }: AssetDropSlotProps) {
   const [isDragOver, setIsDragOver] = useState(false);
@@ -154,11 +161,9 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
                 <span className={cn(
                   'max-w-full text-[10px] font-mono font-bold truncate px-1.5 py-0.5 rounded',
                   'bg-black/85 backdrop-blur-md border',
-                  variant === 'video' ? 'text-violet-300' : 'text-cyan-300',
+                  BADGE_TEXT[variant],
                 )}
-                style={{
-                  borderColor: variant === 'video' ? 'rgba(167,139,250,0.4)' : 'rgba(34,211,238,0.2)',
-                }}>
+                style={{ borderColor: BADGE_BORDER[variant] }}>
                   {value.slug}
                 </span>
               </div>

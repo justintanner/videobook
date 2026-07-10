@@ -8,6 +8,7 @@ export function useCanvasStepDecorations(
   rootRef: RefObject<HTMLDivElement | null>,
   definition: NotebookPlanDefinition | null,
   mediaItems: MediaItem[],
+  stepCosts: ReadonlyMap<string, string>,
 ) {
   useEffect(() => {
     const root = rootRef.current
@@ -27,17 +28,26 @@ export function useCanvasStepDecorations(
         if (thumb && href) thumb.setAttribute('href', href)
         // Flip the icon ↔ thumbnail layers via CSS.
         group.classList.toggle('vc-has-thumb', Boolean(thumb && href))
+        const costEl = group.querySelector<SVGTextElement>('text.vc-card-cost')
+        if (costEl) {
+          const label = stepCosts.get(step.id) ?? ''
+          // Unlike the class/attr writes above, setting textContent IS a
+          // childList mutation and re-fires the observer; the equality guard
+          // makes it converge after a single bounce instead of looping.
+          if ((costEl.textContent ?? '') !== label) costEl.textContent = label
+        }
       }
     }
     apply()
     // SWD re-renders the workspace on a setTimeout(0) after definition changes,
     // and the initial render after Designer.create is async — re-apply whenever
-    // step nodes (re)appear. Class/attr writes above are not childList
-    // mutations, so this observer cannot re-trigger itself into a loop.
+    // step nodes (re)appear. The class/attr writes are not childList mutations,
+    // and the cost textContent write is equality-guarded, so this observer
+    // settles rather than looping.
     const observer = new MutationObserver((mutations) => {
       if (mutations.some((mutation) => mutation.addedNodes.length > 0)) apply()
     })
     observer.observe(root, { childList: true, subtree: true })
     return () => observer.disconnect()
-  }, [definition, mediaItems, rootRef])
+  }, [definition, mediaItems, stepCosts, rootRef])
 }

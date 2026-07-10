@@ -102,6 +102,9 @@ interface MediaStripProps {
   characters: CharacterPillData[];
   onRemoveCharacter: (ref: string) => void;
   warnings: string[];
+  /** 'large' turns the thin strip into a prominent drop area (used by the
+   *  plan notebook sidebar). Defaults to the original compact strip. */
+  size?: 'default' | 'large';
 }
 
 export function MediaStrip({
@@ -117,6 +120,7 @@ export function MediaStrip({
   characters,
   onRemoveCharacter,
   warnings,
+  size = 'default',
 }: MediaStripProps) {
   const [dragOver, setDragOver] = useState(false);
 
@@ -210,92 +214,187 @@ export function MediaStrip({
   });
   const showEmptyHint = !hasChips && characters.length === 0;
 
+  // Empty-slot color follows the panel domain (fixes plan rendering cyan).
+  const slotVariant = domain === 'video' ? 'video' : domain === 'plan' ? 'plan' : 'image';
+  const chipSize = size === 'large' ? 'large' : 'default';
+  const acceptTypesList = Array.from(acceptedKinds) as ('image' | 'video' | 'audio' | 'character')[];
+
+  // Shared drop routing for the trailing AssetDropSlot (both sizes).
+  const routeDroppedAsset = (asset: ResolvedAsset | null) => {
+    if (!asset) return;
+    const kind = asset.type === 'video' ? 'video' : asset.type === 'audio' ? 'audio' : 'image';
+    const route = routeDrop(kind, slots);
+    if (route.action === 'append') {
+      onChange('image_slugs', appendImageSlug(formValues, asset.slug), asset);
+    } else if (route.param) {
+      onChange(route.param, asset.slug, asset);
+    }
+  };
+
+  const slotChips = slots.map((slot) => {
+    const value = formValues[slot.param];
+    if (slot.kind === 'image' && Array.isArray(value)) {
+      const slugs = value as string[];
+      return slugs.map((slug, i) => (
+        <StripChip
+          key={`${slot.param}-${i}`}
+          size={chipSize}
+          slug={slug}
+          label={slot.label}
+          resolvedAssets={resolvedAssets}
+          droppedAssets={droppedAssets}
+          projectImages={projectImages}
+          onRemove={() => {
+            const next = slugs.filter((_, idx) => idx !== i);
+            onChange(slot.param, next);
+          }}
+          onPin={hasPinnableImage ? () => handleTogglePin(slug) : undefined}
+          pinned={pinnedSlug === slug}
+          disabled={disabled}
+          icon={slotIcon(slot.kind)}
+          badge={slot.param === 'image_slugs' ? String(i + 1) : undefined}
+        />
+      ));
+    }
+    if (typeof value === 'string' && value) {
+      return (
+        <StripChip
+          key={slot.param}
+          size={chipSize}
+          slug={value}
+          label={slot.label}
+          resolvedAssets={resolvedAssets}
+          droppedAssets={droppedAssets}
+          projectImages={projectImages}
+          onRemove={() => onChange(slot.param, '')}
+          disabled={disabled}
+          icon={slotIcon(slot.kind)}
+        />
+      );
+    }
+    return null;
+  });
+
+  const characterChips = characters.map((c) => (
+    <CharacterChip
+      key={c.ref}
+      name={c.name}
+      thumbnailUrl={c.thumbnailUrl}
+      imageCount={c.imageCount}
+      onRemove={() => onRemoveCharacter(c.ref)}
+      disabled={disabled}
+    />
+  ));
+
+  const showMeter = characterRefs.length > 0 || slots.some((s) => s.kind === 'image');
+  const meter = showMeter ? (
+    <span className={cn('text-[10px] font-mono whitespace-nowrap', budgetClass)}>{budget.meter}</span>
+  ) : null;
+  const modeLabelNode = activeMode ? (
+    <span className={cn('text-[9px] font-mono uppercase tracking-wider whitespace-nowrap', MODE_LABEL[domain])}>
+      {activeMode.label}
+    </span>
+  ) : null;
+
+  const footer = (
+    <>
+      {budget.message && (
+        <div className="px-3 pb-2 text-[10px] font-mono text-red-400/80">{budget.message}</div>
+      )}
+      {warnings.length > 0 && (
+        <div className="px-3 pb-2 space-y-0.5">
+          {warnings.map((w, i) => (
+            <p key={i} className="text-[10px] font-mono text-amber-400/60">{w}</p>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  const dragProps = {
+    onDragOver: (e: React.DragEvent) => { e.preventDefault(); setDragOver(true); },
+    onDragLeave: () => setDragOver(false),
+    onDrop: handleDrop,
+  };
+
+  if (size === 'large') {
+    const hasContent = hasChips || characters.length > 0;
+    return (
+      <div
+        {...dragProps}
+        className={cn(
+          'rounded border transition-colors duration-150 bg-black/40',
+          dragOver ? DRAGOVER_CLASS[domain] : 'border-primary/20',
+        )}
+      >
+        {hasContent ? (
+          <div className="flex flex-wrap items-start gap-2 p-2">
+            {slotChips}
+            {characterChips}
+            <div className="w-16 shrink-0">
+              <AssetDropSlot
+                value={null}
+                onChange={routeDroppedAsset}
+                disabled={disabled}
+                acceptTypes={acceptTypesList}
+                square
+                variant={slotVariant}
+              />
+            </div>
+            {(meter || modeLabelNode) && (
+              <div className="ml-auto flex flex-col items-end gap-1 pl-2 pt-0.5">
+                {meter}
+                {modeLabelNode}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5 p-2">
+            <AssetDropSlot
+              value={null}
+              onChange={routeDroppedAsset}
+              disabled={disabled}
+              acceptTypes={acceptTypesList}
+              variant={slotVariant}
+            />
+            <div className="flex items-center justify-between gap-2 px-0.5">
+              <span className="text-[10px] font-mono text-primary/25 select-none">
+                drag from assets · type @ in the prompt
+              </span>
+              <div className="flex items-center gap-3 shrink-0">
+                {meter}
+                {modeLabelNode}
+              </div>
+            </div>
+          </div>
+        )}
+        {footer}
+      </div>
+    );
+  }
+
   return (
     <div
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={handleDrop}
+      {...dragProps}
       className={cn(
-        'rounded border transition-colors duration-150',
+        'rounded border transition-colors duration-150 bg-black/40',
         dragOver ? DRAGOVER_CLASS[domain] : 'border-primary/20',
-        domain === 'video' ? 'bg-black/40' : 'bg-black/40',
       )}
     >
       {/* Chip row */}
       <div className="flex items-center gap-1.5 px-2 py-2 overflow-x-auto">
-        {slots.map((slot) => {
-          const value = formValues[slot.param];
-          if (slot.kind === 'image' && Array.isArray(value)) {
-            const slugs = value as string[];
-            return slugs.map((slug, i) => (
-              <StripChip
-                key={`${slot.param}-${i}`}
-                slug={slug}
-                label={slot.label}
-                resolvedAssets={resolvedAssets}
-                droppedAssets={droppedAssets}
-                projectImages={projectImages}
-                onRemove={() => {
-                  const next = slugs.filter((_, idx) => idx !== i);
-                  onChange(slot.param, next);
-                }}
-                onPin={hasPinnableImage ? () => handleTogglePin(slug) : undefined}
-                pinned={pinnedSlug === slug}
-                disabled={disabled}
-                icon={slotIcon(slot.kind)}
-                badge={slot.param === 'image_slugs' ? String(i + 1) : undefined}
-              />
-            ));
-          }
-          if (typeof value === 'string' && value) {
-            return (
-              <StripChip
-                key={slot.param}
-                slug={value}
-                label={slot.label}
-                resolvedAssets={resolvedAssets}
-                droppedAssets={droppedAssets}
-                projectImages={projectImages}
-                onRemove={() => onChange(slot.param, '')}
-                disabled={disabled}
-                icon={slotIcon(slot.kind)}
-              />
-            );
-          }
-          return null;
-        })}
-
-        {/* Character pills */}
-        {characters.map((c) => (
-          <CharacterChip
-            key={c.ref}
-            name={c.name}
-            thumbnailUrl={c.thumbnailUrl}
-            imageCount={c.imageCount}
-            onRemove={() => onRemoveCharacter(c.ref)}
-            disabled={disabled}
-          />
-        ))}
+        {slotChips}
+        {characterChips}
 
         {/* Empty drop zone */}
         <div className="flex items-center gap-1.5 shrink-0">
           <AssetDropSlot
             value={null}
-            onChange={(asset) => {
-              if (!asset) return;
-              const kind = asset.type === 'video' ? 'video' : asset.type === 'audio' ? 'audio' : 'image';
-              const route = routeDrop(kind, slots);
-              if (route.action === 'append') {
-                const updated = appendImageSlug(formValues, asset.slug);
-                onChange('image_slugs', updated, asset);
-              } else if (route.param) {
-                onChange(route.param, asset.slug, asset);
-              }
-            }}
+            onChange={routeDroppedAsset}
             disabled={disabled}
-            acceptTypes={Array.from(acceptedKinds) as ('image' | 'video' | 'audio' | 'character')[]}
+            acceptTypes={acceptTypesList}
             compact
-            variant={domain === 'video' ? 'video' : 'image'}
+            variant={slotVariant}
           />
           {showEmptyHint && (
             <span className="text-[10px] font-mono text-primary/25 whitespace-nowrap select-none">
@@ -306,34 +405,11 @@ export function MediaStrip({
 
         {/* Budget meter + mode label (right-aligned) */}
         <div className="ml-auto flex items-center gap-3 shrink-0 pl-2">
-          {(characterRefs.length > 0 || slots.some((s) => s.kind === 'image')) && (
-            <span className={cn('text-[10px] font-mono whitespace-nowrap', budgetClass)}>
-              {budget.meter}
-            </span>
-          )}
-          {activeMode && (
-            <span className={cn('text-[9px] font-mono uppercase tracking-wider whitespace-nowrap', MODE_LABEL[domain])}>
-              {activeMode.label}
-            </span>
-          )}
+          {meter}
+          {modeLabelNode}
         </div>
       </div>
-
-      {/* Budget warning */}
-      {budget.message && (
-        <div className="px-3 pb-2 text-[10px] font-mono text-red-400/80">
-          {budget.message}
-        </div>
-      )}
-
-      {/* Inline warnings */}
-      {warnings.length > 0 && (
-        <div className="px-3 pb-2 space-y-0.5">
-          {warnings.map((w, i) => (
-            <p key={i} className="text-[10px] font-mono text-amber-400/60">{w}</p>
-          ))}
-        </div>
-      )}
+      {footer}
     </div>
   );
 }
@@ -350,6 +426,7 @@ function StripChip({
   disabled,
   icon,
   badge,
+  size = 'default',
 }: {
   slug: string;
   label: string;
@@ -362,12 +439,14 @@ function StripChip({
   disabled?: boolean;
   icon?: React.ReactNode;
   badge?: string;
+  size?: 'default' | 'large';
 }) {
   const thumb = findThumbnail(slug, resolvedAssets, droppedAssets, projectImages);
   return (
     <div
       className={cn(
-        'group relative shrink-0 w-10 h-10 rounded overflow-hidden border',
+        'group relative shrink-0 rounded overflow-hidden border',
+        size === 'large' ? 'w-16 h-16' : 'w-10 h-10',
         pinned ? 'border-amber-400/60 ring-1 ring-amber-400/40' : 'border-primary/30',
       )}
       title={badge ? `@referenceImage_${badge} · ${stripSlugPrefix(slug)}` : label}

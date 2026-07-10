@@ -47,13 +47,24 @@ interface SlotState {
 }
 
 function deriveSlotState(cost: UseEstimateCostResult): SlotState | null {
-  // Hide entirely on error or unknown — surfacing "—" inside the button reads as broken.
+  // A transient estimate failure is not "unpriced": keep hiding the slot on hard
+  // errors rather than showing a misleading "$?".
   if (cost.error) return null;
-  if (cost.loading && !cost.estimate) {
-    return { text: '···', tone: 'loading', tooltip: 'Estimating…' };
+  // Nothing computed yet — first fetch in flight, or no calls derivable (e.g. no
+  // model picked). isUnknownEstimate(null) is true, so this must come first.
+  if (!cost.estimate) {
+    return cost.loading ? { text: '···', tone: 'loading', tooltip: 'Estimating…' } : null;
   }
-  if (isUnknownEstimate(cost.estimate)) return null;
-  const e = cost.estimate as NonNullable<typeof cost.estimate>;
+  const e = cost.estimate;
+  // Unpriced model (e.g. Google Flow bills in credits): show an honest "$?"
+  // rather than hiding the slot or inventing a number.
+  if (isUnknownEstimate(e)) {
+    return {
+      text: '$?',
+      tone: cost.stale ? 'stale' : 'normal',
+      tooltip: `No pricing data for this provider/model — billed outside USD rates (e.g. plan credits).\n\n${tooltipText(e)}`,
+    };
+  }
   const text = `${isHeuristic(e) ? '~' : ''}${formatUsd(e.usd)}`;
   return { text, tone: cost.stale ? 'stale' : 'normal', tooltip: tooltipText(e) };
 }
