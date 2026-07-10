@@ -234,4 +234,64 @@ describe("estimate_cost tool", () => {
     expect(payload.estimate.usd).toBeCloseTo(sum, 6);
     expect(payload.estimate.usd).toBeGreaterThan(0);
   });
+
+  it("prices Google Flow omni via Gemini API list rates (not credits×$/cr)", async () => {
+    const prev = process.env.GOOGLE_FLOW_PLAN_TIER;
+    process.env.GOOGLE_FLOW_PLAN_TIER = "ultra99";
+    try {
+      const result = await client.callTool({
+        name: "estimate_cost",
+        arguments: {
+          calls: [{
+            tool_name: "generate_google_omni_video",
+            input: { prompt: "test", duration: "10" },
+          }],
+        },
+      });
+      const payload = parse(result);
+      expect(payload.estimate.warnings.join(" ")).not.toContain("no cost adapter");
+      expect(payload.estimate.source).toBe("per-unit-table");
+      // Official API: $0.10/s × 10s = $1.00 (not amortized 30 × $0.01 = $0.30)
+      expect(payload.estimate.usd).toBeCloseTo(1.0, 6);
+      const credits = (payload.estimate.breakdown as { credits?: number }).credits;
+      expect(credits).toBe(30);
+    } finally {
+      if (prev === undefined) delete process.env.GOOGLE_FLOW_PLAN_TIER;
+      else process.env.GOOGLE_FLOW_PLAN_TIER = prev;
+    }
+  });
+
+  it("prices Google Flow veo fast and free lite-lp via API rates", async () => {
+    const prev = process.env.GOOGLE_FLOW_PLAN_TIER;
+    process.env.GOOGLE_FLOW_PLAN_TIER = "ultra99";
+    try {
+      const fast = await client.callTool({
+        name: "estimate_cost",
+        arguments: {
+          calls: [{
+            tool_name: "generate_veo31_fast_video",
+            input: { prompt: "x", duration: "8" },
+          }],
+        },
+      });
+      // $0.10/s × 8s = $0.80
+      expect(parse(fast).estimate.usd).toBeCloseTo(0.8, 6);
+
+      const free = await client.callTool({
+        name: "estimate_cost",
+        arguments: {
+          calls: [{
+            tool_name: "generate_veo31_lite_low_priority_video",
+            input: { prompt: "x" },
+          }],
+        },
+      });
+      const freePayload = parse(free);
+      expect(freePayload.estimate.usd).toBe(0);
+      expect(freePayload.estimate.warnings.join(" ")).not.toContain("no cost adapter");
+    } finally {
+      if (prev === undefined) delete process.env.GOOGLE_FLOW_PLAN_TIER;
+      else process.env.GOOGLE_FLOW_PLAN_TIER = prev;
+    }
+  });
 });

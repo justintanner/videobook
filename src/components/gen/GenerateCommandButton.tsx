@@ -56,13 +56,14 @@ function deriveSlotState(cost: UseEstimateCostResult): SlotState | null {
     return cost.loading ? { text: '···', tone: 'loading', tooltip: 'Estimating…' } : null;
   }
   const e = cost.estimate;
-  // Unpriced model (e.g. Google Flow bills in credits): show an honest "$?"
-  // rather than hiding the slot or inventing a number.
+  // Unpriced model (no adapter / local table): show an honest "$?" rather than
+  // hiding the slot or inventing a number. Google Flow is priced via the local
+  // credits→USD table and will not hit this branch when rates are present.
   if (isUnknownEstimate(e)) {
     return {
       text: '$?',
       tone: cost.stale ? 'stale' : 'normal',
-      tooltip: `No pricing data for this provider/model — billed outside USD rates (e.g. plan credits).\n\n${tooltipText(e)}`,
+      tooltip: `No pricing data for this provider/model.\n\n${tooltipText(e)}`,
     };
   }
   const text = `${isHeuristic(e) ? '~' : ''}${formatUsd(e.usd)}`;

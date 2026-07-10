@@ -151,13 +151,14 @@ const kieGrokImagineImageEdit: CostAdapter = () => ({
 });
 
 // Map MCP tool_name -> EstimateRequest builder. Tools not listed here return
-// null from getCostAdapter() and surface in the UI as "—" (no rate available).
+// null from getCostAdapter() and surface in the UI as "—" (no rate available),
+// unless a local estimator handles them (see estimateGoogleFlowCost).
 // Fal-backed tools have no entry: @apicity/cost dropped fal coverage when it
 // switched to a pure-local pricing table.
 // Google Flow tools (generate_veo31_*, generate_google_omni_video,
-// generate_nano_banana_pro_google) also have no entry: @apicity/cost has no
-// google provider at all — useapi.net bills in plan credits, not USD. See
-// docs/apicity-gaps.md §15.
+// generate_nano_banana_pro_google) have no ADAPTERS entry because
+// @apicity/cost has no google provider — priced instead by the local
+// credits→USD table in google-flow-cost.ts (docs/apicity-gaps.md §15).
 const ADAPTERS: Record<string, CostAdapter> = {
   // --- text rewrites / chat ---
   rewrite_prompt: openaiText("gpt-5.2", 1000),

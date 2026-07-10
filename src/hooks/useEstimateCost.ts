@@ -10,10 +10,16 @@ export interface CostBreakdown {
   inputTokens?: number;
   outputTokens?: number;
   units?: number;
-  unit?: "tokens" | "characters" | "seconds" | "images" | "songs";
+  unit?: "tokens" | "characters" | "seconds" | "images" | "songs" | "generations";
   inputUsdPerMillion?: number;
   outputUsdPerMillion?: number;
   perUnitUsd?: number;
+  /** Google Flow plan credits (secondary; USD is the primary estimate). */
+  credits?: number;
+  /** USD per Flow credit for the assumed plan tier. */
+  usdPerCredit?: number;
+  /** Assumed Google AI plan tier for Flow estimates. */
+  planTier?: string;
 }
 
 export interface CostEstimate {

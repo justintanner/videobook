@@ -4,6 +4,7 @@ import type { VideocityFs } from "videocity-engine";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { getCostProvider } from "../cost.js";
 import { getCostAdapter } from "../cost-adapters.js";
+import { estimateGoogleFlowCost } from "../google-flow-cost.js";
 
 const callItem = z.object({
   tool_name: z.string().describe("Name of the generation tool whose cost to estimate"),
@@ -65,6 +66,10 @@ async function estimateOne(
   toolName: string,
   input: Record<string, unknown>,
 ): Promise<CostEstimate> {
+  // Google Flow: local credits→USD table (apicity has no google provider).
+  const flow = estimateGoogleFlowCost(toolName, input);
+  if (flow) return flow;
+
   const adapter = getCostAdapter(toolName);
   if (!adapter) return unknown(toolName);
   const enriched = await enrichInput(fs, toolName, input);

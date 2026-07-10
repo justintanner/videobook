@@ -378,15 +378,20 @@ the voices/characters/accounts tools ship hand-written tolerant readers.
 
 `@apicity/cost@0.7.1`'s `PRICING` covers `openai, anthropic, xai, kimicoding,
 fireworks, alibaba, elevenlabs, kie` — no `google`. useapi.net bills Google
-Flow in plan credits (veo-3.1-quality 100, -fast 20, -lite 10, omni-flash
-15-30 per clip), not USD, so `modelSlug("google", …)` throws and no estimate
-is possible.
+Flow in plan credits (veo-3.1-quality 100, -fast 20/10, -lite 10/5,
+omni-flash 15–40 per clip), not USD, so `modelSlug("google", …)` throws and
+no estimate is possible via `@apicity/cost`.
 
 **Workaround (`generate_veo31_*`, `generate_google_omni_video`,
 `generate_nano_banana_pro_google`):**
 
-- **No `cost-adapters.ts` entries** → the UI shows `—` (same treatment as the
-  fal-backed tools).
+- **No `cost-adapters.ts` entries** (apicity cannot price these).
+- **Local cost table** in `server/src/google-flow-cost.ts`, called from
+  `estimate_cost` before the adapter path. Badge **USD** uses official Gemini
+  Developer API list rates (Omni/Veo $/s @ 720p, Nano Banana Pro $/image) —
+  **not** credits × subscription amortization. Flow **credits** are secondary
+  (`breakdown.credits` + tooltip); `GOOGLE_FLOW_PLAN_TIER` (default ultra99)
+  only affects Lite/Fast credit counts and tooltip copy.
 - Asset/job **naming** uses literal slugs (`veo31`, `veo31-fast`,
   `veo31-lite`, `google-omni`; the image tool borrows the kie
   `nano-banana-pro` slug `nbp` for cross-provider consistency).
@@ -395,7 +400,7 @@ is possible.
 
 **Ask apicity:** add a `google`/`googleflow` provider to `@apicity/cost` with
 credits-based rates (or a credits→USD conversion) for the google-flow
-models, plus `MODEL_SLUGS.google` entries.
+models, plus `MODEL_SLUGS.google` entries — then drop the local table.
 
 ---
 

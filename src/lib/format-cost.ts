@@ -24,8 +24,8 @@ export function isUnknownEstimate(estimate: CostEstimate | null): boolean {
 }
 
 // Compact readout shared by the /generate button and the canvas cards. "$?"
-// when the model has no USD pricing adapter (e.g. Google Flow bills in credits)
-// — honest, never a fabricated number.
+// when the model has no USD pricing path (e.g. unpriced fal tools). Google Flow
+// uses a local credits→USD table so it shows real dollars, not "$?".
 export function shortCostLabel(estimate: CostEstimate): string {
   if (isUnknownEstimate(estimate)) return "$?";
   return `${isHeuristic(estimate) ? "~" : ""}${formatUsd(estimate.usd)}`;
@@ -38,10 +38,22 @@ export function tooltipText(estimate: CostEstimate): string {
   const b = estimate.breakdown;
   if (b.inputTokens !== undefined) lines.push(`Input tokens: ${b.inputTokens}`);
   if (b.outputTokens !== undefined) lines.push(`Output tokens: ${b.outputTokens}`);
-  if (b.units !== undefined && b.unit) lines.push(`Units: ${b.units} ${b.unit}`);
+  // API billable units (seconds/images) drive the USD badge when present.
+  if (b.units !== undefined && b.unit) {
+    lines.push(`Units: ${b.units} ${b.unit}`);
+  }
+  if (b.perUnitUsd !== undefined) {
+    lines.push(`Per unit: $${b.perUnitUsd}`);
+  }
+  // Flow plan credits are secondary — not the badge currency.
+  if (b.credits !== undefined) {
+    const tier = b.planTier ? ` · tier ${b.planTier}` : "";
+    const amortized =
+      b.usdPerCredit !== undefined ? ` · amortized ~$${b.usdPerCredit}/credit` : "";
+    lines.push(`Flow credits: ${b.credits}${tier}${amortized}`);
+  }
   if (b.inputUsdPerMillion !== undefined) lines.push(`Input $/M: ${b.inputUsdPerMillion}`);
   if (b.outputUsdPerMillion !== undefined) lines.push(`Output $/M: ${b.outputUsdPerMillion}`);
-  if (b.perUnitUsd !== undefined) lines.push(`Per unit: $${b.perUnitUsd}`);
   if (estimate.warnings.length > 0) {
     lines.push("");
     lines.push("Warnings:");
