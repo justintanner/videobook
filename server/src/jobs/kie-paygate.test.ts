@@ -196,7 +196,7 @@ describe("kie paygate", () => {
   });
 
   it("rejects a kling-3.0/motion-control request with no duration hint as unbounded", () => {
-    // kling-3.0/motion-control (char_swap) prices per second but its kie input
+    // kling-3.0/motion-control prices per second but its kie input
     // schema carries no duration field (output length = motion video). Without a
     // top-level duration hint the units derivation fails and the estimate is
     // unbounded.

@@ -78,7 +78,6 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/settings");
     expect(commandNames).toContain("/files");
     expect(commandNames).toContain("/plan");
-    expect(commandNames).toContain("/plan-vis");
     expect(commandNames).toContain("/projects");
     expect(commandNames).toContain("/project-new");
     expect(commandNames).toContain("/project-rename");

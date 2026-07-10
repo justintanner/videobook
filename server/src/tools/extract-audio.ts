@@ -54,7 +54,7 @@ export function extractAudioDef(fs: VideocityFs): ToolDef {
         })
         .optional()
         .describe(
-          "When set, extract only this time window from the source. Used by plan-vis bootstrap to produce per-scene mp3s ≤ seedance-2's 15.2s reference cap.",
+          "When set, extract only this time window from the source.",
         ),
     },
     handler: async (args) => {
@@ -198,4 +198,3 @@ export function extractAudioDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

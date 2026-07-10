@@ -9,14 +9,14 @@ import { ImageViewer } from './ImageViewer';
 import { ScriptViewer } from './ScriptViewer';
 import { AudioViewer } from './AudioViewer';
 import { CharacterViewer } from './CharacterViewer';
-import { PlanViewer } from './PlanViewer';
+import { PlanNotebook } from './notebook/PlanNotebook';
 import type { CharacterProfile } from '@/hooks/useCharacterSlots';
 import type { ViewerSize, BackTab } from './viewer-types';
 import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle';
 
 // ── AssetViewer Dispatcher ──
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, callState, planResetKey, onBackToTemplates, onClose, imageAssets, mediaItems, onEditCharacterProfile, cropTarget, onCropConsumed, osgTarget, onOsgConsumed, onOsgApply, onGenerationLifecycle }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, callState, onClose, imageAssets, mediaItems, onOpenAsset, onEditCharacterProfile, cropTarget, onCropConsumed, osgTarget, onOsgConsumed, onOsgApply, onGenerationLifecycle }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -34,11 +34,10 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   transcript?: TranscriptInfo | null;
   callTool: UseMcpResult['callTool'];
   callState: UseMcpResult['state'];
-  planResetKey?: number;
-  onBackToTemplates: () => void;
   onClose: () => void;
   imageAssets: MediaItem[];
   mediaItems: MediaItem[];
+  onOpenAsset?: (assetId: string) => void;
   onEditCharacterProfile: (charAssetId: string, profile: CharacterProfile, onProfileSaved?: (profile: CharacterProfile) => void) => void;
   cropTarget?: { assetId: string; ratio?: string } | null;
   onCropConsumed?: () => void;
@@ -85,14 +84,13 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
 
   if (isPlan) {
     return (
-      <PlanViewer
-        item={item}
-        mediaItems={mediaItems}
+      <PlanNotebook
         projectSlug={projectSlug}
         callTool={callTool}
-        resetKey={planResetKey}
+        mcpState={callState}
+        mediaItems={mediaItems}
         onClose={onClose}
-        onBackToTemplates={onBackToTemplates}
+        onOpenAsset={onOpenAsset}
         onGenerationLifecycle={onGenerationLifecycle}
       />
     );

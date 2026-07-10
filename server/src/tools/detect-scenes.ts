@@ -12,8 +12,7 @@ export function detectScenesDef(fs: VideocityFs): ToolDef {
       "Each candidate is { t, score, kind } where kind=\"shot\" is a camera/cut change (scdet score ≥ 10) " +
       "and kind=\"settle\" is a motion-settle moment inside a steady shot (the falling edge of a sustained " +
       "high-motion run, e.g. \"the man finished standing up\"). Runs in the background and persists to " +
-      ".detect-scenes.json. Used by /plan-vis to align scene boundaries to picture rather than audio; also " +
-      "useful as a standalone read-only diagnostic.",
+      ".detect-scenes.json and is useful as a standalone read-only diagnostic.",
     schema: {
       source_asset_id: z.string().describe("Video asset id (vid-*) inside the project"),
       project_slug: z.string().describe("Project slug"),

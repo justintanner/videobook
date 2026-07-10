@@ -28,6 +28,7 @@ import {
   type EditedRename,
 } from "../rename-helpers.js";
 import { RENDER_ORIENTATIONS } from "./sync.js";
+import { isNotebookSidecar, renderPlanMarkdown } from "../plan-notebook.js";
 import type { ToolDef } from "./tool-def.js";
 
 const MODEL = "gpt-5.5";
@@ -624,9 +625,16 @@ async function updatePlanReferences(
     return;
   }
   const before = JSON.stringify(plan);
-  plan = rewriteDeep(plan, idMap);
+  const planIdMap = new Map(idMap);
+  for (const [oldId, newId] of idMap) {
+    planIdMap.set(`@${oldId}`, `@${newId}`);
+  }
+  plan = rewriteDeep(plan, planIdMap);
   if (JSON.stringify(plan) !== before) {
     await fs.writeFile("plan", ".plan.json", JSON.stringify(plan, null, 2), projectSlug);
+    if (isNotebookSidecar(plan)) {
+      await fs.writeFile("plan", "index.md", renderPlanMarkdown(plan.definition), projectSlug);
+    }
   }
 }
 

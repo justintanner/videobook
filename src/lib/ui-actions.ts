@@ -38,7 +38,6 @@ export interface UiActionCallbacks {
   open_character_dialog: (initialSlug: string) => void;
   open_post_composer: (assetSlug: string, text: string) => void;
   open_plan: () => void;
-  open_templates: () => void;
   open_rename_all: () => void;
   open_projects: () => void;
   create_project: (slug: string) => void;
@@ -196,7 +195,7 @@ export function executeUiAction(
       break;
     default:
       // No-arg actions: open_upload, open_inbox, viewer_set_*, viewer_toggle_info,
-      // open_templates, open_projects, close_viewer, open_provider_keys, show_voices, x_connect
+      // open_projects, close_viewer, open_provider_keys, show_voices, x_connect
       (fn as () => void)();
       break;
   }

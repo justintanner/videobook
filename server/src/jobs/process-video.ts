@@ -28,7 +28,7 @@ type ProcessVideoPayload = {
 // identical to the already-committed file; the scoped commit then finds nothing
 // and the engine surfaces a bare "Failed to commit file write:". Skipping the
 // no-op write lets idempotent re-processing succeed. Mirrors
-// writePlanFileIfChanged in plan-clip-show.ts.
+// writePlanFileIfChanged in plan-notebook.ts.
 async function writeBinaryIfChanged(
   fs: VideocityFs,
   assetId: string,

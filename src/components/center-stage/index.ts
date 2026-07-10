@@ -1,7 +1,5 @@
 export { IdleScreen, AssetViewer } from './CenterStage';
-export { PlanViewer } from './PlanViewer';
-export type { PlanFormula } from './PlanViewer';
-export { TemplatesViewer } from './TemplatesViewer';
+export { PlanNotebook } from './notebook/PlanNotebook';
 export { ArchiveBrowser } from './ArchiveBrowser';
 export { RenameAllPanel } from './RenameAllPanel';
 export type { ArchiveSearchResponse, RestoreResponse } from './ArchiveBrowser';

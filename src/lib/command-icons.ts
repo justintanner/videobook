@@ -13,7 +13,7 @@ import {
   Eye,
   Users,
   Archive,
-  LayoutTemplate,
+  NotebookPen,
   Stethoscope,
 } from 'lucide-react';
 
@@ -31,7 +31,7 @@ const iconMap: Record<string, LucideIcon> = {
   Eye,
   Users,
   Archive,
-  LayoutTemplate,
+  NotebookPen,
   Stethoscope,
 };
 

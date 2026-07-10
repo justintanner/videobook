@@ -1,0 +1,72 @@
+.vc-notebook {
+  background: linear-gradient(180deg, rgb(6 18 14), rgb(8 12 11));
+  color: rgb(209 250 229);
+}
+
+.vc-notebook-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgb(52 211 153 / 0.2);
+  padding: 0.75rem 1rem;
+}
+
+.vc-notebook-header > div,
+.vc-notebook-header span {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vc-notebook-header h1,
+.vc-notebook-header span {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.vc-notebook-header h1 { font-size: 0.875rem; }
+.vc-notebook-header span { color: rgb(110 231 183 / 0.75); font-size: 0.7rem; text-transform: uppercase; }
+.vc-notebook-header svg,
+.vc-notebook-save svg,
+.vc-notebook-status svg,
+.vc-notebook-loading svg,
+.vc-notebook-error svg { width: 0.875rem; height: 0.875rem; }
+.vc-notebook-save-saving svg,
+.vc-notebook-save-loading svg,
+.vc-notebook-loading svg { animation: vc-notebook-spin 1s linear infinite; }
+.vc-notebook-save-error,
+.vc-notebook-error,
+.vc-notebook-load-error { color: rgb(252 165 165); }
+.vc-notebook-load-error { padding: 0.5rem 1rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; }
+.vc-notebook .sqd-designer-react { flex: 1; min-height: 0; }
+.vc-notebook .sqd-designer { height: 100%; background: transparent; }
+.vc-notebook .sqd-workspace { background: radial-gradient(circle at top, rgb(16 59 42 / 0.35), transparent 45%); }
+.vc-notebook .sqd-toolbox,
+.vc-notebook .sqd-editor { background: rgb(5 15 11 / 0.92); border-color: rgb(52 211 153 / 0.2); }
+.vc-notebook .sqd-step-task { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.vc-notebook .vc-step-running { animation: vc-notebook-pulse 1.3s ease-in-out infinite; }
+.vc-notebook .vc-step-error { filter: drop-shadow(0 0 5px rgb(248 113 113 / 0.9)); }
+.vc-notebook-editor { display: flex; flex-direction: column; gap: 0.75rem; padding: 0.75rem; min-width: 17rem; max-width: 28rem; overflow-y: auto; }
+.vc-notebook-editor label,
+.vc-notebook-prior-output > span { color: rgb(110 231 183 / 0.7); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.7rem; text-transform: uppercase; }
+.vc-notebook-editor textarea,
+.vc-notebook-root-editor input { min-height: 7rem; resize: vertical; border: 1px solid rgb(52 211 153 / 0.25); border-radius: 0.375rem; background: rgb(0 0 0 / 0.45); padding: 0.75rem; color: rgb(236 253 245); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.vc-notebook-copy-prompt { align-self: flex-start; border: 1px solid rgb(52 211 153 / 0.35); border-radius: 0.375rem; background: rgb(52 211 153 / 0.08); padding: 0.4rem 0.6rem; color: rgb(167 243 208); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.7rem; }
+.vc-notebook-prior-output > div,
+.vc-notebook-output-gallery { display: flex; gap: 0.4rem; overflow-x: auto; }
+.vc-notebook-prior-output button,
+.vc-notebook-output-gallery button { width: 2.75rem; height: 2.75rem; overflow: hidden; border: 1px solid rgb(52 211 153 / 0.25); border-radius: 0.25rem; background: rgb(0 0 0 / 0.4); color: rgb(167 243 208); }
+.vc-notebook-prior-output img,
+.vc-notebook-output-gallery img { width: 100%; height: 100%; object-fit: cover; }
+.vc-notebook-output-error { border-color: rgb(248 113 113) !important; }
+.vc-notebook-status,
+.vc-notebook-loading,
+.vc-notebook-error { display: flex; align-items: center; gap: 0.4rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; }
+.vc-notebook-loading { flex: 1; justify-content: center; color: rgb(110 231 183 / 0.75); }
+.vc-notebook-root-editor { display: flex; flex-direction: column; gap: 0.6rem; padding: 0.75rem; color: rgb(167 243 208); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; }
+.vc-notebook-root-editor label { color: rgb(110 231 183 / 0.7); }
+.vc-notebook-root-editor input { min-height: auto; }
+.vc-notebook-root-editor p { margin: 0; color: rgb(167 243 208 / 0.6); }
+
+@keyframes vc-notebook-spin { to { transform: rotate(360deg); } }
+@keyframes vc-notebook-pulse { 50% { filter: drop-shadow(0 0 7px rgb(52 211 153 / 0.9)); } }

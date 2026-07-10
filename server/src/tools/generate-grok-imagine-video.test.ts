@@ -207,8 +207,8 @@ describe("generate_grok_imagine_video tool", () => {
     }).png().toBuffer();
     await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
 
-    // The char_swap pipeline addresses per-scene audio as @plan/sN.mp3 — a sibling
-    // file inside the non-media-prefixed `plan` asset, not an aud-* asset.
+    // A plan may address per-scene audio as @plan/sN.mp3 — a sibling file inside
+    // the non-media-prefixed `plan` asset, not an aud-* asset.
     const planDir = join(tempDir, "test-proj", "plan");
     await mkdir(planDir, { recursive: true });
     await writeFile(join(planDir, "s1.mp3"), Buffer.from("fake-mp3-bytes"));

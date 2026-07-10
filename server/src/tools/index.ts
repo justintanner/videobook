@@ -177,29 +177,8 @@ import { genImagesAllDef } from "./gen-images-all.js";
 import { generateOutfitDef, previewOutfitPromptsDef } from "./generate-outfit.js";
 import { generateCharacterDef } from "./generate-character.js";
 import { analyzeCharacterImageDef } from "./analyze-character-image.js";
-import { planVisualizationDef } from "./plan-visualization.js";
-import { planPreviewDef } from "./plan-preview.js";
-import { swapPlanSceneFrameDef } from "./swap-plan-scene-frame.js";
-import { acceptPlanSceneFrameSwapDef } from "./accept-plan-scene-frame-swap.js";
-import { replacePlanSceneFrameSwapDef } from "./replace-plan-scene-frame-swap.js";
-import { clearPlanSceneFrameSwapDef } from "./clear-plan-scene-frame-swap.js";
-import { setPlanSceneFrameCharactersDef } from "./set-plan-scene-frame-characters.js";
-import { setPlanSceneSkipPriorDef } from "./set-plan-scene-skip-prior.js";
-import { setPlanSceneFrameSourceDef } from "./set-plan-scene-frame-source.js";
-import { matchPlanSceneCharactersDef } from "./match-plan-scene-characters.js";
-import { acceptPlanSceneVideoSwapDef } from "./accept-plan-scene-video-swap.js";
-import { replacePlanSceneVideoSwapDef } from "./replace-plan-scene-video-swap.js";
 import { readPlanDef } from "./read-plan.js";
-import { readPlanProgressDef } from "./read-plan-progress.js";
-import { ensurePlanSourceFramesDef } from "./ensure-plan-source-frames.js";
-import { planStoryboardVideoDef } from "./plan-storyboard-video.js";
-import { replacePlanStoryboardVideoStoryboardDef } from "./replace-plan-storyboard-video-storyboard.js";
-import { replacePlanStoryboardVideoVideoDef } from "./replace-plan-storyboard-video-video.js";
-import { planClipShowDef } from "./plan-clip-show.js";
-import { replacePlanClipShowAssetDef } from "./replace-plan-clip-show-asset.js";
-import { regenerateClipShowSegmentDef } from "./regenerate-clip-show-segment.js";
-import { regenerateClipShowOsgDef } from "./regenerate-clip-show-osg.js";
-import { generateClipShowImagesDef } from "./generate-clip-show-images.js";
+import { writePlanDef } from "./write-plan.js";
 import { detectScenesDef } from "./detect-scenes.js";
 import { suggestCutsDef } from "./suggest-cuts.js";
 import { suggestSfxDef } from "./suggest-sfx.js";
@@ -400,29 +379,8 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     previewOutfitPromptsDef(fs),
     generateCharacterDef(fs),
     analyzeCharacterImageDef(fs),
-    planVisualizationDef(fs),
-    planPreviewDef(fs),
-    swapPlanSceneFrameDef(fs),
-    acceptPlanSceneFrameSwapDef(fs),
-    replacePlanSceneFrameSwapDef(fs),
-    clearPlanSceneFrameSwapDef(fs),
-    setPlanSceneFrameCharactersDef(fs),
-    setPlanSceneSkipPriorDef(fs),
-    setPlanSceneFrameSourceDef(fs),
-    matchPlanSceneCharactersDef(fs),
-    acceptPlanSceneVideoSwapDef(fs),
-    replacePlanSceneVideoSwapDef(fs),
     readPlanDef(fs),
-    readPlanProgressDef(),
-    ensurePlanSourceFramesDef(),
-    planStoryboardVideoDef(fs),
-    replacePlanStoryboardVideoStoryboardDef(fs),
-    replacePlanStoryboardVideoVideoDef(fs),
-    planClipShowDef(fs),
-    replacePlanClipShowAssetDef(fs),
-    regenerateClipShowSegmentDef(fs),
-    regenerateClipShowOsgDef(fs),
-    generateClipShowImagesDef(fs),
+    writePlanDef(fs),
     detectScenesDef(fs),
     suggestCutsDef(fs),
     suggestSfxDef(fs),

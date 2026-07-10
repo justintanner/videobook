@@ -178,7 +178,7 @@ describe("planEvenSplit (pure)", () => {
     expect(r.hasLeftover).toBe(true);
   });
 
-  it("7s per-scene plan-vis pattern: D=21, [7, 7, 7] → [7, 7, 7], no leftover", () => {
+  it("three 7s targets: D=21, [7, 7, 7] → [7, 7, 7], no leftover", () => {
     const r = planEvenSplit(21, [7, 7, 7]);
     expect(r.ok).toBe(true);
     if (!r.ok) return;

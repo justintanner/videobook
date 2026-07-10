@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
@@ -603,5 +603,75 @@ describe("rename_all tool", () => {
     const timeline = JSON.parse((timelineResult.content as TextContent)[0].text);
     const slots = timeline.slots ?? [];
     expect(slots[0]?.slug).toBe("img-sunset-beach");
+  });
+
+  it("apply rewrites notebook @-references, bare output ids, and the markdown mirror", async () => {
+    const data = Buffer.from("fake-png").toString("base64");
+    const upload = await client.callTool({
+      name: "upload_file",
+      arguments: { project_slug: "test-proj", filename: "plan.png", data },
+    });
+    const assetId = JSON.parse((upload.content as TextContent)[0].text).assetId as string;
+
+    const deadline = Date.now() + 8000;
+    while (Date.now() < deadline) {
+      const list = await client.callTool({
+        name: "list_assets",
+        arguments: { project_slug: "test-proj" },
+      });
+      const assets = JSON.parse((list.content as TextContent)[0].text).assets;
+      const found = assets.find((asset: { id: string; status: string }) => asset.id === assetId);
+      if (found && found.status !== "working") break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    const planDir = join(tempDir, "test-proj", "plan");
+    await mkdir(planDir, { recursive: true });
+    await writeFile(join(planDir, ".plan.json"), JSON.stringify({
+      format: "notebook",
+      schema_version: 1,
+      definition: {
+        properties: {},
+        sequence: [{
+          id: "image-1",
+          componentType: "task",
+          type: "image",
+          name: "Key frame",
+          properties: {
+            model: "nano-banana-pro",
+            values: {
+              prompt: "Use the reference image.",
+              image_slugs: [`@${assetId}`],
+              first_frame_slug: `@${assetId}`,
+            },
+            asset_ids: [assetId],
+          },
+        }],
+      },
+    }, null, 2));
+    await writeFile(join(planDir, "index.md"), "stale index");
+
+    const result = await client.callTool({
+      name: "rename_all",
+      arguments: {
+        project_slug: "test-proj",
+        dry_run: false,
+        renames: [{ asset_id: assetId, suggested_name: "sunset beach" }],
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const renamed = "img-sunset-beach";
+    const sidecar = JSON.parse(await readFile(join(planDir, ".plan.json"), "utf8")) as {
+      definition: {
+        sequence: Array<{ properties: { values: Record<string, unknown>; asset_ids: string[] } }>;
+      };
+    };
+    expect(sidecar.definition.sequence[0].properties.values.image_slugs).toEqual([`@${renamed}`]);
+    expect(sidecar.definition.sequence[0].properties.values.first_frame_slug).toBe(`@${renamed}`);
+    expect(sidecar.definition.sequence[0].properties.asset_ids).toEqual([renamed]);
+    const markdown = await readFile(join(planDir, "index.md"), "utf8");
+    expect(markdown).toContain(`@${renamed}`);
+    expect(markdown).not.toContain(assetId);
   });
 });

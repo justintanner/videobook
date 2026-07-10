@@ -58,12 +58,9 @@ export function rewriteCharacterMentions(text: string, refs: { handle: string; n
   return out;
 }
 
-// Positional image refs come in three flavours across the formulas: "[Image N]"
-// (storyboard, normalizeStoryboardVideoPrompt), "@ImageN" (char_swap video,
-// rewriteVisualWithImageTokens), and bare "Image N" (char_swap swap prompt,
-// defaultSwapPrompt). All three resolve to the same image-ref token; the matched
-// substring (brackets/@ included) defines the chip's character width. The bare
-// form's lookbehind keeps it from re-matching inside the bracket/@ forms.
+// Positional image refs support bracketed, @-prefixed, and bare forms so
+// imported prompts retain their inline thumbnail references. All three resolve
+// to the same image-ref token; the matched substring defines the chip's width.
 const IMAGE_REF_RE = /\[Image\s*(\d+)\]|@Image\s*(\d+)|(?<![@[\w])Image\s*(\d+)\b/gi;
 
 // Google Flow positional @-mention markers (case-insensitive per API docs).
