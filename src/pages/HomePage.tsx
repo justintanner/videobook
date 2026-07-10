@@ -102,12 +102,6 @@ function humanizeId(id: string): string {
     .join(' ');
 }
 
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
 function formatAssetCount(count: number): string {
   return count === 1 ? '1 asset' : `${count} assets`;
 }
@@ -139,7 +133,6 @@ export function HomePage() {
   const [renderingOverrides, setRenderingOverrides] = useState<Map<string, string>>(new Map());
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [timelineSlotIndex, setTimelineSlotIndex] = useState<number | null>(null);
-  const [currentFrame, setCurrentFrame] = useState(0);
   const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image'; prompt: string } | null>(null);
   // Optimistic placeholder tiles for just-enqueued generations, shown in the
   // clips bar until the real asset surfaces via sync (or the safety expiry).
@@ -525,24 +518,6 @@ export function HomePage() {
   }, [activeSelection?.id, projectSlug, settingsOrientation, fetchRenderSettings, mediaItems]);
 
   const previewData = useTimelinePreview(timeline, mediaItems, projectSlug, settingsOrientation);
-
-  const frameRef = useRef(0);
-  const rafRef = useRef(0);
-
-  const handleFrameUpdate = useCallback((frame: number) => {
-    frameRef.current = frame;
-    if (!rafRef.current) {
-      rafRef.current = requestAnimationFrame(() => {
-        setCurrentFrame(frameRef.current);
-        rafRef.current = 0;
-      });
-    }
-  }, []);
-
-  // Cleanup rAF on unmount
-  useEffect(() => {
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, []);
 
   const handleRender = useCallback(async (settings?: RenderSettings) => {
     if (!projectSlug || !activeSelection) return;
@@ -1758,7 +1733,6 @@ export function HomePage() {
                   <TimelinePlayer
                     previewData={previewData}
                     initialSlotIndex={timelineSlotIndex}
-                    onFrameUpdate={handleFrameUpdate}
                     onOrientationChange={handleViewerSizeChange}
                   />
                 ) : (
@@ -1861,7 +1835,6 @@ export function HomePage() {
                     isActive={timelineSlotIndex === i}
                     hasContent={!!slotSlug}
                     frameUrls={frameUrls}
-                    waveform={slotAsset?.waveform ?? undefined}
                     duration={slotAsset?.duration ?? undefined}
                     assetId={slotSlug ? `@${slotSlug}` : undefined}
                     renderStatus={slotAsset?.status}
@@ -1884,32 +1857,6 @@ export function HomePage() {
                 onUpdate={(audioId, fields) => { updateAudio(projectSlug, audioId, fields); }}
               />
             )}
-            <div className="relative h-12 border-t border-border/30 bg-card/20 flex items-center px-3 gap-3">
-              {timelineSlotIndex != null && previewData.ready && (
-                <>
-                  {/* Progress bar with slot boundaries */}
-                  <div className="flex-1 relative h-2 bg-white/5 rounded-full overflow-hidden">
-                    {/* Slot boundary markers */}
-                    {previewData.slotOffsets.slice(1).map((offset, i) => (
-                      <div
-                        key={i}
-                        className="absolute top-0 bottom-0 w-px bg-white/20"
-                        style={{ left: `${(offset / previewData.totalDurationInFrames) * 100}%` }}
-                      />
-                    ))}
-                    {/* Progress fill */}
-                    <div
-                      className="absolute top-0 left-0 bottom-0 bg-primary/60 rounded-full transition-[width] duration-75"
-                      style={{ width: `${(currentFrame / previewData.totalDurationInFrames) * 100}%` }}
-                    />
-                  </div>
-                  {/* Time readout */}
-                  <span className="text-[10px] font-mono text-muted-foreground/50 tabular-nums whitespace-nowrap">
-                    {formatTime(currentFrame / previewData.fps)} / {formatTime(previewData.totalDurationInFrames / previewData.fps)}
-                  </span>
-                </>
-              )}
-            </div>
           </div>
         </div>
       </div>

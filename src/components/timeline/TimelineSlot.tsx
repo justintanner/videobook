@@ -1,55 +1,56 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { cn } from '@/lib/utils';
-import { MoreHorizontal } from 'lucide-react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { cn } from '@/lib/utils'
+import { MoreHorizontal } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuTrigger,
   ContextMenuContent,
   ContextMenuItem,
-} from '@/components/ui/context-menu';
-import { Waveform } from './Waveform';
-import { SlotHourglass } from './SlotHourglass';
-import { OsgBadge } from '@/components/sidebar/cards/badges';
-import type { ClipState, OsgInfo } from '@/components/sidebar/types';
+} from '@/components/ui/context-menu'
+import { SlotHourglass } from './SlotHourglass'
+import { OsgBadge } from '@/components/sidebar/cards/badges'
+import type { ClipState, OsgInfo } from '@/components/sidebar/types'
 
 function parseTimestamp(url: string): number {
-  const match = url.match(/(\d+\.\d+)\.jpg$/);
-  return match ? parseFloat(match[1]) : 0;
+  const match = url.match(/(\d+\.\d+)\.jpg$/)
+  return match ? parseFloat(match[1]) : 0
 }
 
-function MicroThumb({ url, pct }: { url: string; pct: number }) {
-  const [hovered, setHovered] = useState(false);
-  const thumbRef = useRef<HTMLDivElement>(null);
-  const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null);
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds.toFixed(1)}s`
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+function FrameThumb({ url, className }: { url: string; className?: string }) {
+  const [hovered, setHovered] = useState(false)
+  const thumbRef = useRef<HTMLDivElement>(null)
+  const [popupPos, setPopupPos] = useState<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
     if (hovered && thumbRef.current) {
-      const rect = thumbRef.current.getBoundingClientRect();
-      setPopupPos({ x: rect.left + rect.width / 2, y: rect.top });
+      const rect = thumbRef.current.getBoundingClientRect()
+      setPopupPos({ x: rect.left + rect.width / 2, y: rect.top })
     } else {
-      setPopupPos(null);
+      setPopupPos(null)
     }
-  }, [hovered]);
+  }, [hovered])
 
   return (
     <div
       ref={thumbRef}
-      className="absolute top-1/2 z-20"
-      style={{ left: `${pct}%`, transform: 'translate(-50%, -50%)' }}
+      className={cn('relative min-w-0 overflow-hidden', className)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Glowing vertical beam (stays in-flow) */}
-      {hovered && (
-        <div
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[2px] pointer-events-none"
-          style={{ height: '400%' }}
-        >
-          <div className="w-full h-full bg-violet-500 shadow-[0_0_8px_var(--clip-domain-video),0_0_16px_var(--clip-domain-video)]" />
-        </div>
-      )}
-      {/* Large preview — portalled to body to escape overflow-hidden */}
+      <img
+        src={url}
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover"
+        draggable={false}
+      />
       {hovered && popupPos && createPortal(
         <div
           className="pointer-events-none"
@@ -70,40 +71,28 @@ function MicroThumb({ url, pct }: { url: string; pct: number }) {
         </div>,
         document.body,
       )}
-      {/* Small thumbnail */}
-      <img
-        src={url}
-        alt=""
-        className={cn(
-          'h-7 w-auto rounded-sm transition-all duration-150',
-          hovered
-            ? 'opacity-0'
-            : 'opacity-50 hover:opacity-80 drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]'
-        )}
-      />
     </div>
-  );
+  )
 }
 
 interface TimelineSlotProps {
-  label: string;
-  isActive?: boolean;
-  isDragOver?: boolean;
-  hasContent?: boolean;
-  frameUrls?: string[];
-  waveform?: number[];
-  duration?: number;
-  assetId?: string;
-  renderStatus?: ClipState;
-  osg?: OsgInfo;
-  flex?: number;
-  onClick?: () => void;
-  onAnimateCommand?: (text: string) => void;
+  label: string
+  isActive?: boolean
+  isDragOver?: boolean
+  hasContent?: boolean
+  frameUrls?: string[]
+  duration?: number
+  assetId?: string
+  renderStatus?: ClipState
+  osg?: OsgInfo
+  flex?: number
+  onClick?: () => void
+  onAnimateCommand?: (text: string) => void
 }
 
 function isRenderingStatus(status: ClipState | undefined): boolean {
-  if (!status) return false;
-  return status.startsWith('render-queued') || status.startsWith('rendering');
+  if (!status) return false
+  return status.startsWith('render-queued') || status.startsWith('rendering')
 }
 
 export function TimelineSlot({
@@ -112,7 +101,6 @@ export function TimelineSlot({
   isDragOver: isDragOverProp = false,
   hasContent = false,
   frameUrls,
-  waveform,
   duration,
   assetId,
   renderStatus,
@@ -121,63 +109,65 @@ export function TimelineSlot({
   onClick,
   onAnimateCommand,
 }: TimelineSlotProps) {
-  const [isDragOverLocal, setIsDragOverLocal] = useState(false);
-  const isDragOver = isDragOverProp || isDragOverLocal;
+  const [isDragOverLocal, setIsDragOverLocal] = useState(false)
+  const isDragOver = isDragOverProp || isDragOverLocal
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (!onAnimateCommand) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    setIsDragOverLocal(true);
-  }, [onAnimateCommand]);
+    if (!onAnimateCommand) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    setIsDragOverLocal(true)
+  }, [onAnimateCommand])
 
   const handleDragLeave = useCallback(() => {
-    setIsDragOverLocal(false);
-  }, []);
+    setIsDragOverLocal(false)
+  }, [])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragOverLocal(false);
-    if (!onAnimateCommand) return;
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOverLocal(false)
+    if (!onAnimateCommand) return
     try {
-      const data = JSON.parse(e.dataTransfer.getData('application/json'));
-      if (!data?.id) return;
+      const data = JSON.parse(e.dataTransfer.getData('application/json'))
+      if (!data?.id) return
       // Dropping an image onto a filled slot sets that clip's OSG overlay; any
       // other asset is assigned into the slot as before.
-      const slotVideoId = assetId?.replace(/^@/, '');
+      const slotVideoId = assetId?.replace(/^@/, '')
       if (data.type === 'image' && hasContent && slotVideoId) {
-        onAnimateCommand(`/osg @${slotVideoId} @${data.id}`);
+        onAnimateCommand(`/osg @${slotVideoId} @${data.id}`)
       } else {
-        onAnimateCommand(`/assign @${data.id} ${label}`);
+        onAnimateCommand(`/assign @${data.id} ${label}`)
       }
     } catch { /* ignore */ }
-  }, [onAnimateCommand, label, assetId, hasContent]);
+  }, [onAnimateCommand, label, assetId, hasContent])
 
-  const canClear = hasContent && onAnimateCommand;
+  const canClear = hasContent && onAnimateCommand
 
   const handleMenuClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const target = e.currentTarget;
-    const x = e.clientX;
-    const y = e.clientY;
+    e.stopPropagation()
+    e.preventDefault()
+    const target = e.currentTarget
+    const x = e.clientX
+    const y = e.clientY
     setTimeout(() => {
       target.dispatchEvent(
         new MouseEvent('contextmenu', { bubbles: true, clientX: x, clientY: y })
-      );
-    }, 0);
-  }, []);
+      )
+    }, 0)
+  }, [])
 
-  const framePcts = useMemo(() => {
-    if (!frameUrls || frameUrls.length === 0 || !duration || duration <= 0) return [];
-    return frameUrls.map((url) => ({
-      url,
-      pct: Math.min(95, Math.max(5, (parseTimestamp(url) / duration) * 100)),
-    }));
-  }, [frameUrls, duration]);
+  const endFrames = useMemo(() => {
+    if (!frameUrls || frameUrls.length === 0) return null
+    const sorted = [...frameUrls].sort((a, b) => parseTimestamp(a) - parseTimestamp(b))
+    return {
+      first: sorted[0],
+      last: sorted[sorted.length - 1],
+    }
+  }, [frameUrls])
 
-  const isRendering = isRenderingStatus(renderStatus);
+  const isRendering = isRenderingStatus(renderStatus)
+  const durationLabel = duration != null && duration > 0 ? formatDuration(duration) : null
 
   const slot = (
     <div
@@ -206,22 +196,21 @@ export function TimelineSlot({
             <SlotHourglass />
           </div>
         ) : hasContent ? (
-          <>
-            {/* Dark background base */}
-            <div className="absolute inset-0 bg-violet-500/5" />
-
-            {/* Gradient overlay — lighter to not obscure waveform */}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/50" />
-
-            {/* Waveform — main background, vertically centered, ~70% height */}
-            {waveform && waveform.length > 0 && (
-              <Waveform
-                data={waveform}
-                className="absolute inset-x-0 top-[15%] bottom-[15%] text-violet-300"
-              />
-            )}
-
-          </>
+          <div className="absolute inset-0 bg-violet-500/5">
+            {endFrames ? (
+              endFrames.first === endFrames.last ? (
+                <FrameThumb url={endFrames.first} className="absolute inset-0" />
+              ) : (
+                <div className="absolute inset-0 flex">
+                  <FrameThumb url={endFrames.first} className="flex-1 h-full" />
+                  <div className="w-px shrink-0 bg-black/40" />
+                  <FrameThumb url={endFrames.last} className="flex-1 h-full" />
+                </div>
+              )
+            ) : null}
+            {/* Scrim so labels stay readable over frames */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-transparent to-black/60 pointer-events-none" />
+          </div>
         ) : (
           <div className="absolute inset-0 bg-card/10 flex items-center justify-center">
             <span className="text-[10px] font-mono text-muted-foreground/20 group-hover:text-muted-foreground/35 transition-colors select-none">
@@ -230,15 +219,6 @@ export function TimelineSlot({
           </div>
         )}
       </div>
-
-      {/* Micro frame thumbnails — outside overflow-hidden so hover previews escape */}
-      {hasContent && !isRendering && framePcts.length > 0 && (
-        <div className="absolute inset-x-3 bottom-0 top-0 z-20">
-          {framePcts.map(({ url, pct }) => (
-            <MicroThumb key={url} url={url} pct={pct} />
-          ))}
-        </div>
-      )}
 
       {/* Label — top-left slot tag */}
       <div className="absolute top-1 left-1.5 z-30">
@@ -249,6 +229,15 @@ export function TimelineSlot({
           {label}
         </span>
       </div>
+
+      {/* Duration — top-right, left of menu */}
+      {durationLabel && !isRendering && (
+        <div className="absolute top-1 right-6 z-30">
+          <span className="text-[10px] font-mono tabular-nums text-white/55 drop-shadow-md leading-none">
+            {durationLabel}
+          </span>
+        </div>
+      )}
 
       {/* Menu button — top-right, hover-reveal */}
       <div className="absolute top-0.5 right-0.5 z-30">
@@ -270,7 +259,7 @@ export function TimelineSlot({
       {/* Asset ID — bottom-left */}
       {assetId && !isRendering && (
         <div className="absolute bottom-1 left-1.5 z-20 max-w-[calc(100%-12px)]">
-          <span className="text-[9px] font-mono text-white/40 truncate block leading-tight drop-shadow-sm">
+          <span className="text-[9px] font-mono text-white/50 truncate block leading-tight drop-shadow-sm">
             {assetId}
           </span>
         </div>
@@ -282,8 +271,8 @@ export function TimelineSlot({
           osg={osg}
           sizeClassName="w-6 h-6"
           onClick={() => {
-            const slotVideoId = assetId?.replace(/^@/, '');
-            if (slotVideoId && onAnimateCommand) onAnimateCommand(`/osg @${slotVideoId}`);
+            const slotVideoId = assetId?.replace(/^@/, '')
+            if (slotVideoId && onAnimateCommand) onAnimateCommand(`/osg @${slotVideoId}`)
           }}
         />
       )}
@@ -295,12 +284,12 @@ export function TimelineSlot({
 
       {/* Drag overlay */}
       {isDragOver && (
-        <div className="absolute inset-0 bg-violet-500/10 backdrop-blur-[1px] flex items-center justify-center">
+        <div className="absolute inset-0 bg-violet-500/10 backdrop-blur-[1px] flex items-center justify-center z-40">
           <span className="text-xs font-mono text-violet-300 font-bold">drop</span>
         </div>
       )}
     </div>
-  );
+  )
 
   return (
     <ContextMenu>
@@ -317,5 +306,5 @@ export function TimelineSlot({
         </ContextMenuContent>
       )}
     </ContextMenu>
-  );
+  )
 }
