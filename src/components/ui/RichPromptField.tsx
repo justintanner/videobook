@@ -10,7 +10,7 @@
 // Assets are referenced two ways (both rendered as thumbs): "[Image N]" positional
 // tokens and "@slug" mentions. Typing "@" opens slug autocomplete; dragging an
 // asset from the sidebar inserts "@slug" at the caret.
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { AutocompleteDropdown, type AutocompleteItem } from './AutocompleteDropdown';
 import { AssetThumbChip, type ChipThumb } from './AssetThumbChip';
@@ -89,6 +89,16 @@ export function RichPromptField({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [dropActive, setDropActive] = useState(false);
+
+  // Focus without scrolling ancestors. Native autoFocus scrolls the nearest
+  // overflow container to the textarea, which clips the /prompt section header
+  // (and the first lines of long prompts) above the visible area.
+  useEffect(() => {
+    if (!autoFocus || disabled) return;
+    const el = taRef.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+  }, [autoFocus, disabled]);
 
   const segments = useMemo(
     () => parseRichSegments(value, extractRichTokens(value, assetSlugs, characterHandles)),
@@ -177,7 +187,7 @@ export function RichPromptField({
       setDismissed(true);
       const pos = before.length + slug.length + 2;
       requestAnimationFrame(() => {
-        taRef.current?.focus();
+        taRef.current?.focus({ preventScroll: true });
         taRef.current?.setSelectionRange(pos, pos);
         setCaret(pos);
       });
@@ -321,7 +331,6 @@ export function RichPromptField({
           }}
           onBlur={() => setDismissed(true)}
           disabled={disabled}
-          autoFocus={autoFocus}
           rows={rows}
           spellCheck={false}
           placeholder={placeholder}
@@ -331,6 +340,8 @@ export function RichPromptField({
             'relative block resize-none border-0 bg-transparent text-transparent whitespace-pre-wrap break-normal scrollbar-hide',
             'focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed',
             'placeholder:text-zinc-500/40',
+            // Keep section chrome (/prompt header) in view if a parent scrolls to us.
+            'scroll-mt-10',
             fill && 'h-full w-full flex-1',
           )}
         />

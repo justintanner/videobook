@@ -1027,46 +1027,52 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         </div>
       }
     >
-      <div className="flex-1 min-h-0 overflow-clip flip-card-perspective relative">
-        <div className={cn('flip-card-inner w-full h-full relative', flipped && 'flipped')}>
-          {/* Empty front placeholder for flip animation */}
-          <div className="flip-card-face absolute inset-0" />
-          {/* BACK FACE — JSON payloads side by side */}
-          <div className="flip-card-back absolute inset-0 flex">
-            {/* Left pane: Raw MCP tool call */}
-            <div className="flex-1 overflow-auto pl-4 pr-2 py-4 [scrollbar-gutter:stable]">
-              <div className="font-mono text-xs font-bold tracking-widest text-emerald-400/70 mb-3">
-                /tool-call
-              </div>
-              <pre className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all select-text">
-                <JsonNode data={jsonPayload ?? {}} />
-              </pre>
-            </div>
-
-            {/* Right pane: Translated provider payload */}
-            <div className="flex-1 overflow-auto pl-4 pr-2 py-4 border-l border-primary/20 [scrollbar-gutter:stable]">
-              <div className="font-mono text-xs font-bold tracking-widest text-emerald-400/70 mb-3">
-                /provider-payload
-              </div>
-              {translateLoading ? (
-                <div className="flex items-center gap-2 text-emerald-400/40">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  <span className="text-[10px] font-mono">Translating...</span>
+      <div className="flex-1 min-h-0 relative flex flex-col">
+        {/* JSON flip face — only mounted when flipped so it can't clip the form */}
+        {flipped && (
+          <div className="absolute inset-0 overflow-clip flip-card-perspective">
+            <div className="flip-card-inner w-full h-full relative flipped">
+              <div className="flip-card-back absolute inset-0 flex">
+                <div className="flex-1 overflow-auto pl-4 pr-2 py-4 [scrollbar-gutter:stable]">
+                  <div className="font-mono text-xs font-bold tracking-widest text-emerald-400/70 mb-3">
+                    /tool-call
+                  </div>
+                  <pre className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all select-text">
+                    <JsonNode data={jsonPayload ?? {}} />
+                  </pre>
                 </div>
-              ) : translatedPayload ? (
-                <pre className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all select-text">
-                  <JsonNode data={translatedPayload} />
-                </pre>
-              ) : (
-                <span className="text-[10px] text-primary/20 font-mono italic">
-                  Flip to refresh
-                </span>
-              )}
+                <div className="flex-1 overflow-auto pl-4 pr-2 py-4 border-l border-primary/20 [scrollbar-gutter:stable]">
+                  <div className="font-mono text-xs font-bold tracking-widest text-emerald-400/70 mb-3">
+                    /provider-payload
+                  </div>
+                  {translateLoading ? (
+                    <div className="flex items-center gap-2 text-emerald-400/40">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span className="text-[10px] font-mono">Translating...</span>
+                    </div>
+                  ) : translatedPayload ? (
+                    <pre className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all select-text">
+                      <JsonNode data={translatedPayload} />
+                    </pre>
+                  ) : (
+                    <span className="text-[10px] text-primary/20 font-mono italic">
+                      Flip to refresh
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-        {/* FRONT FACE — form (outside 3D context so WebKit scroll works) */}
-        {!flipped && <div className={cn('absolute inset-0 overflow-y-auto px-3 py-2', refreshing && 'opacity-50 pointer-events-none transition-opacity duration-150')}>
+        )}
+        {/* Form face — normal block flow (not absolute) so autofocus cannot scroll
+            the /prompt header out of the top of an overflow-clip ancestor. */}
+        {!flipped && (
+          <div
+            className={cn(
+              'flex-1 min-h-0 overflow-y-auto px-3 py-2',
+              refreshing && 'opacity-50 pointer-events-none transition-opacity duration-150',
+            )}
+          >
             {error && (
               <div className="mb-3 px-3 py-2 rounded border border-red-500/30 bg-red-500/10 text-red-400 text-xs font-mono">
                 {error}
@@ -1175,7 +1181,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                   </GenSection>
                 )}
             </div>
-        </div>}
+          </div>
+        )}
       </div>
     </GenPanel>
   );
