@@ -53,7 +53,12 @@ export function useNotebookRun({
     if (!definitionRef.current || runningStepIds.has(step.id)) return
     const category = step.type === 'image' ? 'image' : 'video'
     const requestId = createGenerationRequestId(category)
-    const modeKey = option.modes ? inferModeKey(option.modes, values) : null
+    const storedMode = typeof step.properties.mode === 'string' ? step.properties.mode : null
+    const modeKey = option.modes
+      ? (storedMode && option.modes.modes.some((m) => m.key === storedMode)
+        ? storedMode
+        : inferModeKey(option.modes, values))
+      : null
     const submitValues = option.modes && modeKey
       ? filterValuesForMode(option.modes, modeKey, values)
       : values

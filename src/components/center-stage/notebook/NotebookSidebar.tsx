@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
-import { AlertCircle, Clock3, ImageIcon, Loader2, Pin, PinOff, Play, Video, X } from 'lucide-react'
+import { AlertCircle, ChevronDown, Clock3, ImageIcon, Loader2, Pin, PinOff, Play, Video, X } from 'lucide-react'
 import type { UseMcpResult } from 'use-mcp/react'
 import { CharacterPickerPopover } from '@/components/gen/ui/CharacterPickerPopover'
 import { DynamicField } from '@/components/gen/ui/DynamicField'
 import { genThemes } from '@/components/gen/ui/gen-themes'
-import { getMode, inferModeKey, modeRequiredMissing } from '@/components/gen/modes'
-import type { ModelOption } from '@/components/gen/types'
+import { getMode, modeRequiredMissing, visibleParams } from '@/components/gen/modes'
+import type { JSONSchemaProperty, ModelOption, ModelModes } from '@/components/gen/types'
 import { usePromptHistory } from '@/hooks/usePromptHistory'
 import { RichPromptField } from '@/components/ui/RichPromptField'
 import { cn } from '@/lib/utils'
@@ -47,6 +47,64 @@ function record(value: unknown): Record<string, unknown> {
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
+/** Explicit /type from step.properties.mode, else model default_mode. */
+function resolveModeKey(modes: ModelModes | null | undefined, stored: unknown): string | null {
+  if (!modes) return null
+  if (typeof stored === 'string' && modes.modes.some((m) => m.key === stored)) return stored
+  return modes.default_mode
+}
+
+function schemaEnumOptions(schema: JSONSchemaProperty): string[] {
+  return (schema.enum ?? []).map(String)
+}
+
+function coerceSchemaValue(schema: JSONSchemaProperty, raw: string): string | number {
+  if (schema.type === 'integer') return parseInt(raw, 10)
+  if (schema.type === 'number') return parseFloat(raw)
+  return raw
+}
+
+/** Value + chevron hug content; invisible native select covers the control. */
+function CompactSelect({
+  id,
+  label,
+  value,
+  options,
+  onChange,
+  disabled,
+  className,
+}: {
+  id: string
+  label?: string
+  value: string
+  options: ReadonlyArray<{ value: string; label: string }>
+  onChange: (value: string) => void
+  disabled?: boolean
+  className?: string
+}) {
+  const display = options.find((o) => o.value === value)?.label ?? value
+  return (
+    <div className={cn('vc-notebook-inline-field', className)}>
+      {label ? <label htmlFor={id}>{label}</label> : null}
+      <div className={cn('vc-notebook-compact-select', disabled && 'is-disabled')}>
+        <span className="vc-notebook-compact-select-value">{display}</span>
+        <ChevronDown className="vc-notebook-compact-select-chevron" aria-hidden />
+        <select
+          id={id}
+          value={value}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.value)}
+          aria-label={label}
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </div>
+    </div>
+  )
 }
 
 function updateProperties(
@@ -212,8 +270,12 @@ function GenerationSidebar({
     () => ({ ...(option?.prefilled_values ?? {}), ...(resolved?.values ?? record(step.properties.values)) }),
     [option?.prefilled_values, resolved, step.properties.values],
   )
-  const modeKey = option?.modes ? inferModeKey(option.modes, mergedValues) : null
+  const modeKey = resolveModeKey(option?.modes, step.properties.mode)
   const activeMode = option?.modes && modeKey ? getMode(option.modes, modeKey) : null
+  const modeVisible = useMemo(
+    () => (option?.modes && modeKey ? visibleParams(option.modes, modeKey) : null),
+    [option, modeKey],
+  )
   const history = usePromptHistory(callTool, category === 'image' ? 'image_generate' : 'video_generate', projectSlug)
   const runStatus = stepRunStatus(step, mediaItems)
   const readiness = stepInputReadiness(definition, step, mediaItems)
@@ -221,12 +283,13 @@ function GenerationSidebar({
     if (!option) return ['model']
     const missing = (option.schema.required ?? []).filter((name) => {
       if (name === 'project_slug') return false
+      if (modeVisible && !modeVisible.has(name)) return false
       const value = mergedValues[name]
       return value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)
     })
     if (activeMode) missing.push(...modeRequiredMissing(activeMode, mergedValues))
     return Array.from(new Set(missing))
-  }, [option, mergedValues, activeMode])
+  }, [option, mergedValues, activeMode, modeVisible])
   const persistedValues = record(step.properties.values)
   const update = (patch: JsonRecord, coalesceKey?: string) => updateDefinition(
     updateProperties(definition, step.id, patch),
@@ -236,14 +299,31 @@ function GenerationSidebar({
     values: { ...persistedValues, [name]: value } as JsonRecord,
   })
   const modelOptions = preview.preview?.model_options ?? []
+  // Inline row: type + duration + aspect_ratio. Remaining settings go under Options.
+  const INLINE_OPTION_KEYS = new Set(['duration', 'aspect_ratio'])
+  const fieldVisible = (name: string): boolean =>
+    name !== 'project_slug'
+    && name !== 'prompt'
+    && name !== 'character_refs'
+    && name !== 'voice_refs'
+    && name !== 'seed'
+    && !CONNECTION_OWNED_PARAMS.includes(name as typeof CONNECTION_OWNED_PARAMS[number])
+    && (!modeVisible || modeVisible.has(name))
   const fieldEntries = option
     ? Object.entries(option.schema.properties).filter(([name]) => (
-      name !== 'project_slug'
-      && name !== 'prompt'
-      && name !== 'character_refs'
-      && !CONNECTION_OWNED_PARAMS.includes(name as typeof CONNECTION_OWNED_PARAMS[number])
+      fieldVisible(name) && !INLINE_OPTION_KEYS.has(name)
     ))
     : []
+  const durationSchema = option?.schema.properties.duration
+  const aspectSchema = option?.schema.properties.aspect_ratio
+  const showDuration = Boolean(durationSchema && fieldVisible('duration'))
+  const showAspect = Boolean(aspectSchema && fieldVisible('aspect_ratio'))
+  const showType = Boolean(option?.modes && modeKey)
+  const showInlineRow = showType || showDuration || showAspect
+  const showCharacters = Boolean(
+    option?.schema.properties.character_refs
+    && (!modeVisible || modeVisible.has('character_refs')),
+  )
   const characterField = option?.schema.properties.character_refs
   const disabledReason = requiredMissing.length > 0
     ? `Missing: ${requiredMissing.join(', ')}`
@@ -258,27 +338,84 @@ function GenerationSidebar({
       {preview.error ? <div className="vc-notebook-error"><AlertCircle /> {preview.error}</div> : null}
       {option ? (
         <>
-          <label htmlFor={`step-model-${step.id}`}>Model</label>
-          <select
+          <CompactSelect
             id={`step-model-${step.id}`}
-            className="vc-notebook-select"
+            label="Model"
             value={`${preview.selectedModelKey}::${preview.selectedProviderKey}`}
             disabled={running}
-            onChange={(event) => {
-              const [nextModel, nextProvider = ''] = event.target.value.split('::')
-              update({ model: nextModel, provider: nextProvider })
+            onChange={(raw) => {
+              const [nextModel, nextProvider = ''] = raw.split('::')
+              update({ model: nextModel, provider: nextProvider, mode: null })
               preview.selectModel(nextModel, nextProvider)
             }}
-          >
-            {modelOptions.flatMap((candidate) => {
+            options={modelOptions.flatMap((candidate) => {
               const providers = candidate.providers?.length ? candidate.providers : [{ key: '', label: '' }]
-              return providers.map((candidateProvider) => (
-                <option key={`${candidate.key}::${candidateProvider.key}`} value={`${candidate.key}::${candidateProvider.key}`}>
-                  {providers.length > 1 ? `${candidate.label} · ${candidateProvider.label}` : candidate.label}
-                </option>
-              ))
+              return providers.map((candidateProvider) => ({
+                value: `${candidate.key}::${candidateProvider.key}`,
+                label: providers.length > 1 ? `${candidate.label} · ${candidateProvider.label}` : candidate.label,
+              }))
             })}
-          </select>
+          />
+          {showInlineRow ? (
+            <div className="vc-notebook-inline-controls">
+              {showType ? (
+                <CompactSelect
+                  id={`step-type-${step.id}`}
+                  label="Type"
+                  value={modeKey!}
+                  disabled={running}
+                  onChange={(next) => update({ mode: next })}
+                  options={option.modes!.modes.map((mode) => ({ value: mode.key, label: mode.label }))}
+                />
+              ) : null}
+              {showDuration && durationSchema ? (
+                <CompactSelect
+                  id={`step-duration-${step.id}`}
+                  label="Duration"
+                  value={
+                    mergedValues.duration != null
+                      ? String(mergedValues.duration)
+                      : durationSchema.default != null
+                        ? String(durationSchema.default)
+                        : (schemaEnumOptions(durationSchema)[0] ?? '')
+                  }
+                  disabled={running}
+                  onChange={(raw) => updateValues('duration', coerceSchemaValue(durationSchema, raw))}
+                  options={schemaEnumOptions(durationSchema).map((entry) => ({ value: entry, label: entry }))}
+                />
+              ) : null}
+              {showAspect && aspectSchema ? (
+                <CompactSelect
+                  id={`step-aspect-${step.id}`}
+                  label="Aspect ratio"
+                  value={
+                    mergedValues.aspect_ratio != null
+                      ? String(mergedValues.aspect_ratio)
+                      : aspectSchema.default != null
+                        ? String(aspectSchema.default)
+                        : (schemaEnumOptions(aspectSchema)[0] ?? '')
+                  }
+                  disabled={running}
+                  onChange={(raw) => updateValues('aspect_ratio', coerceSchemaValue(aspectSchema, raw))}
+                  options={schemaEnumOptions(aspectSchema).map((entry) => ({ value: entry, label: entry }))}
+                />
+              ) : null}
+            </div>
+          ) : null}
+          <label>Inputs</label>
+          <InputList
+            definition={definition}
+            step={step}
+            option={option}
+            mediaItems={mediaItems}
+            onDisconnect={onDisconnect}
+            onSetFirstFrame={onSetFirstFrame}
+          />
+          {(resolved?.warnings.length || readiness.reasons.length) ? (
+            <div className="vc-notebook-warnings">
+              {[...(resolved?.warnings ?? []), ...readiness.reasons].map((warning) => <p key={warning}>{warning}</p>)}
+            </div>
+          ) : null}
           <label>Prompt</label>
           {resolved?.promptFromInputs !== null ? (
             <div className="vc-notebook-linked-prompt">
@@ -310,41 +447,34 @@ function GenerationSidebar({
               }}
             />
           )}
-          <label>Inputs</label>
-          <InputList
-            definition={definition}
-            step={step}
-            option={option}
-            mediaItems={mediaItems}
-            onDisconnect={onDisconnect}
-            onSetFirstFrame={onSetFirstFrame}
-          />
-          {(resolved?.warnings.length || readiness.reasons.length) ? (
-            <div className="vc-notebook-warnings">
-              {[...(resolved?.warnings ?? []), ...readiness.reasons].map((warning) => <p key={warning}>{warning}</p>)}
-            </div>
-          ) : null}
           {fieldEntries.length > 0 ? <>
             <label>Options</label>
-            <div className="flex flex-wrap gap-x-6 gap-y-3">
-              {fieldEntries.map(([name, schema]) => (
-                <DynamicField
-                  key={name}
-                  name={name}
-                  schema={schema}
-                  value={mergedValues[name]}
-                  onChange={(value) => updateValues(name, value)}
-                  required={(option.schema.required ?? []).includes(name)}
-                  disabled={running}
-                  theme={genThemes.plan}
-                  callTool={callTool}
-                  mcpState={mcpState}
-                  projectSlug={projectSlug}
-                />
-              ))}
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {fieldEntries.map(([name, schema]) => {
+                const override = activeMode?.param_overrides?.[name]
+                const fieldSchema = override
+                  ? { ...schema, maxItems: override.maxItems ?? schema.maxItems, description: override.description ?? schema.description }
+                  : schema
+                return (
+                  <DynamicField
+                    key={name}
+                    name={name}
+                    schema={fieldSchema}
+                    value={mergedValues[name]}
+                    onChange={(value) => updateValues(name, value)}
+                    required={(option.schema.required ?? []).includes(name)}
+                    disabled={running}
+                    theme={genThemes.plan}
+                    callTool={callTool}
+                    mcpState={mcpState}
+                    projectSlug={projectSlug}
+                    compact
+                  />
+                )
+              })}
             </div>
           </> : null}
-          {characterField ? <>
+          {showCharacters && characterField ? <>
             <label>Characters</label>
             <CharacterPickerPopover
               selectedRefs={stringArray(mergedValues.character_refs)}

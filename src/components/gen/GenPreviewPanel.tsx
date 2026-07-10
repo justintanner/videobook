@@ -1048,11 +1048,12 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     return { ...s, maxItems: ov.maxItems ?? s.maxItems, description: ov.description ?? s.description };
   };
 
-  // voice_refs hidden for now (picker + autocomplete); server still accepts them.
+  // voice_refs / seed hidden for now; server still accepts them if present.
   const regularFields = fields.filter(
     ([name]) =>
       name !== 'character_refs' &&
       name !== 'voice_refs' &&
+      name !== 'seed' &&
       !isElementField(name) &&
       (modes ? !slotParamNames.has(name) : !isAssetField(name)),
   );

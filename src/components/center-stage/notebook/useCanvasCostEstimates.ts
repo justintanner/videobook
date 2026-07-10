@@ -42,7 +42,12 @@ export function deriveStepEstimateCall(
   if (!option) return null
   const resolved = resolveEffectiveValues(definition, step, option)
   const merged = { ...option.prefilled_values, ...resolved.values }
-  const modeKey = option.modes ? inferModeKey(option.modes, merged) : null
+  const storedMode = typeof step.properties.mode === 'string' ? step.properties.mode : null
+  const modeKey = option.modes
+    ? (storedMode && option.modes.modes.some((m) => m.key === storedMode)
+      ? storedMode
+      : inferModeKey(option.modes, merged))
+    : null
   const toolName = effectiveToolName(option, modeKey)
   const input = { ...merged, project_slug: projectSlug }
   return { stepId: step.id, key: `${toolName} ${JSON.stringify(input)}`, toolName, input }

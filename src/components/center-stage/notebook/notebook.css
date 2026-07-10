@@ -466,8 +466,8 @@
 }
 
 .vc-notebook-editor textarea.vc-notebook-text,
-.vc-notebook-editor input.vc-notebook-text,
-.vc-notebook-select {
+.vc-notebook-editor input.vc-notebook-text {
+  width: 100%;
   min-height: 2.4rem;
   border: 1px solid rgb(52 211 153 / 0.25);
   border-radius: 0.375rem;
@@ -483,8 +483,114 @@
   resize: vertical;
 }
 
-.vc-notebook-select:focus,
 .vc-notebook-text:focus {
+  outline: 1px solid rgb(52 211 153 / 0.75);
+}
+
+/* Type / duration / aspect_ratio on one row under Model */
+.vc-notebook-inline-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.55rem 0.85rem;
+}
+
+.vc-notebook-inline-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-self: flex-start;
+}
+
+.vc-notebook-inline-field > label {
+  margin: 0;
+}
+
+/* Compact select: visible value + chevron hug content; native select is overlay */
+.vc-notebook-compact-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 2rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid rgb(52 211 153 / 0.25);
+  border-radius: 0.375rem;
+  background: rgb(0 0 0 / 0.45);
+  color: rgb(236 253 245);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.vc-notebook-compact-select:hover:not(.is-disabled) {
+  border-color: rgb(52 211 153 / 0.55);
+}
+
+.vc-notebook-compact-select:focus-within {
+  outline: 1px solid rgb(52 211 153 / 0.75);
+}
+
+.vc-notebook-compact-select.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.vc-notebook-compact-select-value {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(18rem, 70vw);
+}
+
+.vc-notebook-compact-select-chevron {
+  flex-shrink: 0;
+  width: 0.85rem;
+  height: 0.85rem;
+  opacity: 0.55;
+  color: rgb(167 243 208);
+}
+
+.vc-notebook-compact-select select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  appearance: none;
+  border: 0;
+  background: transparent;
+}
+
+.vc-notebook-compact-select.is-disabled select {
+  cursor: not-allowed;
+}
+
+/* Legacy native select (if any remain) */
+.vc-notebook-select {
+  width: fit-content;
+  max-width: 100%;
+  align-self: flex-start;
+  min-height: 2.4rem;
+  border: 1px solid rgb(52 211 153 / 0.25);
+  border-radius: 0.375rem;
+  background: rgb(0 0 0 / 0.45);
+  padding: 0.65rem 0.7rem;
+  color: rgb(236 253 245);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.vc-notebook-select:focus {
   outline: 1px solid rgb(52 211 153 / 0.75);
 }
 
