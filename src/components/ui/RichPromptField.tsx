@@ -266,6 +266,8 @@ export function RichPromptField({
     [showSuggestions, items, selectedIndex, commitItem, onKeyDownExtra],
   );
 
+  const surfaceWrapRef = useRef<HTMLDivElement | null>(null);
+
   return (
     <div className={cn('relative', fill && 'flex min-h-0 flex-1 flex-col')}>
       {showSuggestions && (
@@ -274,9 +276,12 @@ export function RichPromptField({
           selectedIndex={selectedIndex}
           onSelect={(item) => commitItem(item)}
           onHover={setSelectedIndex}
+          anchorRef={surfaceWrapRef}
+          preferAbove={false}
         />
       )}
       <div
+        ref={surfaceWrapRef}
         className={cn('relative', fill && 'flex min-h-0 flex-1', surfaceClassName, dropActive && 'ring-1 ring-emerald-400/60')}
         onDragOver={(e) => {
           if (!e.dataTransfer.types.includes('application/json')) return;

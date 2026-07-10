@@ -1657,7 +1657,7 @@ export function HomePage() {
                     projectSlug={projectSlug}
                     pendingGeneration={pendingGenForPanel}
                     onGenerationLifecycle={handleGenerationLifecycle}
-                    imageAssets={genImageAssets}
+                    imageAssets={assetList ? genImageAssets : undefined}
                   />
                 ) : archiveOpen ? (
                   <ArchiveBrowser

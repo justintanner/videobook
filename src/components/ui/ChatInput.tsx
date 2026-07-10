@@ -144,6 +144,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const [commandResult, setCommandResult] = useState<CommandResultPhase>(null);
   const [resultText, setResultText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
   const prevTriggerRef = useRef<string | null>(null);
   const resultTimeoutRef = useRef<number>(0);
   const [navigatingHistory, setNavigatingHistory] = useState(false);
@@ -470,18 +471,21 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
   return (
     <div className={cn('relative flex flex-col gap-0', className)}>
-      {/* Autocomplete dropdown */}
+      {/* Autocomplete dropdown — portaled above the shell so nothing clips it */}
       {showSuggestions && (
         <AutocompleteDropdown
           items={autocompleteItems}
           selectedIndex={selectedIndex}
           onSelect={selectSuggestion}
           onHover={setSelectedIndex}
+          anchorRef={shellRef}
+          preferAbove
         />
       )}
 
       {/* Input container */}
       <div
+        ref={shellRef}
         className={cn(
           'relative flex items-center gap-2 px-3 py-2.5 overflow-hidden',
           'bg-black/40 border-2 border-primary/30 rounded-lg',

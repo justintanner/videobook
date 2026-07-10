@@ -149,6 +149,8 @@ export function useSlashCommandPicker({
       selectedIndex={selectedIndex}
       onSelect={insertSelection}
       onHover={setSelectedIndex}
+      anchorRef={textareaRef}
+      preferAbove
     />
   ) : null;
 

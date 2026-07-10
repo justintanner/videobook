@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import type { ModelOption, ModeSpec, ResolvedAsset } from '@/components/gen/types';
 import type { Domain } from '@/theme/domains';
-import { stripSlugPrefix } from '@/lib/slugs';
+import { findByAssetSlug, stripSlugPrefix } from '@/lib/slugs';
 import {
   deriveStripSlots,
   combinedRefBudget,
@@ -56,9 +56,16 @@ function findThumbnail(
   slug: string,
   resolvedAssets: ResolvedAsset[],
   droppedAssets: Map<string, ResolvedAsset>,
+  projectImages?: { slug: string; filePath: string; thumbnailSrc: string | null }[],
 ): string {
   if (!slug) return '';
-  const dropped = droppedAssets.get(slug);
+  // Prefer live project image paths so renames refresh thumbs even when
+  // droppedAssets still holds a stale URL under the same logical slot.
+  if (projectImages?.length) {
+    const live = findByAssetSlug(slug, projectImages);
+    if (live) return live.thumbnailSrc || live.filePath || '';
+  }
+  const dropped = droppedAssets.get(slug) ?? findByAssetSlug(slug, [...droppedAssets.values()]);
   if (dropped) return videoThumbFallback(dropped);
   const clean = stripSlugPrefix(slug);
   const asset = resolvedAssets.find((a) => {
@@ -87,6 +94,8 @@ interface MediaStripProps {
   formValues: Record<string, unknown>;
   resolvedAssets: ResolvedAsset[];
   droppedAssets: Map<string, ResolvedAsset>;
+  /** Live project images — used for thumbs after renames and to drop dead refs. */
+  projectImages?: { slug: string; filePath: string; thumbnailSrc: string | null }[];
   onChange: (field: string, value: unknown, dropped?: ResolvedAsset) => void;
   disabled: boolean;
   domain: Domain;
@@ -101,6 +110,7 @@ export function MediaStrip({
   formValues,
   resolvedAssets,
   droppedAssets,
+  projectImages,
   onChange,
   disabled,
   domain,
@@ -224,6 +234,7 @@ export function MediaStrip({
                 label={slot.label}
                 resolvedAssets={resolvedAssets}
                 droppedAssets={droppedAssets}
+                projectImages={projectImages}
                 onRemove={() => {
                   const next = slugs.filter((_, idx) => idx !== i);
                   onChange(slot.param, next);
@@ -244,6 +255,7 @@ export function MediaStrip({
                 label={slot.label}
                 resolvedAssets={resolvedAssets}
                 droppedAssets={droppedAssets}
+                projectImages={projectImages}
                 onRemove={() => onChange(slot.param, '')}
                 disabled={disabled}
                 icon={slotIcon(slot.kind)}
@@ -331,6 +343,7 @@ function StripChip({
   label,
   resolvedAssets,
   droppedAssets,
+  projectImages,
   onRemove,
   onPin,
   pinned,
@@ -342,6 +355,7 @@ function StripChip({
   label: string;
   resolvedAssets: ResolvedAsset[];
   droppedAssets: Map<string, ResolvedAsset>;
+  projectImages?: { slug: string; filePath: string; thumbnailSrc: string | null }[];
   onRemove: () => void;
   onPin?: () => void;
   pinned?: boolean;
@@ -349,7 +363,7 @@ function StripChip({
   icon?: React.ReactNode;
   badge?: string;
 }) {
-  const thumb = findThumbnail(slug, resolvedAssets, droppedAssets);
+  const thumb = findThumbnail(slug, resolvedAssets, droppedAssets, projectImages);
   return (
     <div
       className={cn(

@@ -675,16 +675,17 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                 )}
               </div>
 
-              {/* Slash command autocomplete */}
+              {/* Slash command autocomplete — portaled so the flip card can't clip it */}
               {showSuggestions && (
-                <div className="absolute bottom-12 right-3 w-72">
-                  <AutocompleteDropdown
-                    items={autocompleteItems}
-                    selectedIndex={selectedIndex}
-                    onSelect={selectSuggestion}
-                    onHover={setSelectedIndex}
-                  />
-                </div>
+                <AutocompleteDropdown
+                  items={autocompleteItems}
+                  selectedIndex={selectedIndex}
+                  onSelect={selectSuggestion}
+                  onHover={setSelectedIndex}
+                  anchorRef={textareaRef}
+                  preferAbove
+                  widthPx={288}
+                />
               )}
 
             </div>

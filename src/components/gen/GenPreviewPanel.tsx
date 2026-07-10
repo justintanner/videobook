@@ -11,7 +11,7 @@ import { CharacterPickerPopover } from '@/components/gen/ui/CharacterPickerPopov
 import { characterImageCount } from '@/components/gen/ui/media-strip';
 import { sortFields, isAssetField, isElementField } from '@/components/gen/ui/fieldHelpers';
 import { useGoogleFlowEntities } from '@/hooks/useGoogleFlowEntities';
-import { stripAssetTagsFromText, stripSlugPrefix } from '@/lib/slugs';
+import { findByAssetSlug, stripAssetTagsFromText, stripSlugPrefix } from '@/lib/slugs';
 import { ErrorPage } from '@/components/gen/state/ErrorPage';
 import { JsonNode } from '@/components/ui/JsonNode';
 import { ELEMENT_FIELD_RE } from '@/components/gen/types';
@@ -255,9 +255,14 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setFormValues(prev => ({ ...prev, ...overrides }));
     }
     if (saved.droppedAssets?.length) {
-      setDroppedAssets(new Map(saved.droppedAssets.map(a => [a.slug, a])));
+      // Drop img-* entries that no longer exist in the project (e.g. after rename).
+      const live = saved.droppedAssets.filter((a) => {
+        if (!stripSlugPrefix(a.slug).startsWith('img-') || !imageAssets) return true;
+        return findByAssetSlug(a.slug, imageAssets) != null;
+      });
+      setDroppedAssets(new Map(live.map((a) => [a.slug, a])));
     }
-  }, [preview, selectedModelKey]);
+  }, [preview, selectedModelKey, imageAssets]);
 
   const handleModelProviderChange = useCallback((modelKey: string, providerKey: string) => {
     setSelectedModelKey(modelKey);
@@ -389,24 +394,31 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     [optionAssetParams],
   );
 
-  // Drop slug values that can't be resolved against the current preview's
-  // resolved_assets (or local droppedAssets). Stale slugs — restored from
-  // localStorage or leftover from a prior preview — otherwise render as
-  // placeholder-labeled slots with no thumb.
+  // Drop slug values that can't be resolved. Stale slugs — restored from
+  // localStorage after a rename, or leftover from a prior preview — otherwise
+  // render as placeholder "Refer…" chips with no thumb. Project imageAssets is
+  // authoritative for img-* (droppedAssets alone is not enough: it survives
+  // renames with dead paths).
   useEffect(() => {
     if (!preview || !selectedOption) return;
     const resolved = preview.resolved_assets ?? [];
-    // The savedRef fallback covers the initial-mount race: when this filter's
-    // queued setFormValues callback runs during state-queue processing, the
-    // droppedAssets closure is still the pre-restore empty Map. Consulting the
-    // immutable savedRef directly ensures we never strip slugs the user
-    // explicitly dropped before the panel was last closed.
-    const savedDroppedSlugs = new Set((savedRef.current?.droppedAssets ?? []).map((a) => a.slug));
+    const savedDropped = savedRef.current?.droppedAssets ?? [];
+    const savedDroppedSlugs = new Set(savedDropped.map((a) => a.slug));
+
     const canResolve = (slug: string): boolean => {
       if (!slug) return false;
+      const clean = stripSlugPrefix(slug);
+      // When the project image list is loaded, it is authoritative for img-*:
+      // renamed-away slugs must leave the bar. In-session drops that are not
+      // yet in list_assets still resolve via droppedAssets (and are not in the
+      // saved snapshot).
+      if (clean.startsWith('img-') && imageAssets) {
+        if (findByAssetSlug(slug, imageAssets) != null) return true;
+        if (droppedAssets.has(slug) && !savedDroppedSlugs.has(slug)) return true;
+        return resolved.some((a) => stripSlugPrefix(a.slug) === clean);
+      }
       if (droppedAssets.has(slug)) return true;
       if (savedDroppedSlugs.has(slug)) return true;
-      const clean = stripSlugPrefix(slug);
       return resolved.some((a) => {
         const aClean = a.slug ? stripSlugPrefix(a.slug) : a.slug;
         return a.slug === slug || a.slug === clean || aClean === clean;
@@ -418,6 +430,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     setFormValues((prev) => {
       let changed = false;
       const next: Record<string, unknown> = { ...prev };
+      let prompt = typeof prev.prompt === 'string' ? prev.prompt : '';
+      let promptDirty = false;
+
       for (const name of Object.keys(prev)) {
         if (!isSlugField(name)) continue;
         const v = prev[name];
@@ -425,18 +440,50 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
           next[name] = '';
           changed = true;
         } else if (Array.isArray(v)) {
-          const filtered = (v as unknown[]).filter(
-            (s): s is string => typeof s === 'string' && canResolve(s),
-          );
-          if (filtered.length !== v.length) {
-            next[name] = filtered;
+          const prevArr = v as unknown[];
+          const keep: string[] = [];
+          const keepMask: boolean[] = [];
+          for (const s of prevArr) {
+            const ok = typeof s === 'string' && canResolve(s);
+            keepMask.push(ok);
+            if (ok) keep.push(s as string);
+          }
+          if (keep.length !== prevArr.length) {
+            next[name] = keep;
             changed = true;
+            // Renumber @referenceImage_N for removed image_slugs (high→low).
+            if (name === 'image_slugs') {
+              for (let i = keepMask.length - 1; i >= 0; i--) {
+                if (!keepMask[i]) {
+                  prompt = renumberReferenceImageMarkers(prompt, i + 1);
+                  promptDirty = true;
+                }
+              }
+            }
           }
         }
       }
+      if (promptDirty) {
+        next.prompt = prompt;
+        changed = true;
+      }
       return changed ? next : prev;
     });
-  }, [preview, droppedAssets, selectedOption, isAssetParam]);
+
+    // Evict dead img-* entries from droppedAssets so they can't re-seed the bar.
+    setDroppedAssets((prev) => {
+      if (!imageAssets) return prev;
+      let changed = false;
+      const next = new Map(prev);
+      for (const slug of prev.keys()) {
+        if (!stripSlugPrefix(slug).startsWith('img-')) continue;
+        if (findByAssetSlug(slug, imageAssets) != null) continue;
+        next.delete(slug);
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [preview, droppedAssets, selectedOption, isAssetParam, imageAssets]);
 
   // All video/image models (sorted) feed the fused model·provider dropdown.
   const sortedModelOptions = useMemo(() => {
@@ -1122,6 +1169,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                     formValues={formValues}
                     resolvedAssets={preview.resolved_assets ?? []}
                     droppedAssets={droppedAssets}
+                    projectImages={imageAssets}
                     onChange={handleStripChange}
                     disabled={isDisabled}
                     domain={panelDomain}

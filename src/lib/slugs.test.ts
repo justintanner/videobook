@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { stripAssetTagsFromText, stripSlugPrefix } from './slugs'
+import {
+  findByAssetSlug,
+  sameAssetSlug,
+  stripAssetTagsFromText,
+  stripSlugPrefix,
+} from './slugs'
 
 describe('stripSlugPrefix', () => {
   it('removes a leading at sign', () => {
@@ -8,6 +13,23 @@ describe('stripSlugPrefix', () => {
 
   it('leaves plain slugs unchanged', () => {
     expect(stripSlugPrefix('img-justin')).toBe('img-justin')
+  })
+})
+
+describe('sameAssetSlug / findByAssetSlug', () => {
+  it('equates bare and @-prefixed slugs', () => {
+    expect(sameAssetSlug('@img-mmm-buttons', 'img-mmm-buttons')).toBe(true)
+    expect(sameAssetSlug('img-a', 'img-b')).toBe(false)
+  })
+
+  it('finds assets regardless of @ prefix', () => {
+    const assets = [
+      { slug: '@img-poster-table', filePath: '/a.jpg' },
+      { slug: 'img-mmm-buttons', filePath: '/b.jpg' },
+    ]
+    expect(findByAssetSlug('@img-mmm-buttons', assets)?.filePath).toBe('/b.jpg')
+    expect(findByAssetSlug('img-poster-table', assets)?.filePath).toBe('/a.jpg')
+    expect(findByAssetSlug('@img-gone', assets)).toBeUndefined()
   })
 })
 
