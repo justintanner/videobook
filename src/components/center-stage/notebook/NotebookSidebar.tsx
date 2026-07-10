@@ -205,10 +205,13 @@ function GenerationSidebar({
   const provider = typeof step.properties.provider === 'string' ? step.properties.provider : ''
   const preview = useGenPreview({ category, projectSlug, callTool, model, provider })
   const option = preview.selectedOption
-  const resolved = option ? resolveEffectiveValues(definition, step, option) : null
+  const resolved = useMemo(
+    () => (option ? resolveEffectiveValues(definition, step, option) : null),
+    [option, definition, step],
+  )
   const mergedValues = useMemo(
     () => ({ ...(option?.prefilled_values ?? {}), ...(resolved?.values ?? record(step.properties.values)) }),
-    [option?.prefilled_values, resolved?.values, step.properties.values],
+    [option?.prefilled_values, resolved, step.properties.values],
   )
   const modeKey = option?.modes ? inferModeKey(option.modes, mergedValues) : null
   const activeMode = option?.modes && modeKey ? getMode(option.modes, modeKey) : null
