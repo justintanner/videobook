@@ -1,3 +1,19 @@
+/* ============================================================================
+   Plan notebook theme — restyles sequential-workflow-designer (SWD) 0.40 to
+   videocity's emerald terminal look. Loaded AFTER designer.css + designer-dark.css,
+   so equal-specificity rules win on source order.
+
+   SCOPING RULE:
+   - Panel chrome (toolbox / control bar / smart editor / workspace / grid /
+     placeholders / start-stop) lives inside .vc-notebook → scope `.vc-notebook …`.
+   - Step-card SVG, the drag ghost (.sqd-drag) and the context menu (.sqd-context-menu)
+     MOUNT ON document.body, outside .vc-notebook. The ghost renders the same card
+     factory as the canvas, so all card rules are scoped `.sqd-theme-dark …` (present
+     on the designer root AND on the body-mounted ghost/menu). There is exactly one
+     SWD instance in the app, so global `.sqd-theme-dark` rules are safe.
+   ========================================================================== */
+
+/* ── Frame + header ──────────────────────────────────────────────────────── */
 .vc-notebook {
   background: linear-gradient(180deg, rgb(6 18 14), rgb(8 12 11));
   color: rgb(209 250 229);
@@ -7,8 +23,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid rgb(52 211 153 / 0.2);
-  padding: 0.75rem 1rem;
+  padding: 0.75rem;
+  background: rgb(0 0 0 / 0.6);
+  border-bottom: 1px solid rgb(39 39 42 / 0.6);
 }
 
 .vc-notebook-header > div,
@@ -21,52 +38,546 @@
 .vc-notebook-header h1,
 .vc-notebook-header span {
   margin: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
 }
 
-.vc-notebook-header h1 { font-size: 0.875rem; }
-.vc-notebook-header span { color: rgb(110 231 183 / 0.75); font-size: 0.7rem; text-transform: uppercase; }
+.vc-notebook-header h1 {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: rgb(161 161 170);
+}
+
+/* The "PLAN" kind badge — emerald with a soft glow, matching viewer chrome. */
+.vc-notebook-header > div:first-child > span:first-child {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(110 231 183 / 0.9);
+  filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.5));
+}
+
+.vc-notebook-header span {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgb(110 231 183 / 0.75);
+}
+
 .vc-notebook-header svg,
 .vc-notebook-save svg,
 .vc-notebook-status svg,
 .vc-notebook-loading svg,
-.vc-notebook-error svg { width: 0.875rem; height: 0.875rem; }
+.vc-notebook-error svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.vc-notebook-save-saving,
+.vc-notebook-save-loading {
+  color: rgb(251 191 36);
+}
+
 .vc-notebook-save-saving svg,
 .vc-notebook-save-loading svg,
-.vc-notebook-loading svg { animation: vc-notebook-spin 1s linear infinite; }
+.vc-notebook-loading svg {
+  animation: vc-notebook-spin 1s linear infinite;
+}
+
 .vc-notebook-save-error,
 .vc-notebook-error,
-.vc-notebook-load-error { color: rgb(252 165 165); }
-.vc-notebook-load-error { padding: 0.5rem 1rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; }
-.vc-notebook .sqd-designer-react { flex: 1; min-height: 0; }
-.vc-notebook .sqd-designer { height: 100%; background: transparent; }
-.vc-notebook .sqd-workspace { background: radial-gradient(circle at top, rgb(16 59 42 / 0.35), transparent 45%); }
-.vc-notebook .sqd-toolbox,
-.vc-notebook .sqd-editor { background: rgb(5 15 11 / 0.92); border-color: rgb(52 211 153 / 0.2); }
-.vc-notebook .sqd-step-task { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.vc-notebook .vc-step-running { animation: vc-notebook-pulse 1.3s ease-in-out infinite; }
-.vc-notebook .vc-step-error { filter: drop-shadow(0 0 5px rgb(248 113 113 / 0.9)); }
-.vc-notebook-editor { display: flex; flex-direction: column; gap: 0.75rem; padding: 0.75rem; min-width: 17rem; max-width: 28rem; overflow-y: auto; }
+.vc-notebook-load-error {
+  color: rgb(252 165 165);
+}
+
+.vc-notebook-load-error {
+  padding: 0.5rem 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.vc-notebook-legacy-note {
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid rgb(251 191 36 / 0.25);
+  background: rgb(251 191 36 / 0.08);
+  color: rgb(252 211 77);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+/* ── Designer surface + grid (panel-scoped) ─────────────────────────────── */
+.vc-notebook .sqd-designer-react {
+  flex: 1;
+  min-height: 0;
+}
+
+.vc-notebook .sqd-designer {
+  height: 100%;
+  background: transparent;
+  font-family: var(--font-mono);
+}
+
+.vc-notebook .sqd-workspace {
+  background: radial-gradient(circle at top, rgb(16 59 42 / 0.35), transparent 45%);
+}
+
+.vc-notebook .sqd-line-grid-path {
+  stroke: rgb(52 211 153 / 0.06);
+}
+
+.vc-notebook .sqd-join {
+  stroke: rgb(52 211 153 / 0.4);
+}
+
+/* ── Toolbox ─────────────────────────────────────────────────────────────── */
+.vc-notebook .sqd-toolbox {
+  width: 176px;
+  background: rgb(3 12 9 / 0.92);
+  border: 1px solid rgb(52 211 153 / 0.25);
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgb(0 0 0 / 0.4);
+  backdrop-filter: blur(4px);
+}
+
+.vc-notebook .sqd-toolbox-header-title {
+  color: rgb(167 243 208);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vc-notebook .sqd-toolbox-filter-input {
+  background: rgb(0 0 0 / 0.5);
+  border: 1px solid rgb(52 211 153 / 0.25);
+  border-radius: 6px;
+  color: rgb(236 253 245);
+}
+
+.vc-notebook .sqd-toolbox-filter-input:focus {
+  border-color: rgb(52 211 153);
+}
+
+.vc-notebook .sqd-toolbox-group-title {
+  background: rgb(52 211 153 / 0.08);
+  color: rgb(110 231 183 / 0.7);
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.vc-notebook .sqd-toolbox-item {
+  background: rgb(0 0 0 / 0.55);
+  color: rgb(228 228 231);
+  border: 1px solid rgb(52 211 153 / 0.25);
+  border-radius: 6px;
+}
+
+.vc-notebook .sqd-toolbox-item:hover {
+  background: rgb(52 211 153 / 0.12);
+  border-color: rgb(52 211 153 / 0.5);
+}
+
+/* Per-type accent so Prompt/Image/Video read at a glance. */
+.vc-notebook .sqd-toolbox-item.sqd-type-prompt {
+  border-color: rgb(245 158 11 / 0.4);
+}
+.vc-notebook .sqd-toolbox-item.sqd-type-prompt:hover {
+  background: rgb(245 158 11 / 0.12);
+}
+.vc-notebook .sqd-toolbox-item.sqd-type-image {
+  border-color: rgb(34 211 238 / 0.4);
+}
+.vc-notebook .sqd-toolbox-item.sqd-type-image:hover {
+  background: rgb(34 211 238 / 0.12);
+}
+.vc-notebook .sqd-toolbox-item.sqd-type-video {
+  border-color: rgb(167 139 250 / 0.4);
+}
+.vc-notebook .sqd-toolbox-item.sqd-type-video:hover {
+  background: rgb(167 139 250 / 0.12);
+}
+
+/* ── Control bar ─────────────────────────────────────────────────────────── */
+.vc-notebook .sqd-control-bar {
+  background: rgb(0 0 0 / 0.6);
+  border: 1px solid rgb(52 211 153 / 0.2);
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+}
+
+.vc-notebook .sqd-control-bar-button {
+  background: rgb(0 0 0 / 0.4);
+  border: 1px solid rgb(52 211 153 / 0.2);
+  border-radius: 5px;
+}
+
+.vc-notebook .sqd-control-bar-button:hover {
+  background: rgb(52 211 153 / 0.12);
+  border-color: rgb(52 211 153 / 0.5);
+}
+
+.vc-notebook .sqd-control-bar-button .sqd-icon-path {
+  fill: rgb(167 243 208);
+}
+
+.vc-notebook .sqd-control-bar-button.sqd-delete .sqd-icon-path {
+  fill: rgb(248 113 113);
+}
+
+/* ── Placeholders (drop targets) ────────────────────────────────────────── */
+.vc-notebook .sqd-placeholder .sqd-placeholder-rect {
+  fill: rgb(4 20 14 / 0.8);
+  stroke: rgb(52 211 153 / 0.35);
+  stroke-width: 1;
+  stroke-dasharray: 4;
+}
+
+.vc-notebook .sqd-placeholder.sqd-hover .sqd-placeholder-rect {
+  fill: rgb(52 211 153 / 0.3);
+  stroke: rgb(52 211 153);
+}
+
+.vc-notebook .sqd-placeholder-icon-path {
+  fill: rgb(52 211 153 / 0.5);
+}
+
+.vc-notebook .sqd-placeholder.sqd-hover .sqd-placeholder-icon-path {
+  fill: rgb(209 250 229);
+}
+
+/* ── Validation badge (stays amber, matches app accent) ─────────────────── */
+.vc-notebook .sqd-validation-error {
+  fill: rgb(251 191 36);
+}
+
+/* ── Root start / stop terminals (was indigo blue) ──────────────────────── */
+.vc-notebook .sqd-root-start-stop-circle {
+  fill: rgb(6 78 59 / 0.9);
+  stroke: rgb(52 211 153);
+  stroke-width: 2;
+}
+
+.vc-notebook .sqd-root-start-stop-icon {
+  fill: rgb(167 243 208);
+}
+
+/* ── Smart editor (right sidebar) — widened to 420px ────────────────────── */
+.vc-notebook .sqd-smart-editor {
+  background: rgb(5 15 11 / 0.95);
+  border-left: 1px solid rgb(52 211 153 / 0.2);
+}
+
+.vc-notebook .sqd-layout-desktop .sqd-smart-editor {
+  width: 420px;
+}
+
+.vc-notebook .sqd-layout-desktop .sqd-smart-editor-toggle {
+  right: 420px;
+}
+
+/* Re-assert the collapsed position AFTER the width override at higher
+   specificity, else the 420px rule would also push the collapsed toggle. */
+.vc-notebook .sqd-layout-desktop .sqd-smart-editor-toggle.sqd-collapsed {
+  right: 0;
+}
+
+.vc-notebook .sqd-smart-editor-toggle {
+  background: rgb(0 0 0 / 0.7);
+  border: 1px solid rgb(52 211 153 / 0.25);
+}
+
+.vc-notebook .sqd-smart-editor-toggle-icon path {
+  fill: rgb(167 243 208);
+}
+
+/* ============================================================================
+   Step cards — GLOBAL `.sqd-theme-dark` scope (canvas + body-mounted drag ghost)
+   ========================================================================== */
+.sqd-theme-dark .sqd-step-task {
+  font-family: var(--font-mono);
+}
+
+/* Card body. Base fill + fallback stroke; per-type stroke follows. */
+.sqd-theme-dark .sqd-step-task .vc-card-rect {
+  fill: rgb(9 22 17 / 0.97);
+  stroke: rgb(52 211 153 / 0.35);
+  stroke-width: 1;
+  filter: drop-shadow(0 2px 6px rgb(0 0 0 / 0.35));
+}
+
+.sqd-theme-dark .sqd-type-prompt .vc-card-rect {
+  stroke: rgb(245 158 11 / 0.45);
+}
+.sqd-theme-dark .sqd-type-image .vc-card-rect {
+  stroke: rgb(34 211 238 / 0.45);
+}
+.sqd-theme-dark .sqd-type-video .vc-card-rect {
+  stroke: rgb(167 139 250 / 0.45);
+}
+
+/* Selection — one class on the <g> drives stroke + glow. */
+.sqd-theme-dark .sqd-step-task.sqd-selected .vc-card-rect {
+  stroke: rgb(52 211 153);
+  stroke-width: 2;
+}
+.sqd-theme-dark .sqd-step-task.sqd-selected {
+  filter: drop-shadow(0 0 10px rgb(52 211 153 / 0.45));
+}
+
+/* Card layers. */
+.sqd-theme-dark .vc-card-hero-bg {
+  fill: rgb(0 0 0 / 0.55);
+}
+.sqd-theme-dark .vc-card-divider {
+  stroke: rgb(52 211 153 / 0.18);
+  stroke-width: 1;
+}
+.sqd-theme-dark .vc-node-thumb {
+  display: none;
+}
+.sqd-theme-dark .vc-has-thumb .vc-node-thumb {
+  display: inline;
+}
+.sqd-theme-dark .vc-has-thumb .vc-card-icon {
+  display: none;
+}
+
+/* Card text. */
+.sqd-theme-dark .sqd-step-task .vc-card-name {
+  fill: rgb(236 253 245);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.sqd-theme-dark .vc-card-excerpt {
+  fill: rgb(167 243 208 / 0.55);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  dominant-baseline: central;
+}
+
+/* Connection dots. */
+.sqd-theme-dark .sqd-step-task .sqd-input {
+  fill: rgb(9 18 14);
+  stroke: rgb(52 211 153);
+  stroke-width: 2;
+}
+.sqd-theme-dark .sqd-step-task .sqd-output {
+  fill: rgb(52 211 153);
+  stroke-width: 0;
+}
+
+/* Belt-and-braces: the empty-icon fallback rect (unused by our factory). */
+.sqd-theme-dark .sqd-step-task .sqd-step-task-empty-icon {
+  fill: rgb(9 22 17);
+}
+
+/* Run-state decorations (canvas only, toggled by useCanvasStepDecorations). */
+.sqd-theme-dark .vc-step-running {
+  animation: vc-notebook-pulse 1.3s ease-in-out infinite;
+}
+.sqd-theme-dark .vc-step-error {
+  filter: drop-shadow(0 0 8px rgb(248 113 113 / 0.9));
+}
+.sqd-theme-dark .vc-step-ready .vc-card-rect {
+  stroke: rgb(52 211 153 / 0.6);
+}
+
+/* Drag ghost + context menu (body-mounted). */
+.sqd-drag,
+.sqd-context-menu {
+  font-family: var(--font-mono);
+}
+
+.sqd-theme-dark.sqd-context-menu {
+  background: rgb(3 12 9 / 0.97);
+  border: 1px solid rgb(52 211 153 / 0.25);
+  border-radius: 6px;
+}
+
+.sqd-theme-dark.sqd-context-menu .sqd-context-menu-group {
+  color: rgb(110 231 183 / 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sqd-theme-dark.sqd-context-menu .sqd-context-menu-item {
+  color: rgb(236 253 245);
+}
+
+.sqd-theme-dark.sqd-context-menu .sqd-context-menu-item:hover {
+  background: rgb(52 211 153 / 0.15);
+}
+
+/* ── Step editor internals (right sidebar content) ──────────────────────── */
+.vc-notebook-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  overflow-y: auto;
+}
+
 .vc-notebook-editor label,
-.vc-notebook-prior-output > span { color: rgb(110 231 183 / 0.7); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.7rem; text-transform: uppercase; }
-.vc-notebook-editor textarea,
-.vc-notebook-root-editor input { min-height: 7rem; resize: vertical; border: 1px solid rgb(52 211 153 / 0.25); border-radius: 0.375rem; background: rgb(0 0 0 / 0.45); padding: 0.75rem; color: rgb(236 253 245); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.vc-notebook-copy-prompt { align-self: flex-start; border: 1px solid rgb(52 211 153 / 0.35); border-radius: 0.375rem; background: rgb(52 211 153 / 0.08); padding: 0.4rem 0.6rem; color: rgb(167 243 208); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.7rem; }
-.vc-notebook-prior-output > div,
-.vc-notebook-output-gallery { display: flex; gap: 0.4rem; overflow-x: auto; }
-.vc-notebook-prior-output button,
-.vc-notebook-output-gallery button { width: 2.75rem; height: 2.75rem; overflow: hidden; border: 1px solid rgb(52 211 153 / 0.25); border-radius: 0.25rem; background: rgb(0 0 0 / 0.4); color: rgb(167 243 208); }
+.vc-notebook-prior-output > span {
+  color: rgb(110 231 183 / 0.7);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+/* Cell-type header above the form. */
+.vc-notebook-cell-type {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.vc-notebook-cell-type-prompt {
+  color: rgb(245 158 11);
+}
+.vc-notebook-cell-type-image {
+  color: rgb(34 211 238);
+}
+.vc-notebook-cell-type-video {
+  color: rgb(167 139 250);
+}
+
+/* Scoped to the plain prompt-cell textarea only: RichPromptField's inner
+   textarea must keep padding/border identical to its highlight overlay. */
+.vc-notebook-editor textarea.vc-notebook-text,
+.vc-notebook-root-editor input {
+  min-height: 7rem;
+  resize: vertical;
+  border: 1px solid rgb(52 211 153 / 0.25);
+  border-radius: 0.375rem;
+  background: rgb(0 0 0 / 0.45);
+  padding: 0.75rem;
+  color: rgb(236 253 245);
+  font-family: var(--font-mono);
+}
+
+.vc-notebook-copy-prompt {
+  align-self: flex-start;
+  border: 1px solid rgb(52 211 153 / 0.35);
+  border-radius: 0.375rem;
+  background: rgb(52 211 153 / 0.08);
+  padding: 0.4rem 0.6rem;
+  color: rgb(167 243 208);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+.vc-notebook-copy-prompt:hover {
+  background: rgb(52 211 153 / 0.16);
+}
+
+/* Prior-output reference strip — bigger 16:9 thumbs. */
+.vc-notebook-prior-output > div {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+}
+
+.vc-notebook-prior-output button {
+  flex-shrink: 0;
+  width: 6rem;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid rgb(52 211 153 / 0.25);
+  border-radius: 0.375rem;
+  background: rgb(0 0 0 / 0.4);
+  color: rgb(167 243 208);
+}
+
+.vc-notebook-prior-output button:hover {
+  border-color: rgb(52 211 153 / 0.6);
+}
+
+/* Output gallery — 2-column grid of 16:9 result thumbs. */
+.vc-notebook-output-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.vc-notebook-output-gallery button {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid rgb(52 211 153 / 0.25);
+  border-radius: 0.375rem;
+  background: rgb(0 0 0 / 0.4);
+  color: rgb(167 243 208);
+  transition: box-shadow 150ms, border-color 150ms;
+}
+
+.vc-notebook-output-gallery button:hover {
+  border-color: rgb(52 211 153 / 0.6);
+  box-shadow: 0 0 12px rgb(52 211 153 / 0.25);
+}
+
 .vc-notebook-prior-output img,
-.vc-notebook-output-gallery img { width: 100%; height: 100%; object-fit: cover; }
-.vc-notebook-output-error { border-color: rgb(248 113 113) !important; }
+.vc-notebook-output-gallery img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vc-notebook-output-error {
+  border-color: rgb(248 113 113) !important;
+}
+
 .vc-notebook-status,
 .vc-notebook-loading,
-.vc-notebook-error { display: flex; align-items: center; gap: 0.4rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; }
-.vc-notebook-loading { flex: 1; justify-content: center; color: rgb(110 231 183 / 0.75); }
-.vc-notebook-root-editor { display: flex; flex-direction: column; gap: 0.6rem; padding: 0.75rem; color: rgb(167 243 208); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; }
-.vc-notebook-root-editor label { color: rgb(110 231 183 / 0.7); }
-.vc-notebook-root-editor input { min-height: auto; }
-.vc-notebook-root-editor p { margin: 0; color: rgb(167 243 208 / 0.6); }
+.vc-notebook-error {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
 
-@keyframes vc-notebook-spin { to { transform: rotate(360deg); } }
-@keyframes vc-notebook-pulse { 50% { filter: drop-shadow(0 0 7px rgb(52 211 153 / 0.9)); } }
+.vc-notebook-loading {
+  flex: 1;
+  justify-content: center;
+  color: rgb(110 231 183 / 0.75);
+}
+
+.vc-notebook-root-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  color: rgb(167 243 208);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.vc-notebook-root-editor label {
+  color: rgb(110 231 183 / 0.7);
+}
+
+.vc-notebook-root-editor input {
+  min-height: auto;
+}
+
+.vc-notebook-root-editor p {
+  margin: 0;
+  color: rgb(167 243 208 / 0.6);
+}
+
+@keyframes vc-notebook-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes vc-notebook-pulse {
+  50% {
+    filter: drop-shadow(0 0 12px rgb(52 211 153 / 0.9));
+  }
+}

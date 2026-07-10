@@ -56,11 +56,15 @@ describe('notebook model', () => {
     const updated = appendRunAsset(definition, 'image-1', 'img-third')
     expect(updated.sequence[1].properties.asset_ids).toEqual(['img-first', 'img-second', 'img-third'])
     expect(definition.sequence[1].properties.asset_ids).toEqual(['img-first', 'img-second'])
+
+    const ran = appendRunAsset(definition, 'image-1', 'img-third', { model: 'nano_banana', provider: 'kie' })
+    expect(ran.sequence[1].properties.model).toBe('nano_banana')
+    expect(ran.sequence[1].properties.provider).toBe('kie')
   })
 
   it('derives a run state from the latest output asset', () => {
     const image = definition.sequence[1]
-    expect(stepRunStatus(image, [])).toEqual({ state: 'pending', assetId: 'img-second' })
+    expect(stepRunStatus(image, [])).toEqual({ state: 'missing', assetId: 'img-second' })
     expect(stepRunStatus(image, [{ id: 'img-second', status: 'ready' }])).toEqual({
       state: 'ready',
       assetId: 'img-second',

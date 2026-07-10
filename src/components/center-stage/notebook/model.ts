@@ -60,6 +60,7 @@ export function appendRunAsset(
   definition: NotebookPlanDefinition,
   stepId: string,
   assetId: string,
+  ran?: { model: string; provider: string },
 ): NotebookPlanDefinition {
   return {
     ...definition,
@@ -70,6 +71,9 @@ export function appendRunAsset(
         ...step,
         properties: {
           ...step.properties,
+          // Record the model/provider that actually ran, so the plan stays an
+          // accurate record even when the user never touched the default pick.
+          ...(ran ? { model: ran.model, provider: ran.provider } : {}),
           asset_ids: [...stepAssetIds(step), assetId],
         } as JsonRecord,
       }
@@ -84,7 +88,10 @@ export function stepRunStatus(
   const assetId = latestAssetId(step)
   if (!assetId) return { state: 'idle', assetId: null }
   const asset = mediaItems.find((item) => item.id === assetId)
-  if (!asset) return { state: 'pending', assetId }
+  // 'missing' (not 'pending'): the recorded output may have been deleted, and a
+  // deleted output must not disable Run or pulse the canvas step forever. The
+  // brief just-submitted window before sync surfaces the asset also lands here.
+  if (!asset) return { state: 'missing', assetId }
   if (asset.status === 'error') {
     return { state: 'error', assetId, message: asset.failedMessage }
   }

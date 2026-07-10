@@ -10,7 +10,14 @@ export type NotebookSaveState = 'loading' | 'saved' | 'saving' | 'error'
 interface UseNotebookPlanOptions {
   projectSlug: string
   callTool: UseMcpResult['callTool']
+  mcpState: UseMcpResult['state']
 }
+
+// The notebook mounts in two center-stage branches (plan asset selected vs
+// planEmptyOverride), so a view switch remounts it. The unmount flush and the
+// next mount's read_plan would otherwise race on the stateless server; the new
+// mount awaits the previous instance's in-flight write before reading.
+const pendingPlanWrites = new Map<string, Promise<void>>()
 
 function responseText(result: Awaited<ReturnType<UseMcpResult['callTool']>>): string {
   const content = result.content as Array<{ type: string; text: string }>
@@ -24,10 +31,11 @@ function toDefinition(value: unknown): NotebookPlanDefinition {
   return response.definition
 }
 
-export function useNotebookPlan({ projectSlug, callTool }: UseNotebookPlanOptions) {
+export function useNotebookPlan({ projectSlug, callTool, mcpState }: UseNotebookPlanOptions) {
   const [wrapped, setWrapped] = useState<WrappedDefinition<NotebookPlanDefinition> | null>(null)
   const [saveState, setSaveState] = useState<NotebookSaveState>('loading')
   const [error, setError] = useState<string | null>(null)
+  const [legacy, setLegacy] = useState(false)
   const callToolRef = useRef(callTool)
   const lastSavedJsonRef = useRef('')
   const pendingDefinitionRef = useRef<NotebookPlanDefinition | null>(null)
@@ -43,13 +51,22 @@ export function useNotebookPlan({ projectSlug, callTool }: UseNotebookPlanOption
     }
     setSaveState('saving')
     setError(null)
-    try {
+    const attempt = (async () => {
       const result = await callToolRef.current('write_plan', {
         project_slug: projectSlug,
         definition,
       })
       if (result.isError) throw new Error(responseText(result) || 'Unable to save Plan')
+    })()
+    const tracked = attempt.catch(() => {})
+    pendingPlanWrites.set(projectSlug, tracked)
+    void tracked.then(() => {
+      if (pendingPlanWrites.get(projectSlug) === tracked) pendingPlanWrites.delete(projectSlug)
+    })
+    try {
+      await attempt
       lastSavedJsonRef.current = serialized
+      setLegacy(false)
       setSaveState('saved')
     } catch (cause) {
       setSaveState('error')
@@ -84,25 +101,30 @@ export function useNotebookPlan({ projectSlug, callTool }: UseNotebookPlanOption
   }, [scheduleSave])
 
   useEffect(() => {
+    if (mcpState !== 'ready') return
     let cancelled = false
     setWrapped(null)
     setSaveState('loading')
     setError(null)
+    setLegacy(false)
     void (async () => {
       try {
+        const pending = pendingPlanWrites.get(projectSlug)
+        if (pending) await pending
         const result = await callToolRef.current('read_plan', { project_slug: projectSlug })
         if (result.isError) throw new Error(responseText(result) || 'Unable to load Plan')
         const parsed = JSON.parse(responseText(result)) as unknown
         const definition = toDefinition(parsed)
         if (cancelled) return
+        const response = parsed as Partial<NotebookPlanResponse>
+        setLegacy(response.legacy === true)
         lastSavedJsonRef.current = JSON.stringify(definition)
         setWrapped(wrapDefinition(definition))
         setSaveState('saved')
       } catch (cause) {
         if (cancelled) return
-        const definition = createEmptyDefinition()
-        lastSavedJsonRef.current = JSON.stringify(definition)
-        setWrapped(wrapDefinition(definition))
+        // Leave `wrapped` null: a failed load must not hand the user an
+        // editable empty notebook whose first save overwrites the real plan.
         setSaveState('error')
         setError(cause instanceof Error ? cause.message : 'Unable to load Plan')
       }
@@ -111,12 +133,13 @@ export function useNotebookPlan({ projectSlug, callTool }: UseNotebookPlanOption
       cancelled = true
       flush()
     }
-  }, [projectSlug, flush])
+  }, [projectSlug, mcpState, flush])
 
   return {
     wrapped,
     saveState,
     error,
+    legacy,
     onDefinitionChange,
     flush,
   }

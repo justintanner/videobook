@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { UseMcpResult } from 'use-mcp/react'
 import { effectiveToolName, filterValuesForMode, inferModeKey } from '@/components/gen/modes'
 import type { ModelOption } from '@/components/gen/types'
@@ -38,6 +38,11 @@ export function useNotebookRun({
 }: UseNotebookRunOptions) {
   const [runningStepIds, setRunningStepIds] = useState<Set<string>>(new Set())
   const [errors, setErrors] = useState<Map<string, string>>(new Map())
+  // Completion must patch the definition as it exists THEN, not the render
+  // captured at submit — otherwise edits made (or runs finished) while this
+  // generation was in flight get clobbered by replaceDefinition.
+  const definitionRef = useRef(definition)
+  definitionRef.current = definition
 
   const run = useCallback(async (
     step: NotebookPlanStep,
@@ -45,7 +50,7 @@ export function useNotebookRun({
     provider: string,
     values: Record<string, unknown>,
   ) => {
-    if (!definition || runningStepIds.has(step.id)) return
+    if (!definitionRef.current || runningStepIds.has(step.id)) return
     const category = step.type === 'image' ? 'image' : 'video'
     const requestId = createGenerationRequestId(category)
     const modeKey = option.modes ? inferModeKey(option.modes, values) : null
@@ -70,7 +75,13 @@ export function useNotebookRun({
       if (result.isError) throw new Error(responseText(result) || 'Generation failed')
       const assetId = generationAssetId(responseText(result))
       if (!assetId) throw new Error('Generation did not return an asset id')
-      await replaceDefinition(appendRunAsset(definition, step.id, assetId), step.id)
+      const latest = definitionRef.current
+      if (latest) {
+        await replaceDefinition(
+          appendRunAsset(latest, step.id, assetId, { model: option.key, provider }),
+          step.id,
+        )
+      }
       onGenerationLifecycle?.({ phase: 'submitted', requestId, assetId })
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Generation failed'
@@ -83,7 +94,7 @@ export function useNotebookRun({
         return next
       })
     }
-  }, [callTool, definition, onGenerationLifecycle, projectSlug, replaceDefinition, runningStepIds])
+  }, [callTool, onGenerationLifecycle, projectSlug, replaceDefinition, runningStepIds])
 
   return { run, runningStepIds, errors }
 }

@@ -6,6 +6,7 @@ import { CharacterPickerPopover } from '@/components/gen/ui/CharacterPickerPopov
 import { DynamicField } from '@/components/gen/ui/DynamicField'
 import { GenerateCommandButton } from '@/components/gen/GenerateCommandButton'
 import { MediaStrip } from '@/components/gen/ui/MediaStrip'
+import { appendImageSlug } from '@/components/gen/ui/media-strip'
 import { ModelProviderSelector } from '@/components/gen/ui/ModelSelector'
 import { PromptSection } from '@/components/gen/ui/PromptSection'
 import { genThemes } from '@/components/gen/ui/gen-themes'
@@ -18,18 +19,19 @@ import { usePromptHistory } from '@/hooks/usePromptHistory'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import type { MediaItem } from '@/components/sidebar/types'
+import { useEditorBridgeState } from './editorBridge'
+import type { EditorBridge } from './editorBridge'
 import { nearestPromptAbove, latestAssetId, stepRunStatus } from './model'
-import type { JsonRecord, NotebookPlanDefinition, NotebookPlanStep } from './types'
+import type { JsonRecord, NotebookPlanDefinition, NotebookPlanStep, NotebookRunState } from './types'
 import { useGenPreview } from './useGenPreview'
 
 interface NotebookStepEditorProps {
   projectSlug: string
   callTool: UseMcpResult['callTool']
-  mcpState: UseMcpResult['state']
-  definition: NotebookPlanDefinition
-  mediaItems: MediaItem[]
-  running: boolean
-  error: string | null
+  // Volatile data (poll-driven assets, run state) arrives via the bridge:
+  // this editor renders in a separate React root, so parent prop updates
+  // never reach a mounted instance. Everything else must be identity-stable.
+  bridge: EditorBridge
   onRun: (
     step: NotebookPlanStep,
     option: ModelOption,
@@ -52,15 +54,12 @@ function stringArray(value: unknown): string[] {
 export function NotebookStepEditor({
   projectSlug,
   callTool,
-  mcpState,
-  definition,
-  mediaItems,
-  running,
-  error,
+  bridge,
   onRun,
   onOpenAsset,
 }: NotebookStepEditorProps) {
   const editor = useStepEditor<NotebookPlanStep, NotebookPlanDefinition>()
+  const { mediaItems, runningStepIds, errors, mcpState } = useEditorBridgeState(bridge)
   const step = editor.step
 
   if (step.type === 'prompt') {
@@ -73,10 +72,10 @@ export function NotebookStepEditor({
       projectSlug={projectSlug}
       callTool={callTool}
       mcpState={mcpState}
-      definition={definition}
+      definition={editor.definition}
       mediaItems={mediaItems}
-      running={running}
-      error={error}
+      running={runningStepIds.has(step.id)}
+      error={errors.get(step.id) ?? null}
       onRun={onRun}
       onOpenAsset={onOpenAsset}
     />
@@ -92,6 +91,7 @@ function PromptCellEditor({
 
   return (
     <div className="vc-notebook-editor">
+      <div className="vc-notebook-cell-type vc-notebook-cell-type-prompt">Prompt cell</div>
       <label htmlFor={`step-name-${editor.id}`}>Cell name</label>
       <Input
         id={`step-name-${editor.id}`}
@@ -101,6 +101,7 @@ function PromptCellEditor({
       <label htmlFor={`step-text-${editor.id}`}>Prompt</label>
       <textarea
         id={`step-text-${editor.id}`}
+        className="vc-notebook-text"
         value={text}
         onChange={(event) => {
           editor.setProperty('text', event.target.value)
@@ -181,6 +182,9 @@ function GenerationCellEditor({
       .map((item) => ({ slug: item.slug, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc ?? null })),
     [mediaItems],
   )
+  // Video outputs are offered only when the selected model can take a video
+  // ref; they route to video_slug (image_slugs rejects vid-* server-side).
+  const supportsVideoRef = Boolean(selectedOption?.schema.properties.video_slug)
   const previousOutputs = useMemo(() => {
     const currentIndex = definition.sequence.findIndex((candidate) => candidate.id === step.id)
     return definition.sequence
@@ -190,14 +194,19 @@ function GenerationCellEditor({
       .filter((assetId): assetId is string => assetId !== null)
       .map((assetId) => mediaItems.find((item) => item.id === assetId))
       .filter((item): item is MediaItem => item != null && item.status === 'ready')
-  }, [definition.sequence, mediaItems, step.id])
+      .filter((item) => item.type === 'image' || supportsVideoRef)
+  }, [definition.sequence, mediaItems, step.id, supportsVideoRef])
 
   const updateProperty = (name: string, value: string | JsonRecord | string[]) => {
     editor.setProperty(name, value)
     editor.notifyPropertiesChanged()
   }
   const updateValues = (name: string, value: unknown) => {
-    updateProperty('values', { ...mergedValues, [name]: value } as JsonRecord)
+    // Spread the PERSISTED values, not mergedValues: baking the current
+    // model's prefills into the step would carry stale defaults across a
+    // model switch (e.g. a resolution the new model rejects). Prefills stay
+    // live via the merge at render/run time instead.
+    updateProperty('values', { ...values, [name]: value } as JsonRecord)
   }
   const copyPromptAbove = () => {
     const currentIndex = definition.sequence.findIndex((candidate) => candidate.id === step.id)
@@ -215,6 +224,7 @@ function GenerationCellEditor({
 
   return (
     <div className="vc-notebook-editor">
+      <div className={`vc-notebook-cell-type vc-notebook-cell-type-${category}`}>{category} cell</div>
       <label htmlFor={`step-name-${editor.id}`}>Cell name</label>
       <Input
         id={`step-name-${editor.id}`}
@@ -262,10 +272,11 @@ function GenerationCellEditor({
                     type="button"
                     key={item.id}
                     title={`Use ${item.id} as a reference`}
-                    onClick={() => updateValues('image_slugs', [
-                      ...stringArray(mergedValues.image_slugs),
-                      item.slug.startsWith('@') ? item.slug : `@${item.id}`,
-                    ])}
+                    onClick={() => {
+                      const slug = item.slug.startsWith('@') ? item.slug : `@${item.id}`
+                      if (item.type === 'video') updateValues('video_slug', slug)
+                      else updateValues('image_slugs', appendImageSlug(mergedValues, slug))
+                    }}
                   >
                     {item.thumbnailSrc ? <img src={item.thumbnailSrc} alt={item.title} /> : <ImageIcon />}
                   </button>
@@ -331,8 +342,9 @@ function GenerationCellEditor({
   )
 }
 
-function RunStatus({ status }: { status: 'idle' | 'pending' | 'ready' | 'error' }) {
+function RunStatus({ status }: { status: NotebookRunState }) {
   if (status === 'idle') return null
+  if (status === 'missing') return <div className="vc-notebook-status"><Clock3 /> Syncing</div>
   if (status === 'pending') return <div className="vc-notebook-status"><Clock3 /> Running</div>
   if (status === 'ready') return <div className="vc-notebook-status"><CheckCircle2 /> Ready</div>
   return <div className="vc-notebook-status"><AlertCircle /> Failed</div>

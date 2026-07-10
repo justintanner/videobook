@@ -414,16 +414,6 @@ export function HomePage() {
     return mediaItems.find(m => m.id === selectedItem.id) ?? null;
   }, [mediaItems, selectedItem]);
 
-  // While the empty-plan state is showing, retain the plan asset lookup so the
-  // override automatically converges with a populated plan after the next sync.
-  const planAssetForOverride = useMemo(
-    () => (planEmptyOverride ? mediaItems.find((m) => m.id === 'plan') ?? null : null),
-    [planEmptyOverride, mediaItems],
-  );
-  const planCenterStageOpen = !settingsOpen && genPanel == null && (
-    activeSelection?.type === 'plan' || planEmptyOverride || planAssetForOverride != null
-  );
-
   const handleMarkSeen = useCallback((assetId: string) => {
     if (!projectSlug) return;
     markAssetSeenLocal(assetId);
@@ -1590,7 +1580,7 @@ export function HomePage() {
 
             {/* Center Stage */}
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className={`flex-1 ${planCenterStageOpen ? 'p-0' : 'p-4'} overflow-hidden flex flex-col`}>
+              <div className="flex-1 p-4 overflow-hidden flex flex-col">
                 {settingsOpen ? (
                   <ProviderKeysScreen
                     data={providerKeyStatus}

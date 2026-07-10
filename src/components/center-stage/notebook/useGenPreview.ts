@@ -28,12 +28,15 @@ export function useGenPreview({ category, projectSlug, callTool, model, provider
   const callToolRef = useRef(callTool)
   callToolRef.current = callTool
 
-  const refresh = useCallback(async (next = selection) => {
+  const refresh = useCallback(async (next: { model: string; provider: string }) => {
     const requestId = ++requestIdRef.current
     setLoading(true)
     setError(null)
     try {
       const result = await callToolRef.current(previewToolName(category), {
+        // prompt is a required arg on the preview router tools; the notebook
+        // only wants the catalog/schema, so an empty prompt is correct here.
+        prompt: '',
         project_slug: projectSlug,
         ...(next.model ? { selected_model: next.model } : {}),
         ...(next.provider ? { selected_provider: next.provider } : {}),
@@ -48,21 +51,23 @@ export function useGenPreview({ category, projectSlug, callTool, model, provider
     } finally {
       if (requestId === requestIdRef.current) setLoading(false)
     }
-  }, [category, projectSlug, selection])
+  }, [category, projectSlug])
 
+  // Selection is the single fetch trigger; equality guards keep persisted-prop
+  // echoes (setProperty round-trips) and repeat picks from refetching.
   useEffect(() => {
-    setSelection({ model, provider })
+    setSelection((prev) => (prev.model === model && prev.provider === provider ? prev : { model, provider }))
   }, [model, provider])
 
   useEffect(() => {
-    void refresh()
-  }, [refresh])
+    void refresh(selection)
+  }, [refresh, selection])
 
   const selectModel = useCallback((nextModel: string, nextProvider: string) => {
-    const next = { model: nextModel, provider: nextProvider }
-    setSelection(next)
-    void refresh(next)
-  }, [refresh])
+    setSelection((prev) => (
+      prev.model === nextModel && prev.provider === nextProvider ? prev : { model: nextModel, provider: nextProvider }
+    ))
+  }, [])
 
   const selectedModelKey = selection.model || preview?.selected_model || ''
   const selectedOption = preview?.model_options.find((option) => option.key === selectedModelKey)

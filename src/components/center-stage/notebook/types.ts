@@ -42,7 +42,7 @@ export interface NotebookPlanResponse {
 
 export type NotebookToolboxStep = Omit<NotebookPlanStep, 'id'>
 
-export type NotebookRunState = 'idle' | 'pending' | 'ready' | 'error'
+export type NotebookRunState = 'idle' | 'missing' | 'pending' | 'ready' | 'error'
 
 export interface NotebookRunStatus {
   state: NotebookRunState

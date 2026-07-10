@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, Loader2 } from 'lucide-react'
 import {
   SequentialWorkflowDesigner,
@@ -10,6 +10,9 @@ import type { UseMcpResult } from 'use-mcp/react'
 import { CloseButton } from '@/components/ui/CloseButton'
 import type { MediaItem } from '@/components/sidebar/types'
 import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle'
+import type { ModelOption } from '@/components/gen/types'
+import { createEditorBridge } from './editorBridge'
+import { notebookDesignerExtensions } from './designerExtensions'
 import { notebookStepIcon } from './icons'
 import { toolboxStepSeeds } from './model'
 import { NotebookRootEditor } from './NotebookRootEditor'
@@ -55,7 +58,7 @@ export function PlanNotebook({
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null)
   const [isEditorCollapsed, setIsEditorCollapsed] = useState(false)
   const controller = useSequentialWorkflowDesignerController()
-  const plan = useNotebookPlan({ projectSlug, callTool })
+  const plan = useNotebookPlan({ projectSlug, callTool, mcpState })
   const definition = plan.wrapped?.value ?? null
   const toolboxConfiguration = useMemo<ReactToolboxConfiguration>(() => ({
     groups: [{ name: 'Cells', steps: toolboxStepSeeds }],
@@ -78,6 +81,42 @@ export function PlanNotebook({
     onGenerationLifecycle,
   })
 
+  // The SWD editor panel lives in a separate React root: prop updates never
+  // reach a mounted editor, so volatile data flows through the bridge and the
+  // editor's callbacks/props must be identity-stable ref-backed wrappers.
+  const [bridge] = useState(() => createEditorBridge({
+    mediaItems,
+    runningStepIds: new Set<string>(),
+    errors: new Map<string, string>(),
+    mcpState,
+  }))
+  useEffect(() => {
+    bridge.publish({ mediaItems, runningStepIds: run.runningStepIds, errors: run.errors, mcpState })
+  })
+  const callToolRef = useRef(callTool)
+  const runRef = useRef(run.run)
+  const openAssetRef = useRef(onOpenAsset)
+  useEffect(() => {
+    callToolRef.current = callTool
+    runRef.current = run.run
+    openAssetRef.current = onOpenAsset
+  }, [callTool, run.run, onOpenAsset])
+  const stableCallTool = useCallback<UseMcpResult['callTool']>(
+    (...args) => callToolRef.current(...args),
+    [],
+  )
+  const handleRunStep = useCallback((
+    step: NotebookPlanStep,
+    option: ModelOption,
+    provider: string,
+    values: Record<string, unknown>,
+  ) => {
+    void runRef.current(step, option, provider, values)
+  }, [])
+  const handleOpenAsset = useCallback((assetId: string) => {
+    openAssetRef.current?.(assetId)
+  }, [])
+
   useCanvasStepDecorations(rootRef, definition, mediaItems)
 
   const title = typeof definition?.properties.title === 'string' && definition.properties.title.trim()
@@ -85,7 +124,7 @@ export function PlanNotebook({
     : 'Plan notebook'
 
   return (
-    <section ref={rootRef} className="vc-notebook h-full min-h-0 flex flex-col">
+    <section ref={rootRef} className="vc-notebook h-full min-h-0 flex flex-col overflow-hidden border border-zinc-600/50">
       <header className="vc-notebook-header">
         <div>
           <span><BookOpen /> Plan</span>
@@ -100,6 +139,12 @@ export function PlanNotebook({
         </div>
       </header>
       {plan.error && <div className="vc-notebook-load-error">{plan.error}</div>}
+      {plan.legacy && (
+        <div className="vc-notebook-legacy-note">
+          This project has a plan from the old formula system. It opens here as an empty
+          notebook; saving any change will replace the old plan file.
+        </div>
+      )}
       {plan.wrapped ? (
         <SequentialWorkflowDesigner
           definition={plan.wrapped}
@@ -109,6 +154,7 @@ export function PlanNotebook({
           stepsConfiguration={stepsConfiguration}
           validatorConfiguration={validatorConfiguration}
           toolboxConfiguration={toolboxConfiguration}
+          extensions={notebookDesignerExtensions}
           controlBar={true}
           contextMenu={true}
           keyboard={true}
@@ -120,23 +166,17 @@ export function PlanNotebook({
           stepEditor={
             <NotebookStepEditor
               projectSlug={projectSlug}
-              callTool={callTool}
-              mcpState={mcpState}
-              definition={plan.wrapped.value}
-              mediaItems={mediaItems}
-              running={selectedStepId != null && run.runningStepIds.has(selectedStepId)}
-              error={selectedStepId == null ? null : run.errors.get(selectedStepId) ?? null}
-              onRun={(step, option, provider, values) => {
-                void run.run(step, option, provider, values)
-              }}
-              onOpenAsset={onOpenAsset}
+              callTool={stableCallTool}
+              bridge={bridge}
+              onRun={handleRunStep}
+              onOpenAsset={handleOpenAsset}
             />
           }
           controller={controller}
         />
-      ) : (
+      ) : plan.saveState === 'loading' ? (
         <div className="vc-notebook-loading"><Loader2 /> Loading Plan notebook</div>
-      )}
+      ) : null}
     </section>
   )
 }
