@@ -135,7 +135,6 @@ async function handleDryRunSuggest(
   const result = await provider.post.v1.chat.completions({
     model: MODEL,
     messages,
-    temperature: 0.3,
     max_completion_tokens: 2048,
   });
   const suggestions = parseSuggestionResponse(firstContent(result));
