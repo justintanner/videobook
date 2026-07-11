@@ -167,8 +167,7 @@
 }
 
 .vc-notebook-toolbox button:hover,
-.vc-notebook-input-button:hover,
-.vc-notebook-run:hover:not(:disabled) {
+.vc-notebook-input-button:hover {
   border-color: rgb(52 211 153 / 0.65);
   background: rgb(52 211 153 / 0.12);
 }
@@ -189,8 +188,28 @@
 }
 
 .vc-notebook-run:hover:not(:disabled) {
+  border-color: rgb(52 211 153 / 0.65);
   background: rgb(6 95 70 / 0.75);
   box-shadow: 0 0 12px rgb(52 211 153 / 0.2);
+}
+
+.vc-notebook-run:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.vc-notebook-run svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: none;
+}
+
+/* Layout-only cost chip; domain rules below set hue (must follow this block). */
+.vc-notebook-run b {
+  margin-left: auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: rgb(110 231 183);
 }
 
 .vc-notebook-run-image {
@@ -200,6 +219,7 @@
 }
 
 .vc-notebook-run-image:hover:not(:disabled) {
+  border-color: rgb(34 211 238 / 0.75);
   background: rgb(14 116 144 / 0.55);
   box-shadow: 0 0 12px rgb(34 211 238 / 0.22);
 }
@@ -215,30 +235,13 @@
 }
 
 .vc-notebook-run-video:hover:not(:disabled) {
+  border-color: rgb(167 139 250 / 0.75);
   background: rgb(91 33 182 / 0.45);
   box-shadow: 0 0 12px rgb(167 139 250 / 0.22);
 }
 
 .vc-notebook-run-video b {
   color: rgb(167 139 250);
-}
-
-.vc-notebook-run:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.vc-notebook-run svg {
-  width: 0.9rem;
-  height: 0.9rem;
-  flex: none;
-}
-
-.vc-notebook-run b {
-  margin-left: auto;
-  font-weight: 600;
-  color: rgb(110 231 183);
-  font-variant-numeric: tabular-nums;
 }
 
 .vc-notebook-run-busy svg:first-child {

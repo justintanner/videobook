@@ -45,6 +45,19 @@ describe('notebook generation editor order and domain themes', () => {
     expect(css).toContain('rgb(167 139 250')
     expect(css).toContain('.vc-notebook-run-image')
     expect(css).toContain('.vc-notebook-run-video')
+    // Domain cost/hover rules must follow the base `.vc-notebook-run b` / hover so cascade wins.
+    const baseB = css.indexOf('.vc-notebook-run b {')
+    const imageB = css.indexOf('.vc-notebook-run-image b {')
+    const videoB = css.indexOf('.vc-notebook-run-video b {')
+    expect(baseB).toBeGreaterThan(-1)
+    expect(imageB).toBeGreaterThan(baseB)
+    expect(videoB).toBeGreaterThan(baseB)
+    expect(css).toMatch(/\.vc-notebook-run-image:hover:not\(:disabled\)\s*\{[^}]*border-color:\s*rgb\(34 211 238/s)
+    expect(css).toMatch(/\.vc-notebook-run-video:hover:not\(:disabled\)\s*\{[^}]*border-color:\s*rgb\(167 139 250/s)
+    // Shared toolbox hover must not paint emerald borders onto domain Run buttons.
+    expect(css).not.toMatch(
+      /\.vc-notebook-toolbox button:hover,\s*\.vc-notebook-input-button:hover,\s*\.vc-notebook-run:hover/,
+    )
   })
 
   it('disables Run only while submit is in flight, not while asset is pending', () => {
