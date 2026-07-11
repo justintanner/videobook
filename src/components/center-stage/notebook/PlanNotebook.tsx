@@ -5,6 +5,7 @@ import {
   ConnectionLineType,
   ControlButton,
   Controls,
+  PanOnScrollMode,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
@@ -25,9 +26,9 @@ import {
   canConnect,
   connectSteps,
   disconnectSteps,
-  graphLayoutBounds,
   nextNotebookTrackPosition,
   notebookDropTarget,
+  notebookInitialViewport,
   notebookTrackLayout,
   reorderStepsOnTracks,
   removeSteps,
@@ -152,19 +153,8 @@ function NotebookCanvas({
     }
   }, [clearDropPreview, definition, flow.nodes, onAddAsset, onAddStep, reactFlow, selectedStepId])
   const onInit = useCallback((instance: ReactFlowInstance<NotebookFlowNode, Edge>) => {
-    const bounds = graphLayoutBounds(definition)
-    const depth = notebookTrackLayout(definition).rows.at(-1)?.depth ?? 0
-    const depthZoom = depth >= 4 ? 0.55 : depth === 3 ? 0.62 : 0.78
-    const graphWidth = Math.max(1, bounds.maxX - bounds.minX)
     const canvasWidth = canvasRef.current?.clientWidth ?? 720
-    const widthZoom = Math.max(0.38, (canvasWidth - 64) / graphWidth)
-    const zoom = Math.min(depthZoom, widthZoom)
-    const centerX = bounds.minX + graphWidth / 2
-    void instance.setViewport({
-      x: canvasWidth / 2 - centerX * zoom,
-      y: 88 - bounds.minY * zoom,
-      zoom,
-    })
+    void instance.setViewport(notebookInitialViewport(definition, canvasWidth))
   }, [definition])
   const addFromToolbox = useCallback((type: 'prompt' | 'image' | 'video') => {
     const layout = notebookTrackLayout(definition)
@@ -187,10 +177,11 @@ function NotebookCanvas({
   }, [definition, onAddStep, selectedStepId])
   const handleAutoLayout = useCallback(() => {
     onAutoLayout()
+    const canvasWidth = canvasRef.current?.clientWidth ?? 720
     window.setTimeout(() => {
-      reactFlow.fitView({ padding: 0.18, duration: 280, maxZoom: 1 })
+      void reactFlow.setViewport(notebookInitialViewport(definition, canvasWidth), { duration: 280 })
     }, 60)
-  }, [onAutoLayout, reactFlow])
+  }, [definition, onAutoLayout, reactFlow])
   const canvasNodes = useMemo<NotebookFlowNode[]>(() => flow.nodes.map((node) => (
     node.id === dropPreview?.parentId ? { ...node, className: 'vc-notebook-drop-parent' } : node
   )), [dropPreview?.parentId, flow.nodes])
@@ -229,6 +220,10 @@ function NotebookCanvas({
         maxZoom={1.5}
         colorMode="dark"
         proOptions={{ hideAttribution: true }}
+        panOnScroll
+        panOnScrollMode={PanOnScrollMode.Vertical}
+        panOnScrollSpeed={0.9}
+        zoomOnScroll={false}
         fitView={false}
       >
         <NotebookStageBoard definition={definition} selectedStepId={selectedStepId} preview={dropPreview} />

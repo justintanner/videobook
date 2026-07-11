@@ -8,6 +8,7 @@ import {
   stepInvalidReason,
   stepPosition,
   stepRunStatus,
+  quantizedTrackX,
 } from './model'
 import { NODE_DIMENSIONS, type NotebookFlowNode, type NotebookNodeData } from './nodes/nodeTypes'
 import type { NotebookPlanDefinition } from './types'
@@ -244,11 +245,18 @@ export function useNotebookFlow({
   }, [definition, mediaItems, stepCosts, runningStepIds, errors, selectedStepId])
 
   const onNodesChange = useCallback((changes: NodeChange<NotebookFlowNode>[]) => {
-    const positions = definition ? notebookTrackLayout(definition).positions : null
+    if (!definition) {
+      setNodes((current) => applyNodeChanges(changes, current))
+      return
+    }
+    const layout = notebookTrackLayout(definition)
+    const types = new Map(definition.sequence.map((step) => [step.id, step.type]))
     const constrained = changes.map((change) => {
       if (change.type !== 'position' || !change.position) return change
-      const locked = positions?.get(change.id)
-      return locked ? { ...change, position: { x: change.position.x, y: locked.y } } : change
+      const locked = layout.positions.get(change.id)
+      const type = types.get(change.id)
+      if (!locked || !type) return change
+      return { ...change, position: { x: quantizedTrackX(type, change.position.x), y: locked.y } }
     })
     setNodes((current) => applyNodeChanges(constrained, current))
   }, [definition])

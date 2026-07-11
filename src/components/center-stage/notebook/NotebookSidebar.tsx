@@ -567,6 +567,7 @@ function GenerationSidebar({
             </div>
           ) : (
             <RichPromptField
+              surfaceClassName="rounded border border-emerald-400/25 bg-black/35 focus-within:border-emerald-400/60"
               value={typeof mergedValues.prompt === 'string' ? mergedValues.prompt : ''}
               onChange={(value) => updateValues('prompt', value)}
               resolveRef={() => null}

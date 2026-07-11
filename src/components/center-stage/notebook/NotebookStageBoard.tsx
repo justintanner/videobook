@@ -2,6 +2,9 @@ import { useMemo } from 'react'
 import { ImageIcon, MessageSquareText, Video, View } from 'lucide-react'
 import { ViewportPortal } from '@xyflow/react'
 import {
+  NOTEBOOK_STAGE_BAND_HEIGHT,
+  NOTEBOOK_STAGE_BAND_HEADROOM,
+  NOTEBOOK_STAGE_RAIL_WIDTH,
   NOTEBOOK_TRACK_ORIGIN_X,
   NOTEBOOK_TRACK_ORIGIN_Y,
   NOTEBOOK_TRACK_ROW_PITCH,
@@ -9,6 +12,7 @@ import {
   NOTEBOOK_TRACK_SLOT_WIDTH,
   notebookNodeSizes,
   notebookTrackLayout,
+  stageBoardMetrics,
   type NotebookDropTarget,
 } from './model'
 import type { NotebookPlanDefinition } from './types'
@@ -40,19 +44,11 @@ export function NotebookStageBoard({
 }: NotebookStageBoardProps) {
   const layout = useMemo(() => notebookTrackLayout(definition), [definition])
   const selectedDepth = selectedStepId ? layout.depths.get(selectedStepId) : undefined
-  const maxDepth = Math.max(
-    0,
-    layout.rows.at(-1)?.depth ?? 0,
-    preview?.depth ?? 0,
-  )
-  const rowCount = maxDepth + 2
-  const maxSlots = Math.max(
-    4,
-    ...layout.rows.map((row) => row.stepIds.length + 1),
-    preview ? preview.slot + 2 : 0,
-  )
-  const boardWidth = Math.max(1120, NOTEBOOK_TRACK_ORIGIN_X * 2 + maxSlots * NOTEBOOK_TRACK_SLOT_PITCH)
-  const boardHeight = NOTEBOOK_TRACK_ORIGIN_Y + rowCount * NOTEBOOK_TRACK_ROW_PITCH
+  const metrics = stageBoardMetrics(layout, preview)
+  const rowCount = metrics.rowCount
+  const maxSlots = metrics.maxSlots
+  const boardWidth = metrics.width
+  const boardHeight = metrics.height
   const PreviewIcon = preview ? previewIcons[preview.type] : View
   const parent = preview?.parentId
     ? definition.sequence.find((step) => step.id === preview.parentId) ?? null
@@ -81,15 +77,14 @@ export function NotebookStageBoard({
                 key={depth}
                 style={{
                   width: boardWidth,
-                  transform: `translateY(${NOTEBOOK_TRACK_ORIGIN_Y + depth * NOTEBOOK_TRACK_ROW_PITCH - 32}px)`,
+                  height: NOTEBOOK_STAGE_BAND_HEIGHT,
+                  transform: `translateY(${NOTEBOOK_TRACK_ORIGIN_Y + depth * NOTEBOOK_TRACK_ROW_PITCH - NOTEBOOK_STAGE_BAND_HEADROOM}px)`,
                 }}
               >
-                <div className="vc-notebook-stage-label" style={{ left: NOTEBOOK_TRACK_ORIGIN_X }}>
-                  <span>Stage</span>
-                  <b>{stageCode(depth)}</b>
+                <div className="vc-notebook-stage-label" style={{ width: NOTEBOOK_STAGE_RAIL_WIDTH }}>
+                  <b>{`Stage ${stageCode(depth)}`}</b>
                   <em>{depth === 0 ? 'Ingress' : row?.stepIds.length ? 'Linked' : 'Next'}</em>
                 </div>
-                <div className="vc-notebook-stage-rail" />
                 {Array.from({ length: maxSlots }, (_, slot) => (
                   <span
                     className="vc-notebook-stage-slot"

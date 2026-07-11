@@ -188,8 +188,8 @@
 }
 
 .vc-node-gen {
-  width: 220px;
-  min-height: 248px;
+  width: 300px;
+  min-height: 340px;
 }
 
 .vc-node-image {
@@ -223,8 +223,8 @@
 
 .vc-node-input-thumb {
   display: grid;
-  width: 1.55rem;
-  height: 1.55rem;
+  width: 1.9rem;
+  height: 1.9rem;
   flex: none;
   place-items: center;
   overflow: hidden;
@@ -245,8 +245,8 @@
 }
 
 .vc-node-input-thumb svg {
-  width: 0.75rem;
-  height: 0.75rem;
+  width: 0.9rem;
+  height: 0.9rem;
   color: rgb(226 232 240 / 0.75);
 }
 
@@ -261,7 +261,7 @@
 .vc-node-hero {
   position: relative;
   display: flex;
-  height: 196px;
+  height: 290px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
@@ -309,8 +309,8 @@
 }
 
 .vc-node-hero > svg {
-  width: 2.3rem;
-  height: 2.3rem;
+  width: 3rem;
+  height: 3rem;
   color: rgb(167 243 208 / 0.58);
 }
 
@@ -349,7 +349,7 @@
   min-height: 3rem;
   padding: 0.55rem 0.65rem;
   border-top: 1px solid rgb(52 211 153 / 0.16);
-  font-size: 0.66rem;
+  font-size: 0.74rem;
 }
 
 .vc-node-meta span {
@@ -367,8 +367,8 @@
 
 .vc-node-prompt {
   display: flex;
-  width: 200px;
-  min-height: 124px;
+  width: 280px;
+  min-height: 168px;
   flex-direction: column;
   gap: 0.55rem;
   padding: 0.7rem;
@@ -380,8 +380,8 @@
 }
 
 .vc-node-prompt-icon svg {
-  width: 1rem;
-  height: 1rem;
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
 .vc-node-prompt p {
@@ -389,16 +389,16 @@
   overflow: hidden;
   margin: 0;
   color: rgb(254 243 199 / 0.76);
-  font-size: 0.68rem;
+  font-size: 0.78rem;
   line-height: 1.45;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
 }
 
 .vc-node-asset {
   display: flex;
-  width: 200px;
-  min-height: 142px;
+  width: 280px;
+  min-height: 196px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -408,8 +408,8 @@
 }
 
 .vc-node-asset > svg {
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   color: rgb(110 231 183 / 0.65);
 }
 
@@ -419,7 +419,7 @@
   padding: 0.45rem 0.6rem;
   border-top: 1px solid rgb(52 211 153 / 0.16);
   color: rgb(167 243 208 / 0.8);
-  font-size: 0.66rem;
+  font-size: 0.74rem;
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -986,69 +986,67 @@
 .vc-notebook-stage-row {
   position: absolute;
   left: 0;
-  height: 280px;
-  border-top: 1px solid rgb(52 211 153 / 0.13);
-  border-bottom: 1px solid rgb(52 211 153 / 0.07);
+  border: 1px solid rgb(52 211 153 / 0.22);
+  border-radius: 0.6rem;
   background:
-    linear-gradient(90deg, rgb(52 211 153 / 0.055), transparent 15%),
-    linear-gradient(180deg, rgb(52 211 153 / 0.018), transparent 50%, rgb(0 0 0 / 0.1));
-  transition: border-color 160ms ease, background 160ms ease;
+    linear-gradient(90deg, rgb(52 211 153 / 0.06), transparent 14%),
+    linear-gradient(180deg, rgb(52 211 153 / 0.03), rgb(0 0 0 / 0.14));
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
 .vc-notebook-stage-row-active {
-  border-top-color: rgb(110 231 183 / 0.35);
+  border-color: rgb(110 231 183 / 0.5);
   background:
     linear-gradient(90deg, rgb(52 211 153 / 0.11), transparent 22%),
     linear-gradient(180deg, rgb(52 211 153 / 0.035), transparent 58%);
+  box-shadow: inset 0 0 32px rgb(52 211 153 / 0.07);
 }
 
 .vc-notebook-stage-label {
   position: absolute;
-  top: 0.65rem;
-  left: 1rem;
-  display: grid;
-  grid-template-columns: auto auto;
-  align-items: baseline;
-  gap: 0 0.35rem;
+  inset-block: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  border-right: 1px dashed rgb(52 211 153 / 0.18);
+  border-radius: 0.6rem 0 0 0.6rem;
+  background: linear-gradient(180deg, rgb(52 211 153 / 0.05), rgb(0 0 0 / 0.18));
   font-family: var(--font-mono);
   text-transform: uppercase;
 }
 
-.vc-notebook-stage-label span {
-  color: rgb(110 231 183 / 0.46);
-  font-size: 0.52rem;
-  letter-spacing: 0.16em;
-}
-
 .vc-notebook-stage-label b {
-  color: rgb(110 231 183 / 0.74);
-  font-size: 0.76rem;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  color: rgb(110 231 183 / 0.66);
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.24em;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 8px var(--vc-glow);
+  text-shadow: 0 0 14px var(--vc-glow);
+  white-space: nowrap;
 }
 
 .vc-notebook-stage-label em {
-  grid-column: 1 / -1;
-  color: rgb(110 231 183 / 0.25);
-  font-size: 0.48rem;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  color: rgb(110 231 183 / 0.32);
+  font-size: 0.55rem;
   font-style: normal;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.3em;
+  white-space: nowrap;
 }
 
-.vc-notebook-stage-rail {
-  position: absolute;
-  top: 2.85rem;
-  right: 0;
-  left: 5rem;
-  height: 1px;
-  background: linear-gradient(90deg, rgb(52 211 153 / 0.28), rgb(52 211 153 / 0.025) 65%, transparent);
-}
 
 .vc-notebook-stage-slot {
   position: absolute;
-  top: 2.55rem;
-  height: 220px;
-  border: 1px dashed rgb(52 211 153 / 0.07);
+  top: 36px;
+  height: 340px;
+  border: 1px dashed rgb(52 211 153 / 0.16);
+  border-radius: 0.28rem;
   background:
     linear-gradient(135deg, rgb(52 211 153 / 0.14) 0 1px, transparent 1px) top left / 12px 12px no-repeat,
     linear-gradient(225deg, rgb(52 211 153 / 0.14) 0 1px, transparent 1px) top right / 12px 12px no-repeat,
@@ -1085,7 +1083,7 @@
   justify-content: center;
   flex-direction: column;
   gap: 0.55rem;
-  border: 1px dashed var(--vc-line-strong);
+  border: 2px dashed var(--vc-line-strong);
   border-radius: 0.3rem;
   background: rgb(6 78 59 / 0.34);
   box-shadow: inset 0 0 28px rgb(52 211 153 / 0.08), 0 0 20px var(--vc-glow);
@@ -1095,12 +1093,12 @@
 }
 
 .vc-notebook-drop-card svg {
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 2.25rem;
+  height: 2.25rem;
 }
 
 .vc-notebook-drop-card span {
-  font-size: 0.58rem;
+  font-size: 0.66rem;
   letter-spacing: 0.1em;
 }
 
@@ -1229,14 +1227,14 @@
   background: linear-gradient(90deg, rgb(2 10 7 / 0.96), rgb(4 17 12 / 0.86));
   color: rgb(167 243 208 / 0.58);
   font-family: var(--font-mono);
-  font-size: 0.51rem;
+  font-size: 0.6rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .vc-node-kicker b {
   color: var(--vc-node-accent);
-  font-size: 0.5rem;
+  font-size: 0.56rem;
   font-weight: 700;
 }
 

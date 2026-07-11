@@ -16,6 +16,7 @@ import {
   graphLayoutBounds,
   latestAssetId,
   moveSteps,
+  notebookNodeSizes,
   notebookDropTarget,
   notebookTrackDepths,
   notebookTrackLayout,
@@ -338,10 +339,10 @@ describe('notebook model', () => {
     }, null)
     expect(nearest).toMatchObject({ parentId: 'asset', depth: 1 })
 
-    const promptCenter = promptPosition.x + 100
-    const assetCenter = assetPosition.x + 100
+    const promptCenter = promptPosition.x + notebookNodeSizes.prompt.width / 2
+    const assetCenter = assetPosition.x + notebookNodeSizes.asset.width / 2
     const ambiguous = notebookDropTarget(graph, 'image', {
-      x: (promptCenter + assetCenter) / 2 - 110,
+      x: (promptCenter + assetCenter) / 2 - notebookNodeSizes.image.width / 2,
       y: NOTEBOOK_TRACK_ORIGIN_Y + NOTEBOOK_TRACK_ROW_PITCH,
     }, null)
     expect(ambiguous).toMatchObject({ parentId: null, depth: 0 })

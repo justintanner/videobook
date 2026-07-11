@@ -24,17 +24,24 @@ export interface GraphLayoutBounds {
 }
 
 export const notebookNodeSizes: Record<NotebookPlanStep['type'], { width: number; height: number }> = {
-  prompt: { width: 200, height: 124 },
-  image: { width: 220, height: 248 },
-  video: { width: 220, height: 248 },
-  asset: { width: 200, height: 142 },
+  prompt: { width: 280, height: 168 },
+  image: { width: 300, height: 340 },
+  video: { width: 300, height: 340 },
+  asset: { width: 280, height: 196 },
 }
 
-export const NOTEBOOK_TRACK_ORIGIN_X = 80
+// Layout invariants — .vc-node-* CSS sizes and .vc-node-hero MUST mirror notebookNodeSizes.
+// SLOT_PITCH - SLOT_WIDTH = 48px inter-slot gap; ORIGIN_X = STAGE_RAIL_WIDTH + 24 clearance;
+// STAGE_BAND_HEIGHT = STAGE_BAND_HEADROOM + max card height + 24 bottom pad; ROW_PITCH = BAND_HEIGHT + 40 gap.
+export const NOTEBOOK_TRACK_ORIGIN_X = 112
 export const NOTEBOOK_TRACK_ORIGIN_Y = 48
-export const NOTEBOOK_TRACK_SLOT_PITCH = 268
-export const NOTEBOOK_TRACK_ROW_PITCH = 320
-export const NOTEBOOK_TRACK_SLOT_WIDTH = 220
+export const NOTEBOOK_TRACK_SLOT_PITCH = 348
+export const NOTEBOOK_TRACK_ROW_PITCH = 440
+export const NOTEBOOK_TRACK_SLOT_WIDTH = 300
+export const NOTEBOOK_STAGE_RAIL_WIDTH = 88
+export const NOTEBOOK_STAGE_BAND_HEADROOM = 36
+export const NOTEBOOK_STAGE_BAND_HEIGHT = 400
+const NOTEBOOK_TRACK_MAX_CARD_HEIGHT = Math.max(...Object.values(notebookNodeSizes).map((size) => size.height))
 
 export interface NotebookTrackRow {
   depth: number
@@ -230,7 +237,7 @@ function trackLayoutFromRows(
     width: NOTEBOOK_TRACK_ORIGIN_X * 2
       + maxSlots * NOTEBOOK_TRACK_SLOT_PITCH
       - (NOTEBOOK_TRACK_SLOT_PITCH - NOTEBOOK_TRACK_SLOT_WIDTH),
-    height: NOTEBOOK_TRACK_ORIGIN_Y * 2 + maxDepth * NOTEBOOK_TRACK_ROW_PITCH + 248,
+    height: NOTEBOOK_TRACK_ORIGIN_Y * 2 + maxDepth * NOTEBOOK_TRACK_ROW_PITCH + NOTEBOOK_TRACK_MAX_CARD_HEIGHT,
   }
 }
 
@@ -247,10 +254,17 @@ export function snapDefinitionToTracks(definition: NotebookPlanDefinition): Note
   }))
 }
 
-function nearestTrackSlot(step: NotebookPlanStep, x: number): number {
-  const size = notebookNodeSizes[step.type]
+function nearestTrackSlot(type: NotebookPlanStep['type'], x: number): number {
+  const size = notebookNodeSizes[type]
   const offset = (NOTEBOOK_TRACK_SLOT_WIDTH - size.width) / 2
   return Math.max(0, Math.round((x - NOTEBOOK_TRACK_ORIGIN_X - offset) / NOTEBOOK_TRACK_SLOT_PITCH))
+}
+
+export function quantizedTrackX(type: NotebookPlanStep['type'], x: number): number {
+  const size = notebookNodeSizes[type]
+  return NOTEBOOK_TRACK_ORIGIN_X
+    + nearestTrackSlot(type, x) * NOTEBOOK_TRACK_SLOT_PITCH
+    + (NOTEBOOK_TRACK_SLOT_WIDTH - size.width) / 2
 }
 
 export function reorderStepsOnTracks(
@@ -273,7 +287,7 @@ export function reorderStepsOnTracks(
     if (!step) continue
     const depth = layout.depths.get(step.id) ?? 0
     const rowMoves = movesByDepth.get(depth) ?? []
-    rowMoves.push({ step, slot: nearestTrackSlot(step, move.position.x) })
+    rowMoves.push({ step, slot: nearestTrackSlot(step.type, move.position.x) })
     movesByDepth.set(depth, rowMoves)
   }
   for (const [depth, rowMoves] of movesByDepth) {
@@ -322,7 +336,7 @@ export function notebookDropTarget(
   const requestedDepth = type === 'prompt'
     ? 0
     : Math.max(0, Math.round((pointer.y - NOTEBOOK_TRACK_ORIGIN_Y) / NOTEBOOK_TRACK_ROW_PITCH))
-  const slot = nearestTrackSlot(previewStep, pointer.x)
+  const slot = nearestTrackSlot(type, pointer.x)
   if (type === 'prompt' || requestedDepth === 0) {
     return { position: positionForTrackSlot(previewStep, 0, slot), parentId: null, depth: 0, slot }
   }
@@ -351,6 +365,40 @@ export function notebookDropTarget(
     depth,
     slot,
   }
+}
+
+export function stageBoardMetrics(
+  layout: NotebookTrackLayout,
+  preview?: NotebookDropTarget | null,
+): { rowCount: number; maxSlots: number; width: number; height: number } {
+  const maxDepth = Math.max(
+    0,
+    layout.rows.at(-1)?.depth ?? 0,
+    preview?.depth ?? 0,
+  )
+  const rowCount = maxDepth + 2
+  const maxSlots = Math.max(
+    3,
+    ...layout.rows.map((row) => row.stepIds.length + 1),
+    preview ? preview.slot + 2 : 0,
+  )
+  return {
+    rowCount,
+    maxSlots,
+    width: NOTEBOOK_TRACK_ORIGIN_X * 2 + maxSlots * NOTEBOOK_TRACK_SLOT_PITCH,
+    height: NOTEBOOK_TRACK_ORIGIN_Y + rowCount * NOTEBOOK_TRACK_ROW_PITCH,
+  }
+}
+
+export function notebookInitialViewport(
+  definition: NotebookPlanDefinition,
+  canvasWidth: number,
+): { x: number; y: number; zoom: number } {
+  const metrics = stageBoardMetrics(notebookTrackLayout(definition))
+  const zoom = Math.min(1, Math.max(0.5, (canvasWidth - 32) / metrics.width))
+  const x = Math.max(16, (canvasWidth - metrics.width * zoom) / 2)
+  const y = 16 - (NOTEBOOK_TRACK_ORIGIN_Y - NOTEBOOK_STAGE_BAND_HEADROOM) * zoom
+  return { x, y, zoom }
 }
 
 export function assetSlugKind(slug: string): 'image' | 'video' | 'audio' | 'character' | null {
