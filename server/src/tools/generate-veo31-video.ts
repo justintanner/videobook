@@ -2,6 +2,7 @@ import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import type { GoogleVeo31Model } from "../payload-builders.js";
 import { queue } from "../queue.js";
+import { rewriteImageSlugMentions, stripSlugMentions } from "../google-flow-refs.js";
 import type { ToolDef } from "./tool-def.js";
 import { resolveImageSlug, slugify, type RefInput } from "./_seedance2-shared.js";
 
@@ -96,6 +97,16 @@ function makeVeo31VideoTool(
         imageInputs.push(r.value);
       }
 
+      // Google Flow prompts only resolve positional @-markers; a raw @slug
+      // mention 400s at submit (see generate-google-omni-video.ts).
+      const normalizedPrompt = stripSlugMentions(
+        rewriteImageSlugMentions(prompt, imgs),
+        [
+          ...(firstFrameSlug !== undefined ? [firstFrameSlug] : []),
+          ...(lastFrameSlug !== undefined ? [lastFrameSlug] : []),
+        ],
+      );
+
       const modelSlugLiteral = VEO31_SLUGS[model];
       const videoName = `${modelSlugLiteral}-${slugify(prompt) || Date.now().toString(36)}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
@@ -120,7 +131,7 @@ function makeVeo31VideoTool(
         ...(lastFrame ? { lastFrame } : {}),
         imageInputs,
         sourceImageIds,
-        prompt,
+        prompt: normalizedPrompt,
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
         ...(duration !== undefined ? { duration } : {}),
         ...(seed !== undefined ? { seed } : {}),

@@ -313,14 +313,18 @@ function GenerationSidebar({
         : [],
     [mergedValues.character_refs],
   )
+  // Keyed by canonical id (the `-imgs:N` suffix drifts as characters gain or
+  // lose images) so persisted refs still resolve their live entity — without
+  // this, handles fall back to the raw ref and @<handle> mentions never
+  // rewrite to @character_N, which Google Flow rejects with a 400.
   const charMap = useMemo(
-    () => new Map(charEntities.entities.map((e) => [e.ref, e])),
+    () => new Map(charEntities.entities.map((e) => [canonicalCharacterId(e.ref), e])),
     [charEntities.entities],
   )
   const charMentions = useMemo(
     () =>
       characterRefs.map((ref, i) => {
-        const name = charMap.get(ref)?.displayName ?? ref
+        const name = charMap.get(canonicalCharacterId(ref))?.displayName ?? ref
         return { ref, handle: characterHandle(name), label: name, n: i + 1 }
       }),
     [characterRefs, charMap],
@@ -792,7 +796,7 @@ function CharacterInputRows({
   return (
     <>
       {characterRefs.map((ref) => {
-        const entity = charMap.get(ref)
+        const entity = charMap.get(canonicalCharacterId(ref))
         const label = entity?.displayName || ref
         return (
           <div className="vc-notebook-input-chip" key={ref}>

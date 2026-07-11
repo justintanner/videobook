@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { characterRefImageCount, OMNI_MAX_REFERENCE_IMAGES, totalOmniReferenceImages } from "./google-flow-refs.js";
+import {
+  characterRefImageCount,
+  OMNI_MAX_REFERENCE_IMAGES,
+  rewriteImageSlugMentions,
+  stripSlugMentions,
+  totalOmniReferenceImages,
+} from "./google-flow-refs.js";
 
 describe("characterRefImageCount", () => {
   it("parses -imgs:2", () => {
@@ -35,5 +41,44 @@ describe("totalOmniReferenceImages", () => {
 
   it("treats suffix-less characters as one image each", () => {
     expect(totalOmniReferenceImages(2, ["character:a", "character:b"])).toBe(4);
+  });
+});
+
+describe("rewriteImageSlugMentions", () => {
+  it("rewrites @slug to the positional @referenceImage_N marker", () => {
+    expect(rewriteImageSlugMentions("fade-in to @img-da-set slowly", ["img-da-set"]))
+      .toBe("fade-in to @referenceImage_1 slowly");
+  });
+
+  it("numbers markers by image_slugs position, tolerating @-prefixed slugs", () => {
+    expect(rewriteImageSlugMentions("@img-b then @img-a", ["@img-a", "@img-b"]))
+      .toBe("@referenceImage_2 then @referenceImage_1");
+  });
+
+  it("does not rewrite a slug inside a longer slug mention", () => {
+    expect(rewriteImageSlugMentions("@img-da-set and @img-da", ["img-da", "img-da-set"]))
+      .toBe("@referenceImage_2 and @referenceImage_1");
+  });
+
+  it("leaves unrelated mentions and plain text alone", () => {
+    expect(rewriteImageSlugMentions("@character_1 waves at @img-x", ["img-y"]))
+      .toBe("@character_1 waves at @img-x");
+  });
+});
+
+describe("stripSlugMentions", () => {
+  it("removes clip mentions, which have no inline marker form", () => {
+    expect(stripSlugMentions("zoom into @vid-motion suddenly", ["@vid-motion"]))
+      .toBe("zoom into suddenly");
+  });
+
+  it("removes a mention at the start of the prompt", () => {
+    expect(stripSlugMentions("@vid-motion but slower", ["vid-motion"]))
+      .toBe(" but slower");
+  });
+
+  it("keeps mentions of other slugs", () => {
+    expect(stripSlugMentions("keep @img-ref here", ["vid-motion"]))
+      .toBe("keep @img-ref here");
   });
 });

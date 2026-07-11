@@ -655,14 +655,16 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         : [],
     [formValues.character_refs],
   );
+  // Keyed by canonical id (the `-imgs:N` suffix drifts as characters gain or
+  // lose images) so persisted refs still resolve their live entity.
   const charMap = useMemo(
-    () => new Map(charEntities.entities.map((e) => [e.ref, e])),
+    () => new Map(charEntities.entities.map((e) => [canonicalCharacterId(e.ref), e])),
     [charEntities.entities],
   );
   const charMentions = useMemo(
     () =>
       characterRefs.map((ref, i) => {
-        const name = charMap.get(ref)?.displayName ?? ref;
+        const name = charMap.get(canonicalCharacterId(ref))?.displayName ?? ref;
         return { ref, handle: characterHandle(name), label: name, n: i + 1 };
       }),
     [characterRefs, charMap],
@@ -730,7 +732,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       // Hide character chips when the active mode doesn't own character_refs.
       if (modeVisible && !modeVisible.has('character_refs')) return [];
       return characterRefs.map((ref) => {
-        const e = charMap.get(ref);
+        const e = charMap.get(canonicalCharacterId(ref));
         return {
           ref,
           name: e?.displayName ?? ref,
@@ -798,7 +800,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         const m = charMentions.find((c) => c.handle === token.handle);
         if (!m) return null;
         return {
-          thumbnailSrc: charMap.get(m.ref)?.thumbnailUrl ?? null,
+          thumbnailSrc: charMap.get(canonicalCharacterId(m.ref))?.thumbnailUrl ?? null,
           type: 'character',
           label: m.label !== m.ref ? m.label : `Character ${m.n}`,
           badge: String(m.n),
@@ -808,7 +810,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         const m = charMentions.find((c) => c.n === token.n);
         if (!m) return null;
         return {
-          thumbnailSrc: charMap.get(m.ref)?.thumbnailUrl ?? null,
+          thumbnailSrc: charMap.get(canonicalCharacterId(m.ref))?.thumbnailUrl ?? null,
           type: 'character',
           label: m.label !== m.ref ? m.label : `Character ${m.n}`,
           badge: String(m.n),

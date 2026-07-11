@@ -73,6 +73,38 @@ describe("generate_google_omni_video tool", () => {
     expect(parsed.source_videos).toEqual([videoAsset.value.assetId]);
   });
 
+  it("normalizes prompt @slug mentions to positional markers before enqueue", async () => {
+    const fs = createFs({ projectsDir: tempDir });
+    const imageAsset = await fs.createAsset("img", "da-set", "test-proj");
+    const videoAsset = await fs.createAsset("vid", "motion", "test-proj");
+    if (!imageAsset.ok) throw new Error("Failed to create image asset");
+    if (!videoAsset.ok) throw new Error("Failed to create video asset");
+
+    await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
+    await fs.writeFile(videoAsset.value.assetId, "original.mp4", Buffer.from("fake mp4"), "test-proj");
+
+    const result = await client.callTool({
+      name: "generate_google_omni_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: `fade to @${imageAsset.value.assetId} inside @${videoAsset.value.assetId} while @character_1 waves`,
+        image_slugs: [`@${imageAsset.value.assetId}`],
+        video_slug: `@${videoAsset.value.assetId}`,
+        character_refs: ["character:bbb"],
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    const meta = await fs.readMetadata<{ prompt: string }>(
+      parsed.vid_asset_id, "generation-request", "test-proj",
+    );
+    expect(meta.ok && meta.value).toBeTruthy();
+    // Image slug → @referenceImage_1; clip mention removed (no inline form);
+    // already-positional @character_1 untouched.
+    expect(meta.value!.prompt).toBe("fade to @referenceImage_1 inside while @character_1 waves");
+  });
+
   it("enqueues with a first-frame image slug before provider upload", async () => {
     const fs = createFs({ projectsDir: tempDir });
     const imageAsset = await fs.createAsset("img", "start-frame", "test-proj");

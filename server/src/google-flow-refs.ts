@@ -33,3 +33,41 @@ export function totalOmniReferenceImages(imageCount: number, characterRefs: stri
 
 export const OMNI_MAX_REFERENCE_IMAGES = 7;
 export const OMNI_V2V_MAX_REFERENCE_IMAGES = 5;
+
+// Google Flow prompts support inline positional mentions (@character_N,
+// @referenceImage_N, @referenceAudio_N) that resolve to the matching body
+// param — any other @-token the API cannot resolve is rejected with an opaque
+// 400, so videocity @slug mentions must be rewritten (or removed) at submit.
+
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Mention boundary mirrors the client tokenizer (richPromptTokens): a slug
+// mention ends at any char that is not a word char or dash, so "@img-da"
+// never matches inside "@img-da-set". Longest slug first for the same reason.
+function slugMentionEntries(slugs: readonly string[]): { slug: string; index: number }[] {
+  return slugs
+    .map((raw, index) => ({ slug: raw.replace(/^@/, "").trim(), index }))
+    .filter((e) => e.slug !== "")
+    .sort((a, b) => b.slug.length - a.slug.length);
+}
+
+/** Rewrite "@<slug>" mentions to the positional "@referenceImage_N" marker,
+ *  where N is the slug's 1-based position in `imageSlugs` (the same order the
+ *  payload builder assigns referenceImage_N body params from). */
+export function rewriteImageSlugMentions(prompt: string, imageSlugs: readonly string[]): string {
+  let out = prompt;
+  for (const { slug, index } of slugMentionEntries(imageSlugs)) {
+    out = out.replace(new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"), `@referenceImage_${index + 1}`);
+  }
+  return out;
+}
+
+/** Remove "@<slug>" mentions that have no inline marker form (reference video
+ *  clips, first frames) — the asset still rides its body param. */
+export function stripSlugMentions(prompt: string, slugs: readonly string[]): string {
+  let out = prompt;
+  for (const { slug } of slugMentionEntries(slugs)) {
+    out = out.replace(new RegExp(` ?@${escapeRe(slug)}(?![\\w-])`, "g"), "");
+  }
+  return out;
+}

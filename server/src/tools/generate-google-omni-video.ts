@@ -1,7 +1,7 @@
 import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
-import { totalOmniReferenceImages, canonicalCharacterId } from "../google-flow-refs.js";
+import { totalOmniReferenceImages, canonicalCharacterId, rewriteImageSlugMentions, stripSlugMentions } from "../google-flow-refs.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlug, resolveVideoSlug, slugify, type RefInput } from "./_seedance2-shared.js";
 
@@ -41,7 +41,7 @@ const GOOGLE_OMNI_ASPECT_RATIOS = ["16:9", "9:16"] as const;
 //     via startFrameIndex_1 / endFrameIndex_1 (derived from the clip timecodes).
 const generateGoogleOmniVideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().max(20000).describe("Multimodal video generation prompt (max 20000 characters)"),
+  prompt: z.string().max(20000).describe("Multimodal video generation prompt (max 20000 characters). Inline mentions must use the positional markers @referenceImage_1..7 / @character_1..7 / @referenceAudio_1..5 (matching the body param order); @<image-slug> mentions are rewritten to @referenceImage_N automatically, and reference clips cannot be mentioned inline"),
   first_frame_slug: z.string().optional().describe("First-frame image asset for image-to-video (e.g., @img-start); not combinable with image_slugs or video_slug"),
   image_slugs: z.array(z.string()).max(7).optional().describe("Reference image @slugs (0-7, or 0-5 with a reference clip, e.g., @img-style); not combinable with first_frame_slug"),
   video_slug: z.string().optional().describe("Reference video clip @slug for video editing (one clip, e.g., @vid-motion); not combinable with first_frame_slug"),
@@ -164,6 +164,19 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
         videoInput = r.value;
       }
 
+      // Google Flow resolves inline @-mentions against the positional markers
+      // only (@referenceImage_N / @character_N / @referenceAudio_N); any other
+      // @-token — an asset slug, a character handle — draws an opaque 400 at
+      // submit. Rewrite image-slug mentions to their positional marker and
+      // drop clip/first-frame mentions, which have no inline form.
+      const normalizedPrompt = stripSlugMentions(
+        rewriteImageSlugMentions(prompt, imgs),
+        [
+          ...(videoSlug !== undefined ? [videoSlug] : []),
+          ...(firstFrameSlug !== undefined ? [firstFrameSlug] : []),
+        ],
+      );
+
       const videoName = `${SLUG}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
@@ -186,7 +199,7 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
         ...(videoInput ? { videoInput } : {}),
         sourceImageIds,
         sourceVideoIds,
-        prompt,
+        prompt: normalizedPrompt,
         ...(duration !== undefined ? { duration } : {}),
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
         ...(seed !== undefined ? { seed } : {}),
