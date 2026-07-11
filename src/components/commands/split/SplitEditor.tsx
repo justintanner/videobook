@@ -261,14 +261,19 @@ export function SplitEditor({
             />
           </div>
 
-          <div className="shrink-0 h-[68px] grid grid-cols-[110px_1fr] overflow-hidden rounded-md border border-neutral-700/50 bg-neutral-800/30">
+          <div className="shrink-0 h-[112px] grid grid-cols-[110px_1fr] overflow-hidden rounded-md border border-neutral-700/50 bg-neutral-800/30">
             <div className="flex items-center px-3 border-r border-neutral-700/40">
               <span className="font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-500">
                 Transcript
               </span>
             </div>
             <div className="min-w-0 overflow-hidden">
-              <TranscriptPanel state={transcriptState} currentTime={currentTime} compact />
+              <TranscriptPanel
+                state={transcriptState}
+                currentTime={currentTime}
+                splitSec={splitSec}
+                onSelectTime={setSplitSec}
+              />
             </div>
           </div>
 

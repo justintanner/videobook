@@ -1,17 +1,26 @@
-import { useEffect, useRef } from 'react';
-import { cn } from '@/lib/utils';
-import { Loader2 } from 'lucide-react';
-import { EmptyState } from '@/components/ui/EmptyState';
-import type { TimedCue, TranscriptState } from './types';
+import { useEffect, useRef } from 'react'
+import { cn } from '@/lib/utils'
+import { Loader2 } from 'lucide-react'
+import { EmptyState } from '@/components/ui/EmptyState'
+import type { TimedCue, TranscriptState } from './types'
+import { findActiveCueIndex } from './utils'
 
 interface TranscriptPanelProps {
-  state: TranscriptState;
-  currentTime: number;
+  state: TranscriptState
+  currentTime: number
+  splitSec?: number | null
+  onSelectTime?: (sec: number) => void
   compact?: boolean
 }
 
-export function TranscriptPanel({ state, currentTime, compact = false }: TranscriptPanelProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+export function TranscriptPanel({
+  state,
+  currentTime,
+  splitSec = null,
+  onSelectTime,
+  compact = false,
+}: TranscriptPanelProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   if (state.status === 'loading') {
     return (
@@ -19,15 +28,15 @@ export function TranscriptPanel({ state, currentTime, compact = false }: Transcr
         <Loader2 className="w-4 h-4 animate-spin text-neutral-500" />
         <span className="font-mono text-[11px] text-neutral-500">Loading transcript…</span>
       </div>
-    );
+    )
   }
 
   if (state.status === 'missing') {
-    return <EmptyState size="sm" className="flex items-center justify-center h-full">No transcript</EmptyState>;
+    return <EmptyState size="sm" className="flex items-center justify-center h-full">No transcript</EmptyState>
   }
 
   if (state.status === 'silence') {
-    return <EmptyState size="sm" className="flex items-center justify-center h-full">No dialog detected</EmptyState>;
+    return <EmptyState size="sm" className="flex items-center justify-center h-full">No dialog detected</EmptyState>
   }
 
   if (state.status === 'error') {
@@ -35,22 +44,22 @@ export function TranscriptPanel({ state, currentTime, compact = false }: Transcr
       <div className="px-3 py-2 font-mono text-[11px] text-red-300 break-words">
         {state.message}
       </div>
-    );
+    )
   }
 
   if (state.status === 'timed') {
-    if (compact) {
-      const activeIndex = findActiveCueIndex(state.cues, currentTime)
-      const activeCue = activeIndex >= 0 ? state.cues[activeIndex] : null
-      return (
-        <div className="flex h-full items-center px-3 py-2">
-          <p className="line-clamp-2 font-mono text-[12px] leading-relaxed text-neutral-300">
-            {activeCue?.text ?? 'No speech at this boundary'}
-          </p>
-        </div>
-      )
+    if (state.cues.length === 0) {
+      return <EmptyState size="sm" className="flex items-center justify-center h-full">No speech at this boundary</EmptyState>
     }
-    return <TimedTranscript cues={state.cues} currentTime={currentTime} scrollRef={scrollRef} />;
+    return (
+      <TimedTranscript
+        cues={state.cues}
+        currentTime={currentTime}
+        splitSec={splitSec}
+        onSelectTime={onSelectTime}
+        scrollRef={scrollRef}
+      />
+    )
   }
 
   return (
@@ -59,66 +68,85 @@ export function TranscriptPanel({ state, currentTime, compact = false }: Transcr
         {state.text}
       </p>
     </div>
-  );
+  )
 }
 
 function TimedTranscript({
   cues,
   currentTime,
+  splitSec,
+  onSelectTime,
   scrollRef,
 }: {
-  cues: TimedCue[];
-  currentTime: number;
-  scrollRef: React.RefObject<HTMLDivElement | null>;
+  cues: TimedCue[]
+  currentTime: number
+  splitSec: number | null
+  onSelectTime?: (sec: number) => void
+  scrollRef: React.RefObject<HTMLDivElement | null>
 }) {
-  const activeIndex = findActiveCueIndex(cues, currentTime);
-  const activeRef = useRef<HTMLSpanElement | null>(null);
+  const playbackIndex = findActiveCueIndex(cues, currentTime)
+  const splitIndex = splitSec != null ? findActiveCueIndex(cues, splitSec) : -1
+  const scrollTargetIndex = (
+    splitSec != null && Math.abs(currentTime - splitSec) <= 0.08
+      ? splitIndex
+      : playbackIndex
+  )
 
   useEffect(() => {
-    if (activeRef.current && scrollRef.current) {
-      const container = scrollRef.current;
-      const el = activeRef.current;
-      const containerRect = container.getBoundingClientRect();
-      const elRect = el.getBoundingClientRect();
-      if (elRect.top < containerRect.top || elRect.bottom > containerRect.bottom) {
-        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      }
+    const container = scrollRef.current
+    if (!container || scrollTargetIndex < 0) return
+    const el = container.querySelector<HTMLElement>(`[data-cue-index="${scrollTargetIndex}"]`)
+    if (!el) return
+    const containerRect = container.getBoundingClientRect()
+    const elRect = el.getBoundingClientRect()
+    if (elRect.top < containerRect.top || elRect.bottom > containerRect.bottom) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
     }
-  }, [activeIndex, scrollRef]);
+  }, [scrollTargetIndex, scrollRef])
+
+  const clickable = Boolean(onSelectTime)
 
   return (
     <div ref={scrollRef} className="h-full overflow-y-auto px-3 py-2">
       <div className="flex flex-wrap gap-x-0.5 gap-y-1">
         {cues.map((cue, i) => {
-          const isActive = i === activeIndex;
-          const isPast = cue.end < currentTime;
+          const isPlayback = i === playbackIndex
+          const isSplit = i === splitIndex
+          const isPast = cue.end < currentTime
           return (
             <span
               key={`cue-${cue.start}-${i}`}
-              ref={isActive ? activeRef : undefined}
+              data-cue-index={i}
+              role={clickable ? 'button' : undefined}
+              tabIndex={clickable ? 0 : undefined}
+              onClick={clickable ? () => onSelectTime?.(cue.start) : undefined}
+              onKeyDown={clickable ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onSelectTime?.(cue.start)
+                }
+              } : undefined}
+              title={clickable ? `Set split at ${cue.start.toFixed(2)}s` : undefined}
               className={cn(
-                'font-mono text-[12px] leading-relaxed rounded px-0.5 transition-colors duration-100',
-                isActive && 'bg-cyan-500/25 text-cyan-200',
-                !isActive && isPast && 'text-neutral-400',
-                !isActive && !isPast && 'text-neutral-500',
+                'relative font-mono text-[12px] leading-relaxed rounded px-0.5 transition-colors duration-100',
+                clickable && 'cursor-pointer hover:bg-neutral-600/40',
+                isPlayback && 'bg-cyan-500/25 text-cyan-200',
+                !isPlayback && isPast && 'text-neutral-400',
+                !isPlayback && !isPast && 'text-neutral-500',
+                isSplit && 'text-cyan-100',
               )}
             >
+              {isSplit && (
+                <span
+                  aria-hidden
+                  className="absolute left-0 top-0.5 bottom-0.5 w-0.5 -translate-x-1/2 rounded-full bg-cyan-300 shadow-[0_0_8px_rgba(34,211,238,0.7)] pointer-events-none"
+                />
+              )}
               {cue.text}
             </span>
-          );
+          )
         })}
       </div>
     </div>
-  );
-}
-
-function findActiveCueIndex(cues: TimedCue[], currentTime: number): number {
-  for (let i = 0; i < cues.length; i++) {
-    if (currentTime >= cues[i].start && currentTime < cues[i].end) return i;
-  }
-  let lastPast = -1;
-  for (let i = 0; i < cues.length; i++) {
-    if (cues[i].end <= currentTime) lastPast = i;
-  }
-  return lastPast;
+  )
 }

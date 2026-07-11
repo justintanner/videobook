@@ -1,7 +1,19 @@
-import type { TimeMark } from './types';
+import type { TimeMark, TimedCue } from './types';
 
 export const DEFAULT_FPS = 30;
 export const MIN_CHUNK_SEC = 0.5;
+
+/** Index of the cue covering `timeSec`, or the last cue that ended at/before it. */
+export function findActiveCueIndex(cues: TimedCue[], timeSec: number): number {
+  for (let i = 0; i < cues.length; i++) {
+    if (timeSec >= cues[i].start && timeSec < cues[i].end) return i;
+  }
+  let lastPast = -1;
+  for (let i = 0; i < cues.length; i++) {
+    if (cues[i].end <= timeSec) lastPast = i;
+  }
+  return lastPast;
+}
 
 export function formatDurationMS(seconds: number): string {
   const m = Math.floor(seconds / 60);
