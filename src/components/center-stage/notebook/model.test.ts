@@ -315,7 +315,7 @@ describe('notebook model', () => {
     expect(repeated.definition).toBe(migrated.definition)
   })
 
-  it('locks vertical movement and resolves horizontal slot reordering without collisions', () => {
+  it('honors requested depths and clears them when dragged back up', () => {
     const graph: NotebookPlanDefinition = {
       properties: {},
       sequence: ['a', 'b', 'c'].map((id, index) => ({
@@ -323,19 +323,22 @@ describe('notebook model', () => {
         componentType: 'task' as const,
         type: 'prompt' as const,
         name: id,
-        properties: { text: id, position: { x: index * 300, y: index * 400 } },
+        properties: { text: id, position: { x: index * 300, y: 0 } },
       })),
     }
     const tracked = snapDefinitionToTracks(graph)
-    const moved = reorderStepsOnTracks(tracked, [{ id: 'c', position: { x: 0, y: 9999 } }])
-    const layout = notebookTrackLayout(moved)
-    expect(layout.rows[0].stepIds).toEqual(['c', 'a', 'b'])
-    expect(moved.sequence.map((step) => stepPosition(step)?.y)).toEqual([
-      NOTEBOOK_TRACK_ORIGIN_Y,
-      NOTEBOOK_TRACK_ORIGIN_Y,
-      NOTEBOOK_TRACK_ORIGIN_Y,
-    ])
-    expect(new Set(moved.sequence.map((step) => stepPosition(step)?.x)).size).toBe(3)
+    
+    // Drag 'c' down
+    const movedDown = reorderStepsOnTracks(tracked, [{ id: 'c', position: { x: 300, y: 9999 } }])
+    const layoutDown = notebookTrackLayout(movedDown)
+    // clamped to last row (depth 0 initially, boardLastRow returns 1 if stage_count is 1 and no steps have depth, wait, it clamps to max depth + 1).
+    const cDepth = layoutDown.depths.get('c')
+    expect(cDepth).toBeGreaterThan(0)
+    expect(movedDown.sequence.find(s => s.id === 'c')?.properties.depth).toEqual(cDepth)
+
+    // Drag 'c' back up to row 0
+    const movedUp = reorderStepsOnTracks(movedDown, [{ id: 'c', position: { x: 300, y: 0 } }])
+    expect(movedUp.sequence.find(s => s.id === 'c')?.properties.depth).toBeUndefined()
   })
 
   it('selects a smart parent only from the stage immediately above the drop', () => {
@@ -373,8 +376,9 @@ describe('notebook model', () => {
       x: (promptCenter + assetCenter) / 2 - notebookNodeSizes.image.width / 2,
       y: NOTEBOOK_TRACK_ORIGIN_Y + NOTEBOOK_TRACK_ROW_PITCH,
     }, null)
-    expect(ambiguous).toMatchObject({ parentId: null, depth: 0 })
-    expect(notebookDropTarget(graph, 'prompt', { x: 800, y: 800 }, 'asset').depth).toBe(0)
+    // ambiguous drop now { parentId: null, depth: requested }; prompt deep-drop no longer forced to 0.
+    expect(ambiguous).toMatchObject({ parentId: null, depth: 1 })
+    expect(notebookDropTarget(graph, 'prompt', { x: 800, y: 800 }, 'asset').depth).toBe(1)
     expect(notebookTrackDepths(graph)).toEqual(new Map([['prompt', 0], ['asset', 0]]))
   })
 

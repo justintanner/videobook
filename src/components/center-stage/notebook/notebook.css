@@ -255,6 +255,73 @@
   border-color: rgb(167 139 250 / 0.55);
 }
 
+.vc-node-output-strip {
+  position: absolute;
+  bottom: 1.5rem;
+  right: 0.45rem;
+  z-index: 3;
+  display: flex;
+  max-width: calc(100% - 1rem);
+  align-items: center;
+  justify-content: flex-end;
+  pointer-events: auto;
+}
+
+.vc-node-output-thumb {
+  display: grid;
+  width: 1.9rem;
+  height: 1.9rem;
+  flex: none;
+  place-items: center;
+  overflow: hidden;
+  border: 1.5px solid rgb(15 23 42 / 0.9);
+  border-radius: 0.3rem;
+  background: rgb(0 0 0 / 0.82);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.45);
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease;
+  padding: 0;
+}
+
+.vc-node-output-thumb:hover {
+  transform: translateY(-2px);
+  z-index: 4;
+}
+
+.vc-node-output-thumb + .vc-node-output-thumb {
+  margin-left: -0.6rem;
+}
+
+.vc-node-output-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vc-node-output-thumb svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  color: rgb(226 232 240 / 0.75);
+}
+
+.vc-node-output-thumb.is-active {
+  border-color: rgb(244 244 245);
+  z-index: 3;
+}
+
+.vc-node-output-thumb.is-error {
+  border-color: rgb(239 68 68 / 0.7);
+}
+
+.vc-node-output-thumb.is-error svg {
+  color: rgb(239 68 68);
+}
+
+.vc-node-output-thumb.is-pending svg {
+  animation: vc-spin 1s linear infinite;
+  color: rgb(250 204 21);
+}
+
 .vc-node-hero {
   position: relative;
   display: flex;
@@ -1024,6 +1091,35 @@
   white-space: nowrap;
 }
 
+.vc-notebook-add-stage {
+  position: absolute;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed rgb(52 211 153 / 0.16);
+  border-radius: 0.6rem;
+  background:
+    linear-gradient(90deg, rgb(52 211 153 / 0.03), transparent 14%),
+    linear-gradient(180deg, rgb(52 211 153 / 0.01), rgb(0 0 0 / 0.1));
+  color: rgb(52 211 153 / 0.4);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+.vc-notebook-add-stage:hover {
+  border-color: rgb(52 211 153 / 0.3);
+  background:
+    linear-gradient(90deg, rgb(52 211 153 / 0.05), transparent 14%),
+    linear-gradient(180deg, rgb(52 211 153 / 0.03), rgb(0 0 0 / 0.1));
+  color: rgb(52 211 153 / 0.8);
+}
 
 .vc-notebook-stage-slot {
   position: absolute;
@@ -1096,6 +1192,10 @@
 
 .vc-notebook-drop-card-video {
   box-shadow: inset 3px 0 var(--vc-video), 0 0 20px var(--vc-glow);
+}
+
+.vc-notebook-drop-card-asset {
+  box-shadow: inset 3px 0 rgb(244 114 182), 0 0 20px var(--vc-glow);
 }
 
 .vc-notebook-canvas .react-flow__controls {

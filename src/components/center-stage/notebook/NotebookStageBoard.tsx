@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ImageIcon, MessageSquareText, Video, View } from 'lucide-react'
+import { ImageIcon, MessageSquareText, Video, View, FileQuestion, Music, User } from 'lucide-react'
 import { ViewportPortal } from '@xyflow/react'
 import {
   NOTEBOOK_STAGE_BAND_HEIGHT,
@@ -11,6 +11,7 @@ import {
   NOTEBOOK_TRACK_SLOT_PITCH,
   NOTEBOOK_TRACK_SLOT_WIDTH,
   notebookNodeSizes,
+  notebookStageCount,
   notebookTrackLayout,
   stageBoardMetrics,
   type NotebookDropTarget,
@@ -18,19 +19,22 @@ import {
 import type { NotebookPlanDefinition } from './types'
 
 export interface NotebookDropPreview extends NotebookDropTarget {
-  type: 'prompt' | 'image' | 'video'
+  type: 'prompt' | 'image' | 'video' | 'asset'
+  assetKind?: 'image' | 'video' | 'audio' | 'character' | null
 }
 
 interface NotebookStageBoardProps {
   definition: NotebookPlanDefinition
   selectedStepId: string | null
   preview: NotebookDropPreview | null
+  onAddStage: () => void
 }
 
 const previewIcons = {
   prompt: MessageSquareText,
   image: ImageIcon,
   video: Video,
+  asset: FileQuestion,
 }
 
 function stageCode(depth: number): string {
@@ -41,15 +45,19 @@ export function NotebookStageBoard({
   definition,
   selectedStepId,
   preview,
+  onAddStage,
 }: NotebookStageBoardProps) {
   const layout = useMemo(() => notebookTrackLayout(definition), [definition])
   const selectedDepth = selectedStepId ? layout.depths.get(selectedStepId) : undefined
-  const metrics = stageBoardMetrics(layout, preview)
+  const stageCount = notebookStageCount(definition)
+  const metrics = stageBoardMetrics(layout, preview, stageCount)
   const rowCount = metrics.rowCount
   const maxSlots = metrics.maxSlots
   const boardWidth = metrics.width
   const boardHeight = metrics.height
-  const PreviewIcon = preview ? previewIcons[preview.type] : View
+  const PreviewIcon = preview?.type === 'asset'
+    ? (preview.assetKind === 'image' ? ImageIcon : preview.assetKind === 'video' ? Video : preview.assetKind === 'audio' ? Music : preview.assetKind === 'character' ? User : FileQuestion)
+    : (preview ? previewIcons[preview.type] : View)
   const parent = preview?.parentId
     ? definition.sequence.find((step) => step.id === preview.parentId) ?? null
     : null
@@ -58,10 +66,10 @@ export function NotebookStageBoard({
     ? parentPosition.x + notebookNodeSizes[parent.type].width / 2
     : 0
   const sourceY = parent && parentPosition
-    ? parentPosition.y + notebookNodeSizes[parent.type].height
+    ? parentPosition.y + (preview?.type === 'asset' ? 0 : notebookNodeSizes[parent.type].height)
     : 0
   const targetX = preview ? preview.position.x + notebookNodeSizes[preview.type].width / 2 : 0
-  const targetY = preview?.position.y ?? 0
+  const targetY = preview ? preview.position.y + (preview.type === 'asset' ? notebookNodeSizes[preview.type].height : 0) : 0
   const curveY = sourceY + (targetY - sourceY) / 2
 
   return (
@@ -97,6 +105,17 @@ export function NotebookStageBoard({
             )
           })}
         </div>
+        <button
+          className="vc-notebook-add-stage nopan"
+          onClick={onAddStage}
+          style={{
+            width: boardWidth,
+            height: 56,
+            transform: `translateY(${NOTEBOOK_TRACK_ORIGIN_Y + rowCount * NOTEBOOK_TRACK_ROW_PITCH - NOTEBOOK_STAGE_BAND_HEADROOM}px)`,
+          }}
+        >
+          + Add stage {stageCode(rowCount)}
+        </button>
       </ViewportPortal>
       {preview ? (
         <ViewportPortal>

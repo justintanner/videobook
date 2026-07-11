@@ -144,6 +144,44 @@ export const toolboxStepSeeds: NotebookToolboxStep[] = [
   },
 ]
 
+export function storedStepDepth(step: NotebookPlanStep): number | null {
+  const depth = step.properties.depth
+  return typeof depth === 'number' && Number.isInteger(depth) && depth > 0 ? depth : null
+}
+
+export function notebookStageCount(definition: NotebookPlanDefinition): number {
+  const count = definition.properties.stage_count
+  return typeof count === 'number' && Number.isInteger(count) && count >= 1 ? count : 1
+}
+
+export function notebookBoardLastRow(
+  definition: NotebookPlanDefinition,
+  depths?: ReadonlyMap<string, number>,
+): number {
+  const effectiveDepths = depths ?? notebookTrackDepths(definition)
+  const maxEffectiveDepth = Math.max(0, ...effectiveDepths.values())
+  const stageCount = notebookStageCount(definition)
+  return Math.max(maxEffectiveDepth + 1, stageCount - 1)
+}
+
+export function setStepDepthOverride(
+  definition: NotebookPlanDefinition,
+  stepId: string,
+  depth: number | null,
+): NotebookPlanDefinition {
+  const step = definition.sequence.find((s) => s.id === stepId)
+  if (!step) return definition
+  const current = storedStepDepth(step)
+  if (current === depth) return definition
+  if (current === null && (depth === null || depth <= 0)) return definition
+  return setStep(definition, stepId, (s) => {
+    const properties: JsonRecord = { ...s.properties }
+    if (depth !== null && depth > 0) properties.depth = depth
+    else delete properties.depth
+    return copyStep(s, properties)
+  })
+}
+
 export function stepPosition(step: NotebookPlanStep): StepPosition | null {
   const position = record(step.properties.position)
   const x = position.x
@@ -169,9 +207,10 @@ export function notebookTrackDepths(definition: NotebookPlanDefinition): Readonl
     if (!step) return 0
     stack.add(id)
     const parents = stepInputs(step).filter((inputId) => byId.has(inputId))
-    const depth = parents.length === 0
+    const computed = parents.length === 0
       ? 0
       : Math.max(...parents.map((parentId) => depthOf(parentId, stack))) + 1
+    const depth = Math.max(storedStepDepth(step) ?? 0, computed)
     stack.delete(id)
     depths.set(id, depth)
     return depth
@@ -268,31 +307,67 @@ export function quantizedTrackX(type: NotebookPlanStep['type'], x: number): numb
     + (NOTEBOOK_TRACK_SLOT_WIDTH - size.width) / 2
 }
 
+export function constrainTrackDragPosition(
+  definition: NotebookPlanDefinition,
+  layout: NotebookTrackLayout,
+  stepId: string,
+  position: StepPosition,
+): StepPosition {
+  const step = definition.sequence.find((s) => s.id === stepId)
+  if (!step) return position
+  const maxParentDepth = Math.max(
+    -1,
+    ...stepInputs(step).map((id) => layout.depths.get(id) ?? -1)
+  )
+  const unclampedRequestedDepth = Math.max(0, Math.round((position.y - NOTEBOOK_TRACK_ORIGIN_Y) / NOTEBOOK_TRACK_ROW_PITCH))
+  const boardLastRow = notebookBoardLastRow(definition, layout.depths)
+  const depth = Math.max(maxParentDepth + 1, Math.min(unclampedRequestedDepth, boardLastRow))
+  return {
+    x: quantizedTrackX(step.type, position.x),
+    y: NOTEBOOK_TRACK_ORIGIN_Y + depth * NOTEBOOK_TRACK_ROW_PITCH,
+  }
+}
+
 export function reorderStepsOnTracks(
   definition: NotebookPlanDefinition,
   moves: ReadonlyArray<{ id: string; position: StepPosition }>,
 ): NotebookPlanDefinition {
   if (moves.length === 0) return snapDefinitionToTracks(definition)
-  const byId = new Map(definition.sequence.map((step) => [step.id, step]))
   const layout = notebookTrackLayout(definition)
-  const rowsByDepth = new Map<number, NotebookPlanStep[]>()
-  const movesByDepth = new Map<number, Array<{ step: NotebookPlanStep; slot: number }>>()
-  for (const row of layout.rows) {
-    rowsByDepth.set(row.depth, row.stepIds.flatMap((id) => {
-      const step = byId.get(id)
-      return step ? [step] : []
-    }))
-  }
+  const byId = new Map(definition.sequence.map((step) => [step.id, step]))
+  let staged = definition
+  
   for (const move of moves) {
     const step = byId.get(move.id)
     if (!step) continue
-    const depth = layout.depths.get(step.id) ?? 0
+    const maxParentDepth = Math.max(
+      -1,
+      ...stepInputs(step).map((id) => layout.depths.get(id) ?? -1)
+    )
+    const unclampedRequestedDepth = Math.max(0, Math.round((move.position.y - NOTEBOOK_TRACK_ORIGIN_Y) / NOTEBOOK_TRACK_ROW_PITCH))
+    const requested = Math.max(maxParentDepth + 1, unclampedRequestedDepth)
+    const override = requested > maxParentDepth + 1 ? requested : null
+    staged = setStepDepthOverride(staged, step.id, override)
+  }
+
+  const stagedDepths = notebookTrackDepths(staged)
+  const stagedRowsByDepth = new Map<number, NotebookPlanStep[]>()
+  for (const [depth, row] of orderedStepsByDepth(staged, stagedDepths)) {
+    stagedRowsByDepth.set(depth, row)
+  }
+
+  const movesByDepth = new Map<number, Array<{ step: NotebookPlanStep; slot: number }>>()
+  for (const move of moves) {
+    const step = staged.sequence.find((s) => s.id === move.id)
+    if (!step) continue
+    const depth = stagedDepths.get(step.id) ?? 0
     const rowMoves = movesByDepth.get(depth) ?? []
     rowMoves.push({ step, slot: nearestTrackSlot(step.type, move.position.x) })
     movesByDepth.set(depth, rowMoves)
   }
+
   for (const [depth, rowMoves] of movesByDepth) {
-    const row = rowsByDepth.get(depth) ?? []
+    const row = stagedRowsByDepth.get(depth) ?? []
     const currentIndex = new Map(row.map((step, index) => [step.id, index]))
     const movingIds = new Set(rowMoves.map(({ step }) => step.id))
     const moving = rowMoves
@@ -301,10 +376,11 @@ export function reorderStepsOnTracks(
     const remaining = row.filter((step) => !movingIds.has(step.id))
     const anchor = Math.min(...moving.map(({ slot }) => slot))
     remaining.splice(Math.min(anchor, remaining.length), 0, ...moving.map(({ step }) => step))
-    rowsByDepth.set(depth, remaining)
+    stagedRowsByDepth.set(depth, remaining)
   }
-  const nextLayout = trackLayoutFromRows(layout.depths, rowsByDepth)
-  return moveSteps(definition, definition.sequence.flatMap((step) => {
+
+  const nextLayout = trackLayoutFromRows(stagedDepths, stagedRowsByDepth)
+  return moveSteps(staged, staged.sequence.flatMap((step) => {
     const position = nextLayout.positions.get(step.id)
     return position ? [{ id: step.id, position }] : []
   }))
@@ -334,14 +410,11 @@ export function notebookDropTarget(
   const previewStep: NotebookPlanStep = seed
     ? { ...seed, id: '' }
     : { id: '', componentType: 'task', type, name: type, properties: {} }
-  const requestedDepth = type === 'prompt'
-    ? 0
-    : Math.max(0, Math.round((pointer.y - NOTEBOOK_TRACK_ORIGIN_Y) / NOTEBOOK_TRACK_ROW_PITCH))
-  const slot = nearestTrackSlot(type, pointer.x)
-  if (type === 'prompt' || requestedDepth === 0) {
-    return { position: positionForTrackSlot(previewStep, 0, slot), parentId: null, depth: 0, slot }
-  }
+  const unclampedRequestedDepth = Math.max(0, Math.round((pointer.y - NOTEBOOK_TRACK_ORIGIN_Y) / NOTEBOOK_TRACK_ROW_PITCH))
   const layout = notebookTrackLayout(definition)
+  const requestedDepth = Math.min(unclampedRequestedDepth, notebookBoardLastRow(definition, layout.depths))
+  const slot = nearestTrackSlot(type, pointer.x)
+  
   const selectedDepth = selectedStepId ? layout.depths.get(selectedStepId) : undefined
   const selectedParent = selectedStepId && selectedDepth === requestedDepth - 1
     ? definition.sequence.find((step) => step.id === selectedStepId) ?? null
@@ -359,25 +432,81 @@ export function notebookDropTarget(
   const nearest = candidates[0]
   const tied = nearest && candidates[1]?.distance === nearest.distance
   const parent = selectedParent ?? (!tied ? nearest?.step ?? null : null)
-  const depth = parent ? requestedDepth : 0
   return {
-    position: positionForTrackSlot(previewStep, depth, slot),
+    position: positionForTrackSlot(previewStep, requestedDepth, slot),
     parentId: parent?.id ?? null,
-    depth,
+    depth: requestedDepth,
     slot,
+  }
+}
+
+export function notebookAssetDropTarget(
+  definition: NotebookPlanDefinition,
+  pointer: StepPosition,
+): NotebookDropTarget & { connectTargetId: string | null } {
+  const layout = notebookTrackLayout(definition)
+  const type = 'asset'
+  const seed = toolboxStepSeeds.find((step) => step.type === type)
+  const previewStep: NotebookPlanStep = seed
+    ? { ...seed, id: '', type }
+    : { id: '', componentType: 'task', type, name: type, properties: {} }
+
+  const byId = new Map(definition.sequence.map((step) => [step.id, step]))
+  let hitGen: NotebookPlanStep | null = null
+  let hitDepth = 0
+  for (const row of layout.rows) {
+    for (const id of row.stepIds) {
+      const step = byId.get(id)
+      const pos = layout.positions.get(id)
+      if (!step || !pos || !isGenerationStep(step)) continue
+      const size = notebookNodeSizes[step.type]
+      if (
+        pointer.x >= pos.x && pointer.x <= pos.x + size.width &&
+        pointer.y >= pos.y && pointer.y <= pos.y + size.height
+      ) {
+        hitGen = step
+        hitDepth = row.depth
+        break
+      }
+    }
+    if (hitGen) break
+  }
+
+  if (hitGen) {
+    const depth = Math.max(0, hitDepth - 1)
+    const slot = nearestTrackSlot(type, pointer.x)
+    return {
+      position: positionForTrackSlot(previewStep, depth, slot),
+      parentId: null,
+      depth,
+      slot,
+      connectTargetId: hitGen.id,
+    }
+  }
+
+  const unclampedRequestedDepth = Math.max(0, Math.round((pointer.y - NOTEBOOK_TRACK_ORIGIN_Y) / NOTEBOOK_TRACK_ROW_PITCH))
+  const requestedDepth = Math.min(unclampedRequestedDepth, notebookBoardLastRow(definition, layout.depths))
+  const slot = nearestTrackSlot(type, pointer.x)
+  return {
+    position: positionForTrackSlot(previewStep, requestedDepth, slot),
+    parentId: null,
+    depth: requestedDepth,
+    slot,
+    connectTargetId: null,
   }
 }
 
 export function stageBoardMetrics(
   layout: NotebookTrackLayout,
   preview?: NotebookDropTarget | null,
+  stageCount = 1,
 ): { rowCount: number; maxSlots: number; width: number; height: number } {
   const maxDepth = Math.max(
     0,
     layout.rows.at(-1)?.depth ?? 0,
     preview?.depth ?? 0,
   )
-  const rowCount = maxDepth + 2
+  const rowCount = Math.max(maxDepth + 2, stageCount)
   const maxSlots = Math.max(
     3,
     ...layout.rows.map((row) => row.stepIds.length + 1),
@@ -404,7 +533,9 @@ export function notebookInitialViewport(
   definition: NotebookPlanDefinition,
   canvasWidth: number,
 ): { x: number; y: number; zoom: number } {
-  const metrics = stageBoardMetrics(notebookTrackLayout(definition))
+  const layout = notebookTrackLayout(definition)
+  const stageCount = notebookStageCount(definition)
+  const metrics = stageBoardMetrics(layout, null, stageCount)
   const zoom = Math.min(1, Math.max(0.5, (canvasWidth - NOTEBOOK_CANVAS_LEFT_GUTTER - 16) / metrics.width))
   const x = Math.max(NOTEBOOK_CANVAS_LEFT_GUTTER, (canvasWidth - metrics.width * zoom) / 2)
   const y = -NOTEBOOK_TRANSLATE_EXTENT[0][1] * zoom
@@ -476,6 +607,49 @@ export function connectedMediaInputs(
   return strip
 }
 
+export interface GenRunOutput {
+  assetId: string
+  thumbnailSrc: string | null
+  status: 'ready' | 'pending' | 'error' | 'missing'
+  active: boolean
+}
+
+export function stepRunOutputs(step: NotebookPlanStep, mediaItems: NotebookMediaItem[]): GenRunOutput[] {
+  if (!isGenerationStep(step)) return []
+  const assets = stepAssetIds(step)
+  if (assets.length === 0) return []
+  const activeId = assets.at(-1)
+  return assets.map((assetId) => {
+    const asset = mediaItems.find((item) => item.id === assetId)
+    let status: GenRunOutput['status'] = 'missing'
+    if (asset) {
+      if (asset.status === 'error') status = 'error'
+      else if (asset.status === 'ready') status = 'ready'
+      else status = 'pending'
+    }
+    return {
+      assetId,
+      thumbnailSrc: asset?.thumbnailSrc ?? null,
+      status,
+      active: assetId === activeId,
+    }
+  })
+}
+
+export function promoteRunAsset(
+  definition: NotebookPlanDefinition,
+  stepId: string,
+  assetId: string,
+): NotebookPlanDefinition {
+  return setStep(definition, stepId, (step) => {
+    const assets = stepAssetIds(step)
+    if (assets.length === 0 || assets.at(-1) === assetId || !assets.includes(assetId)) return step
+    const properties = { ...step.properties }
+    properties.asset_ids = [...assets.filter((id) => id !== assetId), assetId]
+    return copyStep(step, properties)
+  })
+}
+
 export function appendRunAsset(
   definition: NotebookPlanDefinition,
   stepId: string,
@@ -485,7 +659,7 @@ export function appendRunAsset(
   return setStep(definition, stepId, (step) => copyStep(step, {
     ...step.properties,
     ...(ran ? { model: ran.model, provider: ran.provider } : {}),
-    asset_ids: [...stepAssetIds(step), assetId],
+    asset_ids: [...stepAssetIds(step).filter(id => id !== assetId), assetId], // promote if exists, else append
   }))
 }
 
@@ -667,11 +841,16 @@ export function disconnectSteps(
 ): NotebookPlanDefinition {
   const target = definition.sequence.find((step) => step.id === targetId)
   if (!target || !stepInputs(target).includes(sourceId)) return definition
+  const depths = notebookTrackDepths(definition)
+  const priorEffectiveDepth = depths.get(targetId) ?? 0
   return setStep(definition, targetId, (step) => {
     const nextInputs = stepInputs(step).filter((input) => input !== sourceId)
     const nextProperties: JsonRecord = { ...step.properties, inputs: nextInputs }
     if (stringProperty(step.properties, 'first_frame_source') === sourceId) {
       delete nextProperties.first_frame_source
+    }
+    if (priorEffectiveDepth > 0) {
+      nextProperties.depth = priorEffectiveDepth
     }
     return copyStep(step, nextProperties)
   })
@@ -719,11 +898,16 @@ export function addStep(
   definition: NotebookPlanDefinition,
   seed: NotebookToolboxStep,
   position: StepPosition,
+  depth?: number,
 ): NotebookPlanDefinition {
   const step: NotebookPlanStep = {
     ...seed,
     id: crypto.randomUUID(),
-    properties: { ...seed.properties, position: { x: Math.round(position.x), y: Math.round(position.y) } },
+    properties: {
+      ...seed.properties,
+      position: { x: Math.round(position.x), y: Math.round(position.y) },
+      ...(depth !== undefined && depth > 0 ? { depth } : {}),
+    },
   }
   return { ...definition, sequence: [...definition.sequence, step] }
 }
@@ -732,6 +916,7 @@ export function addAssetStep(
   definition: NotebookPlanDefinition,
   slug: string,
   position: StepPosition,
+  depth?: number,
 ): { definition: NotebookPlanDefinition; stepId: string } {
   const existing = findAssetStep(definition.sequence, slug)
   if (existing) return { definition, stepId: existing.id }
@@ -744,6 +929,7 @@ export function addAssetStep(
     properties: {
       slug: slugWithPrefix(slug),
       position: { x: Math.round(position.x), y: Math.round(position.y) },
+      ...(depth !== undefined && depth > 0 ? { depth } : {}),
     },
   }
   return { definition: { ...definition, sequence: [...definition.sequence, step] }, stepId }
@@ -755,6 +941,7 @@ export function removeSteps(
 ): NotebookPlanDefinition {
   const removed = new Set(ids)
   if (!definition.sequence.some((step) => removed.has(step.id))) return definition
+  const depths = notebookTrackDepths(definition)
   return {
     ...definition,
     sequence: definition.sequence
@@ -766,6 +953,10 @@ export function removeSteps(
         if (nextInputs.length === inputs.length && (!pin || !removed.has(pin))) return step
         const properties: JsonRecord = { ...step.properties, inputs: nextInputs }
         if (pin && removed.has(pin)) delete properties.first_frame_source
+        const priorEffectiveDepth = depths.get(step.id) ?? 0
+        if (priorEffectiveDepth > 0 && inputs.length > nextInputs.length) {
+          properties.depth = priorEffectiveDepth
+        }
         return copyStep(step, properties)
       }),
   }

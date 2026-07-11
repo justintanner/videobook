@@ -1,0 +1,174 @@
+[
+  {
+    "id": "vc-7d3s.7",
+    "title": "Phase 5: tests + verification",
+    "description": "model.test.ts: REWRITE 'locks vertical movement' (:318, codifies removed y-lock) and UPDATE 'selects a smart parent' (:341). New cases: depth override semantics, disconnect/remove baking, drop clamps incl stage_count, notebookAssetDropTarget gen-hit/empty-band, addAssetStep depth + slug-reuse, reorderStepsOnTracks cross-row/descendant regrouping/pure-x no-churn, stageBoardMetrics stageCount, promoteRunAsset + downstream follow, stepRunOutputs mapping. notebook-gen-ui.test.ts source assertions for new classes/props. Verify: npm run test/lint/build + in-app checklist in epic design (drop at stage 03, drop onto gen, add stage at zoom levels, vertical drag, promote older gen, auto-arrange survives).",
+    "status": "open",
+    "priority": 2,
+    "issue_type": "task",
+    "owner": "ci@videocity.test",
+    "created_at": "2026-07-11T09:11:09Z",
+    "created_by": "CI",
+    "updated_at": "2026-07-11T09:11:09Z",
+    "dependencies": [
+      {
+        "issue_id": "vc-7d3s.7",
+        "depends_on_id": "vc-7d3s",
+        "type": "parent-child",
+        "created_at": "2026-07-11T16:11:09Z",
+        "created_by": "CI",
+        "metadata": "{}"
+      }
+    ],
+    "dependency_count": 0,
+    "dependent_count": 0,
+    "comment_count": 0,
+    "parent": "vc-7d3s"
+  },
+  {
+    "id": "vc-7d3s.6",
+    "title": "Phase 4: visible gen stack + click-to-promote",
+    "description": "model.ts: GenRunOutput type, stepRunOutputs(step, mediaItems) (status mirrors stepRunStatus), promoteRunAsset moves assetId to end of asset_ids (identity when absent/already last) — all latestAssetId readers follow automatically. NotebookNodeData gains outputs + onPromoteAsset; add to dataEqual with outputsEqual. useNotebookFlow: ref-stabilized onPromoteAsset option. GenNode: when outputs.length\u003e1 render .vc-node-output-strip nodrag button thumbs (active ringed, pending spinner, error icon), click stops propagation + promotes. PlanNotebook: handlePromoteAsset -\u003e commit(promoteRunAsset(...)), no snap. CSS: output strip pointer-events:auto (NOT none like input strip), overlapping thumbs, is-active/is-pending/is-error/is-missing states. Tradeoff: promotion reorders asset_ids; new run appends and reclaims active.",
+    "status": "open",
+    "priority": 2,
+    "issue_type": "task",
+    "owner": "ci@videocity.test",
+    "created_at": "2026-07-11T09:11:08Z",
+    "created_by": "CI",
+    "updated_at": "2026-07-11T09:11:08Z",
+    "dependencies": [
+      {
+        "issue_id": "vc-7d3s.6",
+        "depends_on_id": "vc-7d3s",
+        "type": "parent-child",
+        "created_at": "2026-07-11T16:11:08Z",
+        "created_by": "CI",
+        "metadata": "{}"
+      }
+    ],
+    "dependency_count": 0,
+    "dependent_count": 0,
+    "comment_count": 0,
+    "parent": "vc-7d3s"
+  },
+  {
+    "id": "vc-7d3s.5",
+    "title": "Phase 3: drag existing cells between stages",
+    "description": "New constrainTrackDragPosition (x quantized, y row-quantized clamped to [maxParentDepth+1, boardLastRow]). useNotebookFlow.onNodesChange: replace y-lock with it. Rewrite reorderStepsOnTracks: per move compute requested row from final y, setStepDepthOverride(requested \u003e parentsDepth ? requested : null), recompute depths on staged definition, rebuild rows via orderedStepsByDepth, group moves by new effective depth, reuse min-slot splice. Multi-select clamps per-node against pre-move parent depths.",
+    "status": "open",
+    "priority": 2,
+    "issue_type": "task",
+    "owner": "ci@videocity.test",
+    "created_at": "2026-07-11T09:11:07Z",
+    "created_by": "CI",
+    "updated_at": "2026-07-11T09:11:07Z",
+    "dependencies": [
+      {
+        "issue_id": "vc-7d3s.5",
+        "depends_on_id": "vc-7d3s",
+        "type": "parent-child",
+        "created_at": "2026-07-11T16:11:07Z",
+        "created_by": "CI",
+        "metadata": "{}"
+      }
+    ],
+    "dependency_count": 0,
+    "dependent_count": 0,
+    "comment_count": 0,
+    "parent": "vc-7d3s"
+  },
+  {
+    "id": "vc-7d3s.4",
+    "title": "Phase 2: drop assets/toolbox cells at any stage",
+    "description": "notebookDropTarget: remove prompt depth-0 forcing, clamp requestedDepth to [0, boardLastRow], keep requestedDepth unlinked when no unambiguous parent. New notebookAssetDropTarget(definition, pointer) replaces flow.nodes bbox scan in onDrop; gen hit -\u003e depth = genDepth-1 + connectTargetId. addStep/addAssetStep optional depth param. handleAddAsset uses real drop position. Asset drop preview via dataTransfer.types sniff of application/x-videocity-asset-* (CardShell.tsx:122); extend NotebookDropPreview with type 'asset' + assetKind; invert dashed link (asset feeds INTO gen); onDragLeave clears preview. CSS .vc-notebook-drop-card-asset.",
+    "status": "open",
+    "priority": 2,
+    "issue_type": "task",
+    "owner": "ci@videocity.test",
+    "created_at": "2026-07-11T09:11:06Z",
+    "created_by": "CI",
+    "updated_at": "2026-07-11T09:11:06Z",
+    "dependencies": [
+      {
+        "issue_id": "vc-7d3s.4",
+        "depends_on_id": "vc-7d3s",
+        "type": "parent-child",
+        "created_at": "2026-07-11T16:11:06Z",
+        "created_by": "CI",
+        "metadata": "{}"
+      }
+    ],
+    "dependency_count": 0,
+    "dependent_count": 0,
+    "comment_count": 0,
+    "parent": "vc-7d3s"
+  },
+  {
+    "id": "vc-7d3s.3",
+    "title": "Phase 1: + Add stage button",
+    "description": "NotebookStageBoard: onAddStage prop, pass notebookStageCount to stageBoardMetrics, render '+ Add stage NN' button as SIBLING of .vc-notebook-stage-board in same ViewportPortal (board is pointer-events:none), pointer-events:auto + nopan class. PlanNotebook: handleAddStage commits stage_count = rowCount+1. CSS .vc-notebook-add-stage dashed ghost band. No auto-shrink on delete.",
+    "status": "open",
+    "priority": 2,
+    "issue_type": "task",
+    "owner": "ci@videocity.test",
+    "created_at": "2026-07-11T09:11:05Z",
+    "created_by": "CI",
+    "updated_at": "2026-07-11T09:11:05Z",
+    "dependencies": [
+      {
+        "issue_id": "vc-7d3s.3",
+        "depends_on_id": "vc-7d3s",
+        "type": "parent-child",
+        "created_at": "2026-07-11T16:11:05Z",
+        "created_by": "CI",
+        "metadata": "{}"
+      }
+    ],
+    "dependency_count": 0,
+    "dependent_count": 0,
+    "comment_count": 0,
+    "parent": "vc-7d3s"
+  },
+  {
+    "id": "vc-7d3s.2",
+    "title": "Phase 0: model foundation — depth overrides + stage count",
+    "description": "model.ts: storedStepDepth, notebookStageCount, notebookBoardLastRow, setStepDepthOverride (identity-return). notebookTrackDepths returns max(stored, computed). stageBoardMetrics gains stageCount param (rowCount = max(maxDepth+2, stageCount)); update notebookInitialViewport. disconnectSteps/removeSteps bake prior effective depth into steps that lose an input. No server changes (properties are free-form z.record).",
+    "status": "open",
+    "priority": 2,
+    "issue_type": "task",
+    "owner": "ci@videocity.test",
+    "created_at": "2026-07-11T09:11:04Z",
+    "created_by": "CI",
+    "updated_at": "2026-07-11T09:11:04Z",
+    "dependencies": [
+      {
+        "issue_id": "vc-7d3s.2",
+        "depends_on_id": "vc-7d3s",
+        "type": "parent-child",
+        "created_at": "2026-07-11T16:11:04Z",
+        "created_by": "CI",
+        "metadata": "{}"
+      }
+    ],
+    "dependency_count": 0,
+    "dependent_count": 0,
+    "comment_count": 0,
+    "parent": "vc-7d3s"
+  },
+  {
+    "id": "vc-7d3s",
+    "title": "Notebook: drop-anywhere stages, visible gen stacks, add-stage",
+    "description": "Three features from annotated /notebook screenshot: (1) drop assets at any stage, (2) stack all generations visibly on gen cells with click-to-promote active output, (3) add more stages + drag existing cells between stages. Root cause for 1+3: stage is derived graph depth; fix via persisted per-cell depth override + definition-level stage_count. Full plan in design field.",
+    "design": "# Notebook: drop-anywhere stages, visible gen stacks, add-stage\n\n## Context\n\nFrom the annotated screenshot of `/notebook`, three asks:\n\n1. **Drop assets at any stage** — sidebar assets currently always land in Stage 01 no matter where they're dropped.\n2. **Stack gens visibly, all gens** — a gen cell shows only its latest generation; the user wants every generation visible. (Decision: clicking an older gen **promotes** it to the active output used downstream; undo must work.)\n3. **Add more stages** — there's always exactly one trailing empty stage, and nothing can be placed in a stage unless connection topology puts it there. (Decision: also allow dragging **existing** cells vertically to re-stage them.)\n\n**Root cause for 1 \u0026 3:** a cell's stage is a *derived* graph depth (`notebookTrackDepths` in `src/components/center-stage/notebook/model.ts:161` — 0 if no inputs, else max(parents)+1), and every mutation runs `snapDefinitionToTracks`, forcing y from depth. Assets have no inputs → always depth 0.\n\n**Feature 2 is presentation-only:** `asset_ids` already appends every run (`appendRunAsset`, `model.ts:479`); all readers use `latestAssetId` = `asset_ids.at(-1)` (`model.ts:423`), so \"last element = active output\" is already the invariant everywhere (downstream slugs, run status, sidebar, markdown mirror). Promotion = move clicked id to the end; every reader follows automatically.\n\n**No server changes:** step and definition `properties` are free-form `z.record` (`server/src/plan-notebook.ts:26-36`), so new keys (`depth`, `stage_count`) pass validation as-is.\n\nAll files below are under `src/components/center-stage/notebook/` unless noted.\n\n## Design decisions\n\n- **Persisted depth override**: new step property `depth?: number`. Effective depth = `max(storedDepth ?? 0, computedFromParents)`. Since computed depth uses parents' *effective* depths, \"child never above parent+1\" is enforced automatically — no write-time clamping.\n- Store the override only when `requested \u003e computedFromParents`; delete the key otherwise (dragging a cell back up \"releases\" it).\n- **Disconnect/remove bake depth**: when a step loses an input, write its prior effective depth into `depth` so it doesn't jump back to Stage 01. Rule: topology can push cells down; nothing moves a cell up implicitly (only drag / explicit action).\n- **Stage count**: definition-level `properties.stage_count?: number` as a minimum row count; `rowCount = max(maxDepth + 2, stage_count)`.\n- Prompts lose their forced-depth-0 special case in drag-drop (they can sit in any stage); toolbox *click* still appends at Stage 01.\n- **Promote callback** reaches `GenNode` through `NotebookNodeData` with a ref-stabilized callback (matches existing `callToolRef`/`definitionRef` patterns); no context provider.\n- Pending/errored gens appear in the stack (status-styled) and are promotable — consistent with today's model where a fresh (pending) run is immediately the active output.\n- Auto-arrange keeps overrides and `stage_count`; it only tidies x-order.\n\n## Phase 0 — Model foundation (`model.ts`)\n\nNew pure helpers (flat, explicit types):\n\n- `storedStepDepth(step): number | null` — `properties.depth` if integer \u003e 0, else null.\n- `notebookStageCount(definition): number` — `properties.stage_count` if integer ≥ 1, else 1.\n- `notebookBoardLastRow(definition, depths?): number` — `max(maxEffectiveDepth + 1, stageCount - 1)`; the interaction clamp for drops/drags.\n- `setStepDepthOverride(definition, stepId, depth: number | null)` — writes/deletes the key; **identity-return when unchanged** (mirror `setFirstFrameSource`, `model.ts:680`) so pure-x reorders don't pollute history.\n\nModify:\n\n- `notebookTrackDepths` (161): `return max(storedStepDepth(step) ?? 0, computed)`.\n- `stageBoardMetrics` (371): third param `stageCount = 1`; `rowCount = max(maxDepth + 2, stageCount)`. Update caller `notebookInitialViewport` (403).\n- `disconnectSteps` (663) / `removeSteps` (752): using pre-mutation depths, bake `depth: priorEffectiveDepth` (when \u003e 0) into each step that loses an input.\n\n## Phase 1 — \"+ Add stage\" (`NotebookStageBoard.tsx`, `PlanNotebook.tsx`, `notebook.css`)\n\n- `NotebookStageBoard`: new prop `onAddStage`; pass `notebookStageCount(definition)` into `stageBoardMetrics`. Render a `+ Add stage NN` button **as a sibling of** `.vc-notebook-stage-board` inside the same `ViewportPortal` (the board div is `aria-hidden` with `pointer-events: none`, `notebook.css:973`), positioned just below the last band, with `pointer-events: auto` and React Flow's `nopan` class so clicks don't pan.\n- `PlanNotebook`: `handleAddStage` commits `{ ...current, properties: { ...current.properties, stage_count: currentRowCount + 1 } }`; thread through `NotebookCanvasProps`. Undo via history; no auto-shrink on delete (rowCount already shrinks when depth dominates).\n- CSS: `.vc-notebook-add-stage` — dashed ghost-band button styled like a stage row.\n\n## Phase 2 — Drops at any stage (`model.ts`, `PlanNotebook.tsx`, `NotebookStageBoard.tsx`, `notebook.css`)\n\n- `notebookDropTarget` (327): remove prompt depth-0 forcing; clamp `requestedDepth` to `[0, notebookBoardLastRow]`; keep parent auto-detect, but when no unambiguous parent, keep `requestedDepth` unlinked instead of falling back to 0.\n- New `notebookAssetDropTarget(definition, pointer): { position, depth, slot, connectTargetId }` — pure model helper replacing the `flow.nodes` bbox scan in `onDrop` (`PlanNotebook.tsx:140-148`); hit-tests gen steps via `layout.positions` + `notebookNodeSizes`. Hit → `depth = max(0, genDepth - 1)`, `connectTargetId = gen.id`; miss → depth from pointer y.\n- `addStep` (718) / `addAssetStep` (731): optional `depth?` param → writes the override when \u003e 0. Asset slug-reuse path unchanged (re-drop doesn't re-stage an existing shared asset cell).\n- `handleAddAsset` (`PlanNotebook.tsx:391`): use `notebookAssetDropTarget`, pass real drop position + depth, connect when `connectTargetId`. `handleAddStep`: pass `depth` only when unlinked (`parentId === null`).\n- **Asset drop preview**: during `onDragOver`, sniff `event.dataTransfer.types` for the `application/x-videocity-asset-(image|video|audio)` marker (set by `src/components/sidebar/cards/CardShell.tsx:122`; data itself is unreadable until drop) → show ghost card. Extend `NotebookDropPreview.type` with `'asset'` + optional `assetKind`; icon per kind; invert the dashed link (asset feeds *into* the gen: preview-bottom → gen-top); labels `Connect input` / `Add asset`. Add `onDragLeave` clearing the preview only when the pointer truly leaves the canvas (`!currentTarget.contains(relatedTarget)`). CSS: `.vc-notebook-drop-card-asset`.\n\n## Phase 3 — Drag existing cells between stages (`model.ts`, `useNotebookFlow.ts`)\n\n- New `constrainTrackDragPosition(definition, layout, stepId, position): StepPosition` — x via existing `quantizedTrackX`; y quantized to rows and clamped to `[maxParentDepth + 1 (or 0), notebookBoardLastRow]` for live row-snapping feedback.\n- `useNotebookFlow.onNodesChange` (247-262): replace the `y: locked.y` lock with `constrainTrackDragPosition`.\n- Rewrite `reorderStepsOnTracks` (271): per move, compute requested row from final y → `setStepDepthOverride(staged, id, requested \u003e parentsDepth ? requested : null)`; recompute `notebookTrackDepths(staged)` and rebuild rows via `orderedStepsByDepth` of the staged definition (so descendants pushed down regroup correctly); group moves by **new effective depth**; reuse the existing min-slot splice; finish with `trackLayoutFromRows` + `moveSteps`.\n- Multi-select drags clamp per-node against pre-move parent depths (child may drift to `parentNew + 1`; acceptable, asserted in tests).\n\n## Phase 4 — Visible gen stack + promote (`model.ts`, `nodes/nodeTypes.ts`, `useNotebookFlow.ts`, `nodes/GenNode.tsx`, `PlanNotebook.tsx`, `notebook.css`)\n\n- Model: `GenRunOutput { assetId, thumbnailSrc, status: 'ready'|'pending'|'error'|'missing', active }`; `stepRunOutputs(step, mediaItems): GenRunOutput[]` (chronological, status mapping mirrors `stepRunStatus`, `[]` for non-gen); `promoteRunAsset(definition, stepId, assetId)` — moves id to end of `asset_ids`; identity-return when absent/already last (history no-ops).\n- `NotebookNodeData` gains `outputs: GenRunOutput[]` and `onPromoteAsset: (stepId, assetId) =\u003e void`; add both to `dataEqual` (`useNotebookFlow.ts:45`) with an `outputsEqual` mirroring `mediaInputsEqual`.\n- `useNotebookFlow`: accept `onPromoteAsset` option, ref-stabilize it, thread into `nodeData` alongside `outputs: stepRunOutputs(...)`.\n- `GenNode`: when `outputs.length \u003e 1`, render `.vc-node-output-strip nodrag` of `\u003cbutton\u003e` thumbs below the hero — active one ringed, pending spinner, error icon; `onClick` stops propagation and calls `onPromoteAsset` unless already active. Hero stays `latestAssetId` (unchanged).\n- `PlanNotebook`: `handlePromoteAsset` → `commit(promoteRunAsset(...))`; no snap needed (no topology change).\n- CSS near the input-strip block (~210-256): `.vc-node-output-strip` (bottom-anchored above `.vc-node-meta`, flex-end so newest stays visible, **`pointer-events: auto`** — do not copy the input strip's `none`), `.vc-node-output-thumb` overlapping-thumb recipe + hover lift, `is-active` / `is-pending` / `is-error` / `is-missing` states.\n\nDocumented tradeoff: promotion reorders `asset_ids`, so strict chronology is lost after a promote; a completing run always appends and reclaims \"active\" (newest-wins, matching today).\n\n## Phase 5 — Tests\n\n`model.test.ts`:\n- **Rewrite** `'locks vertical movement…'` (line 318 — codifies the removed y-lock): drag to `y: 9999` → clamped to last row + `depth` stored; drag back up → key deleted.\n- **Update** `'selects a smart parent…'` (341): ambiguous drop now `{ parentId: null, depth: requested }`; prompt deep-drop no longer forced to 0.\n- **New**: depth override honored / max(stored, computed) / cycle-safe; disconnect \u0026 remove bake depth; `notebookDropTarget` clamps to board last row incl. `stage_count`; `notebookAssetDropTarget` gen-hit (incl. depth-0 gen push-down case) and empty-band cases; `addAssetStep` depth + slug-reuse ignores depth; `reorderStepsOnTracks` cross-row moves, descendant regrouping, pure-x no-churn; `stageBoardMetrics` with stageCount; `notebookStageCount` parsing; `promoteRunAsset` reorder/identity + `latestAssetId`/`resolveEffectiveValues` follow; `stepRunOutputs` status mapping + active flag.\n\n`notebook-gen-ui.test.ts` (source-assertion style): GenNode has `vc-node-output-strip`/`nodrag`/`onPromoteAsset`; StageBoard has `vc-notebook-add-stage`/`nopan`; PlanNotebook has the asset-marker sniff and `onAddStage`; css has new classes. `useNotebookRun.test.ts` unchanged (append semantics untouched).\n\n## Verification\n\n- `npm run test`, `npm run lint`, `npm run build` (tsc -b).\n- In-app (`npm run dev`, open a project → `/notebook`):\n  1. Drag sidebar asset over Stage 03 → ghost in that row; drop → unconnected asset cell in Stage 03; Cmd+Z removes.\n  2. Drop asset onto a Stage-02 gen → gen highlights, ghost sits row above with link pointing into the gen; connected, gen doesn't move rows.\n  3. \"+ Add stage\" (test at multiple zoom levels) → new empty band; drop a toolbox cell in it unlinked; reload → persists; `plan/.plan.json` has `stage_count`.\n  4. Drag an existing cell vertically → live row snapping, can't cross above parent+1; disconnect its edge → stays put (baked depth).\n  5. Generate twice → two thumbs, newest ringed active; click older → hero swaps, downstream input strip + sidebar slug follow, `plan/index.md` Produces reorders; Cmd+Z reverts; new run reclaims active.\n  6. Auto-arrange → overrides + stage_count survive.\n",
+    "status": "open",
+    "priority": 2,
+    "issue_type": "epic",
+    "owner": "ci@videocity.test",
+    "created_at": "2026-07-11T09:09:54Z",
+    "created_by": "CI",
+    "updated_at": "2026-07-11T09:09:54Z",
+    "dependency_count": 0,
+    "dependent_count": 0,
+    "comment_count": 0
+  }
+]

@@ -27,12 +27,16 @@ import {
   connectSteps,
   disconnectSteps,
   nextNotebookTrackPosition,
+  notebookAssetDropTarget,
   notebookDropTarget,
   notebookInitialViewport,
+  notebookStageCount,
   notebookTrackLayout,
   NOTEBOOK_TRANSLATE_EXTENT,
+  stageBoardMetrics,
   reorderStepsOnTracks,
   removeSteps,
+  promoteRunAsset,
   setFirstFrameSource,
   snapDefinitionToTracks,
   toolboxStepSeeds,
@@ -72,8 +76,10 @@ interface NotebookCanvasProps {
     type: 'prompt' | 'image' | 'video',
     position: { x: number; y: number },
     parentId: string | null,
+    depth?: number,
   ) => void
-  onAddAsset: (slug: string, position: { x: number; y: number }, targetId: string | null) => void
+  onAddAsset: (slug: string, position: { x: number; y: number }, targetId: string | null, depth?: number) => void
+  onAddStage: () => void
   canUndo: boolean
   canRedo: boolean
   onUndo: () => void
@@ -91,6 +97,7 @@ function NotebookCanvas({
   onMove,
   onAddStep,
   onAddAsset,
+  onAddStage,
   canUndo,
   canRedo,
   onUndo,
@@ -117,8 +124,8 @@ function NotebookCanvas({
     const position = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY })
     const stepType = event.dataTransfer.getData('application/x-videocity-notebook-step')
     if (stepType === 'prompt' || stepType === 'image' || stepType === 'video') {
-      const target = notebookDropTarget(definition, stepType, position, selectedStepId)
-      onAddStep(stepType, target.position, target.parentId)
+      const target = notebookDropTarget(definition, stepType as 'prompt' | 'image' | 'video', position, selectedStepId)
+      onAddStep(stepType as 'prompt' | 'image' | 'video', target.position, target.parentId, target.depth)
       clearDropPreview()
       return
     }
@@ -137,22 +144,14 @@ function NotebookCanvas({
         return
       }
       const slug = typeof payload.slug === 'string' ? payload.slug : payload.id as string
-      const target = flow.nodes.find((node) => {
-        const width = node.width ?? 0
-        const height = node.height ?? 0
-        return node.type !== 'prompt' && node.type !== 'asset'
-          && position.x >= node.position.x
-          && position.x <= node.position.x + width
-          && position.y >= node.position.y
-          && position.y <= node.position.y + height
-      })
-      onAddAsset(slug, position, target?.id ?? null)
+      const target = notebookAssetDropTarget(definition, position)
+      onAddAsset(slug, target.position, target.connectTargetId, target.depth)
       clearDropPreview()
     } catch {
       clearDropPreview()
       return
     }
-  }, [clearDropPreview, definition, flow.nodes, onAddAsset, onAddStep, reactFlow, selectedStepId])
+  }, [clearDropPreview, definition, onAddAsset, onAddStep, reactFlow, selectedStepId])
   const onInit = useCallback((instance: ReactFlowInstance<NotebookFlowNode, Edge>) => {
     const canvasWidth = canvasRef.current?.clientWidth ?? 720
     void instance.setViewport(notebookInitialViewport(definition, canvasWidth))
@@ -194,8 +193,26 @@ function NotebookCanvas({
       onDragOver={(event) => {
         event.preventDefault()
         event.dataTransfer.dropEffect = 'copy'
+        let isAsset = false
+        let assetKind: NotebookDropPreview['assetKind'] = null
+        for (const type of event.dataTransfer.types) {
+          if (type.startsWith('application/x-videocity-asset-')) {
+            isAsset = true
+            assetKind = type.replace('application/x-videocity-asset-', '') as NotebookDropPreview['assetKind']
+            break
+          }
+        }
+        const position = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY })
         if (draggedStepType) {
-          previewDropAt(reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY }))
+          previewDropAt(position)
+        } else if (isAsset) {
+          const target = notebookAssetDropTarget(definition, position)
+          setDropPreview({ ...target, parentId: target.connectTargetId, type: 'asset', assetKind })
+        }
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as globalThis.Node)) {
+          clearDropPreview()
         }
       }}
       onDrop={onDrop}
@@ -228,7 +245,7 @@ function NotebookCanvas({
         fitView={false}
         translateExtent={NOTEBOOK_TRANSLATE_EXTENT}
       >
-        <NotebookStageBoard definition={definition} selectedStepId={selectedStepId} preview={dropPreview} />
+        <NotebookStageBoard definition={definition} selectedStepId={selectedStepId} preview={dropPreview} onAddStage={onAddStage} />
         <Background variant={BackgroundVariant.Lines} gap={32} size={0.6} />
         <Controls showInteractive={false}>
           <ControlButton onClick={onUndo} disabled={!canUndo} title="Undo"><Undo2 /></ControlButton>
@@ -335,6 +352,15 @@ export function Notebook({
     definition,
     enabled: mcpState === 'ready',
   })
+  const commit = useCallback((next: NotebookPlanDefinition, coalesceKey?: string) => {
+    history.commit(next, coalesceKey)
+  }, [history])
+  const getDefinition = useCallback(() => definition, [definition])
+  const handlePromoteAsset = useCallback((stepId: string, assetId: string) => {
+    const current = getDefinition()
+    if (!current) return
+    commit(promoteRunAsset(current, stepId, assetId))
+  }, [commit, getDefinition])
   const flow = useNotebookFlow({
     definition,
     mediaItems,
@@ -342,11 +368,8 @@ export function Notebook({
     runningStepIds: run.runningStepIds,
     errors: run.errors,
     selectedStepId,
+    onPromoteAsset: handlePromoteAsset,
   })
-  const commit = useCallback((next: NotebookPlanDefinition, coalesceKey?: string) => {
-    history.commit(next, coalesceKey)
-  }, [history])
-  const getDefinition = useCallback(() => definition, [definition])
   const handleConnect = useCallback((connection: Connection) => {
     const current = getDefinition()
     if (!current || !connection.source || !connection.target) return
@@ -379,21 +402,33 @@ export function Notebook({
     type: 'prompt' | 'image' | 'video',
     position: { x: number; y: number },
     parentId: string | null,
+    depth?: number,
   ) => {
     const current = getDefinition()
     const seed = toolboxStepSeeds.find((candidate) => candidate.type === type)
     if (!current || !seed) return
-    const added = addStep(current, seed, position)
+    const added = addStep(current, seed, position, parentId === null ? depth : undefined)
     const stepId = added.sequence.at(-1)?.id
     const connected = parentId && stepId ? connectSteps(added, parentId, stepId) : added
     commit(snapDefinitionToTracks(connected))
   }, [commit, getDefinition])
-  const handleAddAsset = useCallback((slug: string, _position: { x: number; y: number }, targetId: string | null) => {
+  const handleAddAsset = useCallback((slug: string, position: { x: number; y: number }, targetId: string | null, depth?: number) => {
     const current = getDefinition()
     if (!current) return
-    const added = addAssetStep(current, slug, nextNotebookTrackPosition(current, 'asset'))
+    const added = addAssetStep(current, slug, position, depth)
     const next = targetId ? connectSteps(added.definition, added.stepId, targetId) : added.definition
     commit(snapDefinitionToTracks(next))
+  }, [commit, getDefinition])
+  const handleAddStage = useCallback(() => {
+    const current = getDefinition()
+    if (!current) return
+    const layout = notebookTrackLayout(current)
+    const stageCount = notebookStageCount(current)
+    const metrics = stageBoardMetrics(layout, null, stageCount)
+    commit({
+      ...current,
+      properties: { ...current.properties, stage_count: metrics.rowCount + 1 },
+    })
   }, [commit, getDefinition])
   const updateDefinition = useCallback((next: NotebookPlanDefinition, coalesceKey?: string) => {
     commit(next, coalesceKey)
@@ -423,6 +458,7 @@ export function Notebook({
               onMove={handleMove}
               onAddStep={handleAddStep}
               onAddAsset={handleAddAsset}
+              onAddStage={handleAddStage}
               canUndo={history.canUndo}
               canRedo={history.canRedo}
               onUndo={history.undo}

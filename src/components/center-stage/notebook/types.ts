@@ -51,4 +51,4 @@ export interface NotebookRunStatus {
   message?: string
 }
 
-export type NotebookMediaItem = Pick<MediaItem, 'id' | 'status' | 'failedMessage'>
+export type NotebookMediaItem = Pick<MediaItem, 'id' | 'status' | 'failedMessage' | 'thumbnailSrc'>
