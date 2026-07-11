@@ -104,3 +104,20 @@ export function clipWindowPayload(
     video_clip_ends: roundClip(ends),
   }
 }
+
+/**
+ * Ensure video_clip_start/ends match what the clip-window UI displays so v2v
+ * submit / tool-call previews include the window. Unset → full bounds; partial
+ * → normalized against bounds. No-op when dual-range bounds are unavailable.
+ */
+export function withEffectiveClipWindow(
+  values: Record<string, unknown>,
+  bounds: ClipBounds | null,
+): Record<string, unknown> {
+  if (!bounds) return values
+  const display = displayClipWindow(values.video_clip_start, values.video_clip_ends, bounds)
+  return {
+    ...values,
+    ...clipWindowPayload(display.start, display.ends),
+  }
+}

@@ -17,6 +17,7 @@ import {
   displayClipWindow,
   normalizeClipWindow,
   sharedFiniteBounds,
+  withEffectiveClipWindow,
   type ClipBounds,
 } from './clip-window'
 import {
@@ -377,11 +378,18 @@ function GenerationSidebar({
 
   const domainTheme = genThemes[category]
   const notebookTheme = genThemes.notebook
-  const toolPayload = useMemo(() => {
+  const submitValues = useMemo(() => {
     if (!option) return null
-    const submitValues = option.modes && modeKey
-      ? filterValuesForMode(option.modes, modeKey, mergedValues)
-      : mergedValues
+    const withClip = withEffectiveClipWindow(
+      mergedValues,
+      showClipComposite ? clipBounds : null,
+    )
+    return option.modes && modeKey
+      ? filterValuesForMode(option.modes, modeKey, withClip)
+      : withClip
+  }, [option, modeKey, mergedValues, showClipComposite, clipBounds])
+  const toolPayload = useMemo(() => {
+    if (!option || !submitValues) return null
     return {
       tool_name: effectiveToolName(option, modeKey),
       args: {
@@ -390,7 +398,7 @@ function GenerationSidebar({
         _provider: preview.selectedProviderKey || undefined,
       },
     }
-  }, [option, modeKey, mergedValues, projectSlug, preview.selectedProviderKey])
+  }, [option, modeKey, submitValues, projectSlug, preview.selectedProviderKey])
 
   return (
     <aside className={`vc-notebook-sidebar vc-notebook-sidebar-${category}`}>
@@ -590,10 +598,13 @@ function GenerationSidebar({
           {error ? <div className="vc-notebook-error"><AlertCircle /> {error}</div> : null}
           <RunStepButton
             running={running}
-            disabled={requiredMissing.length > 0 || !readiness.ready || running}
+            disabled={requiredMissing.length > 0 || !readiness.ready || running || !submitValues}
             disabledReason={disabledReason}
             cost={costLabel}
-            onClick={() => onRun(step, option, preview.selectedProviderKey, mergedValues)}
+            onClick={() => {
+              if (!submitValues) return
+              onRun(step, option, preview.selectedProviderKey, submitValues)
+            }}
           />
         </footer>
       ) : null}

@@ -31,6 +31,7 @@ describe('notebook generation editor order and domain themes', () => {
     expect(sidebar).not.toContain('vc-notebook-run-image')
     expect(sidebar).not.toContain('domain="notebook"')
     expect(sidebar).toContain('tool_name: effectiveToolName(option, modeKey)')
+    expect(sidebar).toContain('withEffectiveClipWindow')
     expect(sidebar).toContain('<JsonNode data={toolPayload} />')
 
     expect(genThemes.image).toBeDefined()
@@ -84,7 +85,7 @@ describe('notebook generation editor order and domain themes', () => {
 
   it('disables Generate only while submit is in flight, not while asset is pending', () => {
     const sidebar = readFileSync(join(root, 'NotebookSidebar.tsx'), 'utf8')
-    expect(sidebar).toContain('disabled={requiredMissing.length > 0 || !readiness.ready || running}')
+    expect(sidebar).toContain('disabled={requiredMissing.length > 0 || !readiness.ready || running || !submitValues}')
     expect(sidebar).not.toContain("runStatus.state === 'pending'")
     expect(sidebar).toContain("running ? 'Generating' : 'Generate'")
     expect(sidebar).not.toContain('<RunStatus')

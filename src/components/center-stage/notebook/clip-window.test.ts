@@ -8,6 +8,7 @@ import {
   normalizeClipWindow,
   roundClip,
   sharedFiniteBounds,
+  withEffectiveClipWindow,
 } from './clip-window'
 
 const GOOGLE_OMNI_BOUNDS = { min: 0, max: 10 }
@@ -90,5 +91,34 @@ describe('displayClipWindow / isClipUnset / clipWindowPayload', () => {
       video_clip_start: 1.5,
       video_clip_ends: 7.25,
     })
+  })
+})
+
+describe('withEffectiveClipWindow', () => {
+  it('fills full bounds when clip is unset so v2v tool-call includes start/ends', () => {
+    const out = withEffectiveClipWindow(
+      { prompt: 'hyper realistic', video_slug: '@vid-clip' },
+      GOOGLE_OMNI_BOUNDS,
+    )
+    expect(out).toEqual({
+      prompt: 'hyper realistic',
+      video_slug: '@vid-clip',
+      video_clip_start: 0,
+      video_clip_ends: 10,
+    })
+  })
+
+  it('preserves and normalizes an explicit window', () => {
+    const out = withEffectiveClipWindow(
+      { video_slug: '@vid-clip', video_clip_start: 2.004, video_clip_ends: 7.996 },
+      GOOGLE_OMNI_BOUNDS,
+    )
+    expect(out.video_clip_start).toBe(2)
+    expect(out.video_clip_ends).toBe(8)
+  })
+
+  it('is a no-op without dual-range bounds', () => {
+    const values = { video_slug: '@vid-clip' }
+    expect(withEffectiveClipWindow(values, null)).toBe(values)
   })
 })
