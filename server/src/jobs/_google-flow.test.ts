@@ -225,6 +225,38 @@ describe("describeGoogleFlowJobFailure", () => {
       message: "All operations failed",
     });
   });
+
+  // Shape mirrors notebook-e2e vid-google-omni-hyper-realistic-* failures:
+  // abra_edit V2V dies with mediaStatus only (operations empty, no PUBLIC_ERROR_*).
+  it("appends retry/reword guidance for opaque omni V2V mediaStatus FAILED", () => {
+    const { message, failCode } = describeGoogleFlowJobFailure({
+      error: "All operations failed",
+      code: 400,
+      response: {
+        operations: [],
+        media: [{
+          mediaMetadata: {
+            mediaStatus: {
+              error: { code: 13, message: "Generation job finished with state: FAILED" },
+              failureReasons: ["Generation job finished with state: FAILED"],
+              mediaGenerationStatus: "MEDIA_GENERATION_STATUS_FAILED",
+            },
+            visibility: "FAILED_TO_GENERATE",
+          },
+          video: {
+            generatedVideo: { model: "abra_edit", prompt: "hyper realistic" },
+            dimensions: { length: "8s" },
+          },
+        }],
+      },
+    });
+    expect(failCode).toBe("Generation job finished with state: FAILED");
+    expect(message).toBe(
+      "All operations failed: Generation job finished with state: FAILED — "
+      + "Google's video editor failed without a policy reason (common on Omni V2V). "
+      + "Retry once, describe the edit more specifically, or try a different source clip / aspect.",
+    );
+  });
 });
 
 describe("googleFlowFetch path-ID decode (vc-4e8z)", () => {

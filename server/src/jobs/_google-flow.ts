@@ -192,6 +192,12 @@ const GOOGLE_FLOW_GUIDANCE: { match: string; guidance: string }[] = [
     match: "PUBLIC_ERROR_UNUSUAL_ACTIVITY_TOO_MUCH_TRAFFIC",
     guidance: "Google rate-limited this request. Wait a minute and retry.",
   },
+  // Omni Flash V2V (abra_edit) often dies with this opaque mediaStatus and no
+  // PUBLIC_ERROR_* reason — request was accepted; Google's edit job failed.
+  {
+    match: "Generation job finished with state: FAILED",
+    guidance: "Google's video editor failed without a policy reason (common on Omni V2V). Retry once, describe the edit more specifically, or try a different source clip / aspect.",
+  },
 ];
 
 function findGoogleFlowGuidance(details: GoogleFlowFailureDetail[]): string | undefined {
