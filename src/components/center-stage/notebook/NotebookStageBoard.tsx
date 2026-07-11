@@ -69,7 +69,6 @@ export function NotebookStageBoard({
       <ViewportPortal>
         <div className="vc-notebook-stage-board" style={{ width: boardWidth, height: boardHeight }} aria-hidden>
           {Array.from({ length: rowCount }, (_, depth) => {
-            const row = layout.rows.find((candidate) => candidate.depth === depth)
             const active = selectedDepth === depth || preview?.depth === depth
             return (
               <div
@@ -83,7 +82,6 @@ export function NotebookStageBoard({
               >
                 <div className="vc-notebook-stage-label" style={{ width: NOTEBOOK_STAGE_RAIL_WIDTH }}>
                   <b>{`Stage ${stageCode(depth)}`}</b>
-                  <em>{depth === 0 ? 'Ingress' : row?.stepIds.length ? 'Linked' : 'Next'}</em>
                 </div>
                 {Array.from({ length: maxSlots }, (_, slot) => (
                   <span

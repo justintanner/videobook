@@ -30,6 +30,7 @@ import {
   notebookDropTarget,
   notebookInitialViewport,
   notebookTrackLayout,
+  NOTEBOOK_TRANSLATE_EXTENT,
   reorderStepsOnTracks,
   removeSteps,
   setFirstFrameSource,
@@ -225,6 +226,7 @@ function NotebookCanvas({
         panOnScrollSpeed={0.9}
         zoomOnScroll={false}
         fitView={false}
+        translateExtent={NOTEBOOK_TRANSLATE_EXTENT}
       >
         <NotebookStageBoard definition={definition} selectedStepId={selectedStepId} preview={dropPreview} />
         <Background variant={BackgroundVariant.Lines} gap={32} size={0.6} />

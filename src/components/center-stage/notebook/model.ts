@@ -1,5 +1,6 @@
 import { deriveStripSlots, routeDrop } from '@/components/gen/ui/media-strip'
-import type { ModelOption } from '@/components/gen/types'
+import type { CoordinateExtent } from '@xyflow/react'
+import type { ModeSpec, ModelOption } from '@/components/gen/types'
 import type {
   JsonRecord,
   NotebookMediaItem,
@@ -24,10 +25,10 @@ export interface GraphLayoutBounds {
 }
 
 export const notebookNodeSizes: Record<NotebookPlanStep['type'], { width: number; height: number }> = {
-  prompt: { width: 280, height: 168 },
+  prompt: { width: 280, height: 340 },
   image: { width: 300, height: 340 },
   video: { width: 300, height: 340 },
-  asset: { width: 280, height: 196 },
+  asset: { width: 280, height: 340 },
 }
 
 // Layout invariants — .vc-node-* CSS sizes and .vc-node-hero MUST mirror notebookNodeSizes.
@@ -390,14 +391,23 @@ export function stageBoardMetrics(
   }
 }
 
+// Screen-fixed React Flow control rails (add cells top-left, zoom/undo bottom-left) occupy
+// ~52px at the canvas's left edge; anchor the board past them so stage labels stay visible.
+const NOTEBOOK_CANVAS_LEFT_GUTTER = 72
+const NOTEBOOK_CANVAS_TOP_MARGIN = 16
+export const NOTEBOOK_TRANSLATE_EXTENT: CoordinateExtent = [
+  [Number.NEGATIVE_INFINITY, NOTEBOOK_TRACK_ORIGIN_Y - NOTEBOOK_STAGE_BAND_HEADROOM - NOTEBOOK_CANVAS_TOP_MARGIN],
+  [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY],
+]
+
 export function notebookInitialViewport(
   definition: NotebookPlanDefinition,
   canvasWidth: number,
 ): { x: number; y: number; zoom: number } {
   const metrics = stageBoardMetrics(notebookTrackLayout(definition))
-  const zoom = Math.min(1, Math.max(0.5, (canvasWidth - 32) / metrics.width))
-  const x = Math.max(16, (canvasWidth - metrics.width * zoom) / 2)
-  const y = 16 - (NOTEBOOK_TRACK_ORIGIN_Y - NOTEBOOK_STAGE_BAND_HEADROOM) * zoom
+  const zoom = Math.min(1, Math.max(0.5, (canvasWidth - NOTEBOOK_CANVAS_LEFT_GUTTER - 16) / metrics.width))
+  const x = Math.max(NOTEBOOK_CANVAS_LEFT_GUTTER, (canvasWidth - metrics.width * zoom) / 2)
+  const y = -NOTEBOOK_TRANSLATE_EXTENT[0][1] * zoom
   return { x, y, zoom }
 }
 
@@ -779,6 +789,7 @@ export function resolveEffectiveValues(
   definition: NotebookPlanDefinition,
   step: NotebookPlanStep,
   option: ModelOption,
+  activeMode: ModeSpec | null = null,
 ): { values: Record<string, unknown>; warnings: string[]; promptFromInputs: string | null } {
   const persisted = valuesOf(step)
   const values: Record<string, unknown> = { ...persisted }
@@ -787,7 +798,7 @@ export function resolveEffectiveValues(
   const prompts: string[] = []
   let hasPromptInput = false
   const steps = new Map(definition.sequence.map((candidate) => [candidate.id, candidate]))
-  const slots = deriveStripSlots(option)
+  const slots = deriveStripSlots(option, activeMode)
   const firstFrameSource = stringProperty(step.properties, 'first_frame_source')
   const routedStringSources = new Set<string>()
 

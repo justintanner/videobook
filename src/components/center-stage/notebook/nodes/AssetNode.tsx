@@ -11,7 +11,7 @@ function AssetNodeComponent({ data, selected }: NodeProps) {
   const Icon = kind === 'video' ? Video : kind === 'audio' ? Music : ImageIcon
   return (
     <div className={`vc-node vc-node-asset ${selected ? 'vc-node-selected' : ''} ${node.missing ? 'vc-node-missing' : ''} ${node.routeState ? `vc-node-route-${node.routeState}` : ''}`}>
-      <div className="vc-node-kicker"><span>Asset</span><b>{kind?.slice(0, 3) ?? 'REF'}</b></div>
+      <div className="vc-node-kicker"><span><Icon aria-hidden /> Asset</span><b>{kind?.slice(0, 3) ?? 'REF'}</b></div>
       {node.thumbnailSrc ? <img src={node.thumbnailSrc} alt="" /> : <Icon />}
       <span>{slug}</span>
       <Handle type="source" position={Position.Bottom} className="vc-node-handle" />

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { filterValuesForMode, getMode } from '@/components/gen/modes'
 import type { ModelOption } from '@/components/gen/types'
 import {
   NOTEBOOK_TRACK_ORIGIN_Y,
@@ -103,6 +104,33 @@ const imageOption: ModelOption = {
       first_frame_slug: { type: 'string' },
       video_slug: { type: 'string' },
     },
+  },
+}
+
+const omniOption: ModelOption = {
+  ...imageOption,
+  key: 'gemini_omni',
+  label: 'Gemini Omni Video',
+  tool_name: 'generate_google_omni_video',
+  modes: {
+    shared_params: ['prompt', 'duration', 'aspect_ratio'],
+    default_mode: 't2v',
+    modes: [
+      { key: 't2v', label: 'Text', params: [] },
+      {
+        key: 'i2v',
+        label: 'First frame',
+        params: ['first_frame_slug'],
+        required: ['first_frame_slug'],
+        asset_slots: [{ param: 'first_frame_slug', kind: 'image', label: 'First frame' }],
+      },
+      {
+        key: 'r2v',
+        label: 'References',
+        params: ['image_slugs'],
+        asset_slots: [{ param: 'image_slugs', kind: 'image', label: 'References', max: 7 }],
+      },
+    ],
   },
 }
 
@@ -376,6 +404,30 @@ describe('notebook model', () => {
     expect(stepInputReadiness(graph, target, [])).toEqual({ ready: false, reasons: ['Asset is not ready.'] })
     expect(stepInvalidReason(graph, target)).toBeNull()
     expect(stepInvalidReason(graph, { ...target, properties: { ...target.properties, values: {} } })).toBeNull()
+  })
+
+  it('routes an unpinned image input through the selected first-frame mode', () => {
+    const graph: NotebookPlanDefinition = {
+      properties: {},
+      sequence: [
+        {
+          id: 'asset', componentType: 'task', type: 'asset', name: 'Asset',
+          properties: { slug: '@img-source' },
+        },
+        {
+          id: 'target', componentType: 'task', type: 'video', name: 'Target',
+          properties: { mode: 'i2v', values: {}, inputs: ['asset'] },
+        },
+      ],
+    }
+    const target = graph.sequence[1]
+    const mode = getMode(omniOption.modes!, 'i2v')
+    const resolved = resolveEffectiveValues(graph, target, omniOption, mode)
+    const payload = filterValuesForMode(omniOption.modes!, mode.key, resolved.values)
+
+    expect(resolved.values).toEqual({ first_frame_slug: '@img-source' })
+    expect(payload).toEqual({ first_frame_slug: '@img-source' })
+    expect(payload).not.toHaveProperty('image_slugs')
   })
 
   it('builds ordered connected media inputs excluding prompts with icon-fallback thumbs', () => {

@@ -26,7 +26,7 @@ function GenNodeComponent({ data, selected }: NodeProps) {
   return (
     <div className={`vc-node vc-node-gen vc-node-${step.type} ${selected ? 'vc-node-selected' : ''} ${node.invalidReason ? 'vc-node-invalid' : ''} ${node.routeState ? `vc-node-route-${node.routeState}` : ''}`}>
       <Handle type="target" position={Position.Top} className="vc-node-handle" />
-      <div className="vc-node-kicker"><span>Gen {step.type}</span><b>{step.type === 'video' ? 'VID' : 'IMG'}</b></div>
+      <div className="vc-node-kicker"><span><Icon aria-hidden /> Gen {step.type}</span><b>{step.type === 'video' ? 'VID' : 'IMG'}</b></div>
       {mediaInputs.length > 0 ? (
         <div className="vc-node-input-strip" aria-label="Connected media inputs">
           {mediaInputs.map((item) => (
