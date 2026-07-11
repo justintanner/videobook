@@ -8,6 +8,7 @@ import {
   autoLayout,
   canConnect,
   connectSteps,
+  connectedMediaInputs,
   createEmptyDefinition,
   disconnectSteps,
   graphLayoutBounds,
@@ -273,5 +274,59 @@ describe('notebook model', () => {
     expect(stepInputReadiness(graph, target, [])).toEqual({ ready: false, reasons: ['Asset is not ready.'] })
     expect(stepInvalidReason(graph, target)).toBeNull()
     expect(stepInvalidReason(graph, { ...target, properties: { ...target.properties, values: {} } })).toBeNull()
+  })
+
+  it('builds ordered connected media inputs excluding prompts with icon-fallback thumbs', () => {
+    const graph: NotebookPlanDefinition = {
+      properties: {},
+      sequence: [
+        {
+          id: 'prompt', componentType: 'task', type: 'prompt', name: 'Prompt',
+          properties: { text: 'Ignore me' },
+        },
+        {
+          id: 'asset-a', componentType: 'task', type: 'asset', name: 'Asset A',
+          properties: { slug: '@img-alpha' },
+        },
+        {
+          id: 'upstream', componentType: 'task', type: 'image', name: 'Upstream',
+          properties: { model: 'nano_banana', asset_ids: ['img-up'] },
+        },
+        {
+          id: 'asset-b', componentType: 'task', type: 'asset', name: 'Asset B',
+          properties: { slug: '@vid-beta' },
+        },
+        {
+          id: 'target', componentType: 'task', type: 'video', name: 'Target',
+          properties: { inputs: ['prompt', 'asset-a', 'upstream', 'asset-b'] },
+        },
+      ],
+    }
+    const target = graph.sequence[4]
+    const strip = connectedMediaInputs(graph, target, [
+      { id: 'img-alpha', thumbnailSrc: '/thumbs/alpha.jpg' },
+      { id: 'img-up', thumbnailSrc: null },
+    ])
+    expect(strip.map((item) => item.sourceId)).toEqual(['asset-a', 'upstream', 'asset-b'])
+    expect(strip.find((item) => item.sourceId === 'prompt')).toBeUndefined()
+    expect(strip[0]).toMatchObject({
+      sourceId: 'asset-a',
+      kind: 'image',
+      thumbnailSrc: '/thumbs/alpha.jpg',
+      label: '@img-alpha',
+    })
+    expect(strip[1]).toMatchObject({
+      sourceId: 'upstream',
+      kind: 'image',
+      thumbnailSrc: null,
+      label: 'nano_banana',
+    })
+    expect(strip[2]).toMatchObject({
+      sourceId: 'asset-b',
+      kind: 'video',
+      thumbnailSrc: null,
+      label: '@vid-beta',
+    })
+    expect(connectedMediaInputs(graph, graph.sequence[0], [])).toEqual([])
   })
 })

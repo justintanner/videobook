@@ -2,7 +2,7 @@ import type { Node } from '@xyflow/react'
 import { AssetNode } from './AssetNode'
 import { GenNode } from './GenNode'
 import { PromptNode } from './PromptNode'
-import { notebookNodeSizes } from '../model'
+import { notebookNodeSizes, type ConnectedMediaInput } from '../model'
 import type { NotebookPlanStep, NotebookRunState } from '../types'
 
 export interface NotebookNodeData extends Record<string, unknown> {
@@ -14,6 +14,7 @@ export interface NotebookNodeData extends Record<string, unknown> {
   error: string | null
   invalidReason: string | null
   missing: boolean
+  mediaInputs: ConnectedMediaInput[]
 }
 
 export type NotebookFlowNode = Node<NotebookNodeData, NotebookPlanStep['type']>

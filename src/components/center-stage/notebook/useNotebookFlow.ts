@@ -1,6 +1,6 @@
 import { applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type NodeChange } from '@xyflow/react'
 import { useCallback, useEffect, useState } from 'react'
-import { latestAssetId, stepInvalidReason, stepPosition, stepRunStatus } from './model'
+import { connectedMediaInputs, latestAssetId, stepInvalidReason, stepPosition, stepRunStatus } from './model'
 import { NODE_DIMENSIONS, type NotebookFlowNode, type NotebookNodeData } from './nodes/nodeTypes'
 import type { NotebookPlanDefinition } from './types'
 import type { MediaItem } from '@/components/sidebar/types'
@@ -13,6 +13,20 @@ interface NotebookFlowOptions {
   errors: ReadonlyMap<string, string>
 }
 
+function mediaInputsEqual(
+  left: NotebookNodeData['mediaInputs'],
+  right: NotebookNodeData['mediaInputs'],
+): boolean {
+  if (left.length !== right.length) return false
+  return left.every((item, index) => {
+    const other = right[index]
+    return item.sourceId === other.sourceId
+      && item.kind === other.kind
+      && item.thumbnailSrc === other.thumbnailSrc
+      && item.label === other.label
+  })
+}
+
 function dataEqual(left: NotebookNodeData, right: NotebookNodeData): boolean {
   return left.step === right.step
     && left.thumbnailSrc === right.thumbnailSrc
@@ -22,6 +36,7 @@ function dataEqual(left: NotebookNodeData, right: NotebookNodeData): boolean {
     && left.error === right.error
     && left.invalidReason === right.invalidReason
     && left.missing === right.missing
+    && mediaInputsEqual(left.mediaInputs, right.mediaInputs)
 }
 
 function nodeData(
@@ -46,6 +61,7 @@ function nodeData(
     error: errors.get(step.id) ?? null,
     invalidReason: stepInvalidReason(definition, step),
     missing: step.type === 'asset' && !asset,
+    mediaInputs: connectedMediaInputs(definition, step, mediaItems),
   }
 }
 

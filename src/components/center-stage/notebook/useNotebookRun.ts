@@ -29,6 +29,76 @@ function generationAssetId(text: string): string | null {
   }
 }
 
+export interface NotebookRunSubmitArgs {
+  step: NotebookPlanStep
+  option: ModelOption
+  provider: string
+  values: Record<string, unknown>
+  projectSlug: string
+  callTool: UseMcpResult['callTool']
+  getDefinition: () => NotebookPlanDefinition | null
+  replaceDefinition: (definition: NotebookPlanDefinition, stepId: string) => Promise<void>
+  onGenerationLifecycle?: OnGenerationLifecycle
+}
+
+export type NotebookRunSubmitResult =
+  | { ok: true; assetId: string; requestId: string }
+  | { ok: false; message: string; requestId: string }
+
+/** Submit one generation step via MCP. Returns after enqueue (asset id), not after render. */
+export async function submitNotebookGeneration(
+  args: NotebookRunSubmitArgs,
+): Promise<NotebookRunSubmitResult> {
+  const {
+    step,
+    option,
+    provider,
+    values,
+    projectSlug,
+    callTool,
+    getDefinition,
+    replaceDefinition,
+    onGenerationLifecycle,
+  } = args
+  const category = step.type === 'image' ? 'image' : 'video'
+  const requestId = createGenerationRequestId(category)
+  const storedMode = typeof step.properties.mode === 'string' ? step.properties.mode : null
+  const modeKey = option.modes
+    ? (storedMode && option.modes.modes.some((m) => m.key === storedMode)
+      ? storedMode
+      : inferModeKey(option.modes, values))
+    : null
+  const submitValues = option.modes && modeKey
+    ? filterValuesForMode(option.modes, modeKey, values)
+    : values
+  const toolName = effectiveToolName(option, modeKey)
+  const prompt = typeof submitValues.prompt === 'string' ? submitValues.prompt : ''
+  onGenerationLifecycle?.({ phase: 'started', requestId, category, prompt })
+  try {
+    const result = await callTool(toolName, {
+      ...submitValues,
+      project_slug: projectSlug,
+      _provider: provider || undefined,
+    })
+    if (result.isError) throw new Error(responseText(result) || 'Generation failed')
+    const assetId = generationAssetId(responseText(result))
+    if (!assetId) throw new Error('Generation did not return an asset id')
+    const latest = getDefinition()
+    if (latest) {
+      await replaceDefinition(
+        appendRunAsset(latest, step.id, assetId, { model: option.key, provider }),
+        step.id,
+      )
+    }
+    onGenerationLifecycle?.({ phase: 'submitted', requestId, assetId })
+    return { ok: true, assetId, requestId }
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : 'Generation failed'
+    onGenerationLifecycle?.({ phase: 'failed', requestId })
+    return { ok: false, message, requestId }
+  }
+}
+
 export function useNotebookRun({
   projectSlug,
   callTool,
@@ -43,6 +113,7 @@ export function useNotebookRun({
   // generation was in flight get clobbered by replaceDefinition.
   const definitionRef = useRef(definition)
   definitionRef.current = definition
+  const inFlightRef = useRef(new Set<string>())
 
   const run = useCallback(async (
     step: NotebookPlanStep,
@@ -50,56 +121,38 @@ export function useNotebookRun({
     provider: string,
     values: Record<string, unknown>,
   ) => {
-    if (!definitionRef.current || runningStepIds.has(step.id)) return
-    const category = step.type === 'image' ? 'image' : 'video'
-    const requestId = createGenerationRequestId(category)
-    const storedMode = typeof step.properties.mode === 'string' ? step.properties.mode : null
-    const modeKey = option.modes
-      ? (storedMode && option.modes.modes.some((m) => m.key === storedMode)
-        ? storedMode
-        : inferModeKey(option.modes, values))
-      : null
-    const submitValues = option.modes && modeKey
-      ? filterValuesForMode(option.modes, modeKey, values)
-      : values
-    const toolName = effectiveToolName(option, modeKey)
-    const prompt = typeof submitValues.prompt === 'string' ? submitValues.prompt : ''
+    if (!definitionRef.current || inFlightRef.current.has(step.id)) return
+    inFlightRef.current.add(step.id)
     setRunningStepIds((ids) => new Set(ids).add(step.id))
     setErrors((current) => {
       const next = new Map(current)
       next.delete(step.id)
       return next
     })
-    onGenerationLifecycle?.({ phase: 'started', requestId, category, prompt })
     try {
-      const result = await callTool(toolName, {
-        ...submitValues,
-        project_slug: projectSlug,
-        _provider: provider || undefined,
+      const result = await submitNotebookGeneration({
+        step,
+        option,
+        provider,
+        values,
+        projectSlug,
+        callTool,
+        getDefinition: () => definitionRef.current,
+        replaceDefinition,
+        onGenerationLifecycle,
       })
-      if (result.isError) throw new Error(responseText(result) || 'Generation failed')
-      const assetId = generationAssetId(responseText(result))
-      if (!assetId) throw new Error('Generation did not return an asset id')
-      const latest = definitionRef.current
-      if (latest) {
-        await replaceDefinition(
-          appendRunAsset(latest, step.id, assetId, { model: option.key, provider }),
-          step.id,
-        )
+      if (!result.ok) {
+        setErrors((current) => new Map(current).set(step.id, result.message))
       }
-      onGenerationLifecycle?.({ phase: 'submitted', requestId, assetId })
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'Generation failed'
-      setErrors((current) => new Map(current).set(step.id, message))
-      onGenerationLifecycle?.({ phase: 'failed', requestId })
     } finally {
+      inFlightRef.current.delete(step.id)
       setRunningStepIds((ids) => {
         const next = new Set(ids)
         next.delete(step.id)
         return next
       })
     }
-  }, [callTool, onGenerationLifecycle, projectSlug, replaceDefinition, runningStepIds])
+  }, [callTool, onGenerationLifecycle, projectSlug, replaceDefinition])
 
   return { run, runningStepIds, errors }
 }

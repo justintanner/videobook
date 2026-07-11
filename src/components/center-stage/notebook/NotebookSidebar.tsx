@@ -362,8 +362,10 @@ function GenerationSidebar({
     })
   }
 
+  const domainTheme = genThemes[category]
+
   return (
-    <aside className="vc-notebook-sidebar vc-notebook-editor">
+    <aside className={`vc-notebook-sidebar vc-notebook-editor vc-notebook-editor-${category}`}>
       <div className={`vc-notebook-cell-type vc-notebook-cell-type-${category}`}>{category}</div>
       {preview.loading && !preview.preview ? <div className="vc-notebook-loading"><Loader2 /> Loading controls</div> : null}
       {preview.error ? <div className="vc-notebook-error"><AlertCircle /> {preview.error}</div> : null}
@@ -447,6 +449,58 @@ function GenerationSidebar({
               {[...(resolved?.warnings ?? []), ...readiness.reasons].map((warning) => <p key={warning}>{warning}</p>)}
             </div>
           ) : null}
+          {fieldEntries.length > 0 || showClipComposite ? <>
+            <label>Options</label>
+            <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {showClipComposite ? (
+                <ClipWindowControl
+                  startValue={mergedValues.video_clip_start}
+                  endsValue={mergedValues.video_clip_ends}
+                  bounds={clipBounds}
+                  startSchema={option.schema.properties.video_clip_start}
+                  endsSchema={option.schema.properties.video_clip_ends}
+                  disabled={running}
+                  theme={domainTheme}
+                  onChange={applyClipWindow}
+                />
+              ) : null}
+              {fieldEntries.map(([name, schema]) => {
+                const override = activeMode?.param_overrides?.[name]
+                const fieldSchema = override
+                  ? { ...schema, maxItems: override.maxItems ?? schema.maxItems, description: override.description ?? schema.description }
+                  : schema
+                return (
+                  <DynamicField
+                    key={name}
+                    name={name}
+                    schema={fieldSchema}
+                    value={mergedValues[name]}
+                    onChange={(value) => updateValues(name, value)}
+                    required={(option.schema.required ?? []).includes(name)}
+                    disabled={running}
+                    theme={domainTheme}
+                    callTool={callTool}
+                    mcpState={mcpState}
+                    projectSlug={projectSlug}
+                    compact
+                  />
+                )
+              })}
+            </div>
+          </> : null}
+          {showCharacters && characterField ? (
+            <CharacterPickerPopover
+              selectedRefs={stringArray(mergedValues.character_refs)}
+              onChange={(refs) => updateValues('character_refs', refs)}
+              maxItems={characterField.maxItems ?? 7}
+              disabled={running}
+              callTool={callTool}
+              mcpState={mcpState}
+              projectSlug={projectSlug}
+              domain={category}
+              variant="inline"
+            />
+          ) : null}
           <label>Prompt</label>
           {resolved?.promptFromInputs !== null ? (
             <div className="vc-notebook-linked-prompt">
@@ -478,62 +532,12 @@ function GenerationSidebar({
               }}
             />
           )}
-          {fieldEntries.length > 0 || showClipComposite ? <>
-            <label>Options</label>
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
-              {showClipComposite ? (
-                <ClipWindowControl
-                  startValue={mergedValues.video_clip_start}
-                  endsValue={mergedValues.video_clip_ends}
-                  bounds={clipBounds}
-                  startSchema={option.schema.properties.video_clip_start}
-                  endsSchema={option.schema.properties.video_clip_ends}
-                  disabled={running}
-                  onChange={applyClipWindow}
-                />
-              ) : null}
-              {fieldEntries.map(([name, schema]) => {
-                const override = activeMode?.param_overrides?.[name]
-                const fieldSchema = override
-                  ? { ...schema, maxItems: override.maxItems ?? schema.maxItems, description: override.description ?? schema.description }
-                  : schema
-                return (
-                  <DynamicField
-                    key={name}
-                    name={name}
-                    schema={fieldSchema}
-                    value={mergedValues[name]}
-                    onChange={(value) => updateValues(name, value)}
-                    required={(option.schema.required ?? []).includes(name)}
-                    disabled={running}
-                    theme={genThemes.notebook}
-                    callTool={callTool}
-                    mcpState={mcpState}
-                    projectSlug={projectSlug}
-                    compact
-                  />
-                )
-              })}
-            </div>
-          </> : null}
-          {showCharacters && characterField ? (
-            <CharacterPickerPopover
-              selectedRefs={stringArray(mergedValues.character_refs)}
-              onChange={(refs) => updateValues('character_refs', refs)}
-              maxItems={characterField.maxItems ?? 7}
-              disabled={running}
-              callTool={callTool}
-              mcpState={mcpState}
-              projectSlug={projectSlug}
-              domain="notebook"
-              variant="inline"
-            />
-          ) : null}
           <RunStatus status={runStatus.state} />
           {error ? <div className="vc-notebook-error"><AlertCircle /> {error}</div> : null}
           <RunStepButton
             running={running}
-            disabled={requiredMissing.length > 0 || !readiness.ready || running || runStatus.state === 'pending'}
+            category={category}
+            disabled={requiredMissing.length > 0 || !readiness.ready || running}
             disabledReason={disabledReason}
             cost={costLabel}
             onClick={() => onRun(step, option, preview.selectedProviderKey, mergedValues)}
@@ -596,12 +600,14 @@ function InputList({
 
 function RunStepButton({
   running,
+  category,
   disabled,
   disabledReason,
   cost,
   onClick,
 }: {
   running: boolean
+  category: 'image' | 'video'
   disabled: boolean
   disabledReason?: string
   cost: string | null
@@ -610,13 +616,17 @@ function RunStepButton({
   return (
     <button
       type="button"
-      className={cn('vc-notebook-run', running && 'vc-notebook-run-busy')}
+      className={cn(
+        'vc-notebook-run',
+        category === 'image' ? 'vc-notebook-run-image' : 'vc-notebook-run-video',
+        running && 'vc-notebook-run-busy',
+      )}
       disabled={disabled}
       title={disabled && disabledReason ? disabledReason : undefined}
       onClick={onClick}
     >
       {running ? <Loader2 /> : <Play />}
-      <span>{running ? 'Running' : 'Run'}</span>
+      <span>{running ? 'Submitting' : 'Run'}</span>
       {cost ? <b>{cost}</b> : null}
     </button>
   )
@@ -636,6 +646,7 @@ function ClipWindowControl({
   startSchema,
   endsSchema,
   disabled,
+  theme = genThemes.video,
   onChange,
 }: {
   startValue: unknown
@@ -644,10 +655,9 @@ function ClipWindowControl({
   startSchema: JSONSchemaProperty
   endsSchema: JSONSchemaProperty
   disabled?: boolean
+  theme?: typeof genThemes.video
   onChange: (start: number, ends: number) => void
 }) {
-  const theme = genThemes.notebook
-
   if (!bounds) {
     const startNum = typeof startValue === 'number' ? startValue : ''
     const endsNum = typeof endsValue === 'number' ? endsValue : ''

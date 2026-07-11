@@ -137,6 +137,57 @@ export function latestAssetId(step: NotebookPlanStep): string | null {
   return assetIds.at(-1) ?? null
 }
 
+/** Ordered non-prompt media inputs for generation canvas cards. */
+export interface ConnectedMediaInput {
+  sourceId: string
+  kind: 'image' | 'video' | 'audio' | 'unknown'
+  thumbnailSrc: string | null
+  label: string
+}
+
+export function connectedMediaInputs(
+  definition: NotebookPlanDefinition,
+  step: NotebookPlanStep,
+  mediaItems: ReadonlyArray<{ id: string; thumbnailSrc?: string | null }>,
+): ConnectedMediaInput[] {
+  if (!isGenerationStep(step)) return []
+  const steps = new Map(definition.sequence.map((candidate) => [candidate.id, candidate]))
+  const strip: ConnectedMediaInput[] = []
+  for (const inputId of stepInputs(step)) {
+    const source = steps.get(inputId)
+    if (!source || source.type === 'prompt') continue
+    const assetId = source.type === 'asset'
+      ? normalizedSlug(stringProperty(source.properties, 'slug') ?? '')
+      : latestAssetId(source)
+    const asset = assetId ? mediaItems.find((item) => item.id === assetId) : undefined
+    const slug = source.type === 'asset'
+      ? (stringProperty(source.properties, 'slug') ?? '')
+      : assetId
+        ? slugWithPrefix(assetId)
+        : ''
+    const kindFromSlug = slug ? assetSlugKind(slug) : null
+    const kind: ConnectedMediaInput['kind'] =
+      kindFromSlug === 'image' || kindFromSlug === 'video' || kindFromSlug === 'audio'
+        ? kindFromSlug
+        : source.type === 'image'
+          ? 'image'
+          : source.type === 'video'
+            ? 'video'
+            : 'unknown'
+    const model = stringProperty(source.properties, 'model')
+    const label = source.type === 'asset'
+      ? (slug || source.name)
+      : (model || source.name || source.type)
+    strip.push({
+      sourceId: inputId,
+      kind,
+      thumbnailSrc: asset?.thumbnailSrc ?? null,
+      label,
+    })
+  }
+  return strip
+}
+
 export function appendRunAsset(
   definition: NotebookPlanDefinition,
   stepId: string,
