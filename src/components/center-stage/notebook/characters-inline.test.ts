@@ -5,25 +5,23 @@ import { sharedFiniteBounds } from './clip-window'
 
 const root = join(import.meta.dirname)
 
-describe('notebook characters compact trigger wiring', () => {
-  it('sidebar uses CharacterPickerPopover inline variant with step domain', () => {
+describe('notebook characters inline manager wiring', () => {
+  it('sidebar renders the inline character manager with the notebook domain', () => {
     const sidebar = readFileSync(join(root, 'NotebookSidebar.tsx'), 'utf8')
-    expect(sidebar).toContain('variant="inline"')
+    expect(sidebar).toContain('CharacterPickerPopover')
     expect(sidebar).toContain('domain="notebook"')
     expect(sidebar).toContain('character_refs')
     // Characters only when schema + mode support character_refs
     expect(sidebar).toMatch(/modeVisible\.has\('character_refs'\)/)
   })
 
-  it('CharacterPickerPopover exposes inline variant without changing default gen-panel path', () => {
+  it('CharacterPickerPopover is always inline — no variant prop remains', () => {
     const picker = readFileSync(
       join(root, '../../gen/ui/CharacterPickerPopover.tsx'),
       'utf8',
     )
-    expect(picker).toContain("variant?: 'default' | 'inline'")
-    expect(picker).toContain("variant = 'default'")
-    expect(picker).toContain('vc-notebook-characters-inline')
-    expect(picker).toContain('Characters')
+    expect(picker).not.toContain('variant')
+    expect(picker).toContain('Drag images here to create characters')
   })
 })
 

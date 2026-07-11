@@ -11,6 +11,7 @@ import {
   createGoogleFlowCharacter,
   listGoogleFlowCharacters,
   deleteGoogleFlowCharacter,
+  renameGoogleFlowCharacter,
 } from "./google-flow-characters.js";
 
 /**
@@ -87,6 +88,42 @@ describe.skipIf(!LIVE)("google flow entities — live lifecycle", () => {
       expect(listed.characters.some((c) => c.ref === created.character_ref)).toBe(true);
     } finally {
       await deleteGoogleFlowCharacter(provider, created.character_ref);
+    }
+  });
+
+  it("renames a character via recreate+delete, preserving its images", async () => {
+    const provider = createGoogleFlowProvider();
+    const png = await sharp({
+      create: { width: 64, height: 64, channels: 4, background: { r: 50, g: 50, b: 200, alpha: 1 } },
+    }).png().toBuffer();
+
+    const uploaded = await provider.v1.assets({
+      body: new Blob([new Uint8Array(png)], { type: "image/png" }),
+      contentType: "image/png",
+    });
+    const mediaGenerationId = readMediaGenerationId(uploaded as Record<string, unknown>);
+
+    const created = await createGoogleFlowCharacter(provider, {
+      displayName: `videocity-rename-src-${Date.now()}`,
+      imageReferences: [mediaGenerationId],
+    });
+
+    let surviving = created.character_ref;
+    try {
+      const newName = `videocity-renamed-${Date.now()}`;
+      const renamed = await renameGoogleFlowCharacter(provider, created.character_ref, newName);
+      surviving = renamed.character_ref;
+      expect(renamed.old_ref).toBe(created.character_ref);
+      expect(renamed.character_ref).not.toBe(created.character_ref);
+      expect(renamed.warning).toBeUndefined();
+
+      const listed = await listGoogleFlowCharacters(provider, {});
+      const entry = listed.characters.find((c) => c.ref === renamed.character_ref);
+      expect(entry?.display_name).toBe(newName);
+      expect(entry?.image_count).toBe(1);
+      expect(listed.characters.some((c) => c.ref === created.character_ref)).toBe(false);
+    } finally {
+      await deleteGoogleFlowCharacter(provider, surviving);
     }
   });
 });

@@ -573,7 +573,6 @@ function GenerationSidebar({
               mcpState={mcpState}
               projectSlug={projectSlug}
               domain="notebook"
-              variant="inline"
             />
           ) : null}
           <label>Prompt</label>

@@ -10,7 +10,7 @@ describe('notebook generation editor order and domain themes', () => {
   it('renders Options and Characters before Prompt in GenerationSidebar', () => {
     const sidebar = readFileSync(join(root, 'NotebookSidebar.tsx'), 'utf8')
     const optionsIdx = sidebar.indexOf('<label>Options</label>')
-    const charactersIdx = sidebar.indexOf('variant="inline"')
+    const charactersIdx = sidebar.indexOf('<CharacterPickerPopover')
     const promptIdx = sidebar.indexOf('<label>Prompt</label>', sidebar.indexOf('function GenerationSidebar'))
     expect(optionsIdx).toBeGreaterThan(-1)
     expect(charactersIdx).toBeGreaterThan(-1)

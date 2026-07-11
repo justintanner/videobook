@@ -9,9 +9,12 @@ import {
   createGoogleFlowCharacterDef,
   listGoogleFlowCharactersDef,
   deleteGoogleFlowCharacterDef,
+  renameGoogleFlowCharacterDef,
   createGoogleFlowCharacter,
   listGoogleFlowCharacters,
   deleteGoogleFlowCharacter,
+  renameGoogleFlowCharacter,
+  characterImageGenerationIds,
 } from "./google-flow-characters.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -100,6 +103,16 @@ describe("google flow character tools — handler guards", () => {
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("placeholder");
   });
+
+  it("rename errors cleanly when GOOGLE_FLOW_API_KEY is missing", async () => {
+    delete process.env.GOOGLE_FLOW_API_KEY;
+    const result = await renameGoogleFlowCharacterDef().handler({
+      ref: "user:1-character:abc-imgs:1",
+      display_name: "Nigel",
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("GOOGLE_FLOW_API_KEY");
+  });
 });
 
 describe("google flow character cores — stubbed provider", () => {
@@ -177,5 +190,131 @@ describe("google flow character cores — stubbed provider", () => {
     const result = await deleteGoogleFlowCharacter(provider, "user:1-character:abc");
     expect(result).toEqual({ ref: "user:1-character:abc", status: "deleted" });
     expect(calls[0].method).toBe("DELETE");
+  });
+});
+
+describe("characterImageGenerationIds", () => {
+  const REF = "user:2935-email:6a75-character:2ad2bdbd-imgs:2";
+
+  it("rebuilds create-time ids from the ref prefix and retrieve mediaIds", () => {
+    const ids = characterImageGenerationIds(REF, {
+      imageReferences: [
+        { workflowId: "w1", mediaId: "aaa-111" },
+        { workflowId: "w2", mediaId: "bbb-222" },
+      ],
+    });
+    expect(ids).toEqual([
+      "user:2935-email:6a75-image:aaa-111",
+      "user:2935-email:6a75-image:bbb-222",
+    ]);
+  });
+
+  it("caps at two ids and skips entries without a mediaId", () => {
+    const ids = characterImageGenerationIds(REF, {
+      imageReferences: [
+        { workflowId: "w0" },
+        { mediaId: "a" },
+        { mediaId: "b" },
+        { mediaId: "c" },
+      ],
+    });
+    expect(ids).toEqual([
+      "user:2935-email:6a75-image:a",
+      "user:2935-email:6a75-image:b",
+    ]);
+  });
+
+  it("throws when the ref carries no -character: segment", () => {
+    expect(() => characterImageGenerationIds("user:1-imgs:1", { imageReferences: [{ mediaId: "a" }] }))
+      .toThrow(/-character:/);
+  });
+
+  it("throws when the retrieve body has no usable mediaIds", () => {
+    expect(() => characterImageGenerationIds(REF, { imageReferences: [{ workflowId: "w1" }] }))
+      .toThrow(/no imageReferences/);
+  });
+});
+
+describe("renameGoogleFlowCharacter — stubbed provider", () => {
+  const OLD_REF = "user:2935-email:6a75-character:old111-imgs:2";
+  const NEW_REF = "user:2935-email:6a75-character:new222-imgs:2";
+
+  function routingProvider(opts: {
+    calls: Array<{ url: string; method: string; body: Record<string, unknown> | null }>;
+    deleteStatus?: number;
+    retrieveBody?: Record<string, unknown>;
+  }) {
+    const retrieveBody = opts.retrieveBody ?? {
+      character: OLD_REF,
+      displayName: "n",
+      personalityNotes: "grumpy but loyal",
+      voice: { voice: "Kore" },
+      imageReferences: [
+        { workflowId: "w1", mediaId: "media-a" },
+        { workflowId: "w2", mediaId: "media-b" },
+      ],
+    };
+    const fetchFn: typeof fetch = async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) as Record<string, unknown> : null;
+      opts.calls.push({ url, method, body });
+      if (method === "GET") {
+        return new Response(JSON.stringify(retrieveBody), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (method === "POST") {
+        return new Response(JSON.stringify({ character: NEW_REF }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify(opts.deleteStatus === 200 || opts.deleteStatus === undefined ? { deleted: true } : { error: "boom" }), {
+        status: opts.deleteStatus ?? 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    return createGoogleFlow({ apiKey: "test-token", fetch: fetchFn });
+  }
+
+  it("retrieves, recreates with the same images + new name, then deletes the old ref", async () => {
+    const calls: Array<{ url: string; method: string; body: Record<string, unknown> | null }> = [];
+    const provider = routingProvider({ calls });
+
+    const result = await renameGoogleFlowCharacter(provider, OLD_REF, "Nigel");
+    expect(result).toEqual({
+      character_ref: NEW_REF,
+      old_ref: OLD_REF,
+      display_name: "Nigel",
+      status: "renamed",
+    });
+
+    expect(calls.map((c) => c.method)).toEqual(["GET", "POST", "DELETE"]);
+    const create = calls[1];
+    expect(create.body).toMatchObject({
+      displayName: "Nigel",
+      imageReference_1: "user:2935-email:6a75-image:media-a",
+      imageReference_2: "user:2935-email:6a75-image:media-b",
+      personalityNotes: "grumpy but loyal",
+      voice: "Kore",
+    });
+    expect(calls[2].url).toContain("old111");
+  });
+
+  it("returns a warning (not an error) when deleting the old character fails", async () => {
+    const calls: Array<{ url: string; method: string; body: Record<string, unknown> | null }> = [];
+    const provider = routingProvider({ calls, deleteStatus: 500 });
+
+    const result = await renameGoogleFlowCharacter(provider, OLD_REF, "Nigel");
+    expect(result.character_ref).toBe(NEW_REF);
+    expect(result.status).toBe("renamed");
+    expect(result.warning).toMatch(/deleting the old character failed/);
+  });
+
+  it("fails before creating anything when the retrieve body lacks mediaIds", async () => {
+    const calls: Array<{ url: string; method: string; body: Record<string, unknown> | null }> = [];
+    const provider = routingProvider({
+      calls,
+      retrieveBody: { character: OLD_REF, displayName: "n", imageReferences: [{ workflowId: "w1" }] },
+    });
+
+    await expect(renameGoogleFlowCharacter(provider, OLD_REF, "Nigel")).rejects.toThrow(/no imageReferences/);
+    expect(calls.map((c) => c.method)).toEqual(["GET"]);
   });
 });

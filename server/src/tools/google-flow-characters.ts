@@ -271,37 +271,119 @@ export function deleteGoogleFlowCharacterDef(): ToolDef {
   };
 }
 
-const renameGoogleFlowCharacterSchema = {
-  ref: z.string().min(1).describe("Character ref to rename"),
-  display_name: z.string().min(1).max(200).describe("New display name"),
-} satisfies ZodRawShape;
+// ---------------------------------------------------------------------------
+// Rename. useapi.net has no PATCH/PUT for characters (probed 2026-07-11:
+// PATCH /characters/{ref} → 500 "Unknown method PATCH for post-characters"),
+// so rename = recreate with the same uploaded images + the new name, then
+// delete the old ref. The ref CHANGES: callers must swap old_ref →
+// character_ref anywhere the old ref is stored (e.g. character_refs).
+// Recreate reuses the original uploads without re-uploading: an image
+// mediaGenerationId is `<user:N-email:HEX>-image:<mediaId>` (the POST /assets
+// response shape), and GET characters/ref returns each image's bare mediaId,
+// so the id is rebuilt from the character ref's own prefix.
+// ---------------------------------------------------------------------------
+
+/** Rebuild create-time image mediaGenerationIds from a character ref and its
+ *  retrieve body (`imageReferences[].mediaId`). */
+export function characterImageGenerationIds(ref: string, raw: Record<string, unknown>): string[] {
+  const marker = "-character:";
+  const markerIdx = ref.indexOf(marker);
+  if (markerIdx <= 0) {
+    throw new Error(`Character ref has no "${marker}" segment to derive image ids from: ${ref}`);
+  }
+  const prefix = ref.slice(0, markerIdx);
+  const images = raw.imageReferences ?? raw.image_references;
+  const ids: string[] = [];
+  if (Array.isArray(images)) {
+    for (const img of images) {
+      if (!img || typeof img !== "object") continue;
+      const rec = img as Record<string, unknown>;
+      const mediaId = rec.mediaId ?? rec.media_id;
+      if (typeof mediaId === "string" && mediaId.trim() !== "") {
+        ids.push(`${prefix}-image:${mediaId}`);
+      }
+    }
+  }
+  if (ids.length === 0) {
+    throw new Error(`Character ${ref} retrieve returned no imageReferences[].mediaId to rebuild from`);
+  }
+  return ids.slice(0, 2);
+}
+
+/** Voice ref from a character retrieve body: bare string or an object
+ *  carrying voice/ref/name. Null when absent (voice is optional). */
+function readCharacterVoiceRef(raw: Record<string, unknown>): string | null {
+  const voice = raw.voice;
+  if (typeof voice === "string" && voice.trim() !== "") return voice;
+  if (voice && typeof voice === "object" && !Array.isArray(voice)) {
+    const rec = voice as Record<string, unknown>;
+    for (const key of ["voice", "ref", "name"]) {
+      const value = rec[key];
+      if (typeof value === "string" && value.trim() !== "") return value;
+    }
+  }
+  return null;
+}
+
+export type RenamedGoogleFlowCharacter = {
+  character_ref: string;
+  old_ref: string;
+  display_name: string;
+  status: "renamed";
+  warning?: string;
+};
 
 export async function renameGoogleFlowCharacter(
   provider: GoogleFlowProvider,
   ref: string,
   displayName: string,
-): Promise<{ ref: string; status: "renamed" }> {
-  // @ts-expect-error - dynamic import to break potential cyclic dependencies
-  const { googleFlowFetch } = await import("../jobs/_google-flow.js");
-  const res = await googleFlowFetch(`https://api.useapi.net/v1/google-flow/characters/${ref}`, {
-    method: "PATCH",
-    headers: {
-      "Authorization": `Bearer ${process.env.GOOGLE_FLOW_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ displayName })
+): Promise<RenamedGoogleFlowCharacter> {
+  const detail = await getGoogleFlowCharacter(provider, ref);
+  const raw = (detail.raw ?? {}) as Record<string, unknown>;
+  const imageReferences = characterImageGenerationIds(ref, raw);
+  const personalityNotes = typeof raw.personalityNotes === "string" && raw.personalityNotes.trim() !== ""
+    ? raw.personalityNotes
+    : undefined;
+  const voice = readCharacterVoiceRef(raw);
+
+  const created = await createGoogleFlowCharacter(provider, {
+    displayName,
+    imageReferences,
+    ...(personalityNotes !== undefined ? { personalityNotes } : {}),
+    ...(voice !== null ? { voice } : {}),
   });
-  if (!res.ok) {
-     const errText = await res.text();
-     throw new Error(`Failed to rename character: ${res.status} ${errText}`);
+
+  let warning: string | undefined;
+  try {
+    await deleteGoogleFlowCharacter(provider, ref);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    warning = `Renamed copy created, but deleting the old character failed: ${msg}`;
   }
-  return { ref, status: "renamed" };
+
+  return {
+    character_ref: created.character_ref,
+    old_ref: ref,
+    display_name: displayName,
+    status: "renamed",
+    ...(warning !== undefined ? { warning } : {}),
+  };
 }
+
+const renameGoogleFlowCharacterSchema = {
+  ref: z.string().min(1).describe("Character ref to rename (from create_google_flow_character / list_google_flow_characters)"),
+  display_name: apicityField(
+    GoogleFlowCharactersCreateRequestSchema.shape.displayName,
+    "New display name (1-200 chars)",
+    { required: true },
+  ),
+} satisfies ZodRawShape;
 
 export function renameGoogleFlowCharacterDef(): ToolDef {
   return {
     name: "rename_google_flow_character",
-    description: "Rename a Google Flow character in-place. Uses raw fetch hook because apicity lacks PATCH.",
+    description:
+      "Rename a Google Flow character. useapi.net has no update endpoint, so this recreates the character with the same reference images (no re-upload) under the new name and deletes the old one — the ref changes. Returns { character_ref, old_ref }: replace old_ref with character_ref anywhere it is stored (e.g. character_refs). May consume plan credits like create.",
     schema: renameGoogleFlowCharacterSchema,
     handler: async (args): Promise<ToolResult> => {
       const a = args as SchemaArgs<typeof renameGoogleFlowCharacterSchema>;
@@ -310,7 +392,7 @@ export function renameGoogleFlowCharacterDef(): ToolDef {
       }
       try {
         const provider = createGoogleFlowProvider();
-        return jsonResult(await renameGoogleFlowCharacter(provider, a.ref, a.display_name));
+        return jsonResult(await renameGoogleFlowCharacter(provider, a.ref, a.display_name as string));
       } catch (err) {
         return toolError(err instanceof Error ? err.message : String(err));
       }

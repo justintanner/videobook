@@ -15,7 +15,6 @@ interface CharacterPickerPopoverProps {
   mcpState?: UseMcpResult['state'];
   projectSlug?: string;
   domain?: Domain;
-  variant?: 'default' | 'inline';
 }
 
 export function CharacterPickerPopover({
@@ -34,6 +33,7 @@ export function CharacterPickerPopover({
   const [isDragOver, setIsDragOver] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [renamingRef, setRenamingRef] = useState<string | null>(null);
 
   useEffect(() => {
     void ensureLoaded();
@@ -112,13 +112,29 @@ export function CharacterPickerPopover({
     }
   };
 
+  // Rename recreates the character server-side (useapi.net has no update
+  // endpoint), so the ref changes: swap old -> new in the selection.
   async function handleRename(ref: string, newName: string) {
     if (!callTool) return;
+    setRenamingRef(ref);
+    setCreateError(null);
     try {
-      await callTool('rename_google_flow_character', { ref, display_name: newName });
+      const result = await callTool('rename_google_flow_character', { ref, display_name: newName });
+      const content = result.content as Array<{ type: string; text: string }> | undefined;
+      if (result.isError) {
+        setCreateError(content?.[0]?.text ?? 'Rename failed');
+        return;
+      }
+      const parsed = JSON.parse(content?.[0]?.text ?? '{}') as { character_ref?: string; warning?: string };
+      if (parsed.character_ref && selectedSet.has(ref)) {
+        onChange(selectedRefs.map((r) => (r === ref ? parsed.character_ref! : r)));
+      }
+      if (parsed.warning) setCreateError(parsed.warning);
       void refresh();
     } catch (e) {
-      console.error("Rename failed", e);
+      setCreateError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRenamingRef(null);
     }
   }
 
@@ -166,6 +182,7 @@ export function CharacterPickerPopover({
             onToggle={() => toggleRef(e.ref)}
             onRename={(newName) => handleRename(e.ref, newName)}
             onDelete={() => handleDelete(e.ref)}
+            renaming={renamingRef === e.ref}
             disabled={(!selectedSet.has(e.ref) && atCap) || disabled}
           />
         ))}
@@ -189,19 +206,21 @@ export function CharacterPickerPopover({
   );
 }
 
-function CharacterChip({ 
-  entity, 
-  isSelected, 
+function CharacterChip({
+  entity,
+  isSelected,
   onToggle,
   onRename,
   onDelete,
-  disabled 
-}: { 
+  renaming,
+  disabled
+}: {
   entity: GoogleFlowEntityOption;
   isSelected: boolean;
   onToggle: () => void;
   onRename: (newName: string) => void;
   onDelete: () => void;
+  renaming?: boolean;
   disabled?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
@@ -248,7 +267,12 @@ function CharacterChip({
         </div>
       </button>
       
-      {editing ? (
+      {renaming ? (
+        <span className="flex items-center gap-1 text-[10px] font-mono text-cyan-400/80 max-w-[100px] truncate">
+          <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+          <span className="truncate">{editName || entity.displayName || 'Renaming'}</span>
+        </span>
+      ) : editing ? (
         <input
           ref={inputRef}
           type="text"
@@ -265,7 +289,7 @@ function CharacterChip({
           className="bg-black/60 border border-cyan-400/50 text-[10px] font-mono text-primary/90 w-24 px-1 py-0.5 rounded outline-none"
         />
       ) : (
-        <button 
+        <button
           type="button"
           onClick={() => setEditing(true)}
           className="text-[10px] font-mono text-primary/70 hover:text-primary max-w-[100px] truncate flex-1 text-left"
@@ -281,10 +305,10 @@ function CharacterChip({
         </button>
       )}
       
-      {!editing && (
-        <button 
-          type="button" 
-          onClick={(e) => { e.stopPropagation(); onDelete(); }} 
+      {!editing && !renaming && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
           className="opacity-0 group-hover:opacity-100 text-red-400/70 hover:text-red-400 shrink-0 transition-opacity ml-1"
           title="Delete character"
         >
