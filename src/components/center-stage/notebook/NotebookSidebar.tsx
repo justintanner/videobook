@@ -7,8 +7,10 @@ import { genThemes } from '@/components/gen/ui/gen-themes'
 import { effectiveToolName, filterValuesForMode, getMode, modeRequiredMissing, visibleParams } from '@/components/gen/modes'
 import type { JSONSchemaProperty, ModelOption, ModelModes } from '@/components/gen/types'
 import { usePromptHistory } from '@/hooks/usePromptHistory'
+import { useGoogleFlowEntities } from '@/hooks/useGoogleFlowEntities'
 import { JsonNode } from '@/components/ui/JsonNode'
 import { RichPromptField } from '@/components/ui/RichPromptField'
+import { characterHandle } from '@/components/ui/richPromptTokens'
 import { cn } from '@/lib/utils'
 import type { MediaItem } from '@/components/sidebar/types'
 import {
@@ -46,7 +48,7 @@ interface NotebookSidebarProps {
   updateDefinition: (next: NotebookPlanDefinition, coalesceKey?: string) => void
   onDisconnect: (sourceId: string, targetId: string) => void
   onSetFirstFrame: (targetId: string, sourceId: string | null) => void
-  onRun: (step: NotebookPlanStep, option: ModelOption, provider: string, values: Record<string, unknown>) => void
+  onRun: (step: NotebookPlanStep, option: ModelOption, provider: string, values: Record<string, unknown>, charMentions?: { handle: string; n: number }[]) => void
   onOpenAsset?: (assetId: string) => void
 }
 
@@ -304,6 +306,38 @@ function GenerationSidebar({
     [option, modeKey],
   )
   const history = usePromptHistory(callTool, category === 'image' ? 'image_generate' : 'video_generate', projectSlug)
+  
+  const charEntities = useGoogleFlowEntities('character', category === 'video' ? callTool : undefined, mcpState)
+  const characterRefs = useMemo(
+    () =>
+      Array.isArray(mergedValues.character_refs)
+        ? (mergedValues.character_refs as string[]).filter((s) => s.trim() !== '')
+        : [],
+    [mergedValues.character_refs],
+  )
+  const charMap = useMemo(
+    () => new Map(charEntities.entities.map((e) => [e.ref, e])),
+    [charEntities.entities],
+  )
+  const charMentions = useMemo(
+    () =>
+      characterRefs.map((ref, i) => {
+        const name = charMap.get(ref)?.displayName ?? ref
+        return { ref, handle: characterHandle(name), label: name, n: i + 1 }
+      }),
+    [characterRefs, charMap],
+  )
+  const charHandles = useMemo(() => charMentions.map((c) => c.handle), [charMentions])
+  const allCharMentions = useMemo(
+    () =>
+      charEntities.entities.map((e) => ({
+        handle: characterHandle(e.displayName),
+        label: e.displayName,
+        ref: e.ref,
+      })),
+    [charEntities.entities],
+  )
+
   const [showPayload, setShowPayload] = useState(false)
   const readiness = stepInputReadiness(definition, step, mediaItems)
   const requiredMissing = useMemo(() => {
@@ -325,6 +359,16 @@ function GenerationSidebar({
   const updateValues = (name: string, value: unknown) => update({
     values: { ...persistedValues, [name]: value } as JsonRecord,
   })
+  
+  const handlePickCharacter = (ref: string) => {
+    if (!ref) return
+    const current = Array.isArray(persistedValues.character_refs)
+      ? (persistedValues.character_refs as string[]).filter((s) => s.trim() !== '')
+      : []
+    if (current.includes(ref)) return
+    updateValues('character_refs', [...current, ref])
+  }
+
   const modelOptions = preview.preview?.model_options ?? []
   // Inline row: type + duration + aspect_ratio. Remaining settings go under Options.
   const INLINE_OPTION_KEYS = new Set(['duration', 'aspect_ratio'])
@@ -589,6 +633,9 @@ function GenerationSidebar({
               resolveRef={() => null}
               assetSlugs={mediaItems.map((item) => item.slug.replace(/^@/, ''))}
               slugForAssetId={(id) => mediaItems.find((item) => item.id === id)?.slug.replace(/^@/, '') ?? null}
+              characterMentions={showCharacters ? allCharMentions : undefined}
+              characterHandles={showCharacters ? charHandles : undefined}
+              onPickCharacter={showCharacters ? handlePickCharacter : undefined}
               rows={3}
               disabled={running}
               placeholder="Describe this generation."
@@ -620,7 +667,7 @@ function GenerationSidebar({
             cost={costLabel}
             onClick={() => {
               if (!submitValues) return
-              onRun(step, option, preview.selectedProviderKey, submitValues)
+              onRun(step, option, preview.selectedProviderKey, submitValues, charMentions)
             }}
           />
         </footer>

@@ -4,6 +4,7 @@ import { effectiveToolName, filterValuesForMode, inferModeKey } from '@/componen
 import type { ModelOption } from '@/components/gen/types'
 import { createGenerationRequestId } from '@/lib/generation-lifecycle'
 import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle'
+import { rewriteCharacterMentions, stripOrphanedReferenceMarkers } from '@/components/ui/richPromptTokens'
 import { appendRunAsset } from './model'
 import type { NotebookPlanDefinition, NotebookPlanStep } from './types'
 
@@ -39,6 +40,7 @@ export interface NotebookRunSubmitArgs {
   getDefinition: () => NotebookPlanDefinition | null
   replaceDefinition: (definition: NotebookPlanDefinition, stepId: string) => Promise<void>
   onGenerationLifecycle?: OnGenerationLifecycle
+  charMentions?: { handle: string; n: number }[]
 }
 
 export type NotebookRunSubmitResult =
@@ -68,10 +70,26 @@ export async function submitNotebookGeneration(
       ? storedMode
       : inferModeKey(option.modes, values))
     : null
-  const submitValues = option.modes && modeKey
-    ? filterValuesForMode(option.modes, modeKey, values)
-    : values
+  const submitValues = {
+    ...(option.modes && modeKey
+      ? filterValuesForMode(option.modes, modeKey, values)
+      : values)
+  }
   const toolName = effectiveToolName(option, modeKey)
+  
+  if (args.charMentions && option.schema.properties.character_refs) {
+    const rawPrompt = typeof submitValues.prompt === 'string' ? submitValues.prompt : ''
+    const rewritten = rewriteCharacterMentions(rawPrompt, args.charMentions)
+    const charCount = Array.isArray(submitValues.character_refs) ? (submitValues.character_refs as unknown[]).length : 0
+    const imgCount = Array.isArray(submitValues.image_slugs) ? (submitValues.image_slugs as unknown[]).length : 0
+    const voiceCount = Array.isArray(submitValues.voice_refs) ? (submitValues.voice_refs as unknown[]).length : 0
+    submitValues.prompt = stripOrphanedReferenceMarkers(rewritten, {
+      character: charCount,
+      referenceImage: imgCount,
+      referenceAudio: voiceCount,
+    })
+  }
+  
   const prompt = typeof submitValues.prompt === 'string' ? submitValues.prompt : ''
   onGenerationLifecycle?.({ phase: 'started', requestId, category, prompt })
   try {
@@ -120,6 +138,7 @@ export function useNotebookRun({
     option: ModelOption,
     provider: string,
     values: Record<string, unknown>,
+    charMentions?: { handle: string; n: number }[]
   ) => {
     if (!definitionRef.current || inFlightRef.current.has(step.id)) return
     inFlightRef.current.add(step.id)
@@ -140,6 +159,7 @@ export function useNotebookRun({
         getDefinition: () => definitionRef.current,
         replaceDefinition,
         onGenerationLifecycle,
+        charMentions,
       })
       if (!result.ok) {
         setErrors((current) => new Map(current).set(step.id, result.message))
