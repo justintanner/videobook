@@ -1511,6 +1511,11 @@ export function HomePage() {
           initialAtSec={splitTarget?.atSec}
           item={splitItem}
           onClose={() => setSplitTarget(null)}
+          onComplete={() => {
+            if (!projectSlug) return
+            void listAssets(projectSlug, sortOrder)
+            void sync(projectSlug)
+          }}
           assetSlugs={assetSlugs}
           callTool={callTool}
           projectSlug={projectSlug}

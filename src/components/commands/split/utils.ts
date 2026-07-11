@@ -94,3 +94,72 @@ export function clampSplitSec(splitSec: number, duration: number): number {
   if (duration <= MIN_CHUNK_SEC * 2) return duration / 2;
   return clamp(splitSec, MIN_CHUNK_SEC, duration - MIN_CHUNK_SEC);
 }
+
+export interface IntervalPlan {
+  targets: number[];
+  boundaries: number[];
+  clipDurations: number[];
+  clipCount: number;
+  disabled: boolean;
+  disabledReason: string | null;
+}
+
+export function planIntervalSplit(duration: number, interval: number): IntervalPlan {
+  if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(interval) || interval <= 0) {
+    return {
+      targets: [],
+      boundaries: [],
+      clipDurations: [],
+      clipCount: 0,
+      disabled: true,
+      disabledReason: 'Invalid source or interval.',
+    };
+  }
+
+  const fullChunks = Math.floor(duration / interval);
+  const remainder = duration - fullChunks * interval;
+
+  let targetCount = fullChunks;
+  if (remainder > 0 && remainder < MIN_CHUNK_SEC) {
+    targetCount = Math.max(0, fullChunks - 1);
+  }
+
+  if (targetCount === 0) {
+    return {
+      targets: [],
+      boundaries: [],
+      clipDurations: [],
+      clipCount: 0,
+      disabled: true,
+      disabledReason: 'Source too short to split at this interval.',
+    };
+  }
+
+  const targets = new Array<number>(targetCount).fill(interval);
+  const sum = targets.reduce((a, b) => a + b, 0);
+  const leftover = duration - sum;
+
+  const clipDurations: number[] = [...targets];
+  if (leftover >= MIN_CHUNK_SEC) {
+    clipDurations.push(leftover);
+  }
+
+  const boundaries: number[] = [];
+  let cursor = 0;
+  for (let i = 0; i < clipDurations.length - 1; i++) {
+    cursor += clipDurations[i];
+    boundaries.push(cursor);
+  }
+
+  const clipCount = clipDurations.length;
+  const disabled = clipCount < 2;
+
+  return {
+    targets,
+    boundaries,
+    clipDurations,
+    clipCount,
+    disabled,
+    disabledReason: disabled ? 'Source too short to split at this interval.' : null,
+  };
+}

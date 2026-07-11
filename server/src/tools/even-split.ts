@@ -99,6 +99,59 @@ export function planEvenSplit(D: number, targets: number[]): PlanResult {
   };
 }
 
+export interface IntervalPlan {
+  targets: number[];
+  boundaries: number[];
+  clipDurations: number[];
+  clipCount: number;
+  disabled: boolean;
+  disabledReason: string | null;
+}
+
+export function planIntervalSplit(duration: number, interval: number): IntervalPlan {
+  if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(interval) || interval <= 0) {
+    return { targets: [], boundaries: [], clipDurations: [], clipCount: 0, disabled: true, disabledReason: "Invalid source or interval." };
+  }
+
+  const fullChunks = Math.floor(duration / interval);
+  const remainder = duration - fullChunks * interval;
+
+  let targetCount = fullChunks;
+  if (remainder > 0 && remainder < MIN_CHUNK_SEC) {
+    targetCount = Math.max(0, fullChunks - 1);
+  }
+
+  if (targetCount === 0) {
+    return { targets: [], boundaries: [], clipDurations: [], clipCount: 0, disabled: true, disabledReason: "Source too short to split at this interval." };
+  }
+
+  const targets = new Array<number>(targetCount).fill(interval);
+  const plan = planEvenSplit(duration, targets);
+  if (!plan.ok) {
+    return { targets: [], boundaries: [], clipDurations: [], clipCount: 0, disabled: true, disabledReason: plan.error };
+  }
+
+  const clipDurations = plan.chunks.map((c) => c.duration);
+  const boundaries: number[] = [];
+  let cursor = 0;
+  for (let i = 0; i < plan.chunks.length - 1; i++) {
+    cursor += plan.chunks[i].duration;
+    boundaries.push(cursor);
+  }
+
+  const clipCount = plan.chunks.length;
+  const disabled = clipCount < 2;
+
+  return {
+    targets,
+    boundaries,
+    clipDurations,
+    clipCount,
+    disabled,
+    disabledReason: disabled ? "Source too short to split at this interval." : null,
+  };
+}
+
 function parseSingleTarget(input: number | string): number {
   if (typeof input === "number") return input;
   // Strip a trailing unit suffix like "s" / " sec" so "10s" parses cleanly.
