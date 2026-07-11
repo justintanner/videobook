@@ -158,22 +158,9 @@ export function NotebookSidebar({
 }: NotebookSidebarProps) {
   const selected = definition.sequence.find((step) => step.id === selectedStepId) ?? null
   if (!selected) {
-    const title = typeof definition.properties.title === 'string' ? definition.properties.title : ''
     return (
       <aside className="vc-notebook-sidebar">
-        <LoadoutHeader title="Notebook" />
         <div className="vc-notebook-editor">
-          <label htmlFor="notebook-title">Notebook title</label>
-          <input
-            id="notebook-title"
-            className="vc-notebook-text"
-            value={title}
-            onChange={(event) => updateDefinition(
-              { ...definition, properties: { ...definition.properties, title: event.target.value } },
-              'text:notebook:title',
-            )}
-            placeholder="Untitled notebook"
-          />
           <div className="vc-notebook-briefing-empty">
             <Crosshair />
             <strong>No cell selected</strong>

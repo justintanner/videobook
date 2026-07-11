@@ -13,7 +13,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from '@xyflow/react'
-import { BookOpen, Loader2, Rows3, Redo2, Undo2 } from 'lucide-react'
+import { BookOpen, ImageIcon, Loader2, MessageSquareText, Rows3, Redo2, Undo2, Video } from 'lucide-react'
 import type { UseMcpResult } from 'use-mcp/react'
 import { CloseButton } from '@/components/ui/CloseButton'
 import type { MediaItem } from '@/components/sidebar/types'
@@ -37,7 +37,6 @@ import {
 } from './model'
 import { NotebookSidebar } from './NotebookSidebar'
 import { NotebookStageBoard, type NotebookDropPreview } from './NotebookStageBoard'
-import { NotebookToolbox } from './NotebookToolbox'
 import { NODE_TYPES } from './nodes/nodeTypes'
 import type { NotebookFlowNode } from './nodes/nodeTypes'
 import type { NotebookPlanDefinition } from './types'
@@ -238,12 +237,49 @@ function NotebookCanvas({
           <ControlButton onClick={onUndo} disabled={!canUndo} title="Undo"><Undo2 /></ControlButton>
           <ControlButton onClick={onRedo} disabled={!canRedo} title="Redo"><Redo2 /></ControlButton>
           <ControlButton onClick={handleAutoLayout} title="Auto-arrange"><Rows3 /></ControlButton>
+          <ControlButton
+            className="vc-notebook-add-cell"
+            title="Add prompt cell"
+            draggable
+            onClick={() => addFromToolbox('prompt')}
+            onDragStart={(event) => {
+              event.dataTransfer.setData('application/x-videocity-notebook-step', 'prompt')
+              event.dataTransfer.effectAllowed = 'copy'
+              setDraggedStepType('prompt')
+            }}
+            onDragEnd={clearDropPreview}
+          >
+            <MessageSquareText />
+          </ControlButton>
+          <ControlButton
+            className="vc-notebook-add-cell"
+            title="Add image cell"
+            draggable
+            onClick={() => addFromToolbox('image')}
+            onDragStart={(event) => {
+              event.dataTransfer.setData('application/x-videocity-notebook-step', 'image')
+              event.dataTransfer.effectAllowed = 'copy'
+              setDraggedStepType('image')
+            }}
+            onDragEnd={clearDropPreview}
+          >
+            <ImageIcon />
+          </ControlButton>
+          <ControlButton
+            className="vc-notebook-add-cell"
+            title="Add video cell"
+            draggable
+            onClick={() => addFromToolbox('video')}
+            onDragStart={(event) => {
+              event.dataTransfer.setData('application/x-videocity-notebook-step', 'video')
+              event.dataTransfer.effectAllowed = 'copy'
+              setDraggedStepType('video')
+            }}
+            onDragEnd={clearDropPreview}
+          >
+            <Video />
+          </ControlButton>
         </Controls>
-        <NotebookToolbox
-          onAdd={addFromToolbox}
-          onDragStart={setDraggedStepType}
-          onDragEnd={clearDropPreview}
-        />
       </ReactFlow>
       <span className="sr-only">{selectedStepId}</span>
     </div>
@@ -349,17 +385,12 @@ export function Notebook({
 
   return (
     <section className="vc-notebook h-full min-h-0 flex flex-col overflow-hidden border border-zinc-600/50">
-      <header className="vc-notebook-header">
-        <div className="vc-notebook-brand">
-          <span><BookOpen /> /notebook</span>
-        </div>
-        <div className="vc-notebook-sync">
-          <span className={`vc-notebook-save vc-notebook-save-${plan.saveState}`}>
-            {plan.saveState === 'saving' || plan.saveState === 'loading' ? <Loader2 /> : null}
-            Data {plan.saveState}
-          </span>
-          <CloseButton onClick={onClose} tone="emerald" />
-        </div>
+      <header className="flex items-center justify-between px-3 py-3 shrink-0 border-b border-zinc-800/60 bg-black/60">
+        <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-emerald-300/70">
+          <BookOpen className="w-3.5 h-3.5" />
+          <span>/notebook</span>
+        </span>
+        <CloseButton onClick={onClose} tone="emerald" title="Close (ESC)" />
       </header>
       {plan.error ? <div className="vc-notebook-load-error">{plan.error}</div> : null}
       {plan.legacy ? <div className="vc-notebook-legacy-note">This project has a notebook from the old formula system. Saving changes replaces that old plan file.</div> : null}

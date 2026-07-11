@@ -309,7 +309,7 @@ describe('notebook model', () => {
     expect(new Set(moved.sequence.map((step) => stepPosition(step)?.x)).size).toBe(3)
   })
 
-  it('selects a smart parent only from the stage immediately above a deployment', () => {
+  it('selects a smart parent only from the stage immediately above the drop', () => {
     const graph: NotebookPlanDefinition = snapDefinitionToTracks({
       properties: {},
       sequence: [

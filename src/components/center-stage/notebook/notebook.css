@@ -3,45 +3,6 @@
   color: rgb(209 250 229);
 }
 
-.vc-notebook-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem;
-  background: rgb(0 0 0 / 0.6);
-  border-bottom: 1px solid rgb(39 39 42 / 0.6);
-}
-
-.vc-notebook-header > div,
-.vc-notebook-header span {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.vc-notebook-header span {
-  margin: 0;
-  font-family: var(--font-mono);
-}
-
-.vc-notebook-header > div:first-child > span:first-child {
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: none;
-  color: rgb(110 231 183 / 0.9);
-  filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.5));
-}
-
-.vc-notebook-header span {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: rgb(110 231 183 / 0.75);
-}
-
-.vc-notebook-header svg,
-.vc-notebook-save svg,
 .vc-notebook-status svg,
 .vc-notebook-loading svg,
 .vc-notebook-error svg {
@@ -49,18 +10,10 @@
   height: 0.875rem;
 }
 
-.vc-notebook-save-saving,
-.vc-notebook-save-loading {
-  color: rgb(251 191 36);
-}
-
-.vc-notebook-save-saving svg,
-.vc-notebook-save-loading svg,
 .vc-notebook-loading svg {
   animation: vc-notebook-spin 1s linear infinite;
 }
 
-.vc-notebook-save-error,
 .vc-notebook-error,
 .vc-notebook-load-error {
   color: rgb(252 165 165);
@@ -126,24 +79,6 @@
   background: rgb(52 211 153 / 0.15);
 }
 
-.vc-notebook-toolbox {
-  position: absolute;
-  z-index: 5;
-  top: 0.75rem;
-  left: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  width: 8.5rem;
-  padding: 0.4rem;
-  border: 1px solid rgb(52 211 153 / 0.25);
-  border-radius: 0.5rem;
-  background: rgb(3 12 9 / 0.92);
-  box-shadow: 0 0 20px rgb(0 0 0 / 0.4);
-  backdrop-filter: blur(4px);
-}
-
-.vc-notebook-toolbox button,
 .vc-notebook-input-button,
 .vc-notebook-run {
   display: flex;
@@ -159,7 +94,6 @@
   text-align: left;
 }
 
-.vc-notebook-toolbox button:hover,
 .vc-notebook-input-button:hover {
   border-color: rgb(52 211 153 / 0.65);
   background: rgb(52 211 153 / 0.12);
@@ -239,11 +173,6 @@
 
 .vc-notebook-run-busy svg:first-child {
   animation: vc-notebook-spin 1s linear infinite;
-}
-
-.vc-notebook-toolbox svg {
-  width: 0.85rem;
-  height: 0.85rem;
 }
 
 .vc-node {
@@ -565,8 +494,7 @@
   color: rgb(167 139 250 / 0.75);
 }
 
-.vc-notebook-editor textarea.vc-notebook-text,
-.vc-notebook-editor input.vc-notebook-text {
+.vc-notebook-editor textarea.vc-notebook-text {
   width: 100%;
   min-height: 2.4rem;
   border: 1px solid rgb(52 211 153 / 0.25);
@@ -1041,47 +969,6 @@
   color: var(--vc-text);
 }
 
-.vc-notebook-header {
-  position: relative;
-  min-height: 4rem;
-  padding: 0.72rem 1rem;
-  border-bottom-color: var(--vc-line);
-  background:
-    linear-gradient(90deg, rgb(52 211 153 / 0.08), transparent 28%),
-    rgb(1 6 4 / 0.94);
-  box-shadow: inset 0 -1px rgb(52 211 153 / 0.06), 0 8px 30px rgb(0 0 0 / 0.24);
-}
-
-.vc-notebook-header::after {
-  position: absolute;
-  bottom: -1px;
-  left: 1rem;
-  width: 7rem;
-  height: 2px;
-  background: var(--vc-line-strong);
-  box-shadow: 0 0 12px var(--vc-glow);
-  content: '';
-}
-
-.vc-notebook-brand {
-  min-width: 0;
-}
-
-.vc-notebook-brand > span {
-  min-width: max-content;
-}
-
-.vc-notebook-sync {
-  flex: none;
-}
-
-.vc-notebook-save {
-  padding: 0.28rem 0.5rem;
-  border: 1px solid var(--vc-line);
-  border-radius: 0.2rem;
-  background: rgb(52 211 153 / 0.04);
-}
-
 .vc-notebook-canvas::after {
   position: absolute;
   inset: 0;
@@ -1262,60 +1149,6 @@
   box-shadow: inset 3px 0 var(--vc-video), 0 0 20px var(--vc-glow);
 }
 
-.vc-notebook-toolbox {
-  top: 0.8rem;
-  left: 0.85rem;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.45rem;
-  width: auto;
-  max-width: calc(100% - 1.7rem);
-  padding: 0.34rem;
-  border-color: var(--vc-line);
-  border-radius: 0.3rem;
-  background: rgb(2 10 7 / 0.93);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 0.42), inset 0 1px rgb(110 231 183 / 0.06);
-  backdrop-filter: blur(8px);
-}
-
-.vc-notebook-snap-lock {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0 0.45rem;
-  color: rgb(110 231 183 / 0.56);
-  font-family: var(--font-mono);
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.vc-notebook-snap-lock svg {
-  width: 0.74rem;
-  height: 0.74rem;
-}
-
-.vc-notebook-toolbox-actions {
-  display: flex;
-  gap: 0.28rem;
-}
-
-.vc-notebook-toolbox button {
-  min-height: 1.9rem;
-  border-radius: 0.2rem;
-  background: rgb(52 211 153 / 0.035);
-  padding: 0.35rem 0.55rem;
-  letter-spacing: 0.03em;
-}
-
-.vc-notebook-snap-lock {
-  min-height: 1.9rem;
-  border-left: 1px solid var(--vc-line);
-  color: rgb(110 231 183 / 0.74);
-}
-
 .vc-notebook-canvas .react-flow__controls {
   overflow: hidden;
   border: 1px solid var(--vc-line);
@@ -1332,6 +1165,14 @@
 .vc-notebook-canvas .react-flow__controls-button svg {
   max-width: 1.15rem;
   max-height: 1.15rem;
+}
+
+.vc-notebook-canvas .react-flow__controls-button svg.lucide {
+  fill: none;
+}
+
+.vc-notebook-canvas .react-flow__controls-button:not(.vc-notebook-add-cell) + .vc-notebook-add-cell {
+  border-top: 1px solid var(--vc-line-strong);
 }
 
 .vc-node {
@@ -1669,7 +1510,6 @@
 
 .vc-notebook-compact-select,
 .vc-notebook-editor textarea.vc-notebook-text,
-.vc-notebook-editor input.vc-notebook-text,
 .vc-notebook-select,
 .vc-notebook-input-chip {
   border-color: var(--vc-line);
@@ -1698,23 +1538,12 @@
   .vc-notebook-sidebar {
     width: min(300px, 42vw);
   }
-
-  .vc-notebook-snap-lock {
-    font-size: 0;
-  }
-
-  .vc-notebook-snap-lock svg {
-    width: 0.85rem;
-    height: 0.85rem;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .vc-notebook-drop-link path,
   .vc-notebook-canvas .react-flow__edge.vc-notebook-edge-running .react-flow__edge-path,
   .vc-node-invalid,
-  .vc-notebook-save-saving svg,
-  .vc-notebook-save-loading svg,
   .vc-notebook-loading svg,
   .vc-notebook-run-busy svg:first-child {
     animation: none;
