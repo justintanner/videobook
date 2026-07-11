@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { AlertCircle, Braces, ChevronDown, Crosshair, ImageIcon, Loader2, Pin, PinOff, Play, Video, X } from 'lucide-react'
+import { AlertCircle, Braces, ChevronDown, Crosshair, ImageIcon, Loader2, Play, User, Video, X } from 'lucide-react'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import type { UseMcpResult } from 'use-mcp/react'
 import { CharacterPickerPopover } from '@/components/gen/ui/CharacterPickerPopover'
 import { DynamicField } from '@/components/gen/ui/DynamicField'
@@ -7,7 +8,7 @@ import { genThemes } from '@/components/gen/ui/gen-themes'
 import { effectiveToolName, filterValuesForMode, getMode, modeRequiredMissing, visibleParams } from '@/components/gen/modes'
 import type { JSONSchemaProperty, ModelOption, ModelModes } from '@/components/gen/types'
 import { usePromptHistory } from '@/hooks/usePromptHistory'
-import { useGoogleFlowEntities } from '@/hooks/useGoogleFlowEntities'
+import { useGoogleFlowEntities, type GoogleFlowEntityOption } from '@/hooks/useGoogleFlowEntities'
 import { JsonNode } from '@/components/ui/JsonNode'
 import { RichPromptField } from '@/components/ui/RichPromptField'
 import { characterHandle } from '@/components/ui/richPromptTokens'
@@ -23,6 +24,7 @@ import {
   type ClipBounds,
 } from './clip-window'
 import { isAssetField } from '@/components/gen/ui/fieldHelpers'
+import { deriveStripSlots, routeDrop } from '@/components/gen/ui/media-strip'
 import {
   CONNECTION_OWNED_PARAMS,
   assetSlugKind,
@@ -47,7 +49,7 @@ interface NotebookSidebarProps {
   errors: ReadonlyMap<string, string>
   updateDefinition: (next: NotebookPlanDefinition, coalesceKey?: string) => void
   onDisconnect: (sourceId: string, targetId: string) => void
-  onSetFirstFrame: (targetId: string, sourceId: string | null) => void
+  onSetInputRoute: (targetId: string, sourceId: string, param: string | null) => void
   onRun: (step: NotebookPlanStep, option: ModelOption, provider: string, values: Record<string, unknown>, charMentions?: { handle: string; n: number }[]) => void
   onOpenAsset?: (assetId: string) => void
 }
@@ -56,10 +58,6 @@ function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {}
-}
-
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 }
 
 /** Explicit /type from step.properties.mode, else model default_mode. */
@@ -160,7 +158,7 @@ export function NotebookSidebar({
   errors,
   updateDefinition,
   onDisconnect,
-  onSetFirstFrame,
+  onSetInputRoute,
   onRun,
   onOpenAsset,
 }: NotebookSidebarProps) {
@@ -216,7 +214,7 @@ export function NotebookSidebar({
       error={errors.get(selected.id) ?? null}
       updateDefinition={updateDefinition}
       onDisconnect={onDisconnect}
-      onSetFirstFrame={onSetFirstFrame}
+      onSetInputRoute={onSetInputRoute}
       onRun={onRun}
     />
   )
@@ -264,7 +262,7 @@ interface GenerationSidebarProps {
   error: string | null
   updateDefinition: NotebookSidebarProps['updateDefinition']
   onDisconnect: NotebookSidebarProps['onDisconnect']
-  onSetFirstFrame: NotebookSidebarProps['onSetFirstFrame']
+  onSetInputRoute: NotebookSidebarProps['onSetInputRoute']
   onRun: NotebookSidebarProps['onRun']
 }
 
@@ -280,7 +278,7 @@ function GenerationSidebar({
   error,
   updateDefinition,
   onDisconnect,
-  onSetFirstFrame,
+  onSetInputRoute,
   onRun,
 }: GenerationSidebarProps) {
   const category: 'image' | 'video' = step.type === 'video' ? 'video' : 'image'
@@ -490,6 +488,33 @@ function GenerationSidebar({
         ) : null}
         {option && !showPayload ? (
           <>
+          <label>Inputs</label>
+          <InputList
+            definition={definition}
+            step={step}
+            option={option}
+            mediaItems={mediaItems}
+            onDisconnect={onDisconnect}
+            onSetInputRoute={onSetInputRoute}
+          >
+            {showCharacters && characterField ? (
+              <CharacterInputRows
+                characterRefs={characterRefs}
+                charMap={charMap}
+                onUpdate={(refs) => updateValues('character_refs', refs)}
+                maxItems={characterField.maxItems ?? 7}
+                disabled={running}
+                callTool={callTool}
+                mcpState={mcpState}
+                projectSlug={projectSlug}
+              />
+            ) : null}
+          </InputList>
+          {(resolved?.warnings.length || readiness.reasons.length) ? (
+            <div className="vc-notebook-warnings">
+              {[...(resolved?.warnings ?? []), ...readiness.reasons].map((warning) => <p key={warning}>{warning}</p>)}
+            </div>
+          ) : null}
           <CompactSelect
             id={`step-model-${step.id}`}
             label="Model"
@@ -554,20 +579,7 @@ function GenerationSidebar({
               ) : null}
             </div>
           ) : null}
-          <label>Inputs</label>
-          <InputList
-            definition={definition}
-            step={step}
-            option={option}
-            mediaItems={mediaItems}
-            onDisconnect={onDisconnect}
-            onSetFirstFrame={onSetFirstFrame}
-          />
-          {(resolved?.warnings.length || readiness.reasons.length) ? (
-            <div className="vc-notebook-warnings">
-              {[...(resolved?.warnings ?? []), ...readiness.reasons].map((warning) => <p key={warning}>{warning}</p>)}
-            </div>
-          ) : null}
+
           {fieldEntries.length > 0 || showClipComposite ? <>
             <label>Options</label>
             <div className="flex flex-wrap gap-x-4 gap-y-2">
@@ -607,18 +619,6 @@ function GenerationSidebar({
               })}
             </div>
           </> : null}
-          {showCharacters && characterField ? (
-            <CharacterPickerPopover
-              selectedRefs={stringArray(mergedValues.character_refs)}
-              onChange={(refs) => updateValues('character_refs', refs)}
-              maxItems={characterField.maxItems ?? 7}
-              disabled={running}
-              callTool={callTool}
-              mcpState={mcpState}
-              projectSlug={projectSlug}
-              domain="notebook"
-            />
-          ) : null}
           <label>Prompt</label>
           {resolved?.promptFromInputs !== null ? (
             <div className="vc-notebook-linked-prompt">
@@ -682,19 +682,28 @@ function InputList({
   option,
   mediaItems,
   onDisconnect,
-  onSetFirstFrame,
+  onSetInputRoute,
+  children,
 }: {
   definition: NotebookPlanDefinition
   step: NotebookPlanStep
   option: ModelOption
   mediaItems: MediaItem[]
   onDisconnect: NotebookSidebarProps['onDisconnect']
-  onSetFirstFrame: NotebookSidebarProps['onSetFirstFrame']
+  onSetInputRoute: NotebookSidebarProps['onSetInputRoute']
+  children?: ReactNode
 }) {
   const sources = new Map(definition.sequence.map((candidate) => [candidate.id, candidate]))
-  const pin = typeof step.properties.first_frame_source === 'string' ? step.properties.first_frame_source : null
+  const inputRoutes = (step.properties.input_routes as JsonRecord) ?? {}
+  const legacyFirstFrameSource = typeof step.properties.first_frame_source === 'string' ? step.properties.first_frame_source : null
+  const effectiveRoutes = { ...inputRoutes }
+  if (legacyFirstFrameSource && !effectiveRoutes[legacyFirstFrameSource]) {
+    effectiveRoutes[legacyFirstFrameSource] = 'first_frame_slug'
+  }
+  const modeSlots = deriveStripSlots(option, null)
+
   const inputs = stepInputs(step)
-  if (inputs.length === 0) return <p className="vc-notebook-hint">Connect nodes on the canvas to add inputs.</p>
+  if (inputs.length === 0 && !children) return <p className="vc-notebook-hint">Connect nodes on the canvas to add inputs.</p>
   return (
     <div className="vc-notebook-input-list">
       {inputs.map((id) => {
@@ -705,24 +714,108 @@ function InputList({
           : latestAssetId(source) ? `@${latestAssetId(source)}` : ''
         const item = slug ? mediaItems.find((media) => media.id === slug.replace(/^@/, '')) : null
         const kind = source.type === 'prompt' ? null : assetSlugKind(slug)
-        const canPin = kind === 'image' && Boolean(option.schema.properties.first_frame_slug)
         const label = source.type === 'prompt'
           ? (typeof source.properties.text === 'string' ? source.properties.text : '').slice(0, 48) || 'Empty prompt'
           : source.type === 'asset'
             ? slug
             : `${typeof source.properties.model === 'string' ? source.properties.model : source.type} · ${slug || 'no output'}`
+
+        const explicitParam = typeof effectiveRoutes[id] === 'string' ? effectiveRoutes[id] : null
+        const autoRoute = kind ? routeDrop(kind, modeSlots) : { param: '' }
+        const options = kind ? modeSlots.filter((slot) => {
+          if (kind === 'image') return slot.kind === 'image' || slot.param === 'first_frame_slug' || slot.param === 'last_frame_slug'
+          if (kind === 'video') return slot.kind === 'video'
+          if (kind === 'audio') return slot.kind === 'audio'
+          if (kind === 'character') return slot.param === 'character_image_slugs'
+          return false
+        }) : []
+        const hasSelect = kind !== null && options.length > 0
+
         return (
           <div className="vc-notebook-input-chip" key={id}>
             {item?.thumbnailSrc ? <img src={item.thumbnailSrc} alt="" /> : kind === 'video' ? <Video /> : <ImageIcon />}
             <span>{label}</span>
-            {canPin ? <button type="button" title={pin === id ? 'Unpin first frame' : 'Use as first frame'} onClick={() => onSetFirstFrame(step.id, pin === id ? null : id)}>
-              {pin === id ? <Pin /> : <PinOff />}
-            </button> : null}
-            <button type="button" title="Disconnect" onClick={() => onDisconnect(id, step.id)}><X /></button>
+            {hasSelect ? (
+              <select
+                className="vc-notebook-route-select text-xs ml-auto bg-transparent border border-white/20 rounded px-1"
+                value={explicitParam || ''}
+                onChange={(e) => onSetInputRoute(step.id, id, e.target.value || null)}
+                title="Select connection route"
+              >
+                <option value="">Auto ({autoRoute.param || 'unsupported'})</option>
+                {options.map((opt) => (
+                  <option key={opt.param} value={opt.param}>{opt.param}</option>
+                ))}
+              </select>
+            ) : source.type === 'prompt' ? (
+              <span className="vc-notebook-route-fixed text-xs ml-auto opacity-60">prompt</span>
+            ) : null}
+            <button type="button" title="Disconnect" onClick={() => onDisconnect(id, step.id)}><X className="w-4 h-4" /></button>
           </div>
         )
       })}
+      {children}
     </div>
+  )
+}
+
+function CharacterInputRows({
+  characterRefs,
+  charMap,
+  onUpdate,
+  maxItems,
+  disabled,
+  callTool,
+  mcpState,
+  projectSlug,
+}: {
+  characterRefs: string[]
+  charMap: Map<string, GoogleFlowEntityOption>
+  onUpdate: (refs: string[]) => void
+  maxItems: number
+  disabled: boolean
+  callTool: UseMcpResult['callTool']
+  mcpState: UseMcpResult['state']
+  projectSlug: string
+}) {
+  return (
+    <>
+      {characterRefs.map((ref) => {
+        const entity = charMap.get(ref)
+        const label = entity?.displayName || ref
+        return (
+          <div className="vc-notebook-input-chip" key={ref}>
+            {entity?.thumbnailUrl ? <img src={entity.thumbnailUrl} alt="" /> : <User />}
+            <span>{label}</span>
+            <span className="vc-notebook-route-fixed text-xs ml-auto opacity-60">character</span>
+            <button type="button" title="Disconnect" onClick={() => onUpdate(characterRefs.filter(r => r !== ref))}><X className="w-4 h-4" /></button>
+          </div>
+        )
+      })}
+      {characterRefs.length < maxItems && !disabled ? (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button type="button" className="vc-notebook-input-chip vc-notebook-add-character-btn hover:bg-white/5 border border-dashed border-white/20 justify-center">
+              <span className="opacity-70 text-xs font-medium">+ character</span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="p-0 border-0 bg-transparent shadow-none" side="bottom" align="start">
+            <div className="bg-[#1a1a1a] rounded-lg border border-white/10 p-2 shadow-xl shadow-black/50">
+              <CharacterPickerPopover
+                selectedRefs={characterRefs}
+                onChange={onUpdate}
+                maxItems={maxItems}
+                disabled={disabled}
+                callTool={callTool}
+                mcpState={mcpState}
+                projectSlug={projectSlug}
+                domain="notebook"
+              />
+            </div>
+          </PopoverContent>
+        </Popover>
+      ) : null}
+    </>
   )
 }
 

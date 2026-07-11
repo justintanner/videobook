@@ -27,7 +27,7 @@ import {
   removeSteps,
   resolveEffectiveValues,
   sanitizeValuesForOption,
-  setFirstFrameSource,
+  setInputRoute,
   snapDefinitionToTracks,
   stepInputReadiness,
   stepInvalidReason,
@@ -209,7 +209,7 @@ describe('notebook model', () => {
     const asset = migrated.definition.sequence.find((step) => step.id === 'asset-img-external')
     expect(migrated.changed).toBe(true)
     expect(target && stepInputs(target)).toEqual(['source', 'asset-img-external'])
-    expect(target?.properties.first_frame_source).toBe('asset-img-external')
+    expect((target?.properties.input_routes as Record<string, unknown>)?.['asset-img-external']).toBe('first_frame_slug')
     expect(target?.properties.values).toEqual({ prompt: 'Animate it' })
     expect(asset?.properties.slug).toBe('@img-external')
     expect(migrated.definition.sequence.every((step) => {
@@ -242,11 +242,11 @@ describe('notebook model', () => {
     expect(wouldCreateCycle(chained, 'video-1', 'image-1')).toBe(true)
     expect(stepInputs(chained.sequence[1])).toEqual(['prompt-1'])
     expect(stepInputs(chained.sequence[2])).toEqual(['image-1'])
-    const pinned = setFirstFrameSource(chained, 'video-1', 'image-1')
-    expect(pinned.sequence[2].properties.first_frame_source).toBe('image-1')
+    const pinned = setInputRoute(chained, 'video-1', 'image-1', 'first_frame_slug')
+    expect((pinned.sequence[2].properties.input_routes as Record<string, unknown>)['image-1']).toBe('first_frame_slug')
     const disconnected = disconnectSteps(pinned, 'image-1', 'video-1')
     expect(stepInputs(disconnected.sequence[2])).toEqual([])
-    expect(disconnected.sequence[2].properties.first_frame_source).toBeUndefined()
+    expect((disconnected.sequence[2].properties.input_routes as Record<string, unknown> | undefined)?.['image-1']).toBeUndefined()
     const pruned = removeSteps(chained, ['image-1'])
     expect(pruned.sequence.map((step) => step.id)).toEqual(['prompt-1', 'video-1'])
     expect(stepInputs(pruned.sequence[1])).toEqual([])

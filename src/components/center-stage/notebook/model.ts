@@ -776,7 +776,11 @@ export function normalizeDefinition(definition: NotebookPlanDefinition): {
     const hasConnectionValues = CONNECTION_OWNED_PARAMS.some((param) => Object.hasOwn(values, param))
     if (!hasConnectionValues) continue
     let inputs = stepInputs(step)
-    let firstFrameSource = stringProperty(step.properties, 'first_frame_source')
+    let inputRoutes = (step.properties.input_routes as JsonRecord) ?? {}
+    const firstFrameSource = stringProperty(step.properties, 'first_frame_source')
+    if (firstFrameSource && !inputRoutes[firstFrameSource]) {
+      inputRoutes = { ...inputRoutes, [firstFrameSource]: 'first_frame_slug' }
+    }
     for (const slug of stringArray(values.image_slugs)) {
       const migrated = migrateSlugToInput(sequence, index, slug)
       sequence = migrated.sequence
@@ -788,15 +792,19 @@ export function normalizeDefinition(definition: NotebookPlanDefinition): {
       const migrated = migrateSlugToInput(sequence, index, slug)
       sequence = migrated.sequence
       if (!inputs.includes(migrated.sourceId)) inputs = [...inputs, migrated.sourceId]
-      if (param === 'first_frame_slug') firstFrameSource = migrated.sourceId
+      if (param === 'first_frame_slug') {
+        inputRoutes = { ...inputRoutes, [migrated.sourceId]: 'first_frame_slug' }
+      }
     }
     const nextValues: JsonRecord = { ...values }
     for (const param of CONNECTION_OWNED_PARAMS) delete nextValues[param]
+    const nextProperties = { ...sequence[index].properties }
+    delete nextProperties.first_frame_source
     sequence[index] = copyStep(sequence[index], {
-      ...sequence[index].properties,
+      ...nextProperties,
       values: nextValues,
       ...(inputs.length > 0 ? { inputs } : {}),
-      ...(firstFrameSource ? { first_frame_source: firstFrameSource } : {}),
+      ...(Object.keys(inputRoutes).length > 0 ? { input_routes: inputRoutes } : {}),
     })
     changed = true
   }
@@ -879,8 +887,13 @@ export function disconnectSteps(
   return setStep(definition, targetId, (step) => {
     const nextInputs = stepInputs(step).filter((input) => input !== sourceId)
     const nextProperties: JsonRecord = { ...step.properties, inputs: nextInputs }
-    if (stringProperty(step.properties, 'first_frame_source') === sourceId) {
+    const currentRoutes = (step.properties.input_routes as JsonRecord) ?? {}
+    if (currentRoutes[sourceId] || stringProperty(step.properties, 'first_frame_source') === sourceId) {
       delete nextProperties.first_frame_source
+      const nextRoutes = { ...currentRoutes }
+      delete nextRoutes[sourceId]
+      if (Object.keys(nextRoutes).length > 0) nextProperties.input_routes = nextRoutes
+      else delete nextProperties.input_routes
     }
     if (priorEffectiveDepth > 0) {
       nextProperties.depth = priorEffectiveDepth
@@ -889,20 +902,24 @@ export function disconnectSteps(
   })
 }
 
-export function setFirstFrameSource(
+export function setInputRoute(
   definition: NotebookPlanDefinition,
   targetId: string,
-  sourceId: string | null,
+  sourceId: string,
+  param: string | null,
 ): NotebookPlanDefinition {
   const target = definition.sequence.find((step) => step.id === targetId)
-  if (!target) return definition
-  if (sourceId !== null && !stepInputs(target).includes(sourceId)) return definition
-  const current = stringProperty(target.properties, 'first_frame_source')
-  if (current === sourceId) return definition
+  if (!target || !stepInputs(target).includes(sourceId)) return definition
+  const currentRoutes = (target.properties.input_routes as JsonRecord) ?? {}
+  const current = currentRoutes[sourceId]
+  if (current === param) return definition
   return setStep(definition, targetId, (step) => {
     const properties: JsonRecord = { ...step.properties }
-    if (sourceId) properties.first_frame_source = sourceId
-    else delete properties.first_frame_source
+    const nextRoutes = { ...currentRoutes }
+    if (param) nextRoutes[sourceId] = param
+    else delete nextRoutes[sourceId]
+    if (Object.keys(nextRoutes).length > 0) properties.input_routes = nextRoutes
+    else delete properties.input_routes
     return copyStep(step, properties)
   })
 }
@@ -982,10 +999,18 @@ export function removeSteps(
       .map((step) => {
         const inputs = stepInputs(step)
         const nextInputs = inputs.filter((input) => !removed.has(input))
+        const currentRoutes = (step.properties.input_routes as JsonRecord) ?? {}
+        const hasRemovedRoutes = Object.keys(currentRoutes).some((id) => removed.has(id))
         const pin = stringProperty(step.properties, 'first_frame_source')
-        if (nextInputs.length === inputs.length && (!pin || !removed.has(pin))) return step
+        if (nextInputs.length === inputs.length && !hasRemovedRoutes && (!pin || !removed.has(pin))) return step
         const properties: JsonRecord = { ...step.properties, inputs: nextInputs }
         if (pin && removed.has(pin)) delete properties.first_frame_source
+        if (hasRemovedRoutes) {
+          const nextRoutes = { ...currentRoutes }
+          for (const id of removed) delete nextRoutes[id]
+          if (Object.keys(nextRoutes).length > 0) properties.input_routes = nextRoutes
+          else delete properties.input_routes
+        }
         const priorEffectiveDepth = depths.get(step.id) ?? 0
         if (priorEffectiveDepth > 0 && inputs.length > nextInputs.length) {
           properties.depth = priorEffectiveDepth
@@ -1033,7 +1058,12 @@ export function resolveEffectiveValues(
   // Union of every mode's slots (or flat schema) — used when the active mode
   // is text-only so connected img/vid/aud can still resolve into refs.
   const allSlots = deriveStripSlots(option, null)
-  const firstFrameSource = stringProperty(step.properties, 'first_frame_source')
+  const inputRoutes = (step.properties.input_routes as JsonRecord) ?? {}
+  const legacyFirstFrameSource = stringProperty(step.properties, 'first_frame_source')
+  const effectiveRoutes = { ...inputRoutes }
+  if (legacyFirstFrameSource && !effectiveRoutes[legacyFirstFrameSource]) {
+    effectiveRoutes[legacyFirstFrameSource] = 'first_frame_slug'
+  }
   const routedStringSources = new Set<string>()
   const usedFallbackSlots = new Set<string>()
 
@@ -1059,14 +1089,22 @@ export function resolveEffectiveValues(
       warnings.push(`${input.name} does not provide a usable media reference.`)
       continue
     }
-    let route = inputId === firstFrameSource && option.schema.properties.first_frame_slug
-      ? { param: 'first_frame_slug', action: 'set' as const }
-      : routeDrop(kind, modeSlots)
+    let route: { param: string, action: 'set' | 'append' } = { param: '', action: 'append' }
+    const explicitParam = typeof effectiveRoutes[inputId] === 'string' ? effectiveRoutes[inputId] : null
     let slotsForCap = modeSlots
-    if (!route.param || !option.schema.properties[route.param]) {
-      route = routeDrop(kind, allSlots)
-      slotsForCap = allSlots
-      if (route.param) usedFallbackSlots.add(route.param)
+
+    if (explicitParam && option.schema.properties[explicitParam]) {
+      route = { param: explicitParam, action: 'append' as const }
+    } else {
+      if (explicitParam) {
+        warnings.push(`Connection route '${explicitParam}' is not available for this model; falling back to auto.`)
+      }
+      route = routeDrop(kind, modeSlots)
+      if (!route.param || !option.schema.properties[route.param]) {
+        route = routeDrop(kind, allSlots)
+        slotsForCap = allSlots
+        if (route.param) usedFallbackSlots.add(route.param)
+      }
     }
     const schema = option.schema.properties[route.param]
     if (!route.param || !schema) {
@@ -1093,8 +1131,12 @@ export function resolveEffectiveValues(
       continue
     }
     if (routedStringSources.has(route.param)) {
-      warnings.push(`${route.param} accepts one connected reference; keeping the first.`)
-      continue
+      if (explicitParam) {
+        warnings.push(`${route.param} is already occupied; overriding with explicit route.`)
+      } else {
+        warnings.push(`${route.param} accepts one connected reference; keeping the first.`)
+        continue
+      }
     }
     values[route.param] = slug
     routedStringSources.add(route.param)

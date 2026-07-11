@@ -37,7 +37,7 @@ import {
   reorderStepsOnTracks,
   removeSteps,
   promoteRunAsset,
-  setFirstFrameSource,
+  setInputRoute,
   snapDefinitionToTracks,
   toolboxStepSeeds,
 } from './model'
@@ -493,9 +493,9 @@ export function Notebook({
                 const current = getDefinition()
                 if (current) commit(snapDefinitionToTracks(disconnectSteps(current, sourceId, targetId)))
               }}
-              onSetFirstFrame={(targetId, sourceId) => {
+              onSetInputRoute={(targetId, sourceId, param) => {
                 const current = getDefinition()
-                if (current) commit(setFirstFrameSource(current, targetId, sourceId))
+                if (current) commit(setInputRoute(current, targetId, sourceId, param))
               }}
               onRun={run.run}
               onOpenAsset={onOpenAsset}
