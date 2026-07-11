@@ -76,4 +76,28 @@ describe("trimRange", () => {
     expect(probe.duration).toBeLessThan(6);
     await assertSaneTrimOutput(sourcePath, out);
   });
+
+  it("falls back to re-encoding when a copy trim omits the video stream", async () => {
+    const sparseGopSource = join(dir, "sparse-gop.mp4");
+    const out = join(dir, "sparse-gop-tail.mp4");
+    await execFileAsync(FFMPEG, [
+      "-y",
+      "-f", "lavfi", "-i", "testsrc=duration=6:size=320x240:rate=24",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=6",
+      "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+      "-g", "9999", "-keyint_min", "9999", "-sc_threshold", "0",
+      "-c:a", "aac", "-shortest",
+      sparseGopSource,
+    ]);
+
+    await trimRange(sparseGopSource, out, 1, undefined);
+
+    const probe = await probeVideo(out);
+    expect(probe.videoCodec).toBe("h264");
+    expect(probe.width).toBe(320);
+    expect(probe.height).toBe(240);
+    expect(probe.duration).toBeGreaterThan(4);
+    expect(probe.duration).toBeLessThan(6);
+    await assertSaneTrimOutput(sparseGopSource, out);
+  });
 });

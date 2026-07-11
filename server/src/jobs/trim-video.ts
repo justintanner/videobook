@@ -25,7 +25,7 @@ const TRIM_DURATION_SAFETY_SECS = 0.05;
 
 interface StreamDurations {
   format: number;
-  video: number;
+  video: number | null;
   audio: number | null;
 }
 
@@ -44,7 +44,7 @@ async function probeStreamDurations(filePath: string): Promise<StreamDurations> 
   const format = Number(data.format?.duration ?? 0);
   const videoStream = data.streams?.find((s) => s.codec_type === "video");
   const audioStream = data.streams?.find((s) => s.codec_type === "audio");
-  const video = Number(videoStream?.duration ?? format);
+  const video = videoStream ? Number(videoStream.duration ?? format) : null;
   const audio = audioStream ? Number(audioStream.duration ?? format) : null;
   return { format, video, audio };
 }
@@ -57,9 +57,11 @@ export async function assertSaneTrimOutput(
     probeStreamDurations(inputPath),
     probeStreamDurations(outputPath),
   ]);
-  if (output.format <= 0 || output.video <= 0) {
+  const video = output.video;
+  if (!Number.isFinite(output.format) || output.format <= 0
+    || video === null || !Number.isFinite(video) || video <= 0) {
     throw new Error(
-      `Trim output has zero duration (format=${output.format}, video=${output.video})`,
+      `Trim output has no usable video stream (format=${output.format}, video=${video})`,
     );
   }
   if (output.format > input.format + DURATION_EPSILON_SECS) {
@@ -67,9 +69,10 @@ export async function assertSaneTrimOutput(
       `Trim output duration ${output.format.toFixed(3)}s exceeds input ${input.format.toFixed(3)}s — likely a corrupted concat`,
     );
   }
-  if (output.audio !== null && Math.abs(output.video - output.audio) > AV_DRIFT_TOLERANCE_SECS) {
+  if (output.audio !== null && (!Number.isFinite(output.audio)
+    || Math.abs(video - output.audio) > AV_DRIFT_TOLERANCE_SECS)) {
     throw new Error(
-      `Trim output audio/video duration mismatch: video=${output.video.toFixed(3)}s audio=${output.audio.toFixed(3)}s`,
+      `Trim output audio/video duration mismatch: video=${video.toFixed(3)}s audio=${output.audio.toFixed(3)}s`,
     );
   }
 }
@@ -114,15 +117,18 @@ async function assertCopyTrimSane(
     probeStreamDurations(inputPath),
     probeStreamDurations(outputPath),
   ]);
-  if (output.format <= 0 || output.video <= 0) {
+  const video = output.video;
+  if (!Number.isFinite(output.format) || output.format <= 0
+    || video === null || !Number.isFinite(video) || video <= 0) {
     throw new Error(
-      `Copy trim has zero duration (format=${output.format}, video=${output.video})`,
+      `Copy trim has no usable video stream (format=${output.format}, video=${video})`,
     );
   }
   if (output.audio !== null
-    && Math.abs(output.video - output.audio) > COPY_AV_DRIFT_TOLERANCE_SECS) {
+    && (!Number.isFinite(output.audio)
+      || Math.abs(video - output.audio) > COPY_AV_DRIFT_TOLERANCE_SECS)) {
     throw new Error(
-      `Copy trim A/V desync: video=${output.video.toFixed(3)}s audio=${output.audio.toFixed(3)}s`,
+      `Copy trim A/V desync: video=${video.toFixed(3)}s audio=${output.audio.toFixed(3)}s`,
     );
   }
   let expected: number | undefined;

@@ -53,6 +53,9 @@ export function registerProcessVideoJob(fs: VideocityFs): void {
 
     return withLocalLease(fs, projectSlug, assetId, ctx, "process", async () => {
     const probe = await probeVideo(videoPath);
+    if (probe.videoCodec === null || probe.width <= 0 || probe.height <= 0) {
+      throw new Error(`process_video requires a video stream: ${assetId}`);
+    }
     const { width, height, duration } = probe;
 
     // Generate original.mp4 alongside non-mp4 uploads so downstream consumers

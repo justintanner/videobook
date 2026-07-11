@@ -37,6 +37,15 @@ async function generateTestVideo(outputPath: string): Promise<void> {
   ]);
 }
 
+async function generateAudioOnlyMp4(outputPath: string): Promise<void> {
+  await execFileAsync(FFMPEG, [
+    "-y",
+    "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+    "-c:a", "aac",
+    outputPath,
+  ]);
+}
+
 async function pollForFile(filePath: string, timeoutMs = 60_000): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -119,5 +128,37 @@ describe("process_video force re-process tolerates byte-identical original.mp3",
     const fs = createFsForTest(getProjectsDir());
     const read = await fs.readFile(assetId, "original.mp3", PROJECT);
     expect(read.ok).toBe(true);
+  });
+
+  it("rejects an MP4 without a video stream", async () => {
+    const audioOnlyPath = join(tempDir, "audio-only.mp4");
+    await generateAudioOnlyMp4(audioOnlyPath);
+
+    const fs = createFsForTest(getProjectsDir());
+    const created = await fs.createAsset("vid", "audio-only", PROJECT);
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const written = await fs.writeFile(
+      created.value.assetId,
+      "original.mp4",
+      await readFile(audioOnlyPath),
+      PROJECT,
+    );
+    expect(written.ok).toBe(true);
+    if (!written.ok) return;
+
+    await expect(queue.enqueueAndWait(
+      `process-video-audio-only-${created.value.assetId}`,
+      {
+        type: "process_video",
+        videoPath: join(created.value.path, "original.mp4"),
+        assetId: created.value.assetId,
+        assetDir: created.value.path,
+        projectSlug: PROJECT,
+        provenance: { origin: "test-audio-only" },
+        skipDownstreamJobs: true,
+      } as unknown as Parameters<typeof queue.enqueueAndWait>[1],
+    )).rejects.toThrow(`process_video requires a video stream: ${created.value.assetId}`);
   });
 });
