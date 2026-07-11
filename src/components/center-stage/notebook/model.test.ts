@@ -26,6 +26,7 @@ import {
   reorderStepsOnTracks,
   removeSteps,
   resolveEffectiveValues,
+  sanitizeValuesForOption,
   setFirstFrameSource,
   snapDefinitionToTracks,
   stepInputReadiness,
@@ -561,5 +562,34 @@ describe('notebook model', () => {
       label: '@vid-beta',
     })
     expect(connectedMediaInputs(graph, graph.sequence[0], [])).toEqual([])
+  })
+
+  it('sanitizeValuesForOption filters out values not in option schema or enum', () => {
+    const raw = {
+      prompt: 'A test prompt',
+      duration: '9',
+      numeric_duration: 9,
+      aspect_ratio: '16:9',
+      image_slugs: ['@img-ref'],
+      unknown_param: 'should be dropped',
+    }
+    const option: ModelOption = {
+      ...omniOption,
+      schema: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string' },
+          duration: { type: 'string', enum: ['4', '6', '8', '10'] },
+          numeric_duration: { type: 'number', enum: [4, 6, 8, 10] },
+          aspect_ratio: { type: 'string', enum: ['16:9', '9:16'] },
+        },
+      },
+    }
+    const sanitized = sanitizeValuesForOption(raw, option)
+    expect(sanitized).toEqual({
+      prompt: 'A test prompt',
+      aspect_ratio: '16:9',
+      image_slugs: ['@img-ref'],
+    })
   })
 })

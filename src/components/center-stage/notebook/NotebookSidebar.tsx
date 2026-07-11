@@ -26,6 +26,7 @@ import {
   assetSlugKind,
   latestAssetId,
   resolveEffectiveValues,
+  sanitizeValuesForOption,
   stepInputReadiness,
   stepInputs,
 } from './model'
@@ -292,8 +293,11 @@ function GenerationSidebar({
     [option, definition, step, activeMode],
   )
   const mergedValues = useMemo(
-    () => ({ ...(option?.prefilled_values ?? {}), ...(resolved?.values ?? record(step.properties.values)) }),
-    [option?.prefilled_values, resolved, step.properties.values],
+    () => {
+      const raw = { ...(option?.prefilled_values ?? {}), ...(resolved?.values ?? record(step.properties.values)) }
+      return option ? sanitizeValuesForOption(raw, option) : raw
+    },
+    [option, resolved, step.properties.values],
   )
   const modeVisible = useMemo(
     () => (option?.modes && modeKey ? visibleParams(option.modes, modeKey) : null),

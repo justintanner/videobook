@@ -808,6 +808,23 @@ export function normalizeDefinition(definition: NotebookPlanDefinition): {
     : { definition: tracked, changed: true }
 }
 
+export function sanitizeValuesForOption(values: JsonRecord, option: ModelOption): JsonRecord {
+  const sanitized: JsonRecord = {}
+  for (const [key, value] of Object.entries(values)) {
+    if (CONNECTION_OWNED_PARAMS.includes(key as typeof CONNECTION_OWNED_PARAMS[number])) {
+      sanitized[key] = value
+      continue
+    }
+    const schema = option.schema.properties[key]
+    if (!schema) continue
+    if (schema.enum && !schema.enum.map(String).includes(String(value))) {
+      continue
+    }
+    sanitized[key] = value
+  }
+  return sanitized
+}
+
 export function wouldCreateCycle(
   definition: NotebookPlanDefinition,
   sourceId: string,
