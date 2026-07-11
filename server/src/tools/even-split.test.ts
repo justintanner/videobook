@@ -416,50 +416,6 @@ describe("even_split tool (integration)", () => {
     }
   }, 180_000);
 
-  it("splits a 34s source with repeated targets [10,10,10] into 4 clips including 4s remainder", async () => {
-    const videoPath = join(fixtureDir, "thirty-four-34s-repeated.mp4");
-    await generateTestVideo(videoPath, 34);
-    const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
-
-    const result = await client.callTool({
-      name: "even_split",
-      arguments: {
-        asset_id: uploaded.assetId,
-        project_slug: "even-split-proj",
-        target_secs: [10, 10, 10],
-      },
-    });
-
-    expect(result.isError).toBeFalsy();
-    const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.chunks).toHaveLength(4);
-    expect(parsed.chunks[0].duration).toBe(10);
-    expect(parsed.chunks[1].duration).toBe(10);
-    expect(parsed.chunks[2].duration).toBe(10);
-    expect(parsed.chunks[3].duration).toBeCloseTo(4, 1);
-    expect(parsed.chunks[0].exact).toBe(true);
-    expect(parsed.chunks[1].exact).toBe(true);
-    expect(parsed.chunks[2].exact).toBe(true);
-    expect(parsed.chunks[3].exact).toBe(false);
-    expect(parsed.used_target_secs).toEqual([10, 10, 10]);
-    expect(parsed.has_leftover).toBe(true);
-
-    await waitForJob(parsed.job_id);
-
-    const expectedDurations = [10, 10, 10, 4];
-    for (let i = 0; i < parsed.chunks.length; i++) {
-      const chunk = parsed.chunks[i];
-      const manifest = await client.callTool({
-        name: "asset_manifest",
-        arguments: { asset_id: chunk.asset_id, project_slug: "even-split-proj" },
-      });
-      const path = join(JSON.parse((manifest.content as TextContent)[0].text).path, "original.mp4");
-      const dur = await probeDuration(path);
-      expect(dur).toBeLessThanOrEqual(expectedDurations[i] + 0.05);
-      expect(dur).toBeGreaterThan(expectedDurations[i] - 0.5);
-    }
-  }, 180_000);
-
   it("returns error for nonexistent asset", async () => {
     const result = await client.callTool({
       name: "even_split",

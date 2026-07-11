@@ -19,7 +19,6 @@ import { SplitFramePair } from './SplitFramePair'
 import { SplitScrubber } from './SplitScrubber'
 import { BoundaryPlayer } from './BoundaryPlayer'
 import { TranscriptPanel } from './TranscriptPanel'
-import { EvenModePanel } from './EvenModePanel'
 import { useLazySplitFrames } from './useLazySplitFrames'
 import { useSceneMarkers } from './useSceneMarkers'
 import { useSplitPoint } from './useSplitPoint'
@@ -31,9 +30,7 @@ import {
   frameDuration,
   MIN_CHUNK_SEC,
   parseTimestamp,
-  planIntervalSplit,
 } from './utils'
-import type { IntervalSeconds, SplitMode } from './types'
 
 interface SplitEditorProps {
   open: boolean
@@ -47,8 +44,6 @@ interface SplitEditorProps {
   projectSlug: string | undefined
 }
 
-const DEFAULT_INTERVAL: IntervalSeconds = 10
-
 export function SplitEditor({
   open,
   assetId,
@@ -60,22 +55,15 @@ export function SplitEditor({
   callTool,
   projectSlug,
 }: SplitEditorProps) {
-  const initialMode: SplitMode = initialAtSec != null ? 'manual' : 'even'
-  const [mode, setMode] = useState<SplitMode>(initialMode)
-  const [interval, setIntervalSec] = useState<IntervalSeconds>(DEFAULT_INTERVAL)
   const [execState, setExecState] = useState<ExecuteButtonState | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
-  const [activeBoundaryIndex, setActiveBoundaryIndex] = useState(0)
 
   const sessionKey = open ? `${assetId ?? ''}|${initialAtSec ?? ''}` : ''
   const [prevSession, setPrevSession] = useState(sessionKey)
   if (prevSession !== sessionKey) {
     setPrevSession(sessionKey)
-    setMode(initialAtSec != null ? 'manual' : 'even')
-    setIntervalSec(DEFAULT_INTERVAL)
     setError(null)
     setExecState(undefined)
-    setActiveBoundaryIndex(0)
   }
 
   const duration = item?.duration ?? 0
@@ -90,7 +78,7 @@ export function SplitEditor({
     resetToMid,
     clear,
   } = useSplitPoint({
-    open: open && mode === 'manual',
+    open,
     duration,
     fps,
     initialSec: initialAtSec ?? null,
@@ -102,25 +90,9 @@ export function SplitEditor({
 
   const videoSrc = item?.filePath ?? ''
 
-  const intervalPlan = useMemo(() => {
-    if (mode !== 'even' || duration <= 0) return null
-    return planIntervalSplit(duration, interval)
-  }, [mode, duration, interval])
-
-  const evenBoundaries = intervalPlan?.boundaries ?? []
-  const evenClipDurations = intervalPlan?.clipDurations ?? []
-  const evenClipCount = intervalPlan?.clipCount ?? 0
-  const evenDisabled = intervalPlan?.disabled ?? true
-  const evenDisabledReason = intervalPlan?.disabledReason ?? null
-  const evenTargets = useMemo(() => intervalPlan?.targets ?? [], [intervalPlan])
-
-  const activeBoundary = mode === 'even'
-    ? (evenBoundaries[activeBoundaryIndex] ?? null)
-    : splitSec
-
   const { videoRef: boundaryVideoRef, playing, togglePlay, currentTime } = useBoundaryPlayer(
     videoSrc,
-    activeBoundary,
+    splitSec,
     duration,
   )
 
@@ -135,14 +107,14 @@ export function SplitEditor({
   }, [onClose])
 
   const leftSec = useMemo(() => {
-    if (activeBoundary === null) return null
-    return Math.max(0, activeBoundary - frameStep)
-  }, [activeBoundary, frameStep])
+    if (splitSec === null) return null
+    return Math.max(0, splitSec - frameStep)
+  }, [splitSec, frameStep])
 
-  const rightSec = activeBoundary
+  const rightSec = splitSec
 
   const { leftUrl, rightUrl, seeking, videoRef: frameVideoRef } = useLazySplitFrames({
-    open: open && activeBoundary !== null,
+    open: open && splitSec !== null,
     videoSrc,
     fps,
     leftSec,
@@ -151,12 +123,6 @@ export function SplitEditor({
 
   const chunkADur = splitSec !== null ? splitSec : 0
   const chunkBDur = splitSec !== null && duration > 0 ? duration - splitSec : 0
-  const previewLeftDuration = mode === 'even'
-    ? (evenClipDurations[activeBoundaryIndex] ?? 0)
-    : chunkADur
-  const previewRightDuration = mode === 'even'
-    ? (evenClipDurations[activeBoundaryIndex + 1] ?? 0)
-    : chunkBDur
 
   const finishSuccess = useCallback(() => {
     setExecState('success')
@@ -199,33 +165,6 @@ export function SplitEditor({
     }
   }, [execState, assetId, projectSlug, splitSec, duration, chunkADur, chunkBDur, callTool, finishSuccess])
 
-  const runEvenSplit = useCallback(async () => {
-    if (execState || !assetId || !projectSlug || evenDisabled || evenTargets.length === 0) return
-    setError(null)
-    setExecState('charging')
-    await new Promise((r) => setTimeout(r, 350))
-    setExecState('processing')
-    try {
-      const result = await callTool('even_split', {
-        asset_id: assetId,
-        project_slug: projectSlug,
-        target_secs: evenTargets,
-      })
-      if (result && 'isError' in result && result.isError) {
-        const msg = Array.isArray(result.content) && result.content[0]?.text
-          ? String(result.content[0].text)
-          : 'even_split failed'
-        setError(msg)
-        setExecState(undefined)
-        return
-      }
-      finishSuccess()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'even_split failed')
-      setExecState(undefined)
-    }
-  }, [execState, assetId, projectSlug, evenDisabled, evenTargets, callTool, finishSuccess])
-
   const { dispatch: contextDispatch, commands: contextCommands } = useCommandDispatch()
 
   const handleSend = async (message: string): Promise<boolean> => {
@@ -238,28 +177,13 @@ export function SplitEditor({
       return true
     }
     if (cmd === '/mid' || cmd === '/reset') { resetToMid(); return true }
-    if (cmd.startsWith('/every')) {
-      const arg = raw.slice(6).trim()
-      const n = Number(arg)
-      if (n === 5 || n === 10 || n === 15) {
-        setIntervalSec(n as IntervalSeconds)
-        setMode('even')
-        setActiveBoundaryIndex(0)
-      }
-      return true
-    }
-    if (cmd === '/manual') { setMode('manual'); return true }
     if (cmd.startsWith('/goto')) {
       const arg = raw.slice(5).trim()
       const t = parseTimestamp(arg)
-      if (t !== undefined) {
-        setMode('manual')
-        setSplitSec(t)
-      }
+      if (t !== undefined) setSplitSec(t)
       return true
     }
     if (cmd.startsWith('/frame')) {
-      setMode('manual')
       const arg = raw.slice(6).trim()
       const n = Number(arg.replace(/^\+/, ''))
       if (Number.isFinite(n) && n !== 0) nudgeFrames(n)
@@ -268,11 +192,7 @@ export function SplitEditor({
       return true
     }
     if (cmd === '/split here' || cmd === '/split') {
-      if (mode === 'manual') {
-        await runManualSplit()
-      } else {
-        await runEvenSplit()
-      }
+      await runManualSplit()
       return true
     }
     return contextDispatch(message)
@@ -284,7 +204,8 @@ export function SplitEditor({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="w-[96vw] max-w-none h-[94vh] max-h-none"
+        fullScreen
+        className="bg-neutral-950"
         aria-label="Split video"
         onOpenAutoFocus={() => { loadTranscript() }}
       >
@@ -307,16 +228,14 @@ export function SplitEditor({
         </DialogHeader>
 
         <div className="flex-1 min-h-0 flex flex-col gap-2 p-4 overflow-hidden">
-          <ModeTabs mode={mode} onModeChange={setMode} />
-
           <div className="flex-1 min-h-[280px] flex flex-col gap-1.5">
             <div className="shrink-0 flex items-center justify-between">
               <span className="font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-500">
                 Boundary frames
               </span>
-              {activeBoundary !== null && (
+              {splitSec !== null && (
                 <span className="font-mono text-[11px] text-neutral-400">
-                  Cut at {formatPrecise(activeBoundary)}
+                  Cut at {formatPrecise(splitSec)}
                 </span>
               )}
             </div>
@@ -325,14 +244,14 @@ export function SplitEditor({
               rightUrl={rightUrl}
               leftSec={leftSec}
               rightSec={rightSec}
-              chunkADur={previewLeftDuration}
-              chunkBDur={previewRightDuration}
+              chunkADur={chunkADur}
+              chunkBDur={chunkBDur}
               seeking={seeking}
               overlay={(
                 <BoundaryPlayer
                   videoRef={boundaryVideoRef}
                   videoSrc={videoSrc}
-                  boundarySec={activeBoundary}
+                  boundarySec={splitSec}
                   duration={duration}
                   playing={playing}
                   currentTime={currentTime}
@@ -353,76 +272,50 @@ export function SplitEditor({
             </div>
           </div>
 
-          {mode === 'even' ? (
-            <div className="shrink-0 flex flex-col gap-2">
-              <EvenModePanel
-                duration={duration}
-                interval={interval}
-                onIntervalChange={(v) => { setIntervalSec(v); setActiveBoundaryIndex(0) }}
-                boundaries={evenBoundaries}
-                clipDurations={evenClipDurations}
-                clipCount={evenClipCount}
-                disabled={evenDisabled}
-                disabledReason={evenDisabledReason}
-                activeBoundaryIndex={activeBoundaryIndex}
-                onActiveBoundaryChange={setActiveBoundaryIndex}
-              />
-              <div className="flex items-center justify-end gap-2">
-                <ActionButton
-                  label={evenClipCount > 0 ? `Split into ${evenClipCount} clips` : 'Split'}
-                  icon={<Scissors className="w-4 h-4" />}
-                  state={execState ?? (evenDisabled ? 'disabled' : undefined)}
-                  disabledReason={evenDisabledReason ?? 'Cannot split at this interval'}
-                  onClick={() => { void runEvenSplit() }}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="shrink-0 flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <div className={cn(
-                  'min-w-0 flex-1 rounded border px-3 py-2 font-mono text-[11px]',
-                  'border-neutral-600/40 bg-neutral-700/20',
-                )}>
-                  {hasSplit ? (
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="uppercase tracking-widest text-neutral-400">Split at</span>
-                      <span className="text-neutral-200">{formatPrecise(splitSec!)}</span>
-                      <span className="ml-auto text-neutral-500">
-                        A: {chunkADur.toFixed(1)}s · B: {chunkBDur.toFixed(1)}s
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="uppercase tracking-widest text-neutral-600">
-                      Click the timeline to set the split point
+          <div className="shrink-0 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <div className={cn(
+                'min-w-0 flex-1 rounded border px-3 py-2 font-mono text-[11px]',
+                'border-neutral-600/40 bg-neutral-700/20',
+              )}>
+                {hasSplit ? (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="uppercase tracking-widest text-neutral-400">Split at</span>
+                    <span className="text-neutral-200">{formatPrecise(splitSec!)}</span>
+                    <span className="ml-auto text-neutral-500">
+                      A: {chunkADur.toFixed(1)}s · B: {chunkBDur.toFixed(1)}s
                     </span>
-                  )}
-                </div>
-                <ActionButton
-                  label="Clear"
-                  icon={<Eraser className="w-4 h-4" />}
-                  variant="neutral"
-                  disabled={isBusy || !hasSplit}
-                  onClick={() => { clear(); setError(null) }}
-                />
-                <ActionButton
-                  label="Split here"
-                  icon={<Scissors className="w-4 h-4" />}
-                  state={execState ?? (hasSplit ? undefined : 'disabled')}
-                  disabledReason="Set a split point on the timeline first"
-                  onClick={() => { void runManualSplit() }}
-                />
+                  </div>
+                ) : (
+                  <span className="uppercase tracking-widest text-neutral-600">
+                    Click the timeline to set the split point
+                  </span>
+                )}
               </div>
-              <SplitScrubber
-                duration={duration}
-                waveform={item?.waveform ?? []}
-                splitSec={splitSec}
-                markers={markers}
-                onSetSplitPct={setSplitFromPct}
-                onSetSplitSec={setSplitSec}
+              <ActionButton
+                label="Clear"
+                icon={<Eraser className="w-4 h-4" />}
+                variant="neutral"
+                disabled={isBusy || !hasSplit}
+                onClick={() => { clear(); setError(null) }}
+              />
+              <ActionButton
+                label="Split here"
+                icon={<Scissors className="w-4 h-4" />}
+                state={execState ?? (hasSplit ? undefined : 'disabled')}
+                disabledReason="Set a split point on the timeline first"
+                onClick={() => { void runManualSplit() }}
               />
             </div>
-          )}
+            <SplitScrubber
+              duration={duration}
+              waveform={item?.waveform ?? []}
+              splitSec={splitSec}
+              markers={markers}
+              onSetSplitPct={setSplitFromPct}
+              onSetSplitSec={setSplitSec}
+            />
+          </div>
 
           {error && (
             <div className="shrink-0 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 font-mono text-[11px] text-red-300 break-words whitespace-pre-wrap">
@@ -438,38 +331,11 @@ export function SplitEditor({
             onSend={handleSend}
             callTool={callTool}
             projectSlug={projectSlug}
-            placeholder={mode === 'even'
-              ? '/every 5|10|15 · /manual · /split'
-              : 'drag the line or /frame +1 · /split here when perfect'}
+            placeholder="drag the line or /frame +1 · /split here when perfect"
           />
         </div>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function ModeTabs({ mode, onModeChange }: { mode: SplitMode; onModeChange: (m: SplitMode) => void }) {
-  return (
-    <div className="shrink-0 flex gap-1" role="tablist" aria-label="Split mode">
-      {(['even', 'manual'] as const).map((m) => (
-        <button
-          key={m}
-          type="button"
-          role="tab"
-          aria-selected={mode === m}
-          onClick={() => onModeChange(m)}
-          className={cn(
-            'px-4 py-1.5 rounded font-mono text-[11px] tracking-wide transition-colors',
-            'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-neutral-400',
-            mode === m
-              ? 'bg-neutral-100 text-neutral-900'
-              : 'bg-neutral-800/50 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700/50',
-          )}
-        >
-          {m === 'even' ? 'Even cuts' : 'Manual'}
-        </button>
-      ))}
-    </div>
   )
 }
 

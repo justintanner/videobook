@@ -13,10 +13,6 @@ export interface SplitTarget {
   atSec?: number;
 }
 
-export type SplitMode = 'even' | 'manual';
-
-export type IntervalSeconds = 5 | 10 | 15;
-
 export interface TimedCue {
   text: string;
   start: number;
