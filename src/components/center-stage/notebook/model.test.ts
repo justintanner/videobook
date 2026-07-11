@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { ModelOption } from '@/components/gen/types'
 import {
+  NOTEBOOK_TRACK_ORIGIN_Y,
+  NOTEBOOK_TRACK_ROW_PITCH,
   addAssetStep,
   addStep,
   appendRunAsset,
@@ -14,10 +16,15 @@ import {
   graphLayoutBounds,
   latestAssetId,
   moveSteps,
+  notebookDropTarget,
+  notebookTrackDepths,
+  notebookTrackLayout,
   normalizeDefinition,
+  reorderStepsOnTracks,
   removeSteps,
   resolveEffectiveValues,
   setFirstFrameSource,
+  snapDefinitionToTracks,
   stepInputReadiness,
   stepInvalidReason,
   stepInputs,
@@ -246,6 +253,100 @@ describe('notebook model', () => {
     expect(targetPos.y).toBeGreaterThan(promptPos.y)
     expect(new Set([promptPos.x, assetPos.x]).size).toBe(2)
     expect(autoLayout(createEmptyDefinition())).toEqual(createEmptyDefinition())
+  })
+
+  it('converts freeform positions to dependency tracks while preserving horizontal order', () => {
+    const graph: NotebookPlanDefinition = {
+      properties: {},
+      sequence: [
+        {
+          id: 'right', componentType: 'task', type: 'prompt', name: 'Right',
+          properties: { text: 'right', position: { x: 800, y: 12 } },
+        },
+        {
+          id: 'left', componentType: 'task', type: 'asset', name: 'Left',
+          properties: { slug: '@img-left', position: { x: 100, y: 700 } },
+        },
+        {
+          id: 'child', componentType: 'task', type: 'image', name: 'Child',
+          properties: { inputs: ['left'], position: { x: 40, y: 40 } },
+        },
+      ],
+    }
+    const migrated = normalizeDefinition(graph)
+    const layout = notebookTrackLayout(migrated.definition)
+    expect(migrated.changed).toBe(true)
+    expect(layout.rows.map((row) => row.stepIds)).toEqual([['left', 'right'], ['child']])
+    expect(stepPosition(migrated.definition.sequence[0])?.y).toBe(NOTEBOOK_TRACK_ORIGIN_Y)
+    expect(stepPosition(migrated.definition.sequence[2])?.y).toBe(
+      NOTEBOOK_TRACK_ORIGIN_Y + NOTEBOOK_TRACK_ROW_PITCH,
+    )
+    const repeated = normalizeDefinition(migrated.definition)
+    expect(repeated.changed).toBe(false)
+    expect(repeated.definition).toBe(migrated.definition)
+  })
+
+  it('locks vertical movement and resolves horizontal slot reordering without collisions', () => {
+    const graph: NotebookPlanDefinition = {
+      properties: {},
+      sequence: ['a', 'b', 'c'].map((id, index) => ({
+        id,
+        componentType: 'task' as const,
+        type: 'prompt' as const,
+        name: id,
+        properties: { text: id, position: { x: index * 300, y: index * 400 } },
+      })),
+    }
+    const tracked = snapDefinitionToTracks(graph)
+    const moved = reorderStepsOnTracks(tracked, [{ id: 'c', position: { x: 0, y: 9999 } }])
+    const layout = notebookTrackLayout(moved)
+    expect(layout.rows[0].stepIds).toEqual(['c', 'a', 'b'])
+    expect(moved.sequence.map((step) => stepPosition(step)?.y)).toEqual([
+      NOTEBOOK_TRACK_ORIGIN_Y,
+      NOTEBOOK_TRACK_ORIGIN_Y,
+      NOTEBOOK_TRACK_ORIGIN_Y,
+    ])
+    expect(new Set(moved.sequence.map((step) => stepPosition(step)?.x)).size).toBe(3)
+  })
+
+  it('selects a smart parent only from the stage immediately above a deployment', () => {
+    const graph: NotebookPlanDefinition = snapDefinitionToTracks({
+      properties: {},
+      sequence: [
+        {
+          id: 'prompt', componentType: 'task', type: 'prompt', name: 'Prompt',
+          properties: { text: 'go', position: { x: 0, y: 0 } },
+        },
+        {
+          id: 'asset', componentType: 'task', type: 'asset', name: 'Asset',
+          properties: { slug: '@img-ref', position: { x: 300, y: 0 } },
+        },
+      ],
+    })
+    const layout = notebookTrackLayout(graph)
+    const promptPosition = layout.positions.get('prompt')!
+    const selected = notebookDropTarget(graph, 'image', {
+      x: promptPosition.x,
+      y: NOTEBOOK_TRACK_ORIGIN_Y + NOTEBOOK_TRACK_ROW_PITCH,
+    }, 'prompt')
+    expect(selected).toMatchObject({ parentId: 'prompt', depth: 1 })
+
+    const assetPosition = layout.positions.get('asset')!
+    const nearest = notebookDropTarget(graph, 'video', {
+      x: assetPosition.x,
+      y: NOTEBOOK_TRACK_ORIGIN_Y + NOTEBOOK_TRACK_ROW_PITCH,
+    }, null)
+    expect(nearest).toMatchObject({ parentId: 'asset', depth: 1 })
+
+    const promptCenter = promptPosition.x + 100
+    const assetCenter = assetPosition.x + 100
+    const ambiguous = notebookDropTarget(graph, 'image', {
+      x: (promptCenter + assetCenter) / 2 - 110,
+      y: NOTEBOOK_TRACK_ORIGIN_Y + NOTEBOOK_TRACK_ROW_PITCH,
+    }, null)
+    expect(ambiguous).toMatchObject({ parentId: null, depth: 0 })
+    expect(notebookDropTarget(graph, 'prompt', { x: 800, y: 800 }, 'asset').depth).toBe(0)
+    expect(notebookTrackDepths(graph)).toEqual(new Map([['prompt', 0], ['asset', 0]]))
   })
 
   it('resolves input-owned values and reports readiness and validity', () => {

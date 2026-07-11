@@ -1,6 +1,14 @@
 import { applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type NodeChange } from '@xyflow/react'
 import { useCallback, useEffect, useState } from 'react'
-import { connectedMediaInputs, latestAssetId, stepInvalidReason, stepPosition, stepRunStatus } from './model'
+import {
+  connectedMediaInputs,
+  latestAssetId,
+  notebookTrackLayout,
+  stepInputs,
+  stepInvalidReason,
+  stepPosition,
+  stepRunStatus,
+} from './model'
 import { NODE_DIMENSIONS, type NotebookFlowNode, type NotebookNodeData } from './nodes/nodeTypes'
 import type { NotebookPlanDefinition } from './types'
 import type { MediaItem } from '@/components/sidebar/types'
@@ -11,6 +19,12 @@ interface NotebookFlowOptions {
   stepCosts: ReadonlyMap<string, string>
   runningStepIds: ReadonlySet<string>
   errors: ReadonlyMap<string, string>
+  selectedStepId: string | null
+}
+
+interface ActiveRoute {
+  nodeStates: ReadonlyMap<string, NotebookNodeData['routeState']>
+  edgeIds: ReadonlySet<string>
 }
 
 function mediaInputsEqual(
@@ -36,7 +50,49 @@ function dataEqual(left: NotebookNodeData, right: NotebookNodeData): boolean {
     && left.error === right.error
     && left.invalidReason === right.invalidReason
     && left.missing === right.missing
+    && left.routeState === right.routeState
     && mediaInputsEqual(left.mediaInputs, right.mediaInputs)
+}
+
+function activeRoute(definition: NotebookPlanDefinition, selectedStepId: string | null): ActiveRoute {
+  const nodeStates = new Map<string, NotebookNodeData['routeState']>()
+  const edgeIds = new Set<string>()
+  if (!selectedStepId) return { nodeStates, edgeIds }
+  const byId = new Map(definition.sequence.map((step) => [step.id, step]))
+  const children = new Map<string, string[]>()
+  for (const step of definition.sequence) {
+    for (const parentId of stepInputs(step)) {
+      const current = children.get(parentId) ?? []
+      current.push(step.id)
+      children.set(parentId, current)
+    }
+  }
+  const upstreamVisited = new Set<string>()
+  const downstreamVisited = new Set<string>()
+  const visitUpstream = (id: string) => {
+    if (upstreamVisited.has(id)) return
+    upstreamVisited.add(id)
+    const step = byId.get(id)
+    if (!step) return
+    for (const parentId of stepInputs(step)) {
+      edgeIds.add(`${parentId}->${id}`)
+      if (!nodeStates.has(parentId)) nodeStates.set(parentId, 'upstream')
+      visitUpstream(parentId)
+    }
+  }
+  const visitDownstream = (id: string) => {
+    if (downstreamVisited.has(id)) return
+    downstreamVisited.add(id)
+    for (const childId of children.get(id) ?? []) {
+      edgeIds.add(`${id}->${childId}`)
+      if (!nodeStates.has(childId)) nodeStates.set(childId, 'downstream')
+      visitDownstream(childId)
+    }
+  }
+  nodeStates.set(selectedStepId, 'selected')
+  visitUpstream(selectedStepId)
+  visitDownstream(selectedStepId)
+  return { nodeStates, edgeIds }
 }
 
 function nodeData(
@@ -46,6 +102,7 @@ function nodeData(
   stepCosts: ReadonlyMap<string, string>,
   runningStepIds: ReadonlySet<string>,
   errors: ReadonlyMap<string, string>,
+  route: ActiveRoute,
 ): NotebookNodeData {
   const assetId = step.type === 'asset'
     ? typeof step.properties.slug === 'string' ? step.properties.slug.replace(/^@/, '') : null
@@ -62,6 +119,7 @@ function nodeData(
     invalidReason: stepInvalidReason(definition, step),
     missing: step.type === 'asset' && !asset,
     mediaInputs: connectedMediaInputs(definition, step, mediaItems),
+    routeState: route.nodeStates.get(step.id) ?? null,
   }
 }
 
@@ -71,6 +129,7 @@ function desiredNodes(
   stepCosts: ReadonlyMap<string, string>,
   runningStepIds: ReadonlySet<string>,
   errors: ReadonlyMap<string, string>,
+  route: ActiveRoute,
 ): NotebookFlowNode[] {
   return definition.sequence.map((step) => {
     const position = stepPosition(step) ?? { x: 0, y: 0 }
@@ -81,12 +140,17 @@ function desiredNodes(
       position,
       width: size.width,
       height: size.height,
-      data: nodeData(definition, step, mediaItems, stepCosts, runningStepIds, errors),
+      data: nodeData(definition, step, mediaItems, stepCosts, runningStepIds, errors, route),
     }
   })
 }
 
-function desiredEdges(definition: NotebookPlanDefinition): Edge[] {
+function desiredEdges(
+  definition: NotebookPlanDefinition,
+  runningStepIds: ReadonlySet<string>,
+  selectedStepId: string | null,
+  route: ActiveRoute,
+): Edge[] {
   const steps = new Map(definition.sequence.map((step) => [step.id, step]))
   return definition.sequence.flatMap((target) => {
     if (target.type !== 'image' && target.type !== 'video') return []
@@ -96,13 +160,21 @@ function desiredEdges(definition: NotebookPlanDefinition): Edge[] {
     const inputs = Array.isArray(target.properties.inputs)
       ? target.properties.inputs.filter((input): input is string => typeof input === 'string')
       : []
-    return inputs.filter((source) => steps.has(source)).map((source) => ({
-      id: `${source}->${target.id}`,
-      source,
-      target: target.id,
-      className: steps.get(source)?.type === 'prompt' ? 'vc-notebook-edge-prompt' : 'vc-notebook-edge-ref',
-      data: { kind: steps.get(source)?.type === 'prompt' ? 'prompt' : 'ref', pinned: pin === source },
-    }))
+    return inputs.filter((source) => steps.has(source)).map((source) => {
+      const id = `${source}->${target.id}`
+      const classes = [steps.get(source)?.type === 'prompt' ? 'vc-notebook-edge-prompt' : 'vc-notebook-edge-ref']
+      if (selectedStepId) classes.push(route.edgeIds.has(id) ? 'vc-notebook-edge-active' : 'vc-notebook-edge-muted')
+      if (runningStepIds.has(source) || runningStepIds.has(target.id)) classes.push('vc-notebook-edge-running')
+      return {
+        id,
+        source,
+        target: target.id,
+        type: 'smoothstep',
+        animated: runningStepIds.has(source) || runningStepIds.has(target.id),
+        className: classes.join(' '),
+        data: { kind: steps.get(source)?.type === 'prompt' ? 'prompt' : 'ref', pinned: pin === source },
+      }
+    })
   })
 }
 
@@ -129,7 +201,12 @@ function reconcileEdges(previous: Edge[], desired: Edge[]): Edge[] {
   return desired.map((next) => {
     const old = existing.get(next.id)
     if (!old) return next
-    if (old.className === next.className && old.data?.pinned === next.data?.pinned) return old
+    if (
+      old.className === next.className
+      && old.data?.pinned === next.data?.pinned
+      && old.animated === next.animated
+      && old.type === next.type
+    ) return old
     return { ...old, ...next }
   })
 }
@@ -140,6 +217,7 @@ export function useNotebookFlow({
   stepCosts,
   runningStepIds,
   errors,
+  selectedStepId,
 }: NotebookFlowOptions) {
   const [nodes, setNodes] = useState<NotebookFlowNode[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
@@ -153,8 +231,9 @@ export function useNotebookFlow({
         setEdges([])
         return
       }
-      const nextNodes = desiredNodes(definition, mediaItems, stepCosts, runningStepIds, errors)
-      const nextEdges = desiredEdges(definition)
+      const route = activeRoute(definition, selectedStepId)
+      const nextNodes = desiredNodes(definition, mediaItems, stepCosts, runningStepIds, errors, route)
+      const nextEdges = desiredEdges(definition, runningStepIds, selectedStepId, route)
       setNodes((previous) => reconcileNodes(previous, nextNodes))
       setEdges((previous) => reconcileEdges(previous, nextEdges))
     }
@@ -162,11 +241,17 @@ export function useNotebookFlow({
     return () => {
       cancelled = true
     }
-  }, [definition, mediaItems, stepCosts, runningStepIds, errors])
+  }, [definition, mediaItems, stepCosts, runningStepIds, errors, selectedStepId])
 
   const onNodesChange = useCallback((changes: NodeChange<NotebookFlowNode>[]) => {
-    setNodes((current) => applyNodeChanges(changes, current))
-  }, [])
+    const positions = definition ? notebookTrackLayout(definition).positions : null
+    const constrained = changes.map((change) => {
+      if (change.type !== 'position' || !change.position) return change
+      const locked = positions?.get(change.id)
+      return locked ? { ...change, position: { x: change.position.x, y: locked.y } } : change
+    })
+    setNodes((current) => applyNodeChanges(constrained, current))
+  }, [definition])
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
     setEdges((current) => applyEdgeChanges(changes, current))

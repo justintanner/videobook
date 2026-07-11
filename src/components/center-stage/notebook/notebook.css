@@ -1052,3 +1052,754 @@
   width: 0.75rem;
   height: 0.75rem;
 }
+
+.vc-notebook {
+  --vc-board: rgb(3 11 8);
+  --vc-panel: rgb(5 16 12 / 0.98);
+  --vc-panel-raised: rgb(8 24 17 / 0.96);
+  --vc-line: rgb(52 211 153 / 0.24);
+  --vc-line-strong: rgb(110 231 183 / 0.72);
+  --vc-glow: rgb(52 211 153 / 0.28);
+  --vc-text: rgb(209 250 229);
+  --vc-muted: rgb(167 243 208 / 0.58);
+  --vc-prompt: rgb(251 191 36);
+  --vc-image: rgb(34 211 238);
+  --vc-video: rgb(167 139 250);
+  background:
+    linear-gradient(90deg, rgb(52 211 153 / 0.018) 1px, transparent 1px),
+    linear-gradient(180deg, rgb(7 23 16), var(--vc-board));
+  background-size: 64px 64px, auto;
+  color: var(--vc-text);
+}
+
+.vc-notebook-header {
+  position: relative;
+  min-height: 4rem;
+  padding: 0.72rem 1rem;
+  border-bottom-color: var(--vc-line);
+  background:
+    linear-gradient(90deg, rgb(52 211 153 / 0.08), transparent 28%),
+    rgb(1 6 4 / 0.94);
+  box-shadow: inset 0 -1px rgb(52 211 153 / 0.06), 0 8px 30px rgb(0 0 0 / 0.24);
+}
+
+.vc-notebook-header::after {
+  position: absolute;
+  bottom: -1px;
+  left: 1rem;
+  width: 7rem;
+  height: 2px;
+  background: var(--vc-line-strong);
+  box-shadow: 0 0 12px var(--vc-glow);
+  content: '';
+}
+
+.vc-notebook-brand {
+  min-width: 0;
+}
+
+.vc-notebook-brand > span {
+  min-width: max-content;
+}
+
+.vc-notebook-brand h1 {
+  overflow: hidden;
+  color: var(--vc-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vc-notebook-sync {
+  flex: none;
+}
+
+.vc-notebook-save {
+  padding: 0.28rem 0.5rem;
+  border: 1px solid var(--vc-line);
+  border-radius: 0.2rem;
+  background: rgb(52 211 153 / 0.04);
+}
+
+.vc-notebook-canvas::after {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: repeating-linear-gradient(180deg, transparent 0 3px, rgb(52 211 153 / 0.012) 4px);
+  content: '';
+  pointer-events: none;
+}
+
+.vc-notebook-canvas .react-flow {
+  --xy-edge-stroke-default: rgb(52 211 153 / 0.58);
+  --xy-edge-stroke-width-default: 1.5;
+  --xy-handle-background-color-default: rgb(110 231 183);
+  --xy-handle-border-color-default: rgb(2 9 6);
+  --xy-controls-button-background-color-default: rgb(2 10 7 / 0.94);
+  --xy-controls-button-color-default: rgb(110 231 183);
+  --xy-controls-button-border-color-default: var(--vc-line);
+  background:
+    radial-gradient(circle at 50% 0, rgb(16 80 53 / 0.24), transparent 42%),
+    var(--vc-board);
+}
+
+.vc-notebook-canvas .react-flow__background path {
+  stroke: rgb(52 211 153 / 0.07);
+}
+
+.vc-notebook-canvas .react-flow__edges {
+  z-index: 1;
+}
+
+.vc-notebook-canvas .react-flow__nodes {
+  z-index: 2;
+}
+
+.vc-notebook-stage-board {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.vc-notebook-stage-row {
+  position: absolute;
+  left: 0;
+  height: 280px;
+  border-top: 1px solid rgb(52 211 153 / 0.13);
+  border-bottom: 1px solid rgb(52 211 153 / 0.07);
+  background:
+    linear-gradient(90deg, rgb(52 211 153 / 0.055), transparent 15%),
+    linear-gradient(180deg, rgb(52 211 153 / 0.018), transparent 50%, rgb(0 0 0 / 0.1));
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.vc-notebook-stage-row-active {
+  border-top-color: rgb(110 231 183 / 0.35);
+  background:
+    linear-gradient(90deg, rgb(52 211 153 / 0.11), transparent 22%),
+    linear-gradient(180deg, rgb(52 211 153 / 0.035), transparent 58%);
+}
+
+.vc-notebook-stage-label {
+  position: absolute;
+  top: 0.65rem;
+  left: 1rem;
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  gap: 0 0.35rem;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+}
+
+.vc-notebook-stage-label span {
+  color: rgb(110 231 183 / 0.46);
+  font-size: 0.52rem;
+  letter-spacing: 0.16em;
+}
+
+.vc-notebook-stage-label b {
+  color: rgb(110 231 183 / 0.74);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 8px var(--vc-glow);
+}
+
+.vc-notebook-stage-label em {
+  grid-column: 1 / -1;
+  color: rgb(110 231 183 / 0.25);
+  font-size: 0.48rem;
+  font-style: normal;
+  letter-spacing: 0.12em;
+}
+
+.vc-notebook-stage-rail {
+  position: absolute;
+  top: 2.85rem;
+  right: 0;
+  left: 5rem;
+  height: 1px;
+  background: linear-gradient(90deg, rgb(52 211 153 / 0.28), rgb(52 211 153 / 0.025) 65%, transparent);
+}
+
+.vc-notebook-stage-slot {
+  position: absolute;
+  top: 2.55rem;
+  height: 220px;
+  border: 1px dashed rgb(52 211 153 / 0.07);
+  background:
+    linear-gradient(135deg, rgb(52 211 153 / 0.14) 0 1px, transparent 1px) top left / 12px 12px no-repeat,
+    linear-gradient(225deg, rgb(52 211 153 / 0.14) 0 1px, transparent 1px) top right / 12px 12px no-repeat,
+    linear-gradient(45deg, rgb(52 211 153 / 0.1) 0 1px, transparent 1px) bottom left / 12px 12px no-repeat,
+    linear-gradient(315deg, rgb(52 211 153 / 0.1) 0 1px, transparent 1px) bottom right / 12px 12px no-repeat;
+}
+
+.vc-notebook-drop-preview-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.vc-notebook-drop-link {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.vc-notebook-drop-link path {
+  fill: none;
+  stroke: rgb(110 231 183 / 0.9);
+  stroke-dasharray: 8 5;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 5px rgb(52 211 153 / 0.65));
+  animation: vc-notebook-signal 650ms linear infinite;
+}
+
+.vc-notebook-drop-card {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.55rem;
+  border: 1px dashed var(--vc-line-strong);
+  border-radius: 0.3rem;
+  background: rgb(6 78 59 / 0.34);
+  box-shadow: inset 0 0 28px rgb(52 211 153 / 0.08), 0 0 20px var(--vc-glow);
+  color: rgb(167 243 208 / 0.85);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+}
+
+.vc-notebook-drop-card svg {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.vc-notebook-drop-card span {
+  font-size: 0.58rem;
+  letter-spacing: 0.1em;
+}
+
+.vc-notebook-drop-card-prompt {
+  box-shadow: inset 3px 0 var(--vc-prompt), 0 0 20px var(--vc-glow);
+}
+
+.vc-notebook-drop-card-image {
+  box-shadow: inset 3px 0 var(--vc-image), 0 0 20px var(--vc-glow);
+}
+
+.vc-notebook-drop-card-video {
+  box-shadow: inset 3px 0 var(--vc-video), 0 0 20px var(--vc-glow);
+}
+
+.vc-notebook-toolbox {
+  top: 0.8rem;
+  left: 0.85rem;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.45rem;
+  width: auto;
+  max-width: calc(100% - 1.7rem);
+  padding: 0.34rem;
+  border-color: var(--vc-line);
+  border-radius: 0.3rem;
+  background: rgb(2 10 7 / 0.93);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.42), inset 0 1px rgb(110 231 183 / 0.06);
+  backdrop-filter: blur(8px);
+}
+
+.vc-notebook-toolbox-title,
+.vc-notebook-snap-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.45rem;
+  color: rgb(110 231 183 / 0.56);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.vc-notebook-toolbox-title svg,
+.vc-notebook-snap-lock svg {
+  width: 0.74rem;
+  height: 0.74rem;
+}
+
+.vc-notebook-toolbox-actions {
+  display: flex;
+  gap: 0.28rem;
+}
+
+.vc-notebook-toolbox button {
+  min-height: 1.9rem;
+  border-radius: 0.2rem;
+  background: rgb(52 211 153 / 0.035);
+  padding: 0.35rem 0.55rem;
+  letter-spacing: 0.03em;
+}
+
+.vc-notebook-snap-lock {
+  min-height: 1.9rem;
+  border-left: 1px solid var(--vc-line);
+  color: rgb(110 231 183 / 0.74);
+}
+
+.vc-notebook-canvas .react-flow__controls {
+  overflow: hidden;
+  border: 1px solid var(--vc-line);
+  border-radius: 0.25rem;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.42);
+}
+
+.vc-notebook-canvas .react-flow__controls-button {
+  border-bottom-color: var(--vc-line);
+}
+
+.vc-node {
+  --vc-node-accent: rgb(110 231 183);
+  border-color: rgb(110 231 183 / 0.32);
+  border-radius: 0.28rem;
+  background:
+    linear-gradient(145deg, rgb(110 231 183 / 0.035), transparent 38%),
+    var(--vc-panel-raised);
+  box-shadow: 0 10px 22px rgb(0 0 0 / 0.36), inset 0 0 0 1px rgb(0 0 0 / 0.32);
+  transition: border-color 140ms ease, box-shadow 140ms ease, filter 140ms ease, opacity 140ms ease;
+}
+
+.vc-node::before {
+  position: absolute;
+  z-index: 4;
+  top: -1px;
+  left: -1px;
+  width: 1rem;
+  height: 1rem;
+  border-top: 2px solid var(--vc-node-accent);
+  border-left: 2px solid var(--vc-node-accent);
+  content: '';
+  pointer-events: none;
+}
+
+.vc-node::after {
+  position: absolute;
+  z-index: 4;
+  top: -1px;
+  right: 0.55rem;
+  left: 0.55rem;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--vc-node-accent), transparent);
+  content: '';
+  opacity: 0.68;
+  pointer-events: none;
+}
+
+.vc-node-prompt {
+  --vc-node-accent: var(--vc-prompt);
+  padding-top: 2.35rem;
+  border-color: rgb(110 231 183 / 0.28);
+}
+
+.vc-node-image {
+  --vc-node-accent: var(--vc-image);
+  border-color: rgb(110 231 183 / 0.3);
+}
+
+.vc-node-video {
+  --vc-node-accent: var(--vc-video);
+  border-color: rgb(110 231 183 / 0.3);
+}
+
+.vc-node-asset {
+  --vc-node-accent: rgb(110 231 183);
+  border-color: rgb(110 231 183 / 0.3);
+}
+
+.vc-node-kicker {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  min-height: 1.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem 0.3rem 0.65rem;
+  border-bottom: 1px solid rgb(110 231 183 / 0.12);
+  background: linear-gradient(90deg, rgb(2 10 7 / 0.96), rgb(4 17 12 / 0.86));
+  color: rgb(167 243 208 / 0.58);
+  font-family: var(--font-mono);
+  font-size: 0.51rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.vc-node-kicker b {
+  color: var(--vc-node-accent);
+  font-size: 0.5rem;
+  font-weight: 700;
+}
+
+.vc-node-gen .vc-node-hero {
+  border-radius: 0.2rem 0.2rem 0 0;
+}
+
+.vc-node-gen .vc-node-hero::after {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgb(1 7 5 / 0.52), transparent 32%),
+    linear-gradient(0deg, rgb(2 10 7 / 0.26), transparent 32%);
+  content: '';
+  pointer-events: none;
+}
+
+.vc-node-input-strip {
+  top: 1.7rem;
+  left: 0.55rem;
+}
+
+.vc-node-image.vc-node-selected,
+.vc-node-video.vc-node-selected,
+.vc-node-selected {
+  border-color: var(--vc-line-strong);
+  box-shadow: 0 0 0 1px rgb(110 231 183 / 0.3), 0 0 22px var(--vc-glow), 0 12px 28px rgb(0 0 0 / 0.4);
+}
+
+.vc-node-route-upstream,
+.vc-node-route-downstream {
+  border-color: rgb(110 231 183 / 0.52);
+  box-shadow: 0 0 16px rgb(52 211 153 / 0.14), 0 10px 22px rgb(0 0 0 / 0.36);
+}
+
+.vc-notebook-has-route .vc-node:not(.vc-node-route-selected, .vc-node-route-upstream, .vc-node-route-downstream) {
+  opacity: 0.48;
+  filter: saturate(0.5) brightness(0.74);
+}
+
+.react-flow__node.vc-notebook-drop-parent .vc-node {
+  border-color: rgb(110 231 183 / 0.9);
+  box-shadow: 0 0 0 2px rgb(52 211 153 / 0.24), 0 0 28px rgb(52 211 153 / 0.48);
+}
+
+.vc-node-handle {
+  width: 14px;
+  height: 14px;
+  border-color: rgb(2 9 6);
+  background: rgb(110 231 183);
+  box-shadow: 0 0 0 2px rgb(52 211 153 / 0.16), 0 0 10px rgb(52 211 153 / 0.35);
+}
+
+.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-prompt .react-flow__edge-path,
+.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-ref .react-flow__edge-path {
+  stroke: rgb(74 222 128 / 0.62);
+  filter: drop-shadow(0 0 2px rgb(52 211 153 / 0.24));
+}
+
+.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-active .react-flow__edge-path {
+  stroke: rgb(110 231 183);
+  stroke-width: 2.25;
+  filter: drop-shadow(0 0 5px rgb(52 211 153 / 0.62));
+}
+
+.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-muted {
+  opacity: 0.18;
+}
+
+.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-running .react-flow__edge-path {
+  stroke-dasharray: 7 5;
+  animation: vc-notebook-signal 620ms linear infinite;
+}
+
+.vc-node-image .vc-node-meta,
+.vc-node-video .vc-node-meta {
+  border-top-color: rgb(110 231 183 / 0.14);
+}
+
+.vc-node-image .vc-node-meta span,
+.vc-node-video .vc-node-meta span {
+  color: var(--vc-muted);
+}
+
+.vc-node-image .vc-node-meta b,
+.vc-node-video .vc-node-meta b {
+  color: var(--vc-node-accent);
+}
+
+.vc-notebook-sidebar {
+  display: flex;
+  width: clamp(360px, 32vw, 420px);
+  min-height: 0;
+  flex-direction: column;
+  border-left-color: var(--vc-line);
+  background:
+    linear-gradient(135deg, rgb(52 211 153 / 0.04), transparent 32%),
+    var(--vc-panel);
+  box-shadow: -14px 0 34px rgb(0 0 0 / 0.24);
+}
+
+.vc-notebook-loadout-head {
+  position: relative;
+  display: flex;
+  min-height: 4.2rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid var(--vc-line);
+  background: rgb(1 8 5 / 0.48);
+}
+
+.vc-notebook-loadout-head::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  width: 4.5rem;
+  height: 1px;
+  background: var(--vc-line-strong);
+  box-shadow: 0 0 8px var(--vc-glow);
+  content: '';
+}
+
+.vc-notebook-loadout-head > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.22rem;
+}
+
+.vc-notebook-loadout-head span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgb(110 231 183 / 0.5);
+  font-family: var(--font-mono);
+  font-size: 0.53rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.vc-notebook-loadout-head span svg {
+  width: 0.7rem;
+  height: 0.7rem;
+}
+
+.vc-notebook-loadout-head strong {
+  overflow: hidden;
+  color: var(--vc-text);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.vc-notebook-cell-type {
+  flex: none;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid currentColor;
+  border-radius: 0.18rem;
+  background: rgb(0 0 0 / 0.32);
+  font-size: 0.55rem;
+}
+
+.vc-notebook-cell-type-mission,
+.vc-notebook-cell-type-asset {
+  color: rgb(110 231 183);
+}
+
+.vc-notebook-editor {
+  flex: 1;
+  gap: 0.75rem;
+  overflow-y: auto;
+  padding: 0.9rem;
+  scrollbar-color: rgb(52 211 153 / 0.28) transparent;
+}
+
+.vc-notebook-editor label,
+.vc-notebook-sidebar-image .vc-notebook-editor label,
+.vc-notebook-sidebar-video .vc-notebook-editor label {
+  color: rgb(110 231 183 / 0.66);
+}
+
+.vc-notebook-briefing-empty {
+  display: flex;
+  min-height: 14rem;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.55rem;
+  border: 1px dashed rgb(52 211 153 / 0.18);
+  background: radial-gradient(circle, rgb(52 211 153 / 0.07), transparent 62%);
+  color: rgb(110 231 183 / 0.32);
+  text-align: center;
+}
+
+.vc-notebook-briefing-empty svg {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.vc-notebook-briefing-empty strong {
+  color: rgb(167 243 208 / 0.68);
+  font-family: var(--font-mono);
+  font-size: 0.67rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.vc-notebook-briefing-empty p {
+  max-width: 16rem;
+  margin: 0;
+  color: var(--vc-muted);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  line-height: 1.55;
+}
+
+.vc-notebook-action-deck {
+  flex: none;
+  padding: 0.7rem 0.85rem 0.85rem;
+  border-top: 1px solid var(--vc-line);
+  background:
+    linear-gradient(180deg, rgb(52 211 153 / 0.035), transparent 42%),
+    rgb(1 8 5 / 0.92);
+  box-shadow: 0 -12px 28px rgb(0 0 0 / 0.2);
+}
+
+.vc-notebook-action-status {
+  display: flex;
+  min-height: 1.45rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.vc-notebook-action-status > span {
+  color: rgb(110 231 183 / 0.44);
+  font-family: var(--font-mono);
+  font-size: 0.53rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.vc-notebook-action-status .vc-notebook-error {
+  overflow: hidden;
+  flex: 1;
+  justify-content: flex-end;
+  font-size: 0.64rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vc-notebook-run,
+.vc-notebook-run-image,
+.vc-notebook-run-video {
+  min-height: 3rem;
+  border-color: rgb(110 231 183 / 0.52);
+  border-radius: 0.24rem;
+  background:
+    linear-gradient(90deg, rgb(52 211 153 / 0.2), rgb(6 78 59 / 0.56)),
+    rgb(2 18 11);
+  color: rgb(209 250 229);
+  box-shadow: inset 3px 0 var(--vc-node-accent, rgb(110 231 183)), inset 0 1px rgb(167 243 208 / 0.08);
+}
+
+.vc-notebook-run-image {
+  --vc-node-accent: var(--vc-image);
+}
+
+.vc-notebook-run-video {
+  --vc-node-accent: var(--vc-video);
+}
+
+.vc-notebook-run:hover:not(:disabled),
+.vc-notebook-run-image:hover:not(:disabled),
+.vc-notebook-run-video:hover:not(:disabled) {
+  border-color: rgb(110 231 183 / 0.82);
+  background:
+    linear-gradient(90deg, rgb(52 211 153 / 0.3), rgb(6 95 70 / 0.7)),
+    rgb(2 18 11);
+  color: rgb(236 253 245);
+  box-shadow: inset 3px 0 var(--vc-node-accent, rgb(110 231 183)), 0 0 16px var(--vc-glow);
+}
+
+.vc-notebook-run-image b,
+.vc-notebook-run-video b,
+.vc-notebook-run b {
+  color: rgb(110 231 183);
+}
+
+.vc-notebook-compact-select,
+.vc-notebook-editor textarea.vc-notebook-text,
+.vc-notebook-editor input.vc-notebook-text,
+.vc-notebook-select,
+.vc-notebook-input-chip {
+  border-color: var(--vc-line);
+  border-radius: 0.24rem;
+  background: rgb(0 0 0 / 0.36);
+}
+
+.vc-notebook-compact-select:hover:not(.is-disabled),
+.vc-notebook-input-button:hover {
+  border-color: rgb(110 231 183 / 0.58);
+}
+
+@keyframes vc-notebook-signal {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+@media (max-width: 1400px) {
+  .vc-notebook-sidebar {
+    width: 320px;
+  }
+
+  .vc-notebook-toolbox-title {
+    font-size: 0;
+  }
+
+  .vc-notebook-toolbox-title svg {
+    width: 0.85rem;
+    height: 0.85rem;
+  }
+}
+
+@media (max-width: 1100px) {
+  .vc-notebook-sidebar {
+    width: min(300px, 42vw);
+  }
+
+  .vc-notebook-toolbox-title,
+  .vc-notebook-snap-lock {
+    font-size: 0;
+  }
+
+  .vc-notebook-toolbox-title svg,
+  .vc-notebook-snap-lock svg {
+    width: 0.85rem;
+    height: 0.85rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vc-notebook-drop-link path,
+  .vc-notebook-canvas .react-flow__edge.vc-notebook-edge-running .react-flow__edge-path,
+  .vc-node-invalid,
+  .vc-notebook-save-saving svg,
+  .vc-notebook-save-loading svg,
+  .vc-notebook-loading svg,
+  .vc-notebook-run-busy svg:first-child {
+    animation: none;
+  }
+}

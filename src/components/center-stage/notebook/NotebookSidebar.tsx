@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { AlertCircle, ChevronDown, Clock3, ImageIcon, Loader2, Pin, PinOff, Play, Video, X } from 'lucide-react'
+import { AlertCircle, ChevronDown, Clock3, Crosshair, ImageIcon, Loader2, Pin, PinOff, Play, Video, X } from 'lucide-react'
 import type { UseMcpResult } from 'use-mcp/react'
 import { CharacterPickerPopover } from '@/components/gen/ui/CharacterPickerPopover'
 import { DynamicField } from '@/components/gen/ui/DynamicField'
@@ -128,6 +128,24 @@ function updateProperties(
   }
 }
 
+function LoadoutHeader({
+  type,
+  title,
+}: {
+  type: 'mission' | 'prompt' | 'asset' | 'image' | 'video'
+  title: string
+}) {
+  return (
+    <header className="vc-notebook-loadout-head">
+      <div>
+        <span><Crosshair /> Cell loadout</span>
+        <strong>{title}</strong>
+      </div>
+      <b className={`vc-notebook-cell-type vc-notebook-cell-type-${type}`}>{type}</b>
+    </header>
+  )
+}
+
 export function NotebookSidebar({
   projectSlug,
   callTool,
@@ -148,39 +166,48 @@ export function NotebookSidebar({
   if (!selected) {
     const title = typeof definition.properties.title === 'string' ? definition.properties.title : ''
     return (
-      <aside className="vc-notebook-sidebar vc-notebook-editor">
-        <label htmlFor="notebook-title">Notebook title</label>
-        <input
-          id="notebook-title"
-          className="vc-notebook-text"
-          value={title}
-          onChange={(event) => updateDefinition(
-            { ...definition, properties: { ...definition.properties, title: event.target.value } },
-            'text:notebook:title',
-          )}
-          placeholder="Untitled notebook"
-        />
-        <p className="vc-notebook-hint">Select a node to edit it. Connect nodes on the canvas to supply prompts and references.</p>
+      <aside className="vc-notebook-sidebar">
+        <LoadoutHeader type="mission" title="Mission briefing" />
+        <div className="vc-notebook-editor">
+          <label htmlFor="notebook-title">Notebook title</label>
+          <input
+            id="notebook-title"
+            className="vc-notebook-text"
+            value={title}
+            onChange={(event) => updateDefinition(
+              { ...definition, properties: { ...definition.properties, title: event.target.value } },
+              'text:notebook:title',
+            )}
+            placeholder="Untitled notebook"
+          />
+          <div className="vc-notebook-briefing-empty">
+            <Crosshair />
+            <strong>No cell targeted</strong>
+            <p>Select a mission cell to configure its loadout, inputs, and deployment settings.</p>
+          </div>
+        </div>
       </aside>
     )
   }
   if (selected.type === 'prompt') {
     const text = typeof selected.properties.text === 'string' ? selected.properties.text : ''
     return (
-      <aside className="vc-notebook-sidebar vc-notebook-editor">
-        <div className="vc-notebook-cell-type vc-notebook-cell-type-prompt">Prompt</div>
-        <label htmlFor={`step-text-${selected.id}`}>Prompt</label>
-        <textarea
-          id={`step-text-${selected.id}`}
-          className="vc-notebook-text"
-          value={text}
-          onChange={(event) => updateDefinition(
-            updateProperties(definition, selected.id, { text: event.target.value }),
-            `text:${selected.id}:prompt`,
-          )}
-          placeholder="Write the instruction this notebook will reuse."
-          rows={8}
-        />
+      <aside className="vc-notebook-sidebar">
+        <LoadoutHeader type="prompt" title="Prompt uplink" />
+        <div className="vc-notebook-editor">
+          <label htmlFor={`step-text-${selected.id}`}>Transmission</label>
+          <textarea
+            id={`step-text-${selected.id}`}
+            className="vc-notebook-text"
+            value={text}
+            onChange={(event) => updateDefinition(
+              updateProperties(definition, selected.id, { text: event.target.value }),
+              `text:${selected.id}:prompt`,
+            )}
+            placeholder="Write the instruction this notebook will reuse."
+            rows={8}
+          />
+        </div>
       </aside>
     )
   }
@@ -222,14 +249,16 @@ function AssetSidebar({
   const item = mediaItems.find((media) => media.id === assetId)
   const uses = definition.sequence.filter((candidate) => stepInputs(candidate).includes(step.id)).length
   return (
-    <aside className="vc-notebook-sidebar vc-notebook-editor">
-      <div className="vc-notebook-cell-type vc-notebook-cell-type-asset">Asset</div>
-      {item?.thumbnailSrc ? <img className="vc-notebook-asset-preview" src={item.thumbnailSrc} alt="" /> : <ImageIcon />}
-      <code>{slug}</code>
-      <span className="vc-notebook-hint">{assetSlugKind(slug) ?? 'unknown'} · used by {uses} cell{uses === 1 ? '' : 's'}</span>
-      {item ? (
-        <button type="button" className="vc-notebook-input-button" onClick={() => onOpenAsset?.(item.id)}>Open asset</button>
-      ) : <div className="vc-notebook-error"><AlertCircle /> Asset is missing.</div>}
+    <aside className="vc-notebook-sidebar">
+      <LoadoutHeader type="asset" title="Asset cache" />
+      <div className="vc-notebook-editor">
+        {item?.thumbnailSrc ? <img className="vc-notebook-asset-preview" src={item.thumbnailSrc} alt="" /> : <ImageIcon />}
+        <code>{slug}</code>
+        <span className="vc-notebook-hint">{assetSlugKind(slug) ?? 'unknown'} · used by {uses} cell{uses === 1 ? '' : 's'}</span>
+        {item ? (
+          <button type="button" className="vc-notebook-input-button" onClick={() => onOpenAsset?.(item.id)}>Open asset</button>
+        ) : <div className="vc-notebook-error"><AlertCircle /> Asset is missing.</div>}
+      </div>
     </aside>
   )
 }
@@ -365,12 +394,13 @@ function GenerationSidebar({
   const domainTheme = genThemes[category]
 
   return (
-    <aside className={`vc-notebook-sidebar vc-notebook-editor vc-notebook-editor-${category}`}>
-      <div className={`vc-notebook-cell-type vc-notebook-cell-type-${category}`}>{category}</div>
-      {preview.loading && !preview.preview ? <div className="vc-notebook-loading"><Loader2 /> Loading controls</div> : null}
-      {preview.error ? <div className="vc-notebook-error"><AlertCircle /> {preview.error}</div> : null}
-      {option ? (
-        <>
+    <aside className={`vc-notebook-sidebar vc-notebook-sidebar-${category}`}>
+      <LoadoutHeader type={category} title={`${category} forge`} />
+      <div className="vc-notebook-editor">
+        {preview.loading && !preview.preview ? <div className="vc-notebook-loading"><Loader2 /> Loading controls</div> : null}
+        {preview.error ? <div className="vc-notebook-error"><AlertCircle /> {preview.error}</div> : null}
+        {option ? (
+          <>
           <CompactSelect
             id={`step-model-${step.id}`}
             label="Model"
@@ -532,8 +562,16 @@ function GenerationSidebar({
               }}
             />
           )}
-          <RunStatus status={runStatus.state} />
-          {error ? <div className="vc-notebook-error"><AlertCircle /> {error}</div> : null}
+          </>
+        ) : null}
+      </div>
+      {option ? (
+        <footer className="vc-notebook-action-deck">
+          <div className="vc-notebook-action-status">
+            <span>Deployment</span>
+            <RunStatus status={runStatus.state} />
+            {error ? <div className="vc-notebook-error"><AlertCircle /> {error}</div> : null}
+          </div>
           <RunStepButton
             running={running}
             category={category}
@@ -542,7 +580,7 @@ function GenerationSidebar({
             cost={costLabel}
             onClick={() => onRun(step, option, preview.selectedProviderKey, mergedValues)}
           />
-        </>
+        </footer>
       ) : null}
     </aside>
   )

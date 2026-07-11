@@ -35,29 +35,39 @@ describe('notebook generation editor order and domain themes', () => {
     expect(cardTone('notebook').color).toBe('#34d399')
   })
 
-  it('keeps notebook shell chrome emerald while gen cards use cyan/violet CSS', () => {
+  it('uses one emerald HUD shell with image and video limited to compact accents', () => {
     const css = readFileSync(join(root, 'notebook.css'), 'utf8')
-    expect(css).toContain('.vc-notebook-header > div:first-child > span:first-child')
-    expect(css).toMatch(/color:\s*rgb\(110 231 183/)
-    expect(css).toContain('.vc-node-image')
-    expect(css).toContain('rgb(34 211 238')
-    expect(css).toContain('.vc-node-video')
-    expect(css).toContain('rgb(167 139 250')
-    expect(css).toContain('.vc-notebook-run-image')
-    expect(css).toContain('.vc-notebook-run-video')
-    // Domain cost/hover rules must follow the base `.vc-notebook-run b` / hover so cascade wins.
-    const baseB = css.indexOf('.vc-notebook-run b {')
-    const imageB = css.indexOf('.vc-notebook-run-image b {')
-    const videoB = css.indexOf('.vc-notebook-run-video b {')
-    expect(baseB).toBeGreaterThan(-1)
-    expect(imageB).toBeGreaterThan(baseB)
-    expect(videoB).toBeGreaterThan(baseB)
-    expect(css).toMatch(/\.vc-notebook-run-image:hover:not\(:disabled\)\s*\{[^}]*border-color:\s*rgb\(34 211 238/s)
-    expect(css).toMatch(/\.vc-notebook-run-video:hover:not\(:disabled\)\s*\{[^}]*border-color:\s*rgb\(167 139 250/s)
-    // Shared toolbox hover must not paint emerald borders onto domain Run buttons.
-    expect(css).not.toMatch(
-      /\.vc-notebook-toolbox button:hover,\s*\.vc-notebook-input-button:hover,\s*\.vc-notebook-run:hover/,
-    )
+    const unifiedRun = css.lastIndexOf('.vc-notebook-run,')
+    const oldVideoSurface = css.indexOf('.vc-notebook-run-video {')
+    expect(css).toContain('--vc-line-strong: rgb(110 231 183')
+    expect(css).toContain('--vc-image: rgb(34 211 238)')
+    expect(css).toContain('--vc-video: rgb(167 139 250)')
+    expect(css).toContain('.vc-node-image {\n  --vc-node-accent: var(--vc-image)')
+    expect(css).toContain('.vc-node-video {\n  --vc-node-accent: var(--vc-video)')
+    expect(css).toContain('.vc-notebook-sidebar-video .vc-notebook-editor label')
+    expect(css).toContain('.vc-notebook-action-deck')
+    expect(unifiedRun).toBeGreaterThan(oldVideoSurface)
+    expect(css.slice(unifiedRun)).toContain('border-color: rgb(110 231 183 / 0.52)')
+    expect(css.slice(unifiedRun)).toContain('background:')
+  })
+
+  it('renders the mission board stages, deployment preview, and locked snap controls', () => {
+    const notebook = readFileSync(join(root, 'PlanNotebook.tsx'), 'utf8')
+    const stageBoard = readFileSync(join(root, 'NotebookStageBoard.tsx'), 'utf8')
+    const toolbox = readFileSync(join(root, 'NotebookToolbox.tsx'), 'utf8')
+    const flow = readFileSync(join(root, 'useNotebookFlow.ts'), 'utf8')
+    expect(notebook).toContain('<NotebookStageBoard')
+    expect(notebook).toContain('notebookDropTarget')
+    expect(notebook).toContain('reorderStepsOnTracks')
+    expect(notebook).toContain('Repack mission')
+    expect(stageBoard).toContain('<ViewportPortal>')
+    expect(stageBoard).toContain('vc-notebook-stage-row')
+    expect(stageBoard).toContain('vc-notebook-drop-link')
+    expect(toolbox).toContain('Snap locked')
+    expect(toolbox).toContain('Deploy')
+    expect(flow).toContain('function activeRoute')
+    expect(flow).toContain('vc-notebook-edge-active')
+    expect(flow).toContain('vc-notebook-edge-muted')
   })
 
   it('disables Run only while submit is in flight, not while asset is pending', () => {

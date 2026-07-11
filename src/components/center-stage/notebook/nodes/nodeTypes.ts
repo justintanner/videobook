@@ -15,6 +15,7 @@ export interface NotebookNodeData extends Record<string, unknown> {
   invalidReason: string | null
   missing: boolean
   mediaInputs: ConnectedMediaInput[]
+  routeState: 'selected' | 'upstream' | 'downstream' | null
 }
 
 export type NotebookFlowNode = Node<NotebookNodeData, NotebookPlanStep['type']>

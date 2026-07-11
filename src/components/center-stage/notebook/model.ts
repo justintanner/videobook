@@ -30,6 +30,33 @@ export const notebookNodeSizes: Record<NotebookPlanStep['type'], { width: number
   asset: { width: 200, height: 142 },
 }
 
+export const NOTEBOOK_TRACK_ORIGIN_X = 80
+export const NOTEBOOK_TRACK_ORIGIN_Y = 48
+export const NOTEBOOK_TRACK_SLOT_PITCH = 268
+export const NOTEBOOK_TRACK_ROW_PITCH = 320
+export const NOTEBOOK_TRACK_SLOT_WIDTH = 220
+
+export interface NotebookTrackRow {
+  depth: number
+  y: number
+  stepIds: string[]
+}
+
+export interface NotebookTrackLayout {
+  rows: NotebookTrackRow[]
+  positions: ReadonlyMap<string, StepPosition>
+  depths: ReadonlyMap<string, number>
+  width: number
+  height: number
+}
+
+export interface NotebookDropTarget {
+  position: StepPosition
+  parentId: string | null
+  depth: number
+  slot: number
+}
+
 function record(value: unknown): JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as JsonRecord
@@ -121,6 +148,209 @@ export function stepPosition(step: NotebookPlanStep): StepPosition | null {
 
 export function stepInputs(step: NotebookPlanStep): string[] {
   return stringArray(step.properties.inputs)
+}
+
+export function notebookTrackDepths(definition: NotebookPlanDefinition): ReadonlyMap<string, number> {
+  const byId = new Map(definition.sequence.map((step) => [step.id, step]))
+  const depths = new Map<string, number>()
+  const depthOf = (id: string, stack: Set<string>): number => {
+    const cached = depths.get(id)
+    if (cached !== undefined) return cached
+    if (stack.has(id)) return 0
+    const step = byId.get(id)
+    if (!step) return 0
+    stack.add(id)
+    const parents = stepInputs(step).filter((inputId) => byId.has(inputId))
+    const depth = parents.length === 0
+      ? 0
+      : Math.max(...parents.map((parentId) => depthOf(parentId, stack))) + 1
+    stack.delete(id)
+    depths.set(id, depth)
+    return depth
+  }
+  for (const step of definition.sequence) depthOf(step.id, new Set())
+  return depths
+}
+
+function positionForTrackSlot(step: NotebookPlanStep, depth: number, slot: number): StepPosition {
+  const size = notebookNodeSizes[step.type]
+  return {
+    x: NOTEBOOK_TRACK_ORIGIN_X
+      + slot * NOTEBOOK_TRACK_SLOT_PITCH
+      + (NOTEBOOK_TRACK_SLOT_WIDTH - size.width) / 2,
+    y: NOTEBOOK_TRACK_ORIGIN_Y + depth * NOTEBOOK_TRACK_ROW_PITCH,
+  }
+}
+
+function orderedStepsByDepth(
+  definition: NotebookPlanDefinition,
+  depths: ReadonlyMap<string, number>,
+): Map<number, NotebookPlanStep[]> {
+  const sequenceIndex = new Map(definition.sequence.map((step, index) => [step.id, index]))
+  const rows = new Map<number, NotebookPlanStep[]>()
+  for (const step of definition.sequence) {
+    const depth = depths.get(step.id) ?? 0
+    const row = rows.get(depth) ?? []
+    row.push(step)
+    rows.set(depth, row)
+  }
+  for (const row of rows.values()) {
+    row.sort((left, right) => {
+      const leftX = stepPosition(left)?.x ?? (sequenceIndex.get(left.id) ?? 0) * NOTEBOOK_TRACK_SLOT_PITCH
+      const rightX = stepPosition(right)?.x ?? (sequenceIndex.get(right.id) ?? 0) * NOTEBOOK_TRACK_SLOT_PITCH
+      return leftX - rightX || (sequenceIndex.get(left.id) ?? 0) - (sequenceIndex.get(right.id) ?? 0)
+    })
+  }
+  return rows
+}
+
+function trackLayoutFromRows(
+  depths: ReadonlyMap<string, number>,
+  rowsByDepth: ReadonlyMap<number, ReadonlyArray<NotebookPlanStep>>,
+): NotebookTrackLayout {
+  const positions = new Map<string, StepPosition>()
+  const rows: NotebookTrackRow[] = []
+  const sortedDepths = [...rowsByDepth.keys()].sort((left, right) => left - right)
+  let maxSlots = 1
+  for (const depth of sortedDepths) {
+    const steps = rowsByDepth.get(depth) ?? []
+    maxSlots = Math.max(maxSlots, steps.length)
+    steps.forEach((step, slot) => positions.set(step.id, positionForTrackSlot(step, depth, slot)))
+    rows.push({
+      depth,
+      y: NOTEBOOK_TRACK_ORIGIN_Y + depth * NOTEBOOK_TRACK_ROW_PITCH,
+      stepIds: steps.map((step) => step.id),
+    })
+  }
+  const maxDepth = sortedDepths.at(-1) ?? 0
+  return {
+    rows,
+    positions,
+    depths,
+    width: NOTEBOOK_TRACK_ORIGIN_X * 2
+      + maxSlots * NOTEBOOK_TRACK_SLOT_PITCH
+      - (NOTEBOOK_TRACK_SLOT_PITCH - NOTEBOOK_TRACK_SLOT_WIDTH),
+    height: NOTEBOOK_TRACK_ORIGIN_Y * 2 + maxDepth * NOTEBOOK_TRACK_ROW_PITCH + 248,
+  }
+}
+
+export function notebookTrackLayout(definition: NotebookPlanDefinition): NotebookTrackLayout {
+  const depths = notebookTrackDepths(definition)
+  return trackLayoutFromRows(depths, orderedStepsByDepth(definition, depths))
+}
+
+export function snapDefinitionToTracks(definition: NotebookPlanDefinition): NotebookPlanDefinition {
+  const layout = notebookTrackLayout(definition)
+  return moveSteps(definition, definition.sequence.flatMap((step) => {
+    const position = layout.positions.get(step.id)
+    return position ? [{ id: step.id, position }] : []
+  }))
+}
+
+function nearestTrackSlot(step: NotebookPlanStep, x: number): number {
+  const size = notebookNodeSizes[step.type]
+  const offset = (NOTEBOOK_TRACK_SLOT_WIDTH - size.width) / 2
+  return Math.max(0, Math.round((x - NOTEBOOK_TRACK_ORIGIN_X - offset) / NOTEBOOK_TRACK_SLOT_PITCH))
+}
+
+export function reorderStepsOnTracks(
+  definition: NotebookPlanDefinition,
+  moves: ReadonlyArray<{ id: string; position: StepPosition }>,
+): NotebookPlanDefinition {
+  if (moves.length === 0) return snapDefinitionToTracks(definition)
+  const byId = new Map(definition.sequence.map((step) => [step.id, step]))
+  const layout = notebookTrackLayout(definition)
+  const rowsByDepth = new Map<number, NotebookPlanStep[]>()
+  const movesByDepth = new Map<number, Array<{ step: NotebookPlanStep; slot: number }>>()
+  for (const row of layout.rows) {
+    rowsByDepth.set(row.depth, row.stepIds.flatMap((id) => {
+      const step = byId.get(id)
+      return step ? [step] : []
+    }))
+  }
+  for (const move of moves) {
+    const step = byId.get(move.id)
+    if (!step) continue
+    const depth = layout.depths.get(step.id) ?? 0
+    const rowMoves = movesByDepth.get(depth) ?? []
+    rowMoves.push({ step, slot: nearestTrackSlot(step, move.position.x) })
+    movesByDepth.set(depth, rowMoves)
+  }
+  for (const [depth, rowMoves] of movesByDepth) {
+    const row = rowsByDepth.get(depth) ?? []
+    const currentIndex = new Map(row.map((step, index) => [step.id, index]))
+    const movingIds = new Set(rowMoves.map(({ step }) => step.id))
+    const moving = rowMoves
+      .slice()
+      .sort((left, right) => (currentIndex.get(left.step.id) ?? 0) - (currentIndex.get(right.step.id) ?? 0))
+    const remaining = row.filter((step) => !movingIds.has(step.id))
+    const anchor = Math.min(...moving.map(({ slot }) => slot))
+    remaining.splice(Math.min(anchor, remaining.length), 0, ...moving.map(({ step }) => step))
+    rowsByDepth.set(depth, remaining)
+  }
+  const nextLayout = trackLayoutFromRows(layout.depths, rowsByDepth)
+  return moveSteps(definition, definition.sequence.flatMap((step) => {
+    const position = nextLayout.positions.get(step.id)
+    return position ? [{ id: step.id, position }] : []
+  }))
+}
+
+export function nextNotebookTrackPosition(
+  definition: NotebookPlanDefinition,
+  type: NotebookPlanStep['type'],
+  depth = 0,
+): StepPosition {
+  const layout = notebookTrackLayout(definition)
+  const slot = layout.rows.find((row) => row.depth === depth)?.stepIds.length ?? 0
+  const seed = toolboxStepSeeds.find((step) => step.type === type)
+  const step: NotebookPlanStep = seed
+    ? { ...seed, id: '', type }
+    : { id: '', componentType: 'task', type, name: type, properties: {} }
+  return positionForTrackSlot(step, depth, slot)
+}
+
+export function notebookDropTarget(
+  definition: NotebookPlanDefinition,
+  type: Extract<NotebookPlanStep['type'], 'prompt' | 'image' | 'video'>,
+  pointer: StepPosition,
+  selectedStepId: string | null,
+): NotebookDropTarget {
+  const seed = toolboxStepSeeds.find((step) => step.type === type)
+  const previewStep: NotebookPlanStep = seed
+    ? { ...seed, id: '' }
+    : { id: '', componentType: 'task', type, name: type, properties: {} }
+  const requestedDepth = type === 'prompt'
+    ? 0
+    : Math.max(0, Math.round((pointer.y - NOTEBOOK_TRACK_ORIGIN_Y) / NOTEBOOK_TRACK_ROW_PITCH))
+  const slot = nearestTrackSlot(previewStep, pointer.x)
+  if (type === 'prompt' || requestedDepth === 0) {
+    return { position: positionForTrackSlot(previewStep, 0, slot), parentId: null, depth: 0, slot }
+  }
+  const layout = notebookTrackLayout(definition)
+  const selectedDepth = selectedStepId ? layout.depths.get(selectedStepId) : undefined
+  const selectedParent = selectedStepId && selectedDepth === requestedDepth - 1
+    ? definition.sequence.find((step) => step.id === selectedStepId) ?? null
+    : null
+  const parentRow = layout.rows.find((row) => row.depth === requestedDepth - 1)
+  const byId = new Map(definition.sequence.map((step) => [step.id, step]))
+  const candidates = parentRow?.stepIds.flatMap((id) => {
+    const step = byId.get(id)
+    const position = layout.positions.get(id)
+    if (!step || !position) return []
+    const center = position.x + notebookNodeSizes[step.type].width / 2
+    const pointerCenter = pointer.x + notebookNodeSizes[type].width / 2
+    return [{ step, distance: Math.abs(center - pointerCenter) }]
+  }).sort((left, right) => left.distance - right.distance) ?? []
+  const nearest = candidates[0]
+  const tied = nearest && candidates[1]?.distance === nearest.distance
+  const parent = selectedParent ?? (!tied ? nearest?.step ?? null : null)
+  const depth = parent ? requestedDepth : 0
+  return {
+    position: positionForTrackSlot(previewStep, depth, slot),
+    parentId: parent?.id ?? null,
+    depth,
+    slot,
+  }
 }
 
 export function assetSlugKind(slug: string): 'image' | 'video' | 'audio' | 'character' | null {
@@ -323,7 +553,11 @@ export function normalizeDefinition(definition: NotebookPlanDefinition): {
     changed = true
   }
 
-  return changed ? { definition: { ...definition, sequence }, changed: true } : { definition, changed: false }
+  const normalized = changed ? { ...definition, sequence } : definition
+  const tracked = snapDefinitionToTracks(normalized)
+  return tracked === definition
+    ? { definition, changed: false }
+    : { definition: tracked, changed: true }
 }
 
 export function wouldCreateCycle(
@@ -616,70 +850,6 @@ export function graphLayoutBounds(definition: NotebookPlanDefinition): GraphLayo
   }, { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity })
 }
 
-const LAYOUT_TYPE_ORDER: Record<NotebookPlanStep['type'], number> = {
-  prompt: 0,
-  asset: 1,
-  image: 2,
-  video: 3,
-}
-
-const LAYOUT_COL_GAP = 48
-const LAYOUT_ROW_GAP = 72
-const LAYOUT_ORIGIN_X = 80
-const LAYOUT_ORIGIN_Y = 48
-
 export function autoLayout(definition: NotebookPlanDefinition): NotebookPlanDefinition {
-  if (definition.sequence.length === 0) return definition
-  const byId = new Map(definition.sequence.map((step) => [step.id, step]))
-  const parents = new Map<string, string[]>()
-  for (const step of definition.sequence) {
-    parents.set(
-      step.id,
-      stepInputs(step).filter((inputId) => byId.has(inputId)),
-    )
-  }
-
-  const layer = new Map<string, number>()
-  const depthOf = (id: string, stack: Set<string>): number => {
-    const cached = layer.get(id)
-    if (cached !== undefined) return cached
-    if (stack.has(id)) return 0
-    stack.add(id)
-    const parentIds = parents.get(id) ?? []
-    const depth = parentIds.length === 0
-      ? 0
-      : Math.max(...parentIds.map((parentId) => depthOf(parentId, stack))) + 1
-    stack.delete(id)
-    layer.set(id, depth)
-    return depth
-  }
-  for (const step of definition.sequence) depthOf(step.id, new Set())
-
-  const rows = new Map<number, NotebookPlanStep[]>()
-  for (const step of definition.sequence) {
-    const depth = layer.get(step.id) ?? 0
-    const row = rows.get(depth) ?? []
-    row.push(step)
-    rows.set(depth, row)
-  }
-
-  const moves: Array<{ id: string; position: StepPosition }> = []
-  let y = LAYOUT_ORIGIN_Y
-  const depths = [...rows.keys()].sort((left, right) => left - right)
-  for (const depth of depths) {
-    const row = (rows.get(depth) ?? []).slice().sort((left, right) => {
-      const typeDelta = LAYOUT_TYPE_ORDER[left.type] - LAYOUT_TYPE_ORDER[right.type]
-      return typeDelta !== 0 ? typeDelta : left.id.localeCompare(right.id)
-    })
-    let x = LAYOUT_ORIGIN_X
-    let rowHeight = 0
-    for (const step of row) {
-      const size = notebookNodeSizes[step.type]
-      moves.push({ id: step.id, position: { x, y } })
-      x += size.width + LAYOUT_COL_GAP
-      rowHeight = Math.max(rowHeight, size.height)
-    }
-    y += rowHeight + LAYOUT_ROW_GAP
-  }
-  return moveSteps(definition, moves)
+  return snapDefinitionToTracks(definition)
 }
