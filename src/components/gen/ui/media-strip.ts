@@ -134,33 +134,73 @@ export interface DropRoute {
   action: 'set' | 'append';
 }
 
-/** Route a dropped asset to the right slot. video → the video slot (set);
- *  audio → the first audio slot (set); image → append image_slugs when present,
- *  else set the first single-image slot. */
+/** Params that hold multiple @slugs (append on drop). Everything else is set. */
+const ARRAY_SLUG_PARAMS = new Set([
+  'image_slugs',
+  'video_slugs',
+  'audio_slugs',
+  'character_image_slugs',
+  'motion_video_slugs',
+]);
+
+export function isArraySlugParam(param: string): boolean {
+  return ARRAY_SLUG_PARAMS.has(param) || param.endsWith('_slugs');
+}
+
+/** Route a dropped asset to the right slot. Array slug params (image_slugs,
+ *  video_slugs, audio_slugs, …) append; single-slug slots (video_slug,
+ *  first_frame_slug, …) set. */
 export function routeDrop(
   kind: 'image' | 'video' | 'audio',
   slots: StripSlot[],
 ): DropRoute {
   if (kind === 'video') {
     const v = slots.find((s) => s.kind === 'video');
-    return { param: v?.param ?? 'video_slug', action: 'set' };
+    const param = v?.param ?? 'video_slug';
+    return { param, action: isArraySlugParam(param) ? 'append' : 'set' };
   }
   if (kind === 'audio') {
     const a = slots.find((s) => s.kind === 'audio');
-    return { param: a?.param ?? '', action: 'set' };
+    const param = a?.param ?? '';
+    return { param, action: param && isArraySlugParam(param) ? 'append' : 'set' };
   }
   const imageSlugs = slots.find((s) => s.param === 'image_slugs');
   if (imageSlugs) return { param: 'image_slugs', action: 'append' };
   const firstImage = slots.find((s) => s.kind === 'image');
-  return { param: firstImage?.param ?? '', action: 'set' };
+  const param = firstImage?.param ?? '';
+  return { param, action: param && isArraySlugParam(param) ? 'append' : 'set' };
+}
+
+/** Append a slug to any array slug param (deduped); returns the new array.
+ *  When `max` is set and the array is already full, returns the current array. */
+export function appendSlug(
+  values: Record<string, unknown>,
+  param: string,
+  slug: string,
+  max?: number | null,
+): string[] {
+  const current = Array.isArray(values[param]) ? (values[param] as string[]) : [];
+  const clean = slug.startsWith('@') ? slug : `@${slug}`;
+  if (current.some((s) => s === clean || s === slug)) return current;
+  if (max != null && current.length >= max) return current;
+  return [...current, clean];
 }
 
 /** Append a slug to image_slugs (deduped); returns the new array. */
 export function appendImageSlug(values: Record<string, unknown>, slug: string): string[] {
-  const current = Array.isArray(values.image_slugs) ? (values.image_slugs as string[]) : [];
-  const clean = slug.startsWith('@') ? slug : `@${slug}`;
-  if (current.some((s) => s === clean || s === slug)) return current;
-  return [...current, clean];
+  return appendSlug(values, 'image_slugs', slug);
+}
+
+/** Resolve which array/set param a project asset slug should wire into. */
+export function paramForAssetSlug(
+  slug: string,
+  slots: StripSlot[],
+): DropRoute | null {
+  const clean = slug.startsWith('@') ? slug.slice(1) : slug;
+  const kind: StripSlot['kind'] =
+    clean.startsWith('vid-') ? 'video' : clean.startsWith('aud-') ? 'audio' : 'image';
+  if (!slots.some((s) => s.kind === kind)) return null;
+  return routeDrop(kind, slots);
 }
 
 /** Toggle the first-frame pin. Pinning an image moves it from image_slugs into

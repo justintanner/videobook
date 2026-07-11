@@ -8,7 +8,12 @@ import { DynamicField } from '@/components/gen/ui/DynamicField';
 import { ElementGroupEditor } from '@/components/gen/ElementGroupEditor';
 import { MediaStrip, type CharacterPillData } from '@/components/gen/ui/MediaStrip';
 import { CharacterPickerPopover } from '@/components/gen/ui/CharacterPickerPopover';
-import { characterImageCount } from '@/components/gen/ui/media-strip';
+import {
+  appendSlug,
+  characterImageCount,
+  deriveStripSlots,
+  paramForAssetSlug,
+} from '@/components/gen/ui/media-strip';
 import { sortFields, isAssetField, isElementField } from '@/components/gen/ui/fieldHelpers';
 import { useGoogleFlowEntities } from '@/hooks/useGoogleFlowEntities';
 import { findByAssetSlug, stripAssetTagsFromText, stripSlugPrefix } from '@/lib/slugs';
@@ -60,9 +65,15 @@ interface GenPreviewPanelProps {
    *  background — dims the /generate button (kept clickable). */
   pendingGeneration?: boolean;
   onGenerationLifecycle?: OnGenerationLifecycle;
-  /** Project image assets offered in the prompt's @ autocomplete (picking one
-   *  appends it to image_slugs and inserts @referenceImage_N). */
-  imageAssets?: { slug: string; filePath: string; thumbnailSrc: string | null }[];
+  /** Project assets offered in the prompt's @ autocomplete. Images append to
+   *  image_slugs (and insert @referenceImage_N); video/audio append to the
+   *  active mode's video_slugs / audio_slugs when present. */
+  imageAssets?: {
+    slug: string;
+    filePath: string;
+    thumbnailSrc: string | null;
+    type?: 'image' | 'video' | 'audio' | 'character';
+  }[];
 }
 
 function getPreviewToolName(cat: 'video' | 'image'): string {
@@ -362,24 +373,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     }
   }, []);
 
-  // Appends an image asset to image_slugs (or returns its existing 1-based
-  // index if already a ref) for the prompt @ autocomplete. The resolved asset
-  // is registered in droppedAssets so its thumbnail resolves and it survives
-  // the stale-slug pruning effect even when absent from preview.resolved_assets.
-  const handlePickImageAsset = useCallback((slug: string): number | null => {
-    const clean = slug.startsWith('@') ? slug : `@${slug}`;
-    const current = Array.isArray(formValues.image_slugs) ? (formValues.image_slugs as string[]) : [];
-    const existingIdx = current.indexOf(clean);
-    if (existingIdx >= 0) return existingIdx + 1;
-    const next = [...current, clean];
-    const matched = imageAssets?.find((a) => a.slug === slug || a.slug === clean);
-    const dropped: ResolvedAsset | undefined = matched
-      ? { slug: clean, src: matched.filePath, thumbnailSrc: matched.thumbnailSrc ?? null, type: 'image' }
-      : undefined;
-    handleFieldChange('image_slugs', next, dropped);
-    return next.length;
-  }, [formValues.image_slugs, imageAssets, handleFieldChange]);
-
   // Wrap the media strip's onChange so removing an image_slugs entry (shrink by
   // exactly one) renumbers @referenceImage_N markers in the prompt to match.
   // Every other field falls through to handleFieldChange. The submit-time
@@ -445,6 +438,79 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     () => (modes && activeMode ? visibleParams(modes, activeMode.key) : null),
     [modes, activeMode],
   );
+
+  // Wires a project asset from the prompt @ autocomplete into the right slot:
+  // img-* → image_slugs (returns 1-based index for @referenceImage_N); vid-*/
+  // aud-* → video_slugs / audio_slugs when the active mode exposes them.
+  // If the active mode has no matching slot (e.g. Seedance "text"), auto-switch
+  // to a mode that owns the param so the strip becomes visible.
+  // Returns null when the slug was accepted but should not insert a marker
+  // (video/audio), or when no slot accepts it.
+  const handlePickImageAsset = useCallback((slug: string): number | null => {
+    const clean = slug.startsWith('@') ? slug : `@${slug}`;
+    const bare = stripSlugPrefix(clean);
+    const matched = imageAssets?.find((a) => a.slug === slug || a.slug === clean || a.slug === bare);
+    const assetType: ResolvedAsset['type'] =
+      matched?.type
+      ?? (bare.startsWith('vid-') ? 'video' : bare.startsWith('aud-') ? 'audio' : 'image');
+
+    let slots = selectedOption
+      ? deriveStripSlots(selectedOption, activeMode)
+      : [];
+    let route = slots.length > 0 ? paramForAssetSlug(clean, slots) : null;
+
+    // Active mode has no matching slot — try the union of all mode slots and
+    // flip /type to a mode that owns the param (Seedance text → refs).
+    if ((!route || !route.param) && selectedOption?.modes) {
+      const allSlots = deriveStripSlots(selectedOption, null);
+      route = paramForAssetSlug(clean, allSlots);
+      if (route?.param) {
+        const owner = selectedOption.modes.modes.find((m) =>
+          (m.asset_slots ?? []).some((s) => s.param === route!.param),
+        );
+        if (owner) {
+          setSelectedModeKey(owner.key);
+          slots = deriveStripSlots(selectedOption, owner);
+        }
+      }
+    }
+
+    if (!route?.param) {
+      route = assetType === 'video'
+        ? { param: 'video_slugs', action: 'append' as const }
+        : assetType === 'audio'
+          ? { param: 'audio_slugs', action: 'append' as const }
+          : { param: 'image_slugs', action: 'append' as const };
+    }
+    if (!route?.param) return null;
+
+    const dropped: ResolvedAsset = matched
+      ? {
+          slug: clean,
+          src: matched.filePath,
+          thumbnailSrc: matched.thumbnailSrc ?? null,
+          type: assetType,
+        }
+      : { slug: clean, src: '', thumbnailSrc: null, type: assetType };
+
+    if (route.action === 'append') {
+      const current = Array.isArray(formValues[route.param])
+        ? (formValues[route.param] as string[])
+        : [];
+      const existingIdx = current.findIndex((s) => s === clean || s === slug);
+      if (existingIdx >= 0) {
+        return route.param === 'image_slugs' ? existingIdx + 1 : null;
+      }
+      const slotMax = slots.find((s) => s.param === route!.param)?.max ?? null;
+      const next = appendSlug(formValues, route.param, clean, slotMax);
+      if (next.length === current.length) return null;
+      handleFieldChange(route.param, next, dropped);
+      return route.param === 'image_slugs' ? next.length : null;
+    }
+
+    handleFieldChange(route.param, clean, dropped);
+    return null;
+  }, [formValues, imageAssets, handleFieldChange, selectedOption, activeMode]);
   // Params filtered to the active mode drive submit, cost, and the flip view.
   const submitValues = useMemo(
     () => (modes && activeMode ? filterValuesForMode(modes, activeMode.key, formValues) : formValues),

@@ -681,6 +681,32 @@ describe("VIDEO_TOOL_MODES contract", () => {
     expect(kling.modes).toBeNull();
   });
 
+  it("seedance2 mini ships text + refs modes", () => {
+    const option = buildModelOption("seedance2_mini", VIDEO_MODELS.seedance2_mini, {}, []);
+    expect(option.modes).not.toBeNull();
+    expect(option.modes!.default_mode).toBe("text");
+    expect(option.modes!.modes.map((m) => m.key)).toEqual(["text", "refs"]);
+    const refs = option.modes!.modes.find((m) => m.key === "refs")!;
+    expect(refs.params).toEqual(["image_slugs", "video_slugs", "audio_slugs"]);
+    expect(refs.asset_slots?.map((s) => s.param)).toEqual(["image_slugs", "video_slugs", "audio_slugs"]);
+    expect(refs.asset_slots?.find((s) => s.param === "video_slugs")?.max).toBe(3);
+    expect(refs.asset_slots?.find((s) => s.param === "audio_slugs")?.max).toBe(3);
+  });
+
+  it("seedance2 full/fast ship text + frames + refs (audio/frames exclusive)", () => {
+    for (const key of ["seedance2", "seedance2_fast"] as const) {
+      const option = buildModelOption(key, VIDEO_MODELS[key], {}, []);
+      expect(option.modes, key).not.toBeNull();
+      expect(option.modes!.modes.map((m) => m.key)).toEqual(["text", "frames", "refs"]);
+      const frames = option.modes!.modes.find((m) => m.key === "frames")!;
+      expect(frames.params).toEqual(["first_frame_slug", "last_frame_slug"]);
+      expect(frames.asset_slots?.some((s) => s.param === "audio_slugs")).toBe(false);
+      const refs = option.modes!.modes.find((m) => m.key === "refs")!;
+      expect(refs.params).toContain("audio_slugs");
+      expect(refs.params).not.toContain("first_frame_slug");
+    }
+  });
+
   it("coerces numeric duration to string for kling30", () => {
     const option = buildModelOption("kling30", VIDEO_MODELS.kling30, { duration: 8 }, []);
     expect(option.prefilled_values.duration).toBe("8");

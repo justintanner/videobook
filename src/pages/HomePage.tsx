@@ -332,11 +332,30 @@ export function HomePage() {
     assets.filter((asset) => asset.type !== 'plan'),
   [assets]);
 
-  // Ready image assets offered in the gen panel prompt's @ autocomplete.
+  // Ready project assets offered in the gen panel prompt's @ autocomplete.
+  // Image panel gets images only; video panel also lists vid-/aud- for multi-ref models.
   const genImageAssets = useMemo(() =>
     assets
       .filter((a) => a.type === 'image' && (a.status ?? 'ready') === 'ready')
-      .map((a) => ({ slug: a.slug, filePath: a.filePath, thumbnailSrc: a.thumbnailSrc ?? null })),
+      .map((a) => ({
+        slug: a.slug,
+        filePath: a.filePath,
+        thumbnailSrc: a.thumbnailSrc ?? null,
+        type: 'image' as const,
+      })),
+    [assets]);
+  const genMediaAssets = useMemo(() =>
+    assets
+      .filter((a) =>
+        (a.type === 'image' || a.type === 'video' || a.type === 'audio')
+        && (a.status ?? 'ready') === 'ready',
+      )
+      .map((a) => ({
+        slug: a.slug,
+        filePath: a.filePath,
+        thumbnailSrc: a.thumbnailSrc ?? null,
+        type: a.type as 'image' | 'video' | 'audio',
+      })),
     [assets]);
 
   const clips = useMemo(() =>
@@ -1613,7 +1632,11 @@ export function HomePage() {
                     projectSlug={projectSlug}
                     pendingGeneration={pendingGenForPanel}
                     onGenerationLifecycle={handleGenerationLifecycle}
-                    imageAssets={assetList ? genImageAssets : undefined}
+                    imageAssets={
+                      assetList
+                        ? (genPanel.category === 'video' ? genMediaAssets : genImageAssets)
+                        : undefined
+                    }
                   />
                 ) : archiveOpen ? (
                   <ArchiveBrowser

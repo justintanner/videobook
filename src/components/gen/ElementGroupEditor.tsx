@@ -6,7 +6,7 @@ import type { JSONSchemaProperty, ResolvedAsset } from './types';
 import { MAX_ELEMENT_GROUPS } from './types';
 import { stripSlugPrefix } from '@/lib/slugs';
 import { GenSection } from './ui/GenSection';
-import type { Domain } from '@/theme/domains';
+import { sectionTheme, type Domain } from '@/theme/domains';
 
 interface ElementSkin {
   cardBorder: string;
@@ -25,87 +25,32 @@ interface ElementSkin {
   slotVariant: 'image' | 'video';
 }
 
+function elementSkin(domain: Domain): ElementSkin {
+  const t = sectionTheme(domain);
+  return {
+    cardBorder: t.controlBorder,
+    cardBg: t.controlBg,
+    labelText: t.labelText,
+    countText: t.labelText,
+    inputBorder: t.controlBorder,
+    inputText: t.activeText,
+    inputPlaceholder: t.placeholderText,
+    inputFocus: t.focusBorder,
+    charCount: t.unitText,
+    addBorder: t.controlBorder,
+    addText: t.labelText,
+    addHover: cn(t.inactiveHoverBorder, t.inactiveHoverText, t.controlHover),
+    addFocus: t.focusBorder,
+    slotVariant: domain === 'video' ? 'video' : 'image',
+  };
+}
+
 const ELEMENT_SKINS: Record<Domain, ElementSkin> = {
-  projects: {
-    cardBorder: 'border-zinc-400/30',
-    cardBg: 'bg-zinc-400/5',
-    labelText: 'text-zinc-400/50',
-    countText: 'text-zinc-400/50',
-    inputBorder: 'border-zinc-400/30',
-    inputText: 'text-zinc-300/90',
-    inputPlaceholder: 'placeholder:text-zinc-400/30',
-    inputFocus: 'focus:border-zinc-400/60',
-    charCount: 'text-zinc-400/40',
-    addBorder: 'border-zinc-400/40',
-    addText: 'text-zinc-400/50',
-    addHover: 'hover:border-zinc-400/60 hover:text-zinc-400/70 hover:bg-zinc-400/5',
-    addFocus: 'focus-visible:ring-zinc-400/60',
-    slotVariant: 'image',
-  },
-  image: {
-    cardBorder: 'border-cyan-400/30',
-    cardBg: 'bg-cyan-400/5',
-    labelText: 'text-cyan-400/50',
-    countText: 'text-cyan-400/50',
-    inputBorder: 'border-cyan-400/30',
-    inputText: 'text-cyan-300/90',
-    inputPlaceholder: 'placeholder:text-cyan-400/30',
-    inputFocus: 'focus:border-cyan-400/60',
-    charCount: 'text-cyan-400/40',
-    addBorder: 'border-cyan-400/40',
-    addText: 'text-cyan-400/50',
-    addHover: 'hover:border-cyan-400/60 hover:text-cyan-400/70 hover:bg-cyan-400/5',
-    addFocus: 'focus-visible:ring-cyan-400/60',
-    slotVariant: 'image',
-  },
-  video: {
-    cardBorder: 'border-violet-400/30',
-    cardBg: 'bg-violet-400/5',
-    labelText: 'text-violet-400/50',
-    countText: 'text-violet-400/50',
-    inputBorder: 'border-violet-400/30',
-    inputText: 'text-violet-300/90',
-    inputPlaceholder: 'placeholder:text-violet-400/30',
-    inputFocus: 'focus:border-violet-400/60',
-    charCount: 'text-violet-400/40',
-    addBorder: 'border-violet-400/40',
-    addText: 'text-violet-400/50',
-    addHover: 'hover:border-violet-400/60 hover:text-violet-400/70 hover:bg-violet-400/5',
-    addFocus: 'focus-visible:ring-violet-400/60',
-    slotVariant: 'video',
-  },
-  notebook: {
-    cardBorder: 'border-emerald-400/30',
-    cardBg: 'bg-emerald-400/5',
-    labelText: 'text-emerald-400/50',
-    countText: 'text-emerald-400/50',
-    inputBorder: 'border-emerald-400/30',
-    inputText: 'text-emerald-300/90',
-    inputPlaceholder: 'placeholder:text-emerald-400/30',
-    inputFocus: 'focus:border-emerald-400/60',
-    charCount: 'text-emerald-400/40',
-    addBorder: 'border-emerald-400/40',
-    addText: 'text-emerald-400/50',
-    addHover: 'hover:border-emerald-400/60 hover:text-emerald-400/70 hover:bg-emerald-400/5',
-    addFocus: 'focus-visible:ring-emerald-400/60',
-    slotVariant: 'image',
-  },
-  final: {
-    cardBorder: 'border-amber-400/30',
-    cardBg: 'bg-amber-400/5',
-    labelText: 'text-amber-400/50',
-    countText: 'text-amber-400/50',
-    inputBorder: 'border-amber-400/30',
-    inputText: 'text-amber-300/90',
-    inputPlaceholder: 'placeholder:text-amber-400/30',
-    inputFocus: 'focus:border-amber-400/60',
-    charCount: 'text-amber-400/40',
-    addBorder: 'border-amber-400/40',
-    addText: 'text-amber-400/50',
-    addHover: 'hover:border-amber-400/60 hover:text-amber-400/70 hover:bg-amber-400/5',
-    addFocus: 'focus-visible:ring-amber-400/60',
-    slotVariant: 'image',
-  },
+  projects: elementSkin('projects'),
+  image: elementSkin('image'),
+  video: elementSkin('video'),
+  notebook: elementSkin('notebook'),
+  final: elementSkin('final'),
 };
 
 interface Asset {

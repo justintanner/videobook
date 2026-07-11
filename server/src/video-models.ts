@@ -635,6 +635,64 @@ type ModelModes = {
 // alongside a clip; image_slugs caps at 7 for pure references and 5 alongside
 // a clip. The kie sibling generate_gemini_omni_video is deliberately NOT here
 // (it legally combines image_slugs + a clip, which tabs would misrepresent).
+// Shared Seedance 2 / Fast modes: text | frames (first/last) | refs (img/vid/aud).
+// Frames and refs are exclusive so reference audio never coexists with first/last
+// frame (Seedance rejects that combination). Mini omits frames entirely.
+const SEEDANCE2_SHARED_PARAMS = [
+  "prompt", "aspect_ratio", "resolution", "duration",
+  "generate_audio", "web_search", "nsfw_checker",
+];
+
+const SEEDANCE2_REFS_MODE: ModeSpec = {
+  key: "refs",
+  label: "refs",
+  description: "Reference images, videos (≤3), and/or audio (≤3)",
+  params: ["image_slugs", "video_slugs", "audio_slugs"],
+  asset_slots: [
+    { param: "image_slugs", kind: "image", label: "Images", min: 0, max: null },
+    { param: "video_slugs", kind: "video", label: "Videos", min: 0, max: 3 },
+    { param: "audio_slugs", kind: "audio", label: "Audio", min: 0, max: 3 },
+  ],
+};
+
+const SEEDANCE2_FULL_MODES: ModelModes = {
+  shared_params: SEEDANCE2_SHARED_PARAMS,
+  default_mode: "text",
+  modes: [
+    {
+      key: "text",
+      label: "text",
+      description: "Prompt-only generation",
+      params: [],
+    },
+    {
+      key: "frames",
+      label: "frames",
+      description: "Animate with first and/or last frame (no reference audio)",
+      params: ["first_frame_slug", "last_frame_slug"],
+      asset_slots: [
+        { param: "first_frame_slug", kind: "image", label: "First Frame" },
+        { param: "last_frame_slug", kind: "image", label: "Last Frame" },
+      ],
+    },
+    SEEDANCE2_REFS_MODE,
+  ],
+};
+
+const SEEDANCE2_MINI_MODES: ModelModes = {
+  shared_params: SEEDANCE2_SHARED_PARAMS,
+  default_mode: "text",
+  modes: [
+    {
+      key: "text",
+      label: "text",
+      description: "Prompt-only generation",
+      params: [],
+    },
+    SEEDANCE2_REFS_MODE,
+  ],
+};
+
 const VIDEO_TOOL_MODES: Record<string, ModelModes> = {
   generate_google_omni_video: {
     shared_params: ["prompt", "aspect_ratio", "seed", "voice_refs", "duration"],
@@ -676,6 +734,9 @@ const VIDEO_TOOL_MODES: Record<string, ModelModes> = {
       },
     ],
   },
+  generate_seedance2_video: SEEDANCE2_FULL_MODES,
+  generate_seedance2_fast_video: SEEDANCE2_FULL_MODES,
+  generate_seedance2_mini_video: SEEDANCE2_MINI_MODES,
 };
 
 // ---------------------------------------------------------------------------

@@ -7,6 +7,7 @@ import { usePromptHistory } from '@/hooks/usePromptHistory';
 import { useSlashCommandPicker } from '@/hooks/useSlashCommandPicker';
 import { PromptHistoryArrows } from '@/components/ui/PromptHistoryArrows';
 import type { UseMcpResult } from 'use-mcp/react';
+import { sectionTheme, type Domain } from '@/theme/domains';
 
 const CUSTOM_PROMPT_MAX = 500;
 
@@ -26,43 +27,31 @@ const STYLE_OPTIONS: Array<{ value: RewriteStyle | ''; label: string }> = [
 
 const USEAPI_MODELS = new Set(['nano_banana', 'gemini_omni']);
 
+function rewriteVariantStyles(domain: 'image' | 'video') {
+  const t = sectionTheme(domain as Domain);
+  return {
+    border: t.headerBorder,
+    text: t.valueText,
+    textBold: t.activeText,
+    label: t.labelText,
+    labelTextarea: t.labelText,
+    arrowColor: t.headerIcon,
+    selectBorder: t.controlBorder,
+    selectText: t.valueText,
+    selectHover: cn(t.inactiveHoverBorder, t.focusBorder),
+    textareaBorder: t.controlBorder,
+    textareaText: cn(t.valueText, t.placeholderText),
+    textareaHover: cn(t.inactiveHoverBorder, t.focusBorder),
+    hint: t.unitText,
+    btnText: t.valueText,
+    btnBg: cn(t.activeBg, t.activeBorder),
+    chevron: t.headerIcon,
+  };
+}
+
 const VARIANT_STYLES = {
-  image: {
-    border: 'border-cyan-500/30',
-    text: 'text-cyan-200',
-    textBold: 'text-cyan-300/90',
-    label: 'text-cyan-500/70',
-    labelTextarea: 'text-cyan-500/50',
-    arrowColor: 'text-cyan-400/70',
-    selectBorder: 'border-cyan-500/30',
-    selectText: 'text-cyan-200',
-    selectHover: 'hover:border-cyan-400/60 focus:ring-cyan-400/60',
-    textareaBorder: 'border-cyan-500/30',
-    textareaText: 'text-cyan-100 placeholder:text-cyan-500/30',
-    textareaHover: 'hover:border-cyan-400/60 focus:ring-cyan-400/60',
-    hint: 'text-cyan-500/40',
-    btnText: 'text-cyan-200 hover:text-cyan-100',
-    btnBg: 'bg-cyan-500/15 hover:bg-cyan-500/25 border-cyan-400/50 hover:border-cyan-300/80',
-    chevron: 'text-cyan-400/70',
-  },
-  video: {
-    border: 'border-violet-500/30',
-    text: 'text-violet-200',
-    textBold: 'text-violet-300/90',
-    label: 'text-violet-500/70',
-    labelTextarea: 'text-violet-500/50',
-    arrowColor: 'text-violet-400/70',
-    selectBorder: 'border-violet-500/30',
-    selectText: 'text-violet-200',
-    selectHover: 'hover:border-violet-400/60 focus:ring-violet-400/60',
-    textareaBorder: 'border-violet-500/30',
-    textareaText: 'text-violet-100 placeholder:text-violet-500/30',
-    textareaHover: 'hover:border-violet-400/60 focus:ring-violet-400/60',
-    hint: 'text-violet-500/40',
-    btnText: 'text-violet-200 hover:text-violet-100',
-    btnBg: 'bg-violet-500/15 hover:bg-violet-500/25 border-violet-400/50 hover:border-violet-300/80',
-    chevron: 'text-violet-400/70',
-  },
+  image: rewriteVariantStyles('image'),
+  video: rewriteVariantStyles('video'),
 } as const;
 
 export interface ImagePromptRewriteSubmit {

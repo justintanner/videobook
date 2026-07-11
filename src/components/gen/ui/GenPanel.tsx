@@ -2,15 +2,7 @@ import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { GenFrame } from './GenFrame';
 import { CloseButton } from '@/components/ui/CloseButton';
-import type { Domain } from '@/theme/domains';
-
-const HEADER_LABEL_TEXT: Record<Domain, string> = {
-  projects: 'text-zinc-300/70',
-  image: 'text-cyan-300/70',
-  video: 'text-violet-300/70',
-  notebook: 'text-emerald-300/70',
-  final: 'text-amber-300/70',
-};
+import { sectionTheme, type Domain } from '@/theme/domains';
 
 interface GenPanelProps {
   label: string;
@@ -51,7 +43,7 @@ export function GenPanel({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [closeDisabled, onClose]);
 
-  const headerText = HEADER_LABEL_TEXT[domain];
+  const headerText = sectionTheme(domain).headerText;
   const header = (
     <div className="flex items-center justify-between px-3 py-3 shrink-0 border-b border-zinc-800/60 bg-black/60">
       <div className="flex items-center gap-1.5 px-2 py-0.5">

@@ -5,15 +5,7 @@ import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { useGoogleFlowEntities, type GoogleFlowEntityOption } from '@/hooks/useGoogleFlowEntities';
 import type { UseMcpResult } from 'use-mcp/react';
 import { nameFromAsset, type SlotAsset } from '@/components/gen/ui/google-flow-character-slots';
-import type { Domain } from '@/theme/domains';
-
-const POPOVER_BORDER: Record<Domain, string> = {
-  projects: 'border-zinc-400/30',
-  image: 'border-cyan-400/30',
-  video: 'border-violet-400/30',
-  notebook: 'border-emerald-400/30',
-  final: 'border-amber-400/30',
-};
+import { sectionTheme, type Domain } from '@/theme/domains';
 
 interface CharacterPickerPopoverProps {
   selectedRefs: string[];
@@ -70,7 +62,7 @@ export function CharacterPickerPopover({
 
   const selectedSet = new Set(selectedRefs);
   const atCap = selectedRefs.length >= maxItems;
-  const borderClass = POPOVER_BORDER[domain];
+  const borderClass = sectionTheme(domain).activeBorder;
   const bgClass = 'bg-zinc-950/95';
 
   function toggleRef(ref: string) {

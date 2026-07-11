@@ -2,7 +2,7 @@ import { GenField, GenTextarea } from '@/components/ui/GenField';
 import { GenToggle } from '@/components/ui/GenToggle';
 import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import type { JSONSchemaProperty } from '../types';
-import { isAssetField } from './fieldHelpers';
+import { isAssetField, slugFieldAssetType } from './fieldHelpers';
 import type { GenTheme } from './gen-themes';
 import { genThemes } from './gen-themes';
 import { cn } from '@/lib/utils';
@@ -139,15 +139,17 @@ export function DynamicField({
       }
 
       const slug = Array.isArray(value) && value.length > 0 ? String(value[0]) : null;
+      const assetType = slugFieldAssetType(name);
 
       return (
         <AssetDropSlot
-          value={slug ? { slug, src: '', type: 'image' as const } : null}
+          value={slug ? { slug, src: '', type: assetType } : null}
           onChange={(asset) => {
             onChange(asset ? [asset.slug] : []);
           }}
           disabled={disabled}
-          acceptTypes={['image']}
+          acceptTypes={[assetType]}
+          variant={assetType === 'video' || assetType === 'audio' ? 'video' : 'image'}
         />
       );
     }

@@ -181,3 +181,59 @@ describe('effectiveToolName', () => {
       .toBe('generate_kling30_video');
   });
 });
+
+const SEEDANCE_MINI: ModelModes = {
+  shared_params: [
+    'prompt', 'aspect_ratio', 'resolution', 'duration',
+    'generate_audio', 'web_search', 'nsfw_checker',
+  ],
+  default_mode: 'text',
+  modes: [
+    { key: 'text', label: 'text', params: [] },
+    {
+      key: 'refs',
+      label: 'refs',
+      params: ['image_slugs', 'video_slugs', 'audio_slugs'],
+      asset_slots: [
+        { param: 'image_slugs', kind: 'image', label: 'Images', min: 0, max: null },
+        { param: 'video_slugs', kind: 'video', label: 'Videos', min: 0, max: 3 },
+        { param: 'audio_slugs', kind: 'audio', label: 'Audio', min: 0, max: 3 },
+      ],
+    },
+  ],
+};
+
+describe('seedance mini modes', () => {
+  it('infers refs when any of image/video/audio is filled', () => {
+    expect(inferModeKey(SEEDANCE_MINI, { image_slugs: ['@img-a'] })).toBe('refs');
+    expect(inferModeKey(SEEDANCE_MINI, { video_slugs: ['@vid-a'] })).toBe('refs');
+    expect(inferModeKey(SEEDANCE_MINI, { audio_slugs: ['@aud-a'] })).toBe('refs');
+  });
+
+  it('defaults to text when no assets filled', () => {
+    expect(inferModeKey(SEEDANCE_MINI, { prompt: 'hello' })).toBe('text');
+  });
+
+  it('filterValuesForMode drops asset keys in text mode', () => {
+    const out = filterValuesForMode(SEEDANCE_MINI, 'text', {
+      prompt: 'x',
+      duration: '8',
+      image_slugs: ['@img-a'],
+      video_slugs: ['@vid-a'],
+      audio_slugs: ['@aud-a'],
+    });
+    expect(out.prompt).toBe('x');
+    expect(out.duration).toBe('8');
+    expect(out.image_slugs).toBeUndefined();
+    expect(out.video_slugs).toBeUndefined();
+    expect(out.audio_slugs).toBeUndefined();
+  });
+
+  it('modeBudgetWarnings flags video_slugs over max', () => {
+    const refs = SEEDANCE_MINI.modes.find((m) => m.key === 'refs')!;
+    const warns = modeBudgetWarnings(refs, {
+      video_slugs: ['@a', '@b', '@c', '@d'],
+    });
+    expect(warns.some((w) => w.includes('Videos'))).toBe(true);
+  });
+});

@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 import type { ModelOption, ModelModes } from '@/components/gen/types';
 import {
   appendImageSlug,
+  appendSlug,
   characterImageCount,
   combinedRefBudget,
   deriveStripSlots,
   imageRefMax,
+  paramForAssetSlug,
   routeDrop,
   toggleFirstFramePin,
+  type StripSlot,
 } from '@/components/gen/ui/media-strip';
 
 const omniModes: ModelModes = {
@@ -149,12 +152,42 @@ describe('routeDrop', () => {
   it('routes an image drop to image_slugs (append)', () => {
     expect(routeDrop('image', slots)).toEqual({ param: 'image_slugs', action: 'append' });
   });
+
+  it('appends to video_slugs / audio_slugs array params', () => {
+    const seedanceSlots: StripSlot[] = [
+      { param: 'image_slugs', kind: 'image', label: 'Images', max: null },
+      { param: 'video_slugs', kind: 'video', label: 'Videos', max: 3 },
+      { param: 'audio_slugs', kind: 'audio', label: 'Audio', max: 3 },
+    ];
+    expect(routeDrop('video', seedanceSlots)).toEqual({ param: 'video_slugs', action: 'append' });
+    expect(routeDrop('audio', seedanceSlots)).toEqual({ param: 'audio_slugs', action: 'append' });
+    expect(routeDrop('image', seedanceSlots)).toEqual({ param: 'image_slugs', action: 'append' });
+  });
 });
 
-describe('appendImageSlug', () => {
+describe('appendImageSlug / appendSlug', () => {
   it('appends deduped', () => {
     expect(appendImageSlug({ image_slugs: ['@a'] }, 'b')).toEqual(['@a', '@b']);
     expect(appendImageSlug({ image_slugs: ['@a'] }, '@a')).toEqual(['@a']);
+  });
+
+  it('appendSlug respects max and works for video_slugs', () => {
+    expect(appendSlug({ video_slugs: ['@vid-a'] }, 'video_slugs', '@vid-b', 3)).toEqual(['@vid-a', '@vid-b']);
+    expect(appendSlug({ video_slugs: ['@a', '@b', '@c'] }, 'video_slugs', '@d', 3)).toEqual(['@a', '@b', '@c']);
+  });
+});
+
+describe('paramForAssetSlug', () => {
+  const seedanceSlots: StripSlot[] = [
+    { param: 'image_slugs', kind: 'image', label: 'Images', max: null },
+    { param: 'video_slugs', kind: 'video', label: 'Videos', max: 3 },
+    { param: 'audio_slugs', kind: 'audio', label: 'Audio', max: 3 },
+  ];
+
+  it('maps img-/vid-/aud- prefixes to the right array slot', () => {
+    expect(paramForAssetSlug('@img-style', seedanceSlots)).toEqual({ param: 'image_slugs', action: 'append' });
+    expect(paramForAssetSlug('vid-clip', seedanceSlots)).toEqual({ param: 'video_slugs', action: 'append' });
+    expect(paramForAssetSlug('@aud-music', seedanceSlots)).toEqual({ param: 'audio_slugs', action: 'append' });
   });
 });
 
