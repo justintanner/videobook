@@ -590,7 +590,6 @@ function GenerationSidebar({
           {error ? <div className="vc-notebook-error"><AlertCircle /> {error}</div> : null}
           <RunStepButton
             running={running}
-            category={category}
             disabled={requiredMissing.length > 0 || !readiness.ready || running}
             disabledReason={disabledReason}
             cost={costLabel}
@@ -654,14 +653,12 @@ function InputList({
 
 function RunStepButton({
   running,
-  category,
   disabled,
   disabledReason,
   cost,
   onClick,
 }: {
   running: boolean
-  category: 'image' | 'video'
   disabled: boolean
   disabledReason?: string
   cost: string | null
@@ -670,11 +667,7 @@ function RunStepButton({
   return (
     <button
       type="button"
-      className={cn(
-        'vc-notebook-run',
-        category === 'image' ? 'vc-notebook-run-image' : 'vc-notebook-run-video',
-        running && 'vc-notebook-run-busy',
-      )}
+      className={cn('vc-notebook-run', running && 'vc-notebook-run-busy')}
       disabled={disabled}
       title={disabled && disabledReason ? disabledReason : undefined}
       onClick={onClick}
