@@ -12,7 +12,11 @@ const execFileAsync = promisify(execFile);
 const LOCK_DURATION_MS = 300_000;
 const CROSSFADE_SECS = 0.03;
 const DURATION_EPSILON_SECS = 0.5;
-const AV_DRIFT_TOLERANCE_SECS = 0.5;
+// Stream-copy cuts snap to keyframes, so A/V container durations often differ
+// by ~1–2s on long sources. Keep this loose enough to accept those while still
+// rejecting the catastrophic desyncs (e.g. 62s declared with 20s of audio)
+// that prompted this check.
+const AV_DRIFT_TOLERANCE_SECS = 2.0;
 // `ffmpeg -t N` lands on the next frame/sample boundary, so the container's
 // reported format duration is typically 10–50ms longer than N. Pre-shrink by
 // one slack window so the output stays ≤ the requested length — required for
@@ -75,22 +79,105 @@ export async function assertSaneTrimOutput(
 // sitting at the canonical asset path. `+faststart` puts moov at the front,
 // which means even a truncated mp4 is partially playable AND surfaces obvious
 // corruption to the user immediately rather than after first probe.
+//
+// Prefer stream-copy: a mid-point split of a multi-minute source must finish in
+// seconds, not re-encode the whole file with libx264 medium (which times out
+// enqueueAndWait and leaves husk assets with original.mp4.tmp). Cuts snap to
+// keyframes. Fall back to re-encode when copy fails or produces a broken file
+// (no mid-GOP keyframes → severe A/V desync).
+const COPY_AV_DRIFT_TOLERANCE_SECS = 2.0;
+const COPY_DURATION_SLACK_SECS = 2.0;
+
 export async function trimRange(
   inputPath: string,
   outputPath: string,
   start: number | undefined,
   end: number | undefined,
 ): Promise<void> {
+  try {
+    await runTrimRange(inputPath, outputPath, start, end, "copy");
+    await assertCopyTrimSane(inputPath, outputPath, start, end);
+  } catch {
+    await rm(outputPath, { force: true });
+    await rm(`${outputPath}.tmp`, { force: true });
+    await runTrimRange(inputPath, outputPath, start, end, "reencode");
+  }
+}
+
+async function assertCopyTrimSane(
+  inputPath: string,
+  outputPath: string,
+  start: number | undefined,
+  end: number | undefined,
+): Promise<void> {
+  const [input, output] = await Promise.all([
+    probeStreamDurations(inputPath),
+    probeStreamDurations(outputPath),
+  ]);
+  if (output.format <= 0 || output.video <= 0) {
+    throw new Error(
+      `Copy trim has zero duration (format=${output.format}, video=${output.video})`,
+    );
+  }
+  if (output.audio !== null
+    && Math.abs(output.video - output.audio) > COPY_AV_DRIFT_TOLERANCE_SECS) {
+    throw new Error(
+      `Copy trim A/V desync: video=${output.video.toFixed(3)}s audio=${output.audio.toFixed(3)}s`,
+    );
+  }
+  let expected: number | undefined;
+  if (start !== undefined && end !== undefined) expected = end - start;
+  else if (end !== undefined) expected = end;
+  else if (start !== undefined) expected = input.format - start;
+  if (expected !== undefined && expected > 0) {
+    const slack = Math.max(COPY_DURATION_SLACK_SECS, expected * 0.05);
+    if (Math.abs(output.format - expected) > slack) {
+      throw new Error(
+        `Copy trim duration ${output.format.toFixed(3)}s off expected ${expected.toFixed(3)}s`,
+      );
+    }
+  }
+}
+
+async function runTrimRange(
+  inputPath: string,
+  outputPath: string,
+  start: number | undefined,
+  end: number | undefined,
+  mode: "copy" | "reencode",
+): Promise<void> {
   const args = ["-y"];
-  if (start !== undefined) args.push("-ss", String(start));
+  // Copy: put -ss AFTER -i so the cut lands on/after the requested time
+  // (before -i keyframe-snaps backward and can keep almost the whole source).
+  // Re-encode: put -ss BEFORE -i so the decoder skips work.
+  if (mode === "reencode" && start !== undefined) {
+    args.push("-ss", String(start));
+  }
   args.push("-i", inputPath);
+  if (mode === "copy" && start !== undefined) {
+    args.push("-ss", String(start));
+  }
   if (end !== undefined) {
     const requested = start !== undefined ? end - start : end;
-    const safe = Math.max(0.01, requested - TRIM_DURATION_SAFETY_SECS);
-    args.push("-t", String(safe));
+    // Safety margin only for re-encode: shaving 50ms on copy can drop a GOP.
+    const duration =
+      mode === "reencode"
+        ? Math.max(0.01, requested - TRIM_DURATION_SAFETY_SECS)
+        : Math.max(0.01, requested);
+    args.push("-t", String(duration));
   }
   const tmpPath = `${outputPath}.tmp`;
-  args.push(...H264_MEDIUM, ...AUDIO_OPTS, "-movflags", "+faststart", "-f", "mp4", tmpPath);
+  if (mode === "copy") {
+    args.push(
+      "-c", "copy",
+      "-avoid_negative_ts", "make_zero",
+      "-movflags", "+faststart",
+      "-f", "mp4",
+      tmpPath,
+    );
+  } else {
+    args.push(...H264_MEDIUM, ...AUDIO_OPTS, "-movflags", "+faststart", "-f", "mp4", tmpPath);
+  }
   try {
     await runFfmpeg(args);
     await rename(tmpPath, outputPath);

@@ -16,7 +16,7 @@ import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle';
 
 // ── AssetViewer Dispatcher ──
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, callState, onClose, imageAssets, mediaItems, onOpenAsset, onEditCharacterProfile, cropTarget, onCropConsumed, osgTarget, onOsgConsumed, onOsgApply, onGenerationLifecycle }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, onSplitAtCursor, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, callState, onClose, imageAssets, mediaItems, onOpenAsset, onEditCharacterProfile, cropTarget, onCropConsumed, osgTarget, onOsgConsumed, onOsgApply, onGenerationLifecycle }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -25,6 +25,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onFlippedChange: (f: boolean) => void;
   renderOrientation: Orientation;
   onRender?: (settings?: RenderSettings) => void;
+  onSplitAtCursor?: (assetId: string, atSec: number) => void;
   pendingFilePosition?: number | null;
   onClearPendingFilePosition?: () => void;
   pendingBackTab?: BackTab | null;
@@ -63,6 +64,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
         onFlippedChange={onFlippedChange}
         renderOrientation={renderOrientation}
         onRender={onRender}
+        onSplitAtCursor={item.type === 'video' ? onSplitAtCursor : undefined}
         pendingFilePosition={pendingFilePosition}
         onClearPendingFilePosition={onClearPendingFilePosition}
         pendingBackTab={pendingBackTab}

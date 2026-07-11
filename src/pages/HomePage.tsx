@@ -432,6 +432,10 @@ export function HomePage() {
     setViewerSize(isClip && timeline?.currentOrientation ? timeline.currentOrientation : 'original');
   }, [timeline]);
 
+  const handleSplitAtCursor = useCallback((assetId: string, atSec: number) => {
+    setSplitTarget({ assetId, atSec });
+  }, []);
+
   // Open the /rename-all bulk rename panel, clearing the other center-stage views.
   const openRenameAll = useCallback(() => {
     setSettingsOpen(false);
@@ -1628,6 +1632,7 @@ export function HomePage() {
                     onFlippedChange={setViewerFlipped}
                     renderOrientation={settingsOrientation}
                     onRender={handleRender}
+                    onSplitAtCursor={handleSplitAtCursor}
                     pendingFilePosition={pendingFilePosition}
                     onClearPendingFilePosition={() => setPendingFilePosition(null)}
                     pendingBackTab={pendingBackTab}

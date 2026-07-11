@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, useEffect, useMemo } from 'react';
+import { useRef, useCallback, useState, useEffect, useMemo, type ReactNode } from 'react';
 import { Crop, Settings, Tv } from 'lucide-react';
 import { CloseButton } from '@/components/ui/CloseButton';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,7 @@ import {
   ContextMenuTrigger,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
 } from '@/components/ui/context-menu';
 import {
   RatioToggle,
@@ -31,10 +32,11 @@ import {
 
 // ── Video-specific components ──
 
-function ClipContent({ item, size, onRender, callTool, projectSlug, videoRef, cropMode, cropRatio, onCropApply, onCropCancel, osgMode, osgImageAssets, osgInitialAssetId, onOsgApply, onOsgRemove, onOsgCancel }: {
+function ClipContent({ item, size, onRender, onSplitAtCursor, callTool, projectSlug, videoRef, cropMode, cropRatio, onCropApply, onCropCancel, osgMode, osgImageAssets, osgInitialAssetId, onOsgApply, onOsgRemove, onOsgCancel }: {
   item: MediaItem;
   size: ViewerSize;
   onRender?: () => void;
+  onSplitAtCursor?: (assetId: string, atSec: number) => void;
   callTool: UseMcpResult['callTool'];
   projectSlug: string;
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -49,6 +51,21 @@ function ClipContent({ item, size, onRender, callTool, projectSlug, videoRef, cr
   onOsgRemove: () => void;
   onOsgCancel: () => void;
 }) {
+  const contextTimeRef = useRef<number | null>(null);
+
+  const handleContextMenu = useCallback(() => {
+    const currentTime = videoRef.current?.currentTime;
+    contextTimeRef.current = currentTime !== undefined && Number.isFinite(currentTime)
+      ? currentTime
+      : null;
+  }, [videoRef]);
+
+  const handleSplitAtCursor = useCallback(() => {
+    const currentTime = contextTimeRef.current ?? videoRef.current?.currentTime;
+    if (currentTime === undefined || !Number.isFinite(currentTime)) return;
+    onSplitAtCursor?.(item.id, currentTime);
+  }, [item.id, onSplitAtCursor, videoRef]);
+
   const handleExtractFrame = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -66,7 +83,7 @@ function ClipContent({ item, size, onRender, callTool, projectSlug, videoRef, cr
   if (!item.filePath) return null;
 
   const renderVideoLayer = (src: string, posterSrc: string) => (
-    <div className="relative w-full h-full">
+    <div className="relative w-full h-full" onContextMenu={handleContextMenu}>
       <video ref={videoRef} key={src} src={src} poster={posterSrc} controls tabIndex={-1} className="w-full h-full object-contain" draggable={false} />
       {cropMode && (
         <CropOverlay
@@ -94,24 +111,38 @@ function ClipContent({ item, size, onRender, callTool, projectSlug, videoRef, cr
     </div>
   );
 
+  const renderVideoContextMenu = (videoLayer: ReactNode) => (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        {videoLayer}
+      </ContextMenuTrigger>
+      <ContextMenuContent className="min-w-52">
+        {onSplitAtCursor && (
+          <>
+            <ContextMenuItem
+              onSelect={handleSplitAtCursor}
+              className="!flex !items-center gap-3 py-2 px-2.5 border-l-[3px] bg-white/[0.02] border-l-violet-500/50 focus:!bg-white/[0.12] focus:!text-inherit focus:!border-l-[3px] focus:border-l-violet-500/80"
+            >
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-none text-violet-300">Split at Cursor</span>
+              <span className="font-mono text-muted-foreground text-[11px] tracking-wide leading-none">/split here</span>
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        )}
+        <ContextMenuItem
+          onSelect={handleExtractFrame}
+          className="!flex !items-center gap-3 py-2 px-2.5 border-l-[3px] bg-white/[0.02] border-l-cyan-500/30 focus:!bg-white/[0.12] focus:!text-inherit focus:!border-l-[3px] focus:border-l-cyan-500/60"
+        >
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-none text-foreground">Extract Frame</span>
+          <span className="font-mono text-muted-foreground text-[11px] tracking-wide leading-none">/extract-frame</span>
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+
   if (size === 'original') {
     const thumbSrc = item.thumbnailSrc || item.filePath.replace(/\/[^/]+$/, '/original.jpg');
-    return (
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          {renderVideoLayer(item.filePath, thumbSrc)}
-        </ContextMenuTrigger>
-        <ContextMenuContent>
-          <ContextMenuItem
-            onSelect={handleExtractFrame}
-            className="!flex flex-col !items-stretch gap-1.5 py-3 px-3 border-l-[3px] bg-white/[0.02] border-l-cyan-500/30 focus:!bg-white/[0.12] focus:!text-inherit focus:!border-l-[3px] focus:border-l-cyan-500/60"
-          >
-            <span className="text-sm font-semibold leading-none text-foreground">Extract Frame</span>
-            <span className="font-mono text-muted-foreground text-xs tracking-wider leading-none">/extract-frame</span>
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
-    );
+    return renderVideoContextMenu(renderVideoLayer(item.filePath, thumbSrc));
   }
 
   const orient = size as Orientation;
@@ -140,22 +171,7 @@ function ClipContent({ item, size, onRender, callTool, projectSlug, videoRef, cr
       : size === 'portrait' ? `${prefix}portrait.jpg`
       : `${prefix}square.jpg`;
     const thumbSrc = basePath.replace(/\/[^/]+$/, `/${thumbFile}`) + qs;
-    return (
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          {renderVideoLayer(derivedSrc, thumbSrc)}
-        </ContextMenuTrigger>
-        <ContextMenuContent>
-          <ContextMenuItem
-            onSelect={handleExtractFrame}
-            className="!flex flex-col !items-stretch gap-1.5 py-3 px-3 border-l-[3px] bg-white/[0.02] border-l-cyan-500/30 focus:!bg-white/[0.12] focus:!text-inherit focus:!border-l-[3px] focus:border-l-cyan-500/60"
-          >
-            <span className="text-sm font-semibold leading-none text-foreground">Extract Frame</span>
-            <span className="font-mono text-muted-foreground text-xs tracking-wider leading-none">/extract-frame</span>
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
-    );
+    return renderVideoContextMenu(renderVideoLayer(derivedSrc, thumbSrc));
   }
 
   // Rendering a different orientation with nothing rendered here yet — still
@@ -250,7 +266,7 @@ function SettingsPane({ renderOrientation, onSizeChange, onRender, settings, onS
 
 const VIDEO_BACK_TABS: BackTab[] = ['settings', 'files', 'history'];
 
-export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, onClose, cropTarget, onCropConsumed, osgTarget, onOsgConsumed, onOsgApply, imageAssets }: {
+export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, onSplitAtCursor, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, onClose, cropTarget, onCropConsumed, osgTarget, onOsgConsumed, onOsgApply, imageAssets }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -259,6 +275,7 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onFlippedChange: (f: boolean) => void;
   renderOrientation: Orientation;
   onRender?: (settings?: RenderSettings) => void;
+  onSplitAtCursor?: (assetId: string, atSec: number) => void;
   pendingFilePosition?: number | null;
   onClearPendingFilePosition?: () => void;
   pendingBackTab?: BackTab | null;
@@ -447,14 +464,14 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
             )}>
               {size === 'portrait' ? (
                 <div className="aspect-[9/16] h-full max-w-full">
-                  <ClipContent item={item} size={size} onRender={onRender} callTool={callTool} projectSlug={projectSlug} videoRef={videoElRef} cropMode={cropMode} cropRatio={cropRatio} onCropApply={handleCropApply} onCropCancel={handleCropCancel} osgMode={osgMode} osgImageAssets={osgImageAssets} osgInitialAssetId={osgInitialAssetId} onOsgApply={handleOsgApplyLocal} onOsgRemove={handleOsgRemoveLocal} onOsgCancel={handleOsgCancel} />
+                  <ClipContent item={item} size={size} onRender={onRender} onSplitAtCursor={onSplitAtCursor} callTool={callTool} projectSlug={projectSlug} videoRef={videoElRef} cropMode={cropMode} cropRatio={cropRatio} onCropApply={handleCropApply} onCropCancel={handleCropCancel} osgMode={osgMode} osgImageAssets={osgImageAssets} osgInitialAssetId={osgInitialAssetId} onOsgApply={handleOsgApplyLocal} onOsgRemove={handleOsgRemoveLocal} onOsgCancel={handleOsgCancel} />
                 </div>
               ) : size === 'square' ? (
                 <div className="aspect-square h-full max-w-full">
-                  <ClipContent item={item} size={size} onRender={onRender} callTool={callTool} projectSlug={projectSlug} videoRef={videoElRef} cropMode={cropMode} cropRatio={cropRatio} onCropApply={handleCropApply} onCropCancel={handleCropCancel} osgMode={osgMode} osgImageAssets={osgImageAssets} osgInitialAssetId={osgInitialAssetId} onOsgApply={handleOsgApplyLocal} onOsgRemove={handleOsgRemoveLocal} onOsgCancel={handleOsgCancel} />
+                  <ClipContent item={item} size={size} onRender={onRender} onSplitAtCursor={onSplitAtCursor} callTool={callTool} projectSlug={projectSlug} videoRef={videoElRef} cropMode={cropMode} cropRatio={cropRatio} onCropApply={handleCropApply} onCropCancel={handleCropCancel} osgMode={osgMode} osgImageAssets={osgImageAssets} osgInitialAssetId={osgInitialAssetId} onOsgApply={handleOsgApplyLocal} onOsgRemove={handleOsgRemoveLocal} onOsgCancel={handleOsgCancel} />
                 </div>
               ) : (
-                <ClipContent item={item} size={size} onRender={onRender} callTool={callTool} projectSlug={projectSlug} videoRef={videoElRef} cropMode={cropMode} cropRatio={cropRatio} onCropApply={handleCropApply} onCropCancel={handleCropCancel} osgMode={osgMode} osgImageAssets={osgImageAssets} osgInitialAssetId={osgInitialAssetId} onOsgApply={handleOsgApplyLocal} onOsgRemove={handleOsgRemoveLocal} onOsgCancel={handleOsgCancel} />
+                <ClipContent item={item} size={size} onRender={onRender} onSplitAtCursor={onSplitAtCursor} callTool={callTool} projectSlug={projectSlug} videoRef={videoElRef} cropMode={cropMode} cropRatio={cropRatio} onCropApply={handleCropApply} onCropCancel={handleCropCancel} osgMode={osgMode} osgImageAssets={osgImageAssets} osgInitialAssetId={osgInitialAssetId} onOsgApply={handleOsgApplyLocal} onOsgRemove={handleOsgRemoveLocal} onOsgCancel={handleOsgCancel} />
               )}
             </div>
           </div>
