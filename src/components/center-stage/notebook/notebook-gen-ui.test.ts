@@ -63,6 +63,7 @@ describe('notebook generation editor order and domain themes', () => {
     expect(notebook).toContain('/notebook')
     expect(notebook).toContain('application/x-videocity-notebook-step')
     expect(notebook).toContain('Add prompt cell')
+    expect(notebook).toContain("'Escape'")
     expect(notebook).not.toContain('NotebookToolbox')
     expect(stageBoard).toContain('<ViewportPortal>')
     expect(stageBoard).toContain('vc-notebook-stage-row')

@@ -302,6 +302,17 @@ export function Notebook({
   useEffect(() => {
     resetHistory(plan.loadedDefinition)
   }, [resetHistory, plan.loadedDefinition, plan.loadVersion])
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return
+      onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
   const definition = plan.definition
   const run = useNotebookRun({
     projectSlug,

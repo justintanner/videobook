@@ -1171,6 +1171,10 @@
   fill: none;
 }
 
+.vc-notebook-canvas .react-flow__controls-button:disabled svg.lucide {
+  stroke-opacity: 0.4;
+}
+
 .vc-notebook-canvas .react-flow__controls-button:not(.vc-notebook-add-cell) + .vc-notebook-add-cell {
   border-top: 1px solid var(--vc-line-strong);
 }
