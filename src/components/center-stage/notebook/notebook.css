@@ -102,13 +102,13 @@
 .vc-notebook-run {
   width: 100%;
   justify-content: center;
-  gap: 0.5rem;
-  min-height: 2.4rem;
+  gap: 0.4rem;
+  min-height: 2rem;
   border-color: rgb(52 211 153 / 0.45);
   background: rgb(6 78 59 / 0.55);
-  padding: 0.55rem 0.75rem;
+  padding: 0.4rem 0.65rem;
   color: rgb(167 243 208);
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -502,24 +502,23 @@
   display: flex;
   min-height: 0;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.45rem;
   overflow-y: auto;
-  padding: 0.85rem;
+  padding: 0.55rem 0.7rem;
 }
 
 .vc-notebook-editor label {
   color: rgb(110 231 183 / 0.7);
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-.vc-notebook-editor-image label {
-  color: rgb(34 211 238 / 0.75);
-}
-
+/* Image/video sidebars keep emerald labels (no domain purple/cyan chrome). */
+.vc-notebook-editor-image label,
 .vc-notebook-editor-video label {
-  color: rgb(167 139 250 / 0.75);
+  color: rgb(110 231 183 / 0.7);
 }
 
 .vc-notebook-editor textarea.vc-notebook-text {
@@ -548,13 +547,13 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: 0.55rem 0.85rem;
+  gap: 0.35rem 0.55rem;
 }
 
 .vc-notebook-inline-field {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.18rem;
   min-width: 0;
   flex: 0 1 auto;
   align-self: flex-start;
@@ -569,13 +568,13 @@
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.25rem;
   width: fit-content;
   max-width: 100%;
-  min-height: 2rem;
-  padding: 0.4rem 0.55rem;
+  min-height: 1.7rem;
+  padding: 0.28rem 0.45rem;
   border: 1px solid rgb(52 211 153 / 0.25);
-  border-radius: 0.375rem;
+  border-radius: 0.3rem;
   background: rgb(0 0 0 / 0.45);
   color: rgb(236 253 245);
   cursor: pointer;
@@ -666,9 +665,9 @@
 
 .vc-notebook-linked-prompt {
   border: 1px solid rgb(245 158 11 / 0.3);
-  border-radius: 0.4rem;
+  border-radius: 0.3rem;
   background: rgb(245 158 11 / 0.07);
-  padding: 0.65rem;
+  padding: 0.4rem 0.5rem;
 }
 
 .vc-notebook-linked-prompt span {
@@ -690,18 +689,18 @@
 .vc-notebook-input-list {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.22rem;
 }
 
 .vc-notebook-input-chip {
   display: flex;
-  min-height: 2rem;
+  min-height: 1.7rem;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.35rem;
   border: 1px solid rgb(52 211 153 / 0.22);
-  border-radius: 0.35rem;
+  border-radius: 0.3rem;
   background: rgb(0 0 0 / 0.3);
-  padding: 0.28rem;
+  padding: 0.18rem 0.22rem;
 }
 
 .vc-notebook-input-chip img {
@@ -1517,9 +1516,9 @@
 
 .vc-notebook-editor {
   flex: 1;
-  gap: 0.75rem;
+  gap: 0.45rem;
   overflow-y: auto;
-  padding: 0.9rem;
+  padding: 0.55rem 0.7rem;
   scrollbar-color: rgb(52 211 153 / 0.28) transparent;
 }
 
@@ -1527,6 +1526,11 @@
 .vc-notebook-sidebar-image .vc-notebook-editor label,
 .vc-notebook-sidebar-video .vc-notebook-editor label {
   color: rgb(110 231 183 / 0.66);
+}
+
+/* Options row denser: toggles share a tighter wrap */
+.vc-notebook-editor .flex.flex-wrap {
+  gap: 0.35rem 0.75rem;
 }
 
 .vc-notebook-briefing-empty {
@@ -1568,8 +1572,8 @@
   display: flex;
   flex: none;
   flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.7rem 0.85rem 0.85rem;
+  gap: 0.3rem;
+  padding: 0.45rem 0.7rem 0.55rem;
   border-top: 1px solid var(--vc-line);
   background:
     linear-gradient(180deg, rgb(52 211 153 / 0.035), transparent 42%),

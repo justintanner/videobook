@@ -153,6 +153,12 @@ describe('routeDrop', () => {
     expect(routeDrop('image', slots)).toEqual({ param: 'image_slugs', action: 'append' });
   });
 
+  it('returns empty param when no matching slot (text mode)', () => {
+    expect(routeDrop('video', [])).toEqual({ param: '', action: 'set' });
+    expect(routeDrop('audio', [])).toEqual({ param: '', action: 'set' });
+    expect(routeDrop('image', [])).toEqual({ param: '', action: 'set' });
+  });
+
   it('appends to video_slugs / audio_slugs array params', () => {
     const seedanceSlots: StripSlot[] = [
       { param: 'image_slugs', kind: 'image', label: 'Images', max: null },

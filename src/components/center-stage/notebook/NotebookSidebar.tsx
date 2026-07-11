@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AlertCircle, Braces, ChevronDown, Crosshair, ImageIcon, Loader2, Pin, PinOff, Play, Video, X } from 'lucide-react'
 import type { UseMcpResult } from 'use-mcp/react'
 import { CharacterPickerPopover } from '@/components/gen/ui/CharacterPickerPopover'
@@ -376,8 +376,19 @@ function GenerationSidebar({
     })
   }
 
-  const domainTheme = genThemes[category]
+  // Form controls use notebook emerald so the sidebar HUD stays one chrome
+  // (no domain violet/cyan toggles). Category still drives the aside class
+  // for any remaining compact accents.
   const notebookTheme = genThemes.notebook
+
+  // Connected media that only resolve under another mode (e.g. Seedance
+  // "text" + video/audio inputs) flip /type so values are not filtered out.
+  useEffect(() => {
+    const suggested = resolved?.suggestedModeKey
+    if (!suggested || !option?.modes || suggested === modeKey || running) return
+    updateDefinition(updateProperties(definition, step.id, { mode: suggested }))
+  }, [resolved?.suggestedModeKey, option?.modes, modeKey, running, step.id, definition, updateDefinition])
+
   const submitValues = useMemo(() => {
     if (!option) return null
     const withClip = withEffectiveClipWindow(
@@ -536,7 +547,7 @@ function GenerationSidebar({
                     onChange={(value) => updateValues(name, value)}
                     required={(option.schema.required ?? []).includes(name)}
                     disabled={running}
-                    theme={domainTheme}
+                    theme={notebookTheme}
                     callTool={callTool}
                     mcpState={mcpState}
                     projectSlug={projectSlug}
@@ -555,7 +566,7 @@ function GenerationSidebar({
               callTool={callTool}
               mcpState={mcpState}
               projectSlug={projectSlug}
-              domain={category}
+              domain="notebook"
               variant="inline"
             />
           ) : null}
@@ -573,7 +584,7 @@ function GenerationSidebar({
               resolveRef={() => null}
               assetSlugs={mediaItems.map((item) => item.slug.replace(/^@/, ''))}
               slugForAssetId={(id) => mediaItems.find((item) => item.id === id)?.slug.replace(/^@/, '') ?? null}
-              rows={5}
+              rows={3}
               disabled={running}
               placeholder="Describe this generation."
               onKeyDownExtra={(event) => {

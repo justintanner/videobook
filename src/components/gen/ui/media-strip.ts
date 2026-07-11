@@ -149,26 +149,30 @@ export function isArraySlugParam(param: string): boolean {
 
 /** Route a dropped asset to the right slot. Array slug params (image_slugs,
  *  video_slugs, audio_slugs, …) append; single-slug slots (video_slug,
- *  first_frame_slug, …) set. */
+ *  first_frame_slug, …) set. Empty `param` means no matching slot (e.g. mode
+ *  is text-only) — callers should fall back to all-mode slots or reject. */
 export function routeDrop(
   kind: 'image' | 'video' | 'audio',
   slots: StripSlot[],
 ): DropRoute {
   if (kind === 'video') {
     const v = slots.find((s) => s.kind === 'video');
-    const param = v?.param ?? 'video_slug';
-    return { param, action: isArraySlugParam(param) ? 'append' : 'set' };
+    if (!v) return { param: '', action: 'set' };
+    return { param: v.param, action: isArraySlugParam(v.param) ? 'append' : 'set' };
   }
   if (kind === 'audio') {
     const a = slots.find((s) => s.kind === 'audio');
-    const param = a?.param ?? '';
-    return { param, action: param && isArraySlugParam(param) ? 'append' : 'set' };
+    if (!a) return { param: '', action: 'set' };
+    return { param: a.param, action: isArraySlugParam(a.param) ? 'append' : 'set' };
   }
   const imageSlugs = slots.find((s) => s.param === 'image_slugs');
   if (imageSlugs) return { param: 'image_slugs', action: 'append' };
   const firstImage = slots.find((s) => s.kind === 'image');
-  const param = firstImage?.param ?? '';
-  return { param, action: param && isArraySlugParam(param) ? 'append' : 'set' };
+  if (!firstImage) return { param: '', action: 'set' };
+  return {
+    param: firstImage.param,
+    action: isArraySlugParam(firstImage.param) ? 'append' : 'set',
+  };
 }
 
 /** Append a slug to any array slug param (deduped); returns the new array.

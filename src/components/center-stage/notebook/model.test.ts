@@ -434,6 +434,70 @@ describe('notebook model', () => {
     expect(payload).not.toHaveProperty('image_slugs')
   })
 
+  it('routes Seedance mini media through refs when type is text, and suggests refs mode', () => {
+    const seedanceMini: ModelOption = {
+      key: 'seedance2_mini',
+      label: 'Seedance 2 Mini',
+      tool_name: 'generate_seedance2_mini_video',
+      description: '',
+      prefilled_values: {},
+      validation: { valid: true, missing_required: [], warnings: [] },
+      schema: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string' },
+          image_slugs: { type: 'array' },
+          video_slugs: { type: 'array' },
+          audio_slugs: { type: 'array' },
+        },
+      },
+      modes: {
+        shared_params: ['prompt'],
+        default_mode: 'text',
+        modes: [
+          { key: 'text', label: 'text', params: [] },
+          {
+            key: 'refs',
+            label: 'refs',
+            params: ['image_slugs', 'video_slugs', 'audio_slugs'],
+            asset_slots: [
+              { param: 'image_slugs', kind: 'image', label: 'Images', min: 0, max: null },
+              { param: 'video_slugs', kind: 'video', label: 'Videos', min: 0, max: 3 },
+              { param: 'audio_slugs', kind: 'audio', label: 'Audio', min: 0, max: 3 },
+            ],
+          },
+        ],
+      },
+    }
+    const graph: NotebookPlanDefinition = {
+      properties: {},
+      sequence: [
+        {
+          id: 'vid', componentType: 'task', type: 'asset', name: 'Clip',
+          properties: { slug: '@vid-clip' },
+        },
+        {
+          id: 'aud', componentType: 'task', type: 'asset', name: 'Music',
+          properties: { slug: '@aud-music' },
+        },
+        {
+          id: 'target', componentType: 'task', type: 'video', name: 'Target',
+          properties: { mode: 'text', values: {}, inputs: ['vid', 'aud'] },
+        },
+      ],
+    }
+    const textMode = getMode(seedanceMini.modes!, 'text')
+    const resolved = resolveEffectiveValues(graph, graph.sequence[2], seedanceMini, textMode)
+    expect(resolved.warnings).toEqual([])
+    expect(resolved.values.video_slugs).toEqual(['@vid-clip'])
+    expect(resolved.values.audio_slugs).toEqual(['@aud-music'])
+    expect(resolved.suggestedModeKey).toBe('refs')
+    const refsMode = getMode(seedanceMini.modes!, 'refs')
+    const refsResolved = resolveEffectiveValues(graph, graph.sequence[2], seedanceMini, refsMode)
+    expect(refsResolved.suggestedModeKey).toBeNull()
+    expect(refsResolved.values.video_slugs).toEqual(['@vid-clip'])
+  })
+
   it('builds ordered connected media inputs excluding prompts with icon-fallback thumbs', () => {
     const graph: NotebookPlanDefinition = {
       properties: {},

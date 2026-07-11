@@ -981,7 +981,14 @@ export function resolveEffectiveValues(
   step: NotebookPlanStep,
   option: ModelOption,
   activeMode: ModeSpec | null = null,
-): { values: Record<string, unknown>; warnings: string[]; promptFromInputs: string | null } {
+): {
+  values: Record<string, unknown>
+  warnings: string[]
+  promptFromInputs: string | null
+  /** When connections need a mode different from the active one (e.g. Seedance
+   *  "text" with video/audio inputs), the mode key that can accept them. */
+  suggestedModeKey: string | null
+} {
   const persisted = valuesOf(step)
   const values: Record<string, unknown> = { ...persisted }
   for (const param of CONNECTION_OWNED_PARAMS) delete values[param]
@@ -989,9 +996,13 @@ export function resolveEffectiveValues(
   const prompts: string[] = []
   let hasPromptInput = false
   const steps = new Map(definition.sequence.map((candidate) => [candidate.id, candidate]))
-  const slots = deriveStripSlots(option, activeMode)
+  const modeSlots = deriveStripSlots(option, activeMode)
+  // Union of every mode's slots (or flat schema) — used when the active mode
+  // is text-only so connected img/vid/aud can still resolve into refs.
+  const allSlots = deriveStripSlots(option, null)
   const firstFrameSource = stringProperty(step.properties, 'first_frame_source')
   const routedStringSources = new Set<string>()
+  const usedFallbackSlots = new Set<string>()
 
   for (const inputId of stepInputs(step)) {
     const input = steps.get(inputId)
@@ -1015,18 +1026,30 @@ export function resolveEffectiveValues(
       warnings.push(`${input.name} does not provide a usable media reference.`)
       continue
     }
-    const route = inputId === firstFrameSource && option.schema.properties.first_frame_slug
-      ? { param: 'first_frame_slug' }
-      : routeDrop(kind, slots)
+    let route = inputId === firstFrameSource && option.schema.properties.first_frame_slug
+      ? { param: 'first_frame_slug', action: 'set' as const }
+      : routeDrop(kind, modeSlots)
+    let slotsForCap = modeSlots
+    if (!route.param || !option.schema.properties[route.param]) {
+      route = routeDrop(kind, allSlots)
+      slotsForCap = allSlots
+      if (route.param) usedFallbackSlots.add(route.param)
+    }
     const schema = option.schema.properties[route.param]
     if (!route.param || !schema) {
-      warnings.push(`${input.name} cannot be routed to this model.`)
+      warnings.push(
+        kind === 'video'
+          ? 'Video cannot be routed to this model.'
+          : kind === 'audio'
+            ? 'Audio cannot be routed to this model.'
+            : `${input.name} cannot be routed to this model.`,
+      )
       continue
     }
     if (schema.type === 'array') {
       const current = stringArray(values[route.param])
       if (current.includes(slug)) continue
-      const max = slots.find((slot) => slot.param === route.param)?.max
+      const max = slotsForCap.find((slot) => slot.param === route.param)?.max
       if (max !== null && max !== undefined && current.length >= max) {
         warnings.push(`${route.param} accepts at most ${max} connected references.`)
         continue
@@ -1042,9 +1065,17 @@ export function resolveEffectiveValues(
     routedStringSources.add(route.param)
   }
 
+  let suggestedModeKey: string | null = null
+  if (option.modes && usedFallbackSlots.size > 0) {
+    const owner = option.modes.modes.find((mode) =>
+      (mode.asset_slots ?? []).some((slot) => usedFallbackSlots.has(slot.param)),
+    )
+    if (owner && owner.key !== activeMode?.key) suggestedModeKey = owner.key
+  }
+
   const promptFromInputs = hasPromptInput ? prompts.join('\n\n') : null
   if (promptFromInputs !== null) values.prompt = promptFromInputs
-  return { values, warnings, promptFromInputs }
+  return { values, warnings, promptFromInputs, suggestedModeKey }
 }
 
 export function stepInputReadiness(
