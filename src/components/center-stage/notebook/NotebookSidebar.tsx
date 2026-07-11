@@ -1,12 +1,13 @@
-import { useMemo } from 'react'
-import { AlertCircle, ChevronDown, Clock3, Crosshair, ImageIcon, Loader2, Pin, PinOff, Play, Video, X } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { AlertCircle, Braces, ChevronDown, Crosshair, ImageIcon, Loader2, Pin, PinOff, Play, Video, X } from 'lucide-react'
 import type { UseMcpResult } from 'use-mcp/react'
 import { CharacterPickerPopover } from '@/components/gen/ui/CharacterPickerPopover'
 import { DynamicField } from '@/components/gen/ui/DynamicField'
 import { genThemes } from '@/components/gen/ui/gen-themes'
-import { getMode, modeRequiredMissing, visibleParams } from '@/components/gen/modes'
+import { effectiveToolName, filterValuesForMode, getMode, modeRequiredMissing, visibleParams } from '@/components/gen/modes'
 import type { JSONSchemaProperty, ModelOption, ModelModes } from '@/components/gen/types'
 import { usePromptHistory } from '@/hooks/usePromptHistory'
+import { JsonNode } from '@/components/ui/JsonNode'
 import { RichPromptField } from '@/components/ui/RichPromptField'
 import { cn } from '@/lib/utils'
 import type { MediaItem } from '@/components/sidebar/types'
@@ -25,9 +26,8 @@ import {
   resolveEffectiveValues,
   stepInputReadiness,
   stepInputs,
-  stepRunStatus,
 } from './model'
-import type { JsonRecord, NotebookPlanDefinition, NotebookPlanStep, NotebookRunState } from './types'
+import type { JsonRecord, NotebookPlanDefinition, NotebookPlanStep } from './types'
 import { useGenPreview } from './useGenPreview'
 
 interface NotebookSidebarProps {
@@ -130,12 +130,15 @@ function updateProperties(
 
 function LoadoutHeader({
   title,
+  action,
 }: {
   title: string
+  action?: ReactNode
 }) {
   return (
     <header className="vc-notebook-loadout-head">
       <strong>{title}</strong>
+      {action}
     </header>
   )
 }
@@ -295,7 +298,7 @@ function GenerationSidebar({
     [option, modeKey],
   )
   const history = usePromptHistory(callTool, category === 'image' ? 'image_generate' : 'video_generate', projectSlug)
-  const runStatus = stepRunStatus(step, mediaItems)
+  const [showPayload, setShowPayload] = useState(false)
   const readiness = stepInputReadiness(definition, step, mediaItems)
   const requiredMissing = useMemo(() => {
     if (!option) return ['model']
@@ -373,14 +376,50 @@ function GenerationSidebar({
   }
 
   const domainTheme = genThemes[category]
+  const notebookTheme = genThemes.notebook
+  const toolPayload = useMemo(() => {
+    if (!option) return null
+    const submitValues = option.modes && modeKey
+      ? filterValuesForMode(option.modes, modeKey, mergedValues)
+      : mergedValues
+    return {
+      tool_name: effectiveToolName(option, modeKey),
+      args: {
+        ...submitValues,
+        project_slug: projectSlug,
+        _provider: preview.selectedProviderKey || undefined,
+      },
+    }
+  }, [option, modeKey, mergedValues, projectSlug, preview.selectedProviderKey])
 
   return (
     <aside className={`vc-notebook-sidebar vc-notebook-sidebar-${category}`}>
-      <LoadoutHeader title={`Gen ${category}`} />
+      <LoadoutHeader
+        title={`Gen ${category}`}
+        action={option ? (
+          <button
+            type="button"
+            className={cn('vc-notebook-payload-toggle', showPayload && 'is-active')}
+            title={showPayload ? 'Back to form' : 'Show JSON payload'}
+            aria-pressed={showPayload}
+            onClick={() => setShowPayload((open) => !open)}
+          >
+            <Braces />
+          </button>
+        ) : null}
+      />
       <div className="vc-notebook-editor">
         {preview.loading && !preview.preview ? <div className="vc-notebook-loading"><Loader2 /> Loading controls</div> : null}
         {preview.error ? <div className="vc-notebook-error"><AlertCircle /> {preview.error}</div> : null}
-        {option ? (
+        {option && showPayload && toolPayload ? (
+          <div className="vc-notebook-payload">
+            <span className="vc-notebook-payload-label">/tool-call</span>
+            <pre className="vc-notebook-payload-json">
+              <JsonNode data={toolPayload} />
+            </pre>
+          </div>
+        ) : null}
+        {option && !showPayload ? (
           <>
           <CompactSelect
             id={`step-model-${step.id}`}
@@ -471,7 +510,7 @@ function GenerationSidebar({
                   startSchema={option.schema.properties.video_clip_start}
                   endsSchema={option.schema.properties.video_clip_ends}
                   disabled={running}
-                  theme={domainTheme}
+                  theme={notebookTheme}
                   onChange={applyClipWindow}
                 />
               ) : null}
@@ -548,10 +587,7 @@ function GenerationSidebar({
       </div>
       {option ? (
         <footer className="vc-notebook-action-deck">
-          <div className="vc-notebook-action-status">
-            <RunStatus status={runStatus.state} />
-            {error ? <div className="vc-notebook-error"><AlertCircle /> {error}</div> : null}
-          </div>
+          {error ? <div className="vc-notebook-error"><AlertCircle /> {error}</div> : null}
           <RunStepButton
             running={running}
             category={category}
@@ -650,13 +686,6 @@ function RunStepButton({
   )
 }
 
-function RunStatus({ status }: { status: NotebookRunState }) {
-  if (status === 'idle' || status === 'ready') return null
-  if (status === 'missing') return <div className="vc-notebook-status"><Clock3 /> Syncing</div>
-  if (status === 'pending') return <div className="vc-notebook-status"><Clock3 /> Running</div>
-  return <div className="vc-notebook-status"><AlertCircle /> Failed</div>
-}
-
 function ClipWindowControl({
   startValue,
   endsValue,
@@ -664,7 +693,7 @@ function ClipWindowControl({
   startSchema,
   endsSchema,
   disabled,
-  theme = genThemes.video,
+  theme = genThemes.notebook,
   onChange,
 }: {
   startValue: unknown
@@ -673,7 +702,7 @@ function ClipWindowControl({
   startSchema: JSONSchemaProperty
   endsSchema: JSONSchemaProperty
   disabled?: boolean
-  theme?: typeof genThemes.video
+  theme?: typeof genThemes.notebook
   onChange: (start: number, ends: number) => void
 }) {
   if (!bounds) {

@@ -22,11 +22,14 @@ describe('notebook generation editor order and domain themes', () => {
   it('binds image/video genThemes and domain accents, not notebook, on gen surfaces', () => {
     const sidebar = readFileSync(join(root, 'NotebookSidebar.tsx'), 'utf8')
     expect(sidebar).toContain('const domainTheme = genThemes[category]')
+    expect(sidebar).toContain('const notebookTheme = genThemes.notebook')
     expect(sidebar).toContain('theme={domainTheme}')
+    expect(sidebar).toContain('theme={notebookTheme}')
     expect(sidebar).toContain('domain={category}')
     expect(sidebar).toContain("category === 'image' ? 'vc-notebook-run-image' : 'vc-notebook-run-video'")
-    expect(sidebar).not.toMatch(/theme=\{genThemes\.notebook\}/)
     expect(sidebar).not.toContain('domain="notebook"')
+    expect(sidebar).toContain('tool_name: effectiveToolName(option, modeKey)')
+    expect(sidebar).toContain('<JsonNode data={toolPayload} />')
 
     expect(genThemes.image).toBeDefined()
     expect(genThemes.video).toBeDefined()
@@ -64,6 +67,8 @@ describe('notebook generation editor order and domain themes', () => {
     expect(notebook).toContain('application/x-videocity-notebook-step')
     expect(notebook).toContain('Add prompt cell')
     expect(notebook).toContain("'Escape'")
+    expect(notebook).toContain('vc-notebook-add-controls')
+    expect(notebook).toContain('position="top-left"')
     expect(notebook).not.toContain('NotebookToolbox')
     expect(stageBoard).toContain('<ViewportPortal>')
     expect(stageBoard).toContain('vc-notebook-stage-row')
@@ -78,7 +83,8 @@ describe('notebook generation editor order and domain themes', () => {
     expect(sidebar).toContain('disabled={requiredMissing.length > 0 || !readiness.ready || running}')
     expect(sidebar).not.toContain("runStatus.state === 'pending'")
     expect(sidebar).toContain("running ? 'Generating' : 'Generate'")
-    expect(sidebar).toContain('<RunStatus status={runStatus.state} />')
+    expect(sidebar).not.toContain('<RunStatus')
+    expect(sidebar).not.toContain('Syncing')
   })
 
   it('wires GenNode media input strip from graph-ordered connectedMediaInputs', () => {

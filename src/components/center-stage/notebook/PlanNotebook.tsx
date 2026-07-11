@@ -237,6 +237,14 @@ function NotebookCanvas({
           <ControlButton onClick={onUndo} disabled={!canUndo} title="Undo"><Undo2 /></ControlButton>
           <ControlButton onClick={onRedo} disabled={!canRedo} title="Redo"><Redo2 /></ControlButton>
           <ControlButton onClick={handleAutoLayout} title="Auto-arrange"><Rows3 /></ControlButton>
+        </Controls>
+        <Controls
+          className="vc-notebook-add-controls"
+          position="top-left"
+          showInteractive={false}
+          showZoom={false}
+          showFitView={false}
+        >
           <ControlButton
             className="vc-notebook-add-cell"
             title="Add prompt cell"
