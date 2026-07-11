@@ -24,7 +24,7 @@ import {
   type ClipBounds,
 } from './clip-window'
 import { isAssetField } from '@/components/gen/ui/fieldHelpers'
-import { deriveStripSlots, routeDrop } from '@/components/gen/ui/media-strip'
+import { deriveStripSlots, routeDrop, canonicalCharacterId } from '@/components/gen/ui/media-strip'
 import {
   CONNECTION_OWNED_PARAMS,
   assetSlugKind,
@@ -363,7 +363,8 @@ function GenerationSidebar({
     const current = Array.isArray(persistedValues.character_refs)
       ? (persistedValues.character_refs as string[]).filter((s) => s.trim() !== '')
       : []
-    if (current.includes(ref)) return
+    const canonicalRef = canonicalCharacterId(ref)
+    if (current.some((c) => canonicalCharacterId(c) === canonicalRef)) return
     updateValues('character_refs', [...current, ref])
   }
 
@@ -731,7 +732,7 @@ function InputList({
         }) : []
         
         if (kind === 'image' && option.schema.properties.character_refs) {
-          options.push({ param: 'character', kind: 'image' })
+          options.push({ param: 'character', kind: 'image', label: 'Character', max: 7 })
         }
         
         const hasSelect = kind !== null && options.length > 0

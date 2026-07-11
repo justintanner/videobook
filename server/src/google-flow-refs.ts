@@ -6,6 +6,11 @@
 
 const IMGS_SUFFIX = /-imgs:(\d+)$/;
 
+/** Strip the `-imgs:N` suffix from a character ref to get its canonical ID. */
+export function canonicalCharacterId(ref: string): string {
+  return ref.replace(IMGS_SUFFIX, "");
+}
+
 /** Parse the useapi.net `-imgs:N` suffix on a character ref. Absent or
  *  malformed → 1; clamped to 1..2. */
 export function characterRefImageCount(ref: string): number {

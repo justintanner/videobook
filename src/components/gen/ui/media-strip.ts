@@ -3,6 +3,10 @@ import { isAssetField, slugFieldAssetType } from '@/components/gen/ui/fieldHelpe
 
 const IMGS_SUFFIX = /-imgs:(\d+)$/;
 
+export function canonicalCharacterId(ref: string): string {
+  return ref.replace(IMGS_SUFFIX, '');
+}
+
 /** Character entity with an optional image count (from list_google_flow_characters
  *  imageReferences), used to size the ×N badge and budget fallback. */
 export interface CharacterEntity {

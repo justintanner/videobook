@@ -1,7 +1,7 @@
 import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
-import { totalOmniReferenceImages } from "../google-flow-refs.js";
+import { totalOmniReferenceImages, canonicalCharacterId } from "../google-flow-refs.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlug, resolveVideoSlug, slugify, type RefInput } from "./_seedance2-shared.js";
 
@@ -111,6 +111,14 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
       }
       if (charRefs.length > OMNI_MAX_CHARACTERS) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash supports at most ${OMNI_MAX_CHARACTERS} character refs (got ${charRefs.length})` }] };
+      }
+      const seenChars = new Set<string>();
+      for (const ref of charRefs) {
+        const canonical = canonicalCharacterId(ref);
+        if (seenChars.has(canonical)) {
+          return { isError: true as const, content: [{ type: "text" as const, text: `Duplicate character in character_refs: ${ref}` }] };
+        }
+        seenChars.add(canonical);
       }
       const omniRefTotal = totalOmniReferenceImages(imgs.length, charRefs);
       if (omniRefTotal > OMNI_MAX_REFERENCE_IMAGES) {

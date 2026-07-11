@@ -5,6 +5,7 @@ import {
   appendSlug,
   characterImageCount,
   combinedRefBudget,
+  canonicalCharacterId,
   deriveStripSlots,
   imageRefMax,
   paramForAssetSlug,
@@ -39,6 +40,17 @@ describe('characterImageCount', () => {
   });
   it('suffix beats entity count', () => {
     expect(characterImageCount('character:a-imgs:1', { image_count: 2 })).toBe(1);
+  });
+});
+
+describe('canonicalCharacterId', () => {
+  it('strips -imgs:N suffix', () => {
+    expect(canonicalCharacterId('character:8a25f806-imgs:0')).toBe('character:8a25f806');
+    expect(canonicalCharacterId('character:8a25f806-imgs:1')).toBe('character:8a25f806');
+    expect(canonicalCharacterId('character:8a25f806-imgs:2')).toBe('character:8a25f806');
+  });
+  it('leaves bare ref unchanged', () => {
+    expect(canonicalCharacterId('character:8a25f806')).toBe('character:8a25f806');
   });
 });
 

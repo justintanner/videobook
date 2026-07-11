@@ -1,4 +1,4 @@
-import { deriveStripSlots, routeDrop, combinedRefBudget } from '@/components/gen/ui/media-strip'
+import { deriveStripSlots, routeDrop, combinedRefBudget, canonicalCharacterId } from '@/components/gen/ui/media-strip'
 import type { CoordinateExtent } from '@xyflow/react'
 import type { ModeSpec, ModelOption } from '@/components/gen/types'
 import type {
@@ -1107,7 +1107,8 @@ export function resolveEffectiveValues(
       }
       
       if (cachedRef) {
-        if (!current.includes(cachedRef)) {
+        const canonicalCached = canonicalCharacterId(cachedRef)
+        if (!current.some((c) => canonicalCharacterId(c) === canonicalCached)) {
           values.character_refs = [...current, cachedRef]
         }
       } else {

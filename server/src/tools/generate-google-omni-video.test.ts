@@ -261,6 +261,19 @@ describe("generate_google_omni_video tool", () => {
     expect((result.content as TextContent)[0].text).toContain("reference budget");
   });
 
+  it("rejects duplicate characters using canonical IDs", async () => {
+    const result = await client.callTool({
+      name: "generate_google_omni_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "x",
+        character_refs: ["character:a-imgs:1", "character:a-imgs:2"],
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("Duplicate character in character_refs: character:a-imgs:2");
+  });
+
   it("rejects a budget over 7 counting two-image characters (-imgs:2)", async () => {
     const fs = createFs({ projectsDir: tempDir });
     const imageAssets: string[] = [];

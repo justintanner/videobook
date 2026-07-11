@@ -11,6 +11,7 @@ import { CharacterPickerPopover } from '@/components/gen/ui/CharacterPickerPopov
 import {
   appendSlug,
   characterImageCount,
+  canonicalCharacterId,
   deriveStripSlots,
   paramForAssetSlug,
 } from '@/components/gen/ui/media-strip';
@@ -755,7 +756,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       const current = Array.isArray(formValues.character_refs)
         ? (formValues.character_refs as string[]).filter((s) => s.trim() !== '')
         : [];
-      if (current.includes(ref)) return;
+      const canonicalRef = canonicalCharacterId(ref);
+      if (current.some((c) => canonicalCharacterId(c) === canonicalRef)) return;
       handleFieldChange('character_refs', [...current, ref]);
     },
     [formValues.character_refs, handleFieldChange],
@@ -988,7 +990,12 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         ? (outValues.image_slugs as string[]).filter((s) => s.trim() !== '')
         : [];
       const outCharacterRefs = Array.isArray(outValues.character_refs)
-        ? (outValues.character_refs as string[]).filter((s) => s.trim() !== '')
+        ? (outValues.character_refs as string[]).filter((s) => s.trim() !== '').map((ref) => {
+            const canonical = canonicalCharacterId(ref);
+            const liveEntity = charMap.get(canonical);
+            if (!liveEntity) throw new Error(`Character not found upstream: ${ref}`);
+            return liveEntity.ref;
+          })
         : [];
       const outVoiceRefs = Array.isArray(outValues.voice_refs)
         ? (outValues.voice_refs as string[]).filter((s) => s.trim() !== '')
@@ -998,7 +1005,13 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         referenceImage: outImageSlugs.length,
         referenceAudio: outVoiceRefs.length,
       });
-      const args: Record<string, unknown> = { ...outValues, prompt: cleanedPrompt, project_slug: projectSlug, _provider: selectedProviderKey };
+      const args: Record<string, unknown> = { 
+        ...outValues, 
+        prompt: cleanedPrompt, 
+        project_slug: projectSlug, 
+        _provider: selectedProviderKey,
+        ...(Array.isArray(outValues.character_refs) ? { character_refs: outCharacterRefs } : {})
+      };
       const result = await callToolRef.current(outToolName, args);
       if (result.isError) {
         onGenerationLifecycle?.({ phase: 'failed', requestId });
@@ -1037,7 +1050,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setGenState(undefined);
       setError(e instanceof Error ? e.message : 'Generation failed');
     }
-  }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets, promptHistory, onGenerationLifecycle, modes, activeMode, activeModeKey, charMentions]);
+  }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets, promptHistory, onGenerationLifecycle, modes, activeMode, activeModeKey, charMentions, charMap]);
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
