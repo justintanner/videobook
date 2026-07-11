@@ -27,6 +27,8 @@ type TranscriptResponse = TimedResponse | PlainResponse | KindResponse;
 
 export function useTranscript() {
   const [state, setState] = useState<TranscriptState>({ status: 'loading' });
+  const [transcribing, setTranscribing] = useState(false);
+  const [transcribeError, setTranscribeError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
 
   const fetchTranscript = useCallback(async (
@@ -36,6 +38,7 @@ export function useTranscript() {
   ) => {
     const requestId = ++requestIdRef.current;
     setState({ status: 'loading' });
+    setTranscribeError(null);
 
     try {
       const result = await callTool('read_transcript', {
@@ -96,5 +99,32 @@ export function useTranscript() {
     }
   }, []);
 
-  return { state, fetchTranscript };
+  const requestTimedTranscript = useCallback(async (
+    assetId: string,
+    projectSlug: string,
+    callTool: UseMcpResult['callTool'],
+  ) => {
+    setTranscribing(true);
+    setTranscribeError(null);
+    try {
+      const result = await callTool('transcribe', {
+        asset_id: assetId,
+        project_slug: projectSlug,
+        wait: true,
+      }) as ToolTextResult;
+
+      if (result?.isError) {
+        setTranscribeError(result.content?.[0]?.text ?? 'transcribe failed');
+        return;
+      }
+
+      await fetchTranscript(assetId, projectSlug, callTool);
+    } catch (err) {
+      setTranscribeError(err instanceof Error ? err.message : 'transcribe failed');
+    } finally {
+      setTranscribing(false);
+    }
+  }, [fetchTranscript]);
+
+  return { state, fetchTranscript, transcribing, transcribeError, requestTimedTranscript };
 }

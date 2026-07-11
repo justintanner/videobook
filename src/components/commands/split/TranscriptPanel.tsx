@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
-import { Loader2 } from 'lucide-react'
+import { Loader2, AudioLines } from 'lucide-react'
 import { EmptyState } from '@/components/ui/EmptyState'
 import type { TimedCue, TranscriptState } from './types'
 import { findActiveCueIndex } from './utils'
@@ -11,6 +11,9 @@ interface TranscriptPanelProps {
   splitSec?: number | null
   onSelectTime?: (sec: number) => void
   compact?: boolean
+  onRequestTimed?: () => void
+  transcribing?: boolean
+  transcribeError?: string | null
 }
 
 export function TranscriptPanel({
@@ -19,6 +22,9 @@ export function TranscriptPanel({
   splitSec = null,
   onSelectTime,
   compact = false,
+  onRequestTimed,
+  transcribing = false,
+  transcribeError = null,
 }: TranscriptPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -62,11 +68,49 @@ export function TranscriptPanel({
     )
   }
 
+  const showSyncButton = Boolean(onRequestTimed) && !compact
+
   return (
-    <div className={cn('h-full px-3 py-2', compact ? 'flex items-center overflow-hidden' : 'overflow-y-auto')}>
-      <p className={cn('font-mono text-[11px] text-neutral-300 whitespace-pre-wrap leading-relaxed', compact && 'line-clamp-2')}>
-        {state.text}
-      </p>
+    <div className="relative h-full">
+      <div className={cn(
+        'h-full px-3 py-2',
+        compact ? 'flex items-center overflow-hidden' : 'overflow-y-auto',
+        showSyncButton && 'pr-32',
+      )}>
+        <p className={cn('font-mono text-[11px] text-neutral-300 whitespace-pre-wrap leading-relaxed', compact && 'line-clamp-2')}>
+          {state.text}
+        </p>
+      </div>
+      {showSyncButton && (
+        <div className="absolute top-1.5 right-2 flex items-center gap-2">
+          {transcribeError && (
+            <span
+              title={transcribeError}
+              className="font-mono text-[10px] text-red-300 max-w-[160px] truncate"
+            >
+              sync failed
+            </span>
+          )}
+          <button
+            type="button"
+            disabled={transcribing}
+            onClick={onRequestTimed}
+            title="Transcribe with word-level timings to enable the synced caret"
+            className={cn(
+              'inline-flex items-center gap-1.5 h-6 px-2 rounded border font-mono text-[10px] tracking-wide',
+              'border-neutral-600/50 bg-neutral-800/80 text-neutral-300 transition-colors',
+              transcribing
+                ? 'opacity-70 cursor-default'
+                : 'hover:bg-neutral-700/80 hover:border-neutral-500 hover:text-neutral-100',
+            )}
+          >
+            {transcribing
+              ? <Loader2 className="w-3 h-3 animate-spin" />
+              : <AudioLines className="w-3 h-3" />}
+            <span>{transcribing ? 'Syncing…' : 'Sync words'}</span>
+          </button>
+        </div>
+      )}
     </div>
   )
 }

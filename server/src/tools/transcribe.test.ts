@@ -116,4 +116,29 @@ describe("transcribe tool", () => {
     expect(parsed.asset_id).toBe(asset.value.assetId);
     expect(parsed.job_id).toBeDefined();
   });
+
+  it("wait: true surfaces the job failure as a tool error", async () => {
+    // "test-key" matches the placeholder pattern, so the job's requireApiKey
+    // throws before any outbound API call — failing the job deterministically.
+    process.env.ELEVENLABS_API_KEY = "test-key";
+
+    const fs = createFs({ projectsDir: tempDir });
+    const asset = await fs.createAsset("aud", "waitcase", "test-proj");
+    if (!asset.ok) throw new Error("Failed to create asset");
+
+    await fs.writeFile(asset.value.assetId, "original.mp3", Buffer.from("fake-mp3"), "test-proj");
+
+    const result = await client.callTool({
+      name: "transcribe",
+      arguments: {
+        asset_id: asset.value.assetId,
+        project_slug: "test-proj",
+        wait: true,
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    const content = result.content as TextContent;
+    expect(content[0].text).toContain("Transcription failed");
+  }, 60_000);
 });

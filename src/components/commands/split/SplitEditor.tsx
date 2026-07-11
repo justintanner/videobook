@@ -86,7 +86,13 @@ export function SplitEditor({
 
   const markers = useSceneMarkers(open, assetId, projectSlug)
 
-  const { state: transcriptState, fetchTranscript } = useTranscript()
+  const {
+    state: transcriptState,
+    fetchTranscript,
+    transcribing,
+    transcribeError,
+    requestTimedTranscript,
+  } = useTranscript()
 
   const videoSrc = item?.filePath ?? ''
 
@@ -101,6 +107,12 @@ export function SplitEditor({
       void fetchTranscript(assetId, projectSlug, callTool)
     }
   }, [assetId, projectSlug, callTool, fetchTranscript])
+
+  const handleRequestTimed = useCallback(() => {
+    if (assetId && projectSlug) {
+      void requestTimedTranscript(assetId, projectSlug, callTool)
+    }
+  }, [assetId, projectSlug, callTool, requestTimedTranscript])
 
   const handleOpenChange = useCallback((newOpen: boolean) => {
     if (!newOpen) onClose()
@@ -273,6 +285,9 @@ export function SplitEditor({
                 currentTime={currentTime}
                 splitSec={splitSec}
                 onSelectTime={setSplitSec}
+                onRequestTimed={handleRequestTimed}
+                transcribing={transcribing}
+                transcribeError={transcribeError}
               />
             </div>
           </div>
