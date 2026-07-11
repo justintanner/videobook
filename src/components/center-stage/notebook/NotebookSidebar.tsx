@@ -20,6 +20,7 @@ import {
   withEffectiveClipWindow,
   type ClipBounds,
 } from './clip-window'
+import { isAssetField } from '@/components/gen/ui/fieldHelpers'
 import {
   CONNECTION_OWNED_PARAMS,
   assetSlugKind,
@@ -342,6 +343,7 @@ function GenerationSidebar({
     && name !== 'voice_refs'
     && name !== 'seed'
     && !(showClipComposite && (name === 'video_clip_start' || name === 'video_clip_ends'))
+    && !isAssetField(name)
     && !CONNECTION_OWNED_PARAMS.includes(name as typeof CONNECTION_OWNED_PARAMS[number])
     && (!modeVisible || modeVisible.has(name))
   const fieldEntries = option

@@ -21,11 +21,13 @@ describe('notebook generation editor order and domain themes', () => {
 
   it('binds notebook emerald themes on form controls (no video purple toggles)', () => {
     const sidebar = readFileSync(join(root, 'NotebookSidebar.tsx'), 'utf8')
+    const model = readFileSync(join(root, 'model.ts'), 'utf8')
     expect(sidebar).toContain('const notebookTheme = genThemes.notebook')
     expect(sidebar).not.toContain('const domainTheme = genThemes[category]')
     expect(sidebar).toContain('theme={notebookTheme}')
     expect(sidebar).not.toContain('theme={domainTheme}')
     expect(sidebar).toContain('domain="notebook"')
+    expect(sidebar).toContain('isAssetField(name)')
     expect(sidebar).toContain('suggestedModeKey')
     expect(sidebar).toContain("className={cn('vc-notebook-run', running && 'vc-notebook-run-busy')}")
     expect(sidebar).not.toContain('vc-notebook-run-video')
@@ -33,6 +35,9 @@ describe('notebook generation editor order and domain themes', () => {
     expect(sidebar).toContain('tool_name: effectiveToolName(option, modeKey)')
     expect(sidebar).toContain('withEffectiveClipWindow')
     expect(sidebar).toContain('<JsonNode data={toolPayload} />')
+    // Seedance multi-ref params stay connection-owned (Inputs), not Options AssetDropSlots
+    expect(model).toContain("'video_slugs'")
+    expect(model).toContain("'audio_slugs'")
 
     expect(genThemes.notebook).toBeDefined()
     expect(cardTone('notebook').color).toBe('#34d399')

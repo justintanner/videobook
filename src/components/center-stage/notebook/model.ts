@@ -10,7 +10,23 @@ import type {
   NotebookToolboxStep,
 } from './types'
 
-export const CONNECTION_OWNED_PARAMS = ['image_slugs', 'video_slug', 'first_frame_slug'] as const
+/** Media params owned by graph Inputs (not OPTIONS drop slots). Keep in sync
+ *  with isAssetField in gen/ui/fieldHelpers — Seedance uses video_slugs/audio_slugs
+ *  arrays; omitting them painted violet AssetDropSlots under Options. */
+export const CONNECTION_OWNED_PARAMS = [
+  'image_slugs',
+  'image_slug',
+  'video_slug',
+  'video_slugs',
+  'audio_slug',
+  'audio_slugs',
+  'first_frame_slug',
+  'last_frame_slug',
+  'first_clip_slug',
+  'driving_audio_slug',
+  'character_image_slugs',
+  'motion_video_slugs',
+] as const
 
 export interface StepPosition {
   x: number

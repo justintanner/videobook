@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { filterValuesForMode, getMode } from '@/components/gen/modes'
 import type { ModelOption } from '@/components/gen/types'
 import {
+  CONNECTION_OWNED_PARAMS,
   NOTEBOOK_TRACK_ORIGIN_Y,
   NOTEBOOK_TRACK_ROW_PITCH,
   addAssetStep,
@@ -35,6 +36,7 @@ import {
   toolboxStepSeeds,
   wouldCreateCycle,
 } from './model'
+import { isAssetField } from '@/components/gen/ui/fieldHelpers'
 import type { NotebookPlanDefinition } from './types'
 
 const definition: NotebookPlanDefinition = {
@@ -135,6 +137,15 @@ const omniOption: ModelOption = {
 }
 
 describe('notebook model', () => {
+  it('CONNECTION_OWNED_PARAMS covers Seedance multi-ref arrays so Options omit violet drop slots', () => {
+    expect(CONNECTION_OWNED_PARAMS).toEqual(expect.arrayContaining([
+      'image_slugs', 'video_slug', 'video_slugs', 'audio_slugs', 'first_frame_slug', 'last_frame_slug',
+    ]))
+    for (const param of CONNECTION_OWNED_PARAMS) {
+      expect(isAssetField(param), param).toBe(true)
+    }
+  })
+
   it('creates an empty definition and the three toolbox cell seeds', () => {
     expect(createEmptyDefinition()).toEqual({ properties: {}, sequence: [] })
     expect(toolboxStepSeeds.map((step) => step.type)).toEqual(['prompt', 'image', 'video'])
