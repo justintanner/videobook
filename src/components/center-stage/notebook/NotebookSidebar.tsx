@@ -729,12 +729,22 @@ function InputList({
           if (kind === 'character') return slot.param === 'character_image_slugs'
           return false
         }) : []
+        
+        if (kind === 'image' && option.schema.properties.character_refs) {
+          options.push({ param: 'character', kind: 'image' })
+        }
+        
         const hasSelect = kind !== null && options.length > 0
 
         return (
           <div className="vc-notebook-input-chip" key={id}>
             {item?.thumbnailSrc ? <img src={item.thumbnailSrc} alt="" /> : kind === 'video' ? <Video /> : <ImageIcon />}
-            <span>{label}</span>
+            <span>
+              {label}
+              {explicitParam === 'character' && typeof (step.properties.character_cache as JsonRecord)?.[slug] !== 'string' ? (
+                <span className="opacity-50 text-[10px] ml-1">(will create on run)</span>
+              ) : null}
+            </span>
             {hasSelect ? (
               <select
                 className="vc-notebook-route-select text-xs ml-auto bg-transparent border border-white/20 rounded px-1"

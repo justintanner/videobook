@@ -1,4 +1,4 @@
-import { deriveStripSlots, routeDrop } from '@/components/gen/ui/media-strip'
+import { deriveStripSlots, routeDrop, combinedRefBudget } from '@/components/gen/ui/media-strip'
 import type { CoordinateExtent } from '@xyflow/react'
 import type { ModeSpec, ModelOption } from '@/components/gen/types'
 import type {
@@ -1093,6 +1093,32 @@ export function resolveEffectiveValues(
     const explicitParam = typeof effectiveRoutes[inputId] === 'string' ? effectiveRoutes[inputId] : null
     let slotsForCap = modeSlots
 
+    if (explicitParam === 'character' && option.schema.properties.character_refs) {
+      const cachedMap = (step.properties.character_cache as JsonRecord) ?? {}
+      const cachedRef = typeof cachedMap[slug] === 'string' ? cachedMap[slug] : null
+      
+      const current = stringArray(values.character_refs)
+      const max = typeof option.schema.properties.character_refs.maxItems === 'number' 
+        ? option.schema.properties.character_refs.maxItems 
+        : null
+      if (max !== null && current.length >= max) {
+        warnings.push(`character_refs accepts at most ${max} connected references.`)
+        continue
+      }
+      
+      if (cachedRef) {
+        if (!current.includes(cachedRef)) {
+          values.character_refs = [...current, cachedRef]
+        }
+      } else {
+        const pending = stringArray(values._pending_character_slugs)
+        if (!pending.includes(slug)) {
+          values._pending_character_slugs = [...pending, slug]
+        }
+      }
+      continue
+    }
+
     if (explicitParam && option.schema.properties[explicitParam]) {
       route = { param: explicitParam, action: 'append' as const }
     } else {
@@ -1148,6 +1174,15 @@ export function resolveEffectiveValues(
       (mode.asset_slots ?? []).some((slot) => usedFallbackSlots.has(slot.param)),
     )
     if (owner && owner.key !== activeMode?.key) suggestedModeKey = owner.key
+  }
+
+  const imageMax = allSlots.find((slot) => slot.param === 'image_slugs')?.max
+  if (imageMax !== undefined && imageMax !== null) {
+    const allChars = [...stringArray(values.character_refs), ...stringArray(values._pending_character_slugs)]
+    const budget = combinedRefBudget(values, allChars, activeMode, imageMax)
+    if (budget.blocking && budget.message) {
+      warnings.push(budget.message)
+    }
   }
 
   const promptFromInputs = hasPromptInput ? prompts.join('\n\n') : null

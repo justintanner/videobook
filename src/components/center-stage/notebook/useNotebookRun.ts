@@ -90,6 +90,55 @@ export async function submitNotebookGeneration(
     })
   }
   
+  if (Array.isArray(submitValues._pending_character_slugs) && submitValues._pending_character_slugs.length > 0) {
+    const pendingSlugs = submitValues._pending_character_slugs as string[]
+    delete submitValues._pending_character_slugs
+    
+    let cacheUpdates: Record<string, string> | null = null
+    const charRefs = Array.isArray(submitValues.character_refs) ? [...(submitValues.character_refs as string[])] : []
+    
+    for (const slug of pendingSlugs) {
+      onGenerationLifecycle?.({ phase: 'started', requestId: `char_${slug}`, category: 'image', prompt: `Creating character for ${slug}` })
+      try {
+        const charResult = await callTool('create_google_flow_character', {
+          project_slug: projectSlug,
+          display_name: slug,
+          image_slugs: [slug],
+        })
+        if (charResult.isError) throw new Error(responseText(charResult) || 'Character creation failed')
+        const parsed = JSON.parse(responseText(charResult)) as { character_ref?: string }
+        if (parsed.character_ref) {
+          charRefs.push(parsed.character_ref)
+          cacheUpdates = cacheUpdates || {}
+          cacheUpdates[slug] = parsed.character_ref
+        }
+      } catch (err) {
+        throw new Error(`Failed to create character for ${slug}: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+    
+    submitValues.character_refs = charRefs
+    if (cacheUpdates) {
+      const latest = getDefinition()
+      if (latest) {
+        const targetStep = latest.sequence.find(s => s.id === step.id)
+        if (targetStep) {
+          const currentCache = (targetStep.properties.character_cache as Record<string, unknown>) ?? {}
+          await replaceDefinition({
+            ...latest,
+            sequence: latest.sequence.map(s => s.id === step.id ? {
+              ...s,
+              properties: {
+                ...s.properties,
+                character_cache: { ...currentCache, ...cacheUpdates }
+              }
+            } : s)
+          }, step.id)
+        }
+      }
+    }
+  }
+  
   const prompt = typeof submitValues.prompt === 'string' ? submitValues.prompt : ''
   onGenerationLifecycle?.({ phase: 'started', requestId, category, prompt })
   try {
