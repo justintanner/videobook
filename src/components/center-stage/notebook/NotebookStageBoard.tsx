@@ -70,7 +70,6 @@ export function NotebookStageBoard({
     : 0
   const targetX = preview ? preview.position.x + notebookNodeSizes[preview.type].width / 2 : 0
   const targetY = preview ? preview.position.y + (preview.type === 'asset' ? notebookNodeSizes[preview.type].height : 0) : 0
-  const curveY = sourceY + (targetY - sourceY) / 2
 
   return (
     <>
@@ -122,7 +121,7 @@ export function NotebookStageBoard({
           <div className="vc-notebook-drop-preview-layer" style={{ width: boardWidth, height: boardHeight }} aria-hidden>
             {parent && parentPosition ? (
               <svg className="vc-notebook-drop-link" width={boardWidth} height={boardHeight}>
-                <path d={`M ${sourceX} ${sourceY} C ${sourceX} ${curveY}, ${targetX} ${curveY}, ${targetX} ${targetY}`} />
+                <path d={`M ${sourceX} ${sourceY} V ${targetY - 56} H ${targetX} V ${targetY}`} />
               </svg>
             ) : null}
             <div

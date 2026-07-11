@@ -9,7 +9,7 @@ describe('notebook characters compact trigger wiring', () => {
   it('sidebar uses CharacterPickerPopover inline variant with step domain', () => {
     const sidebar = readFileSync(join(root, 'NotebookSidebar.tsx'), 'utf8')
     expect(sidebar).toContain('variant="inline"')
-    expect(sidebar).toContain('domain={category}')
+    expect(sidebar).toContain('domain="notebook"')
     expect(sidebar).toContain('character_refs')
     // Characters only when schema + mode support character_refs
     expect(sidebar).toMatch(/modeVisible\.has\('character_refs'\)/)

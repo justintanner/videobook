@@ -45,6 +45,10 @@ import { NotebookSidebar } from './NotebookSidebar'
 import { NotebookStageBoard, type NotebookDropPreview } from './NotebookStageBoard'
 import { NODE_TYPES } from './nodes/nodeTypes'
 import type { NotebookFlowNode } from './nodes/nodeTypes'
+import { TrunkEdge } from './TrunkEdge.js'
+import { TrunkHoverContext } from './TrunkHoverContext.js'
+
+const EDGE_TYPES = { trunk: TrunkEdge }
 import type { NotebookPlanDefinition } from './types'
 import { useCanvasCostEstimates } from './useCanvasCostEstimates'
 import { useDefinitionHistory } from './useDefinitionHistory'
@@ -108,6 +112,7 @@ function NotebookCanvas({
   const canvasRef = useRef<HTMLDivElement>(null)
   const [draggedStepType, setDraggedStepType] = useState<'prompt' | 'image' | 'video' | null>(null)
   const [dropPreview, setDropPreview] = useState<NotebookDropPreview | null>(null)
+  const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null)
   const clearDropPreview = useCallback(() => {
     setDraggedStepType(null)
     setDropPreview(null)
@@ -189,7 +194,7 @@ function NotebookCanvas({
   return (
     <div
       ref={canvasRef}
-      className={`vc-notebook-canvas ${selectedStepId ? 'vc-notebook-has-route' : ''} ${dropPreview ? 'vc-notebook-is-deploying' : ''}`}
+      className={`vc-notebook-canvas ${selectedStepId ? 'vc-notebook-has-route' : ''} ${dropPreview ? 'vc-notebook-is-deploying' : ''} ${hoveredGroupId ? 'vc-notebook-trunk-hovering' : ''}`}
       onDragOver={(event) => {
         event.preventDefault()
         event.dataTransfer.dropEffect = 'copy'
@@ -217,23 +222,30 @@ function NotebookCanvas({
       }}
       onDrop={onDrop}
     >
+      <TrunkHoverContext.Provider value={{ hoveredGroupId, setHoveredGroupId }}>
       <ReactFlow
         nodes={canvasNodes}
         edges={flow.edges}
         nodeTypes={NODE_TYPES}
+        edgeTypes={EDGE_TYPES}
         onNodesChange={flow.onNodesChange}
         onEdgesChange={flow.onEdgesChange}
         onConnect={onConnect}
         isValidConnection={(connection) => Boolean(
           connection.source && connection.target && canConnect(definition, connection.source, connection.target),
         )}
-        onDelete={onDelete}
+        onDelete={(params) => {
+          if (params.edges.some((e) => e.data?.groupId === hoveredGroupId)) setHoveredGroupId(null)
+          onDelete(params)
+        }}
+        onEdgeMouseEnter={(_, edge) => setHoveredGroupId(edge.data?.groupId as string)}
+        onEdgeMouseLeave={() => setHoveredGroupId(null)}
         onNodeDragStop={(_, __, nodes) => onMove(nodes)}
         onSelectionChange={({ nodes }) => onSelectedStepIdChanged(nodes.length === 1 ? nodes[0].id : null)}
         onInit={onInit}
         deleteKeyCode={['Backspace', 'Delete']}
         connectionRadius={28}
-        connectionLineType={ConnectionLineType.SmoothStep}
+        connectionLineType={ConnectionLineType.Step}
         minZoom={0.25}
         maxZoom={1.5}
         colorMode="dark"
@@ -303,6 +315,7 @@ function NotebookCanvas({
           </ControlButton>
         </Controls>
       </ReactFlow>
+      </TrunkHoverContext.Provider>
       <span className="sr-only">{selectedStepId}</span>
     </div>
   )

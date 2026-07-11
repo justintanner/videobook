@@ -15,6 +15,7 @@ import {
 import { NODE_DIMENSIONS, type NotebookFlowNode, type NotebookNodeData } from './nodes/nodeTypes'
 import type { NotebookPlanDefinition } from './types'
 import type { MediaItem } from '@/components/sidebar/types'
+import { computeTrunkGroups, trunkEdgeDataEqual, type TrunkEdgeData } from './trunk-edges.js'
 
 interface NotebookFlowOptions {
   definition: NotebookPlanDefinition | null
@@ -172,6 +173,8 @@ function desiredEdges(
   route: ActiveRoute,
 ): Edge[] {
   const steps = new Map(definition.sequence.map((step) => [step.id, step]))
+  const trunkGroups = computeTrunkGroups(definition)
+  
   return definition.sequence.flatMap((target) => {
     if (target.type !== 'image' && target.type !== 'video') return []
     const pin = typeof target.properties.first_frame_source === 'string'
@@ -185,14 +188,31 @@ function desiredEdges(
       const classes = [steps.get(source)?.type === 'prompt' ? 'vc-notebook-edge-prompt' : 'vc-notebook-edge-ref']
       if (selectedStepId) classes.push(route.edgeIds.has(id) ? 'vc-notebook-edge-active' : 'vc-notebook-edge-muted')
       if (runningStepIds.has(source) || runningStepIds.has(target.id)) classes.push('vc-notebook-edge-running')
+      
+      const groupAssignment = trunkGroups.get(id)
+      const data: TrunkEdgeData = {
+        kind: steps.get(source)?.type === 'prompt' ? 'prompt' : 'ref',
+        pinned: pin === source,
+        groupId: groupAssignment?.groupId ?? '',
+        groupKind: groupAssignment?.groupKind ?? 'fan-in',
+        groupSize: groupAssignment?.groupSize ?? 1,
+        isPrimary: groupAssignment?.isPrimary ?? true,
+        siblingIds: groupAssignment?.siblingIds ?? [],
+        staggerIndex: groupAssignment?.staggerIndex ?? 0,
+        groupActive: route.edgeIds.has(id) || !!groupAssignment?.siblingIds.some(sid => 
+          groupAssignment.groupKind === 'fan-in' ? route.edgeIds.has(`${sid}->${target.id}`) : route.edgeIds.has(`${source}->${sid}`)
+        ),
+        groupRunning: runningStepIds.has(source) || runningStepIds.has(target.id) || !!groupAssignment?.siblingIds.some(sid => runningStepIds.has(sid)),
+      }
+      
       return {
         id,
         source,
         target: target.id,
-        type: 'smoothstep',
-        animated: runningStepIds.has(source) || runningStepIds.has(target.id),
+        type: 'trunk',
+        animated: false,
         className: classes.join(' '),
-        data: { kind: steps.get(source)?.type === 'prompt' ? 'prompt' : 'ref', pinned: pin === source },
+        data,
       }
     })
   })
@@ -223,8 +243,7 @@ function reconcileEdges(previous: Edge[], desired: Edge[]): Edge[] {
     if (!old) return next
     if (
       old.className === next.className
-      && old.data?.pinned === next.data?.pinned
-      && old.animated === next.animated
+      && trunkEdgeDataEqual(old.data as unknown as TrunkEdgeData, next.data as unknown as TrunkEdgeData)
       && old.type === next.type
     ) return old
     return { ...old, ...next }

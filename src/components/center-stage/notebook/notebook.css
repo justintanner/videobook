@@ -1396,13 +1396,50 @@
   filter: drop-shadow(0 0 5px rgb(52 211 153 / 0.62));
 }
 
-.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-muted {
+.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-muted .react-flow__edge-path {
   opacity: 0.18;
 }
 
 .vc-notebook-canvas .react-flow__edge.vc-notebook-edge-running .react-flow__edge-path {
   stroke-dasharray: 7 5;
   animation: vc-notebook-signal 620ms linear infinite;
+}
+
+.vc-trunk-shared {
+  stroke: rgb(74 222 128 / 0.62);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 2px rgb(52 211 153 / 0.24));
+}
+
+.vc-trunk-shared.is-active,
+.vc-notebook-canvas .react-flow__edge.selected .vc-trunk-shared {
+  stroke: rgb(110 231 183);
+  stroke-width: 2.25;
+  filter: drop-shadow(0 0 5px rgb(52 211 153 / 0.62));
+}
+
+.vc-trunk-shared.is-running {
+  stroke-dasharray: 7 5;
+  animation: vc-notebook-signal 620ms linear infinite;
+}
+
+.vc-trunk-dot {
+  fill: rgb(110 231 183);
+}
+
+.vc-notebook-has-route .vc-trunk-shared:not(.is-active),
+.vc-notebook-has-route .vc-trunk-shared:not(.is-active) ~ .vc-trunk-dot {
+  opacity: 0.18;
+}
+
+.vc-notebook-trunk-hovering .vc-trunk:not(.is-hovered) {
+  opacity: 0.2;
+}
+
+.vc-trunk.is-hovered .react-flow__edge-path,
+.vc-trunk.is-hovered .vc-trunk-shared {
+  stroke: rgb(110 231 183);
+  filter: drop-shadow(0 0 5px rgb(52 211 153 / 0.62));
 }
 
 .vc-node-image .vc-node-meta,
@@ -1645,6 +1682,7 @@
 @media (prefers-reduced-motion: reduce) {
   .vc-notebook-drop-link path,
   .vc-notebook-canvas .react-flow__edge.vc-notebook-edge-running .react-flow__edge-path,
+  .vc-trunk-shared.is-running,
   .vc-node-invalid,
   .vc-notebook-loading svg,
   .vc-notebook-run-busy svg:first-child {
