@@ -1,4 +1,4 @@
-import { ImageIcon, LockKeyhole, MessageSquareText, Plus, Video } from 'lucide-react'
+import { ImageIcon, LockKeyhole, MessageSquareText, Video } from 'lucide-react'
 import type { NotebookStepType } from './types'
 
 interface NotebookToolboxProps {
@@ -16,7 +16,6 @@ const tools: Array<{ type: Extract<NotebookStepType, 'prompt' | 'image' | 'video
 export function NotebookToolbox({ onAdd, onDragStart, onDragEnd }: NotebookToolboxProps) {
   return (
     <div className="vc-notebook-toolbox">
-      <span className="vc-notebook-toolbox-title"><Plus /> Deploy</span>
       <div className="vc-notebook-toolbox-actions">
         {tools.map(({ type, label, icon: Icon }) => (
           <button

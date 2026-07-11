@@ -129,19 +129,13 @@ function updateProperties(
 }
 
 function LoadoutHeader({
-  type,
   title,
 }: {
-  type: 'mission' | 'prompt' | 'asset' | 'image' | 'video'
   title: string
 }) {
   return (
     <header className="vc-notebook-loadout-head">
-      <div>
-        <span><Crosshair /> Cell loadout</span>
-        <strong>{title}</strong>
-      </div>
-      <b className={`vc-notebook-cell-type vc-notebook-cell-type-${type}`}>{type}</b>
+      <strong>{title}</strong>
     </header>
   )
 }
@@ -167,7 +161,7 @@ export function NotebookSidebar({
     const title = typeof definition.properties.title === 'string' ? definition.properties.title : ''
     return (
       <aside className="vc-notebook-sidebar">
-        <LoadoutHeader type="mission" title="Mission briefing" />
+        <LoadoutHeader title="Notebook" />
         <div className="vc-notebook-editor">
           <label htmlFor="notebook-title">Notebook title</label>
           <input
@@ -182,8 +176,8 @@ export function NotebookSidebar({
           />
           <div className="vc-notebook-briefing-empty">
             <Crosshair />
-            <strong>No cell targeted</strong>
-            <p>Select a mission cell to configure its loadout, inputs, and deployment settings.</p>
+            <strong>No cell selected</strong>
+            <p>Select a cell on the canvas to configure its model, inputs, and settings.</p>
           </div>
         </div>
       </aside>
@@ -193,9 +187,9 @@ export function NotebookSidebar({
     const text = typeof selected.properties.text === 'string' ? selected.properties.text : ''
     return (
       <aside className="vc-notebook-sidebar">
-        <LoadoutHeader type="prompt" title="Prompt uplink" />
+        <LoadoutHeader title="Prompt" />
         <div className="vc-notebook-editor">
-          <label htmlFor={`step-text-${selected.id}`}>Transmission</label>
+          <label htmlFor={`step-text-${selected.id}`}>Prompt</label>
           <textarea
             id={`step-text-${selected.id}`}
             className="vc-notebook-text"
@@ -250,7 +244,7 @@ function AssetSidebar({
   const uses = definition.sequence.filter((candidate) => stepInputs(candidate).includes(step.id)).length
   return (
     <aside className="vc-notebook-sidebar">
-      <LoadoutHeader type="asset" title="Asset cache" />
+      <LoadoutHeader title="Asset" />
       <div className="vc-notebook-editor">
         {item?.thumbnailSrc ? <img className="vc-notebook-asset-preview" src={item.thumbnailSrc} alt="" /> : <ImageIcon />}
         <code>{slug}</code>
@@ -395,7 +389,7 @@ function GenerationSidebar({
 
   return (
     <aside className={`vc-notebook-sidebar vc-notebook-sidebar-${category}`}>
-      <LoadoutHeader type={category} title={`${category} forge`} />
+      <LoadoutHeader title={`Gen ${category}`} />
       <div className="vc-notebook-editor">
         {preview.loading && !preview.preview ? <div className="vc-notebook-loading"><Loader2 /> Loading controls</div> : null}
         {preview.error ? <div className="vc-notebook-error"><AlertCircle /> {preview.error}</div> : null}
@@ -568,7 +562,6 @@ function GenerationSidebar({
       {option ? (
         <footer className="vc-notebook-action-deck">
           <div className="vc-notebook-action-status">
-            <span>Deployment</span>
             <RunStatus status={runStatus.state} />
             {error ? <div className="vc-notebook-error"><AlertCircle /> {error}</div> : null}
           </div>
@@ -664,7 +657,7 @@ function RunStepButton({
       onClick={onClick}
     >
       {running ? <Loader2 /> : <Play />}
-      <span>{running ? 'Submitting' : 'Run'}</span>
+      <span>{running ? 'Generating' : 'Generate'}</span>
       {cost ? <b>{cost}</b> : null}
     </button>
   )

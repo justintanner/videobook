@@ -19,23 +19,16 @@
   gap: 0.5rem;
 }
 
-.vc-notebook-header h1,
 .vc-notebook-header span {
   margin: 0;
   font-family: var(--font-mono);
 }
 
-.vc-notebook-header h1 {
+.vc-notebook-header > div:first-child > span:first-child {
   font-size: 0.8rem;
   font-weight: 700;
-  color: rgb(161 161 170);
-}
-
-.vc-notebook-header > div:first-child > span:first-child {
-  font-size: 0.72rem;
-  font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  text-transform: none;
   color: rgb(110 231 183 / 0.9);
   filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.5));
 }
@@ -564,36 +557,12 @@
   text-transform: uppercase;
 }
 
-.vc-notebook-cell-type {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.vc-notebook-cell-type-prompt {
-  color: rgb(245 158 11);
-}
-
-.vc-notebook-cell-type-image {
-  color: rgb(34 211 238);
-}
-
-.vc-notebook-cell-type-video {
-  color: rgb(167 139 250);
-}
-
 .vc-notebook-editor-image label {
   color: rgb(34 211 238 / 0.75);
 }
 
 .vc-notebook-editor-video label {
   color: rgb(167 139 250 / 0.75);
-}
-
-.vc-notebook-cell-type-asset {
-  color: rgb(110 231 183);
 }
 
 .vc-notebook-editor textarea.vc-notebook-text,
@@ -1102,13 +1071,6 @@
   min-width: max-content;
 }
 
-.vc-notebook-brand h1 {
-  overflow: hidden;
-  color: var(--vc-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .vc-notebook-sync {
   flex: none;
 }
@@ -1316,7 +1278,6 @@
   backdrop-filter: blur(8px);
 }
 
-.vc-notebook-toolbox-title,
 .vc-notebook-snap-lock {
   display: inline-flex;
   align-items: center;
@@ -1331,7 +1292,6 @@
   white-space: nowrap;
 }
 
-.vc-notebook-toolbox-title svg,
 .vc-notebook-snap-lock svg {
   width: 0.74rem;
   height: 0.74rem;
@@ -1364,7 +1324,14 @@
 }
 
 .vc-notebook-canvas .react-flow__controls-button {
+  width: 2.4rem;
+  height: 2.4rem;
   border-bottom-color: var(--vc-line);
+}
+
+.vc-notebook-canvas .react-flow__controls-button svg {
+  max-width: 1.15rem;
+  max-height: 1.15rem;
 }
 
 .vc-node {
@@ -1573,29 +1540,6 @@
   content: '';
 }
 
-.vc-notebook-loadout-head > div {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 0.22rem;
-}
-
-.vc-notebook-loadout-head span {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  color: rgb(110 231 183 / 0.5);
-  font-family: var(--font-mono);
-  font-size: 0.53rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.vc-notebook-loadout-head span svg {
-  width: 0.7rem;
-  height: 0.7rem;
-}
-
 .vc-notebook-loadout-head strong {
   overflow: hidden;
   color: var(--vc-text);
@@ -1606,20 +1550,6 @@
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
-}
-
-.vc-notebook-cell-type {
-  flex: none;
-  padding: 0.28rem 0.45rem;
-  border: 1px solid currentColor;
-  border-radius: 0.18rem;
-  background: rgb(0 0 0 / 0.32);
-  font-size: 0.55rem;
-}
-
-.vc-notebook-cell-type-mission,
-.vc-notebook-cell-type-asset {
-  color: rgb(110 231 183);
 }
 
 .vc-notebook-editor {
@@ -1688,14 +1618,6 @@
   justify-content: space-between;
   gap: 0.5rem;
   margin-bottom: 0.4rem;
-}
-
-.vc-notebook-action-status > span {
-  color: rgb(110 231 183 / 0.44);
-  font-family: var(--font-mono);
-  font-size: 0.53rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
 }
 
 .vc-notebook-action-status .vc-notebook-error {
@@ -1770,15 +1692,6 @@
   .vc-notebook-sidebar {
     width: 320px;
   }
-
-  .vc-notebook-toolbox-title {
-    font-size: 0;
-  }
-
-  .vc-notebook-toolbox-title svg {
-    width: 0.85rem;
-    height: 0.85rem;
-  }
 }
 
 @media (max-width: 1100px) {
@@ -1786,12 +1699,10 @@
     width: min(300px, 42vw);
   }
 
-  .vc-notebook-toolbox-title,
   .vc-notebook-snap-lock {
     font-size: 0;
   }
 
-  .vc-notebook-toolbox-title svg,
   .vc-notebook-snap-lock svg {
     width: 0.85rem;
     height: 0.85rem;

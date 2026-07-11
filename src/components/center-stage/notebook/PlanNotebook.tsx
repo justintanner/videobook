@@ -237,7 +237,7 @@ function NotebookCanvas({
         <Controls showInteractive={false}>
           <ControlButton onClick={onUndo} disabled={!canUndo} title="Undo"><Undo2 /></ControlButton>
           <ControlButton onClick={onRedo} disabled={!canRedo} title="Redo"><Redo2 /></ControlButton>
-          <ControlButton onClick={handleAutoLayout} title="Repack mission"><Rows3 /></ControlButton>
+          <ControlButton onClick={handleAutoLayout} title="Auto-arrange"><Rows3 /></ControlButton>
         </Controls>
         <NotebookToolbox
           onAdd={addFromToolbox}
@@ -346,16 +346,12 @@ export function Notebook({
   const updateDefinition = useCallback((next: NotebookPlanDefinition, coalesceKey?: string) => {
     commit(next, coalesceKey)
   }, [commit])
-  const title = typeof definition?.properties.title === 'string' && definition.properties.title.trim()
-    ? definition.properties.title
-    : 'Notebook'
 
   return (
     <section className="vc-notebook h-full min-h-0 flex flex-col overflow-hidden border border-zinc-600/50">
       <header className="vc-notebook-header">
         <div className="vc-notebook-brand">
-          <span><BookOpen /> Mission board</span>
-          <h1>Notebook // {title}</h1>
+          <span><BookOpen /> /notebook</span>
         </div>
         <div className="vc-notebook-sync">
           <span className={`vc-notebook-save vc-notebook-save-${plan.saveState}`}>

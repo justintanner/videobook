@@ -122,7 +122,7 @@ export function NotebookStageBoard({
               }}
             >
               <PreviewIcon />
-              <span>{preview.parentId ? 'Link & deploy' : 'Deploy unlinked'}</span>
+              <span>{preview.parentId ? 'Connect & add' : 'Add unlinked'}</span>
             </div>
           </div>
         </ViewportPortal>

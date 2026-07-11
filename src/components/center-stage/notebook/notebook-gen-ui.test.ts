@@ -51,7 +51,7 @@ describe('notebook generation editor order and domain themes', () => {
     expect(css.slice(unifiedRun)).toContain('background:')
   })
 
-  it('renders the mission board stages, deployment preview, and locked snap controls', () => {
+  it('renders stage rows, drop preview, and locked snap controls', () => {
     const notebook = readFileSync(join(root, 'PlanNotebook.tsx'), 'utf8')
     const stageBoard = readFileSync(join(root, 'NotebookStageBoard.tsx'), 'utf8')
     const toolbox = readFileSync(join(root, 'NotebookToolbox.tsx'), 'utf8')
@@ -59,22 +59,23 @@ describe('notebook generation editor order and domain themes', () => {
     expect(notebook).toContain('<NotebookStageBoard')
     expect(notebook).toContain('notebookDropTarget')
     expect(notebook).toContain('reorderStepsOnTracks')
-    expect(notebook).toContain('Repack mission')
+    expect(notebook).toContain('Auto-arrange')
+    expect(notebook).toContain('/notebook')
     expect(stageBoard).toContain('<ViewportPortal>')
     expect(stageBoard).toContain('vc-notebook-stage-row')
     expect(stageBoard).toContain('vc-notebook-drop-link')
     expect(toolbox).toContain('Snap locked')
-    expect(toolbox).toContain('Deploy')
+    expect(toolbox).not.toContain('Deploy')
     expect(flow).toContain('function activeRoute')
     expect(flow).toContain('vc-notebook-edge-active')
     expect(flow).toContain('vc-notebook-edge-muted')
   })
 
-  it('disables Run only while submit is in flight, not while asset is pending', () => {
+  it('disables Generate only while submit is in flight, not while asset is pending', () => {
     const sidebar = readFileSync(join(root, 'NotebookSidebar.tsx'), 'utf8')
     expect(sidebar).toContain('disabled={requiredMissing.length > 0 || !readiness.ready || running}')
     expect(sidebar).not.toContain("runStatus.state === 'pending'")
-    expect(sidebar).toContain("running ? 'Submitting' : 'Run'")
+    expect(sidebar).toContain("running ? 'Generating' : 'Generate'")
     expect(sidebar).toContain('<RunStatus status={runStatus.state} />')
   })
 
