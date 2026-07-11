@@ -295,7 +295,7 @@ function GenerationSidebar({
   const mergedValues = useMemo(
     () => {
       const raw = { ...(option?.prefilled_values ?? {}), ...(resolved?.values ?? record(step.properties.values)) }
-      return option ? sanitizeValuesForOption(raw, option) : raw
+      return option ? sanitizeValuesForOption(raw as JsonRecord, option) : raw
     },
     [option, resolved, step.properties.values],
   )

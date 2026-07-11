@@ -270,3 +270,51 @@ export function deleteGoogleFlowCharacterDef(): ToolDef {
     },
   };
 }
+
+const renameGoogleFlowCharacterSchema = {
+  ref: z.string().min(1).describe("Character ref to rename"),
+  display_name: z.string().min(1).max(200).describe("New display name"),
+} satisfies ZodRawShape;
+
+export async function renameGoogleFlowCharacter(
+  provider: GoogleFlowProvider,
+  ref: string,
+  displayName: string,
+): Promise<{ ref: string; status: "renamed" }> {
+  // @ts-expect-error - dynamic import to break potential cyclic dependencies
+  const { googleFlowFetch } = await import("../jobs/_google-flow.js");
+  const res = await googleFlowFetch(`https://api.useapi.net/v1/google-flow/characters/${ref}`, {
+    method: "PATCH",
+    headers: {
+      "Authorization": `Bearer ${process.env.GOOGLE_FLOW_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ displayName })
+  });
+  if (!res.ok) {
+     const errText = await res.text();
+     throw new Error(`Failed to rename character: ${res.status} ${errText}`);
+  }
+  return { ref, status: "renamed" };
+}
+
+export function renameGoogleFlowCharacterDef(): ToolDef {
+  return {
+    name: "rename_google_flow_character",
+    description: "Rename a Google Flow character in-place. Uses raw fetch hook because apicity lacks PATCH.",
+    schema: renameGoogleFlowCharacterSchema,
+    handler: async (args): Promise<ToolResult> => {
+      const a = args as SchemaArgs<typeof renameGoogleFlowCharacterSchema>;
+      if (!process.env.GOOGLE_FLOW_API_KEY) {
+        return toolError("GOOGLE_FLOW_API_KEY environment variable is not set");
+      }
+      try {
+        const provider = createGoogleFlowProvider();
+        return jsonResult(await renameGoogleFlowCharacter(provider, a.ref, a.display_name));
+      } catch (err) {
+        return toolError(err instanceof Error ? err.message : String(err));
+      }
+    },
+  };
+}
+

@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Plus, Loader2, User, Check } from 'lucide-react';
+import { X, Loader2, User, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { AssetDropSlot } from '@/components/ui/AssetDropSlot';
 import { useGoogleFlowEntities, type GoogleFlowEntityOption } from '@/hooks/useGoogleFlowEntities';
 import type { UseMcpResult } from 'use-mcp/react';
-import { nameFromAsset, type SlotAsset } from '@/components/gen/ui/google-flow-character-slots';
+import { nameFromAsset } from '@/components/gen/ui/google-flow-character-slots';
 import { sectionTheme, type Domain } from '@/theme/domains';
 
 interface CharacterPickerPopoverProps {
@@ -16,7 +15,6 @@ interface CharacterPickerPopoverProps {
   mcpState?: UseMcpResult['state'];
   projectSlug?: string;
   domain?: Domain;
-  /** Notebook compact row: label + selected count/chips + add/edit. Gen panel keeps default. */
   variant?: 'default' | 'inline';
 }
 
@@ -29,41 +27,21 @@ export function CharacterPickerPopover({
   mcpState,
   projectSlug,
   domain = 'video',
-  variant = 'default',
 }: CharacterPickerPopoverProps) {
-  const [open, setOpen] = useState(false);
-  const [createMode, setCreateMode] = useState(false);
-  const [createName, setCreateName] = useState('');
-  const [primarySlot, setPrimarySlot] = useState<SlotAsset | null>(null);
-  const [altSlot, setAltSlot] = useState<SlotAsset | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
-
-  const { entities, systemEntities, userEntities, loading, loaded, ensureLoaded, refresh } =
+  const { entities, loading, ensureLoaded, refresh } =
     useGoogleFlowEntities('character', callTool, mcpState);
 
-  useEffect(() => {
-    if (!open) return;
-    void ensureLoaded();
-  }, [open, ensureLoaded]);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        setCreateMode(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+    void ensureLoaded();
+  }, [ensureLoaded]);
 
   const selectedSet = new Set(selectedRefs);
   const atCap = selectedRefs.length >= maxItems;
-  const borderClass = sectionTheme(domain).activeBorder;
-  const bgClass = 'bg-zinc-950/95';
+  const t = sectionTheme(domain);
 
   function toggleRef(ref: string) {
     if (selectedSet.has(ref)) {
@@ -73,20 +51,15 @@ export function CharacterPickerPopover({
     }
   }
 
-  async function handleCreate() {
+  async function handleCreate(slugs: string[], defaultName: string) {
     if (!callTool || !projectSlug) return;
-    const images = [primarySlot?.slug, altSlot?.slug].filter((s): s is string => !!s && s.trim() !== '');
-    if (images.length === 0) {
-      setCreateError('Drop an image');
-      return;
-    }
     setCreating(true);
     setCreateError(null);
     try {
       const result = await callTool('create_google_flow_character', {
         project_slug: projectSlug,
-        display_name: createName.trim() || nameFromAsset(primarySlot) || 'Character',
-        image_slugs: images,
+        display_name: defaultName,
+        image_slugs: slugs,
       });
       const content = result.content as Array<{ type: string; text: string }> | undefined;
       if (result.isError) {
@@ -97,10 +70,6 @@ export function CharacterPickerPopover({
       if (parsed.character_ref && !atCap) {
         onChange([...selectedRefs, parsed.character_ref]);
       }
-      setCreateName('');
-      setPrimarySlot(null);
-      setAltSlot(null);
-      setCreateMode(false);
       void refresh();
     } catch (e) {
       setCreateError(e instanceof Error ? e.message : String(e));
@@ -109,286 +78,219 @@ export function CharacterPickerPopover({
     }
   }
 
-  const triggerLabel = selectedRefs.length > 0
-    ? (selectedRefs.length >= maxItems ? 'Edit' : 'Add')
-    : 'Add';
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (disabled || creating) return;
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragOver(true);
+  };
 
-  const defaultTrigger = (
-    <button
-      type="button"
-      onClick={() => setOpen((value) => !value)}
-      disabled={disabled}
-      className={cn(
-        'shrink-0 flex items-center gap-1 px-2 h-8 rounded border',
-        open ? borderClass : 'border-dashed',
-        'text-[10px] font-mono tracking-wider transition-colors duration-150',
-        disabled ? 'opacity-40 cursor-not-allowed' : 'hover:border-primary/40 hover:bg-primary/5',
-        open ? 'text-primary/50' : 'text-primary/30',
-      )}
-    >
-      {open ? <User className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-      <span>CHAR</span>
-    </button>
-  );
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragOver(false);
+    }
+  };
 
-  const inlineTrigger = (
-    <div className="vc-notebook-characters-inline">
-      <span className="vc-notebook-characters-label">Characters</span>
-      {selectedRefs.length > 0 ? (
-        <span className="vc-notebook-characters-count" title={selectedRefs.join(', ')}>
-          {selectedRefs.length}/{maxItems}
-        </span>
-      ) : (
-        <span className="vc-notebook-characters-count is-empty">none</span>
-      )}
-      {selectedRefs.slice(0, 3).map((ref) => (
-        <span key={ref} className="vc-notebook-characters-chip" title={ref}>
-          <User className="w-2.5 h-2.5" />
-        </span>
-      ))}
-      {selectedRefs.length > 3 ? (
-        <span className="vc-notebook-characters-count">+{selectedRefs.length - 3}</span>
-      ) : null}
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        disabled={disabled}
-        className={cn(
-          'vc-notebook-characters-action',
-          disabled && 'is-disabled',
-        )}
-      >
-        <Plus className="w-3 h-3" />
-        <span>{triggerLabel}</span>
-      </button>
-    </div>
-  );
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (disabled || creating) return;
+    try {
+      const raw = e.dataTransfer.getData('application/json');
+      if (raw) {
+        const data = JSON.parse(raw);
+        const items = Array.isArray(data) ? data : [data];
+        const images = items.filter(item => item && item.type === 'image');
+        if (images.length > 0) {
+          const slugs = images.slice(0, 2).map(img => img.slug);
+          const name = nameFromAsset({ slug: slugs[0], src: '', type: 'image' }) || 'Character';
+          void handleCreate(slugs, name);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to parse dropped character images', e);
+    }
+  };
 
-  if (!open) {
-    return variant === 'inline' ? inlineTrigger : defaultTrigger;
+  async function handleRename(ref: string, newName: string) {
+    if (!callTool) return;
+    try {
+      await callTool('rename_google_flow_character', { ref, display_name: newName });
+      void refresh();
+    } catch (e) {
+      console.error("Rename failed", e);
+    }
+  }
+
+  async function handleDelete(ref: string) {
+    if (!callTool) return;
+    try {
+      await callTool('delete_google_flow_character', { ref });
+      if (selectedSet.has(ref)) {
+        onChange(selectedRefs.filter((r) => r !== ref));
+      }
+      void refresh();
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : String(e));
+    }
   }
 
   return (
-    <div ref={ref} className={cn('relative', variant === 'inline' ? 'w-full' : 'shrink-0')}>
-      {variant === 'inline' ? inlineTrigger : defaultTrigger}
-      <div className={cn(
-        variant === 'inline'
-          ? 'mt-2 w-full rounded border overflow-hidden'
-          : 'absolute top-full left-0 mt-1 w-72 max-h-80 rounded border z-50 overflow-hidden',
-        borderClass,
-        bgClass,
-      )}>
-        {createMode ? (
-          <CreateCharacterForm
-            createName={createName}
-            setCreateName={setCreateName}
-            primarySlot={primarySlot}
-            setPrimarySlot={setPrimarySlot}
-            altSlot={altSlot}
-            setAltSlot={setAltSlot}
-            creating={creating}
-            createError={createError}
-            onCreate={handleCreate}
-            onCancel={() => { setCreateMode(false); setCreateError(null); }}
-          />
-        ) : (
-          <CharacterList
-            systemEntities={systemEntities}
-            userEntities={userEntities}
-            selectedSet={selectedSet}
-            loading={loading}
-            loaded={loaded}
-            onToggle={toggleRef}
-            onOpenCreate={() => setCreateMode(true)}
-            atCap={atCap}
-            entities={entities}
-          />
+    <div className="w-full flex flex-col gap-2 relative">
+      <div 
+        className={cn(
+          "w-full flex flex-wrap gap-2 p-2 rounded border min-h-[48px] items-center transition-colors relative",
+          isDragOver ? cn(t.activeBorder, "bg-primary/10") : cn(t.controlBorder, "bg-black/40"),
         )}
-      </div>
-    </div>
-  );
-}
-
-function CharacterList({
-  systemEntities,
-  userEntities,
-  selectedSet,
-  loading,
-  loaded,
-  onToggle,
-  onOpenCreate,
-  atCap,
-  entities,
-}: {
-  systemEntities: GoogleFlowEntityOption[];
-  userEntities: GoogleFlowEntityOption[];
-  selectedSet: Set<string>;
-  loading: boolean;
-  loaded: boolean;
-  onToggle: (ref: string) => void;
-  onOpenCreate: () => void;
-  atCap: boolean;
-  entities: GoogleFlowEntityOption[];
-}) {
-  return (
-    <div className="flex flex-col max-h-80">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-primary/10">
-        <span className="text-[9px] font-mono uppercase tracking-wider text-primary/40">Characters</span>
-        <button
-          type="button"
-          onClick={onOpenCreate}
-          className="text-[9px] font-mono text-cyan-400/60 hover:text-cyan-400 transition-colors"
-        >
-          + new
-        </button>
-      </div>
-      <div className="overflow-y-auto flex-1">
-        {loading && !loaded && (
-          <div className="flex items-center justify-center py-4">
-            <Loader2 className="w-3 h-3 animate-spin text-primary/30" />
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {isDragOver && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10 pointer-events-none rounded">
+            <span className="text-[10px] font-mono tracking-wider text-primary/80">DROP IMAGES TO CREATE</span>
           </div>
         )}
-        {entities.length === 0 && loaded && (
-          <p className="px-3 py-4 text-[10px] font-mono text-primary/30 text-center">
-            No characters. Create one.
-          </p>
+        
+        {entities.length === 0 && !loading && !creating && (
+          <span className="text-[10px] font-mono text-primary/40 italic px-1">
+            Drag images here to create characters
+          </span>
         )}
-        {userEntities.length > 0 && (
-          <EntityGroup label="yours" entities={userEntities} selectedSet={selectedSet} onToggle={onToggle} atCap={atCap} />
-        )}
-        {systemEntities.length > 0 && (
-          <EntityGroup label="system" entities={systemEntities} selectedSet={selectedSet} onToggle={onToggle} atCap={atCap} />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function EntityGroup({
-  label,
-  entities,
-  selectedSet,
-  onToggle,
-  atCap,
-}: {
-  label: string;
-  entities: GoogleFlowEntityOption[];
-  selectedSet: Set<string>;
-  onToggle: (ref: string) => void;
-  atCap: boolean;
-}) {
-  return (
-    <div>
-      <div className="px-3 pt-1.5 pb-0.5 text-[8px] font-mono uppercase tracking-wider text-primary/20">{label}</div>
-      {entities.map((e) => {
-        const isSelected = selectedSet.has(e.ref);
-        return (
-          <button
+        
+        {entities.map(e => (
+          <CharacterChip 
             key={e.ref}
-            type="button"
-            onClick={() => onToggle(e.ref)}
-            disabled={!isSelected && atCap}
-            className={cn(
-              'w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors',
-              'hover:bg-primary/5 disabled:opacity-30 disabled:cursor-not-allowed',
-            )}
-          >
-            <div className="w-6 h-6 rounded overflow-hidden shrink-0 border border-primary/20 flex items-center justify-center bg-black/60">
-              {e.thumbnailUrl ? (
-                <img src={e.thumbnailUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <User className="w-3 h-3 text-primary/20" />
-              )}
-            </div>
-            <span className="text-[10px] font-mono text-primary/60 truncate flex-1">{e.displayName}</span>
-            {isSelected && <Check className="w-3 h-3 text-cyan-400 shrink-0" />}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+            entity={e}
+            isSelected={selectedSet.has(e.ref)}
+            onToggle={() => toggleRef(e.ref)}
+            onRename={(newName) => handleRename(e.ref, newName)}
+            onDelete={() => handleDelete(e.ref)}
+            disabled={(!selectedSet.has(e.ref) && atCap) || disabled}
+          />
+        ))}
 
-function CreateCharacterForm({
-  createName,
-  setCreateName,
-  primarySlot,
-  setPrimarySlot,
-  altSlot,
-  setAltSlot,
-  creating,
-  createError,
-  onCreate,
-  onCancel,
-}: {
-  createName: string;
-  setCreateName: (v: string) => void;
-  primarySlot: SlotAsset | null;
-  setPrimarySlot: (v: SlotAsset | null) => void;
-  altSlot: SlotAsset | null;
-  setAltSlot: (v: SlotAsset | null) => void;
-  creating: boolean;
-  createError: string | null;
-  onCreate: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="p-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-[9px] font-mono uppercase tracking-wider text-primary/40">New Character</span>
-        <button type="button" onClick={onCancel} className="text-primary/30 hover:text-primary/60">
-          <X className="w-3 h-3" />
-        </button>
-      </div>
-      <input
-        type="text"
-        value={createName}
-        onChange={(e) => setCreateName(e.target.value)}
-        placeholder="Name"
-        className="w-full px-2 py-1.5 bg-black/60 border border-primary/20 rounded text-[10px] font-mono text-primary/70 focus:outline-none focus:border-primary/40"
-      />
-      <div className="flex gap-1.5">
-        <AssetDropSlot
-          value={primarySlot ? { slug: primarySlot.slug, src: primarySlot.thumbnailSrc || primarySlot.src, type: 'image' } : null}
-          onChange={(asset) => {
-            if (asset) {
-              setPrimarySlot({ slug: asset.slug, src: asset.src, thumbnailSrc: asset.thumbnailSrc, type: 'image' });
-            } else {
-              setPrimarySlot(null);
-            }
-          }}
-          acceptTypes={['image']}
-          compact
-        />
-        <AssetDropSlot
-          value={altSlot ? { slug: altSlot.slug, src: altSlot.thumbnailSrc || altSlot.src, type: 'image' } : null}
-          onChange={(asset) => {
-            if (asset) {
-              setAltSlot({ slug: asset.slug, src: asset.src, thumbnailSrc: asset.thumbnailSrc, type: 'image' });
-            } else {
-              setAltSlot(null);
-            }
-          }}
-          acceptTypes={['image']}
-          compact
-        />
+        {creating && (
+          <div className="flex items-center gap-2 px-2 py-1 rounded border border-cyan-400/30 bg-cyan-500/10 h-8">
+            <Loader2 className="w-3 h-3 animate-spin text-cyan-400" />
+            <span className="text-[10px] font-mono text-cyan-400/80">Creating...</span>
+          </div>
+        )}
       </div>
       {createError && (
-        <p className="text-[9px] font-mono text-red-400/80">{createError}</p>
+        <div className="text-[10px] font-mono text-red-400 flex items-center justify-between px-1">
+          <span>{createError}</span>
+          <button type="button" onClick={() => setCreateError(null)} className="hover:text-red-300">
+            <X className="w-3 h-3" />
+          </button>
+        </div>
       )}
-      <button
-        type="button"
-        onClick={onCreate}
-        disabled={creating || !primarySlot?.slug}
-        className={cn(
-          'w-full h-7 rounded text-[10px] font-mono tracking-wider',
-          'bg-cyan-500/20 text-cyan-300 border border-cyan-400/30',
-          'hover:bg-cyan-500/30 transition-colors',
-          'disabled:opacity-40 cursor-not-allowed',
-        )}
+    </div>
+  );
+}
+
+function CharacterChip({ 
+  entity, 
+  isSelected, 
+  onToggle,
+  onRename,
+  onDelete,
+  disabled 
+}: { 
+  entity: GoogleFlowEntityOption;
+  isSelected: boolean;
+  onToggle: () => void;
+  onRename: (newName: string) => void;
+  onDelete: () => void;
+  disabled?: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(entity.displayName || '');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const commitEdit = () => {
+    const next = editName.trim();
+    if (next && next !== entity.displayName) {
+      onRename(next);
+    } else {
+      setEditName(entity.displayName || '');
+    }
+    setEditing(false);
+  };
+
+  return (
+    <div className={cn(
+      "group flex items-center gap-1.5 h-8 pr-2 rounded border transition-colors",
+      isSelected 
+        ? "border-cyan-400/50 bg-cyan-950/40" 
+        : "border-primary/20 bg-black/60 hover:border-primary/40",
+      disabled && !isSelected && "opacity-40 cursor-not-allowed"
+    )}>
+      <button 
+        type="button" 
+        onClick={onToggle}
+        disabled={disabled}
+        className="h-full flex items-center gap-1.5 pl-1"
       >
-        {creating ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : 'CREATE'}
+        <div className="w-6 h-6 rounded overflow-hidden shrink-0 border border-primary/20 flex items-center justify-center bg-black/60">
+          {entity.thumbnailUrl ? (
+            <img src={entity.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <User className="w-3 h-3 text-primary/20" />
+          )}
+        </div>
       </button>
+      
+      {editing ? (
+        <input
+          ref={inputRef}
+          type="text"
+          value={editName}
+          onChange={e => setEditName(e.target.value)}
+          onBlur={commitEdit}
+          onKeyDown={e => {
+            if (e.key === 'Enter') commitEdit();
+            if (e.key === 'Escape') {
+              setEditName(entity.displayName || '');
+              setEditing(false);
+            }
+          }}
+          className="bg-black/60 border border-cyan-400/50 text-[10px] font-mono text-primary/90 w-24 px-1 py-0.5 rounded outline-none"
+        />
+      ) : (
+        <button 
+          type="button"
+          onClick={() => setEditing(true)}
+          className="text-[10px] font-mono text-primary/70 hover:text-primary max-w-[100px] truncate flex-1 text-left"
+          title="Click to rename"
+        >
+          {entity.displayName || 'Unnamed'}
+        </button>
+      )}
+      
+      {isSelected && (
+        <button type="button" onClick={onToggle} className="text-cyan-400 shrink-0">
+          <Check className="w-3 h-3" />
+        </button>
+      )}
+      
+      {!editing && (
+        <button 
+          type="button" 
+          onClick={(e) => { e.stopPropagation(); onDelete(); }} 
+          className="opacity-0 group-hover:opacity-100 text-red-400/70 hover:text-red-400 shrink-0 transition-opacity ml-1"
+          title="Delete character"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      )}
     </div>
   );
 }
