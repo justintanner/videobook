@@ -172,7 +172,9 @@ export function CharacterPickerPopover({
     <div ref={ref} className={cn('relative', variant === 'inline' ? 'w-full' : 'shrink-0')}>
       {variant === 'inline' ? inlineTrigger : defaultTrigger}
       <div className={cn(
-        'absolute top-full left-0 mt-1 w-72 max-h-80 rounded border z-50 overflow-hidden',
+        variant === 'inline'
+          ? 'mt-2 w-full rounded border overflow-hidden'
+          : 'absolute top-full left-0 mt-1 w-72 max-h-80 rounded border z-50 overflow-hidden',
         borderClass,
         bgClass,
       )}>
