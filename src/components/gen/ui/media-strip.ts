@@ -140,7 +140,6 @@ const ARRAY_SLUG_PARAMS = new Set([
   'video_slugs',
   'audio_slugs',
   'character_image_slugs',
-  'character_refs',
   'motion_video_slugs',
 ]);
 
@@ -157,7 +156,7 @@ export function routeDrop(
   slots: StripSlot[],
 ): DropRoute {
   if (kind === 'character') {
-    const charSlot = slots.find((s) => s.param === 'character_image_slugs' || s.param === 'character_refs');
+    const charSlot = slots.find((s) => s.param === 'character_image_slugs');
     if (charSlot) return { param: charSlot.param, action: isArraySlugParam(charSlot.param) ? 'append' : 'set' };
     return { param: '', action: 'set' };
   }
@@ -210,7 +209,7 @@ export function paramForAssetSlug(
   const kind: StripSlot['kind'] | 'character' =
     clean.startsWith('char-') ? 'character' : clean.startsWith('vid-') ? 'video' : clean.startsWith('aud-') ? 'audio' : 'image';
   if (kind === 'character') {
-    const charSlot = slots.find((s) => s.param === 'character_image_slugs' || s.param === 'character_refs');
+    const charSlot = slots.find((s) => s.param === 'character_image_slugs');
     if (!charSlot) return null;
     return routeDrop('character', slots);
   }

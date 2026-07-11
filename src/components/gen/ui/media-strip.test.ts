@@ -184,7 +184,7 @@ describe('routeDrop', () => {
     expect(routeDrop('image', seedanceSlots)).toEqual({ param: 'image_slugs', action: 'append' });
   });
 
-  it('routes character to character_image_slugs or character_refs', () => {
+  it('routes character to character_image_slugs', () => {
     const slots: StripSlot[] = [
       { param: 'character_image_slugs', kind: 'image', label: 'Character', max: null },
       { param: 'image_slugs', kind: 'image', label: 'Images', max: null },
@@ -225,10 +225,10 @@ describe('paramForAssetSlug', () => {
 
   it('maps char- to character slots if available', () => {
     const charSlots: StripSlot[] = [
-      { param: 'character_refs', kind: 'image', label: 'Chars', max: null },
+      { param: 'character_image_slugs', kind: 'image', label: 'Chars', max: null },
       { param: 'image_slugs', kind: 'image', label: 'Images', max: null },
     ];
-    expect(paramForAssetSlug('char-hero', charSlots)).toEqual({ param: 'character_refs', action: 'append' });
+    expect(paramForAssetSlug('char-hero', charSlots)).toEqual({ param: 'character_image_slugs', action: 'append' });
     // If no char slot, returns null
     const noCharSlots: StripSlot[] = [
       { param: 'image_slugs', kind: 'image', label: 'Images', max: null },
