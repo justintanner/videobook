@@ -7,7 +7,7 @@
 //   projects → zinc    (workspace navigation, not a content type)
 //   image    → cyan
 //   video    → violet
-//   plan     → emerald
+//   notebook → emerald
 //   final    → amber
 //
 // Class strings are written out per-domain rather than computed from a hue
@@ -15,7 +15,7 @@
 // scan time. The "factory" functions below are lookups, not concatenators.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type Domain = 'projects' | 'image' | 'video' | 'plan' | 'final';
+export type Domain = 'projects' | 'image' | 'video' | 'notebook' | 'final';
 
 // ── Raw values (hex / rgb / CSS var) ──
 
@@ -23,7 +23,7 @@ const domainHex: Record<Domain, string> = {
   projects: '#a1a1aa',
   image: '#22d3ee',
   video: '#a78bfa',
-  plan: '#34d399',
+  notebook: '#34d399',
   final: '#fbbf24',
 };
 
@@ -36,7 +36,7 @@ const domainRgb: Record<Domain, string> = {
   projects: '161, 161, 170',
   image: '34, 211, 238',
   video: '167, 139, 250',
-  plan: '52, 211, 153',
+  notebook: '52, 211, 153',
   final: '251, 191, 36',
 };
 
@@ -106,7 +106,7 @@ const chipVariants: Record<Domain, ChipVariantStyle> = {
     focusRing: 'focus-visible:ring-violet-400/80',
     focusWithinRing: 'focus-within:ring-violet-400/80',
   },
-  plan: {
+  notebook: {
     bg: 'bg-emerald-500/20 border-emerald-500/30',
     shadow: 'rgba(52,211,153,0.5)',
     chevron: 'text-emerald-400/40 group-hover:text-emerald-400/50',
@@ -265,7 +265,7 @@ const sectionThemes: Record<Domain, SectionTheme> = {
     sliderThumb: '[&::-webkit-slider-thumb]:bg-violet-400 [&::-moz-range-thumb]:bg-violet-400',
     placeholderText: 'placeholder:text-violet-400/30',
   },
-  plan: {
+  notebook: {
     headerBg: 'bg-emerald-500/15',
     headerBorder: 'border-emerald-500/30',
     headerText: 'text-emerald-400',

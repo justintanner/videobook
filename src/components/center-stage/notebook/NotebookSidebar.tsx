@@ -11,6 +11,14 @@ import { RichPromptField } from '@/components/ui/RichPromptField'
 import { cn } from '@/lib/utils'
 import type { MediaItem } from '@/components/sidebar/types'
 import {
+  CLIP_PRECISION,
+  clipWindowPayload,
+  displayClipWindow,
+  normalizeClipWindow,
+  sharedFiniteBounds,
+  type ClipBounds,
+} from './clip-window'
+import {
   CONNECTION_OWNED_PARAMS,
   assetSlugKind,
   latestAssetId,
@@ -141,16 +149,16 @@ export function NotebookSidebar({
     const title = typeof definition.properties.title === 'string' ? definition.properties.title : ''
     return (
       <aside className="vc-notebook-sidebar vc-notebook-editor">
-        <label htmlFor="notebook-title">Plan title</label>
+        <label htmlFor="notebook-title">Notebook title</label>
         <input
           id="notebook-title"
           className="vc-notebook-text"
           value={title}
           onChange={(event) => updateDefinition(
             { ...definition, properties: { ...definition.properties, title: event.target.value } },
-            'text:plan:title',
+            'text:notebook:title',
           )}
-          placeholder="Untitled plan"
+          placeholder="Untitled notebook"
         />
         <p className="vc-notebook-hint">Select a node to edit it. Connect nodes on the canvas to supply prompts and references.</p>
       </aside>
@@ -301,12 +309,25 @@ function GenerationSidebar({
   const modelOptions = preview.preview?.model_options ?? []
   // Inline row: type + duration + aspect_ratio. Remaining settings go under Options.
   const INLINE_OPTION_KEYS = new Set(['duration', 'aspect_ratio'])
+  const clipStartVisible = Boolean(
+    option?.schema.properties.video_clip_start
+    && (!modeVisible || modeVisible.has('video_clip_start')),
+  )
+  const clipEndsVisible = Boolean(
+    option?.schema.properties.video_clip_ends
+    && (!modeVisible || modeVisible.has('video_clip_ends')),
+  )
+  const clipBounds = clipStartVisible && clipEndsVisible
+    ? sharedFiniteBounds(option?.schema.properties.video_clip_start, option?.schema.properties.video_clip_ends)
+    : null
+  const showClipComposite = clipStartVisible && clipEndsVisible
   const fieldVisible = (name: string): boolean =>
     name !== 'project_slug'
     && name !== 'prompt'
     && name !== 'character_refs'
     && name !== 'voice_refs'
     && name !== 'seed'
+    && !(showClipComposite && (name === 'video_clip_start' || name === 'video_clip_ends'))
     && !CONNECTION_OWNED_PARAMS.includes(name as typeof CONNECTION_OWNED_PARAMS[number])
     && (!modeVisible || modeVisible.has(name))
   const fieldEntries = option
@@ -330,6 +351,16 @@ function GenerationSidebar({
     : !readiness.ready
       ? readiness.reasons.join(' ')
       : undefined
+  const applyClipWindow = (start: number, ends: number) => {
+    const payload = clipWindowPayload(start, ends)
+    update({
+      values: {
+        ...persistedValues,
+        video_clip_start: payload.video_clip_start,
+        video_clip_ends: payload.video_clip_ends,
+      } as JsonRecord,
+    })
+  }
 
   return (
     <aside className="vc-notebook-sidebar vc-notebook-editor">
@@ -447,9 +478,20 @@ function GenerationSidebar({
               }}
             />
           )}
-          {fieldEntries.length > 0 ? <>
+          {fieldEntries.length > 0 || showClipComposite ? <>
             <label>Options</label>
             <div className="flex flex-wrap gap-x-4 gap-y-2">
+              {showClipComposite ? (
+                <ClipWindowControl
+                  startValue={mergedValues.video_clip_start}
+                  endsValue={mergedValues.video_clip_ends}
+                  bounds={clipBounds}
+                  startSchema={option.schema.properties.video_clip_start}
+                  endsSchema={option.schema.properties.video_clip_ends}
+                  disabled={running}
+                  onChange={applyClipWindow}
+                />
+              ) : null}
               {fieldEntries.map(([name, schema]) => {
                 const override = activeMode?.param_overrides?.[name]
                 const fieldSchema = override
@@ -464,7 +506,7 @@ function GenerationSidebar({
                     onChange={(value) => updateValues(name, value)}
                     required={(option.schema.required ?? []).includes(name)}
                     disabled={running}
-                    theme={genThemes.plan}
+                    theme={genThemes.notebook}
                     callTool={callTool}
                     mcpState={mcpState}
                     projectSlug={projectSlug}
@@ -474,8 +516,7 @@ function GenerationSidebar({
               })}
             </div>
           </> : null}
-          {showCharacters && characterField ? <>
-            <label>Characters</label>
+          {showCharacters && characterField ? (
             <CharacterPickerPopover
               selectedRefs={stringArray(mergedValues.character_refs)}
               onChange={(refs) => updateValues('character_refs', refs)}
@@ -484,9 +525,10 @@ function GenerationSidebar({
               callTool={callTool}
               mcpState={mcpState}
               projectSlug={projectSlug}
-              domain="plan"
+              domain="notebook"
+              variant="inline"
             />
-          </> : null}
+          ) : null}
           <RunStatus status={runStatus.state} />
           {error ? <div className="vc-notebook-error"><AlertCircle /> {error}</div> : null}
           <RunStepButton
@@ -585,4 +627,148 @@ function RunStatus({ status }: { status: NotebookRunState }) {
   if (status === 'missing') return <div className="vc-notebook-status"><Clock3 /> Syncing</div>
   if (status === 'pending') return <div className="vc-notebook-status"><Clock3 /> Running</div>
   return <div className="vc-notebook-status"><AlertCircle /> Failed</div>
+}
+
+function ClipWindowControl({
+  startValue,
+  endsValue,
+  bounds,
+  startSchema,
+  endsSchema,
+  disabled,
+  onChange,
+}: {
+  startValue: unknown
+  endsValue: unknown
+  bounds: ClipBounds | null
+  startSchema: JSONSchemaProperty
+  endsSchema: JSONSchemaProperty
+  disabled?: boolean
+  onChange: (start: number, ends: number) => void
+}) {
+  const theme = genThemes.notebook
+
+  if (!bounds) {
+    const startNum = typeof startValue === 'number' ? startValue : ''
+    const endsNum = typeof endsValue === 'number' ? endsValue : ''
+    return (
+      <div className="vc-notebook-clip-window w-full min-w-[220px]">
+        <span className="vc-notebook-clip-window-label">Clip window</span>
+        <div className="vc-notebook-clip-window-pair">
+          <label className="vc-notebook-clip-window-pair-field">
+            <span>Start</span>
+            <input
+              type="number"
+              step={CLIP_PRECISION}
+              min={startSchema.minimum}
+              max={startSchema.maximum}
+              value={startNum}
+              disabled={disabled}
+              onChange={(event) => {
+                const next = event.target.value === '' ? undefined : Number(event.target.value)
+                if (next === undefined || Number.isNaN(next)) return
+                const ends = typeof endsValue === 'number' ? endsValue : next + CLIP_PRECISION
+                onChange(next, ends)
+              }}
+            />
+          </label>
+          <label className="vc-notebook-clip-window-pair-field">
+            <span>End</span>
+            <input
+              type="number"
+              step={CLIP_PRECISION}
+              min={endsSchema.minimum}
+              max={endsSchema.maximum}
+              value={endsNum}
+              disabled={disabled}
+              onChange={(event) => {
+                const next = event.target.value === '' ? undefined : Number(event.target.value)
+                if (next === undefined || Number.isNaN(next)) return
+                const start = typeof startValue === 'number' ? startValue : Math.max(0, next - CLIP_PRECISION)
+                onChange(start, next)
+              }}
+            />
+          </label>
+        </div>
+      </div>
+    )
+  }
+
+  const display = displayClipWindow(startValue, endsValue, bounds)
+  const commit = (start: number, ends: number) => {
+    const normalized = normalizeClipWindow(start, ends, bounds)
+    onChange(normalized.start, normalized.ends)
+  }
+
+  return (
+    <div className="vc-notebook-clip-window w-full min-w-[240px]">
+      <div className="vc-notebook-clip-window-head">
+        <span className="vc-notebook-clip-window-label">Clip window</span>
+        <div className="vc-notebook-clip-window-values">
+          <input
+            type="number"
+            step={CLIP_PRECISION}
+            min={bounds.min}
+            max={bounds.max}
+            value={display.start}
+            disabled={disabled}
+            aria-label="Clip start seconds"
+            onChange={(event) => {
+              const next = Number(event.target.value)
+              if (Number.isNaN(next)) return
+              commit(next, display.ends)
+            }}
+          />
+          <span>–</span>
+          <input
+            type="number"
+            step={CLIP_PRECISION}
+            min={bounds.min}
+            max={bounds.max}
+            value={display.ends}
+            disabled={disabled}
+            aria-label="Clip end seconds"
+            onChange={(event) => {
+              const next = Number(event.target.value)
+              if (Number.isNaN(next)) return
+              commit(display.start, next)
+            }}
+          />
+          <span className="vc-notebook-clip-window-unit">s</span>
+        </div>
+      </div>
+      <div className="vc-notebook-clip-window-track">
+        <input
+          type="range"
+          min={bounds.min}
+          max={bounds.max}
+          step={CLIP_PRECISION}
+          value={display.start}
+          disabled={disabled}
+          aria-label="Clip start"
+          className={cn(
+            'vc-notebook-clip-window-range vc-notebook-clip-window-range-start',
+            theme.sliderTrack,
+            theme.sliderThumb,
+          )}
+          onChange={(event) => commit(Number(event.target.value), display.ends)}
+        />
+        <input
+          type="range"
+          min={bounds.min}
+          max={bounds.max}
+          step={CLIP_PRECISION}
+          value={display.ends}
+          disabled={disabled}
+          aria-label="Clip end"
+          className={cn(
+            'vc-notebook-clip-window-range vc-notebook-clip-window-range-end',
+            theme.sliderTrack,
+            theme.sliderThumb,
+          )}
+          onChange={(event) => commit(display.start, Number(event.target.value))}
+        />
+      </div>
+    </div>
+  )
 }

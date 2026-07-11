@@ -42,7 +42,7 @@ const COLOR_CLASSES: Record<GenSectionColor, GenSectionStyle> = {
   projects: fromDomain(sectionTheme('projects'), 'text-zinc-400/60', 'text-zinc-300/60', 'border-zinc-500/20'),
   image: fromDomain(sectionTheme('image'), 'text-cyan-400/60', 'text-cyan-300/60', 'border-cyan-500/20'),
   video: fromDomain(sectionTheme('video'), 'text-violet-400/60', 'text-violet-300/60', 'border-violet-500/20'),
-  plan: fromDomain(sectionTheme('plan'), 'text-emerald-400/60', 'text-emerald-300/60', 'border-emerald-500/20'),
+  notebook: fromDomain(sectionTheme('notebook'), 'text-emerald-400/60', 'text-emerald-300/60', 'border-emerald-500/20'),
   final: fromDomain(sectionTheme('final'), 'text-amber-400/60', 'text-amber-300/60', 'border-amber-500/20'),
   blue: {
     frame: 'border-blue-500/15 bg-blue-500/[0.03]',

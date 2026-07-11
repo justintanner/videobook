@@ -50,7 +50,7 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, renderingCoun
         />
 
         {/* Generation shortcuts */}
-        <CommandButton command="/plan" icon={<NotebookPen className="w-3.5 h-3.5" />} variant="plan" onClick={() => onAnimateCommand('/plan')} />
+        <CommandButton command="/notebook" icon={<NotebookPen className="w-3.5 h-3.5" />} variant="notebook" onClick={() => onAnimateCommand('/notebook')} />
         <CommandButton command="/image" icon={<ImageIcon className="w-3.5 h-3.5" />} variant="image" onClick={() => onAnimateCommand('/image')} />
         <CommandButton command="/video" icon={<Film className="w-3.5 h-3.5" />} variant="video" onClick={() => onAnimateCommand('/video')} />
         <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} variant="final" onClick={() => onAnimateCommand('/final')} />

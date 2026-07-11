@@ -20,7 +20,7 @@ const BUDGET_OK: Record<Domain, string> = {
   projects: 'text-zinc-400/50',
   image: 'text-cyan-400/50',
   video: 'text-violet-400/50',
-  plan: 'text-emerald-400/50',
+  notebook: 'text-emerald-400/50',
   final: 'text-amber-400/50',
 };
 const BUDGET_OVER = 'text-red-400';
@@ -30,7 +30,7 @@ const MODE_LABEL: Record<Domain, string> = {
   projects: 'text-zinc-400/30',
   image: 'text-cyan-400/30',
   video: 'text-violet-400/30',
-  plan: 'text-emerald-400/30',
+  notebook: 'text-emerald-400/30',
   final: 'text-amber-400/30',
 };
 
@@ -40,7 +40,7 @@ const DRAGOVER_CLASS: Record<Domain, string> = {
   projects: 'border-zinc-400/60 bg-zinc-400/5',
   image: 'border-cyan-400/60 bg-cyan-400/5',
   video: 'border-violet-400/60 bg-violet-400/5',
-  plan: 'border-emerald-400/60 bg-emerald-400/5',
+  notebook: 'border-emerald-400/60 bg-emerald-400/5',
   final: 'border-amber-400/60 bg-amber-400/5',
 };
 

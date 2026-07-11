@@ -62,7 +62,7 @@ const sectionThemes: Record<'cyan' | 'violet' | 'amber' | 'emerald', DomainSecti
   cyan: sectionTheme('image'),
   violet: sectionTheme('video'),
   amber: sectionTheme('final'),
-  emerald: sectionTheme('plan'),
+  emerald: sectionTheme('notebook'),
 };
 
 type SectionTheme = DomainSectionTheme;

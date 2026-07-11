@@ -37,7 +37,7 @@ export interface UiActionCallbacks {
   gen_elements: (index: string, field: string, value: string) => void;
   open_character_dialog: (initialSlug: string) => void;
   open_post_composer: (assetSlug: string, text: string) => void;
-  open_plan: () => void;
+  open_notebook: () => void;
   open_rename_all: () => void;
   open_projects: () => void;
   create_project: (slug: string) => void;

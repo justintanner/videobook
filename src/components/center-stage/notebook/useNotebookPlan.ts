@@ -56,7 +56,7 @@ export function useNotebookPlan({ projectSlug, callTool, mcpState }: UseNotebook
         project_slug: projectSlug,
         definition,
       })
-      if (result.isError) throw new Error(responseText(result) || 'Unable to save Plan')
+      if (result.isError) throw new Error(responseText(result) || 'Unable to save Notebook')
     })()
     const tracked = attempt.catch(() => {})
     pendingPlanWrites.set(projectSlug, tracked)
@@ -70,7 +70,7 @@ export function useNotebookPlan({ projectSlug, callTool, mcpState }: UseNotebook
       setSaveState('saved')
     } catch (cause) {
       setSaveState('error')
-      setError(cause instanceof Error ? cause.message : 'Unable to save Plan')
+      setError(cause instanceof Error ? cause.message : 'Unable to save Notebook')
     }
   }, [projectSlug])
 
@@ -113,7 +113,7 @@ export function useNotebookPlan({ projectSlug, callTool, mcpState }: UseNotebook
         const pending = pendingPlanWrites.get(projectSlug)
         if (pending) await pending
         const result = await callToolRef.current('read_plan', { project_slug: projectSlug })
-        if (result.isError) throw new Error(responseText(result) || 'Unable to load Plan')
+        if (result.isError) throw new Error(responseText(result) || 'Unable to load Notebook')
         const parsed = JSON.parse(responseText(result)) as unknown
         const loaded = toDefinition(parsed)
         if (cancelled) return
@@ -131,7 +131,7 @@ export function useNotebookPlan({ projectSlug, callTool, mcpState }: UseNotebook
         // Leave `definition` null: a failed load must not hand the user an
         // editable empty notebook whose first save overwrites the real plan.
         setSaveState('error')
-        setError(cause instanceof Error ? cause.message : 'Unable to load Plan')
+        setError(cause instanceof Error ? cause.message : 'Unable to load Notebook')
       }
     })()
     return () => {

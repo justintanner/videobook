@@ -6,14 +6,14 @@ import { UploadSlot } from '@/components/sidebar/UploadSlot';
 import { ImageCard } from '@/components/sidebar/cards/ImageCard';
 import { AudioCard } from '@/components/sidebar/cards/AudioCard';
 import { ScriptCard } from '@/components/sidebar/cards/ScriptCard';
-import { PlanCard } from '@/components/sidebar/cards/PlanCard';
+import { NotebookCard } from '@/components/sidebar/cards/NotebookCard';
 import { VideoCard } from '@/components/sidebar/cards/VideoCard';
 import { FinalVideoCard } from '@/components/sidebar/cards/FinalVideoCard';
 import { GhostClipCard } from '@/components/sidebar/cards/GhostClipCard';
 import { SidebarMicroThumb } from '@/components/sidebar/SidebarMicroThumb';
 import { ContextMenuItem } from '@/components/ui/context-menu';
 import { AssetMenu, ProjectExportPicker } from '@/components/sidebar/menus/AssetMenu';
-import { IdleScreen, AssetViewer, PlanNotebook, ArchiveBrowser, RenameAllPanel } from '@/components/center-stage';
+import { IdleScreen, AssetViewer, Notebook, ArchiveBrowser, RenameAllPanel } from '@/components/center-stage';
 import type { ArchiveSearchResponse, RestoreResponse, ViewerSize } from '@/components/center-stage';
 import { TimelinePlayer } from '@/components/timeline/TimelinePlayer';
 import { useTimelinePreview } from '@/hooks/useTimelinePreview';
@@ -1394,7 +1394,7 @@ export function HomePage() {
         : selectedItem;
       setPostPanel({ assetId: matched?.id ?? null, text: text ?? '' });
     },
-    open_plan: () => {
+    open_notebook: () => {
       setSettingsOpen(false);
       setArchiveOpen(false);
       const planAsset = mediaItems.find((m) => m.id === 'plan');
@@ -1467,7 +1467,7 @@ export function HomePage() {
         {(item.type === 'image' || item.type === 'character') && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
         {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
         {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
-        {item.type === 'plan' && <PlanCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
+        {item.type === 'plan' && <NotebookCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
       </div>
     );
   };
@@ -1658,7 +1658,7 @@ export function HomePage() {
                     onClose={() => setRenameAllOpen(false)}
                   />
                 ) : planEmptyOverride ? (
-                  <PlanNotebook
+                  <Notebook
                     projectSlug={projectSlug ?? ''}
                     callTool={callTool}
                     mcpState={state}

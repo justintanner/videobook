@@ -5,7 +5,7 @@ import { SlugBadge } from './badges';
 
 import type { ReactNode } from 'react';
 
-interface PlanCardProps {
+interface NotebookCardProps {
   item: MediaItem;
   contextMenuContent?: ReactNode;
   selected?: boolean;
@@ -13,9 +13,9 @@ interface PlanCardProps {
   onMarkSeen?: () => void;
 }
 
-export function PlanCard({ item, contextMenuContent, selected, onClick, onMarkSeen }: PlanCardProps) {
+export function NotebookCard({ item, contextMenuContent, selected, onClick, onMarkSeen }: NotebookCardProps) {
   const isCorrupt = false;
-  const planText = item.prompt;
+  const notebookText = item.prompt;
 
   return (
     <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen}>
@@ -35,10 +35,10 @@ export function PlanCard({ item, contextMenuContent, selected, onClick, onMarkSe
         {/* Emerald-tinted vignette */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(10,31,21,0.7)_100%)]" />
         {/* Content: text preview or centered icon */}
-        {planText ? (
+        {notebookText ? (
           <div className="absolute inset-0 p-2 overflow-hidden">
             <p className="text-[10px] leading-tight text-emerald-300/40 line-clamp-[8] whitespace-pre-wrap">
-              {planText}
+              {notebookText}
             </p>
           </div>
         ) : (

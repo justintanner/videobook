@@ -124,11 +124,11 @@ function renderGenerationMarkdown(step: PlanStep, steps: PlanStep[]): string[] {
 
 function renderPlanMarkdown(definition: PlanDefinition): string {
   if (definition.sequence.length === 0) {
-    return ["# Plan", "", "0 steps", "", "_No steps yet._", ""].join("\n");
+    return ["# Notebook", "", "0 steps", "", "_No steps yet._", ""].join("\n");
   }
 
   return [
-    "# Plan",
+    "# Notebook",
     "",
     `${definition.sequence.length} steps`,
     "",

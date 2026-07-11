@@ -8,7 +8,7 @@ const HEADER_LABEL_TEXT: Record<Domain, string> = {
   projects: 'text-zinc-300/70',
   image: 'text-cyan-300/70',
   video: 'text-violet-300/70',
-  plan: 'text-emerald-300/70',
+  notebook: 'text-emerald-300/70',
   final: 'text-amber-300/70',
 };
 

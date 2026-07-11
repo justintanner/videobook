@@ -44,7 +44,7 @@ import { useNotebookRun } from './useNotebookRun'
 import '@xyflow/react/dist/style.css'
 import './notebook.css'
 
-interface PlanNotebookProps {
+interface NotebookProps {
   projectSlug: string
   callTool: UseMcpResult['callTool']
   mcpState: UseMcpResult['state']
@@ -180,7 +180,7 @@ function NotebookCanvas({
   )
 }
 
-export function PlanNotebook({
+export function Notebook({
   projectSlug,
   callTool,
   mcpState,
@@ -188,7 +188,7 @@ export function PlanNotebook({
   onClose,
   onOpenAsset,
   onGenerationLifecycle,
-}: PlanNotebookProps) {
+}: NotebookProps) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null)
   const plan = useNotebookPlan({ projectSlug, callTool, mcpState })
   const history = useDefinitionHistory(plan.setDefinition)
@@ -274,13 +274,13 @@ export function PlanNotebook({
   }, [commit])
   const title = typeof definition?.properties.title === 'string' && definition.properties.title.trim()
     ? definition.properties.title
-    : 'Plan notebook'
+    : 'Notebook'
 
   return (
     <section className="vc-notebook h-full min-h-0 flex flex-col overflow-hidden border border-zinc-600/50">
       <header className="vc-notebook-header">
         <div>
-          <span><BookOpen /> Plan</span>
+          <span><BookOpen /> Notebook</span>
           <h1>{title}</h1>
         </div>
         <div>
@@ -292,7 +292,7 @@ export function PlanNotebook({
         </div>
       </header>
       {plan.error ? <div className="vc-notebook-load-error">{plan.error}</div> : null}
-      {plan.legacy ? <div className="vc-notebook-legacy-note">This project has a plan from the old formula system. Saving changes replaces that old plan file.</div> : null}
+      {plan.legacy ? <div className="vc-notebook-legacy-note">This project has a notebook from the old formula system. Saving changes replaces that old plan file.</div> : null}
       {definition ? (
         <div className="vc-notebook-body">
           <ReactFlowProvider>
@@ -336,7 +336,7 @@ export function PlanNotebook({
             />
           </ReactFlowProvider>
         </div>
-      ) : plan.saveState === 'loading' ? <div className="vc-notebook-loading"><Loader2 /> Loading Plan notebook</div> : null}
+      ) : plan.saveState === 'loading' ? <div className="vc-notebook-loading"><Loader2 /> Loading notebook</div> : null}
     </section>
   )
 }

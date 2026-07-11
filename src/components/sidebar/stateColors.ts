@@ -172,9 +172,9 @@ const TONE_STYLES: Record<CardTone, {
   character: cardTone('image'),
   // Audio is a sub-domain of video (timeline audio lanes live with video).
   audio: cardTone('video'),
-  // Script is a sub-domain of plan (text version of a plan).
-  script: cardTone('plan'),
-  plan: cardTone('plan'),
+  // Script is a sub-domain of notebook (text version of a notebook).
+  script: cardTone('notebook'),
+  plan: cardTone('notebook'),
 };
 
 const TYPE_TO_TONE: Record<AssetType, CardTone> = {

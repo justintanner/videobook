@@ -11,7 +11,7 @@ const POPOVER_BORDER: Record<Domain, string> = {
   projects: 'border-zinc-400/30',
   image: 'border-cyan-400/30',
   video: 'border-violet-400/30',
-  plan: 'border-emerald-400/30',
+  notebook: 'border-emerald-400/30',
   final: 'border-amber-400/30',
 };
 
@@ -24,6 +24,8 @@ interface CharacterPickerPopoverProps {
   mcpState?: UseMcpResult['state'];
   projectSlug?: string;
   domain?: Domain;
+  /** Notebook compact row: label + selected count/chips + add/edit. Gen panel keeps default. */
+  variant?: 'default' | 'inline';
 }
 
 export function CharacterPickerPopover({
@@ -35,6 +37,7 @@ export function CharacterPickerPopover({
   mcpState,
   projectSlug,
   domain = 'video',
+  variant = 'default',
 }: CharacterPickerPopoverProps) {
   const [open, setOpen] = useState(false);
   const [createMode, setCreateMode] = useState(false);
@@ -114,40 +117,73 @@ export function CharacterPickerPopover({
     }
   }
 
-  if (!open) {
-    return (
+  const triggerLabel = selectedRefs.length > 0
+    ? (selectedRefs.length >= maxItems ? 'Edit' : 'Add')
+    : 'Add';
+
+  const defaultTrigger = (
+    <button
+      type="button"
+      onClick={() => setOpen((value) => !value)}
+      disabled={disabled}
+      className={cn(
+        'shrink-0 flex items-center gap-1 px-2 h-8 rounded border',
+        open ? borderClass : 'border-dashed',
+        'text-[10px] font-mono tracking-wider transition-colors duration-150',
+        disabled ? 'opacity-40 cursor-not-allowed' : 'hover:border-primary/40 hover:bg-primary/5',
+        open ? 'text-primary/50' : 'text-primary/30',
+      )}
+    >
+      {open ? <User className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+      <span>CHAR</span>
+    </button>
+  );
+
+  const inlineTrigger = (
+    <div className="vc-notebook-characters-inline">
+      <span className="vc-notebook-characters-label">Characters</span>
+      {selectedRefs.length > 0 ? (
+        <span className="vc-notebook-characters-count" title={selectedRefs.join(', ')}>
+          {selectedRefs.length}/{maxItems}
+        </span>
+      ) : (
+        <span className="vc-notebook-characters-count is-empty">none</span>
+      )}
+      {selectedRefs.slice(0, 3).map((ref) => (
+        <span key={ref} className="vc-notebook-characters-chip" title={ref}>
+          <User className="w-2.5 h-2.5" />
+        </span>
+      ))}
+      {selectedRefs.length > 3 ? (
+        <span className="vc-notebook-characters-count">+{selectedRefs.length - 3}</span>
+      ) : null}
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setOpen((value) => !value)}
         disabled={disabled}
         className={cn(
-          'shrink-0 flex items-center gap-1 px-2 h-8 rounded border border-dashed',
-          'text-[10px] font-mono tracking-wider transition-colors duration-150',
-          disabled ? 'opacity-40 cursor-not-allowed' : 'hover:border-primary/40 hover:bg-primary/5',
-          'text-primary/30',
+          'vc-notebook-characters-action',
+          disabled && 'is-disabled',
         )}
       >
         <Plus className="w-3 h-3" />
-        <span>CHAR</span>
+        <span>{triggerLabel}</span>
       </button>
-    );
+    </div>
+  );
+
+  if (!open) {
+    return variant === 'inline' ? inlineTrigger : defaultTrigger;
   }
 
   return (
-    <div ref={ref} className="relative shrink-0">
-      <button
-        type="button"
-        onClick={() => { setOpen(false); setCreateMode(false); }}
-        className={cn(
-          'shrink-0 flex items-center gap-1 px-2 h-8 rounded border',
-          'text-[10px] font-mono tracking-wider',
-          borderClass, 'text-primary/50',
-        )}
-      >
-        <User className="w-3 h-3" />
-        <span>CHAR</span>
-      </button>
-      <div className={cn('absolute top-full left-0 mt-1 w-72 max-h-80 rounded border z-50 overflow-hidden', borderClass, bgClass)}>
+    <div ref={ref} className={cn('relative', variant === 'inline' ? 'w-full' : 'shrink-0')}>
+      {variant === 'inline' ? inlineTrigger : defaultTrigger}
+      <div className={cn(
+        'absolute top-full left-0 mt-1 w-72 max-h-80 rounded border z-50 overflow-hidden',
+        borderClass,
+        bgClass,
+      )}>
         {createMode ? (
           <CreateCharacterForm
             createName={createName}

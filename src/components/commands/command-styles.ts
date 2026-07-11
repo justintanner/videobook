@@ -61,7 +61,7 @@ export const variants: Record<Domain | 'fuchsia', ChipVariantStyle> = {
   projects: chipVariant('projects'),
   image: chipVariant('image'),
   video: chipVariant('video'),
-  plan: chipVariant('plan'),
+  notebook: chipVariant('notebook'),
   final: chipVariant('final'),
   fuchsia,
 };

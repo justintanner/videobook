@@ -77,7 +77,8 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/info");
     expect(commandNames).toContain("/settings");
     expect(commandNames).toContain("/files");
-    expect(commandNames).toContain("/plan");
+    expect(commandNames).toContain("/notebook");
+    expect(commandNames).not.toContain("/plan");
     expect(commandNames).toContain("/projects");
     expect(commandNames).toContain("/project-new");
     expect(commandNames).toContain("/project-rename");
@@ -108,10 +109,10 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/connect-x");
     expect(commandNames).toContain("/play");
 
-    const plan = commands.find((c) => c.command === "/plan")!;
-    expect(plan.uiAction).toBe("open_plan");
-    expect(plan.params).toEqual([]);
-    expect(plan.category).toBe("action");
+    const notebook = commands.find((c) => c.command === "/notebook")!;
+    expect(notebook.uiAction).toBe("open_notebook");
+    expect(notebook.params).toEqual([]);
+    expect(notebook.category).toBe("action");
 
     const archive = commands.find((c) => c.command === "/archive")!;
     expect(archive.category).toBe("context_menu");

@@ -74,7 +74,7 @@ const ELEMENT_SKINS: Record<Domain, ElementSkin> = {
     addFocus: 'focus-visible:ring-violet-400/60',
     slotVariant: 'video',
   },
-  plan: {
+  notebook: {
     cardBorder: 'border-emerald-400/30',
     cardBg: 'bg-emerald-400/5',
     labelText: 'text-emerald-400/50',

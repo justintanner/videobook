@@ -9,7 +9,7 @@ import { ImageViewer } from './ImageViewer';
 import { ScriptViewer } from './ScriptViewer';
 import { AudioViewer } from './AudioViewer';
 import { CharacterViewer } from './CharacterViewer';
-import { PlanNotebook } from './notebook/PlanNotebook';
+import { Notebook } from './notebook/PlanNotebook';
 import type { CharacterProfile } from '@/hooks/useCharacterSlots';
 import type { ViewerSize, BackTab } from './viewer-types';
 import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle';
@@ -84,7 +84,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
 
   if (isPlan) {
     return (
-      <PlanNotebook
+      <Notebook
         projectSlug={projectSlug}
         callTool={callTool}
         mcpState={callState}

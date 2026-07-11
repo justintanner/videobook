@@ -9,6 +9,6 @@ export const genThemes: Record<Domain, SectionTheme> = {
   projects: sectionTheme('projects'),
   image: sectionTheme('image'),
   video: sectionTheme('video'),
-  plan: sectionTheme('plan'),
+  notebook: sectionTheme('notebook'),
   final: sectionTheme('final'),
 };

@@ -6,7 +6,7 @@ import type { ToolDef, ToolResult } from "./tool-def.js";
 export function writePlanDef(fs: VideocityFs): ToolDef {
   return {
     name: "write_plan",
-    description: "Write a project Plan notebook definition and its markdown mirror.",
+    description: "Write a project Notebook definition and its markdown mirror.",
     schema: {
       project_slug: z.string().describe("Project slug"),
       definition: planDefinitionSchema,

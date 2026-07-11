@@ -729,3 +729,195 @@
     box-shadow: 0 0 12px rgb(248 113 113 / 0.72);
   }
 }
+
+.vc-notebook-clip-window {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.35rem 0;
+}
+
+.vc-notebook-clip-window-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.vc-notebook-clip-window-label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(110 231 183 / 0.55);
+}
+
+.vc-notebook-clip-window-values {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: rgb(167 243 208 / 0.85);
+}
+
+.vc-notebook-clip-window-values input,
+.vc-notebook-clip-window-pair-field input {
+  width: 3.25rem;
+  padding: 0.15rem 0.25rem;
+  border: 1px solid rgb(52 211 153 / 0.25);
+  border-radius: 0.25rem;
+  background: rgb(0 0 0 / 0.55);
+  color: rgb(209 250 229);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.vc-notebook-clip-window-values input:disabled,
+.vc-notebook-clip-window-pair-field input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.vc-notebook-clip-window-unit {
+  color: rgb(110 231 183 / 0.45);
+  font-size: 0.62rem;
+}
+
+.vc-notebook-clip-window-track {
+  position: relative;
+  height: 1.25rem;
+}
+
+.vc-notebook-clip-window-range {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 100%;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+  height: 0.35rem;
+}
+
+.vc-notebook-clip-window-range::-webkit-slider-thumb {
+  pointer-events: auto;
+  appearance: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  background: rgb(52 211 153);
+  cursor: pointer;
+}
+
+.vc-notebook-clip-window-range::-moz-range-thumb {
+  pointer-events: auto;
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(52 211 153);
+  cursor: pointer;
+}
+
+.vc-notebook-clip-window-range-start {
+  z-index: 2;
+}
+
+.vc-notebook-clip-window-range-end {
+  z-index: 3;
+}
+
+.vc-notebook-clip-window-pair {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.vc-notebook-clip-window-pair-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgb(110 231 183 / 0.45);
+}
+
+.vc-notebook-characters-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  width: 100%;
+  min-height: 1.75rem;
+}
+
+.vc-notebook-characters-label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(110 231 183 / 0.55);
+}
+
+.vc-notebook-characters-count {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: rgb(167 243 208 / 0.75);
+}
+
+.vc-notebook-characters-count.is-empty {
+  color: rgb(110 231 183 / 0.35);
+}
+
+.vc-notebook-characters-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  border: 1px solid rgb(52 211 153 / 0.35);
+  background: rgb(6 78 59 / 0.35);
+  color: rgb(110 231 183 / 0.8);
+}
+
+.vc-notebook-characters-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: auto;
+  height: 1.5rem;
+  padding: 0 0.45rem;
+  border: 1px dashed rgb(52 211 153 / 0.35);
+  border-radius: 0.3rem;
+  background: transparent;
+  color: rgb(110 231 183 / 0.7);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.vc-notebook-characters-action:hover {
+  border-color: rgb(52 211 153 / 0.55);
+  background: rgb(52 211 153 / 0.08);
+  color: rgb(167 243 208);
+}
+
+.vc-notebook-characters-action.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.vc-notebook-characters-action svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}

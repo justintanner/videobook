@@ -18,7 +18,7 @@ function missingPlanResponse(legacy = false): Record<string, unknown> {
 export function readPlanDef(fs: VideocityFs): ToolDef {
   return {
     name: "read_plan",
-    description: "Read the project Plan notebook sidecar (plan/.plan.json).",
+    description: "Read the project Notebook sidecar (plan/.plan.json).",
     schema: {
       project_slug: z.string().describe("Project slug"),
     },
