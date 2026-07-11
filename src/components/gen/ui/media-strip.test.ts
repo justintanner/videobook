@@ -140,6 +140,20 @@ describe('deriveStripSlots', () => {
     const slots = deriveStripSlots(option);
     expect(slots.map((s) => s.param)).toEqual(['first_frame_slug', 'last_frame_slug']);
   });
+
+  it('correctly maps asset field kinds for a flat model and routes them', () => {
+    const option = {
+      modes: null,
+      schema: { type: 'object' as const, properties: { character_image_slugs: { type: 'array' as const }, motion_video_slugs: { type: 'array' as const }, driving_audio_slug: { type: 'string' as const } } },
+    } as Pick<ModelOption, 'modes' | 'schema'>;
+    const slots = deriveStripSlots(option);
+    
+    expect(slots.find((s) => s.param === 'character_image_slugs')?.kind).toBe('image');
+    expect(slots.find((s) => s.param === 'motion_video_slugs')?.kind).toBe('video');
+    expect(slots.find((s) => s.param === 'driving_audio_slug')?.kind).toBe('audio');
+
+    expect(routeDrop('video', slots)).toEqual({ param: 'motion_video_slugs', action: 'append' });
+  });
 });
 
 describe('routeDrop', () => {

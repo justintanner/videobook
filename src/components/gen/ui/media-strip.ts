@@ -1,5 +1,5 @@
 import type { ModelOption, ModeSpec } from '@/components/gen/types';
-import { isAssetField } from '@/components/gen/ui/fieldHelpers';
+import { isAssetField, slugFieldAssetType } from '@/components/gen/ui/fieldHelpers';
 
 const IMGS_SUFFIX = /-imgs:(\d+)$/;
 
@@ -122,7 +122,7 @@ export function deriveStripSlots(
   const out: StripSlot[] = [];
   for (const [name] of Object.entries(option.schema.properties)) {
     if (isAssetField(name)) {
-      const kind: StripSlot['kind'] = name.startsWith('video') ? 'video' : name.startsWith('audio') ? 'audio' : 'image';
+      const kind: StripSlot['kind'] = slugFieldAssetType(name);
       out.push({ param: name, kind, label: name.replace(/_slugs?$/, '').replace(/_/g, ' '), max: null });
     }
   }
