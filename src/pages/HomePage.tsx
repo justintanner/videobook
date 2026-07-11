@@ -156,12 +156,14 @@ export function HomePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevStatusOpenRef = useRef(false);
 
-  const { callTool, state } = useMcpConnection();
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+
+  const { callTool, state, error: mcpError, retry: mcpRetry } = useMcpConnection();
   const { upload } = useUploadFile();
   const { projectSlug, setProjectSlug } = useDefaultProject(callTool, state);
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
-  const { projects, refresh: refreshProjects } = useListProjects(callTool);
+  const { projects, refresh: refreshProjects, loading: projectsLoading } = useListProjects(callTool);
   const { createProject } = useCreateProject(callTool);
   const { renameProject } = useRenameProject(callTool);
   const { deleteProject } = useDeleteProject(callTool);
@@ -190,7 +192,10 @@ export function HomePage() {
   } = useSetEnvSecret(callTool, state);
 
   useEffect(() => {
-    if (state === 'ready') refreshProjects();
+    if (state === 'ready') {
+      void refreshProjects();
+      setInitialLoadComplete(true);
+    }
   }, [state, refreshProjects]);
 
   // Fetch activity when status drawer opens
@@ -1494,6 +1499,44 @@ export function HomePage() {
       </div>
     );
   };
+
+  if (state !== 'ready' || !initialLoadComplete || (projects.length === 0 && projectsLoading)) {
+    const isFailed = state === 'failed';
+    const statusText = state === 'ready' ? 'loading projects...' : `MCP ${state}`;
+    
+    return (
+      <div className="fixed inset-0 bg-background flex flex-col items-center justify-center p-6 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]">
+        <div className="flex flex-col gap-4 max-w-sm w-full">
+          <h1 className="flex items-center gap-2.5 font-mono text-2xl font-bold tracking-widest text-foreground justify-center mb-4">
+            <span aria-hidden className="inline-block w-3.5 h-3.5 rounded-full bg-primary ring-4 ring-primary/25" />
+            VIDEOCITY
+          </h1>
+
+          <div
+            className={`flex items-center gap-2.5 rounded-lg border px-4 py-3 ${isFailed ? "border-destructive/40 bg-destructive/10" : "border-border bg-card"}`}
+          >
+            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isFailed ? "bg-destructive" : "bg-amber-400 animate-pulse"}`} />
+            <span className="font-mono text-sm font-medium text-foreground">
+              {statusText}
+            </span>
+            {isFailed && (mcpError || mcpRetry !== undefined) && (
+              <div className="ml-auto flex min-w-0 items-center gap-2">
+                {mcpError && <span className="truncate font-mono text-xs text-destructive">{mcpError}</span>}
+                {mcpRetry && (
+                  <button
+                    onClick={mcpRetry}
+                    className="shrink-0 rounded border border-primary/40 bg-primary/10 px-3 py-1 font-mono text-xs text-primary transition-colors hover:bg-primary/20"
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <MountKeyProvider>
