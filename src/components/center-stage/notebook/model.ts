@@ -1038,7 +1038,7 @@ export function resolveEffectiveValues(
       continue
     }
     const kind = assetSlugKind(slug)
-    if (!kind || kind === 'character') {
+    if (!kind) {
       warnings.push(`${input.name} does not provide a usable media reference.`)
       continue
     }
@@ -1058,7 +1058,9 @@ export function resolveEffectiveValues(
           ? 'Video cannot be routed to this model.'
           : kind === 'audio'
             ? 'Audio cannot be routed to this model.'
-            : `${input.name} cannot be routed to this model.`,
+            : kind === 'character'
+              ? `${input.name} does not provide a usable media reference.`
+              : `${input.name} cannot be routed to this model.`,
       )
       continue
     }

@@ -183,6 +183,19 @@ describe('routeDrop', () => {
     expect(routeDrop('audio', seedanceSlots)).toEqual({ param: 'audio_slugs', action: 'append' });
     expect(routeDrop('image', seedanceSlots)).toEqual({ param: 'image_slugs', action: 'append' });
   });
+
+  it('routes character to character_image_slugs or character_refs', () => {
+    const slots: StripSlot[] = [
+      { param: 'character_image_slugs', kind: 'image', label: 'Character', max: null },
+      { param: 'image_slugs', kind: 'image', label: 'Images', max: null },
+    ];
+    expect(routeDrop('character', slots)).toEqual({ param: 'character_image_slugs', action: 'append' });
+    
+    const slotsNoChar: StripSlot[] = [
+      { param: 'image_slugs', kind: 'image', label: 'Images', max: null },
+    ];
+    expect(routeDrop('character', slotsNoChar)).toEqual({ param: '', action: 'set' });
+  });
 });
 
 describe('appendImageSlug / appendSlug', () => {
@@ -204,10 +217,23 @@ describe('paramForAssetSlug', () => {
     { param: 'audio_slugs', kind: 'audio', label: 'Audio', max: 3 },
   ];
 
-  it('maps img-/vid-/aud- prefixes to the right array slot', () => {
+  it('maps img-/vid-/aud-/char- prefixes to the right array slot', () => {
     expect(paramForAssetSlug('@img-style', seedanceSlots)).toEqual({ param: 'image_slugs', action: 'append' });
     expect(paramForAssetSlug('vid-clip', seedanceSlots)).toEqual({ param: 'video_slugs', action: 'append' });
     expect(paramForAssetSlug('@aud-music', seedanceSlots)).toEqual({ param: 'audio_slugs', action: 'append' });
+  });
+
+  it('maps char- to character slots if available', () => {
+    const charSlots: StripSlot[] = [
+      { param: 'character_refs', kind: 'image', label: 'Chars', max: null },
+      { param: 'image_slugs', kind: 'image', label: 'Images', max: null },
+    ];
+    expect(paramForAssetSlug('char-hero', charSlots)).toEqual({ param: 'character_refs', action: 'append' });
+    // If no char slot, returns null
+    const noCharSlots: StripSlot[] = [
+      { param: 'image_slugs', kind: 'image', label: 'Images', max: null },
+    ];
+    expect(paramForAssetSlug('char-hero', noCharSlots)).toBeNull();
   });
 });
 

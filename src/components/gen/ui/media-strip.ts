@@ -140,6 +140,7 @@ const ARRAY_SLUG_PARAMS = new Set([
   'video_slugs',
   'audio_slugs',
   'character_image_slugs',
+  'character_refs',
   'motion_video_slugs',
 ]);
 
@@ -152,9 +153,14 @@ export function isArraySlugParam(param: string): boolean {
  *  first_frame_slug, …) set. Empty `param` means no matching slot (e.g. mode
  *  is text-only) — callers should fall back to all-mode slots or reject. */
 export function routeDrop(
-  kind: 'image' | 'video' | 'audio',
+  kind: 'image' | 'video' | 'audio' | 'character',
   slots: StripSlot[],
 ): DropRoute {
+  if (kind === 'character') {
+    const charSlot = slots.find((s) => s.param === 'character_image_slugs' || s.param === 'character_refs');
+    if (charSlot) return { param: charSlot.param, action: isArraySlugParam(charSlot.param) ? 'append' : 'set' };
+    return { param: '', action: 'set' };
+  }
   if (kind === 'video') {
     const v = slots.find((s) => s.kind === 'video');
     if (!v) return { param: '', action: 'set' };
@@ -201,8 +207,13 @@ export function paramForAssetSlug(
   slots: StripSlot[],
 ): DropRoute | null {
   const clean = slug.startsWith('@') ? slug.slice(1) : slug;
-  const kind: StripSlot['kind'] =
-    clean.startsWith('vid-') ? 'video' : clean.startsWith('aud-') ? 'audio' : 'image';
+  const kind: StripSlot['kind'] | 'character' =
+    clean.startsWith('char-') ? 'character' : clean.startsWith('vid-') ? 'video' : clean.startsWith('aud-') ? 'audio' : 'image';
+  if (kind === 'character') {
+    const charSlot = slots.find((s) => s.param === 'character_image_slugs' || s.param === 'character_refs');
+    if (!charSlot) return null;
+    return routeDrop('character', slots);
+  }
   if (!slots.some((s) => s.kind === kind)) return null;
   return routeDrop(kind, slots);
 }
