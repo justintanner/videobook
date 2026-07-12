@@ -5,7 +5,7 @@ import type { ModelOption } from '@/components/gen/types'
 import { createGenerationRequestId } from '@/lib/generation-lifecycle'
 import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle'
 import { rewriteCharacterMentions, stripOrphanedReferenceMarkers } from '@/components/ui/richPromptTokens'
-import { canonicalCharacterId } from '@/components/gen/ui/media-strip'
+import { resolveGoogleFlowCharacterRefs } from '@/hooks/useGoogleFlowEntities'
 import { appendRunAsset } from './model'
 import type { NotebookPlanDefinition, NotebookPlanStep } from './types'
 
@@ -142,30 +142,7 @@ export async function submitNotebookGeneration(
 
   if (Array.isArray(submitValues.character_refs) && submitValues.character_refs.length > 0) {
     try {
-      const listResult = await callTool('list_google_flow_characters', { include_previews: false })
-      if (!listResult.isError) {
-        const parsed = JSON.parse(responseText(listResult)) as { characters: { ref: string; display_name?: string }[] }
-        if (parsed.characters) {
-          const canonicalToLive = new Map<string, string>()
-          const canonicalToName = new Map<string, string>()
-          for (const char of parsed.characters) {
-            const canonical = canonicalCharacterId(char.ref)
-            canonicalToLive.set(canonical, char.ref)
-            canonicalToName.set(canonical, char.display_name ?? canonical)
-          }
-          const updatedRefs = (submitValues.character_refs as string[]).map((ref) => {
-            if (!ref.trim()) return ref
-            const canonical = canonicalCharacterId(ref)
-            const liveRef = canonicalToLive.get(canonical)
-            if (!liveRef) {
-              const name = canonicalToName.get(canonical) ?? ref
-              throw new Error(`Character not found upstream: ${name}`)
-            }
-            return liveRef
-          })
-          submitValues.character_refs = updatedRefs
-        }
-      }
+      submitValues.character_refs = await resolveGoogleFlowCharacterRefs(callTool, submitValues.character_refs as string[])
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       onGenerationLifecycle?.({ phase: 'failed', requestId })

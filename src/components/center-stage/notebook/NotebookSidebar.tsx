@@ -305,7 +305,7 @@ function GenerationSidebar({
   )
   const history = usePromptHistory(callTool, category === 'image' ? 'image_generate' : 'video_generate', projectSlug)
   
-  const charEntities = useGoogleFlowEntities('character', category === 'video' ? callTool : undefined, mcpState)
+  const charEntities = useGoogleFlowEntities('character', (category === 'video' || (modeVisible?.has('character_refs') ?? !!option?.schema.properties.character_refs)) ? callTool : undefined, mcpState)
   const characterRefs = useMemo(
     () =>
       Array.isArray(mergedValues.character_refs)
@@ -506,6 +506,7 @@ function GenerationSidebar({
               <CharacterInputRows
                 characterRefs={characterRefs}
                 charMap={charMap}
+                loaded={charEntities.loaded}
                 onUpdate={(refs) => updateValues('character_refs', refs)}
                 maxItems={characterField.maxItems ?? 7}
                 disabled={running}
@@ -777,6 +778,7 @@ function InputList({
 function CharacterInputRows({
   characterRefs,
   charMap,
+  loaded,
   onUpdate,
   maxItems,
   disabled,
@@ -786,6 +788,7 @@ function CharacterInputRows({
 }: {
   characterRefs: string[]
   charMap: Map<string, GoogleFlowEntityOption>
+  loaded: boolean
   onUpdate: (refs: string[]) => void
   maxItems: number
   disabled: boolean
@@ -797,13 +800,14 @@ function CharacterInputRows({
     <>
       {characterRefs.map((ref) => {
         const entity = charMap.get(canonicalCharacterId(ref))
-        const label = entity?.displayName || ref
+        const missing = loaded && !entity
+        const label = missing ? 'Missing' : (entity?.displayName || ref)
         return (
-          <div className="vc-notebook-input-chip" key={ref}>
-            {entity?.thumbnailUrl ? <img src={entity.thumbnailUrl} alt="" /> : <User />}
-            <span>{label}</span>
+          <div className={cn("vc-notebook-input-chip", missing ? "border-red-500/50 bg-red-500/10" : "")} key={ref}>
+            {missing ? <X className="w-4 h-4 text-red-500/80" /> : (entity?.thumbnailUrl ? <img src={entity.thumbnailUrl} alt="" /> : <User />)}
+            <span className={missing ? "text-red-400" : ""}>{label}</span>
             <span className="vc-notebook-route-fixed text-xs ml-auto opacity-60">character</span>
-            <button type="button" title="Disconnect" onClick={() => onUpdate(characterRefs.filter(r => r !== ref))}><X className="w-4 h-4" /></button>
+            <button type="button" title="Disconnect" onClick={() => onUpdate(characterRefs.filter(r => r !== ref))}><X className={cn("w-4 h-4", missing ? "text-red-400" : "")} /></button>
           </div>
         )
       })}

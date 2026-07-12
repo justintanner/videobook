@@ -25,7 +25,7 @@ const EXCLUDED_TOOLS = new Set([
   "push_chat_history",
   "read_asset_metadata",
   "read_file_at_commit",
-  "read_plan",
+  "read_notebook",
   "record_prompt",
   "render_settings",
   "show_folder",

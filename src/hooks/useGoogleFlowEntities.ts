@@ -265,3 +265,45 @@ export function useGoogleFlowEntities(
     ensureLoaded,
   }
 }
+
+import { canonicalCharacterId } from '@/components/gen/ui/media-strip'
+
+export async function resolveGoogleFlowCharacterRefs(
+  callTool: UseMcpResult['callTool'],
+  refs: string[]
+): Promise<string[]> {
+  const listResult = await callTool('list_google_flow_characters', { include_previews: false })
+  if (listResult.isError) {
+    const content = listResult.content as Array<{ type: string; text: string }> | undefined
+    throw new Error(String(content?.[0]?.text ?? 'list_google_flow_characters failed'))
+  }
+  const content = listResult.content as Array<{ type: string; text: string }> | undefined
+  const text = content?.[0]?.text
+  if (!text) throw new Error('list_google_flow_characters returned no data')
+
+  const parsed = JSON.parse(text) as { characters: { ref: string; display_name?: string }[] }
+  if (!parsed.characters) return refs
+
+  const canonicalToLive = new Map<string, string>()
+  const canonicalToName = new Map<string, string>()
+  for (const char of parsed.characters) {
+    const canonical = canonicalCharacterId(char.ref)
+    canonicalToLive.set(canonical, char.ref)
+    canonicalToName.set(canonical, char.display_name ?? canonical)
+  }
+
+  return refs.map((ref) => {
+    if (!ref.trim()) return ref
+    const canonical = canonicalCharacterId(ref)
+    const liveRef = canonicalToLive.get(canonical)
+    if (!liveRef) {
+      // canonicalToName here is only populated with existing characters, so it won't help for deleted ones.
+      // But wait, useNotebookRun had `const name = canonicalToName.get(canonical) ?? ref`, which is actually 
+      // not very helpful for deleted ones unless the old name is stored somewhere. 
+      // However, we should just keep it as useNotebookRun had it.
+      const name = canonicalToName.get(canonical) ?? ref
+      throw new Error(`Character not found upstream: ${name}`)
+    }
+    return liveRef
+  })
+}

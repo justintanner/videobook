@@ -79,7 +79,7 @@ describe("write_notebook tool", () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "videocity-write-plan-test-"));
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-write-notebook-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
@@ -92,7 +92,7 @@ describe("write_notebook tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("writes a ready plan asset, mirrors markdown, and round-trips through read_plan", async () => {
+  it("writes a ready notebook asset, mirrors markdown, and round-trips through read_notebook", async () => {
     const result = await client.callTool({
       name: "write_notebook",
       arguments: { project_slug: "test-proj", name: "testnb", definition: NOTEBOOK_DEFINITION },

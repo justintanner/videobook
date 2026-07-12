@@ -83,6 +83,7 @@ export interface CharacterPillData {
   name: string
   thumbnailUrl: string | null
   imageCount: number
+  missing?: boolean
 }
 
 interface MediaStripProps {
@@ -270,6 +271,7 @@ export function MediaStrip({
       imageCount={c.imageCount}
       onRemove={() => onRemoveCharacter(c.ref)}
       disabled={disabled}
+      missing={c.missing}
     />
   ))
 
@@ -439,30 +441,43 @@ function CharacterChip({
   imageCount,
   onRemove,
   disabled,
+  missing,
 }: {
   name: string
   thumbnailUrl: string | null
   imageCount: number
   onRemove: () => void
   disabled?: boolean
+  missing?: boolean
 }) {
   const [broken, setBroken] = useState(false)
   const showImg = !!thumbnailUrl && !broken
   return (
     <div
-      className="group relative shrink-0 flex items-center gap-1.5 h-10 pl-1 pr-2 rounded border border-primary/30 bg-black/60"
+      className={cn(
+        "group relative shrink-0 flex items-center gap-1.5 h-10 pl-1 pr-2 rounded border bg-black/60",
+        missing ? "border-red-500/50" : "border-primary/30"
+      )}
       title={name}
     >
-      <div className="w-8 h-8 rounded overflow-hidden shrink-0 flex items-center justify-center bg-black/60">
-        {showImg ? (
+      <div className={cn(
+        "w-8 h-8 rounded overflow-hidden shrink-0 flex items-center justify-center",
+        missing ? "bg-red-500/20" : "bg-black/60"
+      )}>
+        {missing ? (
+          <X className="w-4 h-4 text-red-500/80" />
+        ) : showImg ? (
           <img src={thumbnailUrl!} alt={name} className="w-full h-full object-cover" onError={() => setBroken(true)} />
         ) : (
           <ImageIcon className="w-3 h-3 text-primary/30" />
         )}
       </div>
       <div className="flex flex-col">
-        <span className="text-[9px] font-mono text-primary/70 max-w-[60px] truncate leading-tight">{name}</span>
-        {imageCount > 1 && (
+        <span className={cn(
+          "text-[9px] font-mono max-w-[60px] truncate leading-tight",
+          missing ? "text-red-400" : "text-primary/70"
+        )}>{missing ? 'Missing' : name}</span>
+        {!missing && imageCount > 1 && (
           <span className="text-[8px] font-mono text-amber-400/50 leading-tight">×{imageCount}</span>
         )}
       </div>

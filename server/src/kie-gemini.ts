@@ -149,7 +149,7 @@ const STREAM_ATTEMPTS = 2;
 // Kie's streaming endpoint can also stall mid-flight without erroring — the SSE
 // connection stays open but no further chunk arrives. The provider timeout
 // covers request initiation, not inter-chunk gaps, so an idle stream would hang
-// the for-await (and, for the plan job, wedge the source asset's analyze lease +
+// the for-await (and, for the notebook job, wedge the source asset's analyze lease +
 // a queue slot indefinitely). Abort the stream after this many ms of silence so
 // the hang surfaces as a failed attempt and degrades to the one-shot fallback.
 const STREAM_IDLE_MS = 60_000;

@@ -137,7 +137,7 @@ export function useCanvasCostEstimates(options: {
   }, [enabled, definition, projectSlug])
 
   // Debounced estimate pass. The definition identity changes per keystroke in
-  // the sidebar (only write_plan is debounced, not the in-memory state), so the
+  // the sidebar (only write_notebook is debounced, not the in-memory state), so the
   // debounce + per-key cache keep estimate_cost traffic to one batched call per
   // settled edit.
   useEffect(() => {

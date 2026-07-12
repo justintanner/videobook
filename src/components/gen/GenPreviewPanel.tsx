@@ -16,7 +16,7 @@ import {
   paramForAssetSlug,
 } from '@/components/gen/ui/media-strip';
 import { sortFields, isAssetField, isElementField } from '@/components/gen/ui/fieldHelpers';
-import { useGoogleFlowEntities } from '@/hooks/useGoogleFlowEntities';
+import { useGoogleFlowEntities, resolveGoogleFlowCharacterRefs } from '@/hooks/useGoogleFlowEntities';
 import { findByAssetSlug, stripAssetTagsFromText, stripSlugPrefix } from '@/lib/slugs';
 import { ErrorPage } from '@/components/gen/state/ErrorPage';
 import { JsonNode } from '@/components/ui/JsonNode';
@@ -647,7 +647,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     return [{ toolName: submitToolName, input }];
   }, [selectedOption, submitToolName, submitValues, projectSlug]);
   const cost = useEstimateCost(callTool, { calls: estimateCalls });
-  const charEntities = useGoogleFlowEntities('character', category === 'video' ? callTool : undefined, mcpState);
+  const charEntities = useGoogleFlowEntities('character', (category === 'video' || (modeVisible?.has('character_refs') ?? !!selectedOption?.schema.properties.character_refs)) ? callTool : undefined, mcpState);
   const characterRefs = useMemo(
     () =>
       Array.isArray(formValues.character_refs)
@@ -738,10 +738,11 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
           name: e?.displayName ?? ref,
           thumbnailUrl: e?.thumbnailUrl ?? null,
           imageCount: characterImageCount(ref, e ? { image_count: e.image_count } : null),
+          missing: charEntities.loaded && !e,
         };
       });
     },
-    [characterRefs, charMap, modeVisible],
+    [characterRefs, charMap, modeVisible, charEntities.loaded],
   );
   const allCharMentions = useMemo(
     () =>
@@ -991,14 +992,12 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       const outImageSlugs = Array.isArray(outValues.image_slugs)
         ? (outValues.image_slugs as string[]).filter((s) => s.trim() !== '')
         : [];
-      const outCharacterRefs = Array.isArray(outValues.character_refs)
-        ? (outValues.character_refs as string[]).filter((s) => s.trim() !== '').map((ref) => {
-            const canonical = canonicalCharacterId(ref);
-            const liveEntity = charMap.get(canonical);
-            if (!liveEntity) throw new Error(`Character not found upstream: ${ref}`);
-            return liveEntity.ref;
-          })
+      let outCharacterRefs = Array.isArray(outValues.character_refs)
+        ? (outValues.character_refs as string[]).filter((s) => s.trim() !== '')
         : [];
+      if (outCharacterRefs.length > 0) {
+        outCharacterRefs = await resolveGoogleFlowCharacterRefs(callToolRef.current, outCharacterRefs);
+      }
       const outVoiceRefs = Array.isArray(outValues.voice_refs)
         ? (outValues.voice_refs as string[]).filter((s) => s.trim() !== '')
         : [];
@@ -1052,7 +1051,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setGenState(undefined);
       setError(e instanceof Error ? e.message : 'Generation failed');
     }
-  }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets, promptHistory, onGenerationLifecycle, modes, activeMode, activeModeKey, charMentions, charMap]);
+  }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets, promptHistory, onGenerationLifecycle, modes, activeMode, activeModeKey, charMentions]);
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
   const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
