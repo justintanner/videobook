@@ -28,11 +28,8 @@ import type { SplitTarget } from '@/components/commands/split/types';
 import { parseTimestamp } from '@/components/commands/split/utils';
 import { GenPreviewPanel } from '@/components/gen/GenPreviewPanel';
 import type { GenPreviewPanelHandle } from '@/components/gen/GenPreviewPanel';
-import { CharacterDialog } from '@/components/character/CharacterDialog';
 import { PostComposerDialog } from '@/components/post/PostComposerDialog';
 import { useExtractSkeleton } from '@/hooks/useExtractSkeleton';
-import { useGenerateCharacter } from '@/hooks/useGenerateCharacter';
-import type { CharacterProfile } from '@/hooks/useCharacterSlots';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
 import { TimelineAudioLane } from '@/components/timeline/TimelineAudioLane';
 import { DropzoneOverlay } from '@/components/DropzoneOverlay';
@@ -139,11 +136,7 @@ export function HomePage() {
   const [ghostClips, setGhostClips] = useState<
     { requestId: string; assetId?: string; category: 'video' | 'image'; prompt: string; startedAt: number }[]
   >([]);
-  const [characterDialog, setCharacterDialog] = useState<{
-    initialSlug: string | null;
-    initialProfile?: CharacterProfile;
-    onProfileSaved?: (profile: CharacterProfile) => void;
-  } | null>(null);
+
   const [postPanel, setPostPanel] = useState<{ assetId: string | null; text: string } | null>(null);
   const [watermarkPanel, setWatermarkPanel] = useState<{ assetId: string | null } | null>(null);
   const [projectExportAssetId, setProjectExportAssetId] = useState<string | null>(null);
@@ -175,7 +168,7 @@ export function HomePage() {
   const markAssetSeen = useMarkAssetSeen(callTool);
   const { timeline, fetchTimeline, setCurrentOrientation, addAudio, moveAudio, removeAudio, updateAudio } = useTimeline(callTool);
   const { renderAsset } = useRenderAsset(callTool);
-  const { generate: generateCharacter, submitting: characterSubmitting } = useGenerateCharacter(callTool);
+
   const { extract: extractSkeleton } = useExtractSkeleton(sync);
   const { fetchRenderSettings } = useRenderSettings(callTool);
   const { entries: activityEntries, loading: activityLoading, fetch: fetchActivity } = useProjectActivity(callTool);
@@ -659,7 +652,7 @@ export function HomePage() {
     setPendingBackTab(null);
     setTimelineSlotIndex(null);
     setGenPanel(null);
-    setCharacterDialog(null);
+
     setPostPanel(null);
     setProjectExportAssetId(null);
     setPlanEmptyOverride(false);
@@ -1411,10 +1404,7 @@ export function HomePage() {
     gen_neg: (text: string) => genPanelRef.current?.setField('negative_prompt', text),
     gen_images: (slugs: string) => genPanelRef.current?.setImages(slugs),
     gen_elements: (index: string, field: string, value: string) => genPanelRef.current?.setElement(index, field, value),
-    open_character_dialog: (initialSlug: string) => {
-      const cleaned = initialSlug.trim();
-      setCharacterDialog({ initialSlug: cleaned ? cleaned : null });
-    },
+
     open_post_composer: (assetSlug: string, text: string) => {
       const cleaned = assetSlug.trim().replace(/^@/, '');
       const matched = cleaned
@@ -1467,7 +1457,7 @@ export function HomePage() {
   }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, viewerSize, applySubsSetting, applyAudioSetting, applyOsgSetting, activeSelection, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openRenameAll]);
 
   const renderAssetCard = (item: MediaItem) => {
-    const canExtractSkeleton = (item.type === 'image' || item.type === 'character') && !!item.filePath && !!projectSlug;
+    const canExtractSkeleton = item.type === 'image' && !!item.filePath && !!projectSlug;
     const itemFilePath = item.filePath;
     const isUnseen = item.seenAt == null && (item.status ?? 'ready') === 'ready';
     const onMarkSeen = isUnseen && projectSlug ? () => handleMarkSeen(item.id) : undefined;
@@ -1492,7 +1482,7 @@ export function HomePage() {
 
     return (
       <div key={item.id} className="w-full">
-        {(item.type === 'image' || item.type === 'character') && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
+        {item.type === 'image' && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
         {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
         {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
         {item.type === 'plan' && <NotebookCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
@@ -1714,10 +1704,9 @@ export function HomePage() {
                     callTool={callTool}
                     callState={state}
                     onClose={() => setSelectedItem(null)}
-                    imageAssets={mediaItems.filter((m) => m.type === 'image' || m.type === 'character')}
+                    imageAssets={mediaItems.filter((m) => m.type === 'image')}
                     mediaItems={mediaItems}
                     onOpenAsset={handleOpenAsset}
-                    onEditCharacterProfile={(charId, profile, onProfileSaved) => setCharacterDialog({ initialSlug: charId, initialProfile: profile, onProfileSaved })}
                     cropTarget={cropTarget}
                     onCropConsumed={() => setCropTarget(null)}
                     osgTarget={osgTarget}
@@ -1874,19 +1863,7 @@ export function HomePage() {
           </div>
         </div>
       </div>
-      <CharacterDialog
-        open={!!characterDialog}
-        onOpenChange={(next) => { if (!next) setCharacterDialog(null); }}
-        imageAssets={mediaItems.filter((m) => m.type === 'image' || m.type === 'character')}
-        projectSlug={projectSlug}
-        initialSlug={characterDialog?.initialSlug ?? null}
-        initialProfile={characterDialog?.initialProfile ?? null}
-        generate={generateCharacter}
-        submitting={characterSubmitting}
-        callTool={callTool}
-        callState={state}
-        onProfileSaved={characterDialog?.onProfileSaved}
-      />
+
       <PostComposerDialog
         open={!!postPanel}
         onOpenChange={(next) => { if (!next) setPostPanel(null); }}

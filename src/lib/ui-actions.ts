@@ -35,7 +35,7 @@ export interface UiActionCallbacks {
   gen_neg: (text: string) => void;
   gen_images: (slugs: string) => void;
   gen_elements: (index: string, field: string, value: string) => void;
-  open_character_dialog: (initialSlug: string) => void;
+
   open_post_composer: (assetSlug: string, text: string) => void;
   open_notebook: () => void;
   open_rename_all: () => void;
@@ -147,9 +147,7 @@ export function executeUiAction(
     case 'gen_elements':
       (fn as UiActionCallbacks['gen_elements'])(ctx.args.index ?? '', ctx.args.field ?? '', ctx.args.value ?? ctx.raw);
       break;
-    case 'open_character_dialog':
-      (fn as UiActionCallbacks['open_character_dialog'])(ctx.raw || ctx.args.model_slug || '');
-      break;
+
     case 'open_post_composer':
       (fn as UiActionCallbacks['open_post_composer'])(ctx.args.asset_slug ?? '', ctx.args.text ?? '');
       break;

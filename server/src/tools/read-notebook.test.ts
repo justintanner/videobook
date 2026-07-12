@@ -64,9 +64,9 @@ async function seedPlanSidecar(
   projectSlug: string,
   sidecar: unknown,
 ): Promise<void> {
-  const planDir = join(projectsDir, projectSlug, "plan");
-  await mkdir(planDir, { recursive: true });
-  await writeFile(join(planDir, ".plan.json"), JSON.stringify(sidecar, null, 2));
+  const notebookDir = join(projectsDir, projectSlug, "nb-test");
+  await mkdir(notebookDir, { recursive: true });
+  await writeFile(join(notebookDir, ".notebook.json"), JSON.stringify(sidecar, null, 2));
 }
 
 function readResponse(result: Awaited<ReturnType<Client["callTool"]>>): ReadPlanResponse {
@@ -74,7 +74,7 @@ function readResponse(result: Awaited<ReturnType<Client["callTool"]>>): ReadPlan
   return JSON.parse(content[0].text) as ReadPlanResponse;
 }
 
-describe("read_plan tool", () => {
+describe("read_notebook tool", () => {
   let client: Client;
   let tempDir: string;
 
@@ -83,7 +83,7 @@ describe("read_plan tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { project_slug: "test-proj", notebook_id: "nb-test" },
     });
   });
 
@@ -100,8 +100,8 @@ describe("read_plan tool", () => {
     });
 
     const result = await client.callTool({
-      name: "read_plan",
-      arguments: { project_slug: "test-proj" },
+      name: "read_notebook",
+      arguments: { project_slug: "test-proj", notebook_id: "nb-test" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -110,8 +110,8 @@ describe("read_plan tool", () => {
 
   it("returns an empty notebook definition when the plan is missing", async () => {
     const result = await client.callTool({
-      name: "read_plan",
-      arguments: { project_slug: "test-proj" },
+      name: "read_notebook",
+      arguments: { project_slug: "test-proj", notebook_id: "nb-test" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -126,8 +126,8 @@ describe("read_plan tool", () => {
     });
 
     const result = await client.callTool({
-      name: "read_plan",
-      arguments: { project_slug: "test-proj" },
+      name: "read_notebook",
+      arguments: { project_slug: "test-proj", notebook_id: "nb-test" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -139,13 +139,13 @@ describe("read_plan tool", () => {
   });
 
   it("marks corrupt JSON as legacy-empty", async () => {
-    const planDir = join(tempDir, "test-proj", "plan");
-    await mkdir(planDir, { recursive: true });
-    await writeFile(join(planDir, ".plan.json"), "{");
+    const notebookDir = join(tempDir, "test-proj", "nb-test");
+    await mkdir(notebookDir, { recursive: true });
+    await writeFile(join(notebookDir, ".notebook.json"), "{");
 
     const result = await client.callTool({
-      name: "read_plan",
-      arguments: { project_slug: "test-proj" },
+      name: "read_notebook",
+      arguments: { project_slug: "test-proj", notebook_id: "nb-test" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -158,7 +158,7 @@ describe("read_plan tool", () => {
 
   it("returns an error when the project does not exist", async () => {
     const result = await client.callTool({
-      name: "read_plan",
+      name: "read_notebook",
       arguments: { project_slug: "no-such-project" },
     });
 

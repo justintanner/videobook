@@ -428,11 +428,22 @@ export async function buildAssetList(fs: VideocityFs, project_slug: string, sort
         const mediaMtime = mediaFile?.mtimeMs ?? 0;
         if (mediaMtime) cacheBust = `?v=${Math.floor(mediaMtime)}`;
       }
-      const media_url = mediaFile
+      // Character assets: free-form folders have no original.* media. Project
+      // the first image in the folder so sidebar thumbs and drag-drop keep working.
+      let charImage = null;
+      if (a.type === "character") {
+        charImage = files.find((f) => /\.(jpg|jpeg|png|webp|gif)$/i.test(f.name)) ?? null;
+      }
+      
+      const media_url = charImage
+        ? `/files/${project_slug}/${a.id}/${charImage.name}${cacheBust}`
+        : mediaFile
         ? `/files/${project_slug}/${a.id}/${mediaFile.name}${cacheBust}`
         : null;
       const isImage = a.type === "image";
-      const thumbnail_url = hasThumbnail
+      const thumbnail_url = charImage
+        ? `/files/${project_slug}/${a.id}/${charImage.name}${cacheBust}`
+        : hasThumbnail
         ? `/files/${project_slug}/${a.id}/original.jpg${cacheBust}`
         : isImage ? media_url : null;
 
@@ -475,11 +486,7 @@ export async function buildAssetList(fs: VideocityFs, project_slug: string, sort
 
       // Character assets: surface whether an ElevenLabs voice is assigned, so the
       // client can flag voiceless hosts before a Clip Show plan is attempted.
-      let has_voice: boolean | null = null;
-      if (a.type === "character") {
-        const charMeta = await fs.readMetadata<{ elevenlabs_voice_id?: string }>(a.id, "character", project_slug);
-        has_voice = charMeta.ok ? Boolean(charMeta.value.elevenlabs_voice_id?.trim()) : false;
-      }
+      const has_voice: boolean | null = null;
 
       // Video/final assets: surface the configured OSG overlay so the client can
       // render its badge on clip cards and timeline slots without a per-asset
@@ -494,7 +501,7 @@ export async function buildAssetList(fs: VideocityFs, project_slug: string, sort
         const md = await fs.readFile(a.id, "original.md", project_slug);
         if (md.ok) prompt = md.value.toString();
       }
-      if (!prompt && a.type === "plan") {
+      if (!prompt && a.type === "notebook") {
         const md = await fs.readFile(a.id, "index.md", project_slug);
         if (md.ok) prompt = md.value.toString();
       }

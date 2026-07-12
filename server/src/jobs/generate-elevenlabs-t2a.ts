@@ -7,7 +7,6 @@ type GenerateElevenlabsT2aPayload = {
   type: "generate_elevenlabs_t2a";
   audAssetId: string;
   projectSlug: string;
-  characterAssetId: string;
   voiceId: string;
   text: string;
   modelId: string;
@@ -19,7 +18,6 @@ export function registerGenerateElevenlabsT2aJob(fs: VideocityFs): void {
     const {
       audAssetId,
       projectSlug,
-      characterAssetId,
       voiceId,
       text,
       modelId,
@@ -45,7 +43,6 @@ export function registerGenerateElevenlabsT2aJob(fs: VideocityFs): void {
       model_id: modelId,
       output_format: outputFormat,
       voice_id: voiceId,
-      source_character_asset_id: characterAssetId,
       text,
       generated_at: new Date().toISOString(),
     };

@@ -1,29 +1,30 @@
 import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
-import { emptyPlanDefinition, isNotebookSidecar } from "../plan-notebook.js";
+import { emptyNotebookDefinition, isNotebookSidecar } from "../notebook-store.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
-function isMissingPlanError(error: { code?: string; message: string }): boolean {
-  return error.code === "NOT_FOUND" || error.message.includes("File not found: plan/.plan.json");
+function isMissingNotebookError(error: { code?: string; message: string }): boolean {
+  return error.code === "NOT_FOUND" || error.message.includes("File not found");
 }
 
-function missingPlanResponse(legacy = false): Record<string, unknown> {
+function missingNotebookResponse(legacy = false): Record<string, unknown> {
   return {
     exists: false,
     ...(legacy ? { legacy: true } : {}),
-    definition: emptyPlanDefinition(),
+    definition: emptyNotebookDefinition(),
   };
 }
 
-export function readPlanDef(fs: VideocityFs): ToolDef {
+export function readNotebookDef(fs: VideocityFs): ToolDef {
   return {
-    name: "read_plan",
-    description: "Read the project Notebook sidecar (plan/.plan.json).",
+    name: "read_notebook",
+    description: "Read a Notebook sidecar (nb-*/.notebook.json).",
     schema: {
       project_slug: z.string().describe("Project slug"),
+      notebook_id: z.string().describe("Asset ID of the notebook (e.g. nb-123)"),
     },
     handler: async (args): Promise<ToolResult> => {
-      const { project_slug } = args as { project_slug: string };
+      const { project_slug, notebook_id } = args as { project_slug: string; notebook_id: string; };
       const project = await fs.getProject(project_slug);
       if (!project.ok) {
         return {
@@ -32,11 +33,11 @@ export function readPlanDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const result = await fs.readFile("plan", ".plan.json", project_slug);
+      const result = await fs.readFile(notebook_id, ".notebook.json", project_slug);
       if (!result.ok) {
-        if (isMissingPlanError(result.error)) {
+        if (isMissingNotebookError(result.error)) {
           return {
-            content: [{ type: "text", text: JSON.stringify(missingPlanResponse()) }],
+            content: [{ type: "text", text: JSON.stringify(missingNotebookResponse()) }],
           };
         }
         return {
@@ -50,12 +51,12 @@ export function readPlanDef(fs: VideocityFs): ToolDef {
         sidecar = JSON.parse(Buffer.from(result.value).toString("utf-8"));
       } catch {
         return {
-          content: [{ type: "text", text: JSON.stringify(missingPlanResponse(true)) }],
+          content: [{ type: "text", text: JSON.stringify(missingNotebookResponse(true)) }],
         };
       }
       if (!isNotebookSidecar(sidecar)) {
         return {
-          content: [{ type: "text", text: JSON.stringify(missingPlanResponse(true)) }],
+          content: [{ type: "text", text: JSON.stringify(missingNotebookResponse(true)) }],
         };
       }
       return {

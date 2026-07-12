@@ -326,13 +326,7 @@ export function AssetMenu({
           accentColor: 'border-l-emerald-500/50 focus:border-l-emerald-500/80',
           onSelect: () => onAnimateCommand?.(`/describe ${slug}`),
         },
-        {
-          command: `/character ${slug}`,
-          title: 'Character',
-          titleClassName: 'text-violet-300',
-          accentColor: 'border-l-violet-400/50 focus:border-l-violet-400/80',
-          onSelect: () => onAnimateCommand?.(`/character ${slug}`),
-        },
+
         ...(onExtractSkeleton
           ? [{
               command: `extract pose ${slug}`,

@@ -55,8 +55,8 @@ export function generateHappyhorseRefVideoDef(fs: VideocityFs): ToolDef {
       const imageInputs: RefInput[] = [];
       for (const raw of image_slugs) {
         const assetId = raw.replace(/^@/, "");
-        if (!assetId.startsWith("img-") && !assetId.startsWith("char-")) {
-          return { isError: true as const, content: [{ type: "text" as const, text: `image_slugs entries must be img-* or char-* assets, got: ${assetId}` }] };
+        if (!assetId.startsWith("img-")) {
+          return { isError: true as const, content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${assetId}` }] };
         }
         const manifest = await fs.getManifest(assetId, project_slug);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };

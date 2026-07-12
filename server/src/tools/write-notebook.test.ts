@@ -1,8 +1,9 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { mkdtemp, readFile, rm, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
+import { createFs } from "videocity-engine";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -73,7 +74,7 @@ function resultText(result: Awaited<ReturnType<Client["callTool"]>>): string {
   return content[0].text;
 }
 
-describe("write_plan tool", () => {
+describe("write_notebook tool", () => {
   let client: Client;
   let tempDir: string;
 
@@ -82,7 +83,7 @@ describe("write_plan tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { project_slug: "test-proj", name: "testnb" },
     });
   });
 
@@ -93,19 +94,21 @@ describe("write_plan tool", () => {
 
   it("writes a ready plan asset, mirrors markdown, and round-trips through read_plan", async () => {
     const result = await client.callTool({
-      name: "write_plan",
-      arguments: { project_slug: "test-proj", definition: NOTEBOOK_DEFINITION },
+      name: "write_notebook",
+      arguments: { project_slug: "test-proj", name: "testnb", definition: NOTEBOOK_DEFINITION },
     });
 
+    if (result.isError) { console.error("WRITE ERROR:", resultText(result)); }
     expect(result.isError).toBeFalsy();
-    expect(JSON.parse(resultText(result))).toEqual({ ok: true, steps: 4 });
-    const sidecar = await readFile(join(tempDir, "test-proj", "plan", ".plan.json"), "utf8");
+    expect(JSON.parse(resultText(result))).toMatchObject({ ok: true, steps: 4 });
+    const resultObj = JSON.parse(resultText(result));
+    const sidecar = await readFile(join(tempDir, "test-proj", resultObj.notebook_id, ".notebook.json"), "utf8");
     expect(JSON.parse(sidecar)).toEqual({
       format: "notebook",
       schema_version: 1,
       definition: NOTEBOOK_DEFINITION,
     });
-    const markdown = await readFile(join(tempDir, "test-proj", "plan", "index.md"), "utf8");
+    const markdown = await readFile(join(tempDir, "test-proj", resultObj.notebook_id, "index.md"), "utf8");
     expect(markdown).toContain("Idea — prompt");
     expect(markdown).toContain("Key frame — image");
     expect(markdown).toContain("**Model:** nano-banana-pro");
@@ -116,20 +119,20 @@ describe("write_plan tool", () => {
 
     const assetsResult = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: "test-proj" },
+      arguments: { project_slug: "test-proj", name: "testnb" },
     });
     const assets = JSON.parse(resultText(assetsResult)) as {
       assets: Array<{ id: string; type: string; status: string }>;
     };
-    expect(assets.assets).toContainEqual(expect.objectContaining({
-      id: "plan",
-      type: "plan",
+    expect(assets.assets).toEqual(expect.arrayContaining([expect.objectContaining({
+      id: resultObj.notebook_id,
+      type: "notebook",
       status: "ready",
-    }));
+    })]));
 
     const readResult = await client.callTool({
-      name: "read_plan",
-      arguments: { project_slug: "test-proj" },
+      name: "read_notebook",
+      arguments: { project_slug: "test-proj", notebook_id: resultObj.notebook_id },
     });
     expect(JSON.parse(resultText(readResult))).toEqual({
       exists: true,
@@ -139,11 +142,11 @@ describe("write_plan tool", () => {
 
   it("succeeds when rewriting an identical definition", async () => {
     const first = await client.callTool({
-      name: "write_plan",
+      name: "write_notebook",
       arguments: { project_slug: "test-proj", definition: NOTEBOOK_DEFINITION },
     });
     const second = await client.callTool({
-      name: "write_plan",
+      name: "write_notebook",
       arguments: { project_slug: "test-proj", definition: NOTEBOOK_DEFINITION },
     });
 
@@ -167,11 +170,11 @@ describe("write_plan tool", () => {
     };
 
     const duplicateResult = await client.callTool({
-      name: "write_plan",
+      name: "write_notebook",
       arguments: { project_slug: "test-proj", definition: duplicateIds },
     });
     const typeResult = await client.callTool({
-      name: "write_plan",
+      name: "write_notebook",
       arguments: { project_slug: "test-proj", definition: invalidType },
     });
 
@@ -180,17 +183,19 @@ describe("write_plan tool", () => {
   });
 
   it("overwrites a legacy sidecar", async () => {
-    const planDir = join(tempDir, "test-proj", "plan");
-    await mkdir(planDir, { recursive: true });
-    await writeFile(join(planDir, ".plan.json"), JSON.stringify({ formula: "char_swap" }));
-
+    const fsObj = createFs({ projectsDir: tempDir });
+    const asset = await fsObj.createAsset("nb", "legacy", "test-proj");
+    const notebookDir = join(tempDir, "test-proj", asset.value.assetId);
+    await writeFile(join(notebookDir, ".notebook.json"), JSON.stringify({ formula: "char_swap" }));
+    
+    // Now use this assetId for the test
     const result = await client.callTool({
-      name: "write_plan",
-      arguments: { project_slug: "test-proj", definition: NOTEBOOK_DEFINITION },
+      name: "write_notebook",
+      arguments: { project_slug: "test-proj", notebook_id: asset.value.assetId, definition: NOTEBOOK_DEFINITION },
     });
-
+    
     expect(result.isError).toBeFalsy();
-    const sidecar = await readFile(join(planDir, ".plan.json"), "utf8");
+    const sidecar = await readFile(join(notebookDir, ".notebook.json"), "utf8");
     expect(JSON.parse(sidecar)).toMatchObject({ format: "notebook", definition: NOTEBOOK_DEFINITION });
   });
 });

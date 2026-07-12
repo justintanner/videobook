@@ -41,8 +41,8 @@ export function generateHappyhorseI2vVideoDef(fs: VideocityFs): ToolDef {
       }
 
       const assetId = first_frame_slug.replace(/^@/, "");
-      if (!assetId.startsWith("img-") && !assetId.startsWith("char-")) {
-        return { isError: true as const, content: [{ type: "text" as const, text: `first_frame_slug must be an img-* or char-* asset, got: ${assetId}` }] };
+      if (!assetId.startsWith("img-")) {
+        return { isError: true as const, content: [{ type: "text" as const, text: `first_frame_slug must be an img-* asset, got: ${assetId}` }] };
       }
       const manifest = await fs.getManifest(assetId, project_slug);
       if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };

@@ -70,7 +70,7 @@ import { registerSuggestSfxJob } from "./suggest-sfx.js";
 import { registerAnalyzeJokesJob } from "./analyze-jokes.js";
 import { registerDetectScenesJob } from "./detect-scenes.js";
 import { registerDescribeImageJob } from "./describe-image.js";
-import { registerExtractCharacterJob } from "./extract-character.js";
+
 import { registerRewriteScriptJob } from "./rewrite-script.js";
 import { registerRenderTimelineJob } from "./render-timeline.js";
 import { registerProcessImageJob } from "./process-image.js";
@@ -187,7 +187,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerAnalyzeJokesJob(fs);
   registerDetectScenesJob(fs);
   registerDescribeImageJob(fs);
-  registerExtractCharacterJob(fs);
+
   registerRewriteScriptJob(fs);
   registerRenderTimelineJob(fs);
   registerProcessImageJob(fs);
@@ -241,6 +241,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
     "match_plan_characters",
     "plan_clip_show",
     "regenerate_clip_show_segment",
+    "extract_character",
   ]) {
     registerJobHandler(legacyType, async (payload) => {
       console.warn(`[jobs] dropping legacy ${legacyType} job from before the plan-notebook rework`, payload.projectSlug ?? "");

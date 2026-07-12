@@ -36,6 +36,7 @@ type ChangeVideoSpeedPayload = {
   inputPath: string;
   outputPath: string;
   speed: number;
+  targetDuration?: number;
   hasAudio: boolean;
   assetId: string;
   assetDir: string;
@@ -45,7 +46,7 @@ type ChangeVideoSpeedPayload = {
 export function registerChangeVideoSpeedJob(fs: VideocityFs): void {
   registerJobHandler("change_video_speed", async (payload, ctx) => {
     const {
-      inputPath, outputPath, speed, hasAudio,
+      inputPath, outputPath, speed, targetDuration, hasAudio,
       assetId, assetDir, projectSlug,
     } = payload as ChangeVideoSpeedPayload;
 
@@ -59,6 +60,9 @@ export function registerChangeVideoSpeedJob(fs: VideocityFs): void {
       { durationMs: LOCK_DURATION_MS, data: { state: "changing-speed" } },
       async () => {
       const outputOptions = buildSpeedOutputOptions(speed, hasAudio);
+      if (targetDuration !== undefined) {
+        outputOptions.push("-t", targetDuration.toFixed(6));
+      }
       const FFmpeggy = await getFFmpeggy();
       const ff = new FFmpeggy({
         input: inputPath,
@@ -87,7 +91,7 @@ export function registerChangeVideoSpeedJob(fs: VideocityFs): void {
       assetId,
       assetDir,
       projectSlug,
-      provenance: { origin: "speed_change", speed, speed_changed_at: new Date().toISOString() },
+      provenance: { origin: "speed_change", speed, targetDuration, speed_changed_at: new Date().toISOString() },
       force: true,
       skipDownstreamJobs: true,
     } as unknown as Record<string, unknown>);

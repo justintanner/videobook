@@ -70,10 +70,13 @@ app.post("/api/upload/:projectSlug", async (req, res) => {
     return;
   }
 
+  const targetAssetId = typeof req.query.targetAssetId === "string" ? req.query.targetAssetId : undefined;
+
   const result = await uploadLocalStream(fs, {
     projectSlug: req.params.projectSlug,
     filename,
     stream: req,
+    targetAssetId,
   });
 
   if (!result.ok) {

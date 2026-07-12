@@ -7,7 +7,18 @@ import type { GoogleFlowProvider } from "@apicity/googleflow";
 import { createGoogleFlowProvider, uploadAssetToGoogleFlow } from "../jobs/_google-flow.js";
 import { apicityField } from "./schema-from-apicity.js";
 import { toolError } from "./_shared.js";
-import { resolveImageSlug } from "./_seedance2-shared.js";
+
+import { extname } from "node:path";
+import type { AssetManifestFile } from "videocity-engine";
+
+const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+
+function getImagesFromManifest(files: AssetManifestFile[]): AssetManifestFile[] {
+  return files.filter((f) => {
+    const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
+    return IMAGE_EXTENSIONS.has(ext);
+  });
+}
 import type { SchemaArgs, ToolDef, ToolResult } from "./tool-def.js";
 import {
   readCharacterImageCount,
@@ -185,9 +196,23 @@ export function createGoogleFlowCharacterDef(fs: VideocityFs): ToolDef {
 
       const resolved: Array<{ assetId: string; filename: string }> = [];
       for (const slug of slugs) {
-        const r = await resolveImageSlug(fs, slug, a.project_slug);
-        if (!r.ok) return toolError(`image_slugs: ${r.error}`);
-        resolved.push(r.value);
+        const assetId = slug.replace(/^@/, "");
+        if (!assetId.startsWith("img-") && !assetId.startsWith("char-")) {
+          return toolError(`image_slugs entries must be img-* or char-* assets, got: ${assetId}`);
+        }
+        const manifest = await fs.getManifest(assetId, a.project_slug);
+        if (!manifest.ok) return toolError(`image_slugs: ${manifest.error.message}`);
+        const images = getImagesFromManifest(manifest.value.files);
+        if (images.length === 0) return toolError(`image_slugs: No image files found in asset ${assetId}`);
+        
+        resolved.push({ assetId, filename: images[0].name });
+        if (assetId.startsWith("char-") && images.length > 1 && resolved.length < 2) {
+          resolved.push({ assetId, filename: images[1].name });
+        }
+      }
+      
+      if (resolved.length > 2) {
+        resolved.length = 2; // enforce max 2 images for GF characters
       }
 
       try {

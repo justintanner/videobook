@@ -15,10 +15,12 @@ function validateSpeed(speed: number): string | null {
   return null;
 }
 
-async function hasAudioStream(filePath: string): Promise<boolean> {
+async function probeMedia(filePath: string): Promise<{ hasAudio: boolean; duration: number }> {
   const FFmpeggy = await getFFmpeggy();
   const probe = await FFmpeggy.probe(filePath);
-  return probe.streams.some((s) => s.codec_type === "audio");
+  const hasAudio = probe.streams.some((s) => s.codec_type === "audio");
+  const duration = parseFloat(probe.format.duration) || 0;
+  return { hasAudio, duration };
 }
 
 export function changeVideoSpeedDef(fs: VideocityFs): ToolDef {
@@ -28,15 +30,23 @@ export function changeVideoSpeedDef(fs: VideocityFs): ToolDef {
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-my-video)"),
       project_slug: z.string().describe("Project slug"),
-      speed: z.number().describe("Speed multiplier (0.25–4.0). >1 = faster, <1 = slower."),
+      speed: z.number().optional().describe("Speed multiplier (0.25–4.0). >1 = faster, <1 = slower."),
+      target_duration_seconds: z.number().optional().describe("Exact target output duration in seconds"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, speed } = args as { asset_id: string; project_slug: string; speed: number };
-      const speedError = validateSpeed(speed);
-      if (speedError) {
+      const { asset_id, project_slug, speed: requestedSpeed, target_duration_seconds } = args as { asset_id: string; project_slug: string; speed?: number; target_duration_seconds?: number };
+      
+      if ((requestedSpeed === undefined && target_duration_seconds === undefined) || (requestedSpeed !== undefined && target_duration_seconds !== undefined)) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: speedError }],
+          content: [{ type: "text" as const, text: "Must provide exactly one of speed or target_duration_seconds" }],
+        };
+      }
+      
+      if (target_duration_seconds !== undefined && (target_duration_seconds <= 0 || !Number.isFinite(target_duration_seconds))) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: `Target duration must be a positive finite number, got ${target_duration_seconds}` }],
         };
       }
 
@@ -59,16 +69,39 @@ export function changeVideoSpeedDef(fs: VideocityFs): ToolDef {
 
       const assetDir = manifest.path;
       const videoPath = join(assetDir, videoFile.name);
+      
+      const { hasAudio, duration } = await probeMedia(videoPath);
+      
+      let speed: number;
+      if (target_duration_seconds !== undefined) {
+        if (duration <= 0) {
+          return {
+            isError: true as const,
+            content: [{ type: "text" as const, text: `Failed to probe source duration for asset ${asset_id}` }],
+          };
+        }
+        speed = duration / target_duration_seconds;
+      } else {
+        speed = requestedSpeed!;
+      }
+
+      const speedError = validateSpeed(speed);
+      if (speedError) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: speedError }],
+        };
+      }
+
       const tempPath = join(assetDir, "original_speed.mp4");
       const jobId = `speed-${asset_id}-${Date.now()}`;
-
-      const hasAudio = await hasAudioStream(videoPath);
 
       await queue.enqueue(jobId, {
         type: "change_video_speed",
         inputPath: videoPath,
         outputPath: tempPath,
         speed,
+        targetDuration: target_duration_seconds,
         hasAudio,
         assetId: asset_id,
         assetDir,

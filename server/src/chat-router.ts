@@ -159,13 +159,7 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     params: ["archive_ids"],
     category: "action",
   },
-  {
-    name: "set_character_voice",
-    actualTool: "set_character_voice",
-    description: "Set or clear the ElevenLabs voice ID on a char-* asset",
-    params: ["char_asset_id", "elevenlabs_voice_id"],
-    category: "action",
-  },
+
   {
     name: "list_elevenlabs_voices",
     actualTool: "list_elevenlabs_voices",
@@ -212,8 +206,8 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
   {
     name: "generate_elevenlabs_t2a",
     actualTool: "generate_elevenlabs_t2a",
-    description: "Generate speech audio from text using a character's assigned ElevenLabs voice",
-    params: ["character_asset_id", "text"],
+    description: "Generate speech audio from text using an ElevenLabs voice ID",
+    params: ["voice_id", "text"],
     category: "generation",
   },
 ];

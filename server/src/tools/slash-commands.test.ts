@@ -101,10 +101,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/archive-restore");
     expect(commandNames).toContain("/rewind");
     expect(commandNames).toContain("/clear-failed");
-    expect(commandNames).toContain("/voice");
     expect(commandNames).toContain("/voices");
-    expect(commandNames).toContain("/pin");
-    expect(commandNames).toContain("/unpin");
     expect(commandNames).toContain("/say");
     expect(commandNames).toContain("/connect-x");
     expect(commandNames).toContain("/play");

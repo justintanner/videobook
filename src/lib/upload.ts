@@ -8,9 +8,13 @@ export async function uploadProjectFile(
   projectSlug: string,
   data: Blob,
   filename: string,
+  targetAssetId?: string,
 ): Promise<UploadResult> {
   const url = new URL(`/api/upload/${encodeURIComponent(projectSlug)}`, window.location.origin)
   url.searchParams.set('filename', filename)
+  if (targetAssetId) {
+    url.searchParams.set('targetAssetId', targetAssetId)
+  }
 
   const response = await fetch(url, {
     method: 'POST',

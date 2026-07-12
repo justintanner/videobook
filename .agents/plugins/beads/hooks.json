@@ -1,0 +1,11 @@
+{
+  "beads-prime": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "agy-beads-prime",
+        "timeout": 60
+      }
+    ]
+  }
+}

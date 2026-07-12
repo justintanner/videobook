@@ -8,15 +8,13 @@ import type { OsgApplyValue } from './OsgOverlay';
 import { ImageViewer } from './ImageViewer';
 import { ScriptViewer } from './ScriptViewer';
 import { AudioViewer } from './AudioViewer';
-import { CharacterViewer } from './CharacterViewer';
 import { Notebook } from './notebook/PlanNotebook';
-import type { CharacterProfile } from '@/hooks/useCharacterSlots';
 import type { ViewerSize, BackTab } from './viewer-types';
 import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle';
 
 // ── AssetViewer Dispatcher ──
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, onSplitAtCursor, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, callState, onClose, imageAssets, mediaItems, onOpenAsset, onEditCharacterProfile, cropTarget, onCropConsumed, osgTarget, onOsgConsumed, onOsgApply, onGenerationLifecycle }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, onSplitAtCursor, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, callState, onClose, imageAssets, mediaItems, onOpenAsset, cropTarget, onCropConsumed, osgTarget, onOsgConsumed, onOsgApply, onGenerationLifecycle }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -39,7 +37,6 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   imageAssets: MediaItem[];
   mediaItems: MediaItem[];
   onOpenAsset?: (assetId: string) => void;
-  onEditCharacterProfile: (charAssetId: string, profile: CharacterProfile, onProfileSaved?: (profile: CharacterProfile) => void) => void;
   cropTarget?: { assetId: string; ratio?: string } | null;
   onCropConsumed?: () => void;
   osgTarget?: { assetId: string; osgAssetId?: string } | null;
@@ -51,8 +48,6 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   const isPlan = item.type === 'plan';
   const isScript = item.type === 'script';
   const isAudio = item.type === 'audio';
-  const isCharacter = item.type === 'character';
-
   if (isClip) {
     return (
       <VideoViewer
@@ -115,25 +110,6 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     );
   }
 
-  if (isCharacter) {
-    return (
-      <CharacterViewer
-        item={item}
-        projectSlug={projectSlug}
-        flipped={flipped}
-        onFlippedChange={onFlippedChange}
-        pendingFilePosition={pendingFilePosition}
-        onClearPendingFilePosition={onClearPendingFilePosition}
-        pendingBackTab={pendingBackTab}
-        onClearPendingBackTab={onClearPendingBackTab}
-        callTool={callTool}
-        callState={callState}
-        onClose={onClose}
-        imageAssets={imageAssets}
-        onEditProfile={onEditCharacterProfile}
-      />
-    );
-  }
 
   if (isAudio) {
     return (

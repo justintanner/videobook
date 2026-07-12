@@ -24,7 +24,7 @@ const generateWan27ImageProSchema = {
   resolution: apicityField(Wan27ImageResolutionSchema, "Output resolution (default 2K)"),
   seed: z.number().optional().describe("Random seed (0-2147483647)"),
   nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
-  output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),
+
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 
@@ -36,8 +36,8 @@ export function generateWan27ImageProDef(fs: VideocityFs): ToolDef {
     description: "Generate an image using Wan 2.7 Image Pro. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).",
     schema: generateWan27ImageProSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, seed, nsfw_checker, output_prefix } = args as Args;
-      const prefix = output_prefix ?? "img";
+      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, seed, nsfw_checker } = args as Args;
+      const prefix = "img";
 
       const rawSlugs = image_slugs ?? [];
 

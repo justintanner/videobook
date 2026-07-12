@@ -25,7 +25,7 @@ const generateGptImageSchema = {
   aspect_ratio: z.enum(enumOptions(gptImageToImageInputSchema.aspect_ratio)).optional().describe("Aspect ratio"),
   resolution: z.enum(enumOptions(gptImageToImageInputSchema.resolution)).optional().describe("Output resolution. 1:1 cannot upscale to 4K; auto/unset aspect_ratio is 1K only."),
   nsfw_checker: z.boolean().optional().describe("Enable NSFW content filter"),
-  output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),
+
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 
@@ -37,8 +37,8 @@ export function generateGptImageDef(fs: VideocityFs): ToolDef {
     description: "Generate an image using GPT Image 2.0 editing with 1-16 reference images. Creates a new img- asset and enqueues a background job.",
     schema: generateGptImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, nsfw_checker, output_prefix } = args as Args;
-      const prefix = output_prefix ?? "img";
+      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, nsfw_checker } = args as Args;
+      const prefix = "img";
 
       const rawSlugs = image_slugs ?? [];
 

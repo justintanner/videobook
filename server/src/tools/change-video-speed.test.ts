@@ -170,4 +170,37 @@ describe("change_video_speed tool", () => {
     expect(parsed.job_id).toMatch(/^speed-/);
     expect(parsed.status).toBe("enqueued");
   });
+
+  it("enqueues job for valid target_duration_seconds", async () => {
+    const result = await client.callTool({
+      name: "change_video_speed",
+      arguments: {
+        asset_id: sharedVideoAssetId,
+        project_slug: "speed-proj",
+        target_duration_seconds: 0.5,
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.asset_id).toBe(sharedVideoAssetId);
+    expect(parsed.job_id).toMatch(/^speed-/);
+    expect(parsed.status).toBe("enqueued");
+  });
+
+  it("returns error if both speed and target_duration_seconds are provided", async () => {
+    const result = await client.callTool({
+      name: "change_video_speed",
+      arguments: {
+        asset_id: sharedVideoAssetId,
+        project_slug: "speed-proj",
+        speed: 2.0,
+        target_duration_seconds: 0.5,
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    const content = result.content as TextContent;
+    expect(content[0].text).toContain("exactly one of speed or target_duration_seconds");
+  });
 });

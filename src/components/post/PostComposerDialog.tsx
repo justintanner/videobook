@@ -100,7 +100,7 @@ export function PostComposerDialog({
   const previewKind = useMemo(() => {
     if (!item) return null;
     if (item.type === 'video') return 'video' as const;
-    if (item.type === 'image' || item.type === 'character') return 'image' as const;
+    if (item.type === 'image') return 'image' as const;
     return null;
   }, [item]);
 

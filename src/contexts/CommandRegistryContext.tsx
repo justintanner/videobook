@@ -103,6 +103,15 @@ export function CommandRegistryProvider({
             if (cmd.mcpTool.injectParams) {
               Object.assign(toolArgs, cmd.mcpTool.injectParams);
             }
+            if (cmd.mcpTool.tool === 'change_video_speed' && 'speed' in toolArgs) {
+              const val = toolArgs.speed;
+              delete toolArgs.speed;
+              if (typeof val === 'string' && val.endsWith('s')) {
+                toolArgs.target_duration_seconds = parseFloat(val);
+              } else if (val !== undefined) {
+                toolArgs.speed = parseFloat(String(val));
+              }
+            }
             const result = await callTool(cmd.mcpTool.tool, toolArgs);
             if (!result.isError) onAfterDispatch?.(cmd.mcpTool.tool, toolArgs);
             return !result.isError;

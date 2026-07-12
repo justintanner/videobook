@@ -160,8 +160,8 @@ async function readSourceImages(
   const sources: SourceImage[] = [];
   for (const rawSlug of rawSlugs) {
     const assetId = rawSlug.replace(/^@/, "");
-    if (!assetId.startsWith("img-") && !assetId.startsWith("char-")) {
-      return { ok: false, error: `image_slugs entries must be img-* or char-* assets, got: ${assetId}` };
+    if (!assetId.startsWith("img-")) {
+      return { ok: false, error: `image_slugs entries must be img-* assets, got: ${assetId}` };
     }
 
     const manifestResult = await fs.getManifest(assetId, projectSlug);

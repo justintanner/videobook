@@ -17,6 +17,8 @@ import {
   renameGoogleFlowCharacterDef,
 } from "./google-flow-characters.js";
 import { createProjectDef } from "./create-project.js";
+import { createCharacterDef } from "./create-character.js";
+import { setCharacterMetadataDef } from "./set-character-metadata.js";
 import { renameProjectDef } from "./rename-project.js";
 import { deleteProjectDef } from "./delete-project.js";
 import { switchProjectDef } from "./switch-project.js";
@@ -176,19 +178,16 @@ import { generateGrokImagineVideoR2vFalDef } from "./generate-grok-imagine-video
 import { generateGrokImagineVideoExtendFalDef } from "./generate-grok-imagine-video-extend-fal.js";
 import { generateGrokImagineVideoEditFalDef } from "./generate-grok-imagine-video-edit-fal.js";
 import { genImagesAllDef } from "./gen-images-all.js";
-import { generateOutfitDef, previewOutfitPromptsDef } from "./generate-outfit.js";
-import { generateCharacterDef } from "./generate-character.js";
-import { analyzeCharacterImageDef } from "./analyze-character-image.js";
-import { readPlanDef } from "./read-plan.js";
-import { writePlanDef } from "./write-plan.js";
+
+import { readNotebookDef } from "./read-notebook.js";
+import { writeNotebookDef } from "./write-notebook.js";
 import { detectScenesDef } from "./detect-scenes.js";
 import { suggestCutsDef } from "./suggest-cuts.js";
 import { suggestSfxDef } from "./suggest-sfx.js";
 import { analyzeJokesDef } from "./analyze-jokes.js";
 import { applyCutsDef } from "./apply-cuts.js";
 import { applySfxDef } from "./apply-sfx.js";
-import { pinCharacterSlotDef, unpinCharacterSlotDef } from "./pin-character-slot.js";
-import { setCharacterVoiceDef } from "./set-character-voice.js";
+
 import { generateElevenlabsT2aDef } from "./generate-elevenlabs-t2a.js";
 import { estimateCostDef } from "./estimate-cost.js";
 import { postDef } from "./post.js";
@@ -219,6 +218,8 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     renameGoogleFlowCharacterDef(),
     estimateCostDef(fs),
     createProjectDef(fs),
+    createCharacterDef(fs),
+    setCharacterMetadataDef(fs),
     renameProjectDef(fs),
     deleteProjectDef(fs),
     switchProjectDef(fs),
@@ -379,21 +380,16 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     generateGrokImagineVideoExtendFalDef(fs),
     generateGrokImagineVideoEditFalDef(fs),
     genImagesAllDef(fs),
-    generateOutfitDef(fs),
-    previewOutfitPromptsDef(fs),
-    generateCharacterDef(fs),
-    analyzeCharacterImageDef(fs),
-    readPlanDef(fs),
-    writePlanDef(fs),
+
+    readNotebookDef(fs),
+    writeNotebookDef(fs),
     detectScenesDef(fs),
     suggestCutsDef(fs),
     suggestSfxDef(fs),
     analyzeJokesDef(fs),
     applyCutsDef(fs),
     applySfxDef(fs),
-    pinCharacterSlotDef(fs),
-    unpinCharacterSlotDef(fs),
-    setCharacterVoiceDef(fs),
+
     generateElevenlabsT2aDef(fs),
     postDef(),
     xConnectStartDef(),

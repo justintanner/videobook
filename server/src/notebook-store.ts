@@ -1,5 +1,3 @@
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 
@@ -12,7 +10,7 @@ interface PlanStep {
   properties: Record<string, unknown>;
 }
 
-interface PlanDefinition {
+interface NotebookDefinition {
   properties: Record<string, unknown>;
   sequence: PlanStep[];
 }
@@ -20,7 +18,7 @@ interface PlanDefinition {
 interface NotebookPlanSidecar {
   format: "notebook";
   schema_version: 1;
-  definition: PlanDefinition;
+  definition: NotebookDefinition;
 }
 
 const planStepSchema = z.object({
@@ -31,7 +29,7 @@ const planStepSchema = z.object({
   properties: z.record(z.string(), z.unknown()),
 }).strict();
 
-const planDefinitionSchema = z.object({
+const notebookDefinitionSchema = z.object({
   properties: z.record(z.string(), z.unknown()),
   sequence: z.array(planStepSchema),
 }).strict().superRefine((definition, context) => {
@@ -49,7 +47,7 @@ const planDefinitionSchema = z.object({
   });
 });
 
-function emptyPlanDefinition(): PlanDefinition {
+function emptyNotebookDefinition(): NotebookDefinition {
   return { properties: {}, sequence: [] };
 }
 
@@ -122,7 +120,7 @@ function renderGenerationMarkdown(step: PlanStep, steps: PlanStep[]): string[] {
   ];
 }
 
-function renderPlanMarkdown(definition: PlanDefinition): string {
+function renderNotebookMarkdown(definition: NotebookDefinition): string {
   if (definition.sequence.length === 0) {
     return ["# Notebook", "", "0 steps", "", "_No steps yet._", ""].join("\n");
   }
@@ -152,41 +150,39 @@ function renderPlanMarkdown(definition: PlanDefinition): string {
 // modified by routine asset work. Skipping no-op writes lets idempotent plan
 // edits (e.g. "set joke" with unchanged text before generating a voiceover)
 // succeed instead of throwing a bare "Failed to commit file write".
-async function writePlanFileIfChanged(
+async function writeNotebookFileIfChanged(
   fs: VideocityFs,
   projectSlug: string,
+  notebookId: string,
   fileName: string,
   content: string,
 ): Promise<void> {
-  const existing = await fs.readFile("plan", fileName, projectSlug);
+  const existing = await fs.readFile(notebookId, fileName, projectSlug);
   if (existing.ok && Buffer.from(existing.value).toString("utf-8") === content) return;
-  const written = await fs.writeFile("plan", fileName, content, projectSlug);
+  const written = await fs.writeFile(notebookId, fileName, content, projectSlug);
   if (!written.ok) throw new Error(`Failed to write ${fileName}: ${written.error.message}`);
 }
 
-async function writePlanFiles(
+async function writeNotebookFiles(
   fs: VideocityFs,
   projectSlug: string,
-  definition: PlanDefinition,
+  notebookId: string,
+  definition: NotebookDefinition,
 ): Promise<void> {
-  const project = await fs.getProject(projectSlug);
-  if (!project.ok) throw new Error(project.error.message);
-  await mkdir(join(project.value.path, "plan"), { recursive: true });
-
   const sidecar: NotebookPlanSidecar = {
     format: "notebook",
     schema_version: 1,
     definition,
   };
-  await writePlanFileIfChanged(fs, projectSlug, "index.md", renderPlanMarkdown(definition));
-  await writePlanFileIfChanged(fs, projectSlug, ".plan.json", JSON.stringify(sidecar, null, 2));
+  await writeNotebookFileIfChanged(fs, projectSlug, notebookId, "index.md", renderNotebookMarkdown(definition));
+  await writeNotebookFileIfChanged(fs, projectSlug, notebookId, ".notebook.json", JSON.stringify(sidecar, null, 2));
 }
 
 export {
-  emptyPlanDefinition,
+  emptyNotebookDefinition,
   isNotebookSidecar,
-  planDefinitionSchema,
-  renderPlanMarkdown,
-  writePlanFiles,
+  notebookDefinitionSchema,
+  renderNotebookMarkdown,
+  writeNotebookFiles,
 };
-export type { NotebookPlanSidecar, PlanDefinition, PlanStep };
+export type { NotebookPlanSidecar, NotebookDefinition, PlanStep };

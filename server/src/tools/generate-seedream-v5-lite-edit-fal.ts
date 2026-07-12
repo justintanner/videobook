@@ -25,7 +25,7 @@ const schema = {
   num_images: z.number().int().optional().describe("Number of images to generate"),
   max_images: z.number().int().optional().describe("Max images returned"),
   seed: z.number().optional().describe("Seed for deterministic output"),
-  output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),
+
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;
@@ -36,8 +36,8 @@ export function generateSeedreamV5LiteEditFalDef(fs: VideocityFs): ToolDef {
     description: "Edit or compose images via fal.ai using ByteDance Seedream V5 Lite with one or more @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, image_slugs, image_size, num_images, max_images, seed, output_prefix } = args as Args;
-      const prefix = output_prefix ?? "img";
+      const { project_slug, prompt, image_slugs, image_size, num_images, max_images, seed } = args as Args;
+      const prefix = "img";
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };

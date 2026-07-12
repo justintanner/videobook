@@ -26,7 +26,7 @@ const generateNanoBananaImageSchema = {
   aspect_ratio: apicityField(nanoBananaProInputSchema.aspect_ratio, "Aspect ratio"),
   resolution: apicityField(NanoBananaResolutionSchema, "Output resolution"),
   output_format: apicityField(NanoBananaOutputFormatSchema, "Output image format"),
-  output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),
+
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;
 
@@ -38,8 +38,8 @@ export function generateNanoBananaImageDef(fs: VideocityFs): ToolDef {
     description: "Generate an image using the nano-banana-pro model. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional.",
     schema: generateNanoBananaImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, output_format, output_prefix } = args as Args;
-      const prefix = output_prefix ?? "img";
+      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, output_format } = args as Args;
+      const prefix = "img";
 
       const rawSlugs = image_slugs ?? [];
 

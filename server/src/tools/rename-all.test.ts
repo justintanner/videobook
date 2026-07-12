@@ -1,8 +1,9 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { mkdtemp, rm, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
+import { createFs } from "videocity-engine";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import {
   slugifyName,
@@ -625,9 +626,10 @@ describe("rename_all tool", () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
-    const planDir = join(tempDir, "test-proj", "plan");
-    await mkdir(planDir, { recursive: true });
-    await writeFile(join(planDir, ".plan.json"), JSON.stringify({
+    const fsObj = createFs({ projectsDir: tempDir });
+    const asset = await fsObj.createAsset("nb", "main", "test-proj");
+    const notebookDir = join(tempDir, "test-proj", asset.value.assetId);
+    await writeFile(join(notebookDir, ".notebook.json"), JSON.stringify({
       format: "notebook",
       schema_version: 1,
       definition: {
@@ -656,7 +658,7 @@ describe("rename_all tool", () => {
         }],
       },
     }, null, 2));
-    await writeFile(join(planDir, "index.md"), "stale index");
+    await writeFile(join(notebookDir, "index.md"), "stale index");
 
     const result = await client.callTool({
       name: "rename_all",
@@ -669,7 +671,7 @@ describe("rename_all tool", () => {
 
     expect(result.isError).toBeFalsy();
     const renamed = "img-sunset-beach";
-    const sidecar = JSON.parse(await readFile(join(planDir, ".plan.json"), "utf8")) as {
+    const sidecar = JSON.parse(await readFile(join(notebookDir, ".notebook.json"), "utf8")) as {
       definition: {
         sequence: Array<{ properties: { values?: Record<string, unknown>; asset_ids?: string[]; slug?: string } }>;
       };
@@ -681,7 +683,7 @@ describe("rename_all tool", () => {
       `Match the lighting of @${renamed} exactly.`,
     );
     expect(sidecar.definition.sequence[1].properties.slug).toBe(`@${renamed}`);
-    const markdown = await readFile(join(planDir, "index.md"), "utf8");
+    const markdown = await readFile(join(notebookDir, "index.md"), "utf8");
     expect(markdown).toContain(`@${renamed}`);
     expect(markdown).not.toContain(assetId);
   });

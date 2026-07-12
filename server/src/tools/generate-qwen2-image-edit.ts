@@ -21,7 +21,7 @@ const generateQwen2ImageEditSchema = {
   image_size: apicityField(qwen2ImageEditInputSchema.image_size, "Output aspect ratio (default 16:9)"),
   output_format: apicityField(qwen2ImageEditInputSchema.output_format, "Output image format (default png)"),
   seed: z.number().optional().describe("Random seed"),
-  output_prefix: z.enum(["img", "char"]).optional().describe("Asset prefix for the output (default: img). Use 'char' to bundle into a character asset."),
+
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 
@@ -33,8 +33,8 @@ export function generateQwen2ImageEditDef(fs: VideocityFs): ToolDef {
     description: "Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new img- asset and enqueues a background job.",
     schema: generateQwen2ImageEditSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, image_size, output_format, seed, output_prefix } = args as Args;
-      const prefix = output_prefix ?? "img";
+      const { prompt, project_slug, image_slugs, image_size, output_format, seed } = args as Args;
+      const prefix = "img";
 
       if (!process.env.KIE_API_KEY) {
         return {

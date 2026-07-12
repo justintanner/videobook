@@ -196,7 +196,7 @@ describe("generate_grok_imagine_video tool", () => {
     expect(content[0].text).toContain("expected array to have <=7 items");
   });
 
-  it("accepts a slashed @plan/<file> reference for replace_audio_with", async () => {
+  it("accepts a slashed @nb-1/<file> reference for replace_audio_with", async () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createFs({ projectsDir: tempDir });
@@ -207,9 +207,9 @@ describe("generate_grok_imagine_video tool", () => {
     }).png().toBuffer();
     await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
 
-    // A plan may address per-scene audio as @plan/sN.mp3 — a sibling file inside
+    // A plan may address per-scene audio as @nb-1/sN.mp3 — a sibling file inside
     // the non-media-prefixed `plan` asset, not an aud-* asset.
-    const planDir = join(tempDir, "test-proj", "plan");
+    const planDir = join(tempDir, "test-proj", "nb-1");
     await mkdir(planDir, { recursive: true });
     await writeFile(join(planDir, "s1.mp3"), Buffer.from("fake-mp3-bytes"));
 
@@ -218,14 +218,14 @@ describe("generate_grok_imagine_video tool", () => {
       arguments: {
         image_slugs: [asset.value.assetId],
         project_slug: "test-proj",
-        replace_audio_with: "@plan/s1.mp3",
+        replace_audio_with: "@nb-1/s1.mp3",
       },
     });
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.replace_audio_with).toBe("plan");
+    expect(parsed.replace_audio_with).toBe("nb-1");
   });
 
   it("rejects a bare non-aud reference for replace_audio_with", async () => {

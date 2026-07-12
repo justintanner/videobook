@@ -33,8 +33,8 @@ type ResolveErr = { ok: false; error: string };
 
 async function resolveImageSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
-  if (!assetId.startsWith("img-") && !assetId.startsWith("char-")) {
-    return { ok: false, error: `image_slugs entries must be img-* or char-* assets, got: ${assetId}` };
+  if (!assetId.startsWith("img-")) {
+    return { ok: false, error: `image_slugs entries must be img-* assets, got: ${assetId}` };
   }
   const manifest = await fs.getManifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };

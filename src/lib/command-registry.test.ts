@@ -62,14 +62,14 @@ describe("parseCommandArgs", () => {
     });
   });
 
-  it("parses /speed style asset + number args", () => {
+  it("parses /speed style asset + string args", () => {
     const params: CommandParam[] = [
       { name: "asset_id", type: "string", required: true, description: "" },
-      { name: "speed", type: "number", required: true, description: "" },
+      { name: "speed", type: "string", required: true, description: "" },
     ];
-    expect(parseCommandArgs("@vid-x 2", params)).toEqual({
+    expect(parseCommandArgs("@vid-x 8.32s", params)).toEqual({
       asset_id: "vid-x",
-      speed: 2,
+      speed: "8.32s",
     });
   });
 
@@ -84,11 +84,11 @@ describe("parseCommandArgs", () => {
 
   it("parses /say style asset + trailing text", () => {
     const params: CommandParam[] = [
-      { name: "character_asset_id", type: "string", required: true, description: "" },
+      { name: "voice_id", type: "string", required: true, description: "" },
       { name: "text", type: "string", required: true, description: "" },
     ];
-    expect(parseCommandArgs("@char-host hello there everyone", params)).toEqual({
-      character_asset_id: "char-host",
+    expect(parseCommandArgs("12345 hello there everyone", params)).toEqual({
+      voice_id: "12345",
       text: "hello there everyone",
     });
   });

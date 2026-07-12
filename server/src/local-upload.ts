@@ -45,6 +45,7 @@ interface UploadLocalBytesArgs {
   data: Buffer;
   origin?: string;
   waitForProcessing?: boolean;
+  targetAssetId?: string;
 }
 
 interface UploadLocalStreamArgs {
@@ -53,6 +54,7 @@ interface UploadLocalStreamArgs {
   stream: Readable;
   origin?: string;
   waitForProcessing?: boolean;
+  targetAssetId?: string;
 }
 
 function statusCodeForFsError(error: FsError): number {
@@ -71,6 +73,7 @@ export async function uploadLocalBytes(
     filename: args.filename,
     origin: args.origin,
     waitForProcessing: args.waitForProcessing,
+    targetAssetId: args.targetAssetId,
     write: async (assetId, writtenFilename) => {
       const writeResult = await fs.writeFile(
         assetId,
@@ -99,6 +102,7 @@ export async function uploadLocalStream(
     filename: args.filename,
     origin: args.origin,
     waitForProcessing: args.waitForProcessing,
+    targetAssetId: args.targetAssetId,
     write: async (assetId, writtenFilename, assetPath) => {
       const filePath = path.join(assetPath, writtenFilename);
       try {
@@ -126,6 +130,7 @@ interface UploadLocalArgs {
   filename: string;
   origin?: string;
   waitForProcessing?: boolean;
+  targetAssetId?: string;
   write: (assetId: string, writtenFilename: string, assetPath: string) => Promise<UploadWriteResult>;
 }
 
@@ -158,7 +163,7 @@ async function uploadLocal(
 ): Promise<LocalUploadOutcome> {
   const ext = path.extname(args.filename).toLowerCase();
   const prefix = extensionToPrefix[ext];
-  if (!prefix) {
+  if (!prefix && !args.targetAssetId) {
     return {
       ok: false,
       statusCode: 400,
@@ -166,18 +171,48 @@ async function uploadLocal(
     };
   }
 
-  const assetName = path.basename(args.filename, ext);
-  const assetResult = await fs.createAsset(prefix, assetName, args.projectSlug);
-  if (!assetResult.ok) {
-    return {
-      ok: false,
-      statusCode: statusCodeForFsError(assetResult.error),
-      message: assetResult.error.message,
-    };
+  let assetId: string;
+  let assetPath: string;
+  let isNewAsset = false;
+
+  if (args.targetAssetId) {
+    if (!args.targetAssetId.startsWith("char-")) {
+      return { ok: false, statusCode: 400, message: "Target asset must be a character folder" };
+    }
+    const resolveResult = await fs.resolveAssetDir(args.targetAssetId, args.projectSlug);
+    if (!resolveResult.ok) {
+      return { ok: false, statusCode: statusCodeForFsError(resolveResult.error), message: resolveResult.error.message };
+    }
+    assetId = args.targetAssetId;
+    assetPath = resolveResult.value;
+  } else {
+    const assetName = path.basename(args.filename, ext);
+    const assetResult = await fs.createAsset(prefix!, assetName, args.projectSlug);
+    if (!assetResult.ok) {
+      return {
+        ok: false,
+        statusCode: statusCodeForFsError(assetResult.error),
+        message: assetResult.error.message,
+      };
+    }
+    assetId = assetResult.value.assetId;
+    assetPath = assetResult.value.path;
+    isNewAsset = true;
   }
 
-  const { assetId, path: assetPath } = assetResult.value;
-  const writtenFilename = `original${ext}`;
+  let writtenFilename = isNewAsset ? `original${ext}` : args.filename;
+  if (!isNewAsset) {
+    const baseName = path.basename(args.filename, ext);
+    let counter = 1;
+    while (true) {
+      const checkResult = await fs.getManifest(assetId, args.projectSlug);
+      if (!checkResult.ok) break;
+      const exists = checkResult.value.files.some((f) => f.name === writtenFilename);
+      if (!exists) break;
+      writtenFilename = `${baseName}-${counter}${ext}`;
+      counter++;
+    }
+  }
 
   // Hold an fs lock from before the bytes hit disk through the process_*
   // enqueue. Without it, sync's findUnprocessedUploads sweep races the
@@ -257,7 +292,7 @@ async function uploadLocal(
     await fs.releaseLock(assetPath).catch(() => {});
   }
 
-  if (!outcome.ok) {
+  if (!outcome.ok && isNewAsset) {
     await fs.deleteAsset(assetId, args.projectSlug).catch(() => {});
   }
   return outcome;

@@ -79,7 +79,7 @@ export function extractAssetId(payload: Record<string, unknown>): string | null 
   if (typeof payload.imageAssetId === "string") return payload.imageAssetId;
   if (typeof payload.audioAssetId === "string") return payload.audioAssetId;
   if (typeof payload.audAssetId === "string") return payload.audAssetId;
-  if (typeof payload.charAssetId === "string") return payload.charAssetId;
+
   return null;
 }
 
@@ -156,8 +156,7 @@ function jobTypeToAssetWorkKind(
     case "apply_cuts":             return { kind: "apply_cuts" };
     case "apply_sfx":              return { kind: "apply_sfx" };
     case "extract_frame":
-    case "extract_audio":
-    case "extract_character":      return { kind: "extract" };
+    case "extract_audio":          return { kind: "extract" };
     case "describe_image":         return { kind: "describe" };
     case "rewrite_script":         return { kind: "rewrite_script" };
     case "archive_clip":           return { kind: "archive" };

@@ -28,7 +28,7 @@ import {
   type EditedRename,
 } from "../rename-helpers.js";
 import { RENDER_ORIENTATIONS } from "./sync.js";
-import { isNotebookSidecar, renderPlanMarkdown } from "../plan-notebook.js";
+import { isNotebookSidecar, renderNotebookMarkdown } from "../notebook-store.js";
 import type { ToolDef } from "./tool-def.js";
 
 const MODEL = "gpt-5.5";
@@ -558,7 +558,7 @@ async function updateReferences(
 ): Promise<void> {
   await updateTimelineReferences(fs, projectSlug, idMap);
   await updateOsgReferences(fs, projectSlug, idMap);
-  await updatePlanReferences(fs, projectSlug, idMap);
+  await updateNotebookReferences(fs, projectSlug, idMap);
 }
 
 async function updateTimelineReferences(
@@ -607,34 +607,39 @@ async function updateOsgReferences(
   }
 }
 
-async function updatePlanReferences(
+async function updateNotebookReferences(
   fs: VideocityFs,
   projectSlug: string,
   idMap: Map<string, string>,
 ): Promise<void> {
-  const planRead = await fs.readFile("plan", ".plan.json", projectSlug);
-  if (!planRead.ok) return;
-  let plan: unknown;
-  try {
-    plan = JSON.parse(
-      typeof planRead.value === "string"
-        ? planRead.value
-        : new TextDecoder().decode(planRead.value),
-    );
-  } catch {
-    return;
-  }
-  const before = JSON.stringify(plan);
-  const planIdMap = new Map(idMap);
-  for (const [oldId, newId] of idMap) {
-    planIdMap.set(`@${oldId}`, `@${newId}`);
-  }
-  plan = rewriteDeep(plan, planIdMap);
-  plan = rewriteInlineMentions(plan, idMap);
-  if (JSON.stringify(plan) !== before) {
-    await fs.writeFile("plan", ".plan.json", JSON.stringify(plan, null, 2), projectSlug);
-    if (isNotebookSidecar(plan)) {
-      await fs.writeFile("plan", "index.md", renderPlanMarkdown(plan.definition), projectSlug);
+  const assets = await fs.listAssets(projectSlug);
+  const notebooks = assets.filter(a => a.id.startsWith("nb-"));
+  
+  for (const nb of notebooks) {
+    const nbRead = await fs.readFile(nb.id, ".notebook.json", projectSlug);
+    if (!nbRead.ok) continue;
+    let plan: unknown;
+    try {
+      plan = JSON.parse(
+        typeof nbRead.value === "string"
+          ? nbRead.value
+          : new TextDecoder().decode(nbRead.value),
+      );
+    } catch {
+      continue;
+    }
+    const before = JSON.stringify(plan);
+    const planIdMap = new Map(idMap);
+    for (const [oldId, newId] of idMap) {
+      planIdMap.set(`@${oldId}`, `@${newId}`);
+    }
+    plan = rewriteDeep(plan, planIdMap);
+    plan = rewriteInlineMentions(plan, idMap);
+    if (JSON.stringify(plan) !== before) {
+      await fs.writeFile(nb.id, ".notebook.json", JSON.stringify(plan, null, 2), projectSlug);
+      if (isNotebookSidecar(plan)) {
+        await fs.writeFile(nb.id, "index.md", renderNotebookMarkdown(plan.definition), projectSlug);
+      }
     }
   }
 }

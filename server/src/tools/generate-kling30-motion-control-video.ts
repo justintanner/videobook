@@ -10,12 +10,11 @@ import { apicityField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
-  const images = files.filter((f) => {
+function getImagesFromManifest(files: AssetManifestFile[]): AssetManifestFile[] {
+  return files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
   });
-  return images.find((f) => f.name.startsWith("original")) ?? images[0] ?? null;
 }
 
 function slugify(text: string): string {
@@ -71,9 +70,13 @@ export function generateKling30MotionControlVideoDef(fs: VideocityFs): ToolDef {
         }
         const manifest = await fs.getManifest(assetId, project_slug);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
-        const file = findImageFile(manifest.value.files);
-        if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
-        imageInputs.push({ assetId, filename: file.name });
+        const images = getImagesFromManifest(manifest.value.files);
+        if (images.length === 0) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
+        
+        imageInputs.push({ assetId, filename: images[0].name });
+        if (assetId.startsWith("char-") && images.length > 1) {
+          imageInputs.push({ assetId, filename: images[1].name });
+        }
       }
 
       const videoInputs: RefInput[] = [];
