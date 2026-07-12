@@ -58,7 +58,7 @@ describe("zodNumberRange", () => {
   it("reads a Zod 3 (alibaba) ZodNumber with int/min/max", () => {
     expect(zodNumberRange(AlibabaVideoSynthesisParametersSchema.shape.duration)).toEqual({
       min: 2,
-      max: 15,
+      max: 10,
       int: true,
     });
   });
