@@ -13,7 +13,7 @@ import { GhostClipCard } from '@/components/sidebar/cards/GhostClipCard';
 import { SidebarMicroThumb } from '@/components/sidebar/SidebarMicroThumb';
 import { ContextMenuItem } from '@/components/ui/context-menu';
 import { AssetMenu, ProjectExportPicker } from '@/components/sidebar/menus/AssetMenu';
-import { IdleScreen, AssetViewer, Notebook, ArchiveBrowser, RenameAllPanel } from '@/components/center-stage';
+import { IdleScreen, AssetViewer, ArchiveBrowser, RenameAllPanel } from '@/components/center-stage';
 import type { ArchiveSearchResponse, RestoreResponse, ViewerSize } from '@/components/center-stage';
 import { TimelinePlayer } from '@/components/timeline/TimelinePlayer';
 import { useTimelinePreview } from '@/hooks/useTimelinePreview';
@@ -64,7 +64,7 @@ import type { OsgApplyValue } from '@/components/center-stage/OsgOverlay';
 import { isRenderingStatus, supportsOnScreenGraphics } from '@/components/center-stage/viewer-types';
 import { WatermarkDialog, type WatermarkApplyValue } from '@/components/watermark/WatermarkDialog';
 
-const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'plan', 'character']);
+const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'notebook', 'character']);
 const CLIP_TYPES = new Set<string>(['video', 'final']);
 
 const OSG_SIZES = new Set(['small', 'medium', 'large']);
@@ -140,7 +140,7 @@ export function HomePage() {
   const [postPanel, setPostPanel] = useState<{ assetId: string | null; text: string } | null>(null);
   const [watermarkPanel, setWatermarkPanel] = useState<{ assetId: string | null } | null>(null);
   const [projectExportAssetId, setProjectExportAssetId] = useState<string | null>(null);
-  const [planEmptyOverride, setPlanEmptyOverride] = useState(false);
+
   const [renameAllOpen, setRenameAllOpen] = useState(false);
   const [audioReplace, setAudioReplace] = useState<{ videoId: string; videoSlug: string; audioId: string; audioSlug: string } | null>(null);
   const [audioReplaceSubmitting, setAudioReplaceSubmitting] = useState(false);
@@ -322,13 +322,7 @@ export function HomePage() {
     mediaItems.filter((m) => ASSET_TYPES.has(m.type)),
   [mediaItems]);
 
-  const planAssets = useMemo(() =>
-    assets.filter((asset) => asset.type === 'plan'),
-  [assets]);
 
-  const nonPlanAssets = useMemo(() =>
-    assets.filter((asset) => asset.type !== 'plan'),
-  [assets]);
 
   // Ready project assets offered in the gen panel prompt's @ autocomplete.
   // Image panel gets images only; video panel also lists vid-/aud- for multi-ref models.
@@ -444,7 +438,7 @@ export function HomePage() {
     setSelectedItem(item);
     setGenPanel(null);
     setTimelineSlotIndex(null);
-    setPlanEmptyOverride(false);
+
     const isClip = item.type === 'video' || item.type === 'final';
     setViewerSize(isClip && timeline?.currentOrientation ? timeline.currentOrientation : 'original');
   }, [timeline]);
@@ -460,7 +454,7 @@ export function HomePage() {
     setSelectedItem(null);
     setGenPanel(null);
     setTimelineSlotIndex(null);
-    setPlanEmptyOverride(false);
+
     setRenameAllOpen(true);
   }, []);
 
@@ -655,7 +649,7 @@ export function HomePage() {
 
     setPostPanel(null);
     setProjectExportAssetId(null);
-    setPlanEmptyOverride(false);
+
     setAudioReplace(null);
     setAudioReplaceSubmitting(false);
   }, []);
@@ -718,7 +712,7 @@ export function HomePage() {
     setSelectedItem(null);
     setTimelineSlotIndex(null);
     setGenPanel(null);
-    setPlanEmptyOverride(false);
+
     setRenderingOverrides(new Map());
     setDeletingIds(new Set());
     sync(projectSlug);
@@ -989,7 +983,7 @@ export function HomePage() {
     setSelectedItem(null);
     setTimelineSlotIndex(null);
     setGenPanel(null);
-    setPlanEmptyOverride(false);
+
     setArchiveInitialResponse(null);
     setArchiveInitialError(null);
     setArchiveInitialLoading(true);
@@ -1132,7 +1126,7 @@ export function HomePage() {
     setViewerFlipped(false);
     setPendingFilePosition(null);
     setPendingBackTab(null);
-    setPlanEmptyOverride(false);
+
   }, []);
 
   const setSidebarsCollapsed = useCallback((side: string, collapsed: boolean) => {
@@ -1412,18 +1406,34 @@ export function HomePage() {
         : selectedItem;
       setPostPanel({ assetId: matched?.id ?? null, text: text ?? '' });
     },
-    open_notebook: () => {
+    open_notebook: (new_name?: string) => {
       setSettingsOpen(false);
       setArchiveOpen(false);
-      const planAsset = mediaItems.find((m) => m.id === 'plan');
-      if (planAsset) {
-        handleSelectItem(planAsset);
-      } else {
-        setSelectedItem(null);
-        setGenPanel(null);
-        setTimelineSlotIndex(null);
-        setPlanEmptyOverride(true);
+      if (!new_name) {
+        const notebooks = mediaItems.filter(m => m.type === 'notebook').sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+        if (notebooks.length > 0) {
+          handleSelectItem(notebooks[0]);
+          return;
+        }
       }
+      if (!projectSlug) return;
+      void (async () => {
+        try {
+          const res = await callTool('write_notebook', { project_slug: projectSlug, name: new_name, definition: { sequence: [], properties: { name: 'New Notebook', description: '', stage_count: 1 } } });
+          if (!res.isError) {
+            const content = res.content as Array<{ type: string; text: string }>;
+            const notebookId = content[0]?.text;
+            if (notebookId) {
+              await listAssets(projectSlug, sortOrder);
+              setSelectedItem({ id: notebookId, type: 'notebook', slug: `@${notebookId}`, title: notebookId, filePath: '' });
+              setGenPanel(null);
+              setTimelineSlotIndex(null);
+            }
+          }
+        } catch (e) {
+          console.error('Failed to create notebook', e);
+        }
+      })();
     },
     open_rename_all: openRenameAll,
     open_projects: () => setProjectsOpen(true),
@@ -1454,7 +1464,7 @@ export function HomePage() {
     show_voices: handleShowVoices,
     x_connect: () => { void connectX(); },
     open_slot_player: handleOpenSlotPlayer,
-  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, viewerSize, applySubsSetting, applyAudioSetting, applyOsgSetting, activeSelection, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openRenameAll]);
+  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, viewerSize, applySubsSetting, applyAudioSetting, applyOsgSetting, activeSelection, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openRenameAll, callTool, listAssets, projectSlug, sortOrder]);
 
   const renderAssetCard = (item: MediaItem) => {
     const canExtractSkeleton = item.type === 'image' && !!item.filePath && !!projectSlug;
@@ -1485,7 +1495,7 @@ export function HomePage() {
         {item.type === 'image' && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
         {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
         {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
-        {item.type === 'plan' && <NotebookCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
+        {item.type === 'notebook' && <NotebookCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
       </div>
     );
   };
@@ -1618,17 +1628,12 @@ export function HomePage() {
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-                  {planAssets.length > 0 && (
-                    <div className="sticky top-0 z-20 space-y-2 bg-background/95 pb-2 backdrop-blur-sm">
-                      {planAssets.map(renderAssetCard)}
-                    </div>
-                  )}
                   {sortOrder === 'newest' && imageGhosts.map((g) => (
                     <div key={g.requestId} className="w-full">
                       <GhostClipCard id={g.assetId ?? g.requestId} type="image" prompt={g.prompt} startedAt={g.startedAt} />
                     </div>
                   ))}
-                  {nonPlanAssets.map(renderAssetCard)}
+                  {assets.map(renderAssetCard)}
                   {sortOrder === 'oldest' && imageGhosts.map((g) => (
                     <div key={g.requestId} className="w-full">
                       <GhostClipCard id={g.assetId ?? g.requestId} type="image" prompt={g.prompt} startedAt={g.startedAt} />
@@ -1721,16 +1726,6 @@ export function HomePage() {
                     mediaItems={mediaItems}
                     onApplied={handleRenameAllApplied}
                     onClose={() => setRenameAllOpen(false)}
-                  />
-                ) : planEmptyOverride ? (
-                  <Notebook
-                    projectSlug={projectSlug ?? ''}
-                    callTool={callTool}
-                    mcpState={state}
-                    mediaItems={mediaItems}
-                    onClose={() => setPlanEmptyOverride(false)}
-                    onOpenAsset={handleOpenAsset}
-                    onGenerationLifecycle={handleGenerationLifecycle}
                   />
                 ) : timelineSlotIndex != null ? (
                   <TimelinePlayer

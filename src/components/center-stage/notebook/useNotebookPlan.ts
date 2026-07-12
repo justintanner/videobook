@@ -6,14 +6,14 @@ import type { NotebookPlanDefinition, NotebookPlanResponse } from './types'
 export type NotebookSaveState = 'loading' | 'saved' | 'saving' | 'error'
 
 interface UseNotebookPlanOptions {
+  notebookId: string
   projectSlug: string
   callTool: UseMcpResult['callTool']
   mcpState: UseMcpResult['state']
 }
 
-// The notebook mounts in two center-stage branches (plan asset selected vs
-// planEmptyOverride), so a view switch remounts it. The unmount flush and the
-// next mount's read_plan would otherwise race on the stateless server; the new
+// The notebook mounts in the center-stage when a notebook asset is selected.
+// The unmount flush and the next mount's read_notebook would otherwise race on the stateless server; the new
 // mount awaits the previous instance's in-flight write before reading.
 const pendingPlanWrites = new Map<string, Promise<void>>()
 
@@ -29,7 +29,7 @@ function toDefinition(value: unknown): NotebookPlanDefinition {
   return response.definition
 }
 
-export function useNotebookPlan({ projectSlug, callTool, mcpState }: UseNotebookPlanOptions) {
+export function useNotebookPlan({ notebookId, projectSlug, callTool, mcpState }: UseNotebookPlanOptions) {
   const [definition, setDefinitionState] = useState<NotebookPlanDefinition | null>(null)
   const [saveState, setSaveState] = useState<NotebookSaveState>('loading')
   const [error, setError] = useState<string | null>(null)
@@ -52,16 +52,18 @@ export function useNotebookPlan({ projectSlug, callTool, mcpState }: UseNotebook
     setSaveState('saving')
     setError(null)
     const attempt = (async () => {
-      const result = await callToolRef.current('write_plan', {
+      const result = await callToolRef.current('write_notebook', {
         project_slug: projectSlug,
+        notebook_id: notebookId,
         definition,
       })
       if (result.isError) throw new Error(responseText(result) || 'Unable to save Notebook')
     })()
     const tracked = attempt.catch(() => {})
-    pendingPlanWrites.set(projectSlug, tracked)
+    const key = `${projectSlug}:${notebookId}`
+    pendingPlanWrites.set(key, tracked)
     void tracked.then(() => {
-      if (pendingPlanWrites.get(projectSlug) === tracked) pendingPlanWrites.delete(projectSlug)
+      if (pendingPlanWrites.get(key) === tracked) pendingPlanWrites.delete(key)
     })
     try {
       await attempt
@@ -72,7 +74,7 @@ export function useNotebookPlan({ projectSlug, callTool, mcpState }: UseNotebook
       setSaveState('error')
       setError(cause instanceof Error ? cause.message : 'Unable to save Notebook')
     }
-  }, [projectSlug])
+  }, [projectSlug, notebookId])
 
   const flush = useCallback(() => {
     if (saveTimerRef.current) {
@@ -110,9 +112,10 @@ export function useNotebookPlan({ projectSlug, callTool, mcpState }: UseNotebook
     setLegacy(false)
     void (async () => {
       try {
-        const pending = pendingPlanWrites.get(projectSlug)
+        const key = `${projectSlug}:${notebookId}`
+        const pending = pendingPlanWrites.get(key)
         if (pending) await pending
-        const result = await callToolRef.current('read_plan', { project_slug: projectSlug })
+        const result = await callToolRef.current('read_notebook', { project_slug: projectSlug, notebook_id: notebookId })
         if (result.isError) throw new Error(responseText(result) || 'Unable to load Notebook')
         const parsed = JSON.parse(responseText(result)) as unknown
         const loaded = toDefinition(parsed)
@@ -138,7 +141,7 @@ export function useNotebookPlan({ projectSlug, callTool, mcpState }: UseNotebook
       cancelled = true
       flush()
     }
-  }, [projectSlug, mcpState, flush, scheduleSave])
+  }, [projectSlug, notebookId, mcpState, flush, scheduleSave])
 
   return {
     definition,

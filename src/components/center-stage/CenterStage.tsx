@@ -8,6 +8,7 @@ import type { OsgApplyValue } from './OsgOverlay';
 import { ImageViewer } from './ImageViewer';
 import { ScriptViewer } from './ScriptViewer';
 import { AudioViewer } from './AudioViewer';
+import { CharacterFolderViewer } from './CharacterFolderViewer';
 import { Notebook } from './notebook/PlanNotebook';
 import type { ViewerSize, BackTab } from './viewer-types';
 import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle';
@@ -45,9 +46,10 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onGenerationLifecycle?: OnGenerationLifecycle;
 }) {
   const isClip = item.type === 'video' || item.type === 'final';
-  const isPlan = item.type === 'plan';
+  const isNotebook = item.type === 'notebook';
   const isScript = item.type === 'script';
   const isAudio = item.type === 'audio';
+  const isCharacter = item.type === 'character';
   if (isClip) {
     return (
       <VideoViewer
@@ -79,9 +81,10 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     );
   }
 
-  if (isPlan) {
+  if (isNotebook) {
     return (
       <Notebook
+        notebookId={item.id}
         projectSlug={projectSlug}
         callTool={callTool}
         mcpState={callState}
@@ -122,6 +125,17 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
         onClearPendingFilePosition={onClearPendingFilePosition}
         pendingBackTab={pendingBackTab}
         onClearPendingBackTab={onClearPendingBackTab}
+        callTool={callTool}
+        onClose={onClose}
+      />
+    );
+  }
+
+  if (isCharacter) {
+    return (
+      <CharacterFolderViewer
+        item={item}
+        projectSlug={projectSlug}
         callTool={callTool}
         onClose={onClose}
       />

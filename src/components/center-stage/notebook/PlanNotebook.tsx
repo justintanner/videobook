@@ -59,6 +59,7 @@ import '@xyflow/react/dist/style.css'
 import './notebook.css'
 
 interface NotebookProps {
+  notebookId: string
   projectSlug: string
   callTool: UseMcpResult['callTool']
   mcpState: UseMcpResult['state']
@@ -322,6 +323,7 @@ function NotebookCanvas({
 }
 
 export function Notebook({
+  notebookId,
   projectSlug,
   callTool,
   mcpState,
@@ -331,7 +333,7 @@ export function Notebook({
   onGenerationLifecycle,
 }: NotebookProps) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null)
-  const plan = useNotebookPlan({ projectSlug, callTool, mcpState })
+  const plan = useNotebookPlan({ notebookId, projectSlug, callTool, mcpState })
   const history = useDefinitionHistory(plan.setDefinition)
   const resetHistory = history.reset
   useEffect(() => {

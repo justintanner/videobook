@@ -41,7 +41,7 @@
   --clip-domain-projects: hsl(240 5% 65%);   /* zinc */
   --clip-domain-image:    hsl(187 85% 53%);  /* cyan */
   --clip-domain-video:    hsl(258 90% 76%);  /* violet */
-  --clip-domain-plan:     hsl(160 64% 52%);  /* emerald */
+  --clip-domain-notebook: hsl(160 64% 52%);  /* emerald */
   --clip-domain-final:    hsl(43 96% 56%);   /* amber */
 
   /* Generic "active operation" cyan — the default for card state glows

@@ -1,6 +1,6 @@
 import type { OsgPosition } from '@/components/center-stage/render-settings-types';
 
-export type AssetType = 'video' | 'image' | 'script' | 'audio' | 'plan' | 'final' | 'character';
+export type AssetType = 'video' | 'image' | 'script' | 'audio' | 'notebook' | 'final' | 'character';
 
 /** Resolved on-screen graphic overlay summary for a video/final asset. `src` is
  *  the overlay image's displayable URL, resolved client-side from `assetId`. */

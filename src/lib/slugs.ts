@@ -17,7 +17,7 @@ export function findByAssetSlug<T extends { slug: string }>(
   return assets.find((a) => stripSlugPrefix(a.slug) === clean);
 }
 
-const assetTagPattern = /(^|\s)@(?:img|vid|aud|script|plan|char|final)-[a-z0-9][a-z0-9_-]*[,.!?;:]?(?=\s|$)/gi
+const assetTagPattern = /(^|\s)@(?:img|vid|aud|script|nb|char|final)-[a-z0-9][a-z0-9_-]*[,.!?;:]?(?=\s|$)/gi
 const slotTagPattern = /(^|\s)@s\d{1,3}[,.!?;:]?(?=\s|$)/gi
 
 export function stripAssetTagsFromText(text: string): string {

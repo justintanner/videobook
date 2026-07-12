@@ -1,4 +1,5 @@
 export { IdleScreen, AssetViewer } from './CenterStage';
+export { CharacterFolderViewer } from './CharacterFolderViewer';
 export { Notebook } from './notebook/PlanNotebook';
 export { ArchiveBrowser } from './ArchiveBrowser';
 export { RenameAllPanel } from './RenameAllPanel';

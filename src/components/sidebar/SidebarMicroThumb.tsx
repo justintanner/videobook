@@ -17,7 +17,7 @@ function ThumbIcon({ type }: { type: MediaItem['type'] }) {
       return <AudioLines className="w-3.5 h-3.5 text-primary/50" />;
     case 'script':
       return <FileText className="w-3.5 h-3.5 text-primary/50" />;
-    case 'plan':
+    case 'notebook':
       return <Compass className="w-3.5 h-3.5 text-emerald-400/50" />;
     case 'video':
       return <Film className="w-3.5 h-3.5 text-primary/50" />;

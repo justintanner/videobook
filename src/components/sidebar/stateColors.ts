@@ -18,7 +18,7 @@ export type CardTone =
   | 'character'
   | 'audio'
   | 'script'
-  | 'plan';
+  | 'notebook';
 
 export interface CardVisualState {
   tone: CardTone;
@@ -174,7 +174,7 @@ const TONE_STYLES: Record<CardTone, {
   audio: cardTone('video'),
   // Script is a sub-domain of notebook (text version of a notebook).
   script: cardTone('notebook'),
-  plan: cardTone('notebook'),
+  notebook: cardTone('notebook'),
 };
 
 const TYPE_TO_TONE: Record<AssetType, CardTone> = {
@@ -183,7 +183,7 @@ const TYPE_TO_TONE: Record<AssetType, CardTone> = {
   character: 'character',
   audio: 'audio',
   script: 'script',
-  plan: 'plan',
+  notebook: 'notebook',
   final: 'final',
 };
 
@@ -245,7 +245,7 @@ function stateClassForTone(tone: CardTone): string | null {
     case 'character':
     case 'audio':
     case 'script':
-    case 'plan':
+    case 'notebook':
       return 'clip-state-ready';
     case 'error':
       return null;
@@ -260,7 +260,7 @@ function cursorClassForTone(tone: CardTone): string {
   return 'cursor-pointer';
 }
 
-const IDLE_TONES = new Set<CardTone>(['ready', 'video', 'image', 'character', 'audio', 'script', 'plan']);
+const IDLE_TONES = new Set<CardTone>(['ready', 'video', 'image', 'character', 'audio', 'script', 'notebook']);
 
 // Tones whose animation should run in the asset type's color rather than a
 // fixed state color. Keeps the animation/timing but tints it per asset type.
@@ -292,7 +292,7 @@ export function getCardVisualState(item: MediaItem): CardVisualState {
         faint: typeStyle.faint,
       }
     : baseStyle;
-  const isGold = tone === 'final' || tone === 'plan';
+  const isGold = tone === 'final' || tone === 'notebook';
   const isActive = !IDLE_TONES.has(tone) && tone !== 'final' && tone !== 'error';
 
   return {

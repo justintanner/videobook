@@ -31,7 +31,7 @@ function TypeIcon({ type }: { type: MediaItem['type'] }) {
   switch (type) {
     case 'audio': return <AudioLines className={className} />;
     case 'script': return <FileText className={className} />;
-    case 'plan': return <Compass className={className} />;
+    case 'notebook': return <Compass className={className} />;
     case 'video': return <Film className={className} />;
     case 'image': return <ImageIcon className={className} />;
     case 'character': return <User className={className} />;
