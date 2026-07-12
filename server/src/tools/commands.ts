@@ -82,6 +82,17 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "create_character", autoInject: ["project_slug"] },
   },
   {
+    command: "/gf-characters",
+    description: "Manage Google Flow characters",
+    category: "action",
+    icon: "Users",
+    size: "default",
+    variant: "emerald",
+    chevron: "right",
+    params: [],
+    uiAction: "open_gf_characters",
+  },
+  {
     command: "/generate",
     description: "Generate video or image from prompt",
     example: "/generate video a dog on a skateboard @bg-neon",

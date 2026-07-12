@@ -14,7 +14,7 @@ import { GhostClipCard } from '@/components/sidebar/cards/GhostClipCard';
 import { SidebarMicroThumb } from '@/components/sidebar/SidebarMicroThumb';
 import { ContextMenuItem } from '@/components/ui/context-menu';
 import { AssetMenu, ProjectExportPicker } from '@/components/sidebar/menus/AssetMenu';
-import { IdleScreen, AssetViewer, ArchiveBrowser, RenameAllPanel } from '@/components/center-stage';
+import { IdleScreen, AssetViewer, ArchiveBrowser, RenameAllPanel, GoogleFlowCharactersScreen } from '@/components/center-stage';
 import type { ArchiveSearchResponse, RestoreResponse, ViewerSize } from '@/components/center-stage';
 import { TimelinePlayer } from '@/components/timeline/TimelinePlayer';
 import { useTimelinePreview } from '@/hooks/useTimelinePreview';
@@ -178,6 +178,7 @@ export function HomePage() {
   const [projectExportAssetId, setProjectExportAssetId] = useState<string | null>(null);
 
   const [renameAllOpen, setRenameAllOpen] = useState(false);
+  const [gfCharactersOpen, setGfCharactersOpen] = useState(false);
   const [audioReplace, setAudioReplace] = useState<{ videoId: string; videoSlug: string; audioId: string; audioSlug: string } | null>(null);
   const [audioReplaceSubmitting, setAudioReplaceSubmitting] = useState(false);
   const chatInputRef = useRef<ChatInputHandle>(null);
@@ -683,6 +684,9 @@ export function HomePage() {
     setPendingBackTab(null);
     setTimelineSlotIndex(null);
     setGenPanel(null);
+
+    setRenameAllOpen(false);
+    setGfCharactersOpen(false);
 
     setPostPanel(null);
     setProjectExportAssetId(null);
@@ -1436,6 +1440,10 @@ export function HomePage() {
     gen_images: (slugs: string) => genPanelRef.current?.setImages(slugs),
     gen_elements: (index: string, field: string, value: string) => genPanelRef.current?.setElement(index, field, value),
 
+    open_gf_characters: () => {
+      resetOpenScreens();
+      setGfCharactersOpen(true);
+    },
     open_post_composer: (assetSlug: string, text: string) => {
       const cleaned = assetSlug.trim().replace(/^@/, '');
       const matched = cleaned
@@ -1529,7 +1537,7 @@ export function HomePage() {
     show_voices: handleShowVoices,
     x_connect: () => { void connectX(); },
     open_slot_player: handleOpenSlotPlayer,
-  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, viewerSize, applySubsSetting, applyAudioSetting, applyOsgSetting, activeSelection, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openRenameAll, callTool, listAssets, projectSlug, sortOrder]);
+  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, viewerSize, applySubsSetting, applyAudioSetting, applyOsgSetting, activeSelection, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openRenameAll, callTool, listAssets, projectSlug, sortOrder, resetOpenScreens]);
 
   const notebookCommand = useMemo(() => {
     const notebooks = mediaItems
@@ -1806,6 +1814,14 @@ export function HomePage() {
                     mediaItems={mediaItems}
                     onApplied={handleRenameAllApplied}
                     onClose={() => setRenameAllOpen(false)}
+                  />
+                ) : gfCharactersOpen ? (
+                  <GoogleFlowCharactersScreen
+                    projectSlug={projectSlug ?? ''}
+                    callTool={callTool}
+                    callState={state}
+                    mediaItems={mediaItems}
+                    onClose={() => setGfCharactersOpen(false)}
                   />
                 ) : timelineSlotIndex != null ? (
                   <TimelinePlayer

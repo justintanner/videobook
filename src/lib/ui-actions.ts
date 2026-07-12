@@ -58,6 +58,7 @@ export interface UiActionCallbacks {
   show_voices: () => void;
   x_connect: () => void;
   open_slot_player: (slot: string) => void;
+  open_gf_characters: () => void;
 }
 
 export type UiActionMap = Partial<UiActionCallbacks>;
@@ -198,7 +199,7 @@ export function executeUiAction(
       break;
     default:
       // No-arg actions: open_upload, open_inbox, viewer_set_*, viewer_toggle_info,
-      // open_projects, close_viewer, open_provider_keys, show_voices, x_connect
+      // open_projects, close_viewer, open_provider_keys, show_voices, x_connect, open_gf_characters
       (fn as () => void)();
       break;
   }
