@@ -82,13 +82,17 @@ export function GoogleFlowRefPicker({
   const nounPlural = entityType === 'voice' ? 'voices' : 'characters'
 
   const placeholder =
-    atCap
-      ? `Max ${maxItems}`
-      : loading
-        ? 'Loading…'
-        : loaded
-          ? `Add ${noun}…`
-          : `Load ${nounPlural}…`
+    entityType === 'character'
+      ? atCap
+        ? `Max ${maxItems}`
+        : 'Add existing character…'
+      : atCap
+        ? `Max ${maxItems}`
+        : loading
+          ? 'Loading…'
+          : loaded
+            ? `Add ${noun}…`
+            : `Load ${nounPlural}…`
 
   return (
     <GenField label={label} required={required} theme={theme} className="w-full min-w-[220px]">
@@ -113,7 +117,7 @@ export function GoogleFlowRefPicker({
             )}
           >
             <option value="">{placeholder}</option>
-            {onManage && (
+            {onManage && entityType !== 'character' && (
               <option value="_manage_">Manage {nounPlural}…</option>
             )}
             {availableSystem.length > 0 && (
@@ -131,20 +135,39 @@ export function GoogleFlowRefPicker({
               </optgroup>
             )}
           </select>
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            disabled={disabled || loading || !callTool}
-            title={`Refresh ${nounPlural}`}
-            className={cn(
-              'flex items-center justify-center w-7 h-7 rounded border shrink-0',
-              t.controlBorder,
-              t.inactiveText,
-              'hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed',
-            )}
-          >
-            {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-          </button>
+          {entityType === 'character' ? (
+            onManage && (
+              <button
+                type="button"
+                onClick={() => void onManage()}
+                disabled={disabled}
+                title="Manage characters"
+                className={cn(
+                  'flex items-center justify-center px-2 py-1.5 rounded border shrink-0 text-xs font-mono whitespace-nowrap',
+                  t.controlBorder,
+                  t.inactiveText,
+                  'hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed',
+                )}
+              >
+                Manage characters
+              </button>
+            )
+          ) : (
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              disabled={disabled || loading || !callTool}
+              title={`Refresh ${nounPlural}`}
+              className={cn(
+                'flex items-center justify-center w-7 h-7 rounded border shrink-0',
+                t.controlBorder,
+                t.inactiveText,
+                'hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed',
+              )}
+            >
+              {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+            </button>
+          )}
 
         </div>
 
@@ -152,11 +175,14 @@ export function GoogleFlowRefPicker({
           <div className="flex flex-wrap gap-1">
             {selected.map((ref) => {
               const match = entities.find((e) => e.ref === ref)
-              const labelText = match?.displayName && match.displayName !== ref
-                ? match.displayName
-                : ref.length > 28
-                  ? `${ref.slice(0, 28)}…`
-                  : ref
+              let labelText = ''
+              if (match?.displayName && match.displayName !== ref) {
+                labelText = match.displayName
+              } else if (entityType === 'character' && (!loaded || loading)) {
+                labelText = 'Resolving…'
+              } else {
+                labelText = ref.length > 28 ? `${ref.slice(0, 28)}…` : ref
+              }
               return (
                 <span
                   key={ref}

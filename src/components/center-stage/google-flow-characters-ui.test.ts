@@ -26,4 +26,20 @@ describe('GoogleFlowRefPicker manager handoff and caps', () => {
     expect(picker).toContain('maxItems')
     expect(picker).toContain('atCap = selected.length >= maxItems')
   })
+
+  it('implements simplified character experience and stable loading states', () => {
+    const picker = readFileSync(join(genUiRoot, 'GoogleFlowRefPicker.tsx'), 'utf8')
+    // Stable affordance
+    expect(picker).toContain("'Add existing character…'")
+    
+    // Dedicated manager button
+    expect(picker).toContain('Manage characters')
+    expect(picker).toContain("onManage && entityType !== 'character' &&")
+    
+    // Neutral unresolved state
+    expect(picker).toContain("'Resolving…'")
+    
+    // Remove functionality exists
+    expect(picker).toContain('removeRef(ref)')
+  })
 })

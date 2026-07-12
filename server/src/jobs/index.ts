@@ -9,6 +9,7 @@ import { registerDoctorFixJob } from "./doctor-fix.js";
 import { registerTrimVideoJob } from "./trim-video.js";
 import { registerSplitVideoJob } from "./split-video.js";
 import { registerEvenSplitJob } from "./even-split.js";
+import { registerPadVideoJob } from "./pad-video.js";
 import { registerCropVideoJob } from "./crop-video.js";
 import { registerApplyCutsJob } from "./apply-cuts.js";
 import { registerApplySfxJob } from "./apply-sfx.js";
@@ -124,6 +125,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerTrimVideoJob(fs);
   registerSplitVideoJob(fs);
   registerEvenSplitJob(fs);
+  registerPadVideoJob(fs);
   registerCropVideoJob(fs);
   registerApplyCutsJob(fs);
   registerApplySfxJob(fs);

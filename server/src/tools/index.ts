@@ -49,6 +49,7 @@ import { rewindProjectDef } from "./rewind-project.js";
 import { trimVideoDef } from "./trim-video.js";
 import { splitVideoDef } from "./split-video.js";
 import { evenSplitDef } from "./even-split.js";
+import { padVideoDef } from "./pad-video.js";
 import { cropVideoDef } from "./crop-video.js";
 import { setOsgDef } from "./set-osg.js";
 import { downloadVideoDef } from "./download-video.js";
@@ -253,6 +254,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     trimVideoDef(fs),
     splitVideoDef(fs),
     evenSplitDef(fs),
+    padVideoDef(fs),
     cropVideoDef(fs),
     setOsgDef(fs),
     downloadVideoDef(fs),

@@ -138,6 +138,21 @@ const HARDCODED_COMMANDS: Command[] = [
     uiAction: "open_crop",
   },
   {
+    command: "/pad",
+    description: "Add a whole-second video tail with black frames and silence",
+    example: "/pad @vid-me 2s",
+    category: "context_menu",
+    icon: "SquareSquare",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset to pad" },
+      { name: "padding", type: "string", required: true, description: "Padding duration (e.g. 2s)" },
+    ],
+    mcpTool: { tool: "pad_video", autoInject: ["project_slug"] },
+  },
+  {
     command: "/osg",
     description: "Place an on-screen graphic overlay on a video (visually position and size the badge)",
     example: "/osg @vid-yt-clip @img-logo",
