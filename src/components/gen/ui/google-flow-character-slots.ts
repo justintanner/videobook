@@ -1,4 +1,5 @@
 import { stripSlugPrefix } from '@/lib/slugs'
+import { characterNameStem } from '@/lib/character-name'
 import type { ResolvedAsset } from '@/components/gen/types'
 
 export interface SlotAsset {
@@ -86,6 +87,5 @@ export function seedSlotsFromCandidates(
 
 export function nameFromAsset(asset: SlotAsset | null): string {
   if (!asset) return ''
-  const stem = stripSlugPrefix(asset.slug).replace(/^img-/, '').trim()
-  return stem.length >= 3 ? stem : ''
+  return characterNameStem(asset.slug)
 }

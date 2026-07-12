@@ -2,36 +2,81 @@ import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
+/**
+ * Normalize the metadata arg into a plain object.
+ * - Objects pass through (agents often send structured JSON, not a string).
+ * - Valid JSON object strings parse as expected.
+ * - Free-form notes (no leading `{`/`[`) are stored as `{ notes: "..." }`.
+ */
+export function parseCharacterMetadata(
+  input: unknown,
+): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  if (input !== null && typeof input === "object" && !Array.isArray(input)) {
+    return { ok: true, value: input as Record<string, unknown> };
+  }
+
+  if (typeof input !== "string") {
+    return { ok: false, error: "Metadata must be a JSON object or string" };
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return { ok: true, value: {} };
+  }
+
+  // Plain notes / prose — not JSON. Keep them without forcing users to quote keys.
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+    return { ok: true, value: { notes: trimmed } };
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { ok: false, error: "Metadata must be a JSON object" };
+    }
+    return { ok: true, value: parsed as Record<string, unknown> };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      ok: false,
+      error:
+        `Invalid JSON metadata: ${message}. ` +
+        `Use double-quoted keys (e.g. {"display_name":"Ada"}) or free-form notes without braces.`,
+    };
+  }
+}
+
 export function setCharacterMetadataDef(fs: VideocityFs): ToolDef {
   return {
     name: "set_character_metadata",
-    description: "Write arbitrary free-form JSON metadata to a character's .character.json sidecar",
+    description:
+      "Write free-form metadata to a character's .character.json sidecar. " +
+      "Accepts a JSON object, a JSON-stringified object, or plain-text notes " +
+      "(stored as { notes: \"...\" }).",
     schema: {
       project_slug: z.string().describe("Project slug"),
       char_asset_id: z.string().describe("Character asset ID (must start with char-)"),
-      metadata: z.string().describe("Arbitrary JSON stringified metadata object to write"),
+      metadata: z
+        .union([z.string(), z.record(z.string(), z.unknown())])
+        .describe(
+          "JSON object (or stringified object) of character metadata, or free-form notes",
+        ),
     },
     handler: async (args) => {
       const { project_slug, char_asset_id, metadata } = args as {
         project_slug: string;
         char_asset_id: string;
-        metadata: string;
+        metadata: string | Record<string, unknown>;
       };
-      
-      let parsedMetadata: Record<string, unknown>;
-      try {
-        parsedMetadata = JSON.parse(metadata);
-        if (!parsedMetadata || typeof parsedMetadata !== "object" || Array.isArray(parsedMetadata)) {
-          throw new Error("Metadata must be a JSON object");
-        }
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
+
+      const parsed = parseCharacterMetadata(metadata);
+      if (!parsed.ok) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: `Invalid JSON metadata: ${message}` }],
+          content: [{ type: "text" as const, text: parsed.error }],
         };
       }
-      
+
       const id = char_asset_id.replace(/^@/, "").trim();
       if (!id.startsWith("char-")) {
         return {
@@ -39,15 +84,15 @@ export function setCharacterMetadataDef(fs: VideocityFs): ToolDef {
           content: [{ type: "text" as const, text: `Asset ID must start with char-, got: ${id}` }],
         };
       }
-      
-      const writeResult = await fs.writeMetadata(id, "character", parsedMetadata, project_slug);
+
+      const writeResult = await fs.writeMetadata(id, "character", parsed.value, project_slug);
       if (!writeResult.ok) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: `Failed to write .character.json: ${writeResult.error.message}` }],
         };
       }
-      
+
       return {
         content: [{
           type: "text" as const,

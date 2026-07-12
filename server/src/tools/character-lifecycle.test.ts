@@ -40,6 +40,53 @@ describe("Character lifecycle (create + metadata)", () => {
     }
   });
 
+  it("accepts plain-text notes and structured object metadata", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-meta-"));
+    const fs = createFs({ projectsDir: dir });
+    const slug = "test-proj";
+    await fs.createProject(slug);
+
+    const createTool = createCharacterDef(fs);
+    const createResult = await createTool.handler({ project_slug: slug, args: ["ada"] }, {});
+    const charId = JSON.parse((createResult.content[0] as { text: string }).text).asset_id as string;
+    const setTool = setCharacterMetadataDef(fs);
+
+    // Free-form notes (the previous Invalid JSON path when users typed prose)
+    const notesResult = await setTool.handler({
+      project_slug: slug,
+      char_asset_id: charId,
+      metadata: "French headshot, friendly tone",
+    }, {});
+    expect(notesResult.isError).toBeFalsy();
+    const notesRead = await fs.readMetadata(charId, "character", slug);
+    expect(notesRead.ok && notesRead.value).toMatchObject({
+      notes: "French headshot, friendly tone",
+    });
+
+    // Object passed directly (agents often skip JSON.stringify)
+    const objResult = await setTool.handler({
+      project_slug: slug,
+      char_asset_id: charId,
+      metadata: { google_flow_character_ref: "character:abc", display_name: "Ada" },
+    }, {});
+    expect(objResult.isError).toBeFalsy();
+    const objRead = await fs.readMetadata(charId, "character", slug);
+    expect(objRead.ok && objRead.value).toMatchObject({
+      google_flow_character_ref: "character:abc",
+      display_name: "Ada",
+    });
+
+    // Invalid brace-y pseudo-JSON still errors with a helpful message
+    const bad = await setTool.handler({
+      project_slug: slug,
+      char_asset_id: charId,
+      metadata: "{character_ref: unquoted}",
+    }, {});
+    expect(bad.isError).toBe(true);
+    expect((bad.content[0] as { text: string }).text).toMatch(/Invalid JSON metadata/);
+    expect((bad.content[0] as { text: string }).text).toMatch(/double-quoted keys/);
+  });
+
   it("creates a character seeded from one or more existing image assets", async () => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-test-asset-"));
     const fs = createFs({ projectsDir: dir });
@@ -65,13 +112,19 @@ describe("Character lifecycle (create + metadata)", () => {
     expect(createRes1.isError).toBeFalsy();
     const parsed1 = JSON.parse((createRes1.content[0] as { type: "text", text: string }).text);
     expect(parsed1.asset_id).toMatch(/^char-alice/);
+    expect(parsed1.display_name).toBe("alice");
+    const meta1 = await fs.readMetadata(parsed1.asset_id as string, "character", slug);
+    expect(meta1.ok && meta1.value).toMatchObject({ display_name: "alice" });
 
-    // Test with multiple images and no explicit name
+    // Test with multiple images and no explicit name → short stem (face), not char-img-face
     const createRes2 = await createTool.handler({ project_slug: slug, args: ["@img-face", "img-body"] }, {});
     expect(createRes2.isError).toBeFalsy();
     const parsed2 = JSON.parse((createRes2.content[0] as { type: "text", text: string }).text);
-    expect(parsed2.asset_id).toMatch(/^char-img-face/);
-    
+    expect(parsed2.asset_id).toMatch(/^char-face/);
+    expect(parsed2.display_name).toBe("face");
+    const meta2 = await fs.readMetadata(parsed2.asset_id as string, "character", slug);
+    expect(meta2.ok && meta2.value).toMatchObject({ display_name: "face" });
+
     // Test validation for duplicate images
     const createRes3 = await createTool.handler({ project_slug: slug, args: ["img-face", "img-face"] }, {});
     expect(createRes3.isError).toBe(true);
@@ -80,5 +133,21 @@ describe("Character lifecycle (create + metadata)", () => {
     await fs.createAsset("vid", "clip", slug);
     const createRes4 = await createTool.handler({ project_slug: slug, args: ["vid-clip"] }, {});
     expect(createRes4.isError).toBe(true);
+  });
+
+  it("seeds display_name when creating a named character with no images", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-name-only-"));
+    const fs = createFs({ projectsDir: dir });
+    const slug = "test-proj";
+    await fs.createProject(slug);
+    const createTool = createCharacterDef(fs);
+    // createAsset may strip stop-words (the-guy → char-guy); display_name keeps the user string.
+    const res = await createTool.handler({ project_slug: slug, args: ["the-guy"] }, {});
+    expect(res.isError).toBeFalsy();
+    const parsed = JSON.parse((res.content[0] as { text: string }).text);
+    expect(parsed.asset_id).toMatch(/^char-guy/);
+    expect(parsed.display_name).toBe("the-guy");
+    const meta = await fs.readMetadata(parsed.asset_id as string, "character", slug);
+    expect(meta.ok && meta.value).toMatchObject({ display_name: "the-guy" });
   });
 });

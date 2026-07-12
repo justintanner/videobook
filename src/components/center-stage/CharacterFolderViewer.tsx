@@ -8,6 +8,11 @@ import { CloseButton } from '@/components/ui/CloseButton'
 import { Save, UploadCloud, Globe } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePublishGoogleFlowCharacter } from '@/hooks/usePublishGoogleFlowCharacter'
+import { toast } from '@/hooks/useToast'
+import {
+  parseCharacterMetadataObject,
+  resolveDisplayName,
+} from '@/lib/character-name'
 
 export function CharacterFolderViewer({
   item,
@@ -22,6 +27,7 @@ export function CharacterFolderViewer({
 }) {
   const [files, setFiles] = useState<ManifestFile[]>([])
   const [metadata, setMetadata] = useState<string>('{}')
+  const [displayName, setDisplayName] = useState(() => resolveDisplayName(undefined, item.id))
   const [metadataSaving, setMetadataSaving] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [draggedImg, setDraggedImg] = useState<string | null>(null)
@@ -37,32 +43,119 @@ export function CharacterFolderViewer({
     }
   }, [projectSlug, item.id])
 
+  const loadMetadata = useCallback(async () => {
+    if (!projectSlug) return
+    const res = await callTool('read_asset_metadata', {
+      project_slug: projectSlug,
+      asset_id: item.id,
+      name: 'character',
+    })
+    if (!res.isError) {
+      const content = res.content as Array<{ type: string; text: string }>
+      const text = content[0]?.text || '{}'
+      try {
+        const pretty = JSON.stringify(JSON.parse(text), null, 2)
+        setMetadata(pretty)
+        setDisplayName(resolveDisplayName(pretty, item.id))
+      } catch {
+        setMetadata(text)
+        setDisplayName(resolveDisplayName(text, item.id))
+      }
+    } else {
+      setDisplayName(resolveDisplayName(undefined, item.id))
+    }
+  }, [projectSlug, item.id, callTool])
+
   useEffect(() => {
     void fetchManifest()
-
-    if (projectSlug) {
-      void callTool('read_asset_metadata', { project_slug: projectSlug, asset_id: item.id, key: 'character' }).then(res => {
-        if (!res.isError) {
-          const content = res.content as Array<{ type: string; text: string }>
-          const text = content[0]?.text || '{}'
-          setMetadata(text)
-        }
-      })
-    }
-  }, [projectSlug, item.id, fetchManifest, callTool])
+    void loadMetadata()
+  }, [fetchManifest, loadMetadata])
 
   const handleSaveMetadata = async () => {
     if (!projectSlug) return
     setMetadataSaving(true)
     try {
-      await callTool('set_character_metadata', {
+      const name = displayName.trim()
+      // Prefer structured merge so the Name field always wins over stale JSON.
+      const base = parseCharacterMetadataObject(metadata)
+      if (name) base.display_name = name
+      else delete base.display_name
+
+      // If the textarea holds valid JSON (or notes), use merge path; if it's
+      // invalid brace-JSON, fall through to set_character_metadata for a clear error.
+      const trimmedMeta = metadata.trim()
+      const looksLikeJson = trimmedMeta.startsWith('{') || trimmedMeta.startsWith('[')
+      let payload: string | Record<string, unknown>
+      if (!looksLikeJson && trimmedMeta) {
+        payload = { notes: trimmedMeta, ...(name ? { display_name: name } : {}) }
+      } else if (looksLikeJson) {
+        try {
+          const parsed = JSON.parse(trimmedMeta) as unknown
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            payload = { ...(parsed as Record<string, unknown>), ...(name ? { display_name: name } : {}) }
+            if (!name) delete (payload as Record<string, unknown>).display_name
+          } else {
+            payload = metadata
+          }
+        } catch {
+          payload = metadata
+        }
+      } else {
+        payload = base
+      }
+
+      const res = await callTool('set_character_metadata', {
         project_slug: projectSlug,
         char_asset_id: item.id,
-        metadata,
+        metadata: typeof payload === 'string' ? payload : JSON.stringify(payload),
       })
+      if (res.isError) {
+        const msg = (res.content as Array<{ type: string; text: string }>)?.[0]?.text
+        toast({ title: 'Save failed', description: msg ?? 'Could not write character metadata', duration: 5000 })
+        return
+      }
+      await loadMetadata()
+      toast({ title: 'Saved', description: name ? `Name: ${name}` : 'Metadata updated', duration: 2000 })
     } finally {
       setMetadataSaving(false)
     }
+  }
+
+  const handlePublish = async () => {
+    const name = displayName.trim()
+    if (!name) {
+      toast({
+        title: 'Name required',
+        description: 'Set a short name (e.g. the-guy) before publishing to Google Flow',
+        duration: 4000,
+      })
+      return
+    }
+    // Persist name first so re-open keeps the publish label even if GF fails later.
+    const mergedForPublish = {
+      ...parseCharacterMetadataObject(metadata),
+      display_name: name,
+    }
+    setMetadataSaving(true)
+    try {
+      const res = await callTool('set_character_metadata', {
+        project_slug: projectSlug!,
+        char_asset_id: item.id,
+        metadata: JSON.stringify(mergedForPublish),
+      })
+      if (res.isError) {
+        const msg = (res.content as Array<{ type: string; text: string }>)?.[0]?.text
+        toast({ title: 'Save failed', description: msg ?? 'Could not write character metadata', duration: 5000 })
+        return
+      }
+    } finally {
+      setMetadataSaving(false)
+    }
+
+    const result = await publishCharacter(item.id, name, {
+      existingMetadata: JSON.stringify(mergedForPublish),
+    })
+    if (result) await loadMetadata()
   }
 
   const handleFile = async (file: File) => {
@@ -93,6 +186,7 @@ export function CharacterFolderViewer({
   }
 
   const { images, audio, others } = categorizeManifestFiles(files)
+  const canPublish = !publishing && images.length > 0 && displayName.trim().length > 0
 
   const handleDragStartImg = (e: React.DragEvent, name: string) => {
     setDraggedImg(name)
@@ -118,9 +212,9 @@ export function CharacterFolderViewer({
     const newOrder = [...images]
     const [moved] = newOrder.splice(sourceIdx, 1)
     newOrder.splice(targetIdx, 0, moved)
-    
+
     setDraggedImg(null)
-    
+
     if (projectSlug) {
       const orderedFilenames = newOrder.map(f => f.name)
       await callTool('reorder_character_images', {
@@ -159,12 +253,24 @@ export function CharacterFolderViewer({
 
       {/* Files Column */}
       <div className="flex-1 flex flex-col gap-6">
-        <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-semibold">{item.title || item.id}</h2>
+        <div className="flex justify-between items-start gap-4 pr-10">
+          <div className="flex flex-col gap-2 min-w-0 flex-1">
+            <label className="text-xs font-mono uppercase tracking-wider text-zinc-500">Name</label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="the-guy"
+              className="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2 text-xl font-semibold text-zinc-100 focus:outline-none focus:border-emerald-500/60"
+            />
+            <p className="text-xs text-zinc-500">
+              Short name used when publishing to Google Flow. Asset id stays <span className="font-mono">{item.id}</span>.
+            </p>
+          </div>
           <button
-            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors disabled:opacity-50"
-            onClick={() => void publishCharacter(item.id, item.title || item.id)}
-            disabled={publishing || images.length === 0}
+            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors disabled:opacity-50 shrink-0 mt-6"
+            onClick={() => void handlePublish()}
+            disabled={!canPublish || metadataSaving}
           >
             <Globe className="w-4 h-4" />
             {publishing ? 'Publishing...' : 'Publish to Google Flow'}
@@ -218,7 +324,7 @@ export function CharacterFolderViewer({
                       alt={f.name}
                       className="w-full h-full object-cover pointer-events-none"
                     />
-                    
+
                     <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 text-white text-xs rounded shadow backdrop-blur-md font-medium">
                       {i + 1}
                     </div>
@@ -288,7 +394,7 @@ export function CharacterFolderViewer({
           value={metadata}
           onChange={(e) => setMetadata(e.target.value)}
           className="flex-1 w-full bg-zinc-900 border border-zinc-800 rounded-lg p-4 font-mono text-sm resize-none focus:outline-none focus:border-zinc-600"
-          placeholder="Free-form JSON or notes..."
+          placeholder={'JSON object, e.g. {"personality_notes":"..."} — or plain notes'}
         />
       </div>
     </div>

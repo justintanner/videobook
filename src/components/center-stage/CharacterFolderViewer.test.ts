@@ -19,7 +19,8 @@ describe('categorizeManifestFiles', () => {
     const { images, audio, others } = categorizeManifestFiles(files)
     expect(images.map((f) => f.name)).toEqual(['original.png', 'landscape.jpg'])
     expect(audio.map((f) => f.name)).toEqual(['voice.mp3'])
-    expect(others.map((f) => f.name)).toEqual(['.character.json', 'notes.txt'])
+    // Dotfiles (e.g. .character.json) are hidden from "Other Files".
+    expect(others.map((f) => f.name)).toEqual(['notes.txt'])
   })
 
   it('does not throw on real /api/manifest field names (regression for path/size crash)', () => {
@@ -27,11 +28,14 @@ describe('categorizeManifestFiles', () => {
     const apiFiles: ManifestFile[] = [
       { name: 'original.png', size_bytes: 466566, extension: 'png' },
       { name: '.created_at', size_bytes: 10, extension: null },
+      { name: 'notes.txt', size_bytes: 40, extension: 'txt' },
     ]
     expect(() => categorizeManifestFiles(apiFiles)).not.toThrow()
     const { images, others } = categorizeManifestFiles(apiFiles)
     expect(images).toHaveLength(1)
+    // Dotfiles skipped; only non-media non-dot files appear in others.
     expect(others).toHaveLength(1)
-    expect(others[0].size_bytes).toBe(10)
+    expect(others[0].name).toBe('notes.txt')
+    expect(others[0].size_bytes).toBe(40)
   })
 })
