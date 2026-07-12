@@ -12,6 +12,8 @@ import { toast } from '@/hooks/useToast'
 import {
   parseCharacterMetadataObject,
   resolveDisplayName,
+  extractManagedFields,
+  mergeManagedFields,
 } from '@/lib/character-name'
 
 export function CharacterFolderViewer({
@@ -28,6 +30,7 @@ export function CharacterFolderViewer({
   const [files, setFiles] = useState<ManifestFile[]>([])
   const [metadata, setMetadata] = useState<string>('{}')
   const [displayName, setDisplayName] = useState(() => resolveDisplayName(undefined, item.id))
+  const [personalityNotes, setPersonalityNotes] = useState('')
   const [metadataSaving, setMetadataSaving] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [draggedImg, setDraggedImg] = useState<string | null>(null)
@@ -53,16 +56,22 @@ export function CharacterFolderViewer({
     if (!res.isError) {
       const content = res.content as Array<{ type: string; text: string }>
       const text = content[0]?.text || '{}'
-      try {
-        const pretty = JSON.stringify(JSON.parse(text), null, 2)
-        setMetadata(pretty)
-        setDisplayName(resolveDisplayName(pretty, item.id))
-      } catch {
-        setMetadata(text)
-        setDisplayName(resolveDisplayName(text, item.id))
-      }
+      
+      const { displayName: d, personalityNotes: p } = extractManagedFields(text)
+      setDisplayName(d || resolveDisplayName(undefined, item.id))
+      setPersonalityNotes(p || '')
+
+      const advanced = parseCharacterMetadataObject(text)
+      delete advanced.display_name
+      delete advanced.personality_notes
+      delete advanced.personalityNotes
+      delete advanced.notes
+      
+      setMetadata(Object.keys(advanced).length ? JSON.stringify(advanced, null, 2) : '{}')
     } else {
       setDisplayName(resolveDisplayName(undefined, item.id))
+      setPersonalityNotes('')
+      setMetadata('{}')
     }
   }, [projectSlug, item.id, callTool])
 
@@ -76,38 +85,15 @@ export function CharacterFolderViewer({
     setMetadataSaving(true)
     try {
       const name = displayName.trim()
-      // Prefer structured merge so the Name field always wins over stale JSON.
-      const base = parseCharacterMetadataObject(metadata)
-      if (name) base.display_name = name
-      else delete base.display_name
-
-      // If the textarea holds valid JSON (or notes), use merge path; if it's
-      // invalid brace-JSON, fall through to set_character_metadata for a clear error.
-      const trimmedMeta = metadata.trim()
-      const looksLikeJson = trimmedMeta.startsWith('{') || trimmedMeta.startsWith('[')
-      let payload: string | Record<string, unknown>
-      if (!looksLikeJson && trimmedMeta) {
-        payload = { notes: trimmedMeta, ...(name ? { display_name: name } : {}) }
-      } else if (looksLikeJson) {
-        try {
-          const parsed = JSON.parse(trimmedMeta) as unknown
-          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-            payload = { ...(parsed as Record<string, unknown>), ...(name ? { display_name: name } : {}) }
-            if (!name) delete (payload as Record<string, unknown>).display_name
-          } else {
-            payload = metadata
-          }
-        } catch {
-          payload = metadata
-        }
-      } else {
-        payload = base
-      }
+      const notes = personalityNotes.trim()
+      
+      const merged = mergeManagedFields(metadata, { displayName: name, personalityNotes: notes })
+      const payload = JSON.stringify(merged, null, 2)
 
       const res = await callTool('set_character_metadata', {
         project_slug: projectSlug,
         char_asset_id: item.id,
-        metadata: typeof payload === 'string' ? payload : JSON.stringify(payload),
+        metadata: payload,
       })
       if (res.isError) {
         const msg = (res.content as Array<{ type: string; text: string }>)?.[0]?.text
@@ -123,6 +109,7 @@ export function CharacterFolderViewer({
 
   const handlePublish = async () => {
     const name = displayName.trim()
+    const notes = personalityNotes.trim()
     if (!name) {
       toast({
         title: 'Name required',
@@ -131,17 +118,26 @@ export function CharacterFolderViewer({
       })
       return
     }
-    // Persist name first so re-open keeps the publish label even if GF fails later.
-    const mergedForPublish = {
-      ...parseCharacterMetadataObject(metadata),
-      display_name: name,
+
+    if (notes.length > 2000) {
+      toast({
+        title: 'Notes too long',
+        description: 'Personality notes cannot exceed 2000 characters',
+        duration: 4000,
+      })
+      return
     }
+
+    // Persist name and notes first so re-open keeps the values even if GF fails later.
+    const mergedForPublish = mergeManagedFields(metadata, { displayName: name, personalityNotes: notes })
+    const payload = JSON.stringify(mergedForPublish, null, 2)
+
     setMetadataSaving(true)
     try {
       const res = await callTool('set_character_metadata', {
         project_slug: projectSlug!,
         char_asset_id: item.id,
-        metadata: JSON.stringify(mergedForPublish),
+        metadata: payload,
       })
       if (res.isError) {
         const msg = (res.content as Array<{ type: string; text: string }>)?.[0]?.text
@@ -153,7 +149,8 @@ export function CharacterFolderViewer({
     }
 
     const result = await publishCharacter(item.id, name, {
-      existingMetadata: JSON.stringify(mergedForPublish),
+      personalityNotes: notes || undefined,
+      existingMetadata: payload,
     })
     if (result) await loadMetadata()
   }
@@ -266,6 +263,25 @@ export function CharacterFolderViewer({
             <p className="text-xs text-zinc-500">
               Short name used when publishing to Google Flow. Asset id stays <span className="font-mono">{item.id}</span>.
             </p>
+
+            <label className="text-xs font-mono uppercase tracking-wider text-zinc-500 mt-4">Personality notes (Optional)</label>
+            <textarea
+              value={personalityNotes}
+              onChange={(e) => setPersonalityNotes(e.target.value)}
+              placeholder="Guide behavior and dialogue in Google Flow..."
+              className={cn(
+                "w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/60 resize-y min-h-[80px]",
+                personalityNotes.length > 2000 && "border-red-500/60 focus:border-red-500/60"
+              )}
+            />
+            <div className="flex justify-between w-full max-w-md">
+              <p className="text-xs text-zinc-500">
+                Guides behavior and dialogue in Google Flow.
+              </p>
+              <p className={cn("text-xs", personalityNotes.length > 2000 ? "text-red-400" : "text-zinc-500")}>
+                {personalityNotes.length} / 2000
+              </p>
+            </div>
           </div>
           <button
             className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors disabled:opacity-50 shrink-0 mt-6"
@@ -380,7 +396,7 @@ export function CharacterFolderViewer({
       {/* Metadata Column */}
       <div className="w-[400px] flex flex-col gap-4">
         <div className="flex justify-between items-center">
-          <h3 className="text-lg font-medium">Character Metadata</h3>
+          <h3 className="text-lg font-medium">Advanced Metadata</h3>
           <button
             className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-sm transition-colors disabled:opacity-50"
             onClick={() => void handleSaveMetadata()}
@@ -394,7 +410,7 @@ export function CharacterFolderViewer({
           value={metadata}
           onChange={(e) => setMetadata(e.target.value)}
           className="flex-1 w-full bg-zinc-900 border border-zinc-800 rounded-lg p-4 font-mono text-sm resize-none focus:outline-none focus:border-zinc-600"
-          placeholder={'JSON object, e.g. {"personality_notes":"..."} — or plain notes'}
+          placeholder={'JSON object with arbitrary metadata'}
         />
       </div>
     </div>

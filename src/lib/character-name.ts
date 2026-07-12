@@ -51,3 +51,33 @@ export function resolveDisplayName(
   if (typeof saved === 'string' && saved.trim()) return saved.trim()
   return characterNameStem(assetId)
 }
+
+export function extractManagedFields(metadata: Record<string, unknown> | string | undefined): {
+  displayName: string | undefined
+  personalityNotes: string | undefined
+} {
+  const meta = typeof metadata === 'string' ? parseCharacterMetadataObject(metadata) : (metadata ?? {})
+  const displayName = typeof meta.display_name === 'string' && meta.display_name.trim() ? meta.display_name.trim() : undefined
+  const notes = meta.personality_notes ?? meta.personalityNotes ?? meta.notes
+  const personalityNotes = typeof notes === 'string' && notes.trim() ? notes.trim() : undefined
+  return { displayName, personalityNotes }
+}
+
+export function mergeManagedFields(
+  existingRaw: string,
+  updates: { displayName?: string; personalityNotes?: string }
+): Record<string, unknown> {
+  const meta = parseCharacterMetadataObject(existingRaw)
+  delete meta.display_name
+  delete meta.personality_notes
+  delete meta.personalityNotes
+  delete meta.notes
+
+  if (updates.displayName?.trim()) {
+    meta.display_name = updates.displayName.trim()
+  }
+  if (updates.personalityNotes?.trim()) {
+    meta.personality_notes = updates.personalityNotes.trim()
+  }
+  return meta
+}
