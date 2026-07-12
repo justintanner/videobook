@@ -27,6 +27,8 @@ describe('notebook generation editor order and domain themes', () => {
     expect(sidebar).toContain('theme={notebookTheme}')
     expect(sidebar).not.toContain('theme={domainTheme}')
     expect(sidebar).toContain('isAssetField(name)')
+    expect(sidebar).toContain('suggestedModeKey')
+    expect(sidebar).toContain("className={cn('vc-notebook-run', running && 'vc-notebook-run-busy')}")
     expect(sidebar).not.toContain('vc-notebook-run-video')
     expect(sidebar).not.toContain('vc-notebook-run-image')
     expect(sidebar).toContain('tool_name: effectiveToolName(option, modeKey)')
@@ -84,7 +86,14 @@ describe('notebook generation editor order and domain themes', () => {
     expect(flow).toContain('vc-notebook-edge-muted')
   })
 
-  // Generation buttons were removed as captures are read-only and generation happens outside the notebook.
+  it('disables Generate only while submit is in flight, not while asset is pending', () => {
+    const sidebar = readFileSync(join(root, 'NotebookSidebar.tsx'), 'utf8')
+    expect(sidebar).toContain('disabled={requiredMissing.length > 0 || !readiness.ready || running || !submitValues}')
+    expect(sidebar).not.toContain("runStatus.state === 'pending'")
+    expect(sidebar).toContain("running ? 'Generating' : 'Generate'")
+    expect(sidebar).not.toContain('<RunStatus')
+    expect(sidebar).not.toContain('Syncing')
+  })
 
   it('wires GenNode media input strip from graph-ordered connectedMediaInputs', () => {
     const genNode = readFileSync(join(root, 'nodes/GenNode.tsx'), 'utf8')
