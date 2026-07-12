@@ -15,8 +15,7 @@ describe("Character lifecycle (create + metadata)", () => {
     
     // Create
     const createTool = createCharacterDef(fs);
-    const createResult = await createTool.handler({ project_slug: slug, name: "bob" }, {});
-    expect(createResult.isError).toBeFalsy();
+    const createResult = await createTool.handler({ project_slug: slug, args: ["bob"] }, {});
     expect(createResult.isError).toBeFalsy();
     const createdText = (createResult.content[0] as { type: "text", text: string }).text;
     const parsed = JSON.parse(createdText);
@@ -39,5 +38,47 @@ describe("Character lifecycle (create + metadata)", () => {
     if (read.ok) {
       expect(read.value).toMatchObject({ age: 32, traits: ["brave", "tall"] });
     }
+  });
+
+  it("creates a character seeded from one or more existing image assets", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-test-asset-"));
+    const fs = createFs({ projectsDir: dir });
+    const slug = "test-proj";
+    await fs.createProject(slug);
+
+    // Create dummy image assets to serve as sources
+    const faceAsset = await fs.createAsset("img", "face", slug);
+    const bodyAsset = await fs.createAsset("img", "body", slug);
+    expect(faceAsset.ok).toBe(true);
+    expect(bodyAsset.ok).toBe(true);
+    if (faceAsset.ok) {
+        await fs.writeFile(faceAsset.value.assetId, "original.png", "fake data", slug);
+    }
+    if (bodyAsset.ok) {
+        await fs.writeFile(bodyAsset.value.assetId, "original.png", "fake data", slug);
+    }
+
+    const createTool = createCharacterDef(fs);
+
+    // Test with one image and explicit name
+    const createRes1 = await createTool.handler({ project_slug: slug, args: ["img-face", "alice"] }, {});
+    expect(createRes1.isError).toBeFalsy();
+    const parsed1 = JSON.parse((createRes1.content[0] as { type: "text", text: string }).text);
+    expect(parsed1.asset_id).toMatch(/^char-alice/);
+
+    // Test with multiple images and no explicit name
+    const createRes2 = await createTool.handler({ project_slug: slug, args: ["@img-face", "img-body"] }, {});
+    expect(createRes2.isError).toBeFalsy();
+    const parsed2 = JSON.parse((createRes2.content[0] as { type: "text", text: string }).text);
+    expect(parsed2.asset_id).toMatch(/^char-img-face/);
+    
+    // Test validation for duplicate images
+    const createRes3 = await createTool.handler({ project_slug: slug, args: ["img-face", "img-face"] }, {});
+    expect(createRes3.isError).toBe(true);
+
+    // Test validation for non-image sources
+    await fs.createAsset("vid", "clip", slug);
+    const createRes4 = await createTool.handler({ project_slug: slug, args: ["vid-clip"] }, {});
+    expect(createRes4.isError).toBe(true);
   });
 });

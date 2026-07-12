@@ -77,7 +77,7 @@ const HARDCODED_COMMANDS: Command[] = [
     variant: "pink",
     chevron: "right",
     params: [
-      { name: "name", type: "string", required: true, description: "Name of the character" },
+      { name: "args", type: "string[]", required: true, description: "Name of the character OR one or more image asset slugs" },
     ],
     mcpTool: { tool: "create_character", autoInject: ["project_slug"] },
   },
