@@ -1247,3 +1247,107 @@ export function graphLayoutBounds(definition: NotebookPlanDefinition): GraphLayo
 export function autoLayout(definition: NotebookPlanDefinition): NotebookPlanDefinition {
   return snapDefinitionToTracks(definition)
 }
+
+export function mergeCapturesIntoDefinition(
+  definition: NotebookPlanDefinition,
+  captures: import('./types').NotebookCapture[] | undefined,
+  captureLayout: Record<string, { x: number; y: number }> | undefined
+): NotebookPlanDefinition {
+  if (!captures || captures.length === 0) return definition
+
+  const merged = { ...definition, sequence: [...definition.sequence] }
+  
+  const latestResultByAssetSlug = new Map<string, string>()
+  const authoredAssetSlugToId = new Map<string, string>()
+  
+  for (const step of definition.sequence) {
+    if (step.type === 'asset' && typeof step.properties.slug === 'string') {
+      authoredAssetSlugToId.set(normalizedSlug(step.properties.slug), step.id)
+    }
+    if (isGenerationStep(step)) {
+       const latest = latestAssetId(step)
+       if (latest) {
+          latestResultByAssetSlug.set(latest, step.id)
+       }
+    }
+  }
+
+  for (let i = captures.length - 1; i >= 0; i--) {
+    const capture = captures[i]
+    const captureStepId = `cap-${capture.id}`
+    const type = capture.category === 'video_generate' || capture.category === 'video' || capture.category === 'generate-video' ? 'video' : 'image'
+    const inputs: string[] = []
+    const refs = new Set<string>()
+
+    const inputsMap = record(capture.inputs)
+    for (const key of CONNECTION_OWNED_PARAMS) {
+       const value = inputsMap[key]
+       if (typeof value === 'string' && value) {
+         refs.add(normalizedSlug(value))
+       } else if (Array.isArray(value)) {
+         for (const v of value) {
+            if (typeof v === 'string' && v) refs.add(normalizedSlug(v))
+         }
+       }
+    }
+
+    const charRefs = inputsMap.character_refs
+    if (Array.isArray(charRefs)) {
+       for (const v of charRefs) {
+          if (typeof v === 'string' && v) refs.add(normalizedSlug(v))
+       }
+    }
+
+    for (const bareSlug of refs) {
+      if (latestResultByAssetSlug.has(bareSlug)) {
+        inputs.push(latestResultByAssetSlug.get(bareSlug)!)
+      } else if (authoredAssetSlugToId.has(bareSlug)) {
+        inputs.push(authoredAssetSlugToId.get(bareSlug)!)
+      } else {
+        const virtualId = `cap-asset-${bareSlug}`
+        if (!merged.sequence.some(s => s.id === virtualId)) {
+          merged.sequence.push({
+            id: virtualId,
+            componentType: 'task',
+            type: 'asset',
+            name: 'Asset',
+            properties: {
+              is_capture: true,
+              slug: slugWithPrefix(bareSlug),
+              position: { x: 0, y: 0 }
+            }
+          })
+        }
+        inputs.push(virtualId)
+      }
+    }
+
+    const position = captureLayout?.[capture.id] ?? { x: 0, y: 0 }
+    const modelStr = typeof inputsMap.model === 'string' ? inputsMap.model : undefined
+    const step: import('./types').NotebookPlanStep = {
+      id: captureStepId,
+      componentType: 'task',
+      type,
+      name: `Capture ${capture.id}`,
+      properties: {
+        is_capture: true,
+        capture_id: capture.id,
+        capture_status: capture.status,
+        capture_error: capture.error ?? null,
+        position,
+        inputs,
+        model: modelStr ?? null,
+        provider: capture.provider ?? null,
+        values: capture.inputs,
+        asset_ids: capture.assetId ? [capture.assetId] : [],
+      }
+    }
+    merged.sequence.push(step)
+
+    if (capture.assetId) {
+      latestResultByAssetSlug.set(capture.assetId, captureStepId)
+    }
+  }
+
+  return merged
+}

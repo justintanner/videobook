@@ -46,16 +46,17 @@ function GenOutputThumb({
 function GenNodeComponent({ data, selected }: NodeProps) {
   const node = data as NotebookNodeData
   const { step } = node
+  const isCapture = Boolean(step.properties.is_capture)
   const Icon = step.type === 'video' ? Video : ImageIcon
   const model = typeof step.properties.model === 'string' && step.properties.model
     ? step.properties.model
-    : 'choose model'
+    : isCapture ? (typeof step.properties.provider === 'string' ? step.properties.provider : 'unknown') : 'choose model'
   const mediaInputs = node.mediaInputs ?? []
   const outputs = node.outputs ?? []
   return (
-    <div className={`vc-node vc-node-gen vc-node-${step.type} ${selected ? 'vc-node-selected' : ''} ${node.invalidReason ? 'vc-node-invalid' : ''} ${node.routeState ? `vc-node-route-${node.routeState}` : ''}`}>
-      <Handle type="target" position={Position.Top} className="vc-node-handle" />
-      <div className="vc-node-kicker"><span><Icon aria-hidden /> Gen {step.type}</span><b>{step.type === 'video' ? 'VID' : 'IMG'}</b></div>
+    <div className={`vc-node vc-node-gen vc-node-${step.type} ${selected ? 'vc-node-selected' : ''} ${node.invalidReason ? 'vc-node-invalid' : ''} ${node.routeState ? `vc-node-route-${node.routeState}` : ''} ${isCapture ? 'vc-node-capture' : ''}`}>
+      {!isCapture ? <Handle type="target" position={Position.Top} className="vc-node-handle" /> : null}
+      <div className="vc-node-kicker"><span><Icon aria-hidden /> {step.type === 'video' ? 'Video Prompt' : 'Image Prompt'}</span><b>{step.type === 'video' ? 'VID' : 'IMG'}</b></div>
       {mediaInputs.length > 0 ? (
         <div className="vc-node-input-strip" aria-label="Connected media inputs">
           {mediaInputs.map((item) => (
@@ -65,8 +66,8 @@ function GenNodeComponent({ data, selected }: NodeProps) {
       ) : null}
       <div className="vc-node-hero">
         {node.thumbnailSrc ? <img src={node.thumbnailSrc} alt="" /> : <Icon />}
-        <span className={`vc-node-status vc-node-status-${node.running ? 'running' : node.runState}`}>
-          {node.running ? <Loader2 /> : node.error || node.runState === 'error' ? <AlertCircle /> : null}
+        <span className={`vc-node-status vc-node-status-${node.running ? 'running' : (isCapture ? step.properties.capture_status : node.runState)}`}>
+          {node.running || (isCapture && step.properties.capture_status === 'pending') ? <Loader2 /> : node.error || node.runState === 'error' || (isCapture && step.properties.capture_status === 'failed') ? <AlertCircle /> : null}
         </span>
       </div>
       {outputs.length > 1 ? (
@@ -84,7 +85,7 @@ function GenNodeComponent({ data, selected }: NodeProps) {
         <span>{model}</span>
         {node.cost && <b>{node.cost}</b>}
       </div>
-      <Handle type="source" position={Position.Bottom} className="vc-node-handle" />
+      {!isCapture ? <Handle type="source" position={Position.Bottom} className="vc-node-handle" /> : null}
     </div>
   )
 }

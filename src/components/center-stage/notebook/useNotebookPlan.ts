@@ -31,6 +31,8 @@ function toDefinition(value: unknown): NotebookPlanDefinition {
 
 export function useNotebookPlan({ notebookId, projectSlug, callTool, mcpState }: UseNotebookPlanOptions) {
   const [definition, setDefinitionState] = useState<NotebookPlanDefinition | null>(null)
+  const [captures, setCaptures] = useState<NotebookPlanResponse['captures']>()
+  const [captureLayout, setCaptureLayout] = useState<NotebookPlanResponse['capture_layout']>()
   const [saveState, setSaveState] = useState<NotebookSaveState>('loading')
   const [error, setError] = useState<string | null>(null)
   const [legacy, setLegacy] = useState(false)
@@ -107,6 +109,8 @@ export function useNotebookPlan({ notebookId, projectSlug, callTool, mcpState }:
     let cancelled = false
     setDefinitionState(null)
     setLoadedDefinition(null)
+    setCaptures(undefined)
+    setCaptureLayout(undefined)
     setSaveState('loading')
     setError(null)
     setLegacy(false)
@@ -121,7 +125,13 @@ export function useNotebookPlan({ notebookId, projectSlug, callTool, mcpState }:
         const loaded = toDefinition(parsed)
         if (cancelled) return
         const response = parsed as Partial<NotebookPlanResponse>
+        
+        // Also call activate_notebook to share persisted capture target
+        void callToolRef.current('activate_notebook', { project_slug: projectSlug, notebook_id: notebookId })
+
         setLegacy(response.legacy === true)
+        setCaptures(response.captures)
+        setCaptureLayout(response.capture_layout)
         const normalized = normalizeDefinition(loaded)
         lastSavedJsonRef.current = JSON.stringify(loaded)
         setDefinitionState(normalized.definition)
@@ -145,6 +155,8 @@ export function useNotebookPlan({ notebookId, projectSlug, callTool, mcpState }:
 
   return {
     definition,
+    captures,
+    captureLayout,
     saveState,
     error,
     legacy,
@@ -154,3 +166,4 @@ export function useNotebookPlan({ notebookId, projectSlug, callTool, mcpState }:
     flush,
   }
 }
+
