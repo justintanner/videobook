@@ -5,8 +5,9 @@ import type { ManifestFile } from './viewer-types'
 import { categorizeManifestFiles } from './character-folder-utils'
 import { uploadProjectFile } from '@/lib/upload'
 import { CloseButton } from '@/components/ui/CloseButton'
-import { Save, UploadCloud } from 'lucide-react'
+import { Save, UploadCloud, Globe } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { usePublishGoogleFlowCharacter } from '@/hooks/usePublishGoogleFlowCharacter'
 
 export function CharacterFolderViewer({
   item,
@@ -23,7 +24,9 @@ export function CharacterFolderViewer({
   const [metadata, setMetadata] = useState<string>('{}')
   const [metadataSaving, setMetadataSaving] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [draggedImg, setDraggedImg] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { publishCharacter, publishing } = usePublishGoogleFlowCharacter(projectSlug)
 
   const fetchManifest = useCallback(async () => {
     if (!projectSlug) return
@@ -91,6 +94,63 @@ export function CharacterFolderViewer({
 
   const { images, audio, others } = categorizeManifestFiles(files)
 
+  const handleDragStartImg = (e: React.DragEvent, name: string) => {
+    setDraggedImg(name)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOverImg = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleDropImg = async (e: React.DragEvent, targetName: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!draggedImg || draggedImg === targetName) {
+      setDraggedImg(null)
+      return
+    }
+    const sourceIdx = images.findIndex(f => f.name === draggedImg)
+    const targetIdx = images.findIndex(f => f.name === targetName)
+    if (sourceIdx < 0 || targetIdx < 0) return
+
+    const newOrder = [...images]
+    const [moved] = newOrder.splice(sourceIdx, 1)
+    newOrder.splice(targetIdx, 0, moved)
+    
+    setDraggedImg(null)
+    
+    if (projectSlug) {
+      const orderedFilenames = newOrder.map(f => f.name)
+      await callTool('reorder_character_images', {
+        project_slug: projectSlug,
+        asset_id: item.id,
+        ordered_filenames: orderedFilenames
+      })
+      await fetchManifest()
+    }
+  }
+
+  const handleMakeFirst = async (e: React.MouseEvent, name: string) => {
+    e.stopPropagation()
+    const sourceIdx = images.findIndex(f => f.name === name)
+    if (sourceIdx <= 0) return
+    const newOrder = [...images]
+    const [moved] = newOrder.splice(sourceIdx, 1)
+    newOrder.unshift(moved)
+
+    if (projectSlug) {
+      const orderedFilenames = newOrder.map(f => f.name)
+      await callTool('reorder_character_images', {
+        project_slug: projectSlug,
+        asset_id: item.id,
+        ordered_filenames: orderedFilenames
+      })
+      await fetchManifest()
+    }
+  }
+
   return (
     <div className="flex w-full h-full text-zinc-100 p-6 overflow-y-auto gap-6 relative">
       <div className="absolute top-4 right-4 z-10">
@@ -99,7 +159,17 @@ export function CharacterFolderViewer({
 
       {/* Files Column */}
       <div className="flex-1 flex flex-col gap-6">
-        <h2 className="text-2xl font-semibold">{item.title || item.id}</h2>
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-semibold">{item.title || item.id}</h2>
+          <button
+            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors disabled:opacity-50"
+            onClick={() => void publishCharacter(item.id, item.title || item.id)}
+            disabled={publishing || images.length === 0}
+          >
+            <Globe className="w-4 h-4" />
+            {publishing ? 'Publishing...' : 'Publish to Google Flow'}
+          </button>
+        </div>
 
         <div
           className={cn(
@@ -129,15 +199,41 @@ export function CharacterFolderViewer({
           <div>
             <h3 className="text-lg font-medium mb-3">Images</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-              {images.map(f => (
-                <div key={f.name} className="aspect-square bg-zinc-900 rounded-lg overflow-hidden border border-zinc-800">
-                  <img
-                    src={`/files/${projectSlug}/${item.id}/${f.name}`}
-                    alt={f.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              ))}
+              {images.map((f, i) => {
+                const isHighlight = i < 2
+                return (
+                  <div
+                    key={f.name}
+                    className={cn(
+                      "aspect-square rounded-lg overflow-hidden border relative group cursor-grab active:cursor-grabbing",
+                      isHighlight ? "border-emerald-500/50 ring-1 ring-emerald-500/30" : "border-zinc-800 bg-zinc-900"
+                    )}
+                    draggable
+                    onDragStart={(e) => handleDragStartImg(e, f.name)}
+                    onDragOver={handleDragOverImg}
+                    onDrop={(e) => void handleDropImg(e, f.name)}
+                  >
+                    <img
+                      src={`/files/${projectSlug}/${item.id}/${f.name}`}
+                      alt={f.name}
+                      className="w-full h-full object-cover pointer-events-none"
+                    />
+                    
+                    <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 text-white text-xs rounded shadow backdrop-blur-md font-medium">
+                      {i + 1}
+                    </div>
+
+                    {i > 0 && (
+                      <button
+                        onClick={(e) => void handleMakeFirst(e, f.name)}
+                        className="absolute top-2 right-2 px-2 py-1 bg-black/60 hover:bg-emerald-600 text-white text-xs rounded shadow backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        Make first
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}

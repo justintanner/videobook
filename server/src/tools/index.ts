@@ -19,6 +19,7 @@ import {
 import { createProjectDef } from "./create-project.js";
 import { createCharacterDef } from "./create-character.js";
 import { setCharacterMetadataDef } from "./set-character-metadata.js";
+import { reorderCharacterImagesDef } from "./reorder-character-images.js";
 import { renameProjectDef } from "./rename-project.js";
 import { deleteProjectDef } from "./delete-project.js";
 import { switchProjectDef } from "./switch-project.js";
@@ -220,6 +221,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     createProjectDef(fs),
     createCharacterDef(fs),
     setCharacterMetadataDef(fs),
+    reorderCharacterImagesDef(fs),
     renameProjectDef(fs),
     deleteProjectDef(fs),
     switchProjectDef(fs),

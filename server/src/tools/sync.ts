@@ -987,6 +987,24 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
   const pendingAssetIds = new Set(tasks.map((t) => t.assetId));
   for (const failure of persistedFailures) {
     if (!reportedAssetIds.has(failure.assetId) && !pendingAssetIds.has(failure.assetId)) {
+      const asset = assets.find(a => a.id === failure.assetId);
+      if (asset) {
+        const manifestResult = await fs.getManifest(failure.assetId, project_slug);
+        if (manifestResult.ok) {
+          const files = manifestResult.value.files;
+          let hasMedia = false;
+          if (asset.type === "character") {
+             hasMedia = files.some(f => /\\.(jpg|jpeg|png|webp|gif)$/i.test(f.name));
+          } else {
+             hasMedia = findPrimaryMediaFile(files, failure.assetId) !== null;
+          }
+          if (hasMedia) {
+             await fs.generationErrors.clear(project_slug, failure.assetId);
+             continue;
+          }
+        }
+      }
+
       result.failed.push({
         assetId: failure.assetId,
         taskType: "",

@@ -13,6 +13,7 @@ export function categorizeManifestFiles(files: ManifestFile[]): {
   const audio: ManifestFile[] = []
   const others: ManifestFile[] = []
   for (const f of files) {
+    if (f.name.startsWith('.')) continue
     if (IMAGE_EXT.test(f.name)) images.push(f)
     else if (AUDIO_EXT.test(f.name)) audio.push(f)
     else others.push(f)
