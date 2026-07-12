@@ -208,6 +208,14 @@
     box-shadow: 0 0 10px rgba(var(--scrollbar-rgb, 0, 240, 255), 0.5);
   }
 
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   /* ==================== CLIP STATE UTILITIES ==================== */
 
   .clip-state-uploading {

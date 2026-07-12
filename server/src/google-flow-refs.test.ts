@@ -1,46 +1,38 @@
 import { describe, expect, it } from "vitest";
 import {
-  characterRefImageCount,
-  OMNI_MAX_REFERENCE_IMAGES,
+  OMNI_MAX_REFERENCE_SLOTS,
+  OMNI_V2V_MAX_REFERENCE_SLOTS,
   rewriteImageSlugMentions,
   stripSlugMentions,
-  totalOmniReferenceImages,
+  totalOmniReferenceSlots,
 } from "./google-flow-refs.js";
 
-describe("characterRefImageCount", () => {
-  it("parses -imgs:2", () => {
-    expect(characterRefImageCount("character:abc-email:def-imgs:2")).toBe(2);
+describe("totalOmniReferenceSlots", () => {
+  it("charges a flat 2 slots per character regardless of -imgs:N", () => {
+    expect(totalOmniReferenceSlots(0, ["character:a-imgs:1"])).toBe(2);
+    expect(totalOmniReferenceSlots(0, ["character:a-imgs:2"])).toBe(2);
+    expect(totalOmniReferenceSlots(0, ["character:a"])).toBe(2);
   });
 
-  it("defaults a bare ref to 1", () => {
-    expect(characterRefImageCount("character:abc-email:def")).toBe(1);
+  it("fits 3 characters + 1 image exactly in the 7-slot R2V budget", () => {
+    expect(totalOmniReferenceSlots(1, ["character:a-imgs:1", "character:b-imgs:1", "character:c-imgs:1"]))
+      .toBe(OMNI_MAX_REFERENCE_SLOTS);
   });
 
-  it("clamps -imgs:9 to 2", () => {
-    expect(characterRefImageCount("character:abc-imgs:9")).toBe(2);
+  it("overflows with 4 characters + 1 image (the observed INVALID_ARGUMENT 400)", () => {
+    expect(totalOmniReferenceSlots(1, ["character:a-imgs:1", "character:b-imgs:1", "character:c-imgs:1", "character:d-imgs:1"]))
+      .toBe(9);
+    expect(9).toBeGreaterThan(OMNI_MAX_REFERENCE_SLOTS);
   });
 
-  it("clamps -imgs:0 to 1", () => {
-    expect(characterRefImageCount("character:abc-imgs:0")).toBe(1);
+  it("overflows with 4 characters even without images", () => {
+    expect(totalOmniReferenceSlots(0, ["character:a", "character:b", "character:c", "character:d"]))
+      .toBeGreaterThan(OMNI_MAX_REFERENCE_SLOTS);
   });
 
-  it("returns 1 for malformed suffix", () => {
-    expect(characterRefImageCount("character:abc-imgs:x")).toBe(1);
-  });
-});
-
-describe("totalOmniReferenceImages", () => {
-  it("sums image refs + per-character counts", () => {
-    expect(totalOmniReferenceImages(3, ["character:a-imgs:2", "character:b-imgs:2"])).toBe(7);
-  });
-
-  it("overflows when combined budget exceeds 7", () => {
-    expect(totalOmniReferenceImages(4, ["character:a-imgs:2", "character:b-imgs:2"])).toBe(8);
-    expect(8).toBeGreaterThan(OMNI_MAX_REFERENCE_IMAGES);
-  });
-
-  it("treats suffix-less characters as one image each", () => {
-    expect(totalOmniReferenceImages(2, ["character:a", "character:b"])).toBe(4);
+  it("fits 2 characters + 1 image exactly in the 5-slot V2V budget", () => {
+    expect(totalOmniReferenceSlots(1, ["character:a-imgs:1", "character:b-imgs:2"]))
+      .toBe(OMNI_V2V_MAX_REFERENCE_SLOTS);
   });
 });
 

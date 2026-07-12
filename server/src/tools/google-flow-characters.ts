@@ -21,9 +21,10 @@ import {
 // ---------------------------------------------------------------------------
 // Google Flow characters (POST/GET/DELETE /google-flow/characters). A character
 // bundles 1-2 reference images (plus optional personality notes and a voice)
-// into a ref that feeds character_1..7 on generate_google_omni_video
-// (character_refs). Each character's images share omni's 7-image reference
-// budget with image_slugs. GET/DELETE-by-ref paths ride the googleFlowFetch raw
+// into a ref that feeds character_1..N on generate_google_omni_video
+// (character_refs). Each character costs a flat 2 of omni's 7 reference slots
+// shared with image_slugs, regardless of its image count (google-flow-refs.ts).
+// GET/DELETE-by-ref paths ride the googleFlowFetch raw
 // -path hook in createGoogleFlowProvider (docs/apicity-gaps.md §16).
 // ---------------------------------------------------------------------------
 
@@ -154,7 +155,7 @@ const createGoogleFlowCharacterSchema = {
     .min(1)
     .max(2)
     .describe(
-      "1-2 character image @slugs; uploaded to Google Flow as imageReference_1/2. Each image counts against Omni's 7-image reference budget",
+      "1-2 character image @slugs; uploaded to Google Flow as imageReference_1/2. The character costs a flat 2 of Omni's 7 reference slots regardless of image count",
     ),
   personality_notes: apicityField(
     GoogleFlowCharactersCreateRequestSchema.shape.personalityNotes,

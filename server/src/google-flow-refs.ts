@@ -1,8 +1,11 @@
-// Omni Flash reference-image budget math. A character ref may carry a trailing
-// `-imgs:N` suffix minted by useapi.net indicating how many reference images it
-// contributes (1 or 2); suffix-less refs contribute one. Image refs (image_slugs)
-// each contribute one. The combined total must not exceed 7 (useapi.net R2V
-// budget), or 5 alongside a reference clip (V2V).
+// Omni Flash reference budget math. Google counts every reference input
+// against one 7-slot pool (5 alongside a V2V clip): each image_slugs ref costs
+// 1 slot, and each character costs a flat 2 — useapi.net submits every
+// character entity twice in videoGenerationEntityInputs, regardless of its
+// `-imgs:N` suffix or whether the prompt mentions it (verified empirically
+// 2026-07-11 by replaying payloads: 3 chars + 1 image = 7 slots → 200, 4 chars
+// + 1 image = 9 slots → opaque INVALID_ARGUMENT 400). Consequently at most 3
+// characters ever fit an R2V request, and 2 alongside a clip.
 
 const IMGS_SUFFIX = /-imgs:(\d+)$/;
 
@@ -11,28 +14,16 @@ export function canonicalCharacterId(ref: string): string {
   return ref.replace(IMGS_SUFFIX, "");
 }
 
-/** Parse the useapi.net `-imgs:N` suffix on a character ref. Absent or
- *  malformed → 1; clamped to 1..2. */
-export function characterRefImageCount(ref: string): number {
-  const match = IMGS_SUFFIX.exec(ref);
-  if (!match) return 1;
-  const n = Number.parseInt(match[1], 10);
-  if (!Number.isFinite(n)) return 1;
-  return Math.min(2, Math.max(1, n));
+export const OMNI_CHARACTER_SLOT_COST = 2;
+
+/** Total reference slots an omni-flash request consumes: image refs plus a
+ *  flat 2 per character. */
+export function totalOmniReferenceSlots(imageCount: number, characterRefs: string[]): number {
+  return imageCount + characterRefs.length * OMNI_CHARACTER_SLOT_COST;
 }
 
-/** Total reference images for an omni-flash R2V request: image refs plus the
- *  per-character image counts. */
-export function totalOmniReferenceImages(imageCount: number, characterRefs: string[]): number {
-  const charImages = characterRefs.reduce(
-    (sum, ref) => sum + characterRefImageCount(ref),
-    0,
-  );
-  return imageCount + charImages;
-}
-
-export const OMNI_MAX_REFERENCE_IMAGES = 7;
-export const OMNI_V2V_MAX_REFERENCE_IMAGES = 5;
+export const OMNI_MAX_REFERENCE_SLOTS = 7;
+export const OMNI_V2V_MAX_REFERENCE_SLOTS = 5;
 
 // Google Flow prompts support inline positional mentions (@character_N,
 // @referenceImage_N, @referenceAudio_N) that resolve to the matching body

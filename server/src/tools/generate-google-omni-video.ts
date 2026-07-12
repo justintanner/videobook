@@ -1,7 +1,15 @@
 import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
-import { totalOmniReferenceImages, canonicalCharacterId, rewriteImageSlugMentions, stripSlugMentions } from "../google-flow-refs.js";
+import {
+  totalOmniReferenceSlots,
+  canonicalCharacterId,
+  rewriteImageSlugMentions,
+  stripSlugMentions,
+  OMNI_CHARACTER_SLOT_COST,
+  OMNI_MAX_REFERENCE_SLOTS,
+  OMNI_V2V_MAX_REFERENCE_SLOTS,
+} from "../google-flow-refs.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlug, resolveVideoSlug, slugify, type RefInput } from "./_seedance2-shared.js";
 
@@ -9,18 +17,22 @@ import { resolveImageSlug, resolveVideoSlug, slugify, type RefInput } from "./_s
 // would throw (docs/apicity-gaps.md §15).
 const SLUG = "google-omni";
 
-// Omni Flash reference budgets (useapi.net docs): R2V allows 7 reference
-// images; a V2V edit clip allows 5 alongside it. Voices feed referenceAudio_1..5
-// (3 alongside a clip); characters feed character_1..7, whose own images share
-// the 7-image budget with image_slugs. Enums are hand-typed — the 0.7.2
-// @apicity/googleflow schemas carry only loose `.or(z.string())` model/aspect
-// enums, not the per-model restrictions (docs/apicity-gaps.md §14) — and mirror
-// the kie gemini-omni tool's values so provider switching keeps params valid.
-const OMNI_V2V_MAX_IMAGES = 5;
+// Omni Flash reference budgets: R2V allows 7 reference slots, 5 alongside a
+// V2V edit clip. Each image_slugs ref costs 1 slot and each character a flat 2
+// (Google receives every character entity twice — see google-flow-refs.ts), so
+// at most 3 characters ever fit despite the API exposing character_1..7.
+// Voices feed referenceAudio_1..5 (3 alongside a clip). Enums are hand-typed —
+// the 0.7.2 @apicity/googleflow schemas carry only loose `.or(z.string())`
+// model/aspect enums, not the per-model restrictions (docs/apicity-gaps.md §14)
+// — and mirror the kie gemini-omni tool's values so provider switching keeps
+// params valid.
 const OMNI_MAX_VOICES = 5;
 const OMNI_V2V_MAX_VOICES = 3;
-const OMNI_MAX_CHARACTERS = 7;
-const OMNI_MAX_REFERENCE_IMAGES = 7;
+const OMNI_MAX_CHARACTERS = 3;
+// Schema cap stays at the structural character_1..7 param count — the slot
+// budget is enforced in the handler so callers get a readable content error
+// instead of a raw zod "too_big" MCP -32602 dump.
+const GOOGLE_FLOW_MAX_CHARACTER_PARAMS = 7;
 const GOOGLE_OMNI_DURATIONS = ["4", "6", "8", "10"] as const;
 const GOOGLE_OMNI_ASPECT_RATIOS = ["16:9", "9:16"] as const;
 
@@ -51,7 +63,7 @@ const generateGoogleOmniVideoSchema = {
   aspect_ratio: z.enum(GOOGLE_OMNI_ASPECT_RATIOS).optional().describe("Output aspect ratio: 16:9 / 9:16 (sent as landscape / portrait)"),
   seed: z.number().int().min(0).optional().describe("Random seed for reproducibility"),
   voice_refs: z.array(z.string()).max(OMNI_MAX_VOICES).optional().describe("Google Flow voice refs from create_google_flow_voice (up to 5; up to 3 alongside a reference clip); sent as referenceAudio_1..5"),
-  character_refs: z.array(z.string()).max(OMNI_MAX_CHARACTERS).optional().describe("Google Flow character refs from create_google_flow_character (up to 7); each character's 1-2 images share the 7-image reference budget with image_slugs; not combinable with first_frame_slug"),
+  character_refs: z.array(z.string()).max(GOOGLE_FLOW_MAX_CHARACTER_PARAMS).optional().describe("Google Flow character refs from create_google_flow_character (up to 3); each character costs 2 of the 7 reference slots shared with image_slugs (5 with a reference clip); not combinable with first_frame_slug"),
   _provider: z.string().optional().describe("Provider key (e.g., 'google')"),
 } satisfies ZodRawShape;
 
@@ -99,10 +111,10 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
         }
       }
 
-      // Voice/character budgets. Each character carries 1-2 images (useapi.net
-      // `-imgs:N` suffix) that share the 7-image reference budget with
-      // image_slugs; totalOmniReferenceImages sums the exact per-character
-      // counts so two-image characters are enforced here, not deferred.
+      // Voice/character budgets. Each character costs a flat 2 of the shared
+      // reference-slot pool regardless of its `-imgs:N` suffix (Google receives
+      // the entity twice — see google-flow-refs.ts), so overflow is enforced
+      // here in slots, not deferred to an opaque upstream 400.
       if (voiceRefs.length > OMNI_MAX_VOICES) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash supports at most ${OMNI_MAX_VOICES} voice refs (got ${voiceRefs.length})` }] };
       }
@@ -110,7 +122,7 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash video edit supports at most ${OMNI_V2V_MAX_VOICES} voice refs alongside the clip (got ${voiceRefs.length})` }] };
       }
       if (charRefs.length > OMNI_MAX_CHARACTERS) {
-        return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash supports at most ${OMNI_MAX_CHARACTERS} character refs (got ${charRefs.length})` }] };
+        return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash supports at most ${OMNI_MAX_CHARACTERS} character refs — each costs ${OMNI_CHARACTER_SLOT_COST} of the ${OMNI_MAX_REFERENCE_SLOTS} reference slots (got ${charRefs.length}). Remove ${charRefs.length - OMNI_MAX_CHARACTERS} character${charRefs.length - OMNI_MAX_CHARACTERS === 1 ? "" : "s"}` }] };
       }
       const seenChars = new Set<string>();
       for (const ref of charRefs) {
@@ -120,10 +132,11 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
         }
         seenChars.add(canonical);
       }
-      const omniRefTotal = totalOmniReferenceImages(imgs.length, charRefs);
-      if (omniRefTotal > OMNI_MAX_REFERENCE_IMAGES) {
-        const charImageTotal = omniRefTotal - imgs.length;
-        return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash reference budget exceeded: image_slugs plus character images must total at most ${OMNI_MAX_REFERENCE_IMAGES} reference images (got ${omniRefTotal}: ${imgs.length} image_slugs + ${charImageTotal} from ${charRefs.length} character ref${charRefs.length === 1 ? "" : "s"})` }] };
+      const omniSlotBudget = videoSlug !== undefined ? OMNI_V2V_MAX_REFERENCE_SLOTS : OMNI_MAX_REFERENCE_SLOTS;
+      const omniSlotTotal = totalOmniReferenceSlots(imgs.length, charRefs);
+      if (omniSlotTotal > omniSlotBudget) {
+        const budgetLabel = videoSlug !== undefined ? `${OMNI_V2V_MAX_REFERENCE_SLOTS} alongside a reference clip` : `${OMNI_MAX_REFERENCE_SLOTS}`;
+        return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash reference budget exceeded: image_slugs cost 1 slot each and characters ${OMNI_CHARACTER_SLOT_COST} each, at most ${budgetLabel} total (got ${omniSlotTotal}: ${imgs.length} image_slugs + ${charRefs.length} character ref${charRefs.length === 1 ? "" : "s"} × ${OMNI_CHARACTER_SLOT_COST})` }] };
       }
 
       // Clip-timing pre-check mirroring the kie gemini-omni tool. Omni Flash
@@ -137,9 +150,6 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
         }
         if (ends !== undefined && (!(ends > start) || ends > 10)) {
           return { isError: true as const, content: [{ type: "text" as const, text: "video_clip_ends must be greater than video_clip_start and at most 10 seconds" }] };
-        }
-        if (imgs.length > OMNI_V2V_MAX_IMAGES) {
-          return { isError: true as const, content: [{ type: "text" as const, text: `Omni Flash video edit supports at most ${OMNI_V2V_MAX_IMAGES} reference images alongside the clip (got ${imgs.length})` }] };
         }
       }
 

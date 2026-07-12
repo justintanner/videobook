@@ -357,11 +357,31 @@ export async function submitGoogleFlowVideoTask(
   const request = withGoogleFlowCaptchaDefaults(args.request as Record<string, unknown>) as GoogleFlowVideosRequest;
   await fs.writeMetadata(args.assetId, "generation-payload", request, args.projectSlug);
 
-  const res = await callGoogleFlowWithCaptchaRetry(
-    (body) => provider.v1.videos({ ...(body as GoogleFlowVideosRequest), async: true }),
-    request as Record<string, unknown>,
-  );
-  const taskId = readJobId(res as Record<string, unknown>);
+  let res: Record<string, unknown>;
+  try {
+    res = (await callGoogleFlowWithCaptchaRetry(
+      (body) => provider.v1.videos({ ...(body as GoogleFlowVideosRequest), async: true }),
+      request as Record<string, unknown>,
+    )) as Record<string, unknown>;
+  } catch (e) {
+    if (e instanceof GoogleFlowError) {
+      if (e.message.match(/^Google API error (\d+): API error: \d+$/)) {
+        e.message = `${e.message} — request rejected by Google Flow — check reference/character inputs (see payload for asset ${args.assetId})`;
+      } else if (e.body && typeof e.body === "object") {
+        try {
+          const b = { ...(e.body as Record<string, unknown>) };
+          if (b.error && typeof b.error === "string" && e.message.includes(b.error)) delete b.error;
+          const bodyStr = JSON.stringify(b);
+          if (bodyStr !== "{}" && bodyStr !== '{"error":{}}') {
+            e.message = `${e.message} ${bodyStr}`;
+          }
+        } catch {}
+      }
+    }
+    throw e;
+  }
+
+  const taskId = readJobId(res);
   if (!taskId) throw new Error("Google Flow video submit returned no job id");
 
   const pendingResult = await fs.pendingTasks.write(args.projectSlug, {

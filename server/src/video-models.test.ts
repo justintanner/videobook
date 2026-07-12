@@ -842,7 +842,7 @@ describe("google flow video models", () => {
     expect(schema!.properties.voice_refs.maxItems).toBe(5);
     expect(schema!.required).not.toContain("voice_refs");
     expect(schema!.properties.character_refs).toBeDefined();
-    expect(schema!.properties.character_refs.maxItems).toBe(7);
+    expect(schema!.properties.character_refs.maxItems).toBe(3);
     expect(schema!.required).not.toContain("character_refs");
   });
 
@@ -893,9 +893,9 @@ describe("google flow video models", () => {
     expect(voicesWithClip.warnings.some((w) => w.includes("up to 3 voice refs alongside the clip"))).toBe(true);
 
     const tooManyChars = validateVideoParams("generate_google_omni_video", {
-      prompt: "x", character_refs: ["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"],
+      prompt: "x", character_refs: ["c1", "c2", "c3", "c4"],
     });
-    expect(tooManyChars.warnings.some((w) => w.includes("up to 7 character refs"))).toBe(true);
+    expect(tooManyChars.warnings.some((w) => w.includes("up to 3 character refs"))).toBe(true);
 
     const firstWithChars = validateVideoParams("generate_google_omni_video", {
       prompt: "x", first_frame_slug: "@img-start", character_refs: ["c1"],

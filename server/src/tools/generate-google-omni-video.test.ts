@@ -207,7 +207,7 @@ describe("generate_google_omni_video tool", () => {
       },
     });
     expect(result.isError).toBe(true);
-    expect((result.content as TextContent)[0].text).toContain("at most 5 reference images");
+    expect((result.content as TextContent)[0].text).toContain("at most 5 alongside a reference clip");
   });
 
   it("enqueues with voice and character refs echoed back", async () => {
@@ -286,11 +286,25 @@ describe("generate_google_omni_video tool", () => {
         project_slug: "test-proj",
         prompt: "x",
         image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d"],
-        character_refs: ["c1", "c2", "c3", "c4"],
+        character_refs: ["c1", "c2"],
       },
     });
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("reference budget");
+  });
+
+  it("rejects a fourth character with a readable slot-cost error", async () => {
+    const result = await client.callTool({
+      name: "generate_google_omni_video",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "x",
+        character_refs: ["c1", "c2", "c3", "c4"],
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("at most 3 character refs");
+    expect((result.content as TextContent)[0].text).toContain("Remove 1 character");
   });
 
   it("rejects duplicate characters using canonical IDs", async () => {
@@ -306,7 +320,7 @@ describe("generate_google_omni_video tool", () => {
     expect((result.content as TextContent)[0].text).toContain("Duplicate character in character_refs: character:a-imgs:2");
   });
 
-  it("rejects a budget over 7 counting two-image characters (-imgs:2)", async () => {
+  it("rejects a budget over 7 counting characters at 2 slots each", async () => {
     const fs = createFs({ projectsDir: tempDir });
     const imageAssets: string[] = [];
     for (let i = 0; i < 4; i++) {
@@ -328,7 +342,7 @@ describe("generate_google_omni_video tool", () => {
     expect((result.content as TextContent)[0].text).toContain("reference budget");
   });
 
-  it("enqueues when 3 images + two two-image characters exactly hit 7", async () => {
+  it("enqueues when 3 images + two characters exactly hit 7 slots", async () => {
     const fs = createFs({ projectsDir: tempDir });
     const imageAssets: string[] = [];
     for (let i = 0; i < 3; i++) {

@@ -48,7 +48,7 @@ import {
   zodNumberRange,
   type SlotConstraints,
 } from "./zod-slots.js";
-import { totalOmniReferenceImages } from "./google-flow-refs.js";
+import { totalOmniReferenceSlots } from "./google-flow-refs.js";
 
 // ---------------------------------------------------------------------------
 // Provider routes
@@ -715,7 +715,7 @@ const VIDEO_TOOL_MODES: Record<string, ModelModes> = {
       {
         key: "r2v",
         label: "refs",
-        description: "Guide with reference images and characters (7-image shared budget)",
+        description: "Guide with reference images and characters (7-slot shared budget; a character costs 2 slots)",
         params: ["image_slugs", "character_refs"],
         asset_slots: [{ param: "image_slugs", kind: "image", label: "References", min: 0, max: 7 }],
       },
@@ -1277,8 +1277,8 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
         prop.description = "Google Flow voice refs (0-5; 0-3 with a reference clip), sent as referenceAudio_1..5";
       }
       if (isAlias && param === "character_refs") {
-        prop.maxItems = 7;
-        prop.description = "Google Flow character refs (0-7); character images share the 7-image reference budget with image_slugs";
+        prop.maxItems = 3;
+        prop.description = "Google Flow character refs (0-3); each costs 2 of the 7 reference slots shared with image_slugs (5 with a reference clip)";
       }
     }
     if (
@@ -1640,16 +1640,17 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     if (videoSlug && voiceCount > 3) {
       warnings.push(`Google Omni video edit supports up to 3 voice refs alongside the clip (got ${voiceCount})`);
     }
-    if (charCount > 7) {
-      warnings.push(`Google Omni supports up to 7 character refs (got ${charCount})`);
+    if (charCount > 3) {
+      warnings.push(`Google Omni supports up to 3 character refs — each costs 2 of the 7 reference slots (got ${charCount})`);
     }
     if (firstFrame && charCount > 0) {
       warnings.push("Google Omni first_frame_slug cannot be combined with character_refs");
     }
     if (charCount > 0) {
-      const omniRefTotal = totalOmniReferenceImages(totalImages, charRefs);
-      if (omniRefTotal > 7) {
-        warnings.push(`Google Omni reference budget exceeded: image_slugs plus character images must total at most 7 reference images (got ${omniRefTotal}: ${totalImages} image_slugs + ${omniRefTotal - totalImages} from ${charCount} character ref${charCount === 1 ? "" : "s"})`);
+      const slotBudget = videoSlug ? 5 : 7;
+      const omniSlotTotal = totalOmniReferenceSlots(totalImages, charRefs);
+      if (omniSlotTotal > slotBudget) {
+        warnings.push(`Google Omni reference budget exceeded: image_slugs cost 1 slot each and characters 2 each, at most ${slotBudget}${videoSlug ? " alongside a reference clip" : ""} (got ${omniSlotTotal}: ${totalImages} image_slugs + ${charCount} character ref${charCount === 1 ? "" : "s"} × 2)`);
       }
       warnings.push("Google may block generations whose character photos depict identifiable real people (PROMINENT_PEOPLE safety filter). Stylized or AI-generated character images are more reliable.");
     }
