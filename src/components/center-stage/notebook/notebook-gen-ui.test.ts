@@ -10,7 +10,7 @@ describe('notebook generation editor order and domain themes', () => {
   it('renders Options and Characters before Prompt in GenerationSidebar', () => {
     const sidebar = readFileSync(join(root, 'NotebookSidebar.tsx'), 'utf8')
     const optionsIdx = sidebar.indexOf('<label>Options</label>')
-    const charactersIdx = sidebar.indexOf('<CharacterInputRows')
+    const charactersIdx = sidebar.indexOf('<GoogleFlowRefPicker')
     const promptIdx = sidebar.indexOf('<label>Prompt</label>', sidebar.indexOf('function GenerationSidebar'))
     expect(optionsIdx).toBeGreaterThan(-1)
     expect(charactersIdx).toBeGreaterThan(-1)
@@ -26,7 +26,6 @@ describe('notebook generation editor order and domain themes', () => {
     expect(sidebar).not.toContain('const domainTheme = genThemes[category]')
     expect(sidebar).toContain('theme={notebookTheme}')
     expect(sidebar).not.toContain('theme={domainTheme}')
-    expect(sidebar).toContain('domain="notebook"')
     expect(sidebar).toContain('isAssetField(name)')
     expect(sidebar).toContain('suggestedModeKey')
     expect(sidebar).toContain("className={cn('vc-notebook-run', running && 'vc-notebook-run-busy')}")

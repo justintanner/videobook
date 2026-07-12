@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { AlertCircle, Braces, ChevronDown, Crosshair, ImageIcon, Loader2, Play, User, Video, X } from 'lucide-react'
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { AlertCircle, Braces, ChevronDown, Crosshair, ImageIcon, Loader2, Play, Video, X } from 'lucide-react'
 import type { UseMcpResult } from 'use-mcp/react'
-import { CharacterPickerPopover } from '@/components/gen/ui/CharacterPickerPopover'
+import { GoogleFlowRefPicker } from '@/components/gen/ui/GoogleFlowRefPicker'
 import { DynamicField } from '@/components/gen/ui/DynamicField'
 import { genThemes } from '@/components/gen/ui/gen-themes'
 import { effectiveToolName, filterValuesForMode, getMode, modeRequiredMissing, visibleParams } from '@/components/gen/modes'
 import type { JSONSchemaProperty, ModelOption, ModelModes } from '@/components/gen/types'
 import { usePromptHistory } from '@/hooks/usePromptHistory'
-import { useGoogleFlowEntities, type GoogleFlowEntityOption } from '@/hooks/useGoogleFlowEntities'
+import { useGoogleFlowEntities } from '@/hooks/useGoogleFlowEntities'
 import { JsonNode } from '@/components/ui/JsonNode'
 import { RichPromptField } from '@/components/ui/RichPromptField'
 import { characterHandle } from '@/components/ui/richPromptTokens'
@@ -52,6 +51,7 @@ interface NotebookSidebarProps {
   onSetInputRoute: (targetId: string, sourceId: string, param: string | null) => void
   onRun: (step: NotebookPlanStep, option: ModelOption, provider: string, values: Record<string, unknown>, charMentions?: { handle: string; n: number }[]) => void
   onOpenAsset?: (assetId: string) => void
+  onManageCharacters?: () => void
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -161,6 +161,7 @@ export function NotebookSidebar({
   onSetInputRoute,
   onRun,
   onOpenAsset,
+  onManageCharacters,
 }: NotebookSidebarProps) {
   const selected = definition.sequence.find((step) => step.id === selectedStepId) ?? null
   if (!selected) {
@@ -216,6 +217,7 @@ export function NotebookSidebar({
       onDisconnect={onDisconnect}
       onSetInputRoute={onSetInputRoute}
       onRun={onRun}
+      onManageCharacters={onManageCharacters}
     />
   )
 }
@@ -264,6 +266,7 @@ interface GenerationSidebarProps {
   onDisconnect: NotebookSidebarProps['onDisconnect']
   onSetInputRoute: NotebookSidebarProps['onSetInputRoute']
   onRun: NotebookSidebarProps['onRun']
+  onManageCharacters?: () => void
 }
 
 function GenerationSidebar({
@@ -280,6 +283,7 @@ function GenerationSidebar({
   onDisconnect,
   onSetInputRoute,
   onRun,
+  onManageCharacters,
 }: GenerationSidebarProps) {
   const category: 'image' | 'video' = step.type === 'video' ? 'video' : 'image'
   const model = typeof step.properties.model === 'string' ? step.properties.model : ''
@@ -503,17 +507,21 @@ function GenerationSidebar({
             onSetInputRoute={onSetInputRoute}
           >
             {showCharacters && characterField ? (
-              <CharacterInputRows
-                characterRefs={characterRefs}
-                charMap={charMap}
-                loaded={charEntities.loaded}
-                onUpdate={(refs) => updateValues('character_refs', refs)}
-                maxItems={characterField.maxItems ?? 7}
-                disabled={running}
-                callTool={callTool}
-                mcpState={mcpState}
-                projectSlug={projectSlug}
-              />
+              <div className="px-3 pb-3">
+                <GoogleFlowRefPicker
+                  entityType="character"
+                  label="Characters"
+                  value={characterRefs}
+                  onChange={(refs) => updateValues('character_refs', refs)}
+                  maxItems={characterField.maxItems ?? 7}
+                  disabled={running}
+                  callTool={callTool}
+                  mcpState={mcpState}
+                  projectSlug={projectSlug}
+                  onManage={onManageCharacters}
+                  theme={genThemes.notebook}
+                />
+              </div>
             ) : null}
           </InputList>
           {(resolved?.warnings.length || readiness.reasons.length) ? (
@@ -772,69 +780,6 @@ function InputList({
       })}
       {children}
     </div>
-  )
-}
-
-function CharacterInputRows({
-  characterRefs,
-  charMap,
-  loaded,
-  onUpdate,
-  maxItems,
-  disabled,
-  callTool,
-  mcpState,
-  projectSlug,
-}: {
-  characterRefs: string[]
-  charMap: Map<string, GoogleFlowEntityOption>
-  loaded: boolean
-  onUpdate: (refs: string[]) => void
-  maxItems: number
-  disabled: boolean
-  callTool: UseMcpResult['callTool']
-  mcpState: UseMcpResult['state']
-  projectSlug: string
-}) {
-  return (
-    <>
-      {characterRefs.map((ref) => {
-        const entity = charMap.get(canonicalCharacterId(ref))
-        const missing = loaded && !entity
-        const label = missing ? 'Missing' : (entity?.displayName || ref)
-        return (
-          <div className={cn("vc-notebook-input-chip", missing ? "border-red-500/50 bg-red-500/10" : "")} key={ref}>
-            {missing ? <X className="w-4 h-4 text-red-500/80" /> : (entity?.thumbnailUrl ? <img src={entity.thumbnailUrl} alt="" /> : <User />)}
-            <span className={missing ? "text-red-400" : ""}>{label}</span>
-            <span className="vc-notebook-route-fixed text-xs ml-auto opacity-60">character</span>
-            <button type="button" title="Disconnect" onClick={() => onUpdate(characterRefs.filter(r => r !== ref))}><X className={cn("w-4 h-4", missing ? "text-red-400" : "")} /></button>
-          </div>
-        )
-      })}
-      {characterRefs.length < maxItems && !disabled ? (
-        <Popover>
-          <PopoverTrigger asChild>
-            <button type="button" className="vc-notebook-input-chip vc-notebook-add-character-btn hover:bg-white/5 border border-dashed border-white/20 justify-center">
-              <span className="opacity-70 text-xs font-medium">+ character</span>
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="p-0 border-0 bg-transparent shadow-none" side="bottom" align="start">
-            <div className="bg-[#1a1a1a] rounded-lg border border-white/10 p-2 shadow-xl shadow-black/50">
-              <CharacterPickerPopover
-                selectedRefs={characterRefs}
-                onChange={onUpdate}
-                maxItems={maxItems}
-                disabled={disabled}
-                callTool={callTool}
-                mcpState={mcpState}
-                projectSlug={projectSlug}
-                domain="notebook"
-              />
-            </div>
-          </PopoverContent>
-        </Popover>
-      ) : null}
-    </>
   )
 }
 

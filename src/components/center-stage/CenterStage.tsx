@@ -15,7 +15,7 @@ import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle';
 
 // ── AssetViewer Dispatcher ──
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, onSplitAtCursor, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, callState, onClose, imageAssets, mediaItems, onOpenAsset, cropTarget, onCropConsumed, osgTarget, onOsgConsumed, onOsgApply, onGenerationLifecycle }: {
+export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, onSplitAtCursor, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, callState, onClose, imageAssets, mediaItems, onOpenAsset, cropTarget, onCropConsumed, osgTarget, onOsgConsumed, onOsgApply, onGenerationLifecycle, onManageCharacters }: {
   item: MediaItem;
   projectSlug: string;
   size: ViewerSize;
@@ -44,6 +44,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   onOsgConsumed?: () => void;
   onOsgApply?: (assetId: string, value: OsgApplyValue | null) => void;
   onGenerationLifecycle?: OnGenerationLifecycle;
+  onManageCharacters?: () => void;
 }) {
   const isClip = item.type === 'video' || item.type === 'final';
   const isNotebook = item.type === 'notebook';
@@ -92,6 +93,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
         onClose={onClose}
         onOpenAsset={onOpenAsset}
         onGenerationLifecycle={onGenerationLifecycle}
+        onManageCharacters={onManageCharacters}
       />
     );
   }

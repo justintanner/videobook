@@ -103,6 +103,7 @@ export function DynamicField({
         if (name === 'voice_refs') {
           return (
             <GoogleFlowRefPicker
+              entityType="voice"
               label={label}
               value={list}
               onChange={(refs) => onChange(refs)}

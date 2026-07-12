@@ -67,6 +67,7 @@ interface NotebookProps {
   onClose: () => void
   onOpenAsset?: (assetId: string) => void
   onGenerationLifecycle?: OnGenerationLifecycle
+  onManageCharacters?: () => void
 }
 
 interface NotebookCanvasProps {
@@ -331,6 +332,7 @@ export function Notebook({
   onClose,
   onOpenAsset,
   onGenerationLifecycle,
+  onManageCharacters,
 }: NotebookProps) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null)
   const plan = useNotebookPlan({ notebookId, projectSlug, callTool, mcpState })
@@ -486,6 +488,7 @@ export function Notebook({
               mcpState={mcpState}
               definition={definition}
               selectedStepId={selectedStepId}
+              onManageCharacters={onManageCharacters}
               mediaItems={mediaItems}
               stepCosts={stepCosts}
               runningStepIds={run.runningStepIds}

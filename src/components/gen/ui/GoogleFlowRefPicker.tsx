@@ -10,6 +10,7 @@ import {
 import type { UseMcpResult } from 'use-mcp/react'
 
 interface GoogleFlowRefPickerProps {
+  entityType: 'voice' | 'character'
   label: string
   value: string[]
   onChange: (refs: string[]) => void
@@ -21,6 +22,7 @@ interface GoogleFlowRefPickerProps {
   mcpState?: UseMcpResult['state']
   description?: string
   projectSlug?: string
+  onManage?: () => void
 }
 
 function optionLabel(e: GoogleFlowEntityOption): string {
@@ -31,6 +33,7 @@ function optionLabel(e: GoogleFlowEntityOption): string {
 }
 
 export function GoogleFlowRefPicker({
+  entityType,
   label,
   value,
   onChange,
@@ -41,6 +44,7 @@ export function GoogleFlowRefPicker({
   callTool,
   mcpState,
   description,
+  onManage,
 }: GoogleFlowRefPickerProps) {
   const {
     entities,
@@ -51,7 +55,7 @@ export function GoogleFlowRefPicker({
     error,
     refresh,
     ensureLoaded,
-  } = useGoogleFlowEntities('voice', callTool, mcpState)
+  } = useGoogleFlowEntities(entityType, callTool, mcpState)
 
   const selected = value.filter(Boolean)
   const atCap = selected.length >= maxItems
@@ -63,6 +67,10 @@ export function GoogleFlowRefPicker({
 
   function addRef(ref: string) {
     if (!ref || selectedSet.has(ref) || atCap) return
+    if (ref === '_manage_') {
+      onManage?.()
+      return
+    }
     onChange([...selected, ref])
   }
 
@@ -70,14 +78,17 @@ export function GoogleFlowRefPicker({
     onChange(selected.filter((r) => r !== ref))
   }
 
+  const noun = entityType === 'voice' ? 'voice' : 'character'
+  const nounPlural = entityType === 'voice' ? 'voices' : 'characters'
+
   const placeholder =
     atCap
       ? `Max ${maxItems}`
       : loading
         ? 'Loading…'
         : loaded
-          ? 'Add voice…'
-          : 'Load voices…'
+          ? `Add ${noun}…`
+          : `Load ${nounPlural}…`
 
   return (
     <GenField label={label} required={required} theme={theme} className="w-full min-w-[220px]">
@@ -85,7 +96,7 @@ export function GoogleFlowRefPicker({
         <div className="flex items-center gap-1.5">
           <select
             value=""
-            disabled={disabled || atCap || !callTool}
+            disabled={disabled || (atCap && !onManage) || !callTool}
             onFocus={() => void ensureLoaded()}
             onPointerDown={() => void ensureLoaded()}
             onChange={(e) => {
@@ -102,6 +113,9 @@ export function GoogleFlowRefPicker({
             )}
           >
             <option value="">{placeholder}</option>
+            {onManage && (
+              <option value="_manage_">Manage {nounPlural}…</option>
+            )}
             {availableSystem.length > 0 && (
               <optgroup label="System">
                 {availableSystem.map((e) => (
@@ -121,7 +135,7 @@ export function GoogleFlowRefPicker({
             type="button"
             onClick={() => void refresh()}
             disabled={disabled || loading || !callTool}
-            title="Refresh voices"
+            title={`Refresh ${nounPlural}`}
             className={cn(
               'flex items-center justify-center w-7 h-7 rounded border shrink-0',
               t.controlBorder,
@@ -131,6 +145,7 @@ export function GoogleFlowRefPicker({
           >
             {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
           </button>
+
         </div>
 
         {selected.length > 0 && (

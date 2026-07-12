@@ -1758,6 +1758,7 @@ export function HomePage() {
                     projectSlug={projectSlug}
                     pendingGeneration={pendingGenForPanel}
                     onGenerationLifecycle={handleGenerationLifecycle}
+                    onManageCharacters={() => uiActions.open_gf_characters?.()}
                     imageAssets={
                       assetList
                         ? (genPanel.category === 'video' ? genMediaAssets : genImageAssets)
@@ -1806,6 +1807,7 @@ export function HomePage() {
                     onOsgConsumed={() => setOsgTarget(null)}
                     onOsgApply={handleOsgApply}
                     onGenerationLifecycle={handleGenerationLifecycle}
+                    onManageCharacters={() => uiActions.open_gf_characters?.()}
                   />
                 ) : renameAllOpen ? (
                   <RenameAllPanel

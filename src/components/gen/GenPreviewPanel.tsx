@@ -7,7 +7,7 @@ import { ModelProviderSelector, ModeSelector } from '@/components/gen/ui/ModelSe
 import { DynamicField } from '@/components/gen/ui/DynamicField';
 import { ElementGroupEditor } from '@/components/gen/ElementGroupEditor';
 import { MediaStrip, type CharacterPillData } from '@/components/gen/ui/MediaStrip';
-import { CharacterPickerPopover } from '@/components/gen/ui/CharacterPickerPopover';
+import { GoogleFlowRefPicker } from '@/components/gen/ui/GoogleFlowRefPicker';
 import {
   appendSlug,
   characterImageCount,
@@ -66,6 +66,7 @@ interface GenPreviewPanelProps {
    *  background — dims the /generate button (kept clickable). */
   pendingGeneration?: boolean;
   onGenerationLifecycle?: OnGenerationLifecycle;
+  onManageCharacters?: () => void;
   /** Project assets offered in the prompt's @ autocomplete. Images append to
    *  image_slugs (and insert @referenceImage_N); video/audio append to the
    *  active mode's video_slugs / audio_slugs when present. */
@@ -166,6 +167,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   projectSlug,
   pendingGeneration,
   onGenerationLifecycle,
+  onManageCharacters,
   imageAssets,
 }, ref) {
   useMountKey('gen');
@@ -1308,15 +1310,18 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
                   />
                 )}
                 {showCharacterPicker && (
-                  <CharacterPickerPopover
-                    selectedRefs={characterRefs}
+                  <GoogleFlowRefPicker
+                    entityType="character"
+                    label="Characters"
+                    value={characterRefs}
                     onChange={(refs) => handleFieldChange('character_refs', refs)}
                     maxItems={schema!.properties.character_refs.maxItems ?? 7}
                     disabled={isDisabled}
                     callTool={callTool}
                     mcpState={mcpState}
                     projectSlug={projectSlug}
-                    domain={panelDomain}
+                    theme={panelTheme}
+                    onManage={onManageCharacters}
                   />
                 )}
                 {category === 'image' && sortedElementIndices.length > 0 && (
