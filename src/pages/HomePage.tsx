@@ -4,6 +4,7 @@ import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
 import { UploadSlot } from '@/components/sidebar/UploadSlot';
 import { ImageCard } from '@/components/sidebar/cards/ImageCard';
+import { CharacterCard } from '@/components/sidebar/cards/CharacterCard';
 import { AudioCard } from '@/components/sidebar/cards/AudioCard';
 import { ScriptCard } from '@/components/sidebar/cards/ScriptCard';
 import { NotebookCard } from '@/components/sidebar/cards/NotebookCard';
@@ -1572,6 +1573,7 @@ export function HomePage() {
         {item.type === 'image' && <ImageCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
         {item.type === 'audio' && <AudioCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
         {item.type === 'script' && <ScriptCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
+        {item.type === 'character' && <CharacterCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
         {item.type === 'notebook' && <NotebookCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
       </div>
     );
