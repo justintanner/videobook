@@ -66,6 +66,7 @@ import { WatermarkDialog, type WatermarkApplyValue } from '@/components/watermar
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'notebook', 'character']);
 const CLIP_TYPES = new Set<string>(['video', 'final']);
+const DEFAULT_NOTEBOOK_NAME = 'scratch';
 
 const OSG_SIZES = new Set(['small', 'medium', 'large']);
 
@@ -97,6 +98,40 @@ function humanizeId(id: string): string {
     .split('-')
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
+}
+
+/** Notebook asset id → short label for the header command (nb-scratch → scratch). */
+function notebookCommandName(id: string): string {
+  return id.replace(/^nb-/, '');
+}
+
+function normalizeNotebookName(name: string): string {
+  return name.trim().toLowerCase().replace(/^@/, '').replace(/^nb-/, '');
+}
+
+function findNotebookByName<T extends { id: string; title: string }>(
+  notebooks: T[],
+  name: string,
+): T | undefined {
+  const clean = normalizeNotebookName(name);
+  if (!clean) return undefined;
+  return notebooks.find((n) => {
+    const suffix = notebookCommandName(n.id).toLowerCase();
+    return n.id.toLowerCase() === clean
+      || n.id.toLowerCase() === `nb-${clean}`
+      || suffix === clean
+      || n.title.toLowerCase() === clean;
+  });
+}
+
+function parseWriteNotebookId(text: string): string | null {
+  try {
+    const parsed = JSON.parse(text) as { notebook_id?: unknown };
+    if (typeof parsed.notebook_id === 'string' && parsed.notebook_id) return parsed.notebook_id;
+  } catch {
+    if (text && !text.startsWith('{')) return text;
+  }
+  return null;
 }
 
 function formatAssetCount(count: number): string {
@@ -148,6 +183,7 @@ export function HomePage() {
   const genPanelRef = useRef<GenPreviewPanelHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevStatusOpenRef = useRef(false);
+  const creatingNotebookRef = useRef(false);
 
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
@@ -1409,29 +1445,57 @@ export function HomePage() {
     open_notebook: (new_name?: string) => {
       setSettingsOpen(false);
       setArchiveOpen(false);
-      if (!new_name) {
-        const notebooks = mediaItems.filter(m => m.type === 'notebook').sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
-        if (notebooks.length > 0) {
-          handleSelectItem(notebooks[0]);
+      const notebooks = mediaItems
+        .filter((m) => m.type === 'notebook')
+        .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+      const requested = new_name?.trim() ?? '';
+
+      if (requested) {
+        const match = findNotebookByName(notebooks, requested);
+        if (match) {
+          handleSelectItem(match);
           return;
         }
+      } else if (notebooks.length > 0) {
+        const selectedNotebook = selectedItem?.type === 'notebook'
+          ? notebooks.find((n) => n.id === selectedItem.id)
+          : undefined;
+        const scratch = findNotebookByName(notebooks, DEFAULT_NOTEBOOK_NAME);
+        handleSelectItem(selectedNotebook ?? scratch ?? notebooks[0]);
+        return;
       }
-      if (!projectSlug) return;
+
+      if (!projectSlug || creatingNotebookRef.current) return;
+      const createName = requested || DEFAULT_NOTEBOOK_NAME;
+      creatingNotebookRef.current = true;
       void (async () => {
         try {
-          const res = await callTool('write_notebook', { project_slug: projectSlug, name: new_name, definition: { sequence: [], properties: { name: 'New Notebook', description: '', stage_count: 1 } } });
-          if (!res.isError) {
-            const content = res.content as Array<{ type: string; text: string }>;
-            const notebookId = content[0]?.text;
-            if (notebookId) {
-              await listAssets(projectSlug, sortOrder);
-              setSelectedItem({ id: notebookId, type: 'notebook', slug: `@${notebookId}`, title: notebookId, filePath: '' });
-              setGenPanel(null);
-              setTimelineSlotIndex(null);
-            }
-          }
+          const res = await callTool('write_notebook', {
+            project_slug: projectSlug,
+            name: createName,
+            definition: {
+              sequence: [],
+              properties: { name: createName, description: '', stage_count: 1 },
+            },
+          });
+          if (res.isError) return;
+          const content = res.content as Array<{ type: string; text: string }>;
+          const notebookId = parseWriteNotebookId(content[0]?.text ?? '');
+          if (!notebookId) return;
+          await listAssets(projectSlug, sortOrder);
+          setSelectedItem({
+            id: notebookId,
+            type: 'notebook',
+            slug: `@${notebookId}`,
+            title: humanizeId(notebookId),
+            filePath: '',
+          });
+          setGenPanel(null);
+          setTimelineSlotIndex(null);
         } catch (e) {
           console.error('Failed to create notebook', e);
+        } finally {
+          creatingNotebookRef.current = false;
         }
       })();
     },
@@ -1465,6 +1529,19 @@ export function HomePage() {
     x_connect: () => { void connectX(); },
     open_slot_player: handleOpenSlotPlayer,
   }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, viewerSize, applySubsSetting, applyAudioSetting, applyOsgSetting, activeSelection, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openRenameAll, callTool, listAssets, projectSlug, sortOrder]);
+
+  const notebookCommand = useMemo(() => {
+    const notebooks = mediaItems
+      .filter((m) => m.type === 'notebook')
+      .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+    const selectedNotebook = selectedItem?.type === 'notebook'
+      ? notebooks.find((n) => n.id === selectedItem.id)
+      : undefined;
+    const scratch = findNotebookByName(notebooks, DEFAULT_NOTEBOOK_NAME);
+    const current = selectedNotebook ?? scratch ?? notebooks[0];
+    const name = current ? notebookCommandName(current.id) : DEFAULT_NOTEBOOK_NAME;
+    return `/notebook ${name}`;
+  }, [mediaItems, selectedItem]);
 
   const renderAssetCard = (item: MediaItem) => {
     const canExtractSkeleton = item.type === 'image' && !!item.filePath && !!projectSlug;
@@ -1588,6 +1665,7 @@ export function HomePage() {
             projectSlug={projectSlug}
             assetCount={assetList?.length}
             renderingCount={renderingCount}
+            notebookCommand={notebookCommand}
             callTool={callTool}
             onProjectChange={handleProjectChange}
             onStatusClick={() => setStatusOpen(true)}

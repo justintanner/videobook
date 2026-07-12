@@ -350,14 +350,16 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/notebook",
-    description: "Open the project's Notebook — a workflow of prompt, image, and video steps you build and run. Singleton per project.",
-    example: "/notebook",
+    description: "Open a project Notebook — a workflow of prompt, image, and video steps. Opens the existing notebook when present; creates 'scratch' by default.",
+    example: "/notebook scratch",
     category: "action",
     icon: "NotebookPen",
     size: "default",
     variant: "emerald",
     chevron: "right",
-    params: [],
+    params: [
+      { name: "name", type: "string", required: false, description: "Notebook name. Omit to open the current/default notebook, or create 'scratch' if none exist." },
+    ],
     uiAction: "open_notebook",
   },
   {

@@ -108,7 +108,9 @@ describe("slash_commands tool", () => {
 
     const notebook = commands.find((c) => c.command === "/notebook")!;
     expect(notebook.uiAction).toBe("open_notebook");
-    expect(notebook.params).toEqual([]);
+    expect(notebook.params).toEqual([
+      { name: "name", type: "string", required: false, description: "Notebook name. Omit to open the current/default notebook, or create 'scratch' if none exist." },
+    ]);
     expect(notebook.category).toBe("action");
 
     const archive = commands.find((c) => c.command === "/archive")!;

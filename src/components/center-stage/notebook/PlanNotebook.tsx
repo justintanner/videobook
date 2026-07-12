@@ -454,7 +454,7 @@ export function Notebook({
       <header className="flex items-center justify-between px-3 py-3 shrink-0 border-b border-zinc-800/60 bg-black/60">
         <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-emerald-300/70">
           <BookOpen className="w-3.5 h-3.5" />
-          <span>/notebook</span>
+          <span>/notebook {notebookId.replace(/^nb-/, '')}</span>
         </span>
         <CloseButton onClick={onClose} tone="emerald" title="Close (ESC)" />
       </header>

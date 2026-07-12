@@ -10,6 +10,8 @@ interface HomeHeaderBarProps {
   assetCount: number | undefined;
   /** Number of assets currently rendering — shows a global rendering indicator. */
   renderingCount?: number;
+  /** Header label + command for the notebook shortcut, e.g. "/notebook scratch". */
+  notebookCommand?: string;
   callTool: UseMcpResult['callTool'];
   onProjectChange: (slug: string) => void;
   onStatusClick: () => void;
@@ -22,7 +24,7 @@ interface HomeHeaderBarProps {
   onProjectsOpenChange?: (open: boolean) => void;
 }
 
-export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, renderingCount = 0, callTool, onProjectChange, onStatusClick, onArchiveClick, onSettingsClick, onAnimateCommand, archiveActive = false, settingsActive = false, projectsOpen, onProjectsOpenChange }: HomeHeaderBarProps) {
+export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, renderingCount = 0, notebookCommand = '/notebook scratch', callTool, onProjectChange, onStatusClick, onArchiveClick, onSettingsClick, onAnimateCommand, archiveActive = false, settingsActive = false, projectsOpen, onProjectsOpenChange }: HomeHeaderBarProps) {
   const { toasts } = useToast();
   const hasOpenToast = toasts.some((toast) => toast.open);
   const isRendering = renderingCount > 0;
@@ -50,7 +52,7 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, renderingCoun
         />
 
         {/* Generation shortcuts */}
-        <CommandButton command="/notebook" icon={<NotebookPen className="w-3.5 h-3.5" />} variant="notebook" onClick={() => onAnimateCommand('/notebook')} />
+        <CommandButton command={notebookCommand} icon={<NotebookPen className="w-3.5 h-3.5" />} variant="notebook" onClick={() => onAnimateCommand(notebookCommand)} />
         <CommandButton command="/image" icon={<ImageIcon className="w-3.5 h-3.5" />} variant="image" onClick={() => onAnimateCommand('/image')} />
         <CommandButton command="/video" icon={<Film className="w-3.5 h-3.5" />} variant="video" onClick={() => onAnimateCommand('/video')} />
         <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} variant="final" onClick={() => onAnimateCommand('/final')} />

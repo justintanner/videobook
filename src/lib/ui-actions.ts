@@ -37,7 +37,7 @@ export interface UiActionCallbacks {
   gen_elements: (index: string, field: string, value: string) => void;
 
   open_post_composer: (assetSlug: string, text: string) => void;
-  open_notebook: () => void;
+  open_notebook: (name?: string) => void;
   open_rename_all: () => void;
   open_projects: () => void;
   create_project: (slug: string) => void;
@@ -151,6 +151,11 @@ export function executeUiAction(
     case 'open_post_composer':
       (fn as UiActionCallbacks['open_post_composer'])(ctx.args.asset_slug ?? '', ctx.args.text ?? '');
       break;
+    case 'open_notebook': {
+      const notebookName = (ctx.args.name || ctx.raw || '').trim();
+      (fn as UiActionCallbacks['open_notebook'])(notebookName || undefined);
+      break;
+    }
     case 'create_project':
       (fn as UiActionCallbacks['create_project'])(ctx.args.project_slug ?? ctx.raw);
       break;
