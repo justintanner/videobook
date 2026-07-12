@@ -375,7 +375,9 @@ export async function submitGoogleFlowVideoTask(
           if (bodyStr !== "{}" && bodyStr !== '{"error":{}}') {
             e.message = `${e.message} ${bodyStr}`;
           }
-        } catch {}
+        } catch {
+          // ignore serialization errors
+        }
       }
     }
     throw e;

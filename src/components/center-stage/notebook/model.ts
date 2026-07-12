@@ -1177,7 +1177,7 @@ export function resolveEffectiveValues(
     if (owner && owner.key !== activeMode?.key) suggestedModeKey = owner.key
   }
 
-  const imageMax = allSlots.find((slot) => slot.param === 'image_slugs')?.max
+  const imageMax = allSlots.find((slot) => slot.param === 'image_slugs')?.max ?? option.validation?.image_slots?.max
   if (imageMax !== undefined && imageMax !== null) {
     const allChars = [...stringArray(values.character_refs), ...stringArray(values._pending_character_slugs)]
     const budget = combinedRefBudget(values, allChars, activeMode, imageMax)

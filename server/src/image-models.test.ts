@@ -267,7 +267,7 @@ describe("getImageToolSchema", () => {
     const schema = getImageToolSchema("generate_nano_banana_pro_google");
     expect(schema).not.toBeNull();
     expect(schema!.required).toEqual(["prompt"]);
-    expect(Object.keys(schema!.properties)).toEqual(["prompt", "image_slugs", "aspect_ratio", "seed"]);
+    expect(Object.keys(schema!.properties)).toEqual(["prompt", "image_slugs", "character_refs", "aspect_ratio", "seed"]);
     expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "4:3", "1:1", "3:4", "9:16", "auto"]);
     expect(schema!.properties).not.toHaveProperty("resolution");
     expect(schema!.properties).not.toHaveProperty("output_format");
@@ -451,7 +451,7 @@ describe("google flow image provider", () => {
       );
       expect(noRefs.selected_provider).toBe("google");
       expect(noRefs.tool_name).toBe("generate_nano_banana_pro_google");
-      expect(Object.keys(noRefs.schema!.properties)).toEqual(["prompt", "image_slugs", "aspect_ratio", "seed"]);
+      expect(Object.keys(noRefs.schema!.properties)).toEqual(["prompt", "image_slugs", "character_refs", "aspect_ratio", "seed"]);
       expect(noRefs.prefilled_values).not.toHaveProperty("resolution");
       expect(noRefs.prefilled_values).not.toHaveProperty("output_format");
       expect(noRefs.image_slots).toEqual({ min: 0, max: 10 });

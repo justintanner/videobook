@@ -14,6 +14,20 @@ export function canonicalCharacterId(ref: string): string {
   return ref.replace(IMGS_SUFFIX, "");
 }
 
+/** Extract the `-imgs:N` count from a character ref, defaulting to 1 if omitted. */
+export function characterRefImageCount(ref: string): number {
+  const match = ref.match(IMGS_SUFFIX);
+  return match ? parseInt(match[1], 10) : 1;
+}
+
+export const GOOGLE_IMAGE_MAX_REFERENCE_SLOTS = 10;
+
+/** Total reference slots an image request consumes: image refs plus each
+ *  character's actual image count. */
+export function totalImageReferenceSlots(imageCount: number, characterRefs: string[]): number {
+  return imageCount + characterRefs.reduce((acc, ref) => acc + characterRefImageCount(ref), 0);
+}
+
 export const OMNI_CHARACTER_SLOT_COST = 2;
 
 /** Total reference slots an omni-flash request consumes: image refs plus a
@@ -42,13 +56,12 @@ function slugMentionEntries(slugs: readonly string[]): { slug: string; index: nu
     .sort((a, b) => b.slug.length - a.slug.length);
 }
 
-/** Rewrite "@<slug>" mentions to the positional "@referenceImage_N" marker,
- *  where N is the slug's 1-based position in `imageSlugs` (the same order the
- *  payload builder assigns referenceImage_N body params from). */
-export function rewriteImageSlugMentions(prompt: string, imageSlugs: readonly string[]): string {
+/** Rewrite "@<slug>" mentions to a positional marker (e.g., "@referenceImage_N"),
+ *  where N is the slug's 1-based position in `imageSlugs`. */
+export function rewriteImageSlugMentions(prompt: string, imageSlugs: readonly string[], marker: string = "referenceImage"): string {
   let out = prompt;
   for (const { slug, index } of slugMentionEntries(imageSlugs)) {
-    out = out.replace(new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"), `@referenceImage_${index + 1}`);
+    out = out.replace(new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"), `@${marker}_${index + 1}`);
   }
   return out;
 }

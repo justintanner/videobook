@@ -57,6 +57,7 @@ describe("generate_nano_banana_pro_google tool", () => {
     expect(parsed.status).toBe("enqueued");
     expect(parsed.img_asset_id).toMatch(/^img-/);
     expect(parsed.source_images).toEqual([]);
+    expect(parsed.character_refs).toEqual([]);
   });
 
   it("enqueues with reference images resolved to asset inputs", async () => {
@@ -92,5 +93,55 @@ describe("generate_nano_banana_pro_google tool", () => {
     });
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("requires at least one reference image");
+  });
+
+  it("rejects duplicate characters in character_refs", async () => {
+    const result = await client.callTool({
+      name: "generate_nano_banana_pro_google",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "@character_1 eating an apple",
+        character_refs: ["character:a-imgs:1", "character:a-imgs:2", "character:b"],
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("Duplicate character");
+  });
+
+  it("enqueues successfully with valid character_refs", async () => {
+    const result = await client.callTool({
+      name: "generate_nano_banana_pro_google",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "@character_1 and @character_2",
+        character_refs: ["character:a-imgs:1", "character:b"],
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.status).toBe("enqueued");
+    expect(parsed.character_refs).toEqual(["character:a-imgs:1", "character:b"]);
+  });
+
+  it("rejects when combined reference count exceeds 10 slots", async () => {
+    const fs = createFs({ projectsDir: tempDir });
+    const imageAsset = await fs.createAsset("img", "style-ref", "test-proj");
+    if (!imageAsset.ok) throw new Error("Failed to create image asset");
+    await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
+
+    const result = await client.callTool({
+      name: "generate_nano_banana_pro_google",
+      arguments: {
+        project_slug: "test-proj",
+        prompt: "too many refs",
+        image_slugs: [`@${imageAsset.value.assetId}`],
+        character_refs: ["character:a-imgs:5", "character:b-imgs:5"],
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("exceeds maximum of 10");
   });
 });

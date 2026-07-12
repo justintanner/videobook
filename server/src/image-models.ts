@@ -9,6 +9,7 @@
 import type { ResolvedAsset } from "videocity-engine";
 import { createKie } from "@apicity/kie";
 import type { KieMediaModel, PayloadFieldSchema } from "@apicity/kie";
+import { canonicalCharacterId, totalImageReferenceSlots, GOOGLE_IMAGE_MAX_REFERENCE_SLOTS } from "./google-flow-refs.js";
 import {
   GptImage2ImageToImageRequestSchema,
   GptImage2TextToImageRequestSchema,
@@ -301,6 +302,7 @@ type ParamSchema = {
   items?: Record<string, unknown>;
   minimum?: number;
   maximum?: number;
+  maxItems?: number;
 };
 
 type ToolSchema = {
@@ -360,6 +362,12 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
           type: "array",
           items: { type: "string" },
           description: imageSlotsDescription(GOOGLE_NBP_IMAGE_SLOTS),
+        },
+        character_refs: {
+          type: "array",
+          items: { type: "string" },
+          maxItems: 7,
+          description: `Optional Google Flow character references (up to 7, sharing a ${GOOGLE_IMAGE_MAX_REFERENCE_SLOTS}-ref budget)`,
         },
         aspect_ratio: {
           type: "string",
@@ -619,6 +627,25 @@ function validateImageParams(toolName: string, params: Record<string, unknown>):
   if (imageSlots && imageSlots.max !== null && totalImages > imageSlots.max) {
     const range = imageSlots.min === imageSlots.max ? `${imageSlots.max}` : `${imageSlots.min}-${imageSlots.max}`;
     warnings.push(`${label} supports ${range} images (got ${totalImages})`);
+  }
+
+  if (toolName === "generate_nano_banana_pro_google") {
+    const rawCharRefs = (params.character_refs as string[] | undefined) ?? [];
+    const seenChars = new Set<string>();
+    const charRefs: string[] = [];
+    for (const ref of rawCharRefs) {
+      const canonical = canonicalCharacterId(ref);
+      if (seenChars.has(canonical)) {
+        warnings.push(`Duplicate character in character_refs: ${ref}`);
+      } else {
+        seenChars.add(canonical);
+        charRefs.push(ref);
+      }
+    }
+    const totalSlots = totalImageReferenceSlots(totalImages, charRefs);
+    if (totalSlots > GOOGLE_IMAGE_MAX_REFERENCE_SLOTS) {
+      warnings.push(`Combined reference count (${totalSlots}) exceeds maximum of ${GOOGLE_IMAGE_MAX_REFERENCE_SLOTS}. Images take 1 slot; characters take 1 slot plus any -imgs:N amount.`);
+    }
   }
 
   return { valid: missing.length === 0, missing_required: missing, warnings, image_slots: imageSlots };

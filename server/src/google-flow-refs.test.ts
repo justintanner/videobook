@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   OMNI_MAX_REFERENCE_SLOTS,
   OMNI_V2V_MAX_REFERENCE_SLOTS,
-  rewriteImageSlugMentions,
   stripSlugMentions,
   totalOmniReferenceSlots,
+  characterRefImageCount,
+  totalImageReferenceSlots,
+  rewriteImageSlugMentions,
 } from "./google-flow-refs.js";
 
 describe("totalOmniReferenceSlots", () => {
@@ -36,6 +38,17 @@ describe("totalOmniReferenceSlots", () => {
   });
 });
 
+describe("characterRefImageCount & totalImageReferenceSlots", () => {
+  it("characterRefImageCount parses -imgs:N or defaults to 1", () => {
+    expect(characterRefImageCount("character:foo-imgs:3")).toBe(3);
+    expect(characterRefImageCount("character:bar")).toBe(1);
+  });
+
+  it("totalImageReferenceSlots sums raw image count and character counts", () => {
+    expect(totalImageReferenceSlots(2, ["character:a-imgs:2", "character:b"])).toBe(5);
+  });
+});
+
 describe("rewriteImageSlugMentions", () => {
   it("rewrites @slug to the positional @referenceImage_N marker", () => {
     expect(rewriteImageSlugMentions("fade-in to @img-da-set slowly", ["img-da-set"]))
@@ -55,6 +68,11 @@ describe("rewriteImageSlugMentions", () => {
   it("leaves unrelated mentions and plain text alone", () => {
     expect(rewriteImageSlugMentions("@character_1 waves at @img-x", ["img-y"]))
       .toBe("@character_1 waves at @img-x");
+  });
+
+  it("accepts a custom marker", () => {
+    expect(rewriteImageSlugMentions("@img-a", ["img-a"], "reference"))
+      .toBe("@reference_1");
   });
 });
 

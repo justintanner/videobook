@@ -625,6 +625,7 @@ type GoogleNbpImageArgs = {
 function buildGoogleNbpImagePayload(
   args: GoogleNbpImageArgs,
   referenceIds: readonly string[],
+  characterRefs?: readonly string[],
 ): GoogleFlowImagesRequest {
   return {
     prompt: args.prompt,
@@ -635,6 +636,7 @@ function buildGoogleNbpImagePayload(
     ...(args.aspect_ratio !== undefined ? { aspectRatio: args.aspect_ratio } : {}),
     ...(args.seed !== undefined ? { seed: args.seed } : {}),
     ...googleFlowReferenceSlots("reference", referenceIds),
+    ...googleFlowReferenceSlots("character", characterRefs ?? []),
   };
 }
 
@@ -1505,7 +1507,8 @@ function translateToolPayload(
       return { provider_path: "googleflow.v1.videos({ async: true })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_nano_banana_pro_google": {
-      const payload = buildGoogleNbpImagePayload(args as GoogleNbpImageArgs, imageSlugs);
+      const characterRefs = ((args.character_refs as string[] | undefined) ?? []).filter((s) => s.trim() !== "");
+      const payload = buildGoogleNbpImagePayload(args as GoogleNbpImageArgs, imageSlugs, characterRefs);
       return { provider_path: "googleflow.v1.images()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_grok_imagine_text_image": {

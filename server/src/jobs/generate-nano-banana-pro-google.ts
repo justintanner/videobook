@@ -20,6 +20,7 @@ type GenerateNanoBananaProGooglePayload = {
   prompt: string;
   imageInputs: ImageInput[];
   sourceImageIds: string[];
+  character_refs?: string[];
   aspect_ratio?: GoogleNbpImageArgs["aspect_ratio"];
   seed?: number;
 };
@@ -73,6 +74,7 @@ export function registerGenerateNanoBananaProGoogleJob(fs: VideocityFs): void {
           ...(p.seed !== undefined ? { seed: p.seed } : {}),
         },
         referenceIds,
+        p.character_refs,
       ) as Record<string, unknown>,
     ) as GoogleFlowImagesRequest;
     await fs.writeMetadata(p.imgAssetId, "generation-payload", request, p.projectSlug);
@@ -98,6 +100,7 @@ export function registerGenerateNanoBananaProGoogleJob(fs: VideocityFs): void {
       prompt: p.prompt,
       download_url: imageUrl,
       download_url_content_hash: contentHash(buffer),
+      ...(p.character_refs ? { character_refs: p.character_refs } : {}),
       ...(p.aspect_ratio !== undefined ? { aspect_ratio: p.aspect_ratio } : {}),
       generated_at: new Date().toISOString(),
     };
