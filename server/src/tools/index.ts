@@ -183,8 +183,6 @@ import { generateGrokImagineVideoExtendFalDef } from "./generate-grok-imagine-vi
 import { generateGrokImagineVideoEditFalDef } from "./generate-grok-imagine-video-edit-fal.js";
 import { genImagesAllDef } from "./gen-images-all.js";
 
-import { activateNotebookDef } from "./activate-notebook.js";
-import { updateNotebookCaptureLayoutDef } from "./update-notebook-capture-layout.js";
 import { readNotebookDef } from "./read-notebook.js";
 import { writeNotebookDef } from "./write-notebook.js";
 import { detectScenesDef } from "./detect-scenes.js";
@@ -391,8 +389,6 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     generateGrokImagineVideoEditFalDef(fs),
     genImagesAllDef(fs),
 
-    activateNotebookDef(fs),
-    updateNotebookCaptureLayoutDef(fs),
     readNotebookDef(fs),
     writeNotebookDef(fs),
     detectScenesDef(fs),
