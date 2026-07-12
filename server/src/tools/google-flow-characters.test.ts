@@ -137,7 +137,7 @@ describe("google flow character tools — handler guards", () => {
 describe("google flow character cores — stubbed provider", () => {
   it("creates a character and returns its ref", async () => {
     const calls: Array<{ url: string; method: string }> = [];
-    const provider = stubProvider({ character: "user:1-character:abc" }, calls);
+    const provider = stubProvider({ character: "user:1-character:abc", displayName: "Hero" }, calls);
     const result = await createGoogleFlowCharacter(provider, {
       displayName: "Hero",
       imageReferences: ["media:1", "media:2"],
@@ -177,7 +177,7 @@ describe("google flow character cores — stubbed provider", () => {
     });
   });
 
-  it("enriches list items with retrieve thumbnails and names", async () => {
+  it("enriches list items with retrieve thumbnails while preserving list names", async () => {
     const fetchFn: typeof fetch = async (input) => {
       const url = String(input);
       if (url.includes("/characters/") && !url.endsWith("/characters") && !url.includes("?")) {
@@ -198,9 +198,10 @@ describe("google flow character cores — stubbed provider", () => {
     });
     expect(result.characters[0]).toMatchObject({
       ref: "c1",
-      display_name: "Carol",
+      display_name: "Hero",
       thumbnail_url: "https://example.com/thumb.jpg",
     });
+    expect(result.characters[0].raw).toHaveProperty("_conflict", "singleton-read-disagrees");
   });
 
   it("deletes a character by ref", async () => {
@@ -282,7 +283,8 @@ describe("renameGoogleFlowCharacter — stubbed provider", () => {
         return new Response(JSON.stringify(retrieveBody), { status: 200, headers: { "content-type": "application/json" } });
       }
       if (method === "POST") {
-        return new Response(JSON.stringify({ character: NEW_REF }), { status: 200, headers: { "content-type": "application/json" } });
+        const name = body?.displayName ?? "n";
+        return new Response(JSON.stringify({ character: NEW_REF, displayName: name }), { status: 200, headers: { "content-type": "application/json" } });
       }
       return new Response(JSON.stringify(opts.deleteStatus === 200 || opts.deleteStatus === undefined ? { deleted: true } : { error: "boom" }), {
         status: opts.deleteStatus ?? 200,
@@ -304,8 +306,8 @@ describe("renameGoogleFlowCharacter — stubbed provider", () => {
       status: "renamed",
     });
 
-    expect(calls.map((c) => c.method)).toEqual(["GET", "POST", "DELETE"]);
-    const create = calls[1];
+    expect(calls.map((c) => c.method)).toEqual(["GET", "GET", "POST", "DELETE"]);
+    const create = calls[2];
     expect(create.body).toMatchObject({
       displayName: "Nigel",
       imageReference_1: "user:2935-email:6a75-image:media-a",
@@ -313,7 +315,7 @@ describe("renameGoogleFlowCharacter — stubbed provider", () => {
       personalityNotes: "grumpy but loyal",
       voice: "Kore",
     });
-    expect(calls[2].url).toContain("old111");
+    expect(calls[3].url).toContain("old111");
   });
 
   it("returns a warning (not an error) when deleting the old character fails", async () => {
@@ -334,7 +336,7 @@ describe("renameGoogleFlowCharacter — stubbed provider", () => {
     });
 
     await expect(renameGoogleFlowCharacter(provider, OLD_REF, "Nigel")).rejects.toThrow(/no imageReferences/);
-    expect(calls.map((c) => c.method)).toEqual(["GET"]);
+    expect(calls.map((c) => c.method)).toEqual(["GET", "GET"]);
   });
 });
 
@@ -366,7 +368,8 @@ describe("replaceGoogleFlowCharacter — stubbed provider", () => {
         if (url.includes("/assets")) {
           return new Response(JSON.stringify({ mediaGenerationId: "user:1-image:media-new" }), { status: 200, headers: { "content-type": "application/json" } });
         }
-        return new Response(JSON.stringify({ character: NEW_REF }), { status: 200, headers: { "content-type": "application/json" } });
+        const name = body?.displayName ?? "n";
+        return new Response(JSON.stringify({ character: NEW_REF, displayName: name }), { status: 200, headers: { "content-type": "application/json" } });
       }
       return new Response(JSON.stringify({ deleted: true }), {
         status: 200,
@@ -387,7 +390,7 @@ describe("replaceGoogleFlowCharacter — stubbed provider", () => {
     expect(result.character_ref).toBe(NEW_REF);
     expect(result.status).toBe("replaced");
 
-    const create = calls[1];
+    const create = calls[2];
     expect(create.body).toMatchObject({
       displayName: "Nigel",
       personalityNotes: "grumpy but loyal",

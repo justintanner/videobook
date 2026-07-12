@@ -17,10 +17,11 @@ type DetailResponse = {
   display_name: string;
   thumbnail_url: string | null;
   image_count: number;
-  raw?: {
-    personalityNotes?: string;
-    voice?: Record<string, string>;
-  };
+    raw?: {
+      personalityNotes?: string;
+      voice?: Record<string, string>;
+      _conflict?: string;
+    };
 };
 
 type FormState = {
@@ -141,7 +142,11 @@ export function GoogleFlowCharactersScreen({
           return;
         }
         const data = JSON.parse((res.content as TextContent)[0].text);
-        toast({ title: 'Character created', description: form.displayName });
+        if (data.status === 'partial-success' || data.warning) {
+          toast({ title: 'Created with warning', description: data.warning || 'Provider sync issue detected', duration: 8000 });
+        } else {
+          toast({ title: 'Character created', description: form.displayName });
+        }
         await refreshChars();
         if (data.character_ref) {
           handleSelect(data.character_ref);
@@ -362,6 +367,15 @@ export function GoogleFlowCharactersScreen({
                       </div>
 
                       <div className="space-y-4">
+                        {detail.raw?._conflict === 'singleton-read-disagrees' && (
+                          <div className="bg-amber-950/30 border border-amber-900/50 rounded p-3 flex items-start gap-3">
+                            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                            <div className="text-sm text-amber-200/90 leading-relaxed">
+                              <strong className="text-amber-400 block mb-1">Upstream Sync Conflict</strong>
+                              The upstream provider's detail record lost the name or notes (read disagreement). The intended metadata has been preserved from the list model.
+                            </div>
+                          </div>
+                        )}
                         <div className="bg-zinc-900/50 border border-zinc-800 rounded p-4">
                           <h4 className="text-xs font-mono text-zinc-500 mb-1">PERSONALITY NOTES</h4>
                           <p className="text-sm text-zinc-300 whitespace-pre-wrap">{detail.raw?.personalityNotes || <span className="italic text-zinc-600">None</span>}</p>

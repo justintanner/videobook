@@ -49,7 +49,8 @@ export type CreateGoogleFlowCharacterInput = {
 export type CreatedGoogleFlowCharacter = {
   character_ref: string;
   display_name: string;
-  status: "created";
+  status: "created" | "partial-success";
+  warning?: string;
 };
 
 export async function createGoogleFlowCharacter(
@@ -64,33 +65,96 @@ export async function createGoogleFlowCharacter(
     ...(imageReference_2 ? { imageReference_2 } : {}),
     ...(input.personalityNotes ? { personalityNotes: input.personalityNotes } : {}),
     ...(input.voice ? { voice: input.voice } : {}),
-  });
-  const ref = readCreatedRef(res as Record<string, unknown>, "character");
+  }) as Record<string, unknown>;
+  const ref = readCreatedRef(res, "character");
   if (!ref) {
     throw new Error(`Google Flow character create returned no character ref: ${JSON.stringify(res)}`);
   }
+  
+  const returnedName = (typeof res.displayName === "string" && res.displayName.trim()) ||
+                       (typeof res.display_name === "string" && res.display_name.trim()) ||
+                       (typeof res.name === "string" && res.name.trim()) ||
+                       "Untitled Character";
+
+  if (returnedName !== input.displayName) {
+    return {
+      character_ref: ref,
+      display_name: returnedName,
+      status: "partial-success",
+      warning: `Provider returned name "${returnedName}" instead of requested "${input.displayName}"`
+    };
+  }
+
   return { character_ref: ref, display_name: input.displayName, status: "created" };
 }
 
-/** Resolve one character with signed thumbnail (GET characters/ref). */
+export function reconcileGoogleFlowCharacter(
+  listData: GoogleFlowEntity | null,
+  singletonData: GoogleFlowEntity | null,
+): GoogleFlowEntity {
+  if (!listData) return singletonData!;
+  if (!singletonData) return listData;
+
+  const rawList = (listData.raw as Record<string, unknown>) || {};
+  const rawSingle = (singletonData.raw as Record<string, unknown>) || {};
+
+  const nameConflict =
+    typeof rawSingle.displayName === "string" &&
+    rawSingle.displayName !== "Untitled Character" &&
+    rawSingle.displayName !== listData.display_name;
+
+  return {
+    ref: listData.ref ?? singletonData.ref,
+    display_name: listData.display_name ?? singletonData.display_name,
+    thumbnail_url: singletonData.thumbnail_url ?? listData.thumbnail_url,
+    image_count: singletonData.image_count ?? listData.image_count,
+    raw: {
+      ...rawSingle,
+      ...rawList,
+      displayName: listData.display_name ?? singletonData.display_name,
+      display_name: listData.display_name ?? singletonData.display_name,
+      personalityNotes: rawList.personalityNotes ?? rawList.personality_notes,
+      voice: rawList.voice ?? rawSingle.voice,
+      _conflict: nameConflict ? "singleton-read-disagrees" : undefined,
+    },
+  };
+}
+
+/** Resolve one character with signed thumbnail (GET characters/ref) and reconcile with list data. */
 export async function getGoogleFlowCharacter(
   provider: GoogleFlowProvider,
   ref: string,
 ): Promise<GoogleFlowEntity> {
-  const res = await provider.get.v1.characters.retrieve({ ref }) as Record<string, unknown>;
-  const characterRef = readCreatedRef(res, "character") ?? ref;
-  const displayName =
-    (typeof res.displayName === "string" && res.displayName.trim())
-    || (typeof res.display_name === "string" && res.display_name.trim())
-    || (typeof res.name === "string" && res.name.trim())
-    || null;
-  return {
-    ref: characterRef,
-    display_name: displayName,
-    thumbnail_url: readCharacterThumbnailUrl(res),
-    image_count: readCharacterImageCount(res),
-    raw: res,
+  const email = await resolveGoogleFlowEmail(provider).catch(() => undefined);
+  const [listRes, singletonRes] = await Promise.allSettled([
+    email ? provider.get.v1.characters({ email }) : Promise.resolve({ characters: [] }),
+    provider.get.v1.characters.retrieve({ ref })
+  ]);
+
+  if (singletonRes.status === "rejected") {
+    throw singletonRes.reason;
+  }
+
+  const rawSingleton = singletonRes.value as Record<string, unknown>;
+  const detailEntity = {
+    ref: readCreatedRef(rawSingleton, "character") ?? ref,
+    display_name:
+      (typeof rawSingleton.displayName === "string" && rawSingleton.displayName.trim()) ||
+      (typeof rawSingleton.display_name === "string" && rawSingleton.display_name.trim()) ||
+      (typeof rawSingleton.name === "string" && rawSingleton.name.trim()) ||
+      null,
+    thumbnail_url: readCharacterThumbnailUrl(rawSingleton),
+    image_count: readCharacterImageCount(rawSingleton),
+    raw: rawSingleton,
   };
+
+  let listEntity: GoogleFlowEntity | null = null;
+  if (listRes.status === "fulfilled") {
+    const characters = readEntityList(listRes.value as Record<string, unknown>, "characters", "character");
+    listEntity = characters.find(c => c.ref === ref) ?? null;
+  }
+
+  return reconcileGoogleFlowCharacter(listEntity, detailEntity);
 }
 
 const PREVIEW_BATCH = 8;
@@ -109,13 +173,19 @@ export async function enrichCharactersWithPreviews(
         if (!c.ref) return c;
         if (c.thumbnail_url) return c;
         try {
-          const detail = await getGoogleFlowCharacter(provider, c.ref);
-          return {
-            ...c,
-            display_name: detail.display_name ?? c.display_name,
-            thumbnail_url: detail.thumbnail_url ?? c.thumbnail_url,
-            raw: detail.raw ?? c.raw,
+          const res = await provider.get.v1.characters.retrieve({ ref: c.ref }) as Record<string, unknown>;
+          const detailEntity = {
+            ref: readCreatedRef(res, "character") ?? c.ref,
+            display_name:
+              (typeof res.displayName === "string" && res.displayName.trim()) ||
+              (typeof res.display_name === "string" && res.display_name.trim()) ||
+              (typeof res.name === "string" && res.name.trim()) ||
+              null,
+            thumbnail_url: readCharacterThumbnailUrl(res),
+            image_count: readCharacterImageCount(res),
+            raw: res,
           };
+          return reconcileGoogleFlowCharacter(c, detailEntity);
         } catch {
           return c;
         }
@@ -379,7 +449,7 @@ export type RenamedGoogleFlowCharacter = {
   character_ref: string;
   old_ref: string;
   display_name: string;
-  status: "renamed" | "replaced";
+  status: "renamed" | "replaced" | "partial-success";
   warning?: string;
 };
 
@@ -466,19 +536,20 @@ export async function replaceGoogleFlowCharacter(
     ...(finalVoice !== undefined ? { voice: finalVoice } : {}),
   });
 
-  let warning: string | undefined;
+  let warning: string | undefined = created.warning;
   try {
     await deleteGoogleFlowCharacter(provider, ref);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    warning = `Replaced copy created, but deleting the old character failed: ${msg}`;
+    const delWarning = `Replaced copy created, but deleting the old character failed: ${msg}`;
+    warning = warning ? `${warning} | ${delWarning}` : delWarning;
   }
 
   return {
     character_ref: created.character_ref,
     old_ref: ref,
-    display_name: finalDisplayName,
-    status: opts.statusLabel ?? "replaced",
+    display_name: created.display_name,
+    status: created.status === "partial-success" ? "partial-success" : (opts.statusLabel ?? "replaced"),
     ...(warning !== undefined ? { warning } : {}),
   };
 }

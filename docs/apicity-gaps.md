@@ -455,3 +455,17 @@ common single-account case needs no `email` argument.
 **Ask apicity:** make `email` optional on `voices` create/list and `characters`
 list (matching the generation endpoints and useapi.net's own default-account
 behavior).
+
+---
+
+## 18. (bug) `@apicity/googleflow` singleton retrieve drops displayName and personalityNotes
+
+`GET /characters/{ref}` (singleton retrieve) currently returns `displayName: "Untitled Character"` and drops `personalityNotes` entirely, even though `GET /characters` (the list endpoint) and the initial `POST /characters` response correctly return the user-provided name and notes. The official useapi.net contract claims these fields exist on all three responses.
+
+**Workaround (`server/src/tools/google-flow-characters.ts`):**
+- `getGoogleFlowCharacter` (used by the manager UI and the list enricher) now fetches the list record alongside the singleton retrieve.
+- `reconcileGoogleFlowCharacter` merges the two, preserving the list record's intended `display_name`, `personalityNotes`, and `voice` while incorporating the singleton's `thumbnail_url` and media IDs.
+- If the singleton disagrees with the list intent, `_conflict: "singleton-read-disagrees"` is attached to `raw`, and the UI surfaces an "Upstream Sync Conflict" warning.
+- `createGoogleFlowCharacter` and `replaceGoogleFlowCharacter` check if the provider returns an unexpected name, surfacing `status: "partial-success"` + `warning` instead of a false clean success.
+
+**Ask apicity:** Confirm if the `Untitled Character` / missing notes on singleton retrieve is a provider-level useapi.net bug. If so, push upstream to fix `GET /characters/{ref}` to match the list response.
