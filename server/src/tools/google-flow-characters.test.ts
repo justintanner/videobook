@@ -10,10 +10,13 @@ import {
   listGoogleFlowCharactersDef,
   deleteGoogleFlowCharacterDef,
   renameGoogleFlowCharacterDef,
+  getGoogleFlowCharacterDef,
+  replaceGoogleFlowCharacterDef,
   createGoogleFlowCharacter,
   listGoogleFlowCharacters,
   deleteGoogleFlowCharacter,
   renameGoogleFlowCharacter,
+  replaceGoogleFlowCharacter,
   characterImageGenerationIds,
 } from "./google-flow-characters.js";
 
@@ -112,6 +115,22 @@ describe("google flow character tools — handler guards", () => {
     });
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("GOOGLE_FLOW_API_KEY");
+  });
+
+  it("get errors cleanly when GOOGLE_FLOW_API_KEY is missing", async () => {
+    delete process.env.GOOGLE_FLOW_API_KEY;
+    const result = await getGoogleFlowCharacterDef().handler({
+      ref: "user:1-character:abc",
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  it("replace errors cleanly when GOOGLE_FLOW_API_KEY is missing", async () => {
+    delete process.env.GOOGLE_FLOW_API_KEY;
+    const result = await replaceGoogleFlowCharacterDef(fs).handler({
+      ref: "user:1-character:abc",
+    });
+    expect(result.isError).toBe(true);
   });
 });
 
@@ -316,5 +335,96 @@ describe("renameGoogleFlowCharacter — stubbed provider", () => {
 
     await expect(renameGoogleFlowCharacter(provider, OLD_REF, "Nigel")).rejects.toThrow(/no imageReferences/);
     expect(calls.map((c) => c.method)).toEqual(["GET"]);
+  });
+});
+
+describe("replaceGoogleFlowCharacter — stubbed provider", () => {
+  const OLD_REF = "user:2935-email:6a75-character:old111-imgs:2";
+  const NEW_REF = "user:2935-email:6a75-character:new222-imgs:2";
+
+  function routingProvider(opts: {
+    calls: Array<{ url: string; method: string; body: Record<string, unknown> | null }>;
+  }) {
+    const fetchFn: typeof fetch = async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      const body = typeof init?.body === "string" ? JSON.parse(init.body) as Record<string, unknown> : null;
+      opts.calls.push({ url, method, body });
+      if (method === "GET") {
+        return new Response(JSON.stringify({
+          character: OLD_REF,
+          displayName: "n",
+          personalityNotes: "grumpy but loyal",
+          voice: { voice: "Kore" },
+          imageReferences: [
+            { workflowId: "w1", mediaId: "media-a" },
+            { workflowId: "w2", mediaId: "media-b" },
+          ],
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      if (method === "POST") {
+        if (url.includes("/assets")) {
+          return new Response(JSON.stringify({ mediaGenerationId: "user:1-image:media-new" }), { status: 200, headers: { "content-type": "application/json" } });
+        }
+        return new Response(JSON.stringify({ character: NEW_REF }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ deleted: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    return createGoogleFlow({ apiKey: "test-token", fetch: fetchFn });
+  }
+
+  it("replaces display name and clears voice", async () => {
+    const calls: Array<{ url: string; method: string; body: Record<string, unknown> | null }> = [];
+    const provider = routingProvider({ calls });
+
+    const result = await replaceGoogleFlowCharacter(provider, undefined, undefined, OLD_REF, {
+      displayName: "Nigel",
+      clearVoice: true,
+    });
+    expect(result.character_ref).toBe(NEW_REF);
+    expect(result.status).toBe("replaced");
+
+    const create = calls[1];
+    expect(create.body).toMatchObject({
+      displayName: "Nigel",
+      personalityNotes: "grumpy but loyal",
+      imageReference_1: "user:2935-email:6a75-image:media-a",
+      imageReference_2: "user:2935-email:6a75-image:media-b",
+    });
+    expect(create.body).not.toHaveProperty("voice");
+  });
+
+  it("replaces images and notes with new values", async () => {
+    const calls: Array<{ url: string; method: string; body: Record<string, unknown> | null }> = [];
+    const provider = routingProvider({ calls });
+
+    const tempDir = await mkdtemp(join(tmpdir(), "videocity-replace-test-"));
+    const fs = createFs({ projectsDir: tempDir });
+    await fs.createProject("test-proj");
+    const asset = await fs.createAsset("img", "newimg", "test-proj");
+    if (!asset.ok) throw new Error("failed to create asset");
+    await fs.writeFile(asset.value.assetId, "original.png", await makePng(), "test-proj");
+
+    const result = await replaceGoogleFlowCharacter(provider, fs, "test-proj", OLD_REF, {
+      imageSlugs: [`@${asset.value.assetId}`],
+      personalityNotes: "new notes",
+    });
+    expect(result.character_ref).toBe(NEW_REF);
+    expect(result.status).toBe("replaced");
+
+    const create = calls[calls.length - 2]; // before delete
+    expect(create.body).toMatchObject({
+      displayName: "n",
+      personalityNotes: "new notes",
+      voice: "Kore",
+    });
+    expect(create.body).toHaveProperty("imageReference_1");
+    // Should have only 1 imageReference because we only gave 1 image slug
+    expect(create.body).not.toHaveProperty("imageReference_2");
+    
+    await rm(tempDir, { recursive: true, force: true });
   });
 });

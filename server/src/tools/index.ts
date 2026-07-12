@@ -15,6 +15,8 @@ import {
   listGoogleFlowCharactersDef,
   deleteGoogleFlowCharacterDef,
   renameGoogleFlowCharacterDef,
+  getGoogleFlowCharacterDef,
+  replaceGoogleFlowCharacterDef,
 } from "./google-flow-characters.js";
 import { createProjectDef } from "./create-project.js";
 import { createCharacterDef } from "./create-character.js";
@@ -214,6 +216,8 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     listGoogleFlowVoicesDef(),
     deleteGoogleFlowVoiceDef(),
     createGoogleFlowCharacterDef(fs),
+    getGoogleFlowCharacterDef(),
+    replaceGoogleFlowCharacterDef(fs),
     listGoogleFlowCharactersDef(),
     deleteGoogleFlowCharacterDef(),
     renameGoogleFlowCharacterDef(),

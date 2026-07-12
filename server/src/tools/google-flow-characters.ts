@@ -129,6 +129,30 @@ export async function enrichCharactersWithPreviews(
   return out;
 }
 
+const getGoogleFlowCharacterSchema = {
+  ref: z.string().min(1).describe("Character ref to retrieve"),
+} satisfies ZodRawShape;
+
+export function getGoogleFlowCharacterDef(): ToolDef {
+  return {
+    name: "get_google_flow_character",
+    description: "Retrieve normalized details for a single Google Flow character by ref.",
+    schema: getGoogleFlowCharacterSchema,
+    handler: async (args): Promise<ToolResult> => {
+      const a = args as SchemaArgs<typeof getGoogleFlowCharacterSchema>;
+      if (!process.env.GOOGLE_FLOW_API_KEY) {
+        return toolError("GOOGLE_FLOW_API_KEY environment variable is not set");
+      }
+      try {
+        const provider = createGoogleFlowProvider();
+        return jsonResult(await getGoogleFlowCharacter(provider, a.ref));
+      } catch (err) {
+        return toolError(err instanceof Error ? err.message : String(err));
+      }
+    },
+  };
+}
+
 export async function listGoogleFlowCharacters(
   provider: GoogleFlowProvider,
   input: { email?: string; includePreviews?: boolean },
@@ -355,28 +379,91 @@ export type RenamedGoogleFlowCharacter = {
   character_ref: string;
   old_ref: string;
   display_name: string;
-  status: "renamed";
+  status: "renamed" | "replaced";
   warning?: string;
 };
 
-export async function renameGoogleFlowCharacter(
+export async function replaceGoogleFlowCharacter(
   provider: GoogleFlowProvider,
+  fs: VideocityFs | undefined,
+  projectSlug: string | undefined,
   ref: string,
-  displayName: string,
+  opts: {
+    displayName?: string;
+    imageSlugs?: string[];
+    personalityNotes?: string;
+    voice?: string;
+    clearPersonalityNotes?: boolean;
+    clearVoice?: boolean;
+    statusLabel?: "replaced" | "renamed";
+  }
 ): Promise<RenamedGoogleFlowCharacter> {
   const detail = await getGoogleFlowCharacter(provider, ref);
   const raw = (detail.raw ?? {}) as Record<string, unknown>;
-  const imageReferences = characterImageGenerationIds(ref, raw);
-  const personalityNotes = typeof raw.personalityNotes === "string" && raw.personalityNotes.trim() !== ""
-    ? raw.personalityNotes
-    : undefined;
-  const voice = readCharacterVoiceRef(raw);
+
+  let imageReferences: string[] = [];
+  if (opts.imageSlugs && opts.imageSlugs.length > 0) {
+    if (!fs) throw new Error("fs is required when providing new image_slugs");
+    if (!projectSlug) throw new Error("project_slug is required when providing new image_slugs");
+    const blank = (v: unknown): v is "" => typeof v === "string" && v.trim() === "";
+    const slugs = opts.imageSlugs.filter((s) => !blank(s));
+    if (slugs.length > 2) throw new Error("A Google Flow character accepts at most 2 image references");
+
+    const resolved: Array<{ assetId: string; filename: string }> = [];
+    for (const slug of slugs) {
+      const assetId = slug.replace(/^@/, "");
+      if (!assetId.startsWith("img-") && !assetId.startsWith("char-")) {
+        throw new Error(`image_slugs entries must be img-* or char-* assets, got: ${assetId}`);
+      }
+      const manifest = await fs.getManifest(assetId, projectSlug);
+      if (!manifest.ok) throw new Error(`image_slugs: ${manifest.error.message}`);
+      const images = getImagesFromManifest(manifest.value.files);
+      if (images.length === 0) throw new Error(`image_slugs: No image files found in asset ${assetId}`);
+      
+      resolved.push({ assetId, filename: images[0].name });
+      if (assetId.startsWith("char-") && images.length > 1 && resolved.length < 2) {
+        resolved.push({ assetId, filename: images[1].name });
+      }
+    }
+    if (resolved.length > 2) resolved.length = 2;
+
+    for (const input of resolved) {
+      imageReferences.push(
+        await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, projectSlug),
+      );
+    }
+  } else {
+    imageReferences = characterImageGenerationIds(ref, raw);
+  }
+
+  const finalDisplayName = opts.displayName ?? detail.display_name ?? "Unnamed";
+  
+  let finalPersonalityNotes: string | undefined;
+  if (opts.clearPersonalityNotes) {
+    finalPersonalityNotes = undefined;
+  } else if (opts.personalityNotes) {
+    finalPersonalityNotes = opts.personalityNotes;
+  } else {
+    finalPersonalityNotes = typeof raw.personalityNotes === "string" && raw.personalityNotes.trim() !== ""
+      ? raw.personalityNotes
+      : undefined;
+  }
+
+  let finalVoice: string | undefined;
+  if (opts.clearVoice) {
+    finalVoice = undefined;
+  } else if (opts.voice) {
+    finalVoice = opts.voice;
+  } else {
+    const v = readCharacterVoiceRef(raw);
+    if (v) finalVoice = v;
+  }
 
   const created = await createGoogleFlowCharacter(provider, {
-    displayName,
+    displayName: finalDisplayName,
     imageReferences,
-    ...(personalityNotes !== undefined ? { personalityNotes } : {}),
-    ...(voice !== null ? { voice } : {}),
+    ...(finalPersonalityNotes !== undefined ? { personalityNotes: finalPersonalityNotes } : {}),
+    ...(finalVoice !== undefined ? { voice: finalVoice } : {}),
   });
 
   let warning: string | undefined;
@@ -384,15 +471,67 @@ export async function renameGoogleFlowCharacter(
     await deleteGoogleFlowCharacter(provider, ref);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    warning = `Renamed copy created, but deleting the old character failed: ${msg}`;
+    warning = `Replaced copy created, but deleting the old character failed: ${msg}`;
   }
 
   return {
     character_ref: created.character_ref,
     old_ref: ref,
-    display_name: displayName,
-    status: "renamed",
+    display_name: finalDisplayName,
+    status: opts.statusLabel ?? "replaced",
     ...(warning !== undefined ? { warning } : {}),
+  };
+}
+
+export async function renameGoogleFlowCharacter(
+  provider: GoogleFlowProvider,
+  ref: string,
+  displayName: string,
+): Promise<RenamedGoogleFlowCharacter> {
+  return replaceGoogleFlowCharacter(provider, undefined, undefined, ref, { displayName, statusLabel: "renamed" });
+}
+
+const replaceGoogleFlowCharacterSchema = {
+  ref: z.string().min(1).describe("Character ref to replace"),
+  project_slug: z.string().optional().describe("Project slug (required if providing new image_slugs)"),
+  display_name: apicityField(
+    GoogleFlowCharactersCreateRequestSchema.shape.displayName,
+    "New display name (1-200 chars)",
+  ).optional(),
+  image_slugs: z.array(z.string()).max(2).optional().describe("New image slugs to replace the existing ones"),
+  personality_notes: apicityField(
+    GoogleFlowCharactersCreateRequestSchema.shape.personalityNotes,
+    "New personality notes",
+  ).optional(),
+  clear_personality_notes: z.boolean().optional().describe("Clear existing personality notes"),
+  voice: z.string().optional().describe("New voice preset or custom ref"),
+  clear_voice: z.boolean().optional().describe("Clear existing voice"),
+} satisfies ZodRawShape;
+
+export function replaceGoogleFlowCharacterDef(fs: VideocityFs): ToolDef {
+  return {
+    name: "replace_google_flow_character",
+    description: "Replace a Google Flow character with updated fields. Returns { character_ref, old_ref, status, warning }. Recreate happens first, then best-effort delete.",
+    schema: replaceGoogleFlowCharacterSchema,
+    handler: async (args): Promise<ToolResult> => {
+      const a = args as SchemaArgs<typeof replaceGoogleFlowCharacterSchema>;
+      if (!process.env.GOOGLE_FLOW_API_KEY) {
+        return toolError("GOOGLE_FLOW_API_KEY environment variable is not set");
+      }
+      try {
+        const provider = createGoogleFlowProvider();
+        return jsonResult(await replaceGoogleFlowCharacter(provider, fs, a.project_slug, a.ref, {
+          displayName: a.display_name as string | undefined,
+          imageSlugs: a.image_slugs as string[] | undefined,
+          personalityNotes: a.personality_notes as string | undefined,
+          clearPersonalityNotes: a.clear_personality_notes,
+          voice: a.voice,
+          clearVoice: a.clear_voice,
+        }));
+      } catch (err) {
+        return toolError(err instanceof Error ? err.message : String(err));
+      }
+    },
   };
 }
 
