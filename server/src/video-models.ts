@@ -81,18 +81,6 @@ type VideoModelInfo = {
   googleToolName?: string;
 };
 
-function isVideoGenerationTool(toolName: string): boolean {
-  if (toolName in GOOGLE_VIDEO_ALIASES) return true;
-  if (toolName === "upscale_grok_imagine_video") return true; // explicit upscale case
-  for (const info of Object.values(VIDEO_MODELS)) {
-    if (info.tool_name === toolName) return true;
-    if (info.falToolNames?.noRefs === toolName) return true;
-    if (info.falToolNames?.withRefs === toolName) return true;
-    if (info.googleToolName === toolName) return true;
-  }
-  return false;
-}
-
 const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   kling30: {
     label: "Kling 3.0",
@@ -2103,7 +2091,6 @@ export {
   buildModelOption,
   extractLastSettingsPerModel,
   extractLastUsedModel,
-  isVideoGenerationTool,
 };
 export type {
   VideoModelInfo,
