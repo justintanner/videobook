@@ -19,6 +19,10 @@ type ChatDecision = {
   message: string;
 };
 
+// Thinking tokens count against maxOutputTokens on gemini-3.5-flash; 512 was
+// too low and truncated routing JSON mid-string ("Unterminated string in JSON").
+const CHAT_ROUTING_MAX_OUTPUT_TOKENS = 2048;
+
 export type ChatResolvedAsset = {
   tag: string;
   asset_type: string;
@@ -124,7 +128,7 @@ Determine which tool to use and what parameters to pass.`;
             geminiTextPart(userMessage),
           ],
           temperature: 0.1,
-          maxOutputTokens: 512,
+          maxOutputTokens: CHAT_ROUTING_MAX_OUTPUT_TOKENS,
           timeout: 15_000,
           signal: AbortSignal.timeout(15_000),
         });
