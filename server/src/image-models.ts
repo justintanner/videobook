@@ -662,6 +662,17 @@ type ActionLogEntry = {
   date: string;
 };
 
+function isImageGenerationTool(toolName: string): boolean {
+  if (toolName === "generate_nano_banana_pro_google") return true;
+  return IMAGE_MODEL_CONFIGS.some((c) =>
+    c.tool_name === toolName ||
+    c.falToolNames?.noRefs === toolName ||
+    c.falToolNames?.withRefs === toolName ||
+    c.googleToolNames?.noRefs === toolName ||
+    c.googleToolNames?.withRefs === toolName
+  );
+}
+
 function imageActionNameToToolName(action: string): string | null {
   if (!action.startsWith("tool-")) return null;
   const toolName = action.slice(5).replace(/-/g, "_");
@@ -842,5 +853,6 @@ export {
   buildImageModelOption,
   extractLastImageSettingsPerModel,
   extractLastUsedImageModel,
+  isImageGenerationTool,
 };
 export type { ImageModelInfo, ImageModelConfig, ToolSchema, ValidationResult, ModelOption, ActionLogEntry, ProviderRoute };
