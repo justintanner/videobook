@@ -137,6 +137,34 @@ describe("generate_grok_imagine_video tool", () => {
     expect(parsed.job_id).toBeDefined();
   });
 
+  it("accepts string duration (gen UI / localStorage wire shape)", async () => {
+    process.env.KIE_API_KEY = "test-key";
+
+    const fs = createFs({ projectsDir: tempDir });
+    const asset = await fs.createAsset("img", "str-dur", "test-proj");
+    if (!asset.ok) throw new Error("Failed to create asset");
+
+    const png = await sharp({
+      create: { width: 10, height: 10, channels: 4, background: { r: 0, g: 255, b: 0, alpha: 1 } },
+    }).png().toBuffer();
+    await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
+
+    const result = await client.callTool({
+      name: "generate_grok_imagine_video",
+      arguments: {
+        asset_id: asset.value.assetId,
+        project_slug: "test-proj",
+        duration: "6",
+        mode: "fun",
+        resolution: "720p",
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse((result.content as TextContent)[0].text);
+    expect(parsed.status).toBe("enqueued");
+  });
+
   it("enqueues job with up to 7 image_slugs", async () => {
     process.env.KIE_API_KEY = "test-key";
 

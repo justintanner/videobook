@@ -2054,12 +2054,16 @@ function buildModelOption(
     filterInvalidSlugs(params, projectAssetTags);
   }
 
-  // Coerce numeric values to strings for params with string enums
+  // Coerce values to match schema wire types (string enums vs integer ranges)
   if (schema) {
     for (const [k, v] of Object.entries(params)) {
       const prop = schema.properties[k];
-      if (prop?.type === "string" && prop.enum && typeof v === "number") {
+      if (!prop) continue;
+      if (prop.type === "string" && prop.enum && typeof v === "number") {
         params[k] = String(v);
+      } else if ((prop.type === "integer" || prop.type === "number") && typeof v === "string") {
+        const n = prop.type === "integer" ? parseInt(v, 10) : Number(v);
+        if (!Number.isNaN(n)) params[k] = n;
       }
     }
     applyVideoToolConstraints(effectiveToolName, schema, params);

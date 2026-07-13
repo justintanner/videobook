@@ -25,7 +25,7 @@ const generateGrokImagineT2vVideoSchema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Video description (max 5000 chars)"),
   mode: apicityField(GrokImagineModeSchema, "Generation mode: fun / normal / spicy"),
-  duration: z.number().int().min(6).max(30).optional().describe("Video duration in seconds (6-30)"),
+  duration: z.coerce.number().int().min(6).max(30).optional().describe("Video duration in seconds (6-30)"),
   resolution: apicityField(GrokImagineResolutionSchema, "Output resolution: 480p / 720p"),
   aspect_ratio: apicityField(grokT2vInputSchema.aspect_ratio, "Output aspect ratio"),
   nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default false)"),

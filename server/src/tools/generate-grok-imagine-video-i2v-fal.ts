@@ -13,7 +13,7 @@ const generateGrokImagineVideoI2vFalSchema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Video description (max 4096 chars)"),
   first_frame_slug: z.string().describe("First frame image asset (e.g., @img-start)"),
-  duration: z.number().int().min(1).max(15).optional().describe("Video duration in seconds (1-15)"),
+  duration: z.coerce.number().int().min(1).max(15).optional().describe("Video duration in seconds (1-15)"),
   aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
   resolution: apicityField(base.resolution, "Output resolution (480p / 720p)"),
 } satisfies ZodRawShape;

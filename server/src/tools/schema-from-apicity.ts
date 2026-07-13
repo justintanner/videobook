@@ -22,7 +22,15 @@ import {
 
 type ZodLike = { _def?: unknown; unwrap?: () => unknown };
 
-type ApicityFieldCore = z.ZodString | z.ZodNumber | z.ZodBoolean | z.ZodEnum<Record<string, string>>;
+// z.coerce.number() is a ZodCoercedNumber at the type level (accepts unknown input);
+// after .int()/.min()/.max() the runtime still validates as a number.
+type ApicityNumberField = ReturnType<typeof z.coerce.number>;
+type ApicityFieldCore =
+  | z.ZodString
+  | z.ZodNumber
+  | ApicityNumberField
+  | z.ZodBoolean
+  | z.ZodEnum<Record<string, string>>;
 
 function buildCore(schema: ZodLike): ApicityFieldCore {
   const enumOpts = zodEnumOptionsOrNull(schema);
@@ -32,7 +40,9 @@ function buildCore(schema: ZodLike): ApicityFieldCore {
 
   const range = zodNumberRange(schema);
   if (range) {
-    let n = z.number();
+    // Coerce so MCP clients / the gen UI can pass numeric strings ("6") without
+    // invalid_type failures. Output is still a number after parse.
+    let n: ApicityNumberField = z.coerce.number();
     if (range.int) n = n.int();
     if (range.min !== undefined) n = n.min(range.min);
     if (range.max !== undefined) n = n.max(range.max);

@@ -15,7 +15,7 @@ import {
   deriveStripSlots,
   paramForAssetSlug,
 } from '@/components/gen/ui/media-strip';
-import { sortFields, isAssetField, isElementField } from '@/components/gen/ui/fieldHelpers';
+import { sortFields, isAssetField, isElementField, coerceArgsToSchema, coerceValueToSchemaType } from '@/components/gen/ui/fieldHelpers';
 import { useGoogleFlowEntities, resolveGoogleFlowCharacterRefs } from '@/hooks/useGoogleFlowEntities';
 import { findByAssetSlug, stripAssetTagsFromText, stripSlugPrefix } from '@/lib/slugs';
 import { ErrorPage } from '@/components/gen/state/ErrorPage';
@@ -312,8 +312,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     for (const [key, value] of Object.entries(saved.fields)) {
       if (key in option.schema.properties && key !== 'prompt' && key !== 'project_slug') {
         const prop = option.schema.properties[key];
-        if (prop.enum && !(prop.enum as unknown[]).includes(value)) continue;
-        overrides[key] = value;
+        const coerced = coerceValueToSchemaType(value, prop);
+        if (prop.enum && !(prop.enum as unknown[]).includes(coerced as string | number)) continue;
+        overrides[key] = coerced;
       }
     }
     if (Object.keys(overrides).length > 0) {
@@ -632,10 +633,11 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const jsonPayload = useMemo(() => {
     if (!selectedOption || !submitToolName) return null;
-    return {
-      tool_name: submitToolName,
-      args: { ...submitValues, project_slug: projectSlug, _provider: selectedProviderKey },
-    };
+    const args = coerceArgsToSchema(
+      { ...submitValues, project_slug: projectSlug, _provider: selectedProviderKey },
+      selectedOption.schema.properties,
+    );
+    return { tool_name: submitToolName, args };
   }, [selectedOption, submitToolName, submitValues, projectSlug, selectedProviderKey]);
 
   const estimateCalls = useMemo<EstimateCall[] | null>(() => {
@@ -643,9 +645,10 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     // project_slug lets the server resolve duration-priced models like
     // kling-3.0/motion-control where the billable seconds come from the input
     // motion video, not a user-typed parameter.
+    const base = coerceArgsToSchema(submitValues, selectedOption.schema.properties);
     const input: Record<string, unknown> = projectSlug
-      ? { ...submitValues, project_slug: projectSlug }
-      : submitValues;
+      ? { ...base, project_slug: projectSlug }
+      : base;
     return [{ toolName: submitToolName, input }];
   }, [selectedOption, submitToolName, submitValues, projectSlug]);
   const cost = useEstimateCost(callTool, { calls: estimateCalls });
@@ -1008,13 +1011,16 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         referenceImage: outImageSlugs.length,
         referenceAudio: outVoiceRefs.length,
       });
-      const args: Record<string, unknown> = { 
-        ...outValues, 
-        prompt: cleanedPrompt, 
-        project_slug: projectSlug, 
+      const rawArgs: Record<string, unknown> = {
+        ...outValues,
+        prompt: cleanedPrompt,
+        project_slug: projectSlug,
         _provider: selectedProviderKey,
         ...(Array.isArray(outValues.character_refs) ? { character_refs: outCharacterRefs } : {})
       };
+      // Saved settings / slash commands may leave numeric fields as strings
+      // (e.g. duration "6"); coerce to the tool schema types before MCP validation.
+      const args = coerceArgsToSchema(rawArgs, selectedOption.schema.properties);
       const result = await callToolRef.current(outToolName, args);
       if (result.isError) {
         onGenerationLifecycle?.({ phase: 'failed', requestId });

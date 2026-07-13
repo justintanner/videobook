@@ -712,6 +712,16 @@ describe("VIDEO_TOOL_MODES contract", () => {
     expect(option.prefilled_values.duration).toBe("8");
   });
 
+  it("coerces string duration to integer for grok i2v", () => {
+    const option = buildModelOption(
+      "grok_imagine",
+      VIDEO_MODELS.grok_imagine,
+      { duration: "6" },
+      [],
+    );
+    expect(option.prefilled_values.duration).toBe(6);
+  });
+
   it("initializes kling30 element defaults", () => {
     const option = buildModelOption("kling30", VIDEO_MODELS.kling30, {}, []);
     expect(option.prefilled_values.element1_slugs).toEqual([]);

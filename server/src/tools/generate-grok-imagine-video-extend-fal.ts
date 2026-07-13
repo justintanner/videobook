@@ -10,7 +10,7 @@ const schema = {
   project_slug: z.string().describe("Project slug"),
   prompt: z.string().describe("Video description"),
   video_slug: z.string().describe("Source video asset to extend (e.g., @vid-scene)"),
-  duration: z.number().int().min(2).max(10).optional().describe("Extension duration in seconds (2-10)"),
+  duration: z.coerce.number().int().min(2).max(10).optional().describe("Extension duration in seconds (2-10)"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;
