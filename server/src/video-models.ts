@@ -1235,7 +1235,6 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "image_slugs") prop.description = "Reference image assets (e.g., @img-style)";
       if (param === "video_slugs") prop.description = "Reference video assets (0-3, total ≤15s, e.g., @vid-motion)";
       if (param === "audio_slugs") prop.description = "Reference audio assets (0-3, total ≤15s, e.g., @aud-music)";
-      if (param === "nsfw_checker") prop.description = "Content safety filter (default true)";
     }
     if (baseName === "generate_gemini_omni_video") {
       // Enum/range/default for prompt, duration, aspect_ratio, resolution, seed
@@ -1501,6 +1500,12 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
         delete prop.default;
       }
       if (zodIsRequired(providerSchema)) required.add(param);
+    }
+
+    if (toolName === "generate_seedance2_mini_video" && param === "nsfw_checker") {
+      prop.description = "Content safety filter (default false)";
+      prop.default = false;
+      defaults.nsfw_checker = false;
     }
 
     properties[param] = prop;

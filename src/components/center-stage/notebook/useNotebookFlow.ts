@@ -212,6 +212,7 @@ function desiredEdges(
         type: 'trunk',
         animated: false,
         className: classes.join(' '),
+        zIndex: data.groupActive || data.groupRunning ? 2 : 0,
         data,
       }
     })

@@ -12,7 +12,7 @@ describe("translateToolPayload", () => {
       duration: 8,
       resolution: "720p",
       aspect_ratio: "16:9",
-      nsfw_checker: true,
+      nsfw_checker: false,
     });
 
     expect(result?.payload).toEqual({
@@ -25,7 +25,7 @@ describe("translateToolPayload", () => {
         aspect_ratio: "16:9",
         resolution: "720p",
         duration: 8,
-        nsfw_checker: true,
+        nsfw_checker: false,
       },
     });
   });
@@ -50,7 +50,7 @@ describe("translateToolPayload", () => {
       resolution: "720p",
       duration: "12",
       generate_audio: true,
-      nsfw_checker: true,
+      nsfw_checker: false,
     });
 
     expect(result?.payload).toEqual({
@@ -63,7 +63,7 @@ describe("translateToolPayload", () => {
         resolution: "720p",
         duration: 12,
         generate_audio: true,
-        nsfw_checker: true,
+        nsfw_checker: false,
       },
     });
     expect(Seedance2MiniRequestSchema.safeParse(result?.payload).success).toBe(true);

@@ -28,7 +28,7 @@ export function GenToggle<T extends string>({ value, onChange, options, disabled
             disabled={disabled}
             className={cn(
               'rounded font-mono font-bold tracking-wider border transition-all duration-150',
-              compact ? 'h-6 min-w-[36px] px-2 text-[10px]' : 'h-8 min-w-[48px] px-3 text-xs',
+              compact ? 'h-7 min-w-[36px] px-2.5 text-xs' : 'h-8 min-w-[48px] px-3 text-xs',
               active
                 ? cn(t.activeBg, t.activeBorder, t.activeText)
                 : cn(t.controlBg, t.inactiveBorder, t.inactiveText, t.inactiveHoverText, t.inactiveHoverBorder),
