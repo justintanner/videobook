@@ -22,8 +22,6 @@ interface ReadPlanResponse {
   exists: boolean;
   legacy?: boolean;
   definition: PlanDefinition;
-  captures: unknown[];
-  capture_layout: Record<string, unknown>;
 }
 
 const EMPTY_DEFINITION: PlanDefinition = { properties: {}, sequence: [] };
@@ -107,7 +105,7 @@ describe("read_notebook tool", () => {
     });
 
     expect(result.isError).toBeFalsy();
-    expect(readResponse(result)).toEqual({ exists: true, definition: NOTEBOOK_DEFINITION, captures: [], capture_layout: {} });
+    expect(readResponse(result)).toEqual({ exists: true, definition: NOTEBOOK_DEFINITION });
   });
 
   it("returns an empty notebook definition when the plan is missing", async () => {
@@ -117,7 +115,7 @@ describe("read_notebook tool", () => {
     });
 
     expect(result.isError).toBeFalsy();
-    expect(readResponse(result)).toEqual({ exists: false, definition: EMPTY_DEFINITION, captures: [], capture_layout: {} });
+    expect(readResponse(result)).toEqual({ exists: false, definition: EMPTY_DEFINITION });
   });
 
   it("marks a legacy formula sidecar without changing it", async () => {
@@ -137,8 +135,6 @@ describe("read_notebook tool", () => {
       exists: false,
       legacy: true,
       definition: EMPTY_DEFINITION,
-      captures: [],
-      capture_layout: {},
     });
   });
 
@@ -157,8 +153,6 @@ describe("read_notebook tool", () => {
       exists: false,
       legacy: true,
       definition: EMPTY_DEFINITION,
-      captures: [],
-      capture_layout: {},
     });
   });
 

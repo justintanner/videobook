@@ -137,8 +137,6 @@ describe("write_notebook tool", () => {
     expect(JSON.parse(resultText(readResult))).toEqual({
       exists: true,
       definition: NOTEBOOK_DEFINITION,
-      captures: [],
-      capture_layout: {},
     });
   });
 
