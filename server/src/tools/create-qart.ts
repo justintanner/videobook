@@ -286,21 +286,12 @@ export function createQartDef(fs: VideocityFs): ToolDef {
       const resolvedValue = value.trim();
       if (!resolvedValue) return error("value must be a non-empty string");
       const resolvedSize = size ?? DEFAULT_QART_SIZE;
-      const resolvedStyle = style ?? "inverted";
+      const stylesToBuild = style ? [style] : (["inverted", "monochrome"] as QartStyle[]);
       const cover = await readCoverImage(fs, image_slug, project_slug);
       if (!cover.ok) return error(cover.error);
 
       const qr = createQr(resolvedValue);
       const sampled = await sampleCover(cover.buffer, qr.modules.size);
-
-      let buildFiles: QartFiles;
-      try {
-        buildFiles = await buildStyleFiles(qr, sampled, resolvedStyle, resolvedSize);
-      } catch (err) {
-        return error(
-          `Failed to build QR mosaic: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
 
       const stem = slugify(name ?? cover.assetId.replace(/^img-/, "")) || String(Date.now());
       const stamp = Date.now().toString(36);
@@ -320,23 +311,42 @@ export function createQartDef(fs: VideocityFs): ToolDef {
         sample_grid: `${qr.modules.size}x${qr.modules.size}`,
       };
 
-      const resultAsset = await persistQartAsset(
-        fs,
-        project_slug,
-        `qart-${resolvedStyle}-${stem}-${stamp}`,
-        buildFiles,
-        { ...baseMeta, color_mode: resolvedStyle, module_pixels: buildFiles.modulePx },
-      );
-      if (!resultAsset.ok) return error(resultAsset.error);
+      const resultIds: Record<string, string> = {};
+
+      for (const s of stylesToBuild) {
+        let buildFiles: QartFiles;
+        try {
+          buildFiles = await buildStyleFiles(qr, sampled, s, resolvedSize);
+        } catch (err) {
+          return error(
+            `Failed to build QR mosaic: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+
+        const resultAsset = await persistQartAsset(
+          fs,
+          project_slug,
+          `qart-${s}-${stem}-${stamp}`,
+          buildFiles,
+          { ...baseMeta, color_mode: s, module_pixels: buildFiles.modulePx },
+        );
+        if (!resultAsset.ok) return error(resultAsset.error);
+
+        if (style) {
+          resultIds.asset_id = resultAsset.assetId;
+          resultIds.style = s;
+        } else {
+          resultIds[`${s}_asset_id`] = resultAsset.assetId;
+        }
+      }
 
       return {
         content: [{
           type: "text" as const,
           text: JSON.stringify({
-            asset_id: resultAsset.assetId,
+            ...resultIds,
             value: resolvedValue,
             size: resolvedSize,
-            style: resolvedStyle,
             source_image: cover.assetId,
             qr_version: qr.version,
           }),
