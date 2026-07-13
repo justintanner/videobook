@@ -39,6 +39,20 @@ export interface NotebookPlanResponse {
   exists: boolean
   legacy?: boolean
   definition: NotebookPlanDefinition
+  captures?: NotebookCapture[]
+  capture_layout?: Record<string, { x: number; y: number }>
+}
+
+export interface NotebookCapture {
+  id: string
+  action_hash: string
+  date: string
+  category: string
+  provider: string
+  inputs: JsonRecord
+  assetId?: string
+  status: 'missing' | 'failed' | 'deleted' | 'pending' | 'ready' | 'error'
+  error?: string
 }
 
 export type NotebookToolboxStep = Omit<NotebookPlanStep, 'id'>

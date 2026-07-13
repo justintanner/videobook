@@ -1806,7 +1806,6 @@ export function HomePage() {
                     osgTarget={osgTarget}
                     onOsgConsumed={() => setOsgTarget(null)}
                     onOsgApply={handleOsgApply}
-                    onGenerationLifecycle={handleGenerationLifecycle}
                     onManageCharacters={() => uiActions.open_gf_characters?.()}
                   />
                 ) : renameAllOpen ? (
