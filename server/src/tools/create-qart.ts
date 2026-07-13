@@ -20,7 +20,7 @@ const PORTRAIT_WIDTH = 1080;
 const PORTRAIT_HEIGHT = 1920;
 const SQUARE_SIZE = 1080;
 
-type QartStyle = "color" | "monochrome";
+type QartStyle = "color" | "monochrome" | "inverted";
 
 type SampledCover = {
   data: Buffer;
@@ -44,12 +44,7 @@ type QartFiles = {
   modulePx: number;
 };
 
-type QartBuild = {
-  color: QartFiles;
-  monochrome: QartFiles;
-  moduleCount: number;
-  qrVersion: number;
-};
+
 
 function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
@@ -95,7 +90,15 @@ function moduleColor(
   const r = sampled.data[sampleIndex] ?? 255;
   const g = sampled.data[sampleIndex + 1] ?? 255;
   const b = sampled.data[sampleIndex + 2] ?? 255;
-  const source = style === "monochrome" ? [luma(r, g, b), luma(r, g, b), luma(r, g, b)] : [r, g, b];
+  
+  let source: number[];
+  if (style === "monochrome" || style === "inverted") {
+    const l = luma(r, g, b);
+    source = style === "inverted" ? [255 - l, 255 - l, 255 - l] : [l, l, l];
+  } else {
+    source = [r, g, b];
+  }
+
   const channels = source.map((channel) => dark
     ? Math.round(channel * QART_IMAGE_STRENGTH)
     : Math.round(255 - (255 - channel) * QART_IMAGE_STRENGTH));
@@ -174,15 +177,7 @@ async function buildStyleFiles(
   };
 }
 
-async function buildQartFiles(value: string, coverBuffer: Buffer, size: number): Promise<QartBuild> {
-  const qr = createQr(value);
-  const sampled = await sampleCover(coverBuffer, qr.modules.size);
-  const [color, monochrome] = await Promise.all([
-    buildStyleFiles(qr, sampled, "color", size),
-    buildStyleFiles(qr, sampled, "monochrome", size),
-  ]);
-  return { color, monochrome, moduleCount: qr.modules.size, qrVersion: qr.version };
-}
+
 
 export async function buildQartPng(
   value: string,
@@ -265,6 +260,10 @@ export function createQartDef(fs: VideocityFs): ToolDef {
         .max(4096)
         .optional()
         .describe(`Output edge length in pixels (default ${DEFAULT_QART_SIZE})`),
+      style: z
+        .enum(["color", "monochrome", "inverted"])
+        .optional()
+        .describe("Style of the QArt output. 'color', 'monochrome', or 'inverted' (default)"),
       name: z.string().optional().describe("Optional base name for the generated assets"),
     },
     handler: async (args) => {
@@ -273,27 +272,33 @@ export function createQartDef(fs: VideocityFs): ToolDef {
         image_slug,
         value,
         size,
+        style,
         name,
       } = args as {
         project_slug: string;
         image_slug: string;
         value: string;
         size?: number;
+        style?: QartStyle;
         name?: string;
       };
 
       const resolvedValue = value.trim();
       if (!resolvedValue) return error("value must be a non-empty string");
       const resolvedSize = size ?? DEFAULT_QART_SIZE;
+      const resolvedStyle = style ?? "inverted";
       const cover = await readCoverImage(fs, image_slug, project_slug);
       if (!cover.ok) return error(cover.error);
 
-      let build: QartBuild;
+      const qr = createQr(resolvedValue);
+      const sampled = await sampleCover(cover.buffer, qr.modules.size);
+
+      let buildFiles: QartFiles;
       try {
-        build = await buildQartFiles(resolvedValue, cover.buffer, resolvedSize);
+        buildFiles = await buildStyleFiles(qr, sampled, resolvedStyle, resolvedSize);
       } catch (err) {
         return error(
-          `Failed to build QR mosaics: ${err instanceof Error ? err.message : String(err)}`,
+          `Failed to build QR mosaic: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
 
@@ -308,44 +313,32 @@ export function createQartDef(fs: VideocityFs): ToolDef {
         source_image: cover.assetId,
         width: resolvedSize,
         height: resolvedSize,
-        qr_version: build.qrVersion,
+        qr_version: qr.version,
         error_correction: "H",
         quiet_zone_modules: QART_QUIET_MODULES,
         image_strength: QART_IMAGE_STRENGTH,
-        sample_grid: `${build.moduleCount}x${build.moduleCount}`,
+        sample_grid: `${qr.modules.size}x${qr.modules.size}`,
       };
 
-      const colorResult = await persistQartAsset(
+      const resultAsset = await persistQartAsset(
         fs,
         project_slug,
-        `qart-color-${stem}-${stamp}`,
-        build.color,
-        { ...baseMeta, color_mode: "color", module_pixels: build.color.modulePx },
+        `qart-${resolvedStyle}-${stem}-${stamp}`,
+        buildFiles,
+        { ...baseMeta, color_mode: resolvedStyle, module_pixels: buildFiles.modulePx },
       );
-      if (!colorResult.ok) return error(colorResult.error);
-
-      const monochromeResult = await persistQartAsset(
-        fs,
-        project_slug,
-        `qart-monochrome-${stem}-${stamp}`,
-        build.monochrome,
-        { ...baseMeta, color_mode: "monochrome", module_pixels: build.monochrome.modulePx },
-      );
-      if (!monochromeResult.ok) {
-        await fs.deleteAsset(colorResult.assetId, project_slug).catch(() => undefined);
-        return error(monochromeResult.error);
-      }
+      if (!resultAsset.ok) return error(resultAsset.error);
 
       return {
         content: [{
           type: "text" as const,
           text: JSON.stringify({
-            color_asset_id: colorResult.assetId,
-            monochrome_asset_id: monochromeResult.assetId,
+            asset_id: resultAsset.assetId,
             value: resolvedValue,
             size: resolvedSize,
+            style: resolvedStyle,
             source_image: cover.assetId,
-            qr_version: build.qrVersion,
+            qr_version: qr.version,
           }),
         }],
       };

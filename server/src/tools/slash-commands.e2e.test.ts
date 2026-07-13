@@ -941,7 +941,7 @@ describe("slash commands e2e", () => {
       expect(args.value).toBe("hello world qr text");
     });
 
-    it("dispatches create_qart and creates color and monochrome assets", async () => {
+    it("dispatches create_qart and creates an inverted QR asset by default", async () => {
       const sharp = (await import("sharp")).default;
       const fs = createFs({ projectsDir: tempDir });
       const cover = await fs.createAsset("img", "cover-photo", "test-proj");
@@ -969,8 +969,8 @@ describe("slash commands e2e", () => {
       });
       expect(result.isError).toBeFalsy();
       const parsed = parseResult(result);
-      expect(parsed.color_asset_id).toMatch(/^img-/);
-      expect(parsed.monochrome_asset_id).toMatch(/^img-/);
+      expect(parsed.asset_id).toMatch(/^img-/);
+      expect(parsed.style).toBe("inverted");
       expect(parsed.value).toBe("https://example.com/qart-slash");
       expect(parsed.source_image).toBe(cover.value.assetId);
     });
