@@ -197,6 +197,14 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     params: ["image_slug", "value", "size", "name"],
     category: "action",
   },
+  {
+    name: "create_qrbtf",
+    actualTool: "create_qrbtf",
+    description:
+      "Generate parametric QR codes in artistic styles (normal, line, dsj, bubble, func) — use for 'parametric QR', 'qrbtf', or 'styled QR', not generate_image",
+    params: ["value", "style", "size", "name"],
+    category: "action",
+  },
   // --- Generation tools ---
   {
     name: "generate_video",
@@ -262,6 +270,7 @@ Parameter guidelines:
 - For generate_image: put the image description in "prompt"; use image_slugs ONLY for @img-* reference images (include @ prefix). Never put @vid-* or @aud-* in image_slugs — if the user wants an image inspired by a video, describe that in the text prompt instead
 - For create_watermark (QR code / watermark card): use this tool for real scannable QR codes — never generate_image. Pass url from the referenced asset's source_url/webpage_url when the user says "from the url in @vid-…" or similar; optional handle is an X handle without @
 - For create_qart (artistic / picture QR): use when turning an @img-* into scan-safe color and monochrome QR mosaics; pass image_slug and value (URL/text). Prefer over create_watermark when the user wants a photo integrated into the QR modules
+- For create_qrbtf (parametric / styled QR): use when the user wants a stylized QR code (normal, line, dsj, bubble, or func styles) from the qrbtf library; pass value (URL/text) and optional style. No source image needed — the QR is generated parametrically with a black background by default
 - For concat_images: use image_slugs for the referenced @img-* assets; one slug leaves the second two-slot cell empty, and null explicitly leaves a slot empty. Use aspect_ratio 16:9 or 9:16; layout is automatic unless overridden
 - Timeline audio positions (start_frame, duration_frames) are in frames at 30 fps — convert seconds to frames (e.g., "at 5 seconds" → start_frame: 150)
 - Do NOT include project_slug in params — it is injected automatically

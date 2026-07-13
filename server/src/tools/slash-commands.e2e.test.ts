@@ -976,6 +976,48 @@ describe("slash commands e2e", () => {
     });
   });
 
+  // -----------------------------------------------------------------------
+  // 14c. /qrbtf — create_qrbtf
+  // -----------------------------------------------------------------------
+  describe("/qrbtf", () => {
+    it("is registered with create_qrbtf mcpTool", () => {
+      const cmd = findCommand("/qrbtf");
+      expect(cmd.mcpTool?.tool).toBe("create_qrbtf");
+      expect(cmd.mcpTool?.autoInject).toContain("project_slug");
+      expect(cmd.params.map((p) => p.name)).toEqual(["value", "style"]);
+    });
+
+    it("parses '/qrbtf https://example.com normal'", () => {
+      const args = simulateParse("/qrbtf", "https://example.com normal");
+      expect(args.value).toBe("https://example.com");
+      expect(args.style).toBe("normal");
+    });
+
+    it("parses '/qrbtf https://example.com' without style", () => {
+      const args = simulateParse("/qrbtf", "https://example.com");
+      expect(args.value).toBe("https://example.com");
+      expect(args.style).toBeUndefined();
+    });
+
+    it("dispatches create_qrbtf and creates an img asset", async () => {
+      const cmd = findCommand("/qrbtf");
+      const args = parseCommandArgs("https://example.com/qrbtf-slash", cmd.params);
+      const result = await client.callTool({
+        name: "create_qrbtf",
+        arguments: {
+          ...args,
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+      const parsed = parseResult(result);
+      expect(parsed.asset_id).toMatch(/^img-/);
+      expect(parsed.value).toBe("https://example.com/qrbtf-slash");
+      expect(parsed.style).toBe("normal");
+      expect(parsed.bg_color).toBe("#000000");
+    });
+  });
+
   describe("/invert", () => {
     it("finds the command config", () => {
       const cmd = findCommand("/invert");

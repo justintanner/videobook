@@ -200,6 +200,7 @@ import { postDef } from "./post.js";
 import { xConnectStartDef, xConnectStatusDef } from "./connect-x.js";
 import { createWatermarkDef } from "./create-watermark.js";
 import { createQartDef } from "./create-qart.js";
+import { createQrbtfDef } from "./create-qrbtf.js";
 import { getWatermarkConfigDef } from "./get-watermark-config.js";
 import { withLogging } from "./log-wrapper.js";
 
@@ -409,6 +410,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     xConnectStatusDef(),
     createWatermarkDef(fs),
     createQartDef(fs),
+    createQrbtfDef(fs),
     getWatermarkConfigDef(),
   ];
 }

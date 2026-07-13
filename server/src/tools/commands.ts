@@ -459,6 +459,21 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "create_qart", autoInject: ["project_slug"] },
   },
   {
+    command: "/qrbtf",
+    description: "Generate a parametric QR code in an artistic style (normal, line, dsj, bubble, func)",
+    example: "/qrbtf https://example.com normal",
+    category: "action",
+    icon: "QrCode",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "value", type: "string", required: true, description: "URL or text to encode in the QR" },
+      { name: "style", type: "string", required: false, description: "QR style: normal, line, dsj, bubble, or func (default: normal)" },
+    ],
+    mcpTool: { tool: "create_qrbtf", autoInject: ["project_slug"] },
+  },
+  {
     command: "/concat",
     description: "Compose one or two image assets into a 16:9 two-slot sheet; omit the second image to leave an empty cell",
     example: "/concat @img-left @img-right",

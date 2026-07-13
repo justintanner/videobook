@@ -112,6 +112,13 @@ describe("slash_commands tool", () => {
     expect(qart.mcpTool?.autoInject).toContain("project_slug");
     expect(qart.params.map((p) => p.name)).toEqual(["image_slug", "value"]);
 
+    expect(commandNames).toContain("/qrbtf");
+
+    const qrbtf = commands.find((c) => c.command === "/qrbtf")!;
+    expect(qrbtf.mcpTool?.tool).toBe("create_qrbtf");
+    expect(qrbtf.mcpTool?.autoInject).toContain("project_slug");
+    expect(qrbtf.params.map((p) => p.name)).toEqual(["value", "style"]);
+
     const notebook = commands.find((c) => c.command === "/notebook")!;
     expect(notebook.uiAction).toBe("open_notebook");
     expect(notebook.params).toEqual([
