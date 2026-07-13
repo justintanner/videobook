@@ -5,7 +5,9 @@ import {
   geminiFlashResponseText,
   geminiFlashAuthFetch,
   invokeStreamingWithFallback,
+  isGeminiThoughtPart,
   normalizeGeminiJsonText,
+  sliceFirstJsonValue,
   toGeminiResponseSchema,
 } from "./kie-gemini.js";
 
@@ -20,6 +22,36 @@ describe("normalizeGeminiJsonText", () => {
 
   it("leaves plain JSON unchanged", () => {
     expect(normalizeGeminiJsonText("{\"visuals\":[]}")).toBe("{\"visuals\":[]}");
+  });
+
+  it("takes the first object when two JSON values are concatenated", () => {
+    const first = "{\"tool\":\"list_assets\",\"params\":{},\"message\":\"Listing assets.\"}";
+    const second = "{\"tool\":\"trim_video\",\"params\":{\"asset_id\":\"vid-x\"},\"message\":\"Trimming.\"}";
+    const raw = `${first}${second}`;
+    expect(normalizeGeminiJsonText(raw)).toBe(first);
+    expect(JSON.parse(normalizeGeminiJsonText(raw))).toEqual({
+      tool: "list_assets",
+      params: {},
+      message: "Listing assets.",
+    });
+  });
+
+  it("handles nested braces and strings with braces", () => {
+    const raw = "prefix {\"a\":{\"b\":1},\"c\":\"}not close\"} trailing {\"d\":2}";
+    expect(normalizeGeminiJsonText(raw)).toBe("{\"a\":{\"b\":1},\"c\":\"}not close\"}");
+  });
+});
+
+describe("sliceFirstJsonValue", () => {
+  it("returns null for incomplete JSON", () => {
+    expect(sliceFirstJsonValue("{\"a\":1", 0)).toBeNull();
+  });
+});
+
+describe("isGeminiThoughtPart", () => {
+  it("detects thought parts", () => {
+    expect(isGeminiThoughtPart({ thought: true, text: "reasoning" })).toBe(true);
+    expect(isGeminiThoughtPart({ text: "answer" })).toBe(false);
   });
 });
 
@@ -74,6 +106,25 @@ describe("geminiFlashResponseText", () => {
 
   it("returns an empty string when no text content is present", () => {
     expect(geminiFlashResponseText({ candidates: [] })).toBe("");
+  });
+
+  it("skips thought parts so answer JSON is not polluted", () => {
+    const text = geminiFlashResponseText({
+      candidates: [{
+        content: {
+          parts: [
+            { thought: true, text: "I will route to list_assets." },
+            { text: "{\"tool\":\"list_assets\",\"params\":{},\"message\":\"Listing.\"}" },
+          ],
+        },
+      }],
+    });
+    expect(text).toBe("{\"tool\":\"list_assets\",\"params\":{},\"message\":\"Listing.\"}");
+    expect(JSON.parse(text)).toEqual({
+      tool: "list_assets",
+      params: {},
+      message: "Listing.",
+    });
   });
 });
 

@@ -22,6 +22,9 @@ type ChatDecision = {
 // Thinking tokens count against maxOutputTokens on gemini-3.5-flash; 512 was
 // too low and truncated routing JSON mid-string ("Unterminated string in JSON").
 const CHAT_ROUTING_MAX_OUTPUT_TOKENS = 2048;
+// Live routing can exceed 15s under Kie load even with low thinking; 15s aborts
+// surfaced as "Routing failed: ... AbortError" before any decision JSON arrived.
+const CHAT_ROUTING_TIMEOUT_MS = 45_000;
 
 export type ChatResolvedAsset = {
   tag: string;
@@ -29,6 +32,23 @@ export type ChatResolvedAsset = {
   asset_id: string;
   file_path: string | null;
 };
+
+/** Drop non-@img refs from generate_image params; fold them into prompt text. */
+export function sanitizeGenerateImageParams(
+  params: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!Array.isArray(params.image_slugs)) return params;
+  const slugs = params.image_slugs.map(String);
+  const imageOnly = slugs.filter((s) => /^@?img-/.test(s));
+  const dropped = slugs.filter((s) => !/^@?img-/.test(s));
+  const next: Record<string, unknown> = { ...params, image_slugs: imageOnly };
+  if (dropped.length > 0) {
+    const base = typeof params.prompt === "string" ? params.prompt : "";
+    const note = `from source ${dropped.join(", ")}`;
+    next.prompt = base ? `${base} (${note})` : note;
+  }
+  return next;
+}
 
 export async function loadScriptContentsForChat(
   fs: VideocityFs,
@@ -129,8 +149,12 @@ Determine which tool to use and what parameters to pass.`;
           ],
           temperature: 0.1,
           maxOutputTokens: CHAT_ROUTING_MAX_OUTPUT_TOKENS,
-          timeout: 15_000,
-          signal: AbortSignal.timeout(15_000),
+          // Do not pass responseSchema: Kie gemini-3.5-flash + open-ended
+          // params objects frequently truncates to incomplete JSON
+          // (e.g. `{"tool":"...","params": {`). application/json + normalize is enough.
+          thinkingConfig: { includeThoughts: false, thinkingLevel: "low" },
+          timeout: CHAT_ROUTING_TIMEOUT_MS,
+          signal: AbortSignal.timeout(CHAT_ROUTING_TIMEOUT_MS),
         });
 
         decision = JSON.parse(outputText) as ChatDecision;
@@ -167,6 +191,13 @@ Determine which tool to use and what parameters to pass.`;
             }
           }
         }
+      }
+
+      // generate_image only accepts @img-* refs; models often put @vid-* in
+      // image_slugs for "from the source of @vid-…". Drop non-image slugs and
+      // fold them into the text prompt so generation still has the intent.
+      if (decision.tool === "generate_image") {
+        Object.assign(params, sanitizeGenerateImageParams(params));
       }
 
       // Inject script content as prompt for generation tools

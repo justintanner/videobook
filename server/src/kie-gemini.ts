@@ -11,6 +11,11 @@ export const KIE_GEMINI_FLASH_MODEL = "gemini-3-5-flash";
 
 type JsonSchema = Record<string, unknown>;
 
+type GeminiThinkingConfig = {
+  includeThoughts?: boolean;
+  thinkingLevel?: "low" | "high";
+};
+
 type GeminiFlashRequest = {
   apiKey: string;
   parts: KieGeminiPart[];
@@ -18,6 +23,7 @@ type GeminiFlashRequest = {
   maxOutputTokens?: number;
   responseMimeType?: string;
   responseSchema?: JsonSchema;
+  thinkingConfig?: GeminiThinkingConfig;
   timeout?: number;
   signal?: AbortSignal;
   // When provided, the request streams and this fires with the cumulative text
@@ -85,6 +91,10 @@ export function isGeminiFlashAsyncIterable(
   return typeof maybeIterable[Symbol.asyncIterator] === "function";
 }
 
+export function isGeminiThoughtPart(part: { thought?: unknown; text?: unknown }): boolean {
+  return part.thought === true;
+}
+
 export function geminiFlashResponseText(response: KieGemini35FlashGenerateContentResponse): string {
   const envelope = response as { code?: unknown; msg?: unknown; message?: unknown };
   if (typeof envelope.code === "number" && envelope.code !== 0 && envelope.code !== 200) {
@@ -94,8 +104,12 @@ export function geminiFlashResponseText(response: KieGemini35FlashGenerateConten
     throw new Error(`Kie Gemini API error ${envelope.code}: ${message}`);
   }
 
+  // gemini-3.5-flash can emit thought parts alongside answer text. Joining them
+  // produces thought prose + JSON and breaks JSON.parse ("Unexpected
+  // non-whitespace character after JSON").
   return (response.candidates ?? [])
     .flatMap((candidate) => candidate.content?.parts ?? [])
+    .filter((part) => !isGeminiThoughtPart(part))
     .map((part) => typeof part.text === "string" ? part.text : "")
     .join("")
     .trim();
@@ -188,6 +202,7 @@ export async function callGeminiFlash(args: GeminiFlashRequest): Promise<string>
   if (args.maxOutputTokens !== undefined) generationConfig.maxOutputTokens = args.maxOutputTokens;
   if (args.responseMimeType !== undefined) generationConfig.responseMimeType = args.responseMimeType;
   if (args.responseSchema !== undefined) generationConfig.responseSchema = toGeminiResponseSchema(args.responseSchema);
+  if (args.thinkingConfig !== undefined) generationConfig.thinkingConfig = args.thinkingConfig;
 
   // onDelta fires only on the streaming path; the one-shot fallback runs silently.
   // Each attempt gets its own AbortController so the streaming idle-timeout can
@@ -218,10 +233,48 @@ export async function callGeminiFlash(args: GeminiFlashRequest): Promise<string>
   return text;
 }
 
+/** Extract the first complete JSON value starting at `start` (must be `{` or `[`). */
+export function sliceFirstJsonValue(text: string, start: number): string | null {
+  if (text[start] !== "{" && text[start] !== "[") return null;
+  const stack: string[] = [];
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        continue;
+      }
+      if (ch === "\"") inString = false;
+      continue;
+    }
+    if (ch === "\"") {
+      inString = true;
+      continue;
+    }
+    if (ch === "{" || ch === "[") {
+      stack.push(ch === "{" ? "}" : "]");
+      continue;
+    }
+    if (ch === "}" || ch === "]") {
+      if (stack.length === 0 || stack[stack.length - 1] !== ch) return null;
+      stack.pop();
+      if (stack.length === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 export function normalizeGeminiJsonText(text: string): string {
-  const trimmed = text.trim();
+  let trimmed = text.trim();
   const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
-  if (fenced) return fenced[1].trim();
+  if (fenced) trimmed = fenced[1].trim();
 
   const objectStart = trimmed.indexOf("{");
   const arrayStart = trimmed.indexOf("[");
@@ -229,6 +282,11 @@ export function normalizeGeminiJsonText(text: string): string {
   if (starts.length === 0) return trimmed;
 
   const start = Math.min(...starts);
+  // Prefer the first complete value — lastIndexOf("}") wrongly spans two
+  // concatenated JSON objects (common when thought text leaks into the answer).
+  const first = sliceFirstJsonValue(trimmed, start);
+  if (first) return first;
+
   const objectEnd = trimmed.lastIndexOf("}");
   const arrayEnd = trimmed.lastIndexOf("]");
   const end = Math.max(objectEnd, arrayEnd);
@@ -244,6 +302,12 @@ export async function callGeminiFlashJson(args: Omit<GeminiFlashRequest, "respon
   // optional responseSchema it returns a single parseable JSON value (no prose,
   // no markdown fences) rather than best-effort text we have to scrape. The
   // normalize step below stays as a safety net for models that ignore the hint.
-  const outputText = await callGeminiFlash({ ...args, responseMimeType: "application/json" });
+  // Default thinkingConfig keeps thought text out of the answer stream so it
+  // cannot pollute JSON; callers can override.
+  const outputText = await callGeminiFlash({
+    thinkingConfig: { includeThoughts: false, thinkingLevel: "low" },
+    ...args,
+    responseMimeType: "application/json",
+  });
   return normalizeGeminiJsonText(outputText);
 }

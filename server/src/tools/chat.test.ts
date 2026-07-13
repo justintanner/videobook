@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
-import { loadScriptContentsForChat } from "./chat.js";
+import { loadScriptContentsForChat, sanitizeGenerateImageParams } from "./chat.js";
 import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
@@ -117,6 +117,30 @@ describe("chat tool", () => {
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toContain("KIE_API_KEY");
+  });
+});
+
+describe("sanitizeGenerateImageParams", () => {
+  it("folds @vid-* image_slugs into prompt and keeps only @img-*", () => {
+    const out = sanitizeGenerateImageParams({
+      prompt: "qr code",
+      image_slugs: ["@vid-og", "@img-style"],
+    });
+    expect(out.image_slugs).toEqual(["@img-style"]);
+    expect(out.prompt).toBe("qr code (from source @vid-og)");
+  });
+
+  it("builds a prompt when only non-image slugs are present", () => {
+    const out = sanitizeGenerateImageParams({
+      image_slugs: ["@vid-og"],
+    });
+    expect(out.image_slugs).toEqual([]);
+    expect(out.prompt).toBe("from source @vid-og");
+  });
+
+  it("leaves params unchanged when image_slugs is absent", () => {
+    const input = { prompt: "qr code image" };
+    expect(sanitizeGenerateImageParams(input)).toEqual(input);
   });
 });
 
