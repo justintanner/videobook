@@ -976,6 +976,19 @@ describe("slash commands e2e", () => {
     });
   });
 
+  describe("/invert", () => {
+    it("finds the command config", () => {
+      const cmd = findCommand("/invert");
+      expect(cmd).toBeDefined();
+      expect(cmd.mcpTool?.tool).toBe("invert_image");
+    });
+
+    it("parses '/invert @img-test'", () => {
+      const args = simulateParse("/invert", "@img-test");
+      expect(args.asset_id).toBe("img-test");
+    });
+  });
+
   describe("/concat", () => {
     it("is registered with concat_images mcpTool", () => {
       const cmd = findCommand("/concat");

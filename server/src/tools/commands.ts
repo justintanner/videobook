@@ -138,6 +138,20 @@ const HARDCODED_COMMANDS: Command[] = [
     uiAction: "open_crop",
   },
   {
+    command: "/invert",
+    description: "In-place inverts an image asset (negates colors)",
+    example: "/invert @img-cat",
+    category: "context_menu",
+    icon: "ImageOff",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Image asset to invert" },
+    ],
+    mcpTool: { tool: "invert_image", autoInject: ["project_slug"] },
+  },
+  {
     command: "/pad",
     description: "Add a whole-second video tail with black frames and silence",
     example: "/pad @vid-me 2s",

@@ -52,6 +52,7 @@ import { evenSplitDef } from "./even-split.js";
 import { padVideoDef } from "./pad-video.js";
 import { cropVideoDef } from "./crop-video.js";
 import { cropImageDef } from "./crop-image.js";
+import { invertImageDef } from "./invert-image.js";
 import { setOsgDef } from "./set-osg.js";
 import { downloadVideoDef } from "./download-video.js";
 import { archiveClipDef } from "./archive-clip.js";
@@ -259,6 +260,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     padVideoDef(fs),
     cropVideoDef(fs),
     cropImageDef(fs),
+    invertImageDef(fs),
     setOsgDef(fs),
     downloadVideoDef(fs),
     archiveClipDef(fs),
