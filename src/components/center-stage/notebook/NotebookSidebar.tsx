@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { AlertCircle, Braces, ChevronDown, Crosshair, ImageIcon, Loader2, Video, X } from 'lucide-react'
+import { AlertCircle, Braces, ChevronDown, Crosshair, ImageIcon, Loader2, Play, Video, X } from 'lucide-react'
 import type { UseMcpResult } from 'use-mcp/react'
 import { GoogleFlowRefPicker } from '@/components/gen/ui/GoogleFlowRefPicker'
 import { DynamicField } from '@/components/gen/ui/DynamicField'
 import { genThemes } from '@/components/gen/ui/gen-themes'
-import { effectiveToolName, filterValuesForMode, getMode, visibleParams } from '@/components/gen/modes'
+import { effectiveToolName, filterValuesForMode, getMode, modeRequiredMissing, visibleParams } from '@/components/gen/modes'
 import type { JSONSchemaProperty, ModelOption, ModelModes } from '@/components/gen/types'
 import { usePromptHistory } from '@/hooks/usePromptHistory'
 import { useGoogleFlowEntities } from '@/hooks/useGoogleFlowEntities'
@@ -43,9 +43,13 @@ interface NotebookSidebarProps {
   definition: NotebookPlanDefinition
   selectedStepId: string | null
   mediaItems: MediaItem[]
+  stepCosts: ReadonlyMap<string, string>
+  runningStepIds: ReadonlySet<string>
+  errors: ReadonlyMap<string, string>
   updateDefinition: (next: NotebookPlanDefinition, coalesceKey?: string) => void
   onDisconnect: (sourceId: string, targetId: string) => void
   onSetInputRoute: (targetId: string, sourceId: string, param: string | null) => void
+  onRun: (step: NotebookPlanStep, option: ModelOption, provider: string, values: Record<string, unknown>, charMentions?: { handle: string; n: number }[]) => void
   onOpenAsset?: (assetId: string) => void
   onManageCharacters?: () => void
 }
@@ -149,9 +153,13 @@ export function NotebookSidebar({
   definition,
   selectedStepId,
   mediaItems,
+  stepCosts,
+  runningStepIds,
+  errors,
   updateDefinition,
   onDisconnect,
   onSetInputRoute,
+  onRun,
   onOpenAsset,
   onManageCharacters,
 }: NotebookSidebarProps) {
@@ -180,7 +188,6 @@ export function NotebookSidebar({
             id={`step-text-${selected.id}`}
             className="vc-notebook-text"
             value={text}
-            disabled={selected.properties.is_capture === true}
             onChange={(event) => updateDefinition(
               updateProperties(definition, selected.id, { text: event.target.value }),
               `text:${selected.id}:prompt`,
@@ -203,9 +210,13 @@ export function NotebookSidebar({
       definition={definition}
       step={selected}
       mediaItems={mediaItems}
+      costLabel={stepCosts.get(selected.id) ?? null}
+      running={runningStepIds.has(selected.id)}
+      error={errors.get(selected.id) ?? null}
       updateDefinition={updateDefinition}
       onDisconnect={onDisconnect}
       onSetInputRoute={onSetInputRoute}
+      onRun={onRun}
       onManageCharacters={onManageCharacters}
     />
   )
@@ -248,9 +259,13 @@ interface GenerationSidebarProps {
   definition: NotebookPlanDefinition
   step: NotebookPlanStep
   mediaItems: MediaItem[]
+  costLabel: string | null
+  running: boolean
+  error: string | null
   updateDefinition: NotebookSidebarProps['updateDefinition']
   onDisconnect: NotebookSidebarProps['onDisconnect']
   onSetInputRoute: NotebookSidebarProps['onSetInputRoute']
+  onRun: NotebookSidebarProps['onRun']
   onManageCharacters?: () => void
 }
 
@@ -261,13 +276,16 @@ function GenerationSidebar({
   definition,
   step,
   mediaItems,
+  costLabel,
+  running,
+  error,
   updateDefinition,
   onDisconnect,
   onSetInputRoute,
+  onRun,
   onManageCharacters,
 }: GenerationSidebarProps) {
   const category: 'image' | 'video' = step.type === 'video' ? 'video' : 'image'
-  const isCapture = Boolean(step.properties.is_capture)
   const model = typeof step.properties.model === 'string' ? step.properties.model : ''
   const provider = typeof step.properties.provider === 'string' ? step.properties.provider : ''
   const preview = useGenPreview({ category, projectSlug, callTool, model, provider })
@@ -328,6 +346,17 @@ function GenerationSidebar({
 
   const [showPayload, setShowPayload] = useState(false)
   const readiness = stepInputReadiness(definition, step, mediaItems)
+  const requiredMissing = useMemo(() => {
+    if (!option) return ['model']
+    const missing = (option.schema.required ?? []).filter((name) => {
+      if (name === 'project_slug') return false
+      if (modeVisible && !modeVisible.has(name)) return false
+      const value = mergedValues[name]
+      return value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)
+    })
+    if (activeMode) missing.push(...modeRequiredMissing(activeMode, mergedValues))
+    return Array.from(new Set(missing))
+  }, [option, mergedValues, activeMode, modeVisible])
   const persistedValues = record(step.properties.values)
   const update = (patch: JsonRecord, coalesceKey?: string) => updateDefinition(
     updateProperties(definition, step.id, patch),
@@ -388,6 +417,11 @@ function GenerationSidebar({
     && (!modeVisible || modeVisible.has('character_refs')),
   )
   const characterField = option?.schema.properties.character_refs
+  const disabledReason = requiredMissing.length > 0
+    ? `Missing: ${requiredMissing.join(', ')}`
+    : !readiness.ready
+      ? readiness.reasons.join(' ')
+      : undefined
   const applyClipWindow = (start: number, ends: number) => {
     const payload = clipWindowPayload(start, ends)
     update({
@@ -408,9 +442,9 @@ function GenerationSidebar({
   // "text" + video/audio inputs) flip /type so values are not filtered out.
   useEffect(() => {
     const suggested = resolved?.suggestedModeKey
-    if (!suggested || !option?.modes || suggested === modeKey) return
+    if (!suggested || !option?.modes || suggested === modeKey || running) return
     updateDefinition(updateProperties(definition, step.id, { mode: suggested }))
-  }, [resolved?.suggestedModeKey, option?.modes, modeKey, step.id, definition, updateDefinition])
+  }, [resolved?.suggestedModeKey, option?.modes, modeKey, running, step.id, definition, updateDefinition])
 
   const submitValues = useMemo(() => {
     if (!option) return null
@@ -437,7 +471,7 @@ function GenerationSidebar({
   return (
     <aside className={`vc-notebook-sidebar vc-notebook-sidebar-${category}`}>
       <LoadoutHeader
-        title={isCapture ? `Capture ${step.properties.capture_id}` : `Gen ${category}`}
+        title={`Gen ${category}`}
         action={option ? (
           <button
             type="button"
@@ -480,7 +514,7 @@ function GenerationSidebar({
                   value={characterRefs}
                   onChange={(refs) => updateValues('character_refs', refs)}
                   maxItems={characterField.maxItems ?? 7}
-                  disabled={isCapture}
+                  disabled={running}
                   callTool={callTool}
                   mcpState={mcpState}
                   projectSlug={projectSlug}
@@ -499,7 +533,7 @@ function GenerationSidebar({
             id={`step-model-${step.id}`}
             label="Model"
             value={`${preview.selectedModelKey}::${preview.selectedProviderKey}`}
-            disabled={isCapture}
+            disabled={running}
             onChange={(raw) => {
               const [nextModel, nextProvider = ''] = raw.split('::')
               update({ model: nextModel, provider: nextProvider, mode: null })
@@ -520,7 +554,7 @@ function GenerationSidebar({
                   id={`step-type-${step.id}`}
                   label="Type"
                   value={modeKey!}
-                  disabled={isCapture}
+                  disabled={running}
                   onChange={(next) => update({ mode: next })}
                   options={option.modes!.modes.map((mode) => ({ value: mode.key, label: mode.label }))}
                 />
@@ -536,7 +570,7 @@ function GenerationSidebar({
                         ? String(durationSchema.default)
                         : (schemaEnumOptions(durationSchema)[0] ?? '')
                   }
-                  disabled={isCapture}
+                  disabled={running}
                   onChange={(raw) => updateValues('duration', coerceSchemaValue(durationSchema, raw))}
                   options={schemaEnumOptions(durationSchema).map((entry) => ({ value: entry, label: entry }))}
                 />
@@ -552,7 +586,7 @@ function GenerationSidebar({
                         ? String(aspectSchema.default)
                         : (schemaEnumOptions(aspectSchema)[0] ?? '')
                   }
-                  disabled={isCapture}
+                  disabled={running}
                   onChange={(raw) => updateValues('aspect_ratio', coerceSchemaValue(aspectSchema, raw))}
                   options={schemaEnumOptions(aspectSchema).map((entry) => ({ value: entry, label: entry }))}
                 />
@@ -570,7 +604,7 @@ function GenerationSidebar({
                   bounds={clipBounds}
                   startSchema={option.schema.properties.video_clip_start}
                   endsSchema={option.schema.properties.video_clip_ends}
-                  disabled={isCapture}
+                  disabled={running}
                   theme={notebookTheme}
                   onChange={applyClipWindow}
                 />
@@ -588,7 +622,7 @@ function GenerationSidebar({
                     value={mergedValues[name]}
                     onChange={(value) => updateValues(name, value)}
                     required={(option.schema.required ?? []).includes(name)}
-                    disabled={isCapture}
+                    disabled={running}
                     theme={notebookTheme}
                     callTool={callTool}
                     mcpState={mcpState}
@@ -616,9 +650,9 @@ function GenerationSidebar({
               slugForAssetId={(id) => mediaItems.find((item) => item.id === id)?.slug.replace(/^@/, '') ?? null}
               characterMentions={showCharacters ? allCharMentions : undefined}
               characterHandles={showCharacters ? charHandles : undefined}
-              onPickCharacter={showCharacters && !isCapture ? handlePickCharacter : undefined}
+              onPickCharacter={showCharacters ? handlePickCharacter : undefined}
               rows={3}
-              disabled={isCapture}
+              disabled={running}
               placeholder="Describe this generation."
               onKeyDownExtra={(event) => {
                 if (event.key === 'ArrowUp') {
@@ -638,6 +672,21 @@ function GenerationSidebar({
           </>
         ) : null}
       </div>
+      {option ? (
+        <footer className="vc-notebook-action-deck">
+          {error ? <div className="vc-notebook-error"><AlertCircle /> {error}</div> : null}
+          <RunStepButton
+            running={running}
+            disabled={requiredMissing.length > 0 || !readiness.ready || running || !submitValues}
+            disabledReason={disabledReason}
+            cost={costLabel}
+            onClick={() => {
+              if (!submitValues) return
+              onRun(step, option, preview.selectedProviderKey, submitValues, charMentions)
+            }}
+          />
+        </footer>
+      ) : null}
     </aside>
   )
 }
@@ -715,7 +764,6 @@ function InputList({
               <select
                 className="vc-notebook-route-select text-xs ml-auto bg-transparent border border-white/20 rounded px-1"
                 value={explicitParam || ''}
-                disabled={step.properties.is_capture === true}
                 onChange={(e) => onSetInputRoute(step.id, id, e.target.value || null)}
                 title="Select connection route"
               >
@@ -727,14 +775,40 @@ function InputList({
             ) : source.type === 'prompt' ? (
               <span className="vc-notebook-route-fixed text-xs ml-auto opacity-60">prompt</span>
             ) : null}
-            {!step.properties.is_capture ? (
-              <button type="button" title="Disconnect" onClick={() => onDisconnect(id, step.id)}><X className="w-4 h-4" /></button>
-            ) : null}
+            <button type="button" title="Disconnect" onClick={() => onDisconnect(id, step.id)}><X className="w-4 h-4" /></button>
           </div>
         )
       })}
       {children}
     </div>
+  )
+}
+
+function RunStepButton({
+  running,
+  disabled,
+  disabledReason,
+  cost,
+  onClick,
+}: {
+  running: boolean
+  disabled: boolean
+  disabledReason?: string
+  cost: string | null
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className={cn('vc-notebook-run', running && 'vc-notebook-run-busy')}
+      disabled={disabled}
+      title={disabled && disabledReason ? disabledReason : undefined}
+      onClick={onClick}
+    >
+      {running ? <Loader2 /> : <Play />}
+      <span>{running ? 'Generating' : 'Generate'}</span>
+      {cost ? <b>{cost}</b> : null}
+    </button>
   )
 }
 

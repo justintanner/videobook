@@ -18,6 +18,7 @@ import { BookOpen, ImageIcon, Loader2, MessageSquareText, Rows3, Redo2, Undo2, V
 import type { UseMcpResult } from 'use-mcp/react'
 import { CloseButton } from '@/components/ui/CloseButton'
 import type { MediaItem } from '@/components/sidebar/types'
+import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle'
 import {
   addAssetStep,
   addStep,
@@ -53,7 +54,7 @@ import { useCanvasCostEstimates } from './useCanvasCostEstimates'
 import { useDefinitionHistory } from './useDefinitionHistory'
 import { useNotebookFlow } from './useNotebookFlow'
 import { useNotebookPlan } from './useNotebookPlan'
-import { mergeCapturesIntoDefinition } from './model'
+import { useNotebookRun } from './useNotebookRun'
 import '@xyflow/react/dist/style.css'
 import './notebook.css'
 
@@ -65,6 +66,7 @@ interface NotebookProps {
   mediaItems: MediaItem[]
   onClose: () => void
   onOpenAsset?: (assetId: string) => void
+  onGenerationLifecycle?: OnGenerationLifecycle
   onManageCharacters?: () => void
 }
 
@@ -329,6 +331,7 @@ export function Notebook({
   mediaItems,
   onClose,
   onOpenAsset,
+  onGenerationLifecycle,
   onManageCharacters,
 }: NotebookProps) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null)
@@ -350,14 +353,20 @@ export function Notebook({
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose])
   const definition = plan.definition
-  const mergedDefinition = useMemo(() => {
-    if (!definition) return null
-    return mergeCapturesIntoDefinition(definition, plan.captures, plan.captureLayout)
-  }, [definition, plan.captures, plan.captureLayout])
+  const run = useNotebookRun({
+    projectSlug,
+    callTool,
+    definition,
+    replaceDefinition: async (next, stepId) => {
+      history.commit(next)
+      setSelectedStepId(stepId)
+    },
+    onGenerationLifecycle,
+  })
   const stepCosts = useCanvasCostEstimates({
     projectSlug,
     callTool,
-    definition: mergedDefinition ?? { properties: {}, sequence: [] },
+    definition,
     enabled: mcpState === 'ready',
   })
   const commit = useCallback((next: NotebookPlanDefinition, coalesceKey?: string) => {
@@ -370,11 +379,11 @@ export function Notebook({
     commit(promoteRunAsset(current, stepId, assetId))
   }, [commit, getDefinition])
   const flow = useNotebookFlow({
-    definition: mergedDefinition,
+    definition,
     mediaItems,
     stepCosts,
-    runningStepIds: new Set<string>(),
-    errors: new Map<string, string>(),
+    runningStepIds: run.runningStepIds,
+    errors: run.errors,
     selectedStepId,
     onPromoteAsset: handlePromoteAsset,
   })
@@ -399,26 +408,8 @@ export function Notebook({
   const handleMove = useCallback((nodes: Node[]) => {
     const current = getDefinition()
     if (!current) return
-    const authoredNodes = nodes.filter(n => !(n.data as unknown as import('./nodes/nodeTypes').NotebookNodeData).step.properties.is_capture)
-    if (authoredNodes.length > 0) {
-      commit(reorderStepsOnTracks(current, authoredNodes.map((node) => ({ id: node.id, position: node.position }))))
-    }
-    const captureNodes = nodes.filter(n => (n.data as unknown as import('./nodes/nodeTypes').NotebookNodeData).step.properties.is_capture)
-    if (captureNodes.length > 0) {
-      const layoutPatch: Record<string, {x: number; y: number}> = {}
-      for (const node of captureNodes) {
-        const step = (node.data as unknown as import('./nodes/nodeTypes').NotebookNodeData).step
-        if (step.properties.capture_id) {
-          layoutPatch[step.properties.capture_id as string] = node.position
-        }
-      }
-      void callTool('update_notebook_capture_layout', {
-         project_slug: projectSlug,
-         notebook_id: notebookId,
-         positions: layoutPatch
-      })
-    }
-  }, [commit, getDefinition, projectSlug, notebookId, callTool])
+    commit(reorderStepsOnTracks(current, nodes.map((node) => ({ id: node.id, position: node.position }))))
+  }, [commit, getDefinition])
   const handleAutoLayout = useCallback(() => {
     const current = getDefinition()
     if (!current) return
@@ -471,11 +462,11 @@ export function Notebook({
       </header>
       {plan.error ? <div className="vc-notebook-load-error">{plan.error}</div> : null}
       {plan.legacy ? <div className="vc-notebook-legacy-note">This project has a notebook from the old formula system. Saving changes replaces that old plan file.</div> : null}
-      {mergedDefinition ? (
+      {definition ? (
         <div className="vc-notebook-body">
           <ReactFlowProvider>
             <NotebookCanvas
-              definition={mergedDefinition}
+              definition={definition}
               flow={flow}
               selectedStepId={selectedStepId}
               onSelectedStepIdChanged={setSelectedStepId}
@@ -495,10 +486,13 @@ export function Notebook({
               projectSlug={projectSlug}
               callTool={callTool}
               mcpState={mcpState}
-              definition={mergedDefinition}
+              definition={definition}
               selectedStepId={selectedStepId}
               onManageCharacters={onManageCharacters}
               mediaItems={mediaItems}
+              stepCosts={stepCosts}
+              runningStepIds={run.runningStepIds}
+              errors={run.errors}
               updateDefinition={updateDefinition}
               onDisconnect={(sourceId, targetId) => {
                 const current = getDefinition()
@@ -508,6 +502,7 @@ export function Notebook({
                 const current = getDefinition()
                 if (current) commit(setInputRoute(current, targetId, sourceId, param))
               }}
+              onRun={run.run}
               onOpenAsset={onOpenAsset}
             />
           </ReactFlowProvider>

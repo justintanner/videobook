@@ -14,7 +14,7 @@ function AssetNodeComponent({ data, selected }: NodeProps) {
       <div className="vc-node-kicker"><span><Icon aria-hidden /> Asset</span><b>{kind?.slice(0, 3) ?? 'REF'}</b></div>
       {node.thumbnailSrc ? <img src={node.thumbnailSrc} alt="" /> : <Icon />}
       <span>{slug}</span>
-      {!node.step.properties.is_capture ? <Handle type="source" position={Position.Bottom} className="vc-node-handle" /> : null}
+      <Handle type="source" position={Position.Bottom} className="vc-node-handle" />
     </div>
   )
 }
