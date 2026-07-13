@@ -445,6 +445,20 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "create_qart", autoInject: ["project_slug"] },
   },
   {
+    command: "/concat",
+    description: "Compose one or two image assets into a 16:9 two-slot sheet; omit the second image to leave an empty cell",
+    example: "/concat @img-left @img-right",
+    category: "action",
+    icon: "Images",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "image_slugs", type: "string[]", required: true, description: "One or two image assets (@img-*); one asset leaves the second slot empty" },
+    ],
+    mcpTool: { tool: "concat_images", autoInject: ["project_slug"] },
+  },
+  {
     command: "/grok-upscale",
     description: "Upscale a Grok-Imagine video via Kie",
     example: "/grok-upscale @vid-clip",

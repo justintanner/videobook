@@ -10,9 +10,9 @@ const layoutOptions = ["horizontal", "vertical", "grid"] as const;
 const aspectRatioOptions = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const;
 
 const concatImagesSchema = {
-  image_slugs: z.array(z.string()).min(2).max(9).describe("Image asset slugs to concatenate, e.g. ['@img-a', '@img-b']"),
+  image_slugs: z.array(z.string().nullable()).min(1).max(9).describe("Image asset slugs to concatenate. For a two-slot sheet, pass one slug to leave the second slot empty or use null for an explicit empty slot."),
   project_slug: z.string().describe("Project slug"),
-  layout: z.enum(layoutOptions).optional().describe("Cell layout. Defaults to horizontal for 2 images, grid for 3+ images."),
+  layout: z.enum(layoutOptions).optional().describe("Cell layout. Defaults to horizontal for landscape two-slot sheets, vertical for portrait two-slot sheets, and grid for 3+ images."),
   aspect_ratio: z.enum(aspectRatioOptions).optional().describe("Output aspect ratio. Defaults to 16:9 for video generation."),
   name: z.string().optional().describe("Optional name for the generated img-* asset"),
   background: z.string().optional().describe("Background color for padding, e.g. #000000 or white. Defaults to #000000."),
@@ -27,6 +27,8 @@ type SourceImage = {
   filename: string;
   buffer: Buffer;
 };
+
+type SourceImageSlot = SourceImage | null;
 
 type Dimensions = {
   width: number;
@@ -61,7 +63,7 @@ export function concatImagesDef(fs: VideocityFs): ToolDef {
   return {
     name: "concat_images",
     description:
-      "Concatenate 2-9 image assets into a new img-* asset. Each source image is fit into its cell without stretching, so aspect ratios are preserved for video-generation reference sheets.",
+      "Concatenate 1-9 image assets into a new img-* asset. One or two inputs use a fixed two-slot sheet, with landscape images side-by-side and portrait images stacked. A missing slot stays as background, and each source image is fit into its cell without stretching.",
     schema: concatImagesSchema,
     handler: async (args) => {
       const {
@@ -75,11 +77,15 @@ export function concatImagesDef(fs: VideocityFs): ToolDef {
 
       const sourceResult = await readSourceImages(fs, image_slugs, project_slug);
       if (!sourceResult.ok) return error(sourceResult.error);
+      if (!sourceResult.value.some((source) => source !== null)) {
+        return error("At least one image asset is required");
+      }
 
-      const resolvedLayout = layout ?? (sourceResult.value.length <= 2 ? "horizontal" : "grid");
       const resolvedAspectRatio = aspect_ratio ?? "16:9";
+      const resolvedLayout = layout ?? defaultLayout(resolvedAspectRatio, sourceResult.value.length);
       const dimensions = dimensionsByAspectRatio[resolvedAspectRatio];
       const resolvedBackground = background ?? "#000000";
+      const sourceImageIds = sourceResult.value.flatMap((source) => source ? [source.assetId] : []);
       let output: Awaited<ReturnType<typeof renderConcat>>;
       try {
         output = await renderConcat(
@@ -93,7 +99,7 @@ export function concatImagesDef(fs: VideocityFs): ToolDef {
         return error(`Failed to concatenate images: ${message}`);
       }
 
-      const assetName = name ?? deriveAssetName(sourceResult.value.map((source) => source.assetId));
+      const assetName = name ?? deriveAssetName(sourceImageIds);
       const assetResult = await fs.createAsset("img", assetName, project_slug);
       if (!assetResult.ok) return error(`Failed to create image asset: ${assetResult.error.message}`);
 
@@ -111,7 +117,7 @@ export function concatImagesDef(fs: VideocityFs): ToolDef {
         height: output.dimensions.height,
         layout: resolvedLayout,
         aspect_ratio: resolvedAspectRatio,
-        source_images: sourceResult.value.map((source) => source.assetId),
+        source_images: sourceImageIds,
       };
       const metadataResult = await fs.writeMetadata(imgAssetId, "original", metadata, project_slug);
       if (!metadataResult.ok) {
@@ -143,7 +149,7 @@ export function concatImagesDef(fs: VideocityFs): ToolDef {
             height: output.dimensions.height,
             layout: resolvedLayout,
             aspect_ratio: resolvedAspectRatio,
-            source_images: sourceResult.value.map((source) => source.assetId),
+            source_images: sourceImageIds,
             placements: output.placements,
           }),
         }],
@@ -154,11 +160,15 @@ export function concatImagesDef(fs: VideocityFs): ToolDef {
 
 async function readSourceImages(
   fs: VideocityFs,
-  rawSlugs: readonly string[],
+  rawSlugs: readonly (string | null)[],
   projectSlug: string,
-): Promise<{ ok: true; value: SourceImage[] } | { ok: false; error: string }> {
-  const sources: SourceImage[] = [];
+): Promise<{ ok: true; value: SourceImageSlot[] } | { ok: false; error: string }> {
+  const sources: SourceImageSlot[] = [];
   for (const rawSlug of rawSlugs) {
+    if (rawSlug === null || rawSlug.trim() === "") {
+      sources.push(null);
+      continue;
+    }
     const assetId = rawSlug.replace(/^@/, "");
     if (!assetId.startsWith("img-")) {
       return { ok: false, error: `image_slugs entries must be img-* assets, got: ${assetId}` };
@@ -193,13 +203,14 @@ async function readSourceImages(
 }
 
 async function renderConcat(
-  sources: readonly SourceImage[],
+  sources: readonly SourceImageSlot[],
   layout: Layout,
   dimensions: Dimensions,
   background: string,
 ): Promise<{ buffer: Buffer; dimensions: Dimensions; placements: Placement[] }> {
-  const grid = resolveGrid(sources.length, layout);
+  const grid = resolveGrid(sources.length <= 2 ? 2 : sources.length, layout);
   const composites = await Promise.all(sources.map(async (source, index) => {
+    if (!source) return null;
     const cell = cellFor(index, grid, dimensions);
     const input = await sharp(source.buffer)
       .rotate()
@@ -216,6 +227,7 @@ async function renderConcat(
     };
   }));
 
+  const populatedComposites = composites.filter((entry): entry is Exclude<typeof entry, null> => entry !== null);
   const buffer = await sharp({
     create: {
       width: dimensions.width,
@@ -224,15 +236,20 @@ async function renderConcat(
       background,
     },
   })
-    .composite(composites.map((entry) => entry.composite))
+    .composite(populatedComposites.map((entry) => entry.composite))
     .png()
     .toBuffer();
 
   return {
     buffer,
     dimensions,
-    placements: composites.map((entry) => entry.placement),
+    placements: populatedComposites.map((entry) => entry.placement),
   };
+}
+
+function defaultLayout(aspectRatio: AspectRatio, slotCount: number): Layout {
+  if (slotCount > 2) return "grid";
+  return aspectRatio === "9:16" || aspectRatio === "3:4" ? "vertical" : "horizontal";
 }
 
 function resolveGrid(count: number, layout: Layout): Grid {

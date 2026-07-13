@@ -130,6 +130,78 @@ describe("concat_images tool", () => {
     expectRgb(pixels.pixel(1440, 540), { r: 0, g: 0, b: 255 });
   });
 
+  it("stacks a single square source into the first 9:16 slot and leaves the second empty", async () => {
+    const red = await createImageAsset("square-red", await solidPng(600, 600, { r: 255, g: 0, b: 0 }));
+
+    const result = await client!.callTool({
+      name: "concat_images",
+      arguments: {
+        project_slug: PROJECT,
+        image_slugs: [`@${red}`],
+        aspect_ratio: "9:16",
+      },
+    });
+
+    expect(result.isError).not.toBe(true);
+    const parsed = JSON.parse(resultText(result)) as {
+      img_asset_id: string;
+      width: number;
+      height: number;
+      layout: string;
+      aspect_ratio: string;
+      source_images: string[];
+      placements: Array<{ asset_id: string; cell: { x: number; y: number; width: number; height: number } }>;
+    };
+    expect(parsed.width).toBe(1080);
+    expect(parsed.height).toBe(1920);
+    expect(parsed.layout).toBe("vertical");
+    expect(parsed.aspect_ratio).toBe("9:16");
+    expect(parsed.source_images).toEqual([red]);
+    expect(parsed.placements).toHaveLength(1);
+    expect(parsed.placements[0].asset_id).toBe(red);
+    expect(parsed.placements[0].cell).toEqual({ x: 0, y: 0, width: 1080, height: 960 });
+
+    const read = await fs.readFile(parsed.img_asset_id, "original.png", PROJECT);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    const buffer = Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
+    const pixels = await pixelsFor(buffer);
+    expectRgb(pixels.pixel(540, 480), { r: 255, g: 0, b: 0 });
+    expectRgb(pixels.pixel(540, 1440), { r: 0, g: 0, b: 0 });
+  });
+
+  it("keeps an explicitly empty first slot in a 16:9 two-slot sheet", async () => {
+    const blue = await createImageAsset("square-blue", await solidPng(600, 600, { r: 0, g: 0, b: 255 }));
+
+    const result = await client!.callTool({
+      name: "concat_images",
+      arguments: {
+        project_slug: PROJECT,
+        image_slugs: [null, `@${blue}`],
+        aspect_ratio: "16:9",
+      },
+    });
+
+    expect(result.isError).not.toBe(true);
+    const parsed = JSON.parse(resultText(result)) as {
+      img_asset_id: string;
+      layout: string;
+      placements: Array<{ asset_id: string; cell: { x: number; y: number; width: number; height: number } }>;
+    };
+    expect(parsed.layout).toBe("horizontal");
+    expect(parsed.placements).toHaveLength(1);
+    expect(parsed.placements[0].asset_id).toBe(blue);
+    expect(parsed.placements[0].cell).toEqual({ x: 960, y: 0, width: 960, height: 1080 });
+
+    const read = await fs.readFile(parsed.img_asset_id, "original.png", PROJECT);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    const buffer = Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
+    const pixels = await pixelsFor(buffer);
+    expectRgb(pixels.pixel(480, 540), { r: 0, g: 0, b: 0 });
+    expectRgb(pixels.pixel(1440, 540), { r: 0, g: 0, b: 255 });
+  });
+
   it("returns an error when a referenced asset has no image file", async () => {
     const asset = await fs.createAsset("img", "empty", PROJECT);
     if (!asset.ok) throw new Error(asset.error.message);

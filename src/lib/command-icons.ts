@@ -15,6 +15,7 @@ import {
   Archive,
   NotebookPen,
   Stethoscope,
+  Images,
 } from 'lucide-react';
 
 const iconMap: Record<string, LucideIcon> = {
@@ -33,6 +34,7 @@ const iconMap: Record<string, LucideIcon> = {
   Archive,
   NotebookPen,
   Stethoscope,
+  Images,
 };
 
 export function resolveIcon(name: string): LucideIcon | undefined {

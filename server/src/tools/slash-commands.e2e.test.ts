@@ -976,6 +976,50 @@ describe("slash commands e2e", () => {
     });
   });
 
+  describe("/concat", () => {
+    it("is registered with concat_images mcpTool", () => {
+      const cmd = findCommand("/concat");
+      expect(cmd.mcpTool?.tool).toBe("concat_images");
+      expect(cmd.mcpTool?.autoInject).toContain("project_slug");
+      expect(cmd.params.map((p) => p.name)).toEqual(["image_slugs"]);
+      expect(cmd.params[0]?.type).toBe("string[]");
+    });
+
+    it("parses one or two image slugs", () => {
+      expect(simulateParse("/concat", "@img-left @img-right").image_slugs).toEqual(["img-left", "img-right"]);
+      expect(simulateParse("/concat", "@img-left").image_slugs).toEqual(["img-left"]);
+    });
+
+    it("dispatches concat_images and preserves an empty second slot", async () => {
+      const sharp = (await import("sharp")).default;
+      const fs = createFs({ projectsDir: tempDir });
+      const source = await fs.createAsset("img", "concat-source", "test-proj");
+      expect(source.ok).toBe(true);
+      if (!source.ok) return;
+      const png = await sharp({
+        create: { width: 200, height: 200, channels: 3, background: { r: 220, g: 40, b: 80 } },
+      })
+        .png()
+        .toBuffer();
+      const write = await fs.writeFile(source.value.assetId, "original.png", png, "test-proj");
+      expect(write.ok).toBe(true);
+
+      const cmd = findCommand("/concat");
+      const args = parseCommandArgs(`@${source.value.assetId}`, cmd.params);
+      const result = await client.callTool({
+        name: "concat_images",
+        arguments: { ...args, project_slug: "test-proj" },
+      });
+      expect(result.isError).toBeFalsy();
+      const parsed = parseResult(result);
+      expect(parsed.width).toBe(1920);
+      expect(parsed.height).toBe(1080);
+      expect(parsed.layout).toBe("horizontal");
+      expect(parsed.source_images).toEqual([source.value.assetId]);
+      expect(parsed.placements).toHaveLength(1);
+    });
+  });
+
   // -----------------------------------------------------------------------
   // 14. Dynamic project commands
   // -----------------------------------------------------------------------

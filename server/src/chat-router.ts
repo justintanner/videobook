@@ -215,7 +215,7 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
   {
     name: "concat_images",
     actualTool: "concat_images",
-    description: "Concatenate image assets into a single reference-sheet image while preserving each image's aspect ratio",
+    description: "Concatenate one or two square image assets into a 16:9 or 9:16 reference sheet; landscape is side-by-side, portrait is stacked, and one slot may be empty",
     params: ["image_slugs", "layout", "aspect_ratio"],
     category: "generation",
   },
@@ -262,7 +262,7 @@ Parameter guidelines:
 - For generate_image: put the image description in "prompt"; use image_slugs ONLY for @img-* reference images (include @ prefix). Never put @vid-* or @aud-* in image_slugs — if the user wants an image inspired by a video, describe that in the text prompt instead
 - For create_watermark (QR code / watermark card): use this tool for real scannable QR codes — never generate_image. Pass url from the referenced asset's source_url/webpage_url when the user says "from the url in @vid-…" or similar; optional handle is an X handle without @
 - For create_qart (artistic / picture QR): use when turning an @img-* into scan-safe color and monochrome QR mosaics; pass image_slug and value (URL/text). Prefer over create_watermark when the user wants a photo integrated into the QR modules
-- For concat_images: use image_slugs for all referenced image asset IDs (include @ prefix); use layout horizontal for side-by-side requests
+- For concat_images: use image_slugs for the referenced @img-* assets; one slug leaves the second two-slot cell empty, and null explicitly leaves a slot empty. Use aspect_ratio 16:9 or 9:16; layout is automatic unless overridden
 - Timeline audio positions (start_frame, duration_frames) are in frames at 30 fps — convert seconds to frames (e.g., "at 5 seconds" → start_frame: 150)
 - Do NOT include project_slug in params — it is injected automatically
 - When @script- tags are referenced, use the script content as the prompt for generation tools
