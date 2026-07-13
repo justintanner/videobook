@@ -245,6 +245,9 @@ function scheduleWaveformExtraction(
 
 const PARTIAL_DOWNLOAD_RE = /\.(mp4|mov)\.part$/i;
 
+/** Media extensions whose duration can be recovered via ffprobe when .original.json lacks it. */
+const DURATION_PROBE_EXT_RE = /\.(mp4|mov|webm|mkv|mp3|wav|m4a|aac|ogg|flac)$/i;
+
 export const RENDER_ORIENTATIONS = MEDIA_RENDER_ORIENTATIONS;
 
 export async function readRenderSettings(
@@ -471,15 +474,18 @@ export async function buildAssetList(fs: VideocityFs, project_slug: string, sort
       const meta = metadata.ok ? metadata.value : null;
       const archiveMeta = archiveMetadata.ok ? archiveMetadata.value : null;
 
-      // Backfill duration if missing from metadata
+      // Backfill duration if missing from metadata (video + audio; probeVideo
+      // reads format.duration via ffprobe and works for both).
       let duration = (meta?.duration as number) ?? null;
-      if (duration === null && mediaFile && /\.(mp4|mov)$/i.test(mediaFile.name)) {
+      if (duration === null && mediaFile && DURATION_PROBE_EXT_RE.test(mediaFile.name)) {
         try {
           const probe = await probeVideo(join(a.path, mediaFile.name));
-          duration = probe.duration;
-          // Persist so we don't re-probe next time
-          if (metadata.ok) {
-            await fs.writeMetadata(a.id, "original", { ...metadata.value, duration }, project_slug);
+          if (Number.isFinite(probe.duration) && probe.duration > 0) {
+            duration = probe.duration;
+            // Persist so we don't re-probe next time
+            if (metadata.ok) {
+              await fs.writeMetadata(a.id, "original", { ...metadata.value, duration }, project_slug);
+            }
           }
         } catch { /* non-fatal */ }
       }

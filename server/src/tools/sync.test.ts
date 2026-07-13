@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll, vi } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
@@ -229,6 +229,37 @@ describe("buildAssetList", () => {
     const assets = await buildAssetList(fs, "test-proj");
     expect(assets.length).toBe(1);
     expect(assets[0].media_url).toContain("original.mp3");
+  });
+
+  it("backfills duration for audio assets missing metadata duration", async () => {
+    const { buildAssetList } = await import("./sync.js");
+    const { runFfmpeg } = await import("../ffmpeg.js");
+    const createResult = await fs.createAsset("aud", "audio-duration", "test-proj");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+    const assetDir = createResult.value.path;
+    const mp3Path = join(assetDir, "original.mp3");
+
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=1.5",
+      "-acodec", "libmp3lame", "-q:a", "4",
+      mp3Path,
+    ]);
+    // Metadata without duration (matches extract_audio pre-fix shape).
+    await writeFile(
+      join(assetDir, ".original.json"),
+      JSON.stringify({ origin: "extract_audio", source_asset: "vid-source" }),
+    );
+
+    const assets = await buildAssetList(fs, "test-proj");
+    expect(assets.length).toBe(1);
+    expect(assets[0].duration).toBeGreaterThan(1.2);
+    expect(assets[0].duration).toBeLessThan(2.0);
+
+    // Persisted so the next list does not re-probe.
+    const meta = JSON.parse(await readFile(join(assetDir, ".original.json"), "utf-8"));
+    expect(meta.duration).toBe(assets[0].duration);
+    expect(meta.origin).toBe("extract_audio");
   });
 
   it("finds markdown as primary media file", async () => {

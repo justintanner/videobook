@@ -2,7 +2,7 @@ import { AudioLines } from 'lucide-react';
 import type { MediaItem } from '../types';
 import { CardShell } from './CardShell';
 import type { DragData } from './CardShell';
-import { SlugBadge } from './badges';
+import { DurationBadge, SlugBadge } from './badges';
 import { ErrorCardActions } from './ErrorCardActions';
 
 import type { ReactNode } from 'react';
@@ -19,7 +19,9 @@ interface AudioCardProps {
 
 export function AudioCard({ item, contextMenuContent, selected, onClick, onMarkSeen, onRecover, onDelete }: AudioCardProps) {
   const isCorrupt = false;
-  const isError = (item.status ?? 'ready') === 'error';
+  const status = item.status ?? 'ready';
+  const isError = status === 'error';
+  const isProcessing = status !== 'ready' && status !== 'error';
 
   return (
     <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>
@@ -39,6 +41,10 @@ export function AudioCard({ item, contextMenuContent, selected, onClick, onMarkS
 
       {/* Slug badge */}
       {!isCorrupt && <SlugBadge item={item} />}
+
+      {!isCorrupt && !isError && (
+        <DurationBadge item={item} seconds={item.duration} muted={isProcessing} />
+      )}
 
       {/* Recover / Delete buttons — visible on hover for error-state cards */}
       {isError && <ErrorCardActions item={item} onRecover={onRecover} onDelete={onDelete} />}

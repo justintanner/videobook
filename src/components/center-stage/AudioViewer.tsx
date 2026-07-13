@@ -1,3 +1,4 @@
+import { useCallback, useState, type SyntheticEvent } from 'react';
 import { Settings, AudioLines } from 'lucide-react';
 import { CloseButton } from '@/components/ui/CloseButton';
 import { cn } from '@/lib/utils';
@@ -17,6 +18,19 @@ import {
 
 const AUDIO_BACK_TABS: BackTab[] = ['files', 'history'];
 
+/** mm:ss for long clips; one decimal for sub-10s so sub-second audio isn't 0:00. */
+function formatAudioDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  if (seconds < 10) {
+    const trimmed = seconds.toFixed(1).replace(/\.0$/, '');
+    return `${trimmed}s`;
+  }
+  const total = Math.round(seconds);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, callTool, onClose }: {
   item: MediaItem;
   projectSlug: string;
@@ -30,6 +44,15 @@ export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendi
   onClose: () => void;
 }) {
   useMountKey('viewer');
+
+  const metaDuration = item.duration != null && item.duration > 0 ? item.duration : null;
+  const [mediaDuration, setMediaDuration] = useState<number | null>(null);
+  const duration = mediaDuration ?? metaDuration;
+
+  const handleLoadedMetadata = useCallback((e: SyntheticEvent<HTMLAudioElement>) => {
+    const d = e.currentTarget.duration;
+    if (Number.isFinite(d) && d > 0) setMediaDuration(d);
+  }, []);
 
   const bf = useViewerBackFace({
     projectSlug,
@@ -82,11 +105,21 @@ export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendi
             <div className="flex-1 bg-black flex flex-col min-h-0 items-center justify-center gap-6 px-8">
               <AudioLines className="w-16 h-16 text-violet-300/20" />
               {item.filePath && (
-                <audio
-                  src={item.filePath}
-                  controls
-                  className="w-full max-w-md"
-                />
+                <div className="w-full max-w-md flex flex-col items-center gap-2">
+                  <audio
+                    key={item.filePath}
+                    src={item.filePath}
+                    controls
+                    preload="metadata"
+                    onLoadedMetadata={handleLoadedMetadata}
+                    className="w-full"
+                  />
+                  {duration != null && (
+                    <span className="text-xs font-mono tabular-nums text-violet-300/60">
+                      {formatAudioDuration(duration)}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </div>

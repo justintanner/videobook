@@ -190,6 +190,8 @@ describe("extract_audio tool", () => {
     const originJson = JSON.parse(await readFile(join(manifestData.path, ".original.json"), "utf-8"));
     expect(originJson.origin).toBe("extract_audio");
     expect(originJson.source_asset).toBe(uploaded.assetId);
+    expect(typeof originJson.duration).toBe("number");
+    expect(originJson.duration).toBeGreaterThan(0);
   });
 
   describe("destination mode", () => {

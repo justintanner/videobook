@@ -1,25 +1,9 @@
 import type { VideocityFs } from "videocity-engine";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { createRequire } from "node:module";
 import { registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
-
-const execFileAsync = promisify(execFile);
-
-const require = createRequire(import.meta.url);
-const FFMPEG: string = require("ffmpeg-static");
+import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 
 const LOCK_DURATION_MS = 120_000;
-
-async function runFfmpeg(args: string[]): Promise<void> {
-  try {
-    await execFileAsync(FFMPEG, args);
-  } catch (error) {
-    const msg = error instanceof Error ? (error as Error & { stderr?: string }).stderr ?? error.message : String(error);
-    throw new Error(`ffmpeg failed: ${msg}`);
-  }
-}
 
 type ExtractAudioPayload = {
   type: "extract_audio";
@@ -68,6 +52,14 @@ export function registerExtractAudioJob(fs: VideocityFs): void {
         ];
         await runFfmpeg(ffmpegArgs);
 
+        let duration: number | undefined;
+        try {
+          const probe = await probeVideo(outputPath);
+          if (Number.isFinite(probe.duration) && probe.duration > 0) {
+            duration = probe.duration;
+          }
+        } catch { /* non-fatal — list_assets backfill can recover */ }
+
         if (destinationMode) {
           await fs.commitOperation(
             "extract_audio",
@@ -76,6 +68,7 @@ export function registerExtractAudioJob(fs: VideocityFs): void {
               source_asset: sourceVideoId,
               filename: destination.filename,
               ...(range ? { range } : {}),
+              ...(duration !== undefined ? { duration } : {}),
             },
             projectSlug,
           );
@@ -83,6 +76,7 @@ export function registerExtractAudioJob(fs: VideocityFs): void {
           const origin = {
             origin: "extract_audio",
             source_asset: sourceVideoId,
+            ...(duration !== undefined ? { duration } : {}),
           };
           await fs.writeMetadata(audioAssetId, "original", origin, projectSlug);
         }

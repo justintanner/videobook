@@ -1,6 +1,7 @@
 import type { VideocityFs, AssetEntry, AssetType } from "videocity-engine";
 import * as path from "node:path";
 import { queue } from "../queue.js";
+import { probeVideo } from "../ffmpeg.js";
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".avi", ".mkv"]);
 const AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".aac", ".flac", ".ogg"]);
@@ -154,6 +155,21 @@ export async function processExternalUpload(
       extension: upload.extension,
       provenance,
     } as unknown as Record<string, unknown>);
+  } else if (upload.mediaType === "audio") {
+    const audioPath = path.join(upload.assetDir, targetFilename);
+    let duration: number | undefined;
+    try {
+      const probe = await probeVideo(audioPath);
+      if (Number.isFinite(probe.duration) && probe.duration > 0) {
+        duration = probe.duration;
+      }
+    } catch { /* non-fatal — list_assets backfill can recover */ }
+    await fs.writeMetadata(
+      upload.assetId,
+      "original",
+      { ...provenance, ...(duration !== undefined ? { duration } : {}) },
+      projectSlug,
+    );
   } else {
     await fs.writeMetadata(upload.assetId, "original", provenance, projectSlug);
   }
