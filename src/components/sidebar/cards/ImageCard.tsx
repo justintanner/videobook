@@ -3,6 +3,7 @@ import { CardShell } from './CardShell';
 import type { DragData } from './CardShell';
 import { SlugBadge, ResolutionBadge } from './badges';
 import { ErrorCardActions } from './ErrorCardActions';
+import { cn } from '@/lib/utils';
 
 import type { ReactNode } from 'react';
 
@@ -25,6 +26,7 @@ export function ImageCard({ item, contextMenuContent, selected, onClick, onMarkS
   const isLoading = status === 'loading';
   const isDownloading = status === 'downloading';
   const hasOpaqueOverlay = isUploading || isGenerating || isLoading || isCorrupt;
+  const isQart = item.origin === 'create_qart';
 
   return (
     <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>
@@ -35,7 +37,10 @@ export function ImageCard({ item, contextMenuContent, selected, onClick, onMarkS
           alt={item.title}
           loading="lazy"
           draggable={false}
-          className="w-full h-full object-cover transition-opacity"
+          className={cn(
+            'size-full transition-opacity',
+            isQart ? 'bg-white object-contain' : 'object-cover',
+          )}
         />
       )}
 

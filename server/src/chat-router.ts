@@ -193,8 +193,8 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     name: "create_qart",
     actualTool: "create_qart",
     description:
-      "Blend an img-* photo into a scannable artistic QR (qart-style) and create white + black background img-* assets — use for 'artistic QR', 'qart', or 'picture QR', not generate_image",
-    params: ["image_slug", "value", "size", "filter", "name"],
+      "Create scan-safe color and monochrome QR mosaics from an img-* source — use for 'artistic QR', 'qart', or 'picture QR', not generate_image",
+    params: ["image_slug", "value", "size", "name"],
     category: "action",
   },
   // --- Generation tools ---
@@ -261,7 +261,7 @@ Parameter guidelines:
 - For generate_video: put the generation description in "prompt"
 - For generate_image: put the image description in "prompt"; use image_slugs ONLY for @img-* reference images (include @ prefix). Never put @vid-* or @aud-* in image_slugs — if the user wants an image inspired by a video, describe that in the text prompt instead
 - For create_watermark (QR code / watermark card): use this tool for real scannable QR codes — never generate_image. Pass url from the referenced asset's source_url/webpage_url when the user says "from the url in @vid-…" or similar; optional handle is an X handle without @
-- For create_qart (artistic / picture QR): use when blending an @img-* into a QR on white and black; pass image_slug and value (URL/text). Prefer over create_watermark when the user wants a photo inside the QR
+- For create_qart (artistic / picture QR): use when turning an @img-* into scan-safe color and monochrome QR mosaics; pass image_slug and value (URL/text). Prefer over create_watermark when the user wants a photo integrated into the QR modules
 - For concat_images: use image_slugs for all referenced image asset IDs (include @ prefix); use layout horizontal for side-by-side requests
 - Timeline audio positions (start_frame, duration_frames) are in frames at 30 fps — convert seconds to frames (e.g., "at 5 seconds" → start_frame: 150)
 - Do NOT include project_slug in params — it is injected automatically

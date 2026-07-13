@@ -1,141 +1,197 @@
 import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
-import QRCode from "qrcode";
+import QRCode, { type QRCode as QrCode } from "qrcode";
 import sharp from "sharp";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { findImageFile } from "./_image-inputs.js";
-import { writeImageVariants } from "./concat-images.js";
 import { slugify } from "./_fal-shared.js";
 
-const DEFAULT_SIZE = 512;
-const QUIET_MODULES = 4;
-const MIN_MODULE_PX = 3;
+export const DEFAULT_QART_SIZE = 2520;
+export const QART_QUIET_MODULES = 4;
+export const QART_MIN_MODULE_PX = 3;
+export const QART_MIN_VERSION = 20;
+export const QART_IMAGE_STRENGTH = 0.46;
+export const QART_DARK_MAX = Math.round(255 * QART_IMAGE_STRENGTH);
+export const QART_LIGHT_MIN = Math.round(255 * (1 - QART_IMAGE_STRENGTH));
 
-type QartFilter = "threshold" | "color";
-type Rgb = { r: number; g: number; b: number };
+const LANDSCAPE_WIDTH = 1920;
+const LANDSCAPE_HEIGHT = 1080;
+const PORTRAIT_WIDTH = 1080;
+const PORTRAIT_HEIGHT = 1920;
+const SQUARE_SIZE = 1080;
+
+type QartStyle = "color" | "monochrome";
+
+type SampledCover = {
+  data: Buffer;
+  channels: number;
+};
+
+type RenderedQart = {
+  buffer: Buffer;
+  width: number;
+  height: number;
+  modulePx: number;
+  moduleCount: number;
+  qrVersion: number;
+};
+
+type QartFiles = {
+  original: Buffer;
+  landscape: Buffer;
+  portrait: Buffer;
+  square: Buffer;
+  modulePx: number;
+};
+
+type QartBuild = {
+  color: QartFiles;
+  monochrome: QartFiles;
+  moduleCount: number;
+  qrVersion: number;
+};
 
 function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
 }
 
-function parseHexColor(input: string): Rgb {
-  const hex = input.trim().replace(/^#/, "");
-  if (hex.length === 3) {
-    return {
-      r: parseInt(hex[0] + hex[0], 16),
-      g: parseInt(hex[1] + hex[1], 16),
-      b: parseInt(hex[2] + hex[2], 16),
-    };
-  }
-  if (hex.length === 6) {
-    return {
-      r: parseInt(hex.slice(0, 2), 16),
-      g: parseInt(hex.slice(2, 4), 16),
-      b: parseInt(hex.slice(4, 6), 16),
-    };
-  }
-  return { r: 255, g: 255, b: 255 };
+function createQr(value: string): QrCode {
+  const automatic = QRCode.create(value, { errorCorrectionLevel: "H" });
+  const version = Math.max(QART_MIN_VERSION, automatic.version);
+  if (version === automatic.version) return automatic;
+  return QRCode.create(value, { errorCorrectionLevel: "H", version });
 }
 
-function isProtectedModule(row: number, col: number, size: number): boolean {
-  if (row < 9 && col < 9) return true;
-  if (row < 9 && col >= size - 8) return true;
-  if (row >= size - 8 && col < 9) return true;
-  if (row === 6 || col === 6) return true;
-  return false;
-}
-
-function thresholdLuma(r: number, g: number, b: number): number {
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b >= 127 ? 255 : 0;
-}
-
-export async function buildQartPng(
-  value: string,
-  coverBuffer: Buffer,
-  options: {
-    size: number;
-    filter: QartFilter;
-    background: string;
-  },
-): Promise<Buffer> {
-  const qr = QRCode.create(value, { errorCorrectionLevel: "H" });
-  const n = qr.modules.size;
-  const totalModules = n + QUIET_MODULES * 2;
-  const modulePx = Math.max(MIN_MODULE_PX, Math.floor(options.size / totalModules));
-  const working = totalModules * modulePx;
-  const dataPx = n * modulePx;
-
-  const cover = await sharp(coverBuffer)
-    .resize(dataPx, dataPx, { fit: "cover", position: "centre" })
-    .ensureAlpha()
+async function sampleCover(coverBuffer: Buffer, moduleCount: number): Promise<SampledCover> {
+  const sampled = await sharp(coverBuffer)
+    .rotate()
+    .sharpen({ sigma: 1.2 })
+    .modulate({ saturation: 1.25 })
+    .resize(moduleCount, moduleCount, { fit: "cover", position: "centre" })
+    .removeAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
+  return { data: sampled.data, channels: sampled.info.channels };
+}
 
-  const bg = parseHexColor(options.background);
-  const out = Buffer.alloc(working * working * 4);
-  for (let i = 0; i < working * working; i++) {
-    const o = i * 4;
-    out[o] = bg.r;
-    out[o + 1] = bg.g;
-    out[o + 2] = bg.b;
-    out[o + 3] = 255;
+function luma(r: number, g: number, b: number): number {
+  return Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
+}
+
+function moduleColor(
+  qr: QrCode,
+  sampled: SampledCover,
+  row: number,
+  col: number,
+  style: QartStyle,
+): readonly [number, number, number] {
+  const dark = qr.modules.get(row, col) === 1;
+  if (qr.modules.isReserved(row, col)) {
+    const channel = dark ? 0 : 255;
+    return [channel, channel, channel];
   }
 
-  const centerStart = Math.floor(modulePx / 3);
-  const centerEnd = Math.ceil((modulePx * 2) / 3);
-  const coverData = cover.data;
+  const sampleIndex = (row * qr.modules.size + col) * sampled.channels;
+  const r = sampled.data[sampleIndex] ?? 255;
+  const g = sampled.data[sampleIndex + 1] ?? 255;
+  const b = sampled.data[sampleIndex + 2] ?? 255;
+  const source = style === "monochrome" ? [luma(r, g, b), luma(r, g, b), luma(r, g, b)] : [r, g, b];
+  const channels = source.map((channel) => dark
+    ? Math.round(channel * QART_IMAGE_STRENGTH)
+    : Math.round(255 - (255 - channel) * QART_IMAGE_STRENGTH));
+  return [channels[0], channels[1], channels[2]];
+}
 
-  for (let row = 0; row < n; row++) {
-    for (let col = 0; col < n; col++) {
-      const dark = qr.modules.get(row, col) === 1;
-      const qrChannel = dark ? 0 : 255;
-      const keepSolid = isProtectedModule(row, col, n);
-      const ox = (col + QUIET_MODULES) * modulePx;
-      const oy = (row + QUIET_MODULES) * modulePx;
+async function renderQart(
+  qr: QrCode,
+  sampled: SampledCover,
+  style: QartStyle,
+  width: number,
+  height: number,
+): Promise<RenderedQart> {
+  const moduleCount = qr.modules.size;
+  const totalModules = moduleCount + QART_QUIET_MODULES * 2;
+  const modulePx = Math.floor(Math.min(width, height) / totalModules);
+  if (modulePx < QART_MIN_MODULE_PX) {
+    const minimum = totalModules * QART_MIN_MODULE_PX;
+    throw new Error(`size is too small for QR version ${qr.version}; minimum is ${minimum}px`);
+  }
 
+  const gridSize = totalModules * modulePx;
+  const offsetX = Math.floor((width - gridSize) / 2);
+  const offsetY = Math.floor((height - gridSize) / 2);
+  const output = Buffer.alloc(width * height * 3, 255);
+
+  for (let row = 0; row < moduleCount; row++) {
+    for (let col = 0; col < moduleCount; col++) {
+      const color = moduleColor(qr, sampled, row, col, style);
+      const originX = offsetX + (col + QART_QUIET_MODULES) * modulePx;
+      const originY = offsetY + (row + QART_QUIET_MODULES) * modulePx;
       for (let dy = 0; dy < modulePx; dy++) {
         for (let dx = 0; dx < modulePx; dx++) {
-          const x = ox + dx;
-          const y = oy + dy;
-          const idx = (y * working + x) * 4;
-          const isCenter =
-            dx >= centerStart && dx < centerEnd && dy >= centerStart && dy < centerEnd;
-
-          if (keepSolid || isCenter) {
-            out[idx] = qrChannel;
-            out[idx + 1] = qrChannel;
-            out[idx + 2] = qrChannel;
-            out[idx + 3] = 255;
-            continue;
-          }
-
-          const cx = col * modulePx + dx;
-          const cy = row * modulePx + dy;
-          const cidx = (cy * dataPx + cx) * cover.info.channels;
-          let r = coverData[cidx] ?? 0;
-          let g = coverData[cidx + 1] ?? 0;
-          let b = coverData[cidx + 2] ?? 0;
-          if (options.filter === "threshold") {
-            const t = thresholdLuma(r, g, b);
-            r = t;
-            g = t;
-            b = t;
-          }
-          out[idx] = r;
-          out[idx + 1] = g;
-          out[idx + 2] = b;
-          out[idx + 3] = 255;
+          const outputIndex = ((originY + dy) * width + originX + dx) * 3;
+          output[outputIndex] = color[0];
+          output[outputIndex + 1] = color[1];
+          output[outputIndex + 2] = color[2];
         }
       }
     }
   }
 
-  return sharp(out, {
-    raw: { width: working, height: working, channels: 4 },
-  })
-    .resize(options.size, options.size, { kernel: "nearest" })
-    .png()
+  const buffer = await sharp(output, { raw: { width, height, channels: 3 } }).png().toBuffer();
+  return { buffer, width, height, modulePx, moduleCount, qrVersion: qr.version };
+}
+
+async function toJpeg(buffer: Buffer): Promise<Buffer> {
+  return sharp(buffer)
+    .jpeg({ quality: 98, chromaSubsampling: "4:4:4" })
     .toBuffer();
+}
+
+async function buildStyleFiles(
+  qr: QrCode,
+  sampled: SampledCover,
+  style: QartStyle,
+  size: number,
+): Promise<QartFiles> {
+  const [original, landscapePng, portraitPng, squarePng] = await Promise.all([
+    renderQart(qr, sampled, style, size, size),
+    renderQart(qr, sampled, style, LANDSCAPE_WIDTH, LANDSCAPE_HEIGHT),
+    renderQart(qr, sampled, style, PORTRAIT_WIDTH, PORTRAIT_HEIGHT),
+    renderQart(qr, sampled, style, SQUARE_SIZE, SQUARE_SIZE),
+  ]);
+  const [landscape, portrait, square] = await Promise.all([
+    toJpeg(landscapePng.buffer),
+    toJpeg(portraitPng.buffer),
+    toJpeg(squarePng.buffer),
+  ]);
+  return {
+    original: original.buffer,
+    landscape,
+    portrait,
+    square,
+    modulePx: original.modulePx,
+  };
+}
+
+async function buildQartFiles(value: string, coverBuffer: Buffer, size: number): Promise<QartBuild> {
+  const qr = createQr(value);
+  const sampled = await sampleCover(coverBuffer, qr.modules.size);
+  const [color, monochrome] = await Promise.all([
+    buildStyleFiles(qr, sampled, "color", size),
+    buildStyleFiles(qr, sampled, "monochrome", size),
+  ]);
+  return { color, monochrome, moduleCount: qr.modules.size, qrVersion: qr.version };
+}
+
+export async function buildQartPng(
+  value: string,
+  coverBuffer: Buffer,
+  options: { size: number; style: QartStyle },
+): Promise<RenderedQart> {
+  const qr = createQr(value);
+  const sampled = await sampleCover(coverBuffer, qr.modules.size);
+  return renderQart(qr, sampled, options.style, options.size, options.size);
 }
 
 async function readCoverImage(
@@ -167,17 +223,22 @@ async function persistQartAsset(
   fs: VideocityFs,
   projectSlug: string,
   assetName: string,
-  buffer: Buffer,
+  files: QartFiles,
   metadata: Record<string, unknown>,
 ): Promise<{ ok: true; assetId: string } | { ok: false; error: string }> {
   const created = await fs.createAsset("img", assetName, projectSlug);
   if (!created.ok) return { ok: false, error: `Failed to create image asset: ${created.error.message}` };
   const assetId = created.value.assetId;
-
-  const writeResult = await fs.writeFile(assetId, "original.png", buffer, projectSlug);
-  if (!writeResult.ok) {
+  const writes = await Promise.all([
+    fs.writeFile(assetId, "original.png", files.original, projectSlug),
+    fs.writeFile(assetId, "landscape.jpg", files.landscape, projectSlug),
+    fs.writeFile(assetId, "portrait.jpg", files.portrait, projectSlug),
+    fs.writeFile(assetId, "square.jpg", files.square, projectSlug),
+  ]);
+  const writeFailure = writes.find((result) => !result.ok);
+  if (writeFailure && !writeFailure.ok) {
     await fs.deleteAsset(assetId, projectSlug).catch(() => undefined);
-    return { ok: false, error: writeResult.error.message };
+    return { ok: false, error: writeFailure.error.message };
   }
 
   const metadataResult = await fs.writeMetadata(assetId, "original", metadata, projectSlug);
@@ -185,22 +246,6 @@ async function persistQartAsset(
     await fs.deleteAsset(assetId, projectSlug).catch(() => undefined);
     return { ok: false, error: metadataResult.error.message };
   }
-
-  let variantsResult: Awaited<ReturnType<typeof writeImageVariants>>;
-  try {
-    variantsResult = await writeImageVariants(fs, assetId, buffer, projectSlug);
-  } catch (err) {
-    await fs.deleteAsset(assetId, projectSlug).catch(() => undefined);
-    return {
-      ok: false,
-      error: `Failed to write image variants: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
-  if (!variantsResult.ok) {
-    await fs.deleteAsset(assetId, projectSlug).catch(() => undefined);
-    return { ok: false, error: variantsResult.error };
-  }
-
   return { ok: true, assetId };
 }
 
@@ -208,22 +253,18 @@ export function createQartDef(fs: VideocityFs): ToolDef {
   return {
     name: "create_qart",
     description:
-      "Blend an img-* cover image into a scannable artistic QR code (qart.js-style). Creates two new img-* assets: one on white and one on black.",
+      "Create scan-safe color and monochrome QR mosaics from an img-* source image. The image is sampled per QR module with protected QR structures and white quiet zones.",
     schema: {
       project_slug: z.string().describe("Project slug"),
-      image_slug: z.string().describe("Cover image asset (e.g. @img-photo or img-photo)"),
+      image_slug: z.string().describe("Source image asset (e.g. @img-photo or img-photo)"),
       value: z.string().min(1).describe("Text or URL encoded in the QR code"),
       size: z
         .number()
         .int()
-        .min(64)
-        .max(2048)
+        .min(256)
+        .max(4096)
         .optional()
-        .describe(`Output edge length in pixels (default ${DEFAULT_SIZE})`),
-      filter: z
-        .enum(["threshold", "color"])
-        .optional()
-        .describe("Image filter for non-critical modules: color (default) or threshold"),
+        .describe(`Output edge length in pixels (default ${DEFAULT_QART_SIZE})`),
       name: z.string().optional().describe("Optional base name for the generated assets"),
     },
     handler: async (args) => {
@@ -232,92 +273,79 @@ export function createQartDef(fs: VideocityFs): ToolDef {
         image_slug,
         value,
         size,
-        filter,
         name,
       } = args as {
         project_slug: string;
         image_slug: string;
         value: string;
         size?: number;
-        filter?: QartFilter;
         name?: string;
       };
 
       const resolvedValue = value.trim();
       if (!resolvedValue) return error("value must be a non-empty string");
-
-      const resolvedSize = size ?? DEFAULT_SIZE;
-      const resolvedFilter: QartFilter = filter ?? "color";
-
+      const resolvedSize = size ?? DEFAULT_QART_SIZE;
       const cover = await readCoverImage(fs, image_slug, project_slug);
       if (!cover.ok) return error(cover.error);
 
-      let whiteBuffer: Buffer;
-      let blackBuffer: Buffer;
+      let build: QartBuild;
       try {
-        [whiteBuffer, blackBuffer] = await Promise.all([
-          buildQartPng(resolvedValue, cover.buffer, {
-            size: resolvedSize,
-            filter: resolvedFilter,
-            background: "#FFFFFF",
-          }),
-          buildQartPng(resolvedValue, cover.buffer, {
-            size: resolvedSize,
-            filter: resolvedFilter,
-            background: "#000000",
-          }),
-        ]);
+        build = await buildQartFiles(resolvedValue, cover.buffer, resolvedSize);
       } catch (err) {
         return error(
-          `Failed to build qart images: ${err instanceof Error ? err.message : String(err)}`,
+          `Failed to build QR mosaics: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
 
-      const stem =
-        slugify(name ?? cover.assetId.replace(/^img-/, "")) || String(Date.now());
+      const stem = slugify(name ?? cover.assetId.replace(/^img-/, "")) || String(Date.now());
       const stamp = Date.now().toString(36);
+      const createdAt = new Date().toISOString();
       const baseMeta = {
         origin: "create_qart",
-        created_at: new Date().toISOString(),
+        qart_style: "module_mosaic",
+        created_at: createdAt,
         value: resolvedValue,
-        size: resolvedSize,
-        filter: resolvedFilter,
         source_image: cover.assetId,
         width: resolvedSize,
         height: resolvedSize,
+        qr_version: build.qrVersion,
+        error_correction: "H",
+        quiet_zone_modules: QART_QUIET_MODULES,
+        image_strength: QART_IMAGE_STRENGTH,
+        sample_grid: `${build.moduleCount}x${build.moduleCount}`,
       };
 
-      const whiteResult = await persistQartAsset(
+      const colorResult = await persistQartAsset(
         fs,
         project_slug,
-        `qart-white-${stem}-${stamp}`,
-        whiteBuffer,
-        { ...baseMeta, background: "#FFFFFF" },
+        `qart-color-${stem}-${stamp}`,
+        build.color,
+        { ...baseMeta, color_mode: "color", module_pixels: build.color.modulePx },
       );
-      if (!whiteResult.ok) return error(whiteResult.error);
+      if (!colorResult.ok) return error(colorResult.error);
 
-      const blackResult = await persistQartAsset(
+      const monochromeResult = await persistQartAsset(
         fs,
         project_slug,
-        `qart-black-${stem}-${stamp}`,
-        blackBuffer,
-        { ...baseMeta, background: "#000000" },
+        `qart-monochrome-${stem}-${stamp}`,
+        build.monochrome,
+        { ...baseMeta, color_mode: "monochrome", module_pixels: build.monochrome.modulePx },
       );
-      if (!blackResult.ok) {
-        await fs.deleteAsset(whiteResult.assetId, project_slug).catch(() => undefined);
-        return error(blackResult.error);
+      if (!monochromeResult.ok) {
+        await fs.deleteAsset(colorResult.assetId, project_slug).catch(() => undefined);
+        return error(monochromeResult.error);
       }
 
       return {
         content: [{
           type: "text" as const,
           text: JSON.stringify({
-            white_asset_id: whiteResult.assetId,
-            black_asset_id: blackResult.assetId,
+            color_asset_id: colorResult.assetId,
+            monochrome_asset_id: monochromeResult.assetId,
             value: resolvedValue,
             size: resolvedSize,
-            filter: resolvedFilter,
             source_image: cover.assetId,
+            qr_version: build.qrVersion,
           }),
         }],
       };

@@ -431,7 +431,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/qart",
-    description: "Blend an img-* cover into a scannable artistic QR (white + black variants)",
+    description: "Create scan-safe color and monochrome QR mosaics from an img-* source",
     example: "/qart @img-cover https://example.com",
     category: "action",
     icon: "QrCode",

@@ -2,9 +2,18 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import jsQR from "jsqr";
+import QRCode from "qrcode";
 import sharp from "sharp";
 import { createFs } from "videocity-engine";
 import { createTestClient } from "../test-client.js";
+import {
+  buildQartPng,
+  QART_DARK_MAX,
+  QART_LIGHT_MIN,
+  QART_MIN_VERSION,
+  QART_QUIET_MODULES,
+} from "./create-qart.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -17,21 +26,30 @@ function resultText(result: { content?: unknown; toolResult?: unknown }): string
   return toolResult?.content?.[0]?.text ?? "";
 }
 
-async function solidPng(
-  width: number,
-  height: number,
-  rgb: { r: number; g: number; b: number },
-): Promise<Buffer> {
-  return sharp({
-    create: {
-      width,
-      height,
-      channels: 3,
-      background: rgb,
-    },
-  })
-    .png()
-    .toBuffer();
+async function gradientPng(width: number, height: number): Promise<Buffer> {
+  const data = Buffer.alloc(width * height * 3);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const index = (y * width + x) * 3;
+      data[index] = Math.round((x / Math.max(1, width - 1)) * 255);
+      data[index + 1] = Math.round((y / Math.max(1, height - 1)) * 255);
+      data[index + 2] = Math.round((((x + y) % width) / Math.max(1, width - 1)) * 255);
+    }
+  }
+  return sharp(data, { raw: { width, height, channels: 3 } }).png().toBuffer();
+}
+
+async function decodeQr(buffer: Buffer): Promise<string | null> {
+  const raw = await sharp(buffer)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  return jsQR(
+    Uint8ClampedArray.from(raw.data),
+    raw.info.width,
+    raw.info.height,
+    { inversionAttempts: "dontInvert" },
+  )?.data ?? null;
 }
 
 describe("create_qart tool", () => {
@@ -62,59 +80,151 @@ describe("create_qart tool", () => {
     return asset.value.assetId;
   }
 
-  it("creates white and black artistic QR img- assets from a cover image", async () => {
-    const coverId = await createImageAsset(
-      "cover-photo",
-      await solidPng(400, 400, { r: 200, g: 40, b: 80 }),
-    );
+  async function readAssetFile(assetId: string, name: string): Promise<Buffer> {
+    const read = await fs.readFile(assetId, name, PROJECT);
+    if (!read.ok) throw new Error(read.error.message);
+    return Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
+  }
 
+  it("creates scan-safe color and monochrome QR mosaic assets", async () => {
+    const coverId = await createImageAsset("cover-photo", await gradientPng(500, 400));
+    const value = "https://example.com/qart";
+    const size = 630;
     const result = await client!.callTool({
       name: "create_qart",
       arguments: {
         project_slug: PROJECT,
         image_slug: `@${coverId}`,
-        value: "https://example.com/qart",
-        size: 256,
-        filter: "color",
+        value,
+        size,
       },
     });
 
     expect(result.isError).not.toBe(true);
     const parsed = JSON.parse(resultText(result)) as {
-      white_asset_id: string;
-      black_asset_id: string;
+      color_asset_id: string;
+      monochrome_asset_id: string;
       value: string;
       size: number;
-      filter: string;
       source_image: string;
+      qr_version: number;
     };
-    expect(parsed.white_asset_id).toMatch(/^img-/);
-    expect(parsed.black_asset_id).toMatch(/^img-/);
-    expect(parsed.white_asset_id).not.toBe(parsed.black_asset_id);
-    expect(parsed.value).toBe("https://example.com/qart");
-    expect(parsed.size).toBe(256);
-    expect(parsed.filter).toBe("color");
+    expect(parsed.color_asset_id).toMatch(/^img-/);
+    expect(parsed.monochrome_asset_id).toMatch(/^img-/);
+    expect(parsed.color_asset_id).not.toBe(parsed.monochrome_asset_id);
+    expect(parsed.value).toBe(value);
+    expect(parsed.size).toBe(size);
     expect(parsed.source_image).toBe(coverId);
+    expect(parsed.qr_version).toBe(QART_MIN_VERSION);
 
-    for (const assetId of [parsed.white_asset_id, parsed.black_asset_id]) {
+    for (const assetId of [parsed.color_asset_id, parsed.monochrome_asset_id]) {
       const manifest = await fs.getManifest(assetId, PROJECT, { includeDotfiles: true });
       expect(manifest.ok).toBe(true);
       if (!manifest.ok) return;
       const fileNames = new Set(manifest.value.files.map((file) => file.name));
-      expect(fileNames.has("original.png")).toBe(true);
-      expect(fileNames.has("landscape.jpg")).toBe(true);
-      expect(fileNames.has("portrait.jpg")).toBe(true);
-      expect(fileNames.has("square.jpg")).toBe(true);
+      for (const filename of [
+        ".created_at",
+        ".original.json",
+        "original.png",
+        "landscape.jpg",
+        "portrait.jpg",
+        "square.jpg",
+      ]) {
+        expect(fileNames.has(filename)).toBe(true);
+      }
 
-      const read = await fs.readFile(assetId, "original.png", PROJECT);
-      expect(read.ok).toBe(true);
-      if (!read.ok) return;
-      const buffer = Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
-      const metadata = await sharp(buffer).metadata();
-      expect(metadata.width).toBe(256);
-      expect(metadata.height).toBe(256);
-      expect(buffer.byteLength).toBeGreaterThan(100);
+      for (const filename of ["original.png", "landscape.jpg", "portrait.jpg", "square.jpg"]) {
+        expect(await decodeQr(await readAssetFile(assetId, filename))).toBe(value);
+      }
+
+      const metadata = await fs.readMetadata(assetId, "original", PROJECT);
+      expect(metadata.ok).toBe(true);
+      if (!metadata.ok) return;
+      expect(metadata.value).toMatchObject({
+        origin: "create_qart",
+        qart_style: "module_mosaic",
+        value,
+        source_image: coverId,
+        width: size,
+        height: size,
+        qr_version: QART_MIN_VERSION,
+        error_correction: "H",
+        quiet_zone_modules: QART_QUIET_MODULES,
+      });
     }
+
+    const colorBuffer = await readAssetFile(parsed.color_asset_id, "original.png");
+    const colorRaw = await sharp(colorBuffer).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    const qr = QRCode.create(value, { errorCorrectionLevel: "H", version: parsed.qr_version });
+    const totalModules = qr.modules.size + QART_QUIET_MODULES * 2;
+    const modulePx = Math.floor(size / totalModules);
+    const pixel = (x: number, y: number): [number, number, number] => {
+      const index = (y * colorRaw.info.width + x) * colorRaw.info.channels;
+      return [colorRaw.data[index], colorRaw.data[index + 1], colorRaw.data[index + 2]];
+    };
+    expect(pixel(0, 0)).toEqual([255, 255, 255]);
+    expect(pixel(QART_QUIET_MODULES * modulePx - 1, QART_QUIET_MODULES * modulePx - 1))
+      .toEqual([255, 255, 255]);
+
+    let foundColor = false;
+    for (let row = 0; row < qr.modules.size; row++) {
+      for (let col = 0; col < qr.modules.size; col++) {
+        const x = (col + QART_QUIET_MODULES) * modulePx;
+        const y = (row + QART_QUIET_MODULES) * modulePx;
+        const topLeft = pixel(x, y);
+        const bottomRight = pixel(x + modulePx - 1, y + modulePx - 1);
+        expect(bottomRight).toEqual(topLeft);
+        const dark = qr.modules.get(row, col) === 1;
+        if (qr.modules.isReserved(row, col)) {
+          expect(topLeft).toEqual(dark ? [0, 0, 0] : [255, 255, 255]);
+        } else {
+          for (const channel of topLeft) {
+            expect(dark ? channel <= QART_DARK_MAX : channel >= QART_LIGHT_MIN).toBe(true);
+          }
+          if (topLeft[0] !== topLeft[1] || topLeft[1] !== topLeft[2]) foundColor = true;
+        }
+      }
+    }
+    expect(foundColor).toBe(true);
+
+    const monochromeBuffer = await readAssetFile(parsed.monochrome_asset_id, "original.png");
+    const monochromeRaw = await sharp(monochromeBuffer).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    for (let row = 0; row < qr.modules.size; row++) {
+      for (let col = 0; col < qr.modules.size; col++) {
+        const x = (col + QART_QUIET_MODULES) * modulePx + Math.floor(modulePx / 2);
+        const y = (row + QART_QUIET_MODULES) * modulePx + Math.floor(modulePx / 2);
+        const index = (y * monochromeRaw.info.width + x) * monochromeRaw.info.channels;
+        expect(monochromeRaw.data[index]).toBe(monochromeRaw.data[index + 1]);
+        expect(monochromeRaw.data[index + 1]).toBe(monochromeRaw.data[index + 2]);
+      }
+    }
+  });
+
+  it("uses a larger QR version for long payloads", async () => {
+    const value = `https://example.com/?payload=${"x".repeat(700)}`;
+    const rendered = await buildQartPng(value, await gradientPng(500, 500), {
+      size: 1400,
+      style: "color",
+    });
+    expect(rendered.qrVersion).toBeGreaterThan(QART_MIN_VERSION);
+    expect(rendered.width).toBe(1400);
+    expect(rendered.height).toBe(1400);
+    expect(await decodeQr(rendered.buffer)).toBe(value);
+  });
+
+  it("rejects sizes that cannot preserve three pixels per module", async () => {
+    const coverId = await createImageAsset("small-cover", await gradientPng(100, 100));
+    const result = await client!.callTool({
+      name: "create_qart",
+      arguments: {
+        project_slug: PROJECT,
+        image_slug: coverId,
+        value: "https://example.com",
+        size: 256,
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toContain("minimum is 315px");
   });
 
   it("rejects non-img assets", async () => {
