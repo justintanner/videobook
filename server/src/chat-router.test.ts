@@ -64,8 +64,16 @@ describe("buildChatRoutingPrompt", () => {
     expect(prompt).toContain("download_video");
     expect(prompt).toContain("generate_video");
     expect(prompt).toContain("generate_image");
+    expect(prompt).toContain("create_watermark");
     expect(prompt).toContain("concat_images");
     expect(prompt).toContain("Available tools:");
+  });
+
+  it("guides QR requests to create_watermark not generate_image", () => {
+    const prompt = buildChatRoutingPrompt("test");
+    expect(prompt).toContain("create_watermark");
+    expect(prompt).toMatch(/real scannable QR/i);
+    expect(prompt).toContain("source_url");
   });
 
   it("includes history context when provided", () => {
@@ -110,7 +118,16 @@ describe("TIMESTAMP_PARAMS", () => {
 
 describe("ROUTABLE_TOOLS", () => {
   it("has the expected number of entries", () => {
-    expect(ROUTABLE_TOOLS.length).toBe(28);
+    expect(ROUTABLE_TOOLS.length).toBe(29);
+  });
+
+  it("includes create_watermark for QR/watermark routing", () => {
+    const tool = getRoutableTool("create_watermark");
+    expect(tool).toBeDefined();
+    expect(tool!.actualTool).toBe("create_watermark");
+    expect(tool!.category).toBe("action");
+    expect(tool!.params).toContain("url");
+    expect(tool!.params).toContain("handle");
   });
 
   it("contains both action and generation categories", () => {

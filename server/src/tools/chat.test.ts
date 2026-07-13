@@ -4,7 +4,13 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
-import { loadScriptContentsForChat, sanitizeGenerateImageParams } from "./chat.js";
+import {
+  loadScriptContentsForChat,
+  parseChatDecision,
+  repairChatRoutingJson,
+  sanitizeGenerateImageParams,
+  enrichAssetContext,
+} from "./chat.js";
 import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
@@ -141,6 +147,97 @@ describe("sanitizeGenerateImageParams", () => {
   it("leaves params unchanged when image_slugs is absent", () => {
     const input = { prompt: "qr code image" };
     expect(sanitizeGenerateImageParams(input)).toEqual(input);
+  });
+});
+
+describe("parseChatDecision / repairChatRoutingJson", () => {
+  it("parses clean routing JSON", () => {
+    const decision = parseChatDecision(
+      '{"tool":"create_watermark","params":{"url":"https://www.youtube.com/watch?v=b-3853ow72Q"},"message":"Creating QR."}',
+    );
+    expect(decision.tool).toBe("create_watermark");
+    expect(decision.params.url).toBe("https://www.youtube.com/watch?v=b-3853ow72Q");
+    expect(decision.message).toBe("Creating QR.");
+  });
+
+  it("repairs unquoted URLs and trailing commas", () => {
+    const raw =
+      '{"tool":"create_watermark","params":{"url":https://www.youtube.com/watch?v=b-3853ow72Q,},"message":"Creating QR.",}';
+    expect(() => JSON.parse(raw)).toThrow();
+    const repaired = repairChatRoutingJson(raw);
+    const decision = parseChatDecision(raw);
+    expect(repaired).toContain('"https://www.youtube.com/watch?v=b-3853ow72Q"');
+    expect(decision.tool).toBe("create_watermark");
+    expect(decision.params.url).toBe("https://www.youtube.com/watch?v=b-3853ow72Q");
+  });
+
+  it("closes truncated routing JSON missing outer brace and message (live Kie failure)", () => {
+    // Exact shape from live multiculty/@vid-og failure (position 106).
+    const raw = `{
+  "tool": "create_watermark",
+  "params": {
+    "url": "https://www.youtube.com/watch?v=b-3853ow72Q"
+  }`;
+    expect(() => JSON.parse(raw)).toThrow();
+    const decision = parseChatDecision(raw);
+    expect(decision.tool).toBe("create_watermark");
+    expect(decision.params.url).toBe("https://www.youtube.com/watch?v=b-3853ow72Q");
+    expect(decision.message).toBe("");
+  });
+
+  it("closes truncated string values mid-message", () => {
+    const raw =
+      '{"tool":"create_watermark","params":{"url":"https://x.com/a"},"message":"Creat';
+    const decision = parseChatDecision(raw);
+    expect(decision.tool).toBe("create_watermark");
+    expect(decision.params.url).toBe("https://x.com/a");
+    expect(decision.message).toBe("Creat");
+  });
+
+  it("includes a raw snippet when JSON is unrecoverable", () => {
+    expect(() => parseChatDecision("not json at all")).toThrow(/raw:/);
+  });
+});
+
+describe("enrichAssetContext", () => {
+  let tempDir: string;
+
+  afterEach(async () => {
+    if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  it("attaches source_url from .original.json metadata", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-chat-enrich-"));
+    const fs = createFsForTest(tempDir);
+    await fs.createProject("enrich-proj");
+    const asset = await fs.createAsset("vid", "og", "enrich-proj");
+    expect(asset.ok).toBe(true);
+    if (!asset.ok) return;
+
+    await fs.writeMetadata(
+      asset.value.assetId,
+      "original",
+      {
+        origin: "download",
+        source_url: "https://www.youtube.com/watch?v=b-3853ow72Q",
+      },
+      "enrich-proj",
+    );
+
+    const rows = await enrichAssetContext(
+      fs,
+      [{
+        tag: asset.value.assetId,
+        asset_type: "video",
+        asset_id: asset.value.assetId,
+        file_path: join(asset.value.path, "original.mp4"),
+      }],
+      "enrich-proj",
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.source_url).toBe("https://www.youtube.com/watch?v=b-3853ow72Q");
+    fs.close();
   });
 });
 

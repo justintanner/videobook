@@ -181,6 +181,14 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     params: [],
     category: "action",
   },
+  {
+    name: "create_watermark",
+    actualTool: "create_watermark",
+    description:
+      "Generate a real scannable QR-code watermark card (img-* asset) for a URL; use for 'QR code', 'watermark', or 'end card' requests — not generate_image",
+    params: ["url", "handle", "save_default"],
+    category: "action",
+  },
   // --- Generation tools ---
   {
     name: "generate_video",
@@ -244,13 +252,14 @@ Parameter guidelines:
 - For timestamps (trim_start, trim_end, cut_start, cut_end, start_time, end_time): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)
 - For generate_video: put the generation description in "prompt"
 - For generate_image: put the image description in "prompt"; use image_slugs ONLY for @img-* reference images (include @ prefix). Never put @vid-* or @aud-* in image_slugs — if the user wants an image inspired by a video, describe that in the text prompt instead
+- For create_watermark (QR code / watermark card): use this tool for real scannable QR codes — never generate_image. Pass url from the referenced asset's source_url/webpage_url when the user says "from the url in @vid-…" or similar; optional handle is an X handle without @
 - For concat_images: use image_slugs for all referenced image asset IDs (include @ prefix); use layout horizontal for side-by-side requests
 - Timeline audio positions (start_frame, duration_frames) are in frames at 30 fps — convert seconds to frames (e.g., "at 5 seconds" → start_frame: 150)
 - Do NOT include project_slug in params — it is injected automatically
 - When @script- tags are referenced, use the script content as the prompt for generation tools
 
-Respond with JSON only:
-{"tool": "tool_name", "params": {"param1": "value1", ...}, "message": "Status message."}`;
+Respond with JSON only (strict JSON: double-quoted keys/strings, no trailing commas, no comments):
+{"tool": "tool_name", "params": {"param1": "value1"}, "message": "Status message."}`;
 }
 
 function getRoutableTool(name: string): RoutableToolInfo | undefined {

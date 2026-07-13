@@ -50,6 +50,154 @@ export function sanitizeGenerateImageParams(
   return next;
 }
 
+/** Close open strings / braces / brackets so truncated Gemini JSON can parse. */
+export function closeTruncatedJson(text: string): string {
+  let inString = false;
+  let escape = false;
+  const stack: string[] = [];
+
+  for (const ch of text) {
+    if (inString) {
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        continue;
+      }
+      if (ch === "\"") inString = false;
+      continue;
+    }
+    if (ch === "\"") {
+      inString = true;
+      continue;
+    }
+    if (ch === "{") stack.push("}");
+    else if (ch === "[") stack.push("]");
+    else if (ch === "}" || ch === "]") {
+      if (stack.length > 0 && stack[stack.length - 1] === ch) stack.pop();
+    }
+  }
+
+  let out = text;
+  if (inString) out += "\"";
+  // Drop a trailing incomplete property fragment: , "key or , "key": value-less
+  out = out.replace(/,\s*"[^"]*"\s*:\s*$/u, "");
+  out = out.replace(/,\s*"[^"]*$/u, "");
+  out = out.replace(/,\s*$/u, "");
+
+  // Re-scan stack after stripping incomplete tails
+  inString = false;
+  escape = false;
+  stack.length = 0;
+  for (const ch of out) {
+    if (inString) {
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        continue;
+      }
+      if (ch === "\"") inString = false;
+      continue;
+    }
+    if (ch === "\"") {
+      inString = true;
+      continue;
+    }
+    if (ch === "{") stack.push("}");
+    else if (ch === "[") stack.push("]");
+    else if (ch === "}" || ch === "]") {
+      if (stack.length > 0 && stack[stack.length - 1] === ch) stack.pop();
+    }
+  }
+  if (inString) out += "\"";
+  while (stack.length > 0) out += stack.pop();
+  return out;
+}
+
+/** Best-effort repairs for common Gemini JSON glitches before JSON.parse. */
+export function repairChatRoutingJson(text: string): string {
+  let out = text.trim();
+  // Strip trailing commas before } or ]
+  out = out.replace(/,(\s*[}\]])/g, "$1");
+  // Quote bare http(s) URLs used as property values
+  out = out.replace(
+    /(:\s*)(https?:\/\/[^\s,"}\]]+)/g,
+    (_m, prefix: string, url: string) => `${prefix}${JSON.stringify(url)}`,
+  );
+  // Quote bare @slug tokens used as property values
+  out = out.replace(
+    /(:\s*)(@[\w-]+)/g,
+    (_m, prefix: string, slug: string) => `${prefix}${JSON.stringify(slug)}`,
+  );
+  // Close truncated objects (missing final } / message field) — the live
+  // failure mode for create_watermark routing under Kie load.
+  out = closeTruncatedJson(out);
+  return out;
+}
+
+export function parseChatDecision(outputText: string): ChatDecision {
+  const attempts = [outputText, repairChatRoutingJson(outputText)];
+  let lastError: unknown;
+  for (const candidate of attempts) {
+    try {
+      const parsed = JSON.parse(candidate) as ChatDecision;
+      if (parsed && typeof parsed === "object" && typeof parsed.tool === "string") {
+        return {
+          tool: parsed.tool,
+          params: (parsed.params && typeof parsed.params === "object"
+            ? parsed.params
+            : {}) as Record<string, unknown>,
+          message: typeof parsed.message === "string" ? parsed.message : "",
+        };
+      }
+      lastError = new Error("Routing decision missing tool field");
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  const msg = lastError instanceof Error ? lastError.message : String(lastError);
+  const snippet = outputText.length > 200 ? `${outputText.slice(0, 200)}…` : outputText;
+  throw new Error(`${msg} (raw: ${JSON.stringify(snippet)})`);
+}
+
+type AssetOriginMeta = {
+  source_url?: unknown;
+  webpage_url?: unknown;
+};
+
+export async function enrichAssetContext(
+  fs: VideocityFs,
+  resolvedAssets: ChatResolvedAsset[],
+  slug: string,
+): Promise<Array<Record<string, unknown>>> {
+  const rows: Array<Record<string, unknown>> = [];
+  for (const a of resolvedAssets) {
+    const row: Record<string, unknown> = {
+      tag: a.tag,
+      type: a.asset_type,
+      asset_id: a.asset_id,
+      has_file: a.file_path !== null,
+    };
+    const metaResult = await fs.readMetadata<AssetOriginMeta>(a.asset_id, "original", slug);
+    if (metaResult.ok) {
+      const sourceUrl =
+        typeof metaResult.value.source_url === "string"
+          ? metaResult.value.source_url
+          : typeof metaResult.value.webpage_url === "string"
+            ? metaResult.value.webpage_url
+            : null;
+      if (sourceUrl) row.source_url = sourceUrl;
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
 export async function loadScriptContentsForChat(
   fs: VideocityFs,
   resolvedAssets: ChatResolvedAsset[],
@@ -96,13 +244,8 @@ export function chatDef(fs: VideocityFs): ToolDef {
         return error(`Asset not found: ${unresolved.map((t) => `@${t}`).join(", ")}`);
       }
 
-      // 3. Build asset context for the LLM
-      const assetContext = resolvedAssets.map((a) => ({
-        tag: a.tag,
-        type: a.asset_type,
-        asset_id: a.asset_id,
-        has_file: a.file_path !== null,
-      }));
+      // 3. Build asset context for the LLM (include source_url when known)
+      const assetContext = await enrichAssetContext(fs, resolvedAssets, slug);
 
       const imageFiles = resolvedAssets
         .filter((a) => a.asset_type === "image")
@@ -141,23 +284,39 @@ Determine which tool to use and what parameters to pass.`;
 
       let decision: ChatDecision;
       try {
-        const outputText = await callGeminiFlashJson({
-          apiKey,
-          parts: [
-            geminiTextPart(`Instructions:\n${systemPrompt}`),
-            geminiTextPart(userMessage),
-          ],
-          temperature: 0.1,
-          maxOutputTokens: CHAT_ROUTING_MAX_OUTPUT_TOKENS,
-          // Do not pass responseSchema: Kie gemini-3.5-flash + open-ended
-          // params objects frequently truncates to incomplete JSON
-          // (e.g. `{"tool":"...","params": {`). application/json + normalize is enough.
-          thinkingConfig: { includeThoughts: false, thinkingLevel: "low" },
-          timeout: CHAT_ROUTING_TIMEOUT_MS,
-          signal: AbortSignal.timeout(CHAT_ROUTING_TIMEOUT_MS),
-        });
-
-        decision = JSON.parse(outputText) as ChatDecision;
+        // One retry: Gemini occasionally returns brace-balanced but invalid JSON
+        // (unquoted URLs, trailing commas). repairChatRoutingJson covers common
+        // cases; a second call recovers from rarer corruption.
+        let lastError: unknown;
+        decision = { tool: "", params: {}, message: "" };
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const outputText = await callGeminiFlashJson({
+              apiKey,
+              parts: [
+                geminiTextPart(`Instructions:\n${systemPrompt}`),
+                geminiTextPart(userMessage),
+              ],
+              temperature: 0.1,
+              maxOutputTokens: CHAT_ROUTING_MAX_OUTPUT_TOKENS,
+              // Do not pass responseSchema: Kie gemini-3.5-flash + open-ended
+              // params objects frequently truncates to incomplete JSON
+              // (e.g. `{"tool":"...","params": {`). application/json + normalize is enough.
+              thinkingConfig: { includeThoughts: false, thinkingLevel: "low" },
+              timeout: CHAT_ROUTING_TIMEOUT_MS,
+              signal: AbortSignal.timeout(CHAT_ROUTING_TIMEOUT_MS),
+            });
+            decision = parseChatDecision(outputText);
+            lastError = null;
+            break;
+          } catch (e) {
+            lastError = e;
+          }
+        }
+        if (lastError) {
+          const msg = lastError instanceof Error ? lastError.message : String(lastError);
+          return error(`Routing failed: ${msg}`);
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         return error(`Routing failed: ${msg}`);
@@ -200,6 +359,13 @@ Determine which tool to use and what parameters to pass.`;
         Object.assign(params, sanitizeGenerateImageParams(params));
       }
 
+      // create_watermark needs a URL; if the model omitted it, take source_url
+      // from a referenced asset (e.g. "QR from the url in @vid-og").
+      if (decision.tool === "create_watermark" && (params.url === undefined || params.url === "")) {
+        const fromAsset = assetContext.find((a) => typeof a.source_url === "string");
+        if (fromAsset) params.url = fromAsset.source_url;
+      }
+
       // Inject script content as prompt for generation tools
       if (scriptContents.length > 0 && routableTool.category === "generation") {
         const combinedScript = scriptContents.map((s) => s.content).join("\n\n");
@@ -230,8 +396,9 @@ Determine which tool to use and what parameters to pass.`;
         return handlerResult;
       }
 
-      // Action tools: return the LLM's brief message
-      if (handlerResult.isError) {
+      // Action tools: return the LLM's brief message. create_watermark is an
+      // exception — surface the created asset_id JSON so the client can use it.
+      if (handlerResult.isError || decision.tool === "create_watermark") {
         return handlerResult;
       }
       return { content: [{ type: "text" as const, text: decision.message ?? "Done." }] };
