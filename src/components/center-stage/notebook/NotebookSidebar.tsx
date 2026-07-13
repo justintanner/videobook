@@ -635,12 +635,13 @@ function GenerationSidebar({
           </> : null}
           <label>Prompt</label>
           {resolved?.promptFromInputs !== null ? (
-            <div className="vc-notebook-linked-prompt">
+            <div className="vc-notebook-linked-prompt flex-1 min-h-0 overflow-y-auto">
               <span>From connected prompt node</span>
               <p>{resolved?.promptFromInputs}</p>
             </div>
           ) : (
             <RichPromptField
+              fill
               surfaceClassName="rounded border border-emerald-400/25 bg-black/35 focus-within:border-emerald-400/60"
               value={typeof mergedValues.prompt === 'string' ? mergedValues.prompt : ''}
               onChange={(value) => updateValues('prompt', value)}
