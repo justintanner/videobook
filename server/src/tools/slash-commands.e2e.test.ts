@@ -919,6 +919,64 @@ describe("slash commands e2e", () => {
   });
 
   // -----------------------------------------------------------------------
+  // 14b. /qart — create_qart
+  // -----------------------------------------------------------------------
+  describe("/qart", () => {
+    it("is registered with create_qart mcpTool", () => {
+      const cmd = findCommand("/qart");
+      expect(cmd.mcpTool?.tool).toBe("create_qart");
+      expect(cmd.mcpTool?.autoInject).toContain("project_slug");
+      expect(cmd.params.map((p) => p.name)).toEqual(["image_slug", "value"]);
+    });
+
+    it("parses '/qart @img-cover https://example.com/path'", () => {
+      const args = simulateParse("/qart", "@img-cover https://example.com/path");
+      expect(args.image_slug).toBe("img-cover");
+      expect(args.value).toBe("https://example.com/path");
+    });
+
+    it("parses multi-token value into remaining string", () => {
+      const args = simulateParse("/qart", "@img-photo hello world qr text");
+      expect(args.image_slug).toBe("img-photo");
+      expect(args.value).toBe("hello world qr text");
+    });
+
+    it("dispatches create_qart and creates white+black assets", async () => {
+      const sharp = (await import("sharp")).default;
+      const fs = createFs({ projectsDir: tempDir });
+      const cover = await fs.createAsset("img", "cover-photo", "test-proj");
+      expect(cover.ok).toBe(true);
+      if (!cover.ok) return;
+      const png = await sharp({
+        create: { width: 200, height: 200, channels: 3, background: { r: 40, g: 120, b: 200 } },
+      })
+        .png()
+        .toBuffer();
+      const write = await fs.writeFile(cover.value.assetId, "original.png", png, "test-proj");
+      expect(write.ok).toBe(true);
+
+      const cmd = findCommand("/qart");
+      const args = parseCommandArgs(
+        `@${cover.value.assetId} https://example.com/qart-slash`,
+        cmd.params,
+      );
+      const result = await client.callTool({
+        name: "create_qart",
+        arguments: {
+          ...args,
+          project_slug: "test-proj",
+        },
+      });
+      expect(result.isError).toBeFalsy();
+      const parsed = parseResult(result);
+      expect(parsed.white_asset_id).toMatch(/^img-/);
+      expect(parsed.black_asset_id).toMatch(/^img-/);
+      expect(parsed.value).toBe("https://example.com/qart-slash");
+      expect(parsed.source_image).toBe(cover.value.assetId);
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // 14. Dynamic project commands
   // -----------------------------------------------------------------------
   describe("dynamic project commands", () => {

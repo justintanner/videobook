@@ -430,6 +430,21 @@ const HARDCODED_COMMANDS: Command[] = [
     onMount: ["viewer"],
   },
   {
+    command: "/qart",
+    description: "Blend an img-* cover into a scannable artistic QR (white + black variants)",
+    example: "/qart @img-cover https://example.com",
+    category: "action",
+    icon: "QrCode",
+    size: "default",
+    variant: "amber",
+    chevron: "right",
+    params: [
+      { name: "image_slug", type: "string", required: true, description: "Cover image asset (@img-*)" },
+      { name: "value", type: "string", required: true, description: "URL or text to encode in the QR" },
+    ],
+    mcpTool: { tool: "create_qart", autoInject: ["project_slug"] },
+  },
+  {
     command: "/grok-upscale",
     description: "Upscale a Grok-Imagine video via Kie",
     example: "/grok-upscale @vid-clip",

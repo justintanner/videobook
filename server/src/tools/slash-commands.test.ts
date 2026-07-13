@@ -105,6 +105,12 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/say");
     expect(commandNames).toContain("/connect-x");
     expect(commandNames).toContain("/play");
+    expect(commandNames).toContain("/qart");
+
+    const qart = commands.find((c) => c.command === "/qart")!;
+    expect(qart.mcpTool?.tool).toBe("create_qart");
+    expect(qart.mcpTool?.autoInject).toContain("project_slug");
+    expect(qart.params.map((p) => p.name)).toEqual(["image_slug", "value"]);
 
     const notebook = commands.find((c) => c.command === "/notebook")!;
     expect(notebook.uiAction).toBe("open_notebook");
