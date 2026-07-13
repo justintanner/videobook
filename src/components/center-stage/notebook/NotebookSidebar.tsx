@@ -81,6 +81,7 @@ function coerceSchemaValue(schema: JSONSchemaProperty, raw: string): string | nu
 function CompactSelect({
   id,
   label,
+  ariaLabel,
   value,
   options,
   onChange,
@@ -89,6 +90,7 @@ function CompactSelect({
 }: {
   id: string
   label?: string
+  ariaLabel?: string
   value: string
   options: ReadonlyArray<{ value: string; label: string }>
   onChange: (value: string) => void
@@ -107,7 +109,7 @@ function CompactSelect({
           value={value}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
-          aria-label={label}
+          aria-label={label ?? ariaLabel}
         >
           {options.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
@@ -133,14 +135,19 @@ function updateProperties(
 
 function LoadoutHeader({
   title,
+  leading,
   action,
 }: {
   title: string
+  leading?: ReactNode
   action?: ReactNode
 }) {
   return (
     <header className="vc-notebook-loadout-head">
-      <strong>{title}</strong>
+      <div className="vc-notebook-loadout-lead">
+        <strong>{title}</strong>
+        {leading}
+      </div>
       {action}
     </header>
   )
@@ -416,6 +423,12 @@ function GenerationSidebar({
     option?.schema.properties.character_refs
     && (!modeVisible || modeVisible.has('character_refs')),
   )
+  // Models without a prompt param (e.g. lip-sync) must not render the field:
+  // sanitizeValuesForOption strips unknown keys, so typing would silently no-op.
+  const showPrompt = Boolean(
+    option?.schema.properties.prompt
+    && (!modeVisible || modeVisible.has('prompt')),
+  )
   const characterField = option?.schema.properties.character_refs
   const disabledReason = requiredMissing.length > 0
     ? `Missing: ${requiredMissing.join(', ')}`
@@ -472,6 +485,27 @@ function GenerationSidebar({
     <aside className={`vc-notebook-sidebar vc-notebook-sidebar-${category}`}>
       <LoadoutHeader
         title={`Gen ${category}`}
+        leading={option ? (
+          <CompactSelect
+            id={`step-model-${step.id}`}
+            ariaLabel="Model"
+            className="vc-notebook-head-model"
+            value={`${preview.selectedModelKey}::${preview.selectedProviderKey}`}
+            disabled={running}
+            onChange={(raw) => {
+              const [nextModel, nextProvider = ''] = raw.split('::')
+              update({ model: nextModel, provider: nextProvider, mode: null })
+              preview.selectModel(nextModel, nextProvider)
+            }}
+            options={modelOptions.flatMap((candidate) => {
+              const providers = candidate.providers?.length ? candidate.providers : [{ key: '', label: '' }]
+              return providers.map((candidateProvider) => ({
+                value: `${candidate.key}::${candidateProvider.key}`,
+                label: providers.length > 1 ? `${candidate.label} · ${candidateProvider.label}` : candidate.label,
+              }))
+            })}
+          />
+        ) : null}
         action={option ? (
           <button
             type="button"
@@ -529,24 +563,6 @@ function GenerationSidebar({
               {[...(resolved?.warnings ?? []), ...readiness.reasons].map((warning) => <p key={warning}>{warning}</p>)}
             </div>
           ) : null}
-          <CompactSelect
-            id={`step-model-${step.id}`}
-            label="Model"
-            value={`${preview.selectedModelKey}::${preview.selectedProviderKey}`}
-            disabled={running}
-            onChange={(raw) => {
-              const [nextModel, nextProvider = ''] = raw.split('::')
-              update({ model: nextModel, provider: nextProvider, mode: null })
-              preview.selectModel(nextModel, nextProvider)
-            }}
-            options={modelOptions.flatMap((candidate) => {
-              const providers = candidate.providers?.length ? candidate.providers : [{ key: '', label: '' }]
-              return providers.map((candidateProvider) => ({
-                value: `${candidate.key}::${candidateProvider.key}`,
-                label: providers.length > 1 ? `${candidate.label} · ${candidateProvider.label}` : candidate.label,
-              }))
-            })}
-          />
           {showInlineRow ? (
             <div className="vc-notebook-inline-controls">
               {showType ? (
@@ -633,47 +649,50 @@ function GenerationSidebar({
               })}
             </div>
           </> : null}
-          <label>Prompt</label>
-          {resolved?.promptFromInputs !== null ? (
-            <div className="vc-notebook-linked-prompt flex-1 min-h-0 overflow-y-auto">
-              <span>From connected prompt node</span>
-              <p>{resolved?.promptFromInputs}</p>
-            </div>
-          ) : (
-            <RichPromptField
-              fill
-              surfaceClassName="rounded border border-emerald-400/25 bg-black/35 focus-within:border-emerald-400/60"
-              value={typeof mergedValues.prompt === 'string' ? mergedValues.prompt : ''}
-              onChange={(value) => updateValues('prompt', value)}
-              resolveRef={() => null}
-              assetSlugs={mediaItems.map((item) => item.slug.replace(/^@/, ''))}
-              slugForAssetId={(id) => mediaItems.find((item) => item.id === id)?.slug.replace(/^@/, '') ?? null}
-              characterMentions={showCharacters ? allCharMentions : undefined}
-              characterHandles={showCharacters ? charHandles : undefined}
-              onPickCharacter={showCharacters ? handlePickCharacter : undefined}
-              rows={3}
-              disabled={running}
-              placeholder="Describe this generation."
-              onKeyDownExtra={(event) => {
-                if (event.key === 'ArrowUp') {
-                  const previous = history.navigateBack(typeof mergedValues.prompt === 'string' ? mergedValues.prompt : '')
-                  if (previous !== null) updateValues('prompt', previous)
-                  return previous !== null
-                }
-                if (event.key === 'ArrowDown') {
-                  const next = history.navigateForward()
-                  if (next !== null) updateValues('prompt', next)
-                  return next !== null
-                }
-                return false
-              }}
-            />
-          )}
           </>
         ) : null}
       </div>
       {option ? (
         <footer className="vc-notebook-action-deck">
+          {showPrompt && !showPayload ? (
+            <>
+              <label>Prompt</label>
+              {resolved?.promptFromInputs !== null ? (
+                <div className="vc-notebook-linked-prompt overflow-y-auto">
+                  <span>From connected prompt node</span>
+                  <p>{resolved?.promptFromInputs}</p>
+                </div>
+              ) : (
+                <RichPromptField
+                  surfaceClassName="rounded border border-emerald-400/25 bg-black/35 focus-within:border-emerald-400/60"
+                  value={typeof mergedValues.prompt === 'string' ? mergedValues.prompt : ''}
+                  onChange={(value) => updateValues('prompt', value)}
+                  resolveRef={() => null}
+                  assetSlugs={mediaItems.map((item) => item.slug.replace(/^@/, ''))}
+                  slugForAssetId={(id) => mediaItems.find((item) => item.id === id)?.slug.replace(/^@/, '') ?? null}
+                  characterMentions={showCharacters ? allCharMentions : undefined}
+                  characterHandles={showCharacters ? charHandles : undefined}
+                  onPickCharacter={showCharacters ? handlePickCharacter : undefined}
+                  rows={3}
+                  disabled={running}
+                  placeholder="Describe this generation."
+                  onKeyDownExtra={(event) => {
+                    if (event.key === 'ArrowUp') {
+                      const previous = history.navigateBack(typeof mergedValues.prompt === 'string' ? mergedValues.prompt : '')
+                      if (previous !== null) updateValues('prompt', previous)
+                      return previous !== null
+                    }
+                    if (event.key === 'ArrowDown') {
+                      const next = history.navigateForward()
+                      if (next !== null) updateValues('prompt', next)
+                      return next !== null
+                    }
+                    return false
+                  }}
+                />
+              )}
+            </>
+          ) : null}
           {error ? <div className="vc-notebook-error"><AlertCircle /> {error}</div> : null}
           <RunStepButton
             running={running}

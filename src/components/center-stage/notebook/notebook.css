@@ -507,7 +507,8 @@
   padding: 0.55rem 0.7rem;
 }
 
-.vc-notebook-editor label {
+.vc-notebook-editor label,
+.vc-notebook-action-deck label {
   color: rgb(110 231 183 / 0.7);
   font-family: var(--font-mono);
   font-size: 0.62rem;
@@ -1481,6 +1482,24 @@
   background: rgb(1 8 5 / 0.48);
 }
 
+.vc-notebook-loadout-lead {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+/* Model select lives in the sticky header next to the title */
+.vc-notebook-head-model {
+  min-width: 0;
+  align-self: center;
+}
+
+.vc-notebook-head-model .vc-notebook-compact-select-value {
+  max-width: 13rem;
+}
+
 .vc-notebook-loadout-head strong {
   overflow: hidden;
   color: var(--vc-text);
@@ -1560,6 +1579,7 @@
 }
 
 .vc-notebook-editor label,
+.vc-notebook-action-deck label,
 .vc-notebook-sidebar-image .vc-notebook-editor label,
 .vc-notebook-sidebar-video .vc-notebook-editor label {
   color: rgb(110 231 183 / 0.66);
@@ -1620,6 +1640,11 @@
 
 .vc-notebook-action-deck .vc-notebook-error {
   font-size: 0.64rem;
+}
+
+/* Prompt sits in the sticky action deck; linked prompts scroll past ~6 lines */
+.vc-notebook-action-deck .vc-notebook-linked-prompt {
+  max-height: 9rem;
 }
 
 .vc-notebook-run {
