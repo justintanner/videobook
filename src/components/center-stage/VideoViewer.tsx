@@ -87,7 +87,7 @@ function ClipContent({ item, size, onRender, onSplitAtCursor, callTool, projectS
       <video ref={videoRef} key={src} src={src} poster={posterSrc} controls tabIndex={-1} className="w-full h-full object-contain" draggable={false} />
       {cropMode && (
         <CropOverlay
-          videoRef={videoRef}
+          mediaRef={videoRef}
           initialRatio={cropRatio}
           onApply={onCropApply}
           onCancel={onCropCancel}

@@ -11,6 +11,7 @@ import { registerSplitVideoJob } from "./split-video.js";
 import { registerEvenSplitJob } from "./even-split.js";
 import { registerPadVideoJob } from "./pad-video.js";
 import { registerCropVideoJob } from "./crop-video.js";
+import { registerCropImageJob } from "./crop-image.js";
 import { registerApplyCutsJob } from "./apply-cuts.js";
 import { registerApplySfxJob } from "./apply-sfx.js";
 import { registerChangeVideoSpeedJob } from "./change-video-speed.js";
@@ -127,6 +128,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerEvenSplitJob(fs);
   registerPadVideoJob(fs);
   registerCropVideoJob(fs);
+  registerCropImageJob(fs);
   registerApplyCutsJob(fs);
   registerApplySfxJob(fs);
   registerChangeVideoSpeedJob(fs);

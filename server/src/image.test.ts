@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import sharp from "sharp";
-import { probeImage, cropToFill } from "./image.js";
+import { probeImage, cropToFill, cropRegion } from "./image.js";
 
 async function createTestPng(width: number, height: number): Promise<Buffer> {
   return sharp({
@@ -52,5 +52,22 @@ describe("image utilities", () => {
     const result = await probeImage(cropped);
     expect(result.width).toBe(50);
     expect(result.height).toBe(30);
+  });
+
+  it("cropRegion extracts normalized rect and resizes to target", async () => {
+    const buf = await createTestPng(200, 100);
+    // Centre half of the image (100x50) → 1920x1080
+    const cropped = await cropRegion(buf, { x: 0.25, y: 0.25, w: 0.5, h: 0.5 }, 1920, 1080);
+    const result = await probeImage(cropped);
+    expect(result.width).toBe(1920);
+    expect(result.height).toBe(1080);
+  });
+
+  it("cropRegion clamps out-of-bounds pixel boxes", async () => {
+    const buf = await createTestPng(100, 100);
+    const cropped = await cropRegion(buf, { x: 0.8, y: 0.8, w: 0.5, h: 0.5 }, 50, 50);
+    const result = await probeImage(cropped);
+    expect(result.width).toBe(50);
+    expect(result.height).toBe(50);
   });
 });

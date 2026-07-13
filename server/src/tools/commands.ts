@@ -124,15 +124,15 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/crop",
-    description: "Crop video to a 16:9, 9:16, or 1:1 region (visually place the box, then re-render)",
-    example: "/crop @vid-yt-inglourious-basterds-top",
+    description: "Crop video or image to a 16:9, 9:16, or 1:1 region (visually place the box, then re-render)",
+    example: "/crop @img-cat 9:16",
     category: "context_menu",
     icon: "Crop",
     size: "default",
     variant: "default",
     chevron: "right",
     params: [
-      { name: "asset_id", type: "string", required: true, description: "Video asset to crop" },
+      { name: "asset_id", type: "string", required: true, description: "Video or image asset to crop" },
       { name: "ratio", type: "string", required: false, description: "Initial ratio: 16:9 | 9:16 | 1:1" },
     ],
     uiAction: "open_crop",

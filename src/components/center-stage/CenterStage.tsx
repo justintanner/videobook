@@ -158,6 +158,8 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
       onClearPendingBackTab={onClearPendingBackTab}
       callTool={callTool}
       onClose={onClose}
+      cropTarget={cropTarget}
+      onCropConsumed={onCropConsumed}
     />
   );
 }
