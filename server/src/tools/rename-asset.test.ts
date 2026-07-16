@@ -59,12 +59,16 @@ describe("rename_asset tool", () => {
     expect(parsed.new_asset_id).toMatch(/^img-/);
     expect(parsed.new_asset_id).not.toBe(uploaded.assetId);
 
-    // Old asset should be gone
+    // Querying the old asset ID should now transparently return the new asset's manifest
     const oldManifest = await client.callTool({
       name: "asset_manifest",
       arguments: { asset_id: uploaded.assetId, project_slug: "test-proj" },
     });
-    expect(oldManifest.isError).toBe(true);
+    expect(oldManifest.isError).toBeFalsy();
+    const oldParsed = JSON.parse(
+      (oldManifest.content as Array<{ type: string; text: string }>)[0].text
+    );
+    expect(oldParsed.asset_id).toBe(uploaded.assetId);
 
     // New asset should exist
     const newManifest = await client.callTool({

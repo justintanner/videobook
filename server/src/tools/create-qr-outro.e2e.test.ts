@@ -111,8 +111,8 @@ describe("create_qr_outro e2e", () => {
   let tempDir: string;
   let outputAssetId: string;
   let outputPath: string;
-  let silentOutputAssetId: string;
-  let silentOutputPath: string;
+  let defaultSoundOutputAssetId: string;
+  let defaultSoundOutputPath: string;
   let qrOne: string;
   let qrTwo: string;
 
@@ -145,7 +145,7 @@ describe("create_qr_outro e2e", () => {
     if (!manifest.ok) throw new Error(manifest.error.message);
     outputPath = join(manifest.value.path, "original.mp4");
 
-    const silentResult = await client.callTool({
+    const defaultSoundResult = await client.callTool({
       name: "create_qr_outro",
       arguments: {
         project_slug: PROJECT,
@@ -153,13 +153,14 @@ describe("create_qr_outro e2e", () => {
         aspect_ratio: "1:1",
       },
     });
-    expect(silentResult.isError).toBeFalsy();
-    const silentData = parseResult(silentResult);
-    silentOutputAssetId = String(silentData.asset_id);
-    await waitForJob(String(silentData.job_id), 600_000);
-    const silentManifest = await fs.getManifest(silentOutputAssetId, PROJECT);
-    if (!silentManifest.ok) throw new Error(silentManifest.error.message);
-    silentOutputPath = join(silentManifest.value.path, "original.mp4");
+    expect(defaultSoundResult.isError).toBeFalsy();
+    const defaultSoundData = parseResult(defaultSoundResult);
+    expect(defaultSoundData.sound_effect_source).toBe("bundled_default");
+    defaultSoundOutputAssetId = String(defaultSoundData.asset_id);
+    await waitForJob(String(defaultSoundData.job_id), 600_000);
+    const defaultSoundManifest = await fs.getManifest(defaultSoundOutputAssetId, PROJECT);
+    if (!defaultSoundManifest.ok) throw new Error(defaultSoundManifest.error.message);
+    defaultSoundOutputPath = join(defaultSoundManifest.value.path, "original.mp4");
   }, 600_000);
 
   afterAll(async () => {
@@ -200,6 +201,7 @@ describe("create_qr_outro e2e", () => {
       origin: "create_qr_outro",
       qr_image_slugs: [qrOne, qrTwo],
       sound_effect_slug: expect.stringMatching(/^aud-/),
+      sound_effect_source: "asset",
       aspect_ratio: "16:9",
       fps: 30,
       duration_seconds: 3,
@@ -221,12 +223,36 @@ describe("create_qr_outro e2e", () => {
     });
   });
 
-  it("renders successfully without a sound effect", async () => {
-    const probe = await probeVideo(silentOutputPath);
+  it("renders with the bundled sound when no audio asset is supplied", async () => {
+    const probe = await probeVideo(defaultSoundOutputPath);
     expect(probe.width).toBe(1080);
     expect(probe.height).toBe(1080);
-    expect(probe.hasAudio).toBe(false);
-    const status = await fs.getAssetStatus(silentOutputAssetId, PROJECT);
+    expect(probe.hasAudio).toBe(true);
+    const metadata = await fs.readMetadata<Record<string, unknown>>(
+      defaultSoundOutputAssetId,
+      "qr-outro",
+      PROJECT,
+    );
+    if (!metadata.ok) throw new Error(metadata.error.message);
+    expect(metadata.value).toMatchObject({
+      sound_effect_slug: null,
+      sound_effect_source: "bundled_default",
+      sound_effect_filename: "qr-outro-impact.wav",
+    });
+    const pcmPath = join(tempDir, "default-outro-audio.f32le");
+    await runFfmpeg([
+      "-y",
+      "-i", defaultSoundOutputPath,
+      "-map", "0:a:0",
+      "-ac", "1",
+      "-ar", "48000",
+      "-f", "f32le",
+      pcmPath,
+    ]);
+    const pcm = await readFile(pcmPath);
+    expect(rmsAt(pcm, 0.42, 0.52)).toBeGreaterThan(0.01);
+    expect(rmsAt(pcm, 1.4, 1.5)).toBeLessThan(0.005);
+    const status = await fs.getAssetStatus(defaultSoundOutputAssetId, PROJECT);
     expect(status.ok && status.value).toBe("ready");
   });
 
