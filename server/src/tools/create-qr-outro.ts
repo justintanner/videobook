@@ -70,7 +70,7 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
   return {
     name: "create_qr_outro",
     description:
-      "Build a standalone animated outro from 1-4 QR image assets and an optional impact sound.",
+      "Build a standalone animated outro from 1-4 QR image assets with a bundled impact sound or an optional audio override.",
     schema: {
       project_slug: z.string().describe("Project slug"),
       qr_image_slugs: z
@@ -81,7 +81,7 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
       sound_effect_slug: z
         .string()
         .optional()
-        .describe("Optional impact sound asset ID (aud- prefix)"),
+        .describe("Optional impact sound override (aud- prefix); defaults to the bundled sound"),
       aspect_ratio: z
         .enum(["16:9", "9:16", "1:1"])
         .optional()
@@ -163,6 +163,7 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
             aspect_ratio,
             duration_seconds: spec.totalDurationSeconds,
             qr_image_slugs: qrImages.map((image) => image.assetId),
+            sound_effect_source: soundEffect ? "asset" : "bundled_default",
             ...(soundEffect ? { sound_effect_slug: soundEffect.assetId } : {}),
           }),
         }],

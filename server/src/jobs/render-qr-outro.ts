@@ -17,6 +17,7 @@ import type {
   AspectRatio,
   QrOutroOrientation,
 } from "../remotion/qr-outro-spec.js";
+import { DEFAULT_QR_OUTRO_SOUND_FILENAME } from "../remotion/qr-outro-audio.js";
 import { getSharedBundleLocation } from "../remotion/shared-bundle.js";
 import { withRemotionCancellation } from "../remotion-cancellation.js";
 import { withLockedLocalLease } from "./_lease.js";
@@ -145,8 +146,8 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
               composition,
               serveUrl: bundleDir,
               codec: "h264",
-              audioCodec: audioSrc ? "aac" : null,
-              muted: !audioSrc,
+              audioCodec: "aac",
+              muted: false,
               outputLocation: tempOutputPath,
               inputProps: inputProps as unknown as Record<string, unknown>,
               videoBitrate: "8M",
@@ -167,6 +168,8 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
             origin: "create_qr_outro",
             qr_image_slugs: qrImages.map((image) => image.assetId),
             sound_effect_slug: soundEffect?.assetId ?? null,
+            sound_effect_source: soundEffect ? "asset" : "bundled_default",
+            sound_effect_filename: soundEffect?.filename ?? DEFAULT_QR_OUTRO_SOUND_FILENAME,
             aspect_ratio: aspectRatio,
             fps: spec.fps,
             duration_seconds: spec.totalDurationSeconds,

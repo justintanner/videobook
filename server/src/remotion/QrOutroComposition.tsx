@@ -5,6 +5,7 @@ import {
   Audio,
   Sequence,
   interpolate,
+  staticFile,
   useCurrentFrame,
 } from "remotion";
 import {
@@ -15,6 +16,7 @@ import {
   BACKGROUND_COLOR,
 } from "./qr-outro-spec.js";
 import type { AspectRatio } from "./qr-outro-spec.js";
+import { DEFAULT_QR_OUTRO_SOUND_FILENAME } from "./qr-outro-audio.js";
 
 export interface QrOutroInputProps extends Record<string, unknown> {
   qrSrcs: string[];
@@ -71,9 +73,8 @@ export const QrOutroComposition: React.FC<QrOutroInputProps> = ({
   aspectRatio,
 }) => {
   const spec = buildOutroSpec(aspectRatio, qrSrcs.length);
-  const windows = audioSrc
-    ? cueWindows(qrSrcs.length, spec.totalDurationFrames)
-    : [];
+  const resolvedAudioSrc = audioSrc ?? staticFile(DEFAULT_QR_OUTRO_SOUND_FILENAME);
+  const windows = cueWindows(qrSrcs.length, spec.totalDurationFrames);
 
   return (
     <AbsoluteFill style={{ backgroundColor: BACKGROUND_COLOR }}>
@@ -88,7 +89,7 @@ export const QrOutroComposition: React.FC<QrOutroInputProps> = ({
         />
       ))}
 
-      {audioSrc && windows.map((cue, i) => {
+      {windows.map((cue, i) => {
         const cueDuration = cue.endFrame - cue.startFrame;
         const fadeDuration = Math.min(3, Math.floor(cueDuration / 3));
         return (
@@ -98,7 +99,7 @@ export const QrOutroComposition: React.FC<QrOutroInputProps> = ({
             durationInFrames={cueDuration}
           >
             <Audio
-              src={audioSrc}
+              src={resolvedAudioSrc}
               endAt={cueDuration}
               volume={(localFrame: number) => {
                 if (localFrame < cueDuration - fadeDuration) return 1;

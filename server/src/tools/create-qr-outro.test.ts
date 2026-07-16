@@ -81,6 +81,7 @@ describe("create_qr_outro", () => {
       duration_seconds: 3,
       qr_image_slugs: [qrOne, qrTwo],
       sound_effect_slug: sound,
+      sound_effect_source: "asset",
     });
     expect(data.asset_id).toBe("vid-qr-outro-qr-one");
     expect(data.job_id).toMatch(/^render-qr-outro-/);
@@ -89,7 +90,7 @@ describe("create_qr_outro", () => {
     expect(status.ok && status.value).toBe("render-queued-portrait");
   });
 
-  it("defaults to 16:9 without a sound effect", async () => {
+  it("defaults to 16:9 and the bundled sound", async () => {
     const qr = await createImage("qr", "#ffffff");
 
     const result = await createQrOutroDef(fs).handler({
@@ -102,6 +103,7 @@ describe("create_qr_outro", () => {
       aspect_ratio: "16:9",
       duration_seconds: 3,
       qr_image_slugs: [qr],
+      sound_effect_source: "bundled_default",
     });
     expect(parseResult(result)).not.toHaveProperty("sound_effect_slug");
   });

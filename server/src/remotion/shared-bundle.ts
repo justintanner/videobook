@@ -1,6 +1,14 @@
 import { bundle } from "@remotion/bundler";
+import { fileURLToPath } from "node:url";
+import { dirname, extname, join } from "node:path";
 
-const REMOTION_ENTRY = new URL("../remotion/index.tsx", import.meta.url).pathname;
+const MODULE_PATH = fileURLToPath(import.meta.url);
+const REMOTION_DIR = dirname(MODULE_PATH);
+const REMOTION_ENTRY = join(
+  REMOTION_DIR,
+  extname(MODULE_PATH) === ".js" ? "index.js" : "index.tsx",
+);
+const REMOTION_PUBLIC_DIR = join(REMOTION_DIR, "public");
 
 let bundleLocation: string | null = null;
 let bundlePromise: Promise<string> | null = null;
@@ -12,6 +20,7 @@ export async function getSharedBundleLocation(): Promise<string> {
 
   bundlePromise = bundle({
     entryPoint: REMOTION_ENTRY,
+    publicDir: REMOTION_PUBLIC_DIR,
     webpackOverride: (config) => ({
       ...config,
       resolve: {
