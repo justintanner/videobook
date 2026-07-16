@@ -25,7 +25,6 @@ export interface ServerCommand {
 export type CommandDescriptor = ServerCommand;
 
 export interface QrOutroCommandArgs {
-  last_frame_slug: string;
   qr_image_slugs: string[];
   sound_effect_slug?: string;
   aspect_ratio?: '16:9' | '9:16' | '1:1';
@@ -45,16 +44,11 @@ const stripAt = (token: string): string => (token.startsWith('@') ? token.slice(
 
 export function normalizeQrOutroCommandArgs(tokens: readonly string[]): QrOutroCommandArgs {
   const inputs = tokens.map(stripAt);
-  const lastFrame = inputs[0];
-  if (!lastFrame?.startsWith('img-')) {
-    throw new Error('/qr-outro requires a background img-* asset first');
-  }
-
   const qrImages: string[] = [];
   let soundEffect: string | undefined;
   let aspectRatio: QrOutroCommandArgs['aspect_ratio'];
 
-  for (const token of inputs.slice(1)) {
+  for (const token of inputs) {
     if (token.startsWith('img-')) {
       qrImages.push(token);
       if (qrImages.length > 4) {
@@ -80,7 +74,6 @@ export function normalizeQrOutroCommandArgs(tokens: readonly string[]): QrOutroC
   }
 
   return {
-    last_frame_slug: lastFrame,
     qr_image_slugs: qrImages,
     ...(soundEffect ? { sound_effect_slug: soundEffect } : {}),
     ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),

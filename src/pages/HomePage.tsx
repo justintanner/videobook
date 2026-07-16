@@ -59,6 +59,7 @@ import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
 import type { GenerationLifecycleEvent } from '@/lib/generation-lifecycle';
+import { runOptimisticRenderRequest } from '@/lib/render-request';
 import type { MediaItem, AssetType, ClipState, PendingState, OsgInfo } from '@/components/sidebar/types';
 import { DEFAULT_RENDER_SETTINGS, getDefaultRenderSettings, isOsgPosition, isSubtitleLanguage, parseOsgPosition, storedToRenderSettings, type TranscriptInfo } from '@/components/center-stage/render-settings-types';
 import type { RenderSettings } from '@/components/center-stage/render-settings-types';
@@ -574,21 +575,29 @@ export function HomePage() {
     // orientation being rendered so its result (rendering readout, then the
     // output) is what's on screen. No-op when already viewing that orientation.
     if (viewerSize !== orient) handleViewerSizeChange(orient);
-    // Optimistically show rendering animation immediately
-    setRenderingOverrides(prev => new Map(prev).set(activeSelection.id, `render-queued-${orient}`));
-    const { ok, error } = await renderAsset(activeSelection.id, projectSlug, orient, settings);
+    const assetId = activeSelection.id;
+    const { ok, error } = await runOptimisticRenderRequest({
+      optimisticStatus: `render-queued-${orient}`,
+      enqueue: async () => {
+        const outcome = await renderAsset(assetId, projectSlug, orient, settings);
+        if (outcome.ok) sync(projectSlug);
+        return outcome;
+      },
+      refresh: () => listAssets(projectSlug, sortOrder),
+      setOverride: (status) => {
+        setRenderingOverrides(prev => {
+          const next = new Map(prev);
+          if (status === null) next.delete(assetId);
+          else next.set(assetId, status);
+          return next;
+        });
+      },
+    });
     if (!ok) {
-      // Roll back the optimistic state and surface why nothing rendered.
-      setRenderingOverrides(prev => {
-        const next = new Map(prev);
-        next.delete(activeSelection.id);
-        return next;
-      });
       toast({ title: 'Render failed', description: error ?? 'render failed', duration: 6000 });
       return;
     }
-    sync(projectSlug);
-  }, [projectSlug, activeSelection, renderAsset, settingsOrientation, sync, viewerSize, handleViewerSizeChange, setRenderingOverrides]);
+  }, [projectSlug, activeSelection, renderAsset, settingsOrientation, sync, viewerSize, handleViewerSizeChange, setRenderingOverrides, listAssets, sortOrder]);
 
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {

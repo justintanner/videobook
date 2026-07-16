@@ -331,16 +331,15 @@ describe("parseCommandArgs", () => {
 });
 
 describe("normalizeQrOutroCommandArgs", () => {
-  it("maps the background, QR images, sound, and ratio", () => {
+  it("maps every image to the ordered QR list", () => {
     expect(normalizeQrOutroCommandArgs([
-      "@img-frame",
+      "@img-qr-zero",
       "@img-qr-one",
       "@img-qr-two",
       "@aud-slap",
       "16:9",
     ])).toEqual({
-      last_frame_slug: "img-frame",
-      qr_image_slugs: ["img-qr-one", "img-qr-two"],
+      qr_image_slugs: ["img-qr-zero", "img-qr-one", "img-qr-two"],
       sound_effect_slug: "aud-slap",
       aspect_ratio: "16:9",
     });
@@ -348,30 +347,26 @@ describe("normalizeQrOutroCommandArgs", () => {
 
   it("accepts optional inputs in either order", () => {
     expect(normalizeQrOutroCommandArgs([
-      "img-frame",
+      "img-qr-one",
       "9:16",
       "aud-hit",
-      "img-qr",
+      "img-qr-two",
     ])).toEqual({
-      last_frame_slug: "img-frame",
-      qr_image_slugs: ["img-qr"],
+      qr_image_slugs: ["img-qr-one", "img-qr-two"],
       sound_effect_slug: "aud-hit",
       aspect_ratio: "9:16",
     });
   });
 
   it("omits optional values when absent", () => {
-    expect(normalizeQrOutroCommandArgs(["img-frame", "img-qr"])).toEqual({
-      last_frame_slug: "img-frame",
+    expect(normalizeQrOutroCommandArgs(["img-qr"])).toEqual({
       qr_image_slugs: ["img-qr"],
     });
   });
 
-  it("rejects invalid background and QR counts", () => {
-    expect(() => normalizeQrOutroCommandArgs(["aud-hit", "img-qr"])).toThrow();
-    expect(() => normalizeQrOutroCommandArgs(["img-frame"])).toThrow();
+  it("rejects invalid QR counts", () => {
+    expect(() => normalizeQrOutroCommandArgs(["aud-hit"])).toThrow();
     expect(() => normalizeQrOutroCommandArgs([
-      "img-frame",
       "img-1",
       "img-2",
       "img-3",
@@ -382,19 +377,16 @@ describe("normalizeQrOutroCommandArgs", () => {
 
   it("rejects duplicate optional inputs and unknown tokens", () => {
     expect(() => normalizeQrOutroCommandArgs([
-      "img-frame",
       "img-qr",
       "aud-one",
       "aud-two",
     ])).toThrow();
     expect(() => normalizeQrOutroCommandArgs([
-      "img-frame",
       "img-qr",
       "16:9",
       "1:1",
     ])).toThrow();
     expect(() => normalizeQrOutroCommandArgs([
-      "img-frame",
       "img-qr",
       "wide",
     ])).toThrow();

@@ -49,7 +49,6 @@ describe("getRoutableTool", () => {
     expect(tool!.actualTool).toBe("create_qr_outro");
     expect(tool!.category).toBe("action");
     expect(tool!.params).toEqual([
-      "last_frame_slug",
       "qr_image_slugs",
       "sound_effect_slug",
       "aspect_ratio",

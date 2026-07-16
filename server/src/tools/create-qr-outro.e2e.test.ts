@@ -113,7 +113,6 @@ describe("create_qr_outro e2e", () => {
   let outputPath: string;
   let silentOutputAssetId: string;
   let silentOutputPath: string;
-  let frame: string;
   let qrOne: string;
   let qrTwo: string;
 
@@ -124,7 +123,6 @@ describe("create_qr_outro e2e", () => {
     const project = await fs.createProject(PROJECT);
     if (!project.ok) throw new Error(project.error.message);
 
-    frame = await createImage(fs, "last-frame", 1280, 720, "#2040c0");
     qrOne = await createImage(fs, "red-qr", 512, 512, "#ef2020");
     qrTwo = await createImage(fs, "green-qr", 512, 512, "#20d050");
     const sound = await createAudio(fs);
@@ -133,7 +131,6 @@ describe("create_qr_outro e2e", () => {
       name: "create_qr_outro",
       arguments: {
         project_slug: PROJECT,
-        last_frame_slug: `@${frame}`,
         qr_image_slugs: [`@${qrOne}`, `@${qrTwo}`],
         sound_effect_slug: `@${sound}`,
         aspect_ratio: "16:9",
@@ -152,7 +149,6 @@ describe("create_qr_outro e2e", () => {
       name: "create_qr_outro",
       arguments: {
         project_slug: PROJECT,
-        last_frame_slug: frame,
         qr_image_slugs: [qrOne],
         aspect_ratio: "1:1",
       },
@@ -234,7 +230,7 @@ describe("create_qr_outro e2e", () => {
     expect(status.ok && status.value).toBe("ready");
   });
 
-  it("lands QR cards one at a time on the right half", async () => {
+  it("lands every QR input one at a time across the full canvas", async () => {
     const spec = buildOutroSpec("16:9", 2);
     const centers = spec.cards.map((card) => ({
       x: Math.floor(card.x + card.w / 2),
@@ -260,6 +256,30 @@ describe("create_qr_outro e2e", () => {
     expect(afterSecond[0]).toBeLessThan(100);
   });
 
+  it("renders QR source pixels without card borders", async () => {
+    const spec = buildOutroSpec("16:9", 2);
+    const settledPath = join(tempDir, "settled-borderless.png");
+    await extractFrame(outputPath, 1.1, settledPath);
+
+    const firstEdge = await pixelAt(
+      settledPath,
+      spec.cards[0].x + 12,
+      spec.cards[0].y + 12,
+    );
+    const secondEdge = await pixelAt(
+      settledPath,
+      spec.cards[1].x + 12,
+      spec.cards[1].y + 12,
+    );
+
+    expect(firstEdge[0]).toBeGreaterThan(180);
+    expect(firstEdge[1]).toBeLessThan(90);
+    expect(firstEdge[2]).toBeLessThan(90);
+    expect(secondEdge[1]).toBeGreaterThan(150);
+    expect(secondEdge[0]).toBeLessThan(100);
+    expect(secondEdge[2]).toBeLessThan(100);
+  });
+
   it("places an impact sound at each QR landing", async () => {
     const pcmPath = join(tempDir, "outro-audio.f32le");
     await runFfmpeg([
@@ -283,7 +303,6 @@ describe("create_qr_outro e2e", () => {
       name: "create_qr_outro",
       arguments: {
         project_slug: PROJECT,
-        last_frame_slug: frame,
         qr_image_slugs: [],
       },
     });
@@ -291,7 +310,6 @@ describe("create_qr_outro e2e", () => {
       name: "create_qr_outro",
       arguments: {
         project_slug: PROJECT,
-        last_frame_slug: frame,
         qr_image_slugs: [qrOne, qrOne, qrOne, qrOne, qrOne],
       },
     });
@@ -299,7 +317,6 @@ describe("create_qr_outro e2e", () => {
       name: "create_qr_outro",
       arguments: {
         project_slug: PROJECT,
-        last_frame_slug: frame,
         qr_image_slugs: [qrOne],
         aspect_ratio: "4:3",
       },
@@ -308,7 +325,6 @@ describe("create_qr_outro e2e", () => {
       name: "create_qr_outro",
       arguments: {
         project_slug: PROJECT,
-        last_frame_slug: frame,
         qr_image_slugs: [qrOne],
         sound_effect_slug: qrTwo,
       },
@@ -330,8 +346,7 @@ describe("create_qr_outro e2e", () => {
       projectSlug: PROJECT,
       assetId: output.value.assetId,
       orientation: "landscape",
-      lastFrame: { assetId: "img-missing", filename: "original.png" },
-      qrImages: [{ assetId: qrOne, filename: "original.png" }],
+      qrImages: [{ assetId: "img-missing", filename: "original.png" }],
       soundEffect: null,
       aspectRatio: "16:9",
     });

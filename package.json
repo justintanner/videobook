@@ -17,7 +17,8 @@
     "mint:x-token": "op run --env-file=.env.tpl -- node scripts/mint-x-token.mjs",
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "postinstall": "patch-package --error-on-fail"
   },
   "dependencies": {
     "@apicity/alibaba": "^0.7.3",
@@ -86,6 +87,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "knip": "^6.11.0",
+    "patch-package": "^8.0.1",
     "tailwindcss": "^4.2.1",
     "tsx": "^4.21.0",
     "typescript": "~5.9.3",

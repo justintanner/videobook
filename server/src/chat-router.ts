@@ -209,8 +209,8 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     name: "create_qr_outro",
     actualTool: "create_qr_outro",
     description:
-      "Generate an animated QR outro video (vid-* asset) combining an image, up to 4 QR codes, and an optional sound effect in a responsive split layout (16:9, 9:16, 1:1)",
-    params: ["last_frame_slug", "qr_image_slugs", "sound_effect_slug", "aspect_ratio"],
+      "Generate an animated QR outro video (vid-* asset) from 1-4 borderless QR images and an optional sound effect in a responsive layout (16:9, 9:16, 1:1)",
+    params: ["qr_image_slugs", "sound_effect_slug", "aspect_ratio"],
     category: "action",
   },
   // --- Generation tools ---
@@ -279,7 +279,7 @@ Parameter guidelines:
 - For create_watermark (QR code / watermark card): use this tool for real scannable QR codes — never generate_image. Pass url from the referenced asset's source_url/webpage_url when the user says "from the url in @vid-…" or similar; optional handle is an X handle without @
 - For create_qart (artistic / picture QR): use when turning an @img-* into scan-safe color and monochrome QR mosaics; pass image_slug and value (URL/text). Prefer over create_watermark when the user wants a photo integrated into the QR modules
 - For create_qrbtf (parametric / styled QR): use when the user wants a stylized QR code (normal, line, dsj, bubble, or func styles) from the qrbtf library; pass value (URL/text) and optional style. No source image needed — the QR is generated parametrically with a black background by default
-- For create_qr_outro: use when the user asks for an animated QR outro video combining a background frame, QR images, and optional audio. Pass last_frame_slug, qr_image_slugs (array of img- IDs), sound_effect_slug (optional aud- ID), and aspect_ratio ("16:9", "9:16", or "1:1"). This creates a vid-* asset, it is NOT generate_video or create_watermark.
+- For create_qr_outro: use when the user asks for an animated QR outro video from one to four QR images and optional audio. Pass every referenced QR image in order through qr_image_slugs (array of img- IDs), plus sound_effect_slug (optional aud- ID) and aspect_ratio ("16:9", "9:16", or "1:1"). This creates a vid-* asset, it is NOT generate_video or create_watermark.
 - For concat_images: use image_slugs for the referenced @img-* assets; one slug leaves the second two-slot cell empty, and null explicitly leaves a slot empty. Use aspect_ratio 16:9 or 9:16; layout is automatic unless overridden
 - Timeline audio positions (start_frame, duration_frames) are in frames at 30 fps — convert seconds to frames (e.g., "at 5 seconds" → start_frame: 150)
 - Do NOT include project_slug in params — it is injected automatically

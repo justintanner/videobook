@@ -1,12 +1,11 @@
 export type AspectRatio = "16:9" | "9:16" | "1:1";
 export type QrOutroOrientation = "landscape" | "portrait" | "square";
 
-export type SplitLayout = {
+export type QrLayout = {
   width: number;
   height: number;
-  frameRect: { x: number; y: number; w: number; h: number };
-  panelRect: { x: number; y: number; w: number; h: number };
-  splitAxis: "horizontal" | "vertical";
+  contentRect: { x: number; y: number; w: number; h: number };
+  entryEdge: "right" | "bottom";
 };
 
 export type CardPlacement = {
@@ -28,7 +27,7 @@ export type ImpactTiming = {
 };
 
 export type OutroSpec = {
-  layout: SplitLayout;
+  layout: QrLayout;
   cards: CardPlacement[];
   impacts: ImpactTiming[];
   totalDurationFrames: number;
@@ -53,11 +52,9 @@ const ENTRY_FRAMES = IMPACT_INTERVAL_FRAMES;
 const ENTRY_OVERSCAN_FRACTION = 0.25;
 const MAX_FINAL_CUE_S = 0.6;
 
-const PANEL_BG = "#0A0A0A";
-const CARD_PAD = 24;
+const BACKGROUND_COLOR = "#0A0A0A";
+const LAYOUT_PAD = 24;
 const CARD_GAP = 16;
-const CARD_SHADOW = "0 2px 8px rgba(0,0,0,0.4)";
-const CARD_RADIUS = 12;
 
 export {
   FPS,
@@ -70,49 +67,41 @@ export {
   ENTRY_FRAMES,
   ENTRY_OVERSCAN_FRACTION,
   MAX_FINAL_CUE_S,
-  PANEL_BG,
-  CARD_PAD,
+  BACKGROUND_COLOR,
+  LAYOUT_PAD,
   CARD_GAP,
-  CARD_SHADOW,
-  CARD_RADIUS,
 };
 
-export function splitLayout(ratio: AspectRatio): SplitLayout {
+export function qrLayout(ratio: AspectRatio): QrLayout {
   switch (ratio) {
     case "16:9": {
       const w = 1920;
       const h = 1080;
-      const half = Math.floor(w / 2);
       return {
         width: w,
         height: h,
-        frameRect: { x: 0, y: 0, w: half, h },
-        panelRect: { x: half, y: 0, w: w - half, h },
-        splitAxis: "horizontal",
+        contentRect: { x: 0, y: 0, w, h },
+        entryEdge: "right",
       };
     }
     case "9:16": {
       const w = 1080;
       const h = 1920;
-      const half = Math.floor(h / 2);
       return {
         width: w,
         height: h,
-        frameRect: { x: 0, y: 0, w, h: half },
-        panelRect: { x: 0, y: half, w, h: h - half },
-        splitAxis: "vertical",
+        contentRect: { x: 0, y: 0, w, h },
+        entryEdge: "bottom",
       };
     }
     case "1:1": {
       const w = 1080;
       const h = 1080;
-      const half = Math.floor(w / 2);
       return {
         width: w,
         height: h,
-        frameRect: { x: 0, y: 0, w: half, h },
-        panelRect: { x: half, y: 0, w: w - half, h },
-        splitAxis: "horizontal",
+        contentRect: { x: 0, y: 0, w, h },
+        entryEdge: "right",
       };
     }
   }
@@ -128,17 +117,16 @@ export function orientationForAspectRatio(
 
 export function cardPlacements(
   qrCount: number,
-  panelRect: { x: number; y: number; w: number; h: number },
-  splitAxis: "horizontal" | "vertical",
+  contentRect: { x: number; y: number; w: number; h: number },
 ): CardPlacement[] {
   if (qrCount < 1 || qrCount > 4) {
     throw new Error(`qrCount must be 1-4, got ${qrCount}`);
   }
 
-  const insetX = panelRect.x + CARD_PAD;
-  const insetY = panelRect.y + CARD_PAD;
-  const availW = panelRect.w - CARD_PAD * 2;
-  const availH = panelRect.h - CARD_PAD * 2;
+  const insetX = contentRect.x + LAYOUT_PAD;
+  const insetY = contentRect.y + LAYOUT_PAD;
+  const availW = contentRect.w - LAYOUT_PAD * 2;
+  const availH = contentRect.h - LAYOUT_PAD * 2;
 
   if (qrCount === 1) {
     const side = Math.min(availW, availH);
@@ -152,15 +140,7 @@ export function cardPlacements(
   }
 
   if (qrCount === 2) {
-    if (splitAxis === "horizontal") {
-      const cardH = Math.floor((availH - CARD_GAP) / 2);
-      const side = Math.min(availW, cardH);
-      const cx = insetX + Math.floor((availW - side) / 2);
-      return [
-        { x: cx, y: insetY + Math.floor((cardH - side) / 2), w: side, h: side, index: 0 },
-        { x: cx, y: insetY + cardH + CARD_GAP + Math.floor((cardH - side) / 2), w: side, h: side, index: 1 },
-      ];
-    } else {
+    if (availW >= availH) {
       const cardW = Math.floor((availW - CARD_GAP) / 2);
       const side = Math.min(cardW, availH);
       const cy = insetY + Math.floor((availH - side) / 2);
@@ -169,6 +149,14 @@ export function cardPlacements(
         { x: insetX + cardW + CARD_GAP + Math.floor((cardW - side) / 2), y: cy, w: side, h: side, index: 1 },
       ];
     }
+
+    const cardH = Math.floor((availH - CARD_GAP) / 2);
+    const side = Math.min(availW, cardH);
+    const cx = insetX + Math.floor((availW - side) / 2);
+    return [
+      { x: cx, y: insetY + Math.floor((cardH - side) / 2), w: side, h: side, index: 0 },
+      { x: cx, y: insetY + cardH + CARD_GAP + Math.floor((cardH - side) / 2), w: side, h: side, index: 1 },
+    ];
   }
 
   const cols = 2;
@@ -196,14 +184,14 @@ export function cardPlacements(
 
 export function cardEntryOffset(
   placement: CardPlacement,
-  layout: SplitLayout,
+  layout: QrLayout,
 ): CardEntryOffset {
   const driftDirection = placement.index % 2 === 0 ? -1 : 1;
   const overscan = Math.ceil(
     Math.max(placement.w, placement.h) * ENTRY_OVERSCAN_FRACTION,
   );
 
-  if (layout.splitAxis === "horizontal") {
+  if (layout.entryEdge === "right") {
     return {
       x: layout.width - placement.x + overscan,
       y: driftDirection * placement.h * 0.12,
@@ -235,8 +223,8 @@ export function totalDuration(qrCount: number): { frames: number; seconds: numbe
 }
 
 export function buildOutroSpec(ratio: AspectRatio, qrCount: number): OutroSpec {
-  const layout = splitLayout(ratio);
-  const cards = cardPlacements(qrCount, layout.panelRect, layout.splitAxis);
+  const layout = qrLayout(ratio);
+  const cards = cardPlacements(qrCount, layout.contentRect);
   const impacts = impactFrames(qrCount);
   const dur = totalDuration(qrCount);
   return {

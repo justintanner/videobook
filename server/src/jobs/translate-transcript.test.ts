@@ -10,6 +10,7 @@ import { computeSourceTextHash } from "./_translate-transcript.js";
 import { runTranslateTranscript } from "./translate-transcript.js";
 
 const testCtx: JobHandlerContext = {
+  signal: new AbortController().signal,
   setLease: () => {},
   getOwnerId: () => "test-owner",
 };

@@ -4,6 +4,7 @@ import { join, resolve, basename } from "node:path";
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import { registerJobHandler } from "../queue.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
+import { withRemotionCancellation } from "../remotion-cancellation.js";
 import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
 import { chunkSegments } from "../remotion/subtitles/chunker.js";
@@ -41,10 +42,7 @@ import {
 import { getSharedBundleLocation } from "../remotion/shared-bundle.js";
 
 const LOCK_DURATION_MS = 1_800_000; // 30 min for renders
-// How long a render job waits for another holder of the same asset before
-// giving up. The render tool enqueues one job per orientation and the queue
-// runs them concurrently, so same-asset jobs must queue behind each other.
-const CLAIM_WAIT_MS = 900_000;
+const CLAIM_WAIT_MS = 30_000;
 
 type AssetDescriptor = {
   assetId: string;
@@ -136,8 +134,8 @@ async function resolveSubtitleSegments(
 }
 
 export function registerRenderProjectJob(fs: VideocityFs): void {
-  registerJobHandler("render_project", async (payload, _ctx) => {
-    void _ctx;
+  registerJobHandler("render_project", async (payload, ctx) => {
+    ctx.signal.throwIfAborted();
     const {
       projectSlug,
       orientation,
@@ -168,6 +166,7 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
     } = payload as RenderProjectPayload;
 
     const bundleDir = await getSharedBundleLocation();
+    ctx.signal.throwIfAborted();
 
     const targetWidth = orientation === "portrait" ? PORTRAIT_WIDTH : orientation === "square" ? SQUARE_WIDTH : LANDSCAPE_WIDTH;
     const targetHeight = orientation === "portrait" ? PORTRAIT_HEIGHT : orientation === "square" ? SQUARE_HEIGHT : LANDSCAPE_HEIGHT;
@@ -192,11 +191,7 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
     try {
       for (const asset of assets) {
         try {
-          // Per-asset lock + lease: render is a single-asset transition for
-          // each entry in the loop; the wrapper's catch CAS-fails this exact
-          // owner (other assets in the batch keep their leases). Waiting
-          // serializes concurrent renders of the same asset (one job per
-          // orientation) instead of failing the latecomers.
+          ctx.signal.throwIfAborted();
           const claim = await claimLockedLease(
             fs,
             projectSlug,
@@ -221,7 +216,7 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
           let renderSucceeded = false;
 
           try {
-            const probe = await probeVideo(asset.videoPath);
+            const probe = await probeVideo(asset.videoPath, { signal: ctx.signal });
             const durationInSeconds = probe.duration;
             const fps = Math.round(probe.fps) || 30;
             const durationInFrames = Math.max(1, Math.round(durationInSeconds * fps));
@@ -289,26 +284,31 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
                 serveUrl: bundleDir,
                 id: "render",
                 inputProps: inputProps as unknown as Record<string, unknown>,
+                timeoutInMilliseconds: 60_000,
               });
+              ctx.signal.throwIfAborted();
 
-              await renderMedia({
-                composition,
-                serveUrl: bundleDir,
-                codec: "h264",
-                outputLocation: outputPath,
-                inputProps: inputProps as unknown as Record<string, unknown>,
-                videoBitrate: "8M",
-                concurrency: 1,
-                hardwareAcceleration: "if-possible",
-              });
+              await withRemotionCancellation(ctx.signal, (cancelSignal) =>
+                renderMedia({
+                  composition,
+                  serveUrl: bundleDir,
+                  codec: "h264",
+                  outputLocation: outputPath,
+                  inputProps: inputProps as unknown as Record<string, unknown>,
+                  videoBitrate: "8M",
+                  concurrency: 1,
+                  hardwareAcceleration: "if-possible",
+                  cancelSignal,
+                }),
+              );
 
               // Extract first frame as {orientation}.jpg
               const jpgFilename = outputFilename.replace(".mp4", ".jpg");
               const jpgPath = join(asset.assetDir, jpgFilename);
               try {
-                await runFfmpeg(["-y", "-i", outputPath, "-frames:v", "1", "-q:v", "2", jpgPath]);
+                await runFfmpeg(["-y", "-i", outputPath, "-frames:v", "1", "-q:v", "2", jpgPath], { signal: ctx.signal });
               } catch {
-                // non-fatal
+                ctx.signal.throwIfAborted();
               }
 
               // Extract orientation frames at timestamps
@@ -327,13 +327,13 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
                       "-q:v", "2",
                       "-strict", "unofficial",
                       framePath,
-                    ]);
+                    ], { signal: ctx.signal });
                   } catch {
-                    // frame extraction failure is non-fatal
+                    ctx.signal.throwIfAborted();
                   }
                 }
               } catch {
-                // non-fatal
+                ctx.signal.throwIfAborted();
               }
 
               const renderSettings = {
@@ -384,6 +384,7 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
             await fs.releaseLock(asset.assetDir);
           }
         } catch (err) {
+          if (ctx.signal.aborted) throw err;
           failed.push({ assetId: asset.assetId, error: err instanceof Error ? err.message : String(err) });
         }
       }

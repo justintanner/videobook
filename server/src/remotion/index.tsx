@@ -39,7 +39,6 @@ const defaultProps: RenderInputProps = {
 };
 
 const defaultQrOutroProps: QrOutroInputProps = {
-  frameSrc: "",
   qrSrcs: [""],
   audioSrc: null,
   aspectRatio: "16:9",

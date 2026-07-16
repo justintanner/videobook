@@ -8,6 +8,13 @@ const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
 export const FFMPEG: string = require("ffmpeg-static");
 export const FFPROBE: string = require("ffprobe-static").path;
+export const DEFAULT_FFMPEG_TIMEOUT_MS = 30 * 60_000;
+export const DEFAULT_FFPROBE_TIMEOUT_MS = 2 * 60_000;
+
+export interface MediaProcessOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
 
 export const H264_MEDIUM = ["-c:v", "libx264", "-preset", "medium", "-crf", "23", "-profile:v", "high", "-level:v", "4.0"];
 // `-ac 2` downmixes any source to stereo. The native `aac` encoder rejects
@@ -26,17 +33,47 @@ export interface ProbeResult {
   audioCodec: string | null;
 }
 
-export async function probeVideo(filePath: string): Promise<ProbeResult> {
+function interruptionMessage(
+  processName: string,
+  error: unknown,
+  options: MediaProcessOptions,
+  timeoutMs: number,
+): string | null {
+  if (options.signal?.aborted) {
+    const reason = options.signal.reason;
+    const detail = reason instanceof Error ? reason.message : String(reason ?? "aborted");
+    return `${processName} cancelled: ${detail}`;
+  }
+  const processError = error as { killed?: boolean; signal?: string | null };
+  if (processError.killed && processError.signal) {
+    return `${processName} timed out after ${timeoutMs}ms`;
+  }
+  return null;
+}
+
+export async function probeVideo(
+  filePath: string,
+  options: MediaProcessOptions = {},
+): Promise<ProbeResult> {
   let stdout: string;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_FFPROBE_TIMEOUT_MS;
   try {
-    ({ stdout } = await execFileAsync(FFPROBE, [
+    const result = await execFileAsync(FFPROBE, [
       "-v", "error",
       "-print_format", "json",
       "-show_streams",
       "-show_format",
       filePath,
-    ]));
+    ], {
+      encoding: "utf8",
+      killSignal: "SIGKILL",
+      signal: options.signal,
+      timeout: timeoutMs,
+    });
+    stdout = result.stdout;
   } catch (error) {
+    const interruption = interruptionMessage("ffprobe", error, options, timeoutMs);
+    if (interruption) throw new Error(`${interruption} for ${filePath}`);
     const e = error as Error & { code?: number | string; stderr?: string | Buffer };
     const stderr = typeof e.stderr === "string" ? e.stderr : e.stderr?.toString() ?? "";
     const exit = e.code !== undefined ? String(e.code) : "?";
@@ -89,10 +126,21 @@ export function summarizeFfmpegStderr(stderr: string, maxChars = 600): string {
   return tail.length > maxChars ? tail.slice(-maxChars) : tail;
 }
 
-export async function runFfmpeg(args: string[]): Promise<void> {
+export async function runFfmpeg(
+  args: string[],
+  options: MediaProcessOptions = {},
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_FFMPEG_TIMEOUT_MS;
   try {
-    await execFileAsync(FFMPEG, args);
+    await execFileAsync(FFMPEG, args, {
+      encoding: "utf8",
+      killSignal: "SIGKILL",
+      signal: options.signal,
+      timeout: timeoutMs,
+    });
   } catch (error) {
+    const interruption = interruptionMessage("ffmpeg", error, options, timeoutMs);
+    if (interruption) throw new Error(interruption);
     const stderrRaw = error instanceof Error ? (error as Error & { stderr?: string }).stderr : undefined;
     const fallback = error instanceof Error ? error.message : String(error);
     const summary = stderrRaw ? summarizeFfmpegStderr(stderrRaw) : "";

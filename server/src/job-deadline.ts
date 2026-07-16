@@ -1,0 +1,65 @@
+export const JOB_CANCELLATION_GRACE_MS = 10_000;
+
+const JOB_TIMEOUTS_MS = new Map<string, number>([
+  ["render_project", 30 * 60_000],
+  ["render_timeline", 30 * 60_000],
+  ["render_qr_outro", 15 * 60_000],
+]);
+
+export class JobDeadlineError extends Error {
+  readonly jobType: string;
+  readonly timeoutMs: number;
+
+  constructor(jobType: string, timeoutMs: number) {
+    super(`Job ${jobType} timed out after ${timeoutMs}ms`);
+    this.name = "JobDeadlineError";
+    this.jobType = jobType;
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+type Settled<T> =
+  | { state: "resolved"; value: T }
+  | { state: "rejected"; error: unknown };
+
+export function getJobTimeoutMs(jobType: string): number | null {
+  return JOB_TIMEOUTS_MS.get(jobType) ?? null;
+}
+
+export async function runWithJobDeadline<T>(
+  jobType: string,
+  run: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number | null = getJobTimeoutMs(jobType),
+  cancellationGraceMs = JOB_CANCELLATION_GRACE_MS,
+): Promise<T> {
+  const controller = new AbortController();
+  const work = Promise.resolve().then(() => run(controller.signal));
+  if (timeoutMs === null) return work;
+
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+  const settled: Promise<Settled<T>> = work.then(
+    (value): Settled<T> => ({ state: "resolved", value }),
+    (error: unknown): Settled<T> => ({ state: "rejected", error }),
+  );
+  const deadline = new Promise<{ state: "deadline" }>((resolve) => {
+    deadlineTimer = setTimeout(() => resolve({ state: "deadline" }), timeoutMs);
+    deadlineTimer.unref?.();
+  });
+
+  const first = await Promise.race([settled, deadline]);
+  if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
+  if (first.state === "resolved") return first.value;
+  if (first.state === "rejected") throw first.error;
+
+  const timeoutError = new JobDeadlineError(jobType, timeoutMs);
+  controller.abort(timeoutError);
+
+  let graceTimer: ReturnType<typeof setTimeout> | undefined;
+  const grace = new Promise<void>((resolve) => {
+    graceTimer = setTimeout(resolve, cancellationGraceMs);
+    graceTimer.unref?.();
+  });
+  await Promise.race([settled.then(() => undefined), grace]);
+  if (graceTimer !== undefined) clearTimeout(graceTimer);
+  throw timeoutError;
+}

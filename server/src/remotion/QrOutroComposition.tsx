@@ -12,56 +12,15 @@ import {
   cardAnimationProgress,
   cardEntryOffset,
   cueWindows,
-  PANEL_BG,
-  CARD_PAD,
-  CARD_SHADOW,
-  CARD_RADIUS,
+  BACKGROUND_COLOR,
 } from "./qr-outro-spec.js";
 import type { AspectRatio } from "./qr-outro-spec.js";
 
 export interface QrOutroInputProps extends Record<string, unknown> {
-  frameSrc: string;
   qrSrcs: string[];
   audioSrc: string | null;
   aspectRatio: AspectRatio;
 }
-
-const BlurFillImage: React.FC<{
-  src: string;
-  rect: { x: number; y: number; w: number; h: number };
-}> = ({ src, rect }) => (
-  <div
-    style={{
-      position: "absolute",
-      left: rect.x,
-      top: rect.y,
-      width: rect.w,
-      height: rect.h,
-      overflow: "hidden",
-    }}
-  >
-    <Img
-      src={src}
-      style={{
-        position: "absolute",
-        width: "100%",
-        height: "100%",
-        objectFit: "cover",
-        filter: "blur(20px) brightness(0.4)",
-        transform: "scale(1.15)",
-      }}
-    />
-    <Img
-      src={src}
-      style={{
-        position: "absolute",
-        width: "100%",
-        height: "100%",
-        objectFit: "contain",
-      }}
-    />
-  </div>
-);
 
 const QrCard: React.FC<{
   src: string;
@@ -92,36 +51,21 @@ const QrCard: React.FC<{
         transformOrigin: "center center",
       }}
     >
-      <div
+      <Img
+        src={src}
         style={{
           width: "100%",
           height: "100%",
-          borderRadius: CARD_RADIUS,
-          backgroundColor: "#FFFFFF",
-          boxShadow: CARD_SHADOW,
-          padding: CARD_PAD,
-          boxSizing: "border-box",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          display: "block",
+          objectFit: "contain",
+          imageRendering: "pixelated",
         }}
-      >
-        <Img
-          src={src}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "contain",
-            imageRendering: "pixelated",
-          }}
-        />
-      </div>
+      />
     </div>
   );
 };
 
 export const QrOutroComposition: React.FC<QrOutroInputProps> = ({
-  frameSrc,
   qrSrcs,
   audioSrc,
   aspectRatio,
@@ -132,20 +76,7 @@ export const QrOutroComposition: React.FC<QrOutroInputProps> = ({
     : [];
 
   return (
-    <AbsoluteFill style={{ backgroundColor: "#000000" }}>
-      <BlurFillImage src={frameSrc} rect={spec.layout.frameRect} />
-
-      <div
-        style={{
-          position: "absolute",
-          left: spec.layout.panelRect.x,
-          top: spec.layout.panelRect.y,
-          width: spec.layout.panelRect.w,
-          height: spec.layout.panelRect.h,
-          backgroundColor: PANEL_BG,
-        }}
-      />
-
+    <AbsoluteFill style={{ backgroundColor: BACKGROUND_COLOR }}>
       {spec.cards.map((card, i) => (
         <QrCard
           key={i}

@@ -70,12 +70,9 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
   return {
     name: "create_qr_outro",
     description:
-      "Build a standalone QR outro video from a last-frame image, 1-4 QR image assets, and an optional impact sound.",
+      "Build a standalone animated outro from 1-4 QR image assets and an optional impact sound.",
     schema: {
       project_slug: z.string().describe("Project slug"),
-      last_frame_slug: z
-        .string()
-        .describe("Image asset ID for the background frame (img- prefix)"),
       qr_image_slugs: z
         .array(z.string())
         .min(1)
@@ -93,25 +90,15 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
     handler: async (args) => {
       const {
         project_slug,
-        last_frame_slug,
         qr_image_slugs,
         sound_effect_slug,
         aspect_ratio = "16:9",
       } = args as {
         project_slug: string;
-        last_frame_slug: string;
         qr_image_slugs: string[];
         sound_effect_slug?: string;
         aspect_ratio?: AspectRatio;
       };
-
-      const lastFrame = await resolveImageRef(
-        fs,
-        last_frame_slug,
-        project_slug,
-        "last_frame_slug",
-      );
-      if (!lastFrame.ok) return toolError(lastFrame.error);
 
       const qrImages: QrOutroAssetRef[] = [];
       for (const raw of qr_image_slugs) {
@@ -133,10 +120,10 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
       }
 
       const spec = buildOutroSpec(aspect_ratio, qrImages.length);
-      const frameStem = lastFrame.value.assetId.replace(/^img-/, "");
+      const firstQrStem = qrImages[0].assetId.replace(/^img-/, "");
       const created = await fs.createAsset(
         "vid",
-        `qr-outro-${frameStem}`,
+        `qr-outro-${firstQrStem}`,
         project_slug,
       );
       if (!created.ok) {
@@ -151,7 +138,6 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
           projectSlug: project_slug,
           assetId,
           orientation: orientationForAspectRatio(aspect_ratio),
-          lastFrame: lastFrame.value,
           qrImages,
           soundEffect,
           aspectRatio: aspect_ratio,
@@ -176,7 +162,6 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
             status: "enqueued",
             aspect_ratio,
             duration_seconds: spec.totalDurationSeconds,
-            last_frame_slug: lastFrame.value.assetId,
             qr_image_slugs: qrImages.map((image) => image.assetId),
             ...(soundEffect ? { sound_effect_slug: soundEffect.assetId } : {}),
           }),

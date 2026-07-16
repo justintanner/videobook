@@ -7,7 +7,7 @@ import { enqueueLazyAnalysisIfSlotted } from "../lazy-render.js";
 import { probeVideo, runFfmpeg, extractWaveform, isThumbnailBlank, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
 
-type ProcessVideoPayload = {
+export type ProcessVideoPayload = {
   type: "process_video";
   videoPath: string;
   assetId: string;
@@ -16,6 +16,14 @@ type ProcessVideoPayload = {
   provenance: Record<string, unknown>;
   force?: boolean;
   skipDownstreamJobs?: boolean;
+};
+
+export type ProcessVideoResult = {
+  success: true;
+  width: number;
+  height: number;
+  duration: number;
+  frame_count: number;
 };
 
 // Write a derived binary file, skipping the write when the bytes are unchanged.
@@ -44,15 +52,18 @@ async function writeBinaryIfChanged(
   }
 }
 
-export function registerProcessVideoJob(fs: VideocityFs): void {
-  registerJobHandler("process_video", async (payload, ctx) => {
+export async function processVideoFiles(
+  fs: VideocityFs,
+  payload: ProcessVideoPayload,
+  signal?: AbortSignal,
+): Promise<ProcessVideoResult> {
     const {
       videoPath, assetId, assetDir, projectSlug, provenance,
       force, skipDownstreamJobs,
-    } = payload as ProcessVideoPayload;
+    } = payload;
 
-    return withLocalLease(fs, projectSlug, assetId, ctx, "process", async () => {
-    const probe = await probeVideo(videoPath);
+    signal?.throwIfAborted();
+    const probe = await probeVideo(videoPath, { signal });
     if (probe.videoCodec === null || probe.width <= 0 || probe.height <= 0) {
       throw new Error(`process_video requires a video stream: ${assetId}`);
     }
@@ -95,7 +106,7 @@ export function registerProcessVideoJob(fs: VideocityFs): void {
         tempPath,
       ];
       try {
-        await runFfmpeg(transcodeArgs);
+        await runFfmpeg(transcodeArgs, { signal });
         const mp4Buf = await fsReadFile(tempPath);
         await writeBinaryIfChanged(fs, assetId, "original.mp4", mp4Buf, projectSlug);
       } finally {
@@ -141,7 +152,7 @@ export function registerProcessVideoJob(fs: VideocityFs): void {
           "-q:v", "2",
           "-strict", "unofficial",
           framePath,
-        ]);
+        ], { signal });
       } catch {
         // frame extraction failure is non-fatal
       }
@@ -151,7 +162,7 @@ export function registerProcessVideoJob(fs: VideocityFs): void {
     // standalone audio reads — timeline, transcription — match the source).
     if (probe.hasAudio) {
       const mp3TempPath = join(assetDir, "original.mp3.tmp");
-      await runFfmpeg(["-y", "-i", activeVideoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", "-f", "mp3", mp3TempPath]);
+      await runFfmpeg(["-y", "-i", activeVideoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", "-f", "mp3", mp3TempPath], { signal });
       try {
         const mp3Buf = await fsReadFile(mp3TempPath);
         await writeBinaryIfChanged(fs, assetId, "original.mp3", mp3Buf, projectSlug);
@@ -225,7 +236,19 @@ export function registerProcessVideoJob(fs: VideocityFs): void {
       }
     }
 
-      return { success: true, width, height, duration, frame_count: frameCount };
-    });
+    return { success: true, width, height, duration, frame_count: frameCount };
+}
+
+export function registerProcessVideoJob(fs: VideocityFs): void {
+  registerJobHandler("process_video", async (payload, ctx) => {
+    const processPayload = payload as ProcessVideoPayload;
+    return withLocalLease(
+      fs,
+      processPayload.projectSlug,
+      processPayload.assetId,
+      ctx,
+      "process",
+      async () => processVideoFiles(fs, processPayload, ctx.signal),
+    );
   });
 }

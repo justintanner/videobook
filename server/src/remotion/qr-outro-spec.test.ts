@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  splitLayout,
+  qrLayout,
   cardPlacements,
   impactFrames,
   totalDuration,
@@ -13,37 +13,34 @@ import {
   FIRST_IMPACT_FRAME,
   IMPACT_INTERVAL_FRAMES,
   ENTRY_FRAMES,
-  CARD_PAD,
+  LAYOUT_PAD,
   MAX_FINAL_CUE_S,
 } from "./qr-outro-spec.js";
 import type { AspectRatio } from "./qr-outro-spec.js";
 
-describe("splitLayout", () => {
-  it("16:9 → 1920×1080, frame-left / QR-right", () => {
-    const l = splitLayout("16:9");
+describe("qrLayout", () => {
+  it("16:9 uses the full 1920×1080 canvas", () => {
+    const l = qrLayout("16:9");
     expect(l.width).toBe(1920);
     expect(l.height).toBe(1080);
-    expect(l.frameRect).toEqual({ x: 0, y: 0, w: 960, h: 1080 });
-    expect(l.panelRect).toEqual({ x: 960, y: 0, w: 960, h: 1080 });
-    expect(l.splitAxis).toBe("horizontal");
+    expect(l.contentRect).toEqual({ x: 0, y: 0, w: 1920, h: 1080 });
+    expect(l.entryEdge).toBe("right");
   });
 
-  it("9:16 → 1080×1920, frame-top / QR-bottom", () => {
-    const l = splitLayout("9:16");
+  it("9:16 uses the full 1080×1920 canvas", () => {
+    const l = qrLayout("9:16");
     expect(l.width).toBe(1080);
     expect(l.height).toBe(1920);
-    expect(l.frameRect).toEqual({ x: 0, y: 0, w: 1080, h: 960 });
-    expect(l.panelRect).toEqual({ x: 0, y: 960, w: 1080, h: 960 });
-    expect(l.splitAxis).toBe("vertical");
+    expect(l.contentRect).toEqual({ x: 0, y: 0, w: 1080, h: 1920 });
+    expect(l.entryEdge).toBe("bottom");
   });
 
-  it("1:1 → 1080×1080, frame-left / QR-right", () => {
-    const l = splitLayout("1:1");
+  it("1:1 uses the full 1080×1080 canvas", () => {
+    const l = qrLayout("1:1");
     expect(l.width).toBe(1080);
     expect(l.height).toBe(1080);
-    expect(l.frameRect).toEqual({ x: 0, y: 0, w: 540, h: 1080 });
-    expect(l.panelRect).toEqual({ x: 540, y: 0, w: 540, h: 1080 });
-    expect(l.splitAxis).toBe("horizontal");
+    expect(l.contentRect).toEqual({ x: 0, y: 0, w: 1080, h: 1080 });
+    expect(l.entryEdge).toBe("right");
   });
 });
 
@@ -52,19 +49,19 @@ describe("cardPlacements", () => {
 
   for (const ratio of ratios) {
     describe(`ratio ${ratio}`, () => {
-      const layout = splitLayout(ratio);
-      const panel = layout.panelRect;
+      const layout = qrLayout(ratio);
+      const content = layout.contentRect;
 
       for (const count of [1, 2, 3, 4]) {
-        it(`${count} QR(s) fit inside panel with padding`, () => {
-          const cards = cardPlacements(count, panel, layout.splitAxis);
+        it(`${count} QR(s) fit inside the canvas with spacing`, () => {
+          const cards = cardPlacements(count, content);
           expect(cards).toHaveLength(count);
 
           for (const card of cards) {
-            expect(card.x).toBeGreaterThanOrEqual(panel.x + CARD_PAD);
-            expect(card.y).toBeGreaterThanOrEqual(panel.y + CARD_PAD);
-            expect(card.x + card.w).toBeLessThanOrEqual(panel.x + panel.w - CARD_PAD);
-            expect(card.y + card.h).toBeLessThanOrEqual(panel.y + panel.h - CARD_PAD);
+            expect(card.x).toBeGreaterThanOrEqual(content.x + LAYOUT_PAD);
+            expect(card.y).toBeGreaterThanOrEqual(content.y + LAYOUT_PAD);
+            expect(card.x + card.w).toBeLessThanOrEqual(content.x + content.w - LAYOUT_PAD);
+            expect(card.y + card.h).toBeLessThanOrEqual(content.y + content.h - LAYOUT_PAD);
             expect(card.w).toBeGreaterThan(0);
             expect(card.h).toBeGreaterThan(0);
             expect(card.w).toBe(card.h);
@@ -73,30 +70,30 @@ describe("cardPlacements", () => {
       }
 
       it("1 QR is centered", () => {
-        const [card] = cardPlacements(1, panel, layout.splitAxis);
-        const availW = panel.w - CARD_PAD * 2;
-        const availH = panel.h - CARD_PAD * 2;
+        const [card] = cardPlacements(1, content);
+        const availW = content.w - LAYOUT_PAD * 2;
+        const availH = content.h - LAYOUT_PAD * 2;
         const side = Math.min(availW, availH);
-        const expectedX = panel.x + CARD_PAD + Math.floor((availW - side) / 2);
-        const expectedY = panel.y + CARD_PAD + Math.floor((availH - side) / 2);
+        const expectedX = content.x + LAYOUT_PAD + Math.floor((availW - side) / 2);
+        const expectedY = content.y + LAYOUT_PAD + Math.floor((availH - side) / 2);
         expect(card.x).toBe(expectedX);
         expect(card.y).toBe(expectedY);
       });
 
-      it("2 QRs along panel long axis", () => {
-        const cards = cardPlacements(2, panel, layout.splitAxis);
-        if (layout.splitAxis === "horizontal") {
-          expect(cards[0].y).toBeLessThan(cards[1].y);
-          expect(cards[0].x).toBe(cards[1].x);
-        } else {
+      it("2 QRs follow the canvas long axis", () => {
+        const cards = cardPlacements(2, content);
+        if (content.w >= content.h) {
           expect(cards[0].x).toBeLessThan(cards[1].x);
           expect(cards[0].y).toBe(cards[1].y);
+        } else {
+          expect(cards[0].y).toBeLessThan(cards[1].y);
+          expect(cards[0].x).toBe(cards[1].x);
         }
       });
 
       it("3 or 4 QRs in row-major 2×2 grid", () => {
         for (const count of [3, 4]) {
-          const cards = cardPlacements(count, panel, layout.splitAxis);
+          const cards = cardPlacements(count, content);
           expect(cards[0].x).toBeLessThan(cards[1].x);
           if (count >= 3) {
             expect(cards[2].x).toBe(cards[0].x);
@@ -111,7 +108,7 @@ describe("cardPlacements", () => {
 
       it("cards do not overlap", () => {
         for (const count of [2, 3, 4]) {
-          const cards = cardPlacements(count, panel, layout.splitAxis);
+          const cards = cardPlacements(count, content);
           for (let i = 0; i < cards.length; i++) {
             for (let j = i + 1; j < cards.length; j++) {
               const a = cards[i];
@@ -127,9 +124,9 @@ describe("cardPlacements", () => {
   }
 
   it("rejects qrCount outside 1-4", () => {
-    const panel = { x: 0, y: 0, w: 960, h: 1080 };
-    expect(() => cardPlacements(0, panel, "horizontal")).toThrow();
-    expect(() => cardPlacements(5, panel, "horizontal")).toThrow();
+    const content = { x: 0, y: 0, w: 1920, h: 1080 };
+    expect(() => cardPlacements(0, content)).toThrow();
+    expect(() => cardPlacements(5, content)).toThrow();
   });
 });
 
@@ -288,7 +285,7 @@ describe("cardEntryOffset", () => {
           const centerX = card.x + card.w / 2 + offset.x;
           const centerY = card.y + card.h / 2 + offset.y;
 
-          if (spec.layout.splitAxis === "horizontal") {
+          if (spec.layout.entryEdge === "right") {
             expect(centerX - transformedHalfWidth).toBeGreaterThan(spec.layout.width);
           } else {
             expect(centerY - transformedHalfHeight).toBeGreaterThan(spec.layout.height);

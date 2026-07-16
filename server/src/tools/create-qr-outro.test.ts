@@ -62,14 +62,12 @@ describe("create_qr_outro", () => {
   }
 
   it("normalizes references and queues a portrait render", async () => {
-    const frame = await createImage("last-frame", "#336699");
     const qrOne = await createImage("qr-one", "#ffffff");
     const qrTwo = await createImage("qr-two", "#000000");
     const sound = await createAudio("slap");
 
     const result = await createQrOutroDef(fs).handler({
       project_slug: PROJECT,
-      last_frame_slug: `@${frame}`,
       qr_image_slugs: [`@${qrOne}`, qrTwo],
       sound_effect_slug: `@${sound}`,
       aspect_ratio: "9:16",
@@ -81,11 +79,10 @@ describe("create_qr_outro", () => {
       status: "enqueued",
       aspect_ratio: "9:16",
       duration_seconds: 3,
-      last_frame_slug: frame,
       qr_image_slugs: [qrOne, qrTwo],
       sound_effect_slug: sound,
     });
-    expect(data.asset_id).toMatch(/^vid-/);
+    expect(data.asset_id).toBe("vid-qr-outro-qr-one");
     expect(data.job_id).toMatch(/^render-qr-outro-/);
 
     const status = await fs.getAssetStatus(String(data.asset_id), PROJECT);
@@ -93,12 +90,10 @@ describe("create_qr_outro", () => {
   });
 
   it("defaults to 16:9 without a sound effect", async () => {
-    const frame = await createImage("frame", "#123456");
     const qr = await createImage("qr", "#ffffff");
 
     const result = await createQrOutroDef(fs).handler({
       project_slug: PROJECT,
-      last_frame_slug: frame,
       qr_image_slugs: [qr],
     });
 
@@ -112,14 +107,12 @@ describe("create_qr_outro", () => {
   });
 
   it("rejects missing media files before creating an output", async () => {
-    const frame = await createImage("frame", "#123456");
     const empty = await fs.createAsset("img", "empty-qr", PROJECT);
     if (!empty.ok) throw new Error(empty.error.message);
     const before = await fs.listAssets(PROJECT);
 
     const result = await createQrOutroDef(fs).handler({
       project_slug: PROJECT,
-      last_frame_slug: frame,
       qr_image_slugs: [empty.value.assetId],
     });
 
@@ -129,12 +122,10 @@ describe("create_qr_outro", () => {
   });
 
   it("rejects references with the wrong asset type", async () => {
-    const frame = await createImage("frame", "#123456");
     const sound = await createAudio("sound");
 
     const result = await createQrOutroDef(fs).handler({
       project_slug: PROJECT,
-      last_frame_slug: frame,
       qr_image_slugs: [sound],
     });
 

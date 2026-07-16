@@ -6,7 +6,7 @@ import { registerJobHandler } from "../queue.js";
 import { runFfmpeg, probeVideo, AUDIO_OPTS } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 
-const LOCK_DURATION_MS = 900_000;
+const LOCK_DURATION_MS = 1_800_000;
 
 const LANDSCAPE_RENDER = "landscape.mp4";
 const PORTRAIT_RENDER = "portrait.mp4";
@@ -94,6 +94,7 @@ function buildOverlayAudioFilter(inputIndex: number, overlay: ResolvedAudioOverl
 
 export function registerRenderTimelineJob(fs: VideocityFs): void {
   registerJobHandler("render_timeline", async (payload, ctx) => {
+    ctx.signal.throwIfAborted();
     const {
       projectSlug,
       orientation,
@@ -126,9 +127,10 @@ export function registerRenderTimelineJob(fs: VideocityFs): void {
       const hasAudioFlags: boolean[] = [];
 
       for (const slot of resolvedSlots) {
+        ctx.signal.throwIfAborted();
         const inputPath = join(slot.assetDir, renderFilename);
         inputPaths.push(inputPath);
-        const probe = await probeVideo(inputPath);
+        const probe = await probeVideo(inputPath, { signal: ctx.signal });
         durations.push(probe.duration);
         hasAudioFlags.push(probe.hasAudio);
       }
@@ -211,13 +213,13 @@ export function registerRenderTimelineJob(fs: VideocityFs): void {
 
         ffmpegArgs.push("-movflags", "+faststart", "-y", outputPath);
 
-        await runFfmpeg(ffmpegArgs);
+        await runFfmpeg(ffmpegArgs, { signal: ctx.signal });
       } finally {
         await rm(concatListDir, { recursive: true, force: true });
       }
 
       const thumbPath = join(finalDir, "original.jpg");
-      await runFfmpeg(["-y", "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbPath]);
+      await runFfmpeg(["-y", "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbPath], { signal: ctx.signal });
 
       const renderMeta = {
         slotCount: n,

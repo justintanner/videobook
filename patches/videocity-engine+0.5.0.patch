@@ -1,0 +1,21 @@
+diff --git a/node_modules/videocity-engine/dist/queue/dequeue.js b/node_modules/videocity-engine/dist/queue/dequeue.js
+index 993e09e..c5f1c86 100644
+--- a/node_modules/videocity-engine/dist/queue/dequeue.js
++++ b/node_modules/videocity-engine/dist/queue/dequeue.js
+@@ -35,6 +35,16 @@ export function dequeue(db, pid = process.pid, leaseMs = DEFAULT_LEASE_MS) {
+                AND assets.owner_kind = 'provider'
+              )
+            )
++           AND (
++             pending_jobs.asset_id IS NULL
++             OR NOT EXISTS (
++               SELECT 1
++               FROM pending_jobs AS active_jobs
++               WHERE active_jobs.asset_id = pending_jobs.asset_id
++                 AND active_jobs.id != pending_jobs.id
++                 AND active_jobs.state IN ('running','completing')
++             )
++           )
+          ORDER BY pending_jobs.enqueued_at, pending_jobs.id
+          LIMIT  1
+        )

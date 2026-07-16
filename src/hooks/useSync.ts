@@ -1,5 +1,22 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { UseMcpResult } from "use-mcp/react";
+import { withTimeout } from '@/lib/async-timeout'
+
+export const SYNC_TIMEOUT_MS = 30_000
+
+export class SyncRequestGate {
+  private active = false
+
+  start(): boolean {
+    if (this.active) return false
+    this.active = true
+    return true
+  }
+
+  finish(): void {
+    this.active = false
+  }
+}
 
 export interface SyncResult {
   pending: Array<{ assetId: string; taskType: string; progress: number; state: string; prompt: string | null; startedAt: number | null }>;
@@ -26,17 +43,20 @@ export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
   useEffect(() => {
     callToolRef.current = callTool;
   }, [callTool]);
-  const syncingRef = useRef(false);
+  const gateRef = useRef(new SyncRequestGate());
   const prevSyncJsonRef = useRef<string>('');
 
   const sync = useCallback(async (projectSlug: string) => {
-    if (syncingRef.current) return;
-    syncingRef.current = true;
+    if (!gateRef.current.start()) return;
     setSyncing(true);
     setError(undefined);
     console.log("[sync] calling sync for", projectSlug);
     try {
-      const toolResult = await callToolRef.current("sync", { project_slug: projectSlug });
+      const toolResult = await withTimeout(
+        callToolRef.current("sync", { project_slug: projectSlug }),
+        SYNC_TIMEOUT_MS,
+        'Sync request',
+      );
       if (toolResult.isError) {
         const content = toolResult.content as Array<{ type: string; text: string }>;
         const msg = content[0].text;
@@ -63,7 +83,7 @@ export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
       console.error("[sync] exception:", msg);
       setError(msg);
     } finally {
-      syncingRef.current = false;
+      gateRef.current.finish();
       setSyncing(false);
     }
   }, []);

@@ -475,15 +475,15 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/qr-outro",
-    description: "Generate an animated QR outro video (vid- asset) combining an image, up to 4 QR codes, and optional audio",
-    example: "/qr-outro @img-frame @img-qr1 @img-qr2 @aud-impact 16:9",
+    description: "Generate an animated QR outro video (vid- asset) from 1-4 QR images and optional audio",
+    example: "/qr-outro @img-qr1 @img-qr2 @aud-impact 16:9",
     category: "action",
     icon: "QrCode",
     size: "default",
     variant: "amber",
     chevron: "right",
     params: [
-      { name: "inputs", type: "string[]", required: true, description: "Background image, 1-4 QR images, optional audio, and optional aspect ratio" },
+      { name: "inputs", type: "string[]", required: true, description: "1-4 QR images, optional audio, and optional aspect ratio" },
     ],
     mcpTool: { tool: "create_qr_outro", autoInject: ["project_slug"] },
   },

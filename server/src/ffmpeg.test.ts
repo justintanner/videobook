@@ -124,6 +124,17 @@ describe("runFfmpeg", () => {
     ).rejects.toThrow("ffmpeg failed");
   });
 
+  it("terminates ffmpeg when its process deadline expires", async () => {
+    await expect(
+      runFfmpeg([
+        "-f", "lavfi",
+        "-i", "testsrc=size=16x16:rate=30",
+        "-f", "null",
+        "-",
+      ], { timeoutMs: 50 }),
+    ).rejects.toThrow("ffmpeg timed out after 50ms");
+  });
+
   it("error message excludes the ffmpeg version banner", async () => {
     let caught: Error | null = null;
     try {

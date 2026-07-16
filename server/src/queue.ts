@@ -24,6 +24,7 @@ import {
 } from "videocity-engine";
 
 import { fs as defaultFs, PROJECTS_DIR } from "./fs.js";
+import { runWithJobDeadline } from "./job-deadline.js";
 
 async function projectExists(dir: string): Promise<boolean> {
   try {
@@ -48,6 +49,7 @@ export type LeaseToken =
   | { kind: "task"; taskId: string };
 
 export interface JobHandlerContext {
+  signal: AbortSignal;
   setLease(token: LeaseToken): void;
   getOwnerId(): string;
 }
@@ -207,7 +209,7 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
   return (type) => {
     const handler = handlers.get(type);
     if (!handler) return null;
-    return async (job: Job) => {
+    return async (job: Job) => runWithJobDeadline(type, async (signal) => {
       // Ref-cell instead of `let lease`: setLease is captured in ctx and
       // invoked via `ctx.setLease(...)` from inside this scope and via the
       // handler. TypeScript's control-flow analysis doesn't widen a let
@@ -220,6 +222,7 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
       let heartbeat: ReturnType<typeof setInterval> | null = null;
       const providerKind = providerHandoffKindFor(type);
       const ctx: JobHandlerContext = {
+        signal,
         setLease(token) {
           const current = leaseRef.current;
           if (current !== null) {
@@ -326,7 +329,7 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
       } finally {
         if (heartbeat) clearInterval(heartbeat);
       }
-    };
+    });
   };
 }
 

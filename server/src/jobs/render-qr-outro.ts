@@ -9,7 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { renderMedia, selectComposition } from "@remotion/renderer";
-import { queue, registerJobHandler } from "../queue.js";
+import { registerJobHandler } from "../queue.js";
 import {
   buildOutroSpec,
 } from "../remotion/qr-outro-spec.js";
@@ -18,10 +18,11 @@ import type {
   QrOutroOrientation,
 } from "../remotion/qr-outro-spec.js";
 import { getSharedBundleLocation } from "../remotion/shared-bundle.js";
+import { withRemotionCancellation } from "../remotion-cancellation.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { processVideoFiles } from "./process-video.js";
 
 const LOCK_DURATION_MS = 15 * 60_000;
-const PROCESS_TIMEOUT_MS = 10 * 60_000;
 
 type QrOutroAssetRef = {
   assetId: string;
@@ -33,7 +34,6 @@ type RenderQrOutroPayload = {
   projectSlug: string;
   assetId: string;
   orientation: QrOutroOrientation;
-  lastFrame: QrOutroAssetRef;
   qrImages: QrOutroAssetRef[];
   soundEffect: QrOutroAssetRef | null;
   aspectRatio: AspectRatio;
@@ -65,11 +65,11 @@ function assertWrite(
 
 export function registerRenderQrOutroJob(fs: VideocityFs): void {
   registerJobHandler("render_qr_outro", async (payload, ctx) => {
+    ctx.signal.throwIfAborted();
     const {
       projectSlug,
       assetId,
       orientation,
-      lastFrame,
       qrImages,
       soundEffect,
       aspectRatio,
@@ -81,11 +81,12 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
     }
 
     const bundleDir = await getSharedBundleLocation();
+    ctx.signal.throwIfAborted();
     const stagedPaths: string[] = [];
     const tempDir = await mkdtemp(join(tmpdir(), "videocity-qr-outro-"));
 
     try {
-      const renderResult = await withLockedLocalLease(
+      await withLockedLocalLease(
         fs,
         projectSlug,
         assetId,
@@ -97,18 +98,11 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
           data: { state: `rendering-qr-outro-${orientation}` },
         },
         async () => {
+          ctx.signal.throwIfAborted();
           const nonce = `${assetId}-${Date.now()}`;
-          const frame = await stageAssetFile(
-            fs,
-            projectSlug,
-            lastFrame,
-            bundleDir,
-            `qr-outro-frame-${nonce}`,
-          );
-          stagedPaths.push(frame.path);
-
           const qrSrcs: string[] = [];
           for (let index = 0; index < qrImages.length; index += 1) {
+            ctx.signal.throwIfAborted();
             const qr = await stageAssetFile(
               fs,
               projectSlug,
@@ -134,7 +128,6 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
           }
 
           const inputProps = {
-            frameSrc: frame.filename,
             qrSrcs,
             audioSrc,
             aspectRatio,
@@ -143,20 +136,25 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
             serveUrl: bundleDir,
             id: "qr-outro",
             inputProps: inputProps as unknown as Record<string, unknown>,
+            timeoutInMilliseconds: 60_000,
           });
+          ctx.signal.throwIfAborted();
           const tempOutputPath = join(tempDir, "original.mp4");
-          await renderMedia({
-            composition,
-            serveUrl: bundleDir,
-            codec: "h264",
-            audioCodec: audioSrc ? "aac" : null,
-            muted: !audioSrc,
-            outputLocation: tempOutputPath,
-            inputProps: inputProps as unknown as Record<string, unknown>,
-            videoBitrate: "8M",
-            concurrency: 1,
-            hardwareAcceleration: "if-possible",
-          });
+          await withRemotionCancellation(ctx.signal, (cancelSignal) =>
+            renderMedia({
+              composition,
+              serveUrl: bundleDir,
+              codec: "h264",
+              audioCodec: audioSrc ? "aac" : null,
+              muted: !audioSrc,
+              outputLocation: tempOutputPath,
+              inputProps: inputProps as unknown as Record<string, unknown>,
+              videoBitrate: "8M",
+              concurrency: 1,
+              hardwareAcceleration: "if-possible",
+              cancelSignal,
+            }),
+          );
 
           const output = await readNodeFile(tempOutputPath);
           assertWrite(
@@ -167,7 +165,6 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
           const spec = buildOutroSpec(aspectRatio, qrImages.length);
           const provenance = {
             origin: "create_qr_outro",
-            last_frame_slug: lastFrame.assetId,
             qr_image_slugs: qrImages.map((image) => image.assetId),
             sound_effect_slug: soundEffect?.assetId ?? null,
             aspect_ratio: aspectRatio,
@@ -186,6 +183,20 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
             throw new Error(`Failed to write QR outro metadata: ${metadata.error.message}`);
           }
 
+          await processVideoFiles(
+            fs,
+            {
+              type: "process_video",
+              videoPath: join(outputManifest.value.path, "original.mp4"),
+              assetId,
+              assetDir: outputManifest.value.path,
+              projectSlug,
+              provenance,
+              skipDownstreamJobs: true,
+            },
+            ctx.signal,
+          );
+
           return { provenance };
         },
         {
@@ -195,20 +206,7 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
         },
       );
 
-      await queue.enqueueAndWait(
-        `process-video-${assetId}-${Date.now()}`,
-        {
-          type: "process_video",
-          videoPath: join(outputManifest.value.path, "original.mp4"),
-          assetId,
-          assetDir: outputManifest.value.path,
-          projectSlug,
-          provenance: renderResult.provenance,
-          skipDownstreamJobs: true,
-        },
-        PROCESS_TIMEOUT_MS,
-      );
-
+      ctx.signal.throwIfAborted();
       return { success: true, assetId };
     } finally {
       await Promise.all(stagedPaths.map((path) => unlink(path).catch(() => undefined)));
