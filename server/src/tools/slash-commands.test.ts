@@ -119,6 +119,13 @@ describe("slash_commands tool", () => {
     expect(qrbtf.mcpTool?.autoInject).toContain("project_slug");
     expect(qrbtf.params.map((p) => p.name)).toEqual(["value", "style"]);
 
+    expect(commandNames).toContain("/qr-outro");
+    const qrOutro = commands.find((c) => c.command === "/qr-outro")!;
+    expect(qrOutro.mcpTool?.tool).toBe("create_qr_outro");
+    expect(qrOutro.mcpTool?.autoInject).toContain("project_slug");
+    expect(qrOutro.params.map((p) => p.name)).toEqual(["inputs"]);
+    expect(qrOutro.params[0].type).toBe("string[]");
+
     const notebook = commands.find((c) => c.command === "/notebook")!;
     expect(notebook.uiAction).toBe("open_notebook");
     expect(notebook.params).toEqual([

@@ -1,4 +1,5 @@
 export type AspectRatio = "16:9" | "9:16" | "1:1";
+export type QrOutroOrientation = "landscape" | "portrait" | "square";
 
 export type SplitLayout = {
   width: number;
@@ -108,6 +109,14 @@ export function splitLayout(ratio: AspectRatio): SplitLayout {
       };
     }
   }
+}
+
+export function orientationForAspectRatio(
+  ratio: AspectRatio,
+): QrOutroOrientation {
+  if (ratio === "9:16") return "portrait";
+  if (ratio === "1:1") return "square";
+  return "landscape";
 }
 
 export function cardPlacements(
@@ -221,13 +230,19 @@ export function cardAnimationProgress(
   rotation: number;
   scale: number;
 } {
-  if (currentFrame < impactFrame) {
-    return { visible: false, opacity: 0, translateFraction: 1, rotation: 0, scale: 1 };
+  const entryStart = impactFrame - ENTRY_FRAMES;
+  if (currentFrame < entryStart) {
+    return {
+      visible: false,
+      opacity: 0,
+      translateFraction: 1,
+      rotation: 8,
+      scale: 1.2,
+    };
   }
 
-  const elapsed = currentFrame - impactFrame;
-
-  if (elapsed < ENTRY_FRAMES) {
+  if (currentFrame < impactFrame) {
+    const elapsed = currentFrame - entryStart;
     const t = elapsed / ENTRY_FRAMES;
     const eased = 1 - Math.pow(1 - t, 2);
     return {
@@ -235,15 +250,15 @@ export function cardAnimationProgress(
       opacity: eased,
       translateFraction: 1 - eased,
       rotation: (1 - eased) * 8,
-      scale: elapsed === ENTRY_FRAMES - 1 ? 0.95 : 1 - (1 - eased) * 0.05,
+      scale: 1.2 - eased * 0.26,
     };
   }
 
-  const settleElapsed = elapsed - ENTRY_FRAMES;
-  const settleDuration = 4;
+  const settleElapsed = currentFrame - impactFrame;
+  const settleDuration = 6;
   if (settleElapsed < settleDuration) {
     const t = settleElapsed / settleDuration;
-    const spring = 1 + 0.05 * Math.sin(t * Math.PI) * (1 - t);
+    const spring = 0.94 + 0.06 * t + 0.045 * Math.sin(t * Math.PI * 2) * (1 - t);
     return {
       visible: true,
       opacity: 1,

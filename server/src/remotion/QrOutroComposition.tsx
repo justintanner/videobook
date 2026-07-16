@@ -3,9 +3,9 @@ import {
   AbsoluteFill,
   Img,
   Audio,
+  Sequence,
   interpolate,
   useCurrentFrame,
-  useVideoConfig,
 } from "remotion";
 import {
   buildOutroSpec,
@@ -74,16 +74,13 @@ const QrCard: React.FC<{
 
   if (!anim.visible) return null;
 
-  const enterDir = splitAxis === "horizontal"
-    ? (cardIndex % 2 === 0 ? -1 : 1)
-    : (cardIndex % 2 === 0 ? -1 : 1);
-
+  const enterDir = cardIndex % 2 === 0 ? -1 : 1;
   const translateX = splitAxis === "horizontal"
-    ? 0
-    : anim.translateFraction * enterDir * placement.w * 0.5;
+    ? anim.translateFraction * placement.w * 0.55
+    : anim.translateFraction * enterDir * placement.w * 0.12;
   const translateY = splitAxis === "horizontal"
-    ? anim.translateFraction * enterDir * placement.h * 0.5
-    : 0;
+    ? anim.translateFraction * enterDir * placement.h * 0.12
+    : anim.translateFraction * placement.h * 0.55;
 
   return (
     <div
@@ -106,6 +103,7 @@ const QrCard: React.FC<{
           backgroundColor: "#FFFFFF",
           boxShadow: CARD_SHADOW,
           padding: CARD_PAD,
+          boxSizing: "border-box",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -131,13 +129,10 @@ export const QrOutroComposition: React.FC<QrOutroInputProps> = ({
   audioSrc,
   aspectRatio,
 }) => {
-  const { width, height, fps, durationInFrames } = useVideoConfig();
-  const frame = useCurrentFrame();
   const spec = buildOutroSpec(aspectRatio, qrSrcs.length);
-  const windows = audioSrc ? cueWindows(qrSrcs.length, durationInFrames) : [];
-
-  void width;
-  void height;
+  const windows = audioSrc
+    ? cueWindows(qrSrcs.length, spec.totalDurationFrames)
+    : [];
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000000" }}>
@@ -169,30 +164,27 @@ export const QrOutroComposition: React.FC<QrOutroInputProps> = ({
         const cueDuration = cue.endFrame - cue.startFrame;
         const fadeDuration = Math.min(3, Math.floor(cueDuration / 3));
         return (
-          <Audio
+          <Sequence
             key={`sfx-${i}`}
-            src={audioSrc}
-            startFrom={0}
-            endAt={cueDuration}
-            volume={(f: number) => {
-              const localFrame = f;
-              if (localFrame >= cueDuration - fadeDuration) {
+            from={cue.startFrame}
+            durationInFrames={cueDuration}
+          >
+            <Audio
+              src={audioSrc}
+              endAt={cueDuration}
+              volume={(localFrame: number) => {
+                if (localFrame < cueDuration - fadeDuration) return 1;
                 return interpolate(
                   localFrame,
-                  [cueDuration - fadeDuration, cueDuration],
+                  [cueDuration - fadeDuration, cueDuration - 1],
                   [1, 0],
                   { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
                 );
-              }
-              return 1;
-            }}
-            // Audio sequence placement: offset = cue.startFrame
-            // Remotion plays Audio relative to its sequence position
-          />
+              }}
+            />
+          </Sequence>
         );
       })}
-      {/* Render invisible marker for frame reference */}
-      <div style={{ display: "none" }} data-frame={frame} data-fps={fps} />
     </AbsoluteFill>
   );
 };

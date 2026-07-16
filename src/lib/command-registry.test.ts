@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseCommandArgs,
   filterCommandsByMountKeys,
+  normalizeQrOutroCommandArgs,
   selectCommandForInput,
 } from "./command-registry.js";
 import type { CommandParam, ServerCommand } from "./command-registry.js";
@@ -326,6 +327,77 @@ describe("parseCommandArgs", () => {
     expect(parseCommandArgs("@vid-foo extra stuff", params)).toEqual({
       asset_id: "vid-foo extra stuff",
     });
+  });
+});
+
+describe("normalizeQrOutroCommandArgs", () => {
+  it("maps the background, QR images, sound, and ratio", () => {
+    expect(normalizeQrOutroCommandArgs([
+      "@img-frame",
+      "@img-qr-one",
+      "@img-qr-two",
+      "@aud-slap",
+      "16:9",
+    ])).toEqual({
+      last_frame_slug: "img-frame",
+      qr_image_slugs: ["img-qr-one", "img-qr-two"],
+      sound_effect_slug: "aud-slap",
+      aspect_ratio: "16:9",
+    });
+  });
+
+  it("accepts optional inputs in either order", () => {
+    expect(normalizeQrOutroCommandArgs([
+      "img-frame",
+      "9:16",
+      "aud-hit",
+      "img-qr",
+    ])).toEqual({
+      last_frame_slug: "img-frame",
+      qr_image_slugs: ["img-qr"],
+      sound_effect_slug: "aud-hit",
+      aspect_ratio: "9:16",
+    });
+  });
+
+  it("omits optional values when absent", () => {
+    expect(normalizeQrOutroCommandArgs(["img-frame", "img-qr"])).toEqual({
+      last_frame_slug: "img-frame",
+      qr_image_slugs: ["img-qr"],
+    });
+  });
+
+  it("rejects invalid background and QR counts", () => {
+    expect(() => normalizeQrOutroCommandArgs(["aud-hit", "img-qr"])).toThrow();
+    expect(() => normalizeQrOutroCommandArgs(["img-frame"])).toThrow();
+    expect(() => normalizeQrOutroCommandArgs([
+      "img-frame",
+      "img-1",
+      "img-2",
+      "img-3",
+      "img-4",
+      "img-5",
+    ])).toThrow();
+  });
+
+  it("rejects duplicate optional inputs and unknown tokens", () => {
+    expect(() => normalizeQrOutroCommandArgs([
+      "img-frame",
+      "img-qr",
+      "aud-one",
+      "aud-two",
+    ])).toThrow();
+    expect(() => normalizeQrOutroCommandArgs([
+      "img-frame",
+      "img-qr",
+      "16:9",
+      "1:1",
+    ])).toThrow();
+    expect(() => normalizeQrOutroCommandArgs([
+      "img-frame",
+      "img-qr",
+      "wide",
+    ])).toThrow();
   });
 });
 

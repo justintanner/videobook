@@ -32,6 +32,7 @@ const DEFAULT_LEASE_MS = 15 * 60_000;
 type LeaseOptions = {
   durationMs?: number;
   waitForActiveMs?: number;
+  meta?: Partial<AssetMeta>;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -52,6 +53,7 @@ async function beginLocalLease(
       kind,
       ownerKind: "job",
       durationMs: options.durationMs ?? DEFAULT_LEASE_MS,
+      ...(options.meta ? { meta: options.meta } : {}),
     });
     if (lease) return lease;
     if (Date.now() - started >= waitForActiveMs) return null;
@@ -179,7 +181,7 @@ export async function claimLockedLease(
   assetDir: string,
   kind: AssetWorkKind,
   lock: { durationMs: number; data?: Record<string, unknown> },
-  options: LeaseOptions & { meta?: Partial<AssetMeta> } = {},
+  options: LeaseOptions = {},
 ): Promise<LockedLeaseClaim> {
   const started = Date.now();
   const waitForActiveMs = options.waitForActiveMs ?? 0;

@@ -7,6 +7,7 @@ import {
   buildOutroSpec,
   cardAnimationProgress,
   cueWindows,
+  orientationForAspectRatio,
   FPS,
   FIRST_IMPACT_FRAME,
   IMPACT_INTERVAL_FRAMES,
@@ -206,34 +207,44 @@ describe("buildOutroSpec", () => {
   });
 });
 
+describe("orientationForAspectRatio", () => {
+  it.each([
+    ["16:9", "landscape"],
+    ["9:16", "portrait"],
+    ["1:1", "square"],
+  ] as const)("maps %s to %s", (ratio, orientation) => {
+    expect(orientationForAspectRatio(ratio)).toBe(orientation);
+  });
+});
+
 describe("cardAnimationProgress", () => {
   const impact = FIRST_IMPACT_FRAME;
 
-  it("invisible before impact", () => {
-    const p = cardAnimationProgress(impact - 1, impact);
+  it("is invisible before the entry window", () => {
+    const p = cardAnimationProgress(impact - ENTRY_FRAMES - 1, impact);
     expect(p.visible).toBe(false);
     expect(p.opacity).toBe(0);
   });
 
-  it("starts entering at impact frame", () => {
-    const p = cardAnimationProgress(impact, impact);
+  it("starts entering before impact", () => {
+    const p = cardAnimationProgress(impact - ENTRY_FRAMES, impact);
     expect(p.visible).toBe(true);
-    expect(p.opacity).toBeGreaterThanOrEqual(0);
-    expect(p.opacity).toBeLessThan(1);
+    expect(p.opacity).toBe(0);
+    expect(p.translateFraction).toBe(1);
   });
 
-  it("fully visible after entry + settle", () => {
-    const p = cardAnimationProgress(impact + ENTRY_FRAMES + 10, impact);
+  it("lands fully opaque at impact", () => {
+    const p = cardAnimationProgress(impact, impact);
     expect(p.visible).toBe(true);
     expect(p.opacity).toBe(1);
     expect(p.translateFraction).toBe(0);
     expect(p.rotation).toBe(0);
-    expect(p.scale).toBe(1);
+    expect(p.scale).toBeLessThan(1);
   });
 
-  it("has compression near end of entry", () => {
-    const p = cardAnimationProgress(impact + ENTRY_FRAMES - 1, impact);
-    expect(p.scale).toBeLessThan(1);
+  it("settles to its final scale after impact", () => {
+    const p = cardAnimationProgress(impact + ENTRY_FRAMES, impact);
+    expect(p.scale).toBe(1);
   });
 
   it("card persists indefinitely after landing", () => {

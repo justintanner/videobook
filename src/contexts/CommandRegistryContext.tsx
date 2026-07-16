@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { ServerCommand, CommandArgValue } from '@/lib/command-registry';
-import { filterCommandsByMountKeys, parseCommandArgs, selectCommandForInput } from '@/lib/command-registry';
+import { filterCommandsByMountKeys, normalizeQrOutroCommandArgs, parseCommandArgs, selectCommandForInput } from '@/lib/command-registry';
 import { useMountKeys } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
 import { executeUiAction } from '@/lib/ui-actions';
@@ -102,6 +102,12 @@ export function CommandRegistryProvider({
             }
             if (cmd.mcpTool.injectParams) {
               Object.assign(toolArgs, cmd.mcpTool.injectParams);
+            }
+            if (cmd.mcpTool.tool === 'create_qr_outro') {
+              const inputs = toolArgs.inputs;
+              if (!Array.isArray(inputs)) throw new Error('/qr-outro inputs are required');
+              delete toolArgs.inputs;
+              Object.assign(toolArgs, normalizeQrOutroCommandArgs(inputs));
             }
             if (cmd.mcpTool.tool === 'change_video_speed' && 'speed' in toolArgs) {
               const val = toolArgs.speed;

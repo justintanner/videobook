@@ -43,6 +43,19 @@ describe("getRoutableTool", () => {
     expect(tool!.params).toContain("layout");
   });
 
+  it("returns QR outro routing parameters", () => {
+    const tool = getRoutableTool("create_qr_outro");
+    expect(tool).toBeDefined();
+    expect(tool!.actualTool).toBe("create_qr_outro");
+    expect(tool!.category).toBe("action");
+    expect(tool!.params).toEqual([
+      "last_frame_slug",
+      "qr_image_slugs",
+      "sound_effect_slug",
+      "aspect_ratio",
+    ]);
+  });
+
   it("returns undefined for nonexistent tool", () => {
     expect(getRoutableTool("nonexistent")).toBeUndefined();
   });
@@ -66,6 +79,7 @@ describe("buildChatRoutingPrompt", () => {
     expect(prompt).toContain("generate_image");
     expect(prompt).toContain("create_watermark");
     expect(prompt).toContain("concat_images");
+    expect(prompt).toContain("create_qr_outro");
     expect(prompt).toContain("Available tools:");
   });
 

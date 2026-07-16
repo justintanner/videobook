@@ -1,6 +1,9 @@
 import React from "react";
 import { Composition, registerRoot } from "remotion";
 import { RenderComposition } from "./RenderComposition.js";
+import { QrOutroComposition } from "./QrOutroComposition.js";
+import { buildOutroSpec } from "./qr-outro-spec.js";
+import type { QrOutroInputProps } from "./QrOutroComposition.js";
 import type { RenderInputProps } from "./subtitles/types.js";
 
 const defaultProps: RenderInputProps = {
@@ -35,6 +38,13 @@ const defaultProps: RenderInputProps = {
   shadowOpacity: 60,
 };
 
+const defaultQrOutroProps: QrOutroInputProps = {
+  frameSrc: "",
+  qrSrcs: [""],
+  audioSrc: null,
+  aspectRatio: "16:9",
+};
+
 // eslint-disable-next-line react-refresh/only-export-components
 const RemotionRoot: React.FC = () => {
   return (
@@ -53,6 +63,25 @@ const RemotionRoot: React.FC = () => {
           width: (props as RenderInputProps).targetWidth,
           height: (props as RenderInputProps).targetHeight,
         })}
+      />
+      <Composition
+        id="qr-outro"
+        component={QrOutroComposition as React.FC<Record<string, unknown>>}
+        durationInFrames={90}
+        fps={30}
+        width={1920}
+        height={1080}
+        defaultProps={defaultQrOutroProps}
+        calculateMetadata={({ props }) => {
+          const input = props as QrOutroInputProps;
+          const spec = buildOutroSpec(input.aspectRatio, input.qrSrcs.length);
+          return {
+            durationInFrames: spec.totalDurationFrames,
+            fps: spec.fps,
+            width: spec.layout.width,
+            height: spec.layout.height,
+          };
+        }}
       />
     </>
   );

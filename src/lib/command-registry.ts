@@ -24,6 +24,13 @@ export interface ServerCommand {
 
 export type CommandDescriptor = ServerCommand;
 
+export interface QrOutroCommandArgs {
+  last_frame_slug: string;
+  qr_image_slugs: string[];
+  sound_effect_slug?: string;
+  aspect_ratio?: '16:9' | '9:16' | '1:1';
+}
+
 export function filterCommandsByMountKeys(
   commands: ServerCommand[],
   activeKeys: ReadonlySet<string>,
@@ -35,6 +42,50 @@ export function filterCommandsByMountKeys(
 }
 
 const stripAt = (token: string): string => (token.startsWith('@') ? token.slice(1) : token);
+
+export function normalizeQrOutroCommandArgs(tokens: readonly string[]): QrOutroCommandArgs {
+  const inputs = tokens.map(stripAt);
+  const lastFrame = inputs[0];
+  if (!lastFrame?.startsWith('img-')) {
+    throw new Error('/qr-outro requires a background img-* asset first');
+  }
+
+  const qrImages: string[] = [];
+  let soundEffect: string | undefined;
+  let aspectRatio: QrOutroCommandArgs['aspect_ratio'];
+
+  for (const token of inputs.slice(1)) {
+    if (token.startsWith('img-')) {
+      qrImages.push(token);
+      if (qrImages.length > 4) {
+        throw new Error('/qr-outro accepts at most 4 QR images');
+      }
+      continue;
+    }
+    if (token.startsWith('aud-')) {
+      if (soundEffect) throw new Error('/qr-outro accepts only one sound effect');
+      soundEffect = token;
+      continue;
+    }
+    if (token === '16:9' || token === '9:16' || token === '1:1') {
+      if (aspectRatio) throw new Error('/qr-outro accepts only one aspect ratio');
+      aspectRatio = token;
+      continue;
+    }
+    throw new Error(`Unrecognized /qr-outro input: ${token}`);
+  }
+
+  if (qrImages.length === 0) {
+    throw new Error('/qr-outro requires at least one QR img-* asset');
+  }
+
+  return {
+    last_frame_slug: lastFrame,
+    qr_image_slugs: qrImages,
+    ...(soundEffect ? { sound_effect_slug: soundEffect } : {}),
+    ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
+  };
+}
 
 function parseNumberToken(token: string): string | number {
   const stripped = stripAt(token);

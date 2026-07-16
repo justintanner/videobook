@@ -86,6 +86,22 @@ describe("enqueue status (no red-flash window)", () => {
     expect(status.ok && status.value).toBe("render-queued-portrait");
   });
 
+  it("QR outro render reports its queued orientation", async () => {
+    const asset = await fs.createAsset("vid", "qr-outro", slug);
+    expect(asset.ok).toBe(true);
+    if (!asset.ok) return;
+
+    await queue.enqueue(`qr-outro-${Date.now()}`, {
+      type: "render_qr_outro",
+      projectSlug: slug,
+      assetId: asset.value.assetId,
+      orientation: "landscape",
+    });
+
+    const status = await fs.getAssetStatus(asset.value.assetId, slug);
+    expect(status.ok && status.value).toBe("render-queued-landscape");
+  });
+
   it("trim: status is 'trimming' immediately after enqueue", async () => {
     const asset = await fs.createAsset("vid", "trim-test", slug);
     expect(asset.ok).toBe(true);

@@ -125,7 +125,11 @@ function jobTypeToAssetWorkKind(
   jobType: string,
   payload: JobPayload,
 ): ClassifiedJob | null {
-  if (jobType === "render_project" || jobType === "render_timeline") {
+  if (
+    jobType === "render_project" ||
+    jobType === "render_timeline" ||
+    jobType === "render_qr_outro"
+  ) {
     const o = payload.orientation;
     const orientation =
       o === "portrait" || o === "landscape" || o === "square"
