@@ -469,78 +469,99 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
   const [fileLoading, setFileLoading] = useState(false);
 
   const { commits, loading: historyLoading, fetchHistory, restoreVersion } = useAssetHistory(callTool);
-  const [selectedCommitHash, setSelectedCommitHash] = useState<string | null>(null);
+  const [selectedCommitHash, setSelectedCommitHashState] = useState<string | null | undefined>(undefined);
+  const [handledPendingFilePosition, setHandledPendingFilePosition] = useState<number | null | undefined>(null);
+  const [handledPendingBackTab, setHandledPendingBackTab] = useState<BackTab | null | undefined>(null);
+  const [pendingFileSelection, setPendingFileSelection] = useState<number | null>(null);
+  const [focusedFileRequest, setFocusedFileRequest] = useState<{ fileName: string; sequence: number } | null>(null);
+  const filesTabActive = flipped && backTab === 'files';
+  const [filesSession, setFilesSession] = useState({
+    active: filesTabActive,
+    fileName: selectedFile,
+    skipFileRequest: pendingFilePosition != null,
+  });
+  const fileRequestIdRef = useRef(0);
+  const manifestRequestIdRef = useRef(0);
 
   const fileUrl = useMemo(
     () => `/files/${projectSlug}/${itemId}/${selectedFile}`,
     [projectSlug, itemId, selectedFile],
   );
 
-  const fetchFileContent = useCallback(async (fileName: string) => {
+  const requestFileContent = useCallback((fileName: string) => {
+    const requestId = ++fileRequestIdRef.current;
+    void fetch(`/files/${projectSlug}/${itemId}/${fileName}`)
+      .then(async (res) => {
+        if (!res.ok) return `Error: ${res.status} ${res.statusText}`;
+        const text = await res.text();
+        if (!fileName.endsWith('.json')) return text;
+        try {
+          return JSON.stringify(JSON.parse(text), null, 2);
+        } catch {
+          return text;
+        }
+      })
+      .then((content) => {
+        if (requestId === fileRequestIdRef.current) setFileContent(content);
+      })
+      .catch((e: unknown) => {
+        if (requestId === fileRequestIdRef.current) {
+          setFileContent(`Error: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      })
+      .finally(() => {
+        if (requestId === fileRequestIdRef.current) setFileLoading(false);
+      });
+  }, [projectSlug, itemId]);
+
+  const fetchFileContent = useCallback((fileName: string) => {
     if (isBinaryFile(fileName)) {
+      fileRequestIdRef.current += 1;
       setFileContent(null);
+      setFileLoading(false);
       return;
     }
     setFileLoading(true);
-    try {
-      const res = await fetch(`/files/${projectSlug}/${itemId}/${fileName}`);
-      if (res.ok) {
-        const text = await res.text();
-        if (fileName.endsWith('.json')) {
-          try {
-            setFileContent(JSON.stringify(JSON.parse(text), null, 2));
-          } catch {
-            setFileContent(text);
-          }
-        } else {
-          setFileContent(text);
-        }
-      } else {
-        setFileContent(`Error: ${res.status} ${res.statusText}`);
-      }
-    } catch (e) {
-      setFileContent(`Error: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setFileLoading(false);
-    }
+    requestFileContent(fileName);
+  }, [requestFileContent]);
+
+  const requestManifest = useCallback(() => {
+    const requestId = ++manifestRequestIdRef.current;
+    void fetch(`/api/manifest/${projectSlug}/${itemId}`)
+      .then(async (res) => {
+        if (!res.ok) return [];
+        const data = await res.json() as { files: ManifestFile[] };
+        return data.files;
+      })
+      .then((files) => {
+        if (requestId === manifestRequestIdRef.current) setManifest(files);
+      })
+      .catch(() => {
+        if (requestId === manifestRequestIdRef.current) setManifest([]);
+      })
+      .finally(() => {
+        if (requestId === manifestRequestIdRef.current) setManifestLoading(false);
+      });
   }, [projectSlug, itemId]);
 
-  const fetchManifest = useCallback(async () => {
+  const fetchManifest = useCallback(() => {
     setManifestLoading(true);
-    try {
-      const res = await fetch(`/api/manifest/${projectSlug}/${itemId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setManifest(data.files as ManifestFile[]);
-      } else {
-        setManifest([]);
-      }
-    } catch {
-      setManifest([]);
-    } finally {
-      setManifestLoading(false);
-    }
-  }, [projectSlug, itemId]);
+    requestManifest();
+  }, [requestManifest]);
 
-  const pendingFocusRef = useRef<number | undefined>(undefined);
-
-  // Reset on item change
   useEffect(() => {
     onFlippedChange(false);
-    setBackTab(defaultBackTab);
-    setManifest(null);
-    setSelectedFile('.original.json');
-    setFileContent(null);
-    setSelectedCommitHash(null);
-  }, [itemId, onFlippedChange, defaultBackTab]);
+  }, [itemId, onFlippedChange]);
 
   // Fetch manifest when files tab is active
   useEffect(() => {
-    if (flipped && backTab === 'files' && !manifestLoading) {
-      fetchManifest();
-      fetchFileContent('.original.json');
+    if (flipped && backTab === 'files') {
+      requestManifest();
+      if (!filesSession.skipFileRequest && !isBinaryFile(filesSession.fileName)) {
+        requestFileContent(filesSession.fileName);
+      }
     }
-  }, [flipped, backTab]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [flipped, backTab, filesSession, requestManifest, requestFileContent]);
 
   // Fetch history when history tab is active
   useEffect(() => {
@@ -548,13 +569,6 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
       fetchHistory(itemId, projectSlug);
     }
   }, [flipped, backTab]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Auto-select latest commit
-  useEffect(() => {
-    if (commits.length > 0 && selectedCommitHash === null) {
-      setSelectedCommitHash(commits[0].hash);
-    }
-  }, [commits, selectedCommitHash]);
 
   const handleRestore = async (hash: string) => {
     const short = hash.slice(0, 7);
@@ -568,17 +582,15 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
     }
   };
 
-  // Apply pending focus once manifest loads
   useEffect(() => {
-    if (pendingFocusRef.current === undefined || !manifest || manifest.length === 0) return;
-    const idx = Math.max(0, Math.min(pendingFocusRef.current - 1, manifest.length - 1));
-    const fileName = manifest[idx].name;
-    pendingFocusRef.current = undefined;
-    setSelectedFile(fileName);
-    setFileContent(null);
-    fetchFileContent(fileName);
+    if (!focusedFileRequest) return;
+    if (isBinaryFile(focusedFileRequest.fileName)) {
+      fileRequestIdRef.current += 1;
+    } else {
+      requestFileContent(focusedFileRequest.fileName);
+    }
     document.querySelector<HTMLElement>('[data-tabstop="files"]')?.focus();
-  }, [manifest, fetchFileContent]);
+  }, [focusedFileRequest, requestFileContent]);
 
   const handleFlipToBack = () => {
     setBackTab(defaultBackTab);
@@ -588,34 +600,15 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
   // Handle pending file position
   useEffect(() => {
     if (pendingFilePosition == null) return;
-    pendingFocusRef.current = pendingFilePosition;
-    setBackTab('files');
     onFlippedChange(true);
-    if (manifest === null) {
-      fetchManifest();
-    } else {
-      const idx = Math.max(0, Math.min(pendingFilePosition - 1, manifest.length - 1));
-      const fileName = manifest[idx].name;
-      pendingFocusRef.current = undefined;
-      setSelectedFile(fileName);
-      setFileContent(null);
-      fetchFileContent(fileName);
-      document.querySelector<HTMLElement>('[data-tabstop="files"]')?.focus();
-    }
     onClearPendingFilePosition?.();
-  }, [pendingFilePosition]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pendingFilePosition, onFlippedChange, onClearPendingFilePosition]);
 
   // Handle pending back tab
   useEffect(() => {
     if (pendingBackTab == null) return;
-    // Non-video viewers don't have settings tab
-    if (pendingBackTab === 'settings' && defaultBackTab !== 'settings') {
-      setBackTab('files');
-    } else {
-      setBackTab(pendingBackTab);
-    }
     onClearPendingBackTab?.();
-  }, [pendingBackTab]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pendingBackTab, onClearPendingBackTab]);
 
   const handleSelectFile = useCallback((fileName: string) => {
     setSelectedFile(fileName);
@@ -643,20 +636,78 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
     }
   }, [manifest, selectedFile, handleSelectFile]);
 
+  if (filesSession.active !== filesTabActive) {
+    setFilesSession({
+      active: filesTabActive,
+      fileName: selectedFile,
+      skipFileRequest: pendingFilePosition != null || pendingFileSelection != null,
+    });
+    if (filesTabActive) {
+      setManifestLoading(true);
+      setFileLoading(!isBinaryFile(selectedFile));
+      setFileContent(null);
+    }
+  }
+
+  if (selectedCommitHash === undefined && commits.length > 0) {
+    setSelectedCommitHashState(commits[0].hash);
+  }
+
+  if (pendingBackTab !== handledPendingBackTab) {
+    setHandledPendingBackTab(pendingBackTab);
+    if (pendingBackTab != null) {
+      setBackTab(pendingBackTab === 'settings' && defaultBackTab !== 'settings' ? 'files' : pendingBackTab);
+    }
+  }
+  if (pendingFilePosition !== handledPendingFilePosition) {
+    setHandledPendingFilePosition(pendingFilePosition);
+    if (pendingFilePosition != null) {
+      setBackTab('files');
+      setPendingFileSelection(pendingFilePosition);
+    }
+  }
+
+  if (pendingFileSelection != null && manifest) {
+    setPendingFileSelection(null);
+    if (manifest.length === 0) {
+      setFileLoading(false);
+    } else {
+      const idx = Math.max(0, Math.min(pendingFileSelection - 1, manifest.length - 1));
+      const fileName = manifest[idx].name;
+      setSelectedFile(fileName);
+      setFileContent(null);
+      setFileLoading(!isBinaryFile(fileName));
+      setFocusedFileRequest((current) => ({
+        fileName,
+        sequence: (current?.sequence ?? 0) + 1,
+      }));
+    }
+  }
+
+  const setSelectedCommitHash = useCallback((hash: string | null) => {
+    setSelectedCommitHashState(hash);
+  }, []);
+
+  const activeSelectedCommitHash = selectedCommitHash ?? null;
+  const activeManifestLoading = manifestLoading || (filesTabActive && manifest === null);
+  const activeFileLoading = fileLoading || (
+    filesTabActive && manifest?.length !== 0 && fileContent === null && !isBinaryFile(selectedFile)
+  );
+
   return {
     backTab,
     setBackTab,
     manifest,
-    manifestLoading,
+    manifestLoading: activeManifestLoading,
     selectedFile,
     fileContent,
-    fileLoading,
+    fileLoading: activeFileLoading,
     fileUrl,
     handleSelectFile,
     handleFileKeyDown,
     commits,
     historyLoading,
-    selectedCommitHash,
+    selectedCommitHash: activeSelectedCommitHash,
     setSelectedCommitHash,
     handleRestore,
     handleFlipToBack,

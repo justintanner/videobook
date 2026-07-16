@@ -9,12 +9,18 @@ import type { NotebookPlanDefinition, NotebookPlanStep } from './types'
 
 const ESTIMATE_DEBOUNCE_MS = 600
 const CACHE_LIMIT = 400
+const EMPTY_LABELS: ReadonlyMap<string, string> = new Map()
 
 interface DerivedCall {
   stepId: string
   key: string // unique per (toolName, input)
   toolName: string
   input: Record<string, unknown>
+}
+
+interface LabelsState {
+  projectSlug: string
+  labels: ReadonlyMap<string, string>
 }
 
 function responseText(result: Awaited<ReturnType<UseMcpResult['callTool']>>): string {
@@ -70,8 +76,8 @@ function stepTuple(step: NotebookPlanStep): StepTuple | null {
 // (category, model, provider) tuple — the same inputs useGenPreview passes for
 // the editor. Fetching per-category with no provider would resolve a different
 // tool than Run actually uses (e.g. a Kie default vs the cell's Google Flow).
-function tupleKey(tuple: StepTuple): string {
-  return `${tuple.category} ${tuple.model} ${tuple.provider}`
+function tupleKey(tuple: StepTuple, projectSlug: string): string {
+  return `${projectSlug} ${tuple.category} ${tuple.model} ${tuple.provider}`
 }
 
 /**
@@ -87,20 +93,26 @@ export function useCanvasCostEstimates(options: {
   enabled: boolean
 }): ReadonlyMap<string, string> {
   const { projectSlug, callTool, definition, enabled } = options
-  const [labels, setLabels] = useState<ReadonlyMap<string, string>>(new Map())
+  const [labelsState, setLabelsState] = useState<LabelsState>({ projectSlug, labels: EMPTY_LABELS })
+  if (labelsState.projectSlug !== projectSlug) {
+    setLabelsState({ projectSlug, labels: EMPTY_LABELS })
+  }
   const callToolRef = useRef(callTool)
-  callToolRef.current = callTool
   const previewsRef = useRef<Record<string, FullPreviewResponse | 'pending'>>({})
   const cacheRef = useRef(new Map<string, CostEstimate>())
   const requestIdRef = useRef(0)
   const [previewTick, setPreviewTick] = useState(0)
+
+  useEffect(() => {
+    callToolRef.current = callTool
+  }, [callTool])
 
   // A project switch invalidates the model catalogs, the estimate cache, and
   // the labels.
   useEffect(() => {
     previewsRef.current = {}
     cacheRef.current = new Map()
-    setLabels(new Map())
+    requestIdRef.current += 1
   }, [projectSlug])
 
   // Lazily fetch one preview per distinct (category, model, provider) the plan
@@ -110,7 +122,7 @@ export function useCanvasCostEstimates(options: {
     const tuples = new Map<string, StepTuple>()
     for (const step of definition.sequence) {
       const tuple = stepTuple(step)
-      if (tuple) tuples.set(tupleKey(tuple), tuple)
+      if (tuple) tuples.set(tupleKey(tuple, projectSlug), tuple)
     }
     for (const [key, tuple] of tuples) {
       if (previewsRef.current[key]) continue
@@ -149,7 +161,7 @@ export function useCanvasCostEstimates(options: {
         const missing: DerivedCall[] = []
         for (const step of definition.sequence) {
           const tuple = stepTuple(step)
-          const preview = tuple ? previewsRef.current[tupleKey(tuple)] : undefined
+          const preview = tuple ? previewsRef.current[tupleKey(tuple, projectSlug)] : undefined
           const derived = deriveStepEstimateCall(
             definition,
             step,
@@ -184,14 +196,18 @@ export function useCanvasCostEstimates(options: {
           }
         }
         if (requestId !== requestIdRef.current) return
-        setLabels((prev) => {
-          if (prev.size === next.size && [...next].every(([id, label]) => prev.get(id) === label)) return prev
-          return next
+        setLabelsState((prev) => {
+          if (
+            prev.projectSlug === projectSlug
+            && prev.labels.size === next.size
+            && [...next].every(([id, label]) => prev.labels.get(id) === label)
+          ) return prev
+          return { projectSlug, labels: next }
         })
       })()
     }, ESTIMATE_DEBOUNCE_MS)
     return () => clearTimeout(timer)
   }, [enabled, definition, projectSlug, previewTick])
 
-  return labels
+  return labelsState.projectSlug === projectSlug ? labelsState.labels : EMPTY_LABELS
 }

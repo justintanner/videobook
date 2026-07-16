@@ -40,8 +40,23 @@ export function useNotebookPlan({ notebookId, projectSlug, callTool, mcpState }:
   const lastSavedJsonRef = useRef('')
   const pendingDefinitionRef = useRef<NotebookPlanDefinition | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [activeLoadKey, setActiveLoadKey] = useState<string | null>(null)
+  const nextLoadKey = `${projectSlug}:${notebookId}`
 
-  callToolRef.current = callTool
+  if (mcpState !== 'ready' && activeLoadKey !== null) {
+    setActiveLoadKey(null)
+  } else if (mcpState === 'ready' && activeLoadKey !== nextLoadKey) {
+    setActiveLoadKey(nextLoadKey)
+    setDefinitionState(null)
+    setLoadedDefinition(null)
+    setSaveState('loading')
+    setError(null)
+    setLegacy(false)
+  }
+
+  useEffect(() => {
+    callToolRef.current = callTool
+  }, [callTool])
 
   const write = useCallback(async (definition: NotebookPlanDefinition) => {
     const serialized = JSON.stringify(definition)
@@ -105,11 +120,6 @@ export function useNotebookPlan({ notebookId, projectSlug, callTool, mcpState }:
   useEffect(() => {
     if (mcpState !== 'ready') return
     let cancelled = false
-    setDefinitionState(null)
-    setLoadedDefinition(null)
-    setSaveState('loading')
-    setError(null)
-    setLegacy(false)
     void (async () => {
       try {
         const key = `${projectSlug}:${notebookId}`

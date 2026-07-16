@@ -16,6 +16,26 @@ import {
   mergeManagedFields,
 } from '@/lib/character-name'
 
+type CharacterMetadataForm = {
+  displayName: string
+  personalityNotes: string
+  metadata: string
+}
+
+function parseCharacterMetadataForm(text: string, itemId: string): CharacterMetadataForm {
+  const { displayName, personalityNotes } = extractManagedFields(text)
+  const advanced = parseCharacterMetadataObject(text)
+  delete advanced.display_name
+  delete advanced.personality_notes
+  delete advanced.personalityNotes
+  delete advanced.notes
+  return {
+    displayName: displayName || resolveDisplayName(undefined, itemId),
+    personalityNotes: personalityNotes || '',
+    metadata: Object.keys(advanced).length ? JSON.stringify(advanced, null, 2) : '{}',
+  }
+}
+
 export function CharacterFolderViewer({
   item,
   projectSlug,
@@ -37,48 +57,54 @@ export function CharacterFolderViewer({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { publishCharacter, publishing } = usePublishGoogleFlowCharacter(projectSlug)
 
-  const fetchManifest = useCallback(async () => {
-    if (!projectSlug) return
+  const readManifest = useCallback(async (): Promise<ManifestFile[] | null> => {
+    if (!projectSlug) return null
     const res = await fetch(`/api/manifest/${encodeURIComponent(projectSlug)}/${encodeURIComponent(item.id)}`)
-    if (res.ok) {
-      const data = await res.json() as { files?: ManifestFile[] }
-      setFiles(Array.isArray(data.files) ? data.files : [])
-    }
+    if (!res.ok) return null
+    const data = await res.json() as { files?: ManifestFile[] }
+    return Array.isArray(data.files) ? data.files : []
   }, [projectSlug, item.id])
 
-  const loadMetadata = useCallback(async () => {
-    if (!projectSlug) return
+  const readMetadata = useCallback(async (): Promise<CharacterMetadataForm | null> => {
+    if (!projectSlug) return null
     const res = await callTool('read_asset_metadata', {
       project_slug: projectSlug,
       asset_id: item.id,
       name: 'character',
     })
-    if (!res.isError) {
-      const content = res.content as Array<{ type: string; text: string }>
-      const text = content[0]?.text || '{}'
-      
-      const { displayName: d, personalityNotes: p } = extractManagedFields(text)
-      setDisplayName(d || resolveDisplayName(undefined, item.id))
-      setPersonalityNotes(p || '')
-
-      const advanced = parseCharacterMetadataObject(text)
-      delete advanced.display_name
-      delete advanced.personality_notes
-      delete advanced.personalityNotes
-      delete advanced.notes
-      
-      setMetadata(Object.keys(advanced).length ? JSON.stringify(advanced, null, 2) : '{}')
-    } else {
-      setDisplayName(resolveDisplayName(undefined, item.id))
-      setPersonalityNotes('')
-      setMetadata('{}')
-    }
+    if (res.isError) return parseCharacterMetadataForm('{}', item.id)
+    const content = res.content as Array<{ type: string; text: string }>
+    return parseCharacterMetadataForm(content[0]?.text || '{}', item.id)
   }, [projectSlug, item.id, callTool])
 
+  const applyMetadata = useCallback((next: CharacterMetadataForm) => {
+    setDisplayName(next.displayName)
+    setPersonalityNotes(next.personalityNotes)
+    setMetadata(next.metadata)
+  }, [])
+
+  const fetchManifest = useCallback(async () => {
+    const next = await readManifest()
+    if (next) setFiles(next)
+  }, [readManifest])
+
+  const loadMetadata = useCallback(async () => {
+    const next = await readMetadata()
+    if (next) applyMetadata(next)
+  }, [applyMetadata, readMetadata])
+
   useEffect(() => {
-    void fetchManifest()
-    void loadMetadata()
-  }, [fetchManifest, loadMetadata])
+    let cancelled = false
+    void readManifest().then((nextFiles) => {
+      if (cancelled) return
+      if (nextFiles) setFiles(nextFiles)
+    }).catch(() => {})
+    void readMetadata().then((nextMetadata) => {
+      if (cancelled) return
+      if (nextMetadata) applyMetadata(nextMetadata)
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [applyMetadata, readManifest, readMetadata])
 
   const handleSaveMetadata = async () => {
     if (!projectSlug) return

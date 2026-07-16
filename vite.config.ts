@@ -44,7 +44,15 @@ function mediapipeWasm(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), mediapipeWasm()],
+  plugins: [
+    react({
+      babel: {
+        plugins: ['babel-plugin-react-compiler'],
+      },
+    }),
+    tailwindcss(),
+    mediapipeWasm(),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),

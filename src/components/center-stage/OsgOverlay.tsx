@@ -230,7 +230,6 @@ export function OsgOverlay({
   useEffect(() => {
     if (!content || !imageSrc || imageAspect == null || placedRef.current) return;
     placedRef.current = true;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRectPx(rectFromAnchor(content, initialPosition, initialSize, initialScale, imageAspect));
   }, [content, imageSrc, imageAspect, initialPosition, initialSize, initialScale]);
 
@@ -240,7 +239,6 @@ export function OsgOverlay({
     windowPlacedRef.current = true;
     const start = initialStartSeconds != null ? Math.min(Math.max(0, initialStartSeconds), duration) : 0;
     const end = initialEndSeconds != null ? Math.min(Math.max(start, initialEndSeconds), duration) : duration;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setWinStart(start);
      
     setWinEnd(end);
@@ -274,8 +272,9 @@ export function OsgOverlay({
     dragRef.current = { kind: 'move', startPx: rectPx, startPointer: pointerToOverlay(e) };
   };
 
-  const handleResizeStart = (corner: 'nw' | 'ne' | 'sw' | 'se') => (e: React.PointerEvent) => {
+  const handleResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!rectPx) return;
+    const corner = e.currentTarget.dataset.corner as 'nw' | 'ne' | 'sw' | 'se';
     e.preventDefault();
     e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
@@ -313,11 +312,12 @@ export function OsgOverlay({
   }, [rectPx, content]);
 
   // ── Temporal strip interaction ──
-  const handleTimeDragStart = (which: 'start' | 'end') => (e: React.PointerEvent) => {
+  const handleTimeDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
     if (duration == null) return;
+    const which = e.currentTarget.dataset.timeDrag as 'start' | 'end';
     e.preventDefault();
     e.stopPropagation();
-    trackRef.current?.setPointerCapture(e.pointerId);
+    e.currentTarget.parentElement?.setPointerCapture(e.pointerId);
     timeDragRef.current = which;
   };
 
@@ -462,10 +462,10 @@ export function OsgOverlay({
         onPointerDown={handleMoveStart}
       >
         <img src={imageSrc} alt="" draggable={false} onLoad={handleImageLoad} className="w-full h-full object-contain pointer-events-none" />
-        <div className={cn(HANDLE_BASE, 'cursor-nwse-resize')} style={{ left: -6, top: -6 }} onPointerDown={handleResizeStart('nw')} />
-        <div className={cn(HANDLE_BASE, 'cursor-nesw-resize')} style={{ right: -6, top: -6 }} onPointerDown={handleResizeStart('ne')} />
-        <div className={cn(HANDLE_BASE, 'cursor-nesw-resize')} style={{ left: -6, bottom: -6 }} onPointerDown={handleResizeStart('sw')} />
-        <div className={cn(HANDLE_BASE, 'cursor-nwse-resize')} style={{ right: -6, bottom: -6 }} onPointerDown={handleResizeStart('se')} />
+        <div data-corner="nw" className={cn(HANDLE_BASE, 'cursor-nwse-resize')} style={{ left: -6, top: -6 }} onPointerDown={handleResizeStart} />
+        <div data-corner="ne" className={cn(HANDLE_BASE, 'cursor-nesw-resize')} style={{ right: -6, top: -6 }} onPointerDown={handleResizeStart} />
+        <div data-corner="sw" className={cn(HANDLE_BASE, 'cursor-nesw-resize')} style={{ left: -6, bottom: -6 }} onPointerDown={handleResizeStart} />
+        <div data-corner="se" className={cn(HANDLE_BASE, 'cursor-nwse-resize')} style={{ right: -6, bottom: -6 }} onPointerDown={handleResizeStart} />
       </div>
 
       {/* Readout (top) */}
@@ -515,13 +515,15 @@ export function OsgOverlay({
               style={{ left: `${(winStart / duration) * 100}%`, width: `${((winEnd - winStart) / duration) * 100}%` }}
             />
             <div
-              onPointerDown={handleTimeDragStart('start')}
+              data-time-drag="start"
+              onPointerDown={handleTimeDragStart}
               title="OSG appears"
               className="absolute -ml-[6px] w-3 h-5 rounded-sm bg-emerald-300 border border-zinc-900 shadow-md cursor-ew-resize"
               style={{ left: `${(winStart / duration) * 100}%` }}
             />
             <div
-              onPointerDown={handleTimeDragStart('end')}
+              data-time-drag="end"
+              onPointerDown={handleTimeDragStart}
               title="OSG disappears"
               className="absolute -ml-[6px] w-3 h-5 rounded-sm bg-emerald-300 border border-zinc-900 shadow-md cursor-ew-resize"
               style={{ left: `${(winEnd / duration) * 100}%` }}

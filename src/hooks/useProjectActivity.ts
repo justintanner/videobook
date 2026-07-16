@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 
 export interface ActionLogEntry {
@@ -23,7 +23,9 @@ export function useProjectActivity(callTool: UseMcpResult["callTool"]): UseProje
   const [entries, setEntries] = useState<ActionLogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const callToolRef = useRef(callTool);
-  callToolRef.current = callTool;
+  useEffect(() => {
+    callToolRef.current = callTool;
+  }, [callTool]);
 
   const fetch = useCallback(async (projectSlug: string) => {
     setLoading(true);

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { Grid3x3 } from 'lucide-react';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
 import { SidebarHeader } from '@/components/sidebar/SidebarHeader';
@@ -139,6 +140,40 @@ function formatAssetCount(count: number): string {
   return count === 1 ? '1 asset' : `${count} assets`;
 }
 
+type ProjectScopedState<T> = {
+  projectSlug: string | undefined;
+  value: T;
+};
+
+function useProjectScopedState<T>(
+  projectSlug: string | undefined,
+  createValue: () => T,
+): [T, Dispatch<SetStateAction<T>>] {
+  const [state, setState] = useState<ProjectScopedState<T>>(() => ({ projectSlug, value: createValue() }));
+  if (state.projectSlug !== projectSlug) {
+    setState({ projectSlug, value: createValue() });
+  }
+  const value = state.projectSlug === projectSlug ? state.value : createValue();
+  const setValue = useCallback<Dispatch<SetStateAction<T>>>((next) => {
+    setState((current) => {
+      if (current.projectSlug !== projectSlug) return current;
+      const nextValue = typeof next === 'function'
+        ? (next as (previous: T) => T)(current.value)
+        : next;
+      return { projectSlug, value: nextValue };
+    });
+  }, [projectSlug]);
+  return [value, setValue];
+}
+
+function createRenderingOverrides(): Map<string, string> {
+  return new Map();
+}
+
+function createDeletingIds(): Set<string> {
+  return new Set();
+}
+
 export function HomePage() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
@@ -150,6 +185,7 @@ export function HomePage() {
   const [archiveInitialError, setArchiveInitialError] = useState<string | null>(null);
   const [archiveInitialLoading, setArchiveInitialLoading] = useState(false);
   const [archiveInitialQuery, setArchiveInitialQuery] = useState('');
+  const [archiveRequestKey, setArchiveRequestKey] = useState(0);
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [deleteProjectTarget, setDeleteProjectTarget] = useState<string | null>(null);
   const [deleteProjectSubmitting, setDeleteProjectSubmitting] = useState(false);
@@ -163,8 +199,6 @@ export function HomePage() {
   const [pendingBackTab, setPendingBackTab] = useState<'settings' | 'files' | 'history' | null>(null);
   const [renderSettings, setRenderSettings] = useState<RenderSettings>(DEFAULT_RENDER_SETTINGS);
   const [transcriptInfo, setTranscriptInfo] = useState<TranscriptInfo | null>(null);
-  const [renderingOverrides, setRenderingOverrides] = useState<Map<string, string>>(new Map());
-  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [timelineSlotIndex, setTimelineSlotIndex] = useState<number | null>(null);
   const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image'; prompt: string } | null>(null);
   // Optimistic placeholder tiles for just-enqueued generations, shown in the
@@ -186,12 +220,13 @@ export function HomePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevStatusOpenRef = useRef(false);
   const creatingNotebookRef = useRef(false);
-
-  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  const archiveRequestIdRef = useRef(0);
 
   const { callTool, state, error: mcpError, retry: mcpRetry } = useMcpConnection();
   const { upload } = useUploadFile();
-  const { projectSlug, setProjectSlug } = useDefaultProject(callTool, state);
+  const { projectSlug, setProjectSlug, loading: defaultProjectLoading } = useDefaultProject(callTool, state);
+  const [renderingOverrides, setRenderingOverrides] = useProjectScopedState(projectSlug, createRenderingOverrides);
+  const [deletingIds, setDeletingIds] = useProjectScopedState(projectSlug, createDeletingIds);
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
   const { projects, refresh: refreshProjects, loading: projectsLoading } = useListProjects(callTool);
@@ -225,7 +260,6 @@ export function HomePage() {
   useEffect(() => {
     if (state === 'ready') {
       void refreshProjects();
-      setInitialLoadComplete(true);
     }
   }, [state, refreshProjects]);
 
@@ -286,11 +320,6 @@ export function HomePage() {
     if (!projectSlug || syncCount === 0) return;
     listAssets(projectSlug, sortOrder);
   }, [projectSlug, syncCount, sortOrder, listAssets]);
-
-  useEffect(() => {
-    setRenderingOverrides(new Map());
-    setDeletingIds(new Set());
-  }, [projectSlug]);
 
   // Refresh timeline after each sync
   useEffect(() => {
@@ -397,17 +426,20 @@ export function HomePage() {
     mediaItems.reduce((n, m) => n + (isRenderingStatus(m.status) ? 1 : 0), 0),
   [mediaItems]);
 
-  // Drop ghost tiles once their real asset surfaces via sync, and expire
-  // stragglers (e.g. a failed enqueue) so a placeholder never lingers.
   useEffect(() => {
     if (ghostClips.length === 0) return;
-    const ids = new Set(mediaItems.map((m) => m.id));
-    const cutoff = Date.now() - 90_000;
-    setGhostClips((gs) => {
-      const next = gs.filter((g) => (!g.assetId || !ids.has(g.assetId)) && g.startedAt > cutoff);
-      return next.length === gs.length ? gs : next;
-    });
-  }, [mediaItems, ghostClips.length]);
+    const nextExpiry = Math.min(...ghostClips.map((ghost) => ghost.startedAt + 90_000));
+    const timeout = window.setTimeout(() => {
+      const cutoff = Date.now() - 90_000;
+      setGhostClips((ghosts) => ghosts.filter((ghost) => ghost.startedAt > cutoff));
+    }, Math.max(0, nextExpiry - Date.now()));
+    return () => window.clearTimeout(timeout);
+  }, [ghostClips]);
+
+  const activeGhostClips = useMemo(() => {
+    const ids = new Set(mediaItems.map((item) => item.id));
+    return ghostClips.filter((ghost) => !ghost.assetId || !ids.has(ghost.assetId));
+  }, [ghostClips, mediaItems]);
 
   const handleGenerationLifecycle = useCallback((event: GenerationLifecycleEvent) => {
     setGhostClips((ghosts) => {
@@ -431,12 +463,12 @@ export function HomePage() {
   // Ghosts still awaiting their real card, split by where they render.
   const videoGhosts = useMemo(() => {
     const ids = new Set(clips.map((c) => c.id));
-    return ghostClips.filter((g) => g.category === 'video' && (!g.assetId || !ids.has(g.assetId)));
-  }, [ghostClips, clips]);
+    return activeGhostClips.filter((g) => g.category === 'video' && (!g.assetId || !ids.has(g.assetId)));
+  }, [activeGhostClips, clips]);
   const imageGhosts = useMemo(() => {
     const ids = new Set(assets.map((a) => a.id));
-    return ghostClips.filter((g) => g.category === 'image' && (!g.assetId || !ids.has(g.assetId)));
-  }, [ghostClips, assets]);
+    return activeGhostClips.filter((g) => g.category === 'image' && (!g.assetId || !ids.has(g.assetId)));
+  }, [activeGhostClips, assets]);
 
   // Whether a generation of the open panel's category is still running —
   // drives the dimmed-but-clickable /generate button.
@@ -447,8 +479,8 @@ export function HomePage() {
       m.type === cat &&
       (m.pendingState === 'queued' || m.pendingState === 'processing') &&
       (m.pendingTaskType?.startsWith('generate') ?? false));
-    return live || ghostClips.some((g) => g.category === cat);
-  }, [genPanel, mediaItems, ghostClips]);
+    return live || activeGhostClips.some((g) => g.category === cat);
+  }, [genPanel, mediaItems, activeGhostClips]);
 
   const splitItem = useMemo(() =>
     splitTarget
@@ -556,7 +588,7 @@ export function HomePage() {
       return;
     }
     sync(projectSlug);
-  }, [projectSlug, activeSelection, renderAsset, settingsOrientation, sync, viewerSize, handleViewerSizeChange]);
+  }, [projectSlug, activeSelection, renderAsset, settingsOrientation, sync, viewerSize, handleViewerSizeChange, setRenderingOverrides]);
 
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {
@@ -609,7 +641,7 @@ export function HomePage() {
         return next;
       });
     }
-  }, [callTool, fetchTimeline, listAssets, projectSlug, removeAsset, sortOrder, sync]);
+  }, [callTool, fetchTimeline, listAssets, projectSlug, removeAsset, sortOrder, sync, setDeletingIds]);
 
   const handleRecoverClip = useCallback(async (video: MediaItem) => {
     if (!projectSlug) return;
@@ -716,7 +748,7 @@ export function HomePage() {
       setDeletingIds((prev) => new Set(prev).add(assetId));
     }
     chatInputRef.current?.animateAndSend(text);
-  }, []);
+  }, [setDeletingIds]);
 
   const handleAnimateEdit = useCallback((text: string) => {
     chatInputRef.current?.animateAndEdit(text);
@@ -744,7 +776,7 @@ export function HomePage() {
         return next;
       });
     }
-  }, [projectSlug, fetchTimeline, listAssets, sortOrder, sync, removeAsset]);
+  }, [projectSlug, fetchTimeline, listAssets, sortOrder, sync, removeAsset, setDeletingIds]);
 
   const handleActivityRewound = useCallback(async () => {
     if (!projectSlug) return;
@@ -763,7 +795,7 @@ export function HomePage() {
       fetchTimeline(projectSlug),
       fetchActivity(projectSlug),
     ]);
-  }, [projectSlug, clearAssets, sync, refreshProjects, listAssets, sortOrder, fetchTimeline, fetchActivity]);
+  }, [projectSlug, clearAssets, sync, refreshProjects, listAssets, sortOrder, fetchTimeline, fetchActivity, setRenderingOverrides, setDeletingIds]);
 
   const assetSlugs = useMemo(() => mediaItems.map((m) => m.slug), [mediaItems]);
 
@@ -1019,6 +1051,8 @@ export function HomePage() {
 
   const openArchive = useCallback((query?: string) => {
     const trimmedQuery = query?.trim() ?? '';
+    const requestId = archiveRequestIdRef.current + 1;
+    archiveRequestIdRef.current = requestId;
     setStatusOpen(false);
     setSettingsOpen(false);
     setSelectedItem(null);
@@ -1029,6 +1063,7 @@ export function HomePage() {
     setArchiveInitialError(null);
     setArchiveInitialLoading(true);
     setArchiveInitialQuery(trimmedQuery);
+    setArchiveRequestKey(requestId);
     setArchiveOpen(true);
 
     if (state !== 'ready') {
@@ -1045,6 +1080,7 @@ export function HomePage() {
       include_transcript: false,
       presign_media: true,
     }).then((result) => {
+      if (requestId !== archiveRequestIdRef.current) return;
       const content = result.content as Array<{ type: string; text: string }>;
       if (result.isError) {
         setArchiveInitialError(content[0]?.text ?? 'Archive search failed');
@@ -1055,9 +1091,11 @@ export function HomePage() {
       setArchiveInitialResponse(parsed);
       setArchiveInitialError(null);
     }).catch((error: unknown) => {
+      if (requestId !== archiveRequestIdRef.current) return;
       setArchiveInitialError(error instanceof Error ? error.message : String(error));
       setArchiveInitialResponse(null);
     }).finally(() => {
+      if (requestId !== archiveRequestIdRef.current) return;
       setArchiveInitialLoading(false);
     });
   }, [callTool, state]);
@@ -1587,7 +1625,7 @@ export function HomePage() {
     );
   };
 
-  if (state !== 'ready' || !initialLoadComplete || (projects.length === 0 && projectsLoading)) {
+  if (state !== 'ready' || defaultProjectLoading || (projects.length === 0 && projectsLoading)) {
     const isFailed = state === 'failed';
     const statusText = state === 'ready' ? 'loading projects...' : `MCP ${state}`;
     
@@ -1767,6 +1805,7 @@ export function HomePage() {
                   />
                 ) : archiveOpen ? (
                   <ArchiveBrowser
+                    key={`${archiveRequestKey}:${archiveInitialLoading ? 'loading' : 'loaded'}`}
                     projectSlug={projectSlug}
                     callTool={callTool}
                     callState={state}
@@ -1779,6 +1818,7 @@ export function HomePage() {
                   />
                 ) : activeSelection ? (
                   <AssetViewer
+                    key={`${projectSlug ?? ''}:${activeSelection.id}`}
                     item={activeSelection}
                     projectSlug={projectSlug ?? ''}
                     size={viewerSize}

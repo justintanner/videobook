@@ -47,20 +47,21 @@ const POSITION_LABEL: Record<OsgPosition, string> = {
   'bottom-left': 'Bottom left', 'bottom-center': 'Bottom center', 'bottom-right': 'Bottom right',
 };
 
-export function WatermarkDialog({ open, onOpenChange, item, projectSlug, callTool, onApply }: WatermarkDialogProps) {
+export function WatermarkDialog(props: WatermarkDialogProps) {
+  if (!props.open) return null;
+  const key = `${props.projectSlug ?? ''}:${props.item?.id ?? ''}`;
+  return <WatermarkDialogContent key={key} {...props} />;
+}
+
+function WatermarkDialogContent({ onOpenChange, item, projectSlug, callTool, onApply }: WatermarkDialogProps) {
   const [handle, setHandle] = useState('');
   const [recent, setRecent] = useState<string[]>([]);
   const [position, setPosition] = useState<OsgPosition>('bottom-right');
   const [scale, setScale] = useState(1);
   const [saveDefault, setSaveDefault] = useState(false);
-  const [loadingConfig, setLoadingConfig] = useState(false);
+  const [loadingConfig, setLoadingConfig] = useState(true);
 
   useEffect(() => {
-    if (!open) return;
-    setPosition('bottom-right');
-    setScale(1);
-    setSaveDefault(false);
-    setLoadingConfig(true);
     let cancelled = false;
     void (async () => {
       try {
@@ -78,9 +79,7 @@ export function WatermarkDialog({ open, onOpenChange, item, projectSlug, callToo
       }
     })();
     return () => { cancelled = true; };
-  }, [open, callTool]);
-
-  if (!open) return null;
+  }, [callTool]);
 
   const cleanHandle = handle.trim().replace(/^@/, '');
   const canApply = !!item && !!projectSlug && cleanHandle.length > 0;

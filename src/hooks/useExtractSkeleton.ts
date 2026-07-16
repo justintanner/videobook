@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "@/hooks/useToast";
 import { detectHolistic, loadImage } from "@/lib/poseExtract";
 import { countLandmarks, renderSkeletonPng } from "@/lib/poseRender";
@@ -20,7 +20,9 @@ export function useExtractSkeleton(
 ): UseExtractSkeletonResult {
   const [submitting, setSubmitting] = useState(false);
   const syncRef = useRef(sync);
-  syncRef.current = sync;
+  useEffect(() => {
+    syncRef.current = sync;
+  }, [sync]);
   const inFlightRef = useRef(false);
 
   const extract = useCallback(async (args: ExtractSkeletonArgs): Promise<string | null> => {

@@ -24,6 +24,7 @@ export interface UseScriptHistoryNavResult {
 }
 
 const FILENAME = "original.md";
+const EMPTY_COMMITS: GitCommit[] = [];
 
 interface Args {
   callTool: UseMcpResult["callTool"];
@@ -31,20 +32,26 @@ interface Args {
   projectSlug: string;
 }
 
+interface HistoryState {
+  assetId: string;
+  commits: GitCommit[];
+  idx: number;
+}
+
 export function useScriptHistoryNav({ callTool, assetId, projectSlug }: Args): UseScriptHistoryNavResult {
-  const [commits, setCommits] = useState<GitCommit[]>([]);
-  const [idx, setIdx] = useState(0);
+  const [history, setHistory] = useState<HistoryState>(() => ({ assetId, commits: [], idx: 0 }));
   const [loading, setLoading] = useState(false);
+  if (history.assetId !== assetId) {
+    setHistory({ assetId, commits: [], idx: 0 });
+  }
+  const commits = history.assetId === assetId ? history.commits : EMPTY_COMMITS;
+  const idx = history.assetId === assetId ? history.idx : 0;
 
   const callToolRef = useRef(callTool);
-  callToolRef.current = callTool;
-  const inFlightRef = useRef(false);
-
-  // Reset per-asset when switching viewers
   useEffect(() => {
-    setCommits([]);
-    setIdx(0);
-  }, [assetId]);
+    callToolRef.current = callTool;
+  }, [callTool]);
+  const inFlightRef = useRef(false);
 
   const fetchCommits = useCallback(async (): Promise<GitCommit[]> => {
     const result = await callToolRef.current("asset_history", {
@@ -56,7 +63,7 @@ export function useScriptHistoryNav({ callTool, assetId, projectSlug }: Args): U
     const content = result.content as Array<{ type: string; text: string }>;
     const raw: GitCommit[] = JSON.parse(content[0].text);
     const filtered = raw.filter((c) => !c.files || c.files.length === 0 || c.files.includes(FILENAME));
-    setCommits(filtered);
+    setHistory({ assetId, commits: filtered, idx: 0 });
     return filtered;
   }, [assetId, projectSlug]);
 
@@ -73,7 +80,7 @@ export function useScriptHistoryNav({ callTool, assetId, projectSlug }: Args): U
       toast({ title: "Restore failed", description: content?.[0]?.text ?? "Unknown error", duration: 3500 });
       return;
     }
-    setIdx(targetIdx);
+    setHistory({ assetId, commits: list, idx: targetIdx });
     await callToolRef.current("sync", { project_slug: projectSlug });
   }, [assetId, projectSlug]);
 

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 import { toast } from "@/hooks/useToast";
 
@@ -36,7 +36,9 @@ export function useRewriteScript(callTool: UseMcpResult["callTool"]): UseRewrite
   const [rewriting, setRewriting] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const callToolRef = useRef(callTool);
-  callToolRef.current = callTool;
+  useEffect(() => {
+    callToolRef.current = callTool;
+  }, [callTool]);
   const inFlightRef = useRef(false);
 
   const rewrite = useCallback(async (assetId: string, projectSlug: string, opts: RewriteOptions): Promise<boolean> => {

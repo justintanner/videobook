@@ -41,14 +41,21 @@ function localDatetimeNowPlus(minutes: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-export function PostComposerDialog({
-  open,
+export function PostComposerDialog(props: PostComposerDialogProps) {
+  const xConnect = useXConnect(props.callTool);
+  if (!props.open) return null;
+  const key = `${props.projectSlug ?? ''}:${props.item?.id ?? ''}:${props.initialText}`;
+  return <PostComposerDialogContent key={key} {...props} xConnect={xConnect} />;
+}
+
+function PostComposerDialogContent({
   onOpenChange,
   item,
   initialText,
   projectSlug,
   callTool,
-}: PostComposerDialogProps) {
+  xConnect,
+}: PostComposerDialogProps & { xConnect: ReturnType<typeof useXConnect> }) {
   const [text, setText] = useState(initialText);
   const [platform, setPlatform] = useState<Platform>('x');
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
@@ -68,28 +75,12 @@ export function PostComposerDialog({
     onAfterDispatch: () => onOpenChange(false),
   });
 
-  const { status: xStatus, connecting, connectError, connect: connectX, fetchStatus: fetchXStatus, reset: resetXConnect } = useXConnect(callTool);
+  const { status: xStatus, connecting, connectError, connect: connectX, fetchStatus: fetchXStatus, reset: resetXConnect } = xConnect;
 
   useEffect(() => {
-    if (!open) {
-      resetXConnect();
-      return;
-    }
-    setText(initialText);
-    setScheduleEnabled(false);
-    setScheduledFor(localDatetimeNowPlus(30));
-    setResult(null);
-    setError(null);
-    userPickedOrientationRef.current = false;
-    setOrientation('portrait');
-    history.reset();
     void fetchXStatus();
-    return () => {
-      resetXConnect();
-    };
-    // `history` is recreated each render — reset is stable enough; deps below cover the trigger surface.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialText, item?.id, fetchXStatus, resetXConnect]);
+    return resetXConnect;
+  }, [fetchXStatus, resetXConnect]);
 
   const charCount = text.length;
   const overLimit = charCount > MAX_TEXT;
@@ -143,8 +134,6 @@ export function PostComposerDialog({
       setSubmitting(false);
     }
   };
-
-  if (!open) return null;
 
   const buttonLabel = scheduleEnabled ? 'Schedule' : 'Post now';
   const buttonIcon = scheduleEnabled ? <Calendar className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />;

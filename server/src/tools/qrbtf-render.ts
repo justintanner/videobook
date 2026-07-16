@@ -176,9 +176,13 @@ function esc(s: string): string {
 
 function svgRect(
   x: number, y: number, w: number, h: number, fill: string, opacity?: number,
+  stroke?: string, sw?: number,
 ): string {
-  const op = opacity != null && opacity !== 1 ? ` opacity="${opacity}"` : "";
-  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${esc(fill)}"${op}/>`;
+  let a = `x="${x}" y="${y}" width="${w}" height="${h}" fill="${esc(fill)}"`;
+  if (opacity != null && opacity !== 1) a += ` opacity="${opacity}"`;
+  if (stroke) a += ` stroke="${esc(stroke)}"`;
+  if (sw != null) a += ` stroke-width="${sw}"`;
+  return `<rect ${a}/>`;
 }
 
 function svgCircle(

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 
 export type CostSource =
@@ -65,16 +65,17 @@ export function useEstimateCost(
   const [stale, setStale] = useState(false);
 
   const callToolRef = useRef(callTool);
-  callToolRef.current = callTool;
-
   const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const computedKeyRef = useRef<string | null>(null);
   const pendingKeyRef = useRef<string | null>(null);
   const callsRef = useRef<EstimateCall[] | null>(calls);
-  callsRef.current = calls;
   const enabledRef = useRef(enabled);
-  enabledRef.current = enabled;
+  useLayoutEffect(() => {
+    callToolRef.current = callTool;
+    callsRef.current = calls;
+    enabledRef.current = enabled;
+  }, [callTool, calls, enabled]);
 
   const fetchEstimate = useCallback(async () => {
     const current = callsRef.current;

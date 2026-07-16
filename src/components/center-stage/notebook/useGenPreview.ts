@@ -10,6 +10,20 @@ interface UseGenPreviewOptions {
   provider: string
 }
 
+interface SelectionState {
+  sourceModel: string
+  sourceProvider: string
+  model: string
+  provider: string
+  version: number
+}
+
+interface PreviewState {
+  key: string
+  preview: FullPreviewResponse | null
+  error: string | null
+}
+
 function previewToolName(category: 'image' | 'video'): string {
   return category === 'image' ? 'preview_image' : 'preview_video'
 }
@@ -20,18 +34,40 @@ function responseText(result: Awaited<ReturnType<UseMcpResult['callTool']>>): st
 }
 
 export function useGenPreview({ category, projectSlug, callTool, model, provider }: UseGenPreviewOptions) {
-  const [preview, setPreview] = useState<FullPreviewResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [selection, setSelection] = useState({ model, provider })
+  const [previewState, setPreviewState] = useState<PreviewState>({ key: '', preview: null, error: null })
+  const [selection, setSelection] = useState<SelectionState>({
+    sourceModel: model,
+    sourceProvider: provider,
+    model,
+    provider,
+    version: 0,
+  })
   const requestIdRef = useRef(0)
   const callToolRef = useRef(callTool)
-  callToolRef.current = callTool
+  const sourceMatches = selection.sourceModel === model && selection.sourceProvider === provider
+  const selectionMatches = selection.model === model && selection.provider === provider
+  const selectedModel = sourceMatches ? selection.model : model
+  const selectedProvider = sourceMatches ? selection.provider : provider
+  const selectionVersion = sourceMatches || selectionMatches ? selection.version : selection.version + 1
 
-  const refresh = useCallback(async (next: { model: string; provider: string }) => {
+  if (!sourceMatches) {
+    setSelection({
+      sourceModel: model,
+      sourceProvider: provider,
+      model,
+      provider,
+      version: selectionVersion,
+    })
+  }
+
+  const requestKey = JSON.stringify([category, projectSlug, selectedModel, selectedProvider, selectionVersion])
+
+  useEffect(() => {
+    callToolRef.current = callTool
+  }, [callTool])
+
+  const refresh = useCallback(async (next: { model: string; provider: string }, key: string) => {
     const requestId = ++requestIdRef.current
-    setLoading(true)
-    setError(null)
     try {
       const result = await callToolRef.current(previewToolName(category), {
         // prompt is a required arg on the preview router tools; the notebook
@@ -44,39 +80,38 @@ export function useGenPreview({ category, projectSlug, callTool, model, provider
       if (result.isError) throw new Error(responseText(result) || 'Unable to load generation form')
       const parsed = JSON.parse(responseText(result)) as FullPreviewResponse
       if (requestId !== requestIdRef.current) return
-      setPreview(parsed)
+      setPreviewState({ key, preview: parsed, error: null })
     } catch (cause) {
       if (requestId !== requestIdRef.current) return
-      setError(cause instanceof Error ? cause.message : 'Unable to load generation form')
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false)
+      setPreviewState((current) => ({
+        key,
+        preview: current.preview,
+        error: cause instanceof Error ? cause.message : 'Unable to load generation form',
+      }))
     }
   }, [category, projectSlug])
 
-  // Selection is the single fetch trigger; equality guards keep persisted-prop
-  // echoes (setProperty round-trips) and repeat picks from refetching.
   useEffect(() => {
-    setSelection((prev) => (prev.model === model && prev.provider === provider ? prev : { model, provider }))
-  }, [model, provider])
-
-  useEffect(() => {
-    void refresh(selection)
-  }, [refresh, selection])
+    void refresh({ model: selectedModel, provider: selectedProvider }, requestKey)
+  }, [refresh, requestKey, selectedModel, selectedProvider])
 
   const selectModel = useCallback((nextModel: string, nextProvider: string) => {
     setSelection((prev) => (
-      prev.model === nextModel && prev.provider === nextProvider ? prev : { model: nextModel, provider: nextProvider }
+      prev.model === nextModel && prev.provider === nextProvider
+        ? prev
+        : { ...prev, model: nextModel, provider: nextProvider, version: prev.version + 1 }
     ))
   }, [])
 
-  const selectedModelKey = selection.model || preview?.selected_model || ''
+  const preview = previewState.preview
+  const selectedModelKey = selectedModel || preview?.selected_model || ''
   const selectedOption = preview?.model_options.find((option) => option.key === selectedModelKey)
-  const selectedProviderKey = selection.provider || selectedOption?.selected_provider || preview?.selected_provider || ''
+  const selectedProviderKey = selectedProvider || selectedOption?.selected_provider || preview?.selected_provider || ''
 
   return {
     preview,
-    loading,
-    error,
+    loading: previewState.key !== requestKey,
+    error: previewState.key === requestKey ? previewState.error : null,
     selectedModelKey,
     selectedProviderKey,
     selectedOption,

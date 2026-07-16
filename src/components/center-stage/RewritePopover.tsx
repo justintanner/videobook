@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Loader2, Zap, ChevronDown } from 'lucide-react';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import type { RewritePlatform, RewriteVariant } from '@/hooks/useRewriteScript';
 import { PLATFORM_OPTIONS } from './rewrite-platforms';
 import { usePromptHistory } from '@/hooks/usePromptHistory';
+import type { UsePromptHistoryResult } from '@/hooks/usePromptHistory';
 import { useSlashCommandPicker } from '@/hooks/useSlashCommandPicker';
 import { PromptHistoryArrows } from '@/components/ui/PromptHistoryArrows';
 import type { UseMcpResult } from 'use-mcp/react';
@@ -35,7 +36,13 @@ interface RewritePopoverProps {
   projectSlug?: string;
 }
 
-export function RewritePopover({
+export function RewritePopover(props: RewritePopoverProps) {
+  const history = usePromptHistory(props.callTool, 'script_rewrite', props.projectSlug);
+  const key = props.open ? 'open' : 'closed';
+  return <RewritePopoverState key={key} {...props} history={history} />;
+}
+
+function RewritePopoverState({
   open,
   onOpenChange,
   onSubmit,
@@ -43,34 +50,27 @@ export function RewritePopover({
   disabled,
   trigger,
   initial,
-  callTool,
-  projectSlug,
-}: RewritePopoverProps) {
-  const [variant, setVariant] = useState<RewriteVariant>('tldr');
-  const [platform, setPlatform] = useState<RewritePlatform | ''>('');
-  const [customPrompt, setCustomPrompt] = useState('');
+  history,
+}: RewritePopoverProps & { history: UsePromptHistoryResult }) {
+  const [variant, setVariant] = useState<RewriteVariant>(initial?.variant ?? 'tldr');
+  const [platform, setPlatform] = useState<RewritePlatform | ''>(initial?.platform ?? '');
+  const [customPrompt, setCustomPrompt] = useState(initial?.customPrompt ?? '');
+  const [historySessionActive, setHistorySessionActive] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const history = usePromptHistory(callTool, 'script_rewrite', projectSlug);
-
-  // Seed state from `initial` each time the popover opens.
-  useEffect(() => {
-    if (!open) return;
-    setVariant(initial?.variant ?? 'tldr');
-    setPlatform(initial?.platform ?? '');
-    setCustomPrompt(initial?.customPrompt ?? '');
+  const prepareHistory = useCallback(() => {
+    if (historySessionActive) return;
     history.reset();
-    // Intentionally only re-seed when `open` flips — ignore identity changes of `initial`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+    setHistorySessionActive(true);
+  }, [history, historySessionActive]);
 
   // Reset draft state whenever popover closes so it always opens fresh
   const handleOpenChange = useCallback((next: boolean) => {
+    history.reset();
     if (!next) {
       setVariant('tldr');
       setPlatform('');
       setCustomPrompt('');
-      history.reset();
     }
     onOpenChange(next);
   }, [onOpenChange, history]);
@@ -106,6 +106,7 @@ export function RewritePopover({
       return;
     }
     if (e.key === 'ArrowUp' && !e.shiftKey && (textareaRef.current?.selectionStart ?? 0) === 0) {
+      prepareHistory();
       const prev = history.navigateBack(customPrompt);
       if (prev !== null) {
         e.preventDefault();
@@ -113,18 +114,20 @@ export function RewritePopover({
       }
       return;
     }
-    if (e.key === 'ArrowDown' && !e.shiftKey && history.cursor !== -1) {
+    if (e.key === 'ArrowDown' && !e.shiftKey && (historySessionActive ? history.cursor : -1) !== -1) {
+      prepareHistory();
       const next = history.navigateForward();
       if (next !== null) {
         e.preventDefault();
         setCustomPrompt(next.slice(0, CUSTOM_PROMPT_MAX));
       }
     }
-  }, [slashPicker, submit, history, customPrompt]);
+  }, [slashPicker, submit, history, customPrompt, historySessionActive, prepareHistory]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setCustomPrompt(e.target.value.slice(0, CUSTOM_PROMPT_MAX));
     history.reset();
+    setHistorySessionActive(true);
   }, [history]);
 
   return (
@@ -210,13 +213,15 @@ export function RewritePopover({
               <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-500/70">Instruction (optional)</span>
               <div className="flex items-center gap-2">
                 <PromptHistoryArrows
-                  cursor={history.cursor}
+                  cursor={historySessionActive ? history.cursor : -1}
                   total={history.entries.length}
                   onPrev={() => {
+                    prepareHistory();
                     const prev = history.navigateBack(customPrompt);
                     if (prev !== null) setCustomPrompt(prev.slice(0, CUSTOM_PROMPT_MAX));
                   }}
                   onNext={() => {
+                    prepareHistory();
                     const next = history.navigateForward();
                     if (next !== null) setCustomPrompt(next.slice(0, CUSTOM_PROMPT_MAX));
                   }}

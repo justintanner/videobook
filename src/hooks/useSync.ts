@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 
 export interface SyncResult {
@@ -23,7 +23,9 @@ export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
   const [error, setError] = useState<string | undefined>();
   const [syncCount, setSyncCount] = useState(0);
   const callToolRef = useRef(callTool);
-  callToolRef.current = callTool;
+  useEffect(() => {
+    callToolRef.current = callTool;
+  }, [callTool]);
   const syncingRef = useRef(false);
   const prevSyncJsonRef = useRef<string>('');
 

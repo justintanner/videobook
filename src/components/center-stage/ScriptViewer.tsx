@@ -75,7 +75,9 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
   const [saving, setSaving] = useState(false);
   const isDirty = draft !== (item.prompt ?? '');
   const dirtyRef = useRef(isDirty);
-  dirtyRef.current = isDirty;
+  useEffect(() => {
+    dirtyRef.current = isDirty;
+  }, [isDirty]);
 
   // Slash command autocomplete state
   const [cursorPos, setCursorPos] = useState(0);
@@ -166,6 +168,11 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
 
   // Rewrite handler — invokes rewrite_script with variant + optional platform/customPrompt
   const { rewrite, rewriting } = useRewriteScript(callTool);
+  const isGenerating = rewriting || item.status === 'generating';
+  const isGeneratingRef = useRef(isGenerating);
+  useEffect(() => {
+    isGeneratingRef.current = isGenerating;
+  }, [isGenerating]);
   const [rewriteOpen, setRewriteOpen] = useState(false);
   const handleRewriteSubmit = useCallback(
     (args: { variant: 'full' | 'tldr'; platform?: 'ig' | 'tiktok' | 'youtube'; customPrompt?: string }) => {
@@ -253,7 +260,6 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
   }, [callTool, item.id, item.prompt, projectSlug]);
 
   // Debounced autosave on draft change
-  const isGeneratingRef = useRef(false);
   useEffect(() => {
     if (!isDirty || isGeneratingRef.current) return;
     const handle = setTimeout(() => { void saveNow(draft); }, AUTOSAVE_DEBOUNCE_MS);
@@ -323,9 +329,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
   }, [promptText]);
   const genImagesCost = useEstimateCost(callTool, { calls: genImagesEstimateCalls });
 
-  const isGenerating = rewriting || item.status === 'generating';
   const rewriteDisabled = isGenerating;
-  isGeneratingRef.current = isGenerating;
 
   // Refresh last-rewrite metadata and force-sync the textarea after a rewrite completes.
   // item.prompt gets replaced externally, which would otherwise flip isDirty to true

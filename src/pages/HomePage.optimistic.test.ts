@@ -9,9 +9,9 @@ const homepageSrc = readFileSync(
 );
 
 describe("HomePage optimistic UI reset wiring", () => {
-  it("clears renderingOverrides/deletingIds only when projectSlug changes", () => {
+  it("keys renderingOverrides/deletingIds by projectSlug", () => {
     expect(homepageSrc).toMatch(
-      /setRenderingOverrides\(new Map\(\)\)\s*;\s*setDeletingIds\(new Set\(\)\)\s*;\s*\}, \[projectSlug\]\)/,
+      /useProjectScopedState\(projectSlug, createRenderingOverrides\)[\s\S]*?useProjectScopedState\(projectSlug, createDeletingIds\)/,
     );
   });
 

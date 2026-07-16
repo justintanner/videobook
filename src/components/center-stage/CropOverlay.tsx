@@ -180,8 +180,9 @@ export function CropOverlay({ mediaRef, initialRatio, onApply, onCancel }: CropO
     dragRef.current = { kind: 'move', startPx: rectPx, startPointer: pointerToOverlay(e) };
   };
 
-  const handleResizeStart = (corner: 'nw' | 'ne' | 'sw' | 'se') => (e: React.PointerEvent) => {
+  const handleResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!rectPx) return;
+    const corner = e.currentTarget.dataset.corner as 'nw' | 'ne' | 'sw' | 'se';
     e.preventDefault();
     e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
@@ -275,22 +276,26 @@ export function CropOverlay({ mediaRef, initialRatio, onApply, onCancel }: CropO
         <div
           className={cn(HANDLE_BASE, 'cursor-nwse-resize')}
           style={{ left: -6, top: -6 }}
-          onPointerDown={handleResizeStart('nw')}
+          data-corner="nw"
+          onPointerDown={handleResizeStart}
         />
         <div
           className={cn(HANDLE_BASE, 'cursor-nesw-resize')}
           style={{ right: -6, top: -6 }}
-          onPointerDown={handleResizeStart('ne')}
+          data-corner="ne"
+          onPointerDown={handleResizeStart}
         />
         <div
           className={cn(HANDLE_BASE, 'cursor-nesw-resize')}
           style={{ left: -6, bottom: -6 }}
-          onPointerDown={handleResizeStart('sw')}
+          data-corner="sw"
+          onPointerDown={handleResizeStart}
         />
         <div
           className={cn(HANDLE_BASE, 'cursor-nwse-resize')}
           style={{ right: -6, bottom: -6 }}
-          onPointerDown={handleResizeStart('se')}
+          data-corner="se"
+          onPointerDown={handleResizeStart}
         />
       </div>
 

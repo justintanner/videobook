@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { ArchiveRestore, CheckSquare, Loader2, Search, Square } from 'lucide-react'
 import { CloseButton } from '@/components/ui/CloseButton'
@@ -99,29 +99,6 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
   const [searched, setSearched] = useState(initialResponse != null || initialError != null)
   const [error, setError] = useState<string | null>(initialError ?? null)
   const [notice, setNotice] = useState<string | null>(null)
-
-  useEffect(() => {
-    setQuery(initialQuery)
-  }, [initialQuery])
-
-  useEffect(() => {
-    if (initialResponse) {
-      setResults(initialResponse.results)
-      setTotal(initialResponse.total)
-      setOffset(initialResponse.offset)
-      setLimit(initialResponse.limit)
-      setHasMore(initialResponse.has_more)
-      setError(null)
-      setSearched(true)
-    } else if (initialError) {
-      setResults([])
-      setTotal(0)
-      setOffset(0)
-      setHasMore(false)
-      setError(initialError)
-      setSearched(true)
-    }
-  }, [initialError, initialResponse])
 
   const selectedCount = selectedIds.size
   const visibleSelected = useMemo(

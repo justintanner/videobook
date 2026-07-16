@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { UseMcpResult } from 'use-mcp/react'
 import { effectiveToolName, filterValuesForMode, inferModeKey } from '@/components/gen/modes'
 import type { ModelOption } from '@/components/gen/types'
@@ -190,8 +190,11 @@ export function useNotebookRun({
   // captured at submit — otherwise edits made (or runs finished) while this
   // generation was in flight get clobbered by replaceDefinition.
   const definitionRef = useRef(definition)
-  definitionRef.current = definition
   const inFlightRef = useRef(new Set<string>())
+
+  useLayoutEffect(() => {
+    definitionRef.current = definition
+  }, [definition])
 
   const run = useCallback(async (
     step: NotebookPlanStep,
