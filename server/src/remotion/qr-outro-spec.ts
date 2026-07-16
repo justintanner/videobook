@@ -17,6 +17,11 @@ export type CardPlacement = {
   index: number;
 };
 
+export type CardEntryOffset = {
+  x: number;
+  y: number;
+};
+
 export type ImpactTiming = {
   frame: number;
   cardIndex: number;
@@ -44,7 +49,8 @@ const FIRST_IMPACT_S = 0.4;
 const FIRST_IMPACT_FRAME = Math.round(FIRST_IMPACT_S * FPS);
 const MIN_DURATION_S = 3.0;
 const TAIL_AFTER_LAST_IMPACT_S = 1.6;
-const ENTRY_FRAMES = 6;
+const ENTRY_FRAMES = IMPACT_INTERVAL_FRAMES;
+const ENTRY_OVERSCAN_FRACTION = 0.25;
 const MAX_FINAL_CUE_S = 0.6;
 
 const PANEL_BG = "#0A0A0A";
@@ -62,6 +68,7 @@ export {
   MIN_DURATION_S,
   TAIL_AFTER_LAST_IMPACT_S,
   ENTRY_FRAMES,
+  ENTRY_OVERSCAN_FRACTION,
   MAX_FINAL_CUE_S,
   PANEL_BG,
   CARD_PAD,
@@ -185,6 +192,28 @@ export function cardPlacements(
     });
   }
   return placements;
+}
+
+export function cardEntryOffset(
+  placement: CardPlacement,
+  layout: SplitLayout,
+): CardEntryOffset {
+  const driftDirection = placement.index % 2 === 0 ? -1 : 1;
+  const overscan = Math.ceil(
+    Math.max(placement.w, placement.h) * ENTRY_OVERSCAN_FRACTION,
+  );
+
+  if (layout.splitAxis === "horizontal") {
+    return {
+      x: layout.width - placement.x + overscan,
+      y: driftDirection * placement.h * 0.12,
+    };
+  }
+
+  return {
+    x: driftDirection * placement.w * 0.12,
+    y: layout.height - placement.y + overscan,
+  };
 }
 
 export function impactFrames(qrCount: number): ImpactTiming[] {

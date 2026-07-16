@@ -10,6 +10,7 @@ import {
 import {
   buildOutroSpec,
   cardAnimationProgress,
+  cardEntryOffset,
   cueWindows,
   PANEL_BG,
   CARD_PAD,
@@ -67,20 +68,16 @@ const QrCard: React.FC<{
   placement: { x: number; y: number; w: number; h: number };
   impactFrame: number;
   cardIndex: number;
-  splitAxis: "horizontal" | "vertical";
-}> = ({ src, placement, impactFrame, cardIndex, splitAxis }) => {
+  entryOffset: { x: number; y: number };
+}> = ({ src, placement, impactFrame, cardIndex, entryOffset }) => {
   const frame = useCurrentFrame();
   const anim = cardAnimationProgress(frame, impactFrame);
 
   if (!anim.visible) return null;
 
   const enterDir = cardIndex % 2 === 0 ? -1 : 1;
-  const translateX = splitAxis === "horizontal"
-    ? anim.translateFraction * placement.w * 0.55
-    : anim.translateFraction * enterDir * placement.w * 0.12;
-  const translateY = splitAxis === "horizontal"
-    ? anim.translateFraction * enterDir * placement.h * 0.12
-    : anim.translateFraction * placement.h * 0.55;
+  const translateX = anim.translateFraction * entryOffset.x;
+  const translateY = anim.translateFraction * entryOffset.y;
 
   return (
     <div
@@ -156,7 +153,7 @@ export const QrOutroComposition: React.FC<QrOutroInputProps> = ({
           placement={card}
           impactFrame={spec.impacts[i].frame}
           cardIndex={i}
-          splitAxis={spec.layout.splitAxis}
+          entryOffset={cardEntryOffset(card, spec.layout)}
         />
       ))}
 

@@ -6,6 +6,7 @@ import {
   totalDuration,
   buildOutroSpec,
   cardAnimationProgress,
+  cardEntryOffset,
   cueWindows,
   orientationForAspectRatio,
   FPS,
@@ -220,6 +221,11 @@ describe("orientationForAspectRatio", () => {
 describe("cardAnimationProgress", () => {
   const impact = FIRST_IMPACT_FRAME;
 
+  it("uses one impact interval for the default entrance", () => {
+    expect(ENTRY_FRAMES).toBe(IMPACT_INTERVAL_FRAMES);
+    expect(impact - ENTRY_FRAMES).toBe(0);
+  });
+
   it("is invisible before the entry window", () => {
     const p = cardAnimationProgress(impact - ENTRY_FRAMES - 1, impact);
     expect(p.visible).toBe(false);
@@ -231,6 +237,15 @@ describe("cardAnimationProgress", () => {
     expect(p.visible).toBe(true);
     expect(p.opacity).toBe(0);
     expect(p.translateFraction).toBe(1);
+  });
+
+  it("is visibly in motion halfway through the entrance", () => {
+    const p = cardAnimationProgress(impact - ENTRY_FRAMES / 2, impact);
+    expect(p.visible).toBe(true);
+    expect(p.opacity).toBeGreaterThan(0);
+    expect(p.opacity).toBeLessThan(1);
+    expect(p.translateFraction).toBeGreaterThan(0);
+    expect(p.translateFraction).toBeLessThan(1);
   });
 
   it("lands fully opaque at impact", () => {
@@ -251,6 +266,36 @@ describe("cardAnimationProgress", () => {
     const p = cardAnimationProgress(impact + 1000, impact);
     expect(p.visible).toBe(true);
     expect(p.opacity).toBe(1);
+  });
+});
+
+describe("cardEntryOffset", () => {
+  it("starts every card fully beyond the output edge", () => {
+    for (const ratio of ["16:9", "9:16", "1:1"] as AspectRatio[]) {
+      for (const count of [1, 2, 3, 4]) {
+        const spec = buildOutroSpec(ratio, count);
+        for (const card of spec.cards) {
+          const offset = cardEntryOffset(card, spec.layout);
+          const radians = 8 * Math.PI / 180;
+          const transformedHalfWidth = (
+            card.w * 1.2 * Math.cos(radians)
+            + card.h * 1.2 * Math.sin(radians)
+          ) / 2;
+          const transformedHalfHeight = (
+            card.w * 1.2 * Math.sin(radians)
+            + card.h * 1.2 * Math.cos(radians)
+          ) / 2;
+          const centerX = card.x + card.w / 2 + offset.x;
+          const centerY = card.y + card.h / 2 + offset.y;
+
+          if (spec.layout.splitAxis === "horizontal") {
+            expect(centerX - transformedHalfWidth).toBeGreaterThan(spec.layout.width);
+          } else {
+            expect(centerY - transformedHalfHeight).toBeGreaterThan(spec.layout.height);
+          }
+        }
+      }
+    }
   });
 });
 
