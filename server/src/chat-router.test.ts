@@ -118,7 +118,7 @@ describe("TIMESTAMP_PARAMS", () => {
 
 describe("ROUTABLE_TOOLS", () => {
   it("has the expected number of entries", () => {
-    expect(ROUTABLE_TOOLS.length).toBe(31);
+    expect(ROUTABLE_TOOLS.length).toBe(32);
   });
 
   it("includes create_watermark for QR/watermark routing", () => {

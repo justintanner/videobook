@@ -199,6 +199,7 @@ import { estimateCostDef } from "./estimate-cost.js";
 import { postDef } from "./post.js";
 import { xConnectStartDef, xConnectStatusDef } from "./connect-x.js";
 import { createWatermarkDef } from "./create-watermark.js";
+import { createQrOutroDef } from "./create-qr-outro.js";
 import { createQartDef } from "./create-qart.js";
 import { createQrbtfDef } from "./create-qrbtf.js";
 import { getWatermarkConfigDef } from "./get-watermark-config.js";
@@ -409,6 +410,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     xConnectStartDef(),
     xConnectStatusDef(),
     createWatermarkDef(fs),
+    createQrOutroDef(fs),
     createQartDef(fs),
     createQrbtfDef(fs),
     getWatermarkConfigDef(),

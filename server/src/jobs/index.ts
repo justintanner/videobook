@@ -64,6 +64,7 @@ import { registerGenerateAlibabaQwenImageJob, registerGenerateAlibabaQwenImageEd
 import { registerGenerateAlibabaVideoJob } from "./generate-alibaba-video.js";
 import { registerCompleteKieTaskJob } from "./complete-kie-task.js";
 import { registerRenderProjectJob } from "./render-project.js";
+import { registerRenderQrOutroJob } from "./render-qr-outro.js";
 import { registerProcessVideoJob } from "./process-video.js";
 import { registerTranscribeVideoAudioJob } from "./transcribe-video-audio.js";
 import { registerAnalyzeVideoJob } from "./analyze-video.js";
@@ -183,6 +184,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerGenerateAlibabaVideoJob(fs);
   registerCompleteKieTaskJob(fs);
   registerRenderProjectJob(fs);
+  registerRenderQrOutroJob(fs);
   registerProcessVideoJob(fs);
   registerTranscribeVideoAudioJob(fs);
   registerAnalyzeVideoJob(fs);

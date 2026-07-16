@@ -474,6 +474,23 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "create_qrbtf", autoInject: ["project_slug"] },
   },
   {
+    command: "/qr-outro",
+    description: "Generate an animated QR outro video (vid- asset) combining an image, up to 4 QR codes, and optional audio",
+    example: "/qr-outro @img-frame @img-qr1 @aud-impact 9:16",
+    category: "action",
+    icon: "QrCode",
+    size: "default",
+    variant: "amber",
+    chevron: "right",
+    params: [
+      { name: "last_frame_slug", type: "string", required: true, description: "Background frame image (@img-*)" },
+      { name: "qr_image_slugs", type: "string[]", required: true, description: "1 to 4 QR code images (@img-*)" },
+      { name: "sound_effect_slug", type: "string", required: false, description: "Optional audio asset (@aud-*)" },
+      { name: "aspect_ratio", type: "string", required: false, description: "16:9 | 9:16 | 1:1" },
+    ],
+    mcpTool: { tool: "create_qr_outro", autoInject: ["project_slug"] },
+  },
+  {
     command: "/concat",
     description: "Compose one or two image assets into a 16:9 two-slot sheet; omit the second image to leave an empty cell",
     example: "/concat @img-left @img-right",

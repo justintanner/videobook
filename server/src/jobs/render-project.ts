@@ -1,7 +1,6 @@
 import type { VideocityFs } from "videocity-engine";
 import { copyFile, mkdir, unlink } from "node:fs/promises";
 import { join, resolve, basename } from "node:path";
-import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import { registerJobHandler } from "../queue.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
@@ -39,33 +38,13 @@ import {
   SQUARE_WIDTH,
   SQUARE_HEIGHT,
 } from "../remotion/constants.js";
+import { getSharedBundleLocation } from "../remotion/shared-bundle.js";
 
 const LOCK_DURATION_MS = 1_800_000; // 30 min for renders
 // How long a render job waits for another holder of the same asset before
 // giving up. The render tool enqueues one job per orientation and the queue
 // runs them concurrently, so same-asset jobs must queue behind each other.
 const CLAIM_WAIT_MS = 900_000;
-const REMOTION_ENTRY = new URL("../remotion/index.tsx", import.meta.url).pathname;
-
-let bundleLocation: string | null = null;
-
-async function getBundleLocation(): Promise<string> {
-  if (bundleLocation) return bundleLocation;
-  bundleLocation = await bundle({
-    entryPoint: REMOTION_ENTRY,
-    webpackOverride: (config) => ({
-      ...config,
-      resolve: {
-        ...config.resolve,
-        extensions: [".tsx", ".ts", ".js", ".jsx", ".mjs", ".cjs", ".json"],
-        extensionAlias: {
-          ".js": [".tsx", ".ts", ".js"],
-        },
-      },
-    }),
-  });
-  return bundleLocation;
-}
 
 type AssetDescriptor = {
   assetId: string;
@@ -188,7 +167,7 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
       shadowOpacity,
     } = payload as RenderProjectPayload;
 
-    const bundleDir = await getBundleLocation();
+    const bundleDir = await getSharedBundleLocation();
 
     const targetWidth = orientation === "portrait" ? PORTRAIT_WIDTH : orientation === "square" ? SQUARE_WIDTH : LANDSCAPE_WIDTH;
     const targetHeight = orientation === "portrait" ? PORTRAIT_HEIGHT : orientation === "square" ? SQUARE_HEIGHT : LANDSCAPE_HEIGHT;
