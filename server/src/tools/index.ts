@@ -59,6 +59,7 @@ import { archiveClipDef } from "./archive-clip.js";
 import { searchArchiveDef } from "./search-archive.js";
 import { restoreArchiveClipsDef } from "./restore-archive-clips.js";
 import { changeVideoSpeedDef } from "./change-video-speed.js";
+import { timewarpVideoDef } from "./timewarp-video.js";
 import { audioBoostDef } from "./audio-boost.js";
 import { reverseVideoDef } from "./reverse-video.js";
 import { extractFrameDefs } from "./extract-frame.js";
@@ -269,6 +270,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     searchArchiveDef(),
     restoreArchiveClipsDef(fs),
     changeVideoSpeedDef(fs),
+    timewarpVideoDef(fs),
     audioBoostDef(fs),
     reverseVideoDef(fs),
     ...extractFrameDefs(fs),

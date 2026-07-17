@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { ServerCommand, CommandArgValue } from '@/lib/command-registry';
-import { filterCommandsByMountKeys, normalizeQrOutroCommandArgs, parseCommandArgs, selectCommandForInput } from '@/lib/command-registry';
+import { filterCommandsByMountKeys, normalizeQrOutroCommandArgs, normalizeTimewarpCommandArgs, parseCommandArgs, selectCommandForInput } from '@/lib/command-registry';
 import { useMountKeys } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
 import { executeUiAction } from '@/lib/ui-actions';
@@ -117,6 +117,12 @@ export function CommandRegistryProvider({
               } else if (val !== undefined) {
                 toolArgs.speed = parseFloat(String(val));
               }
+            }
+            if (cmd.mcpTool.tool === 'timewarp_video') {
+              const normalized = normalizeTimewarpCommandArgs(toolArgs);
+              delete toolArgs.range;
+              delete toolArgs.factor;
+              Object.assign(toolArgs, normalized);
             }
             const result = await callTool(cmd.mcpTool.tool, toolArgs);
             if (!result.isError) onAfterDispatch?.(cmd.mcpTool.tool, toolArgs);

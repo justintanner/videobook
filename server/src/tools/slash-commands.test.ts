@@ -95,6 +95,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/audio-set");
     expect(commandNames).toContain("/reverse");
     expect(commandNames).toContain("/speed");
+    expect(commandNames).toContain("/timewarp");
     expect(commandNames).toContain("/split");
     expect(commandNames).toContain("/export-to");
     expect(commandNames).toContain("/skeleton");
@@ -106,6 +107,11 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/connect-x");
     expect(commandNames).toContain("/play");
     expect(commandNames).toContain("/qart");
+
+    const timewarp = commands.find((c) => c.command === "/timewarp")!;
+    expect(timewarp.mcpTool?.tool).toBe("timewarp_video");
+    expect(timewarp.mcpTool?.autoInject).toContain("project_slug");
+    expect(timewarp.params.map((p) => p.name)).toEqual(["asset_id", "range", "factor"]);
 
     const qart = commands.find((c) => c.command === "/qart")!;
     expect(qart.mcpTool?.tool).toBe("create_qart");

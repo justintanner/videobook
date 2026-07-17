@@ -158,7 +158,8 @@ function jobTypeToAssetWorkKind(
     case "crop_image":             return { kind: "crop" };
     case "splice_video":           return { kind: "splice" };
     case "reverse_video":          return { kind: "reverse" };
-    case "change_video_speed":     return { kind: "change_speed" };
+    case "change_video_speed":
+    case "timewarp_video":         return { kind: "change_speed" };
     case "replace_video_audio":    return { kind: "replace_audio" };
     case "apply_cuts":             return { kind: "apply_cuts" };
     case "apply_sfx":              return { kind: "apply_sfx" };

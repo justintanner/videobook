@@ -14,7 +14,7 @@ import { createTestClient } from "../test-client.js";
 import { createFs } from "videocity-engine";
 import { registerJobHandler } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { parseCommandArgs, filterCommandsByMountKeys } from "../../../src/lib/command-registry.js";
+import { parseCommandArgs, filterCommandsByMountKeys, normalizeTimewarpCommandArgs } from "../../../src/lib/command-registry.js";
 import type { ServerCommand } from "../../../src/lib/command-registry.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -72,6 +72,38 @@ describe("slash commands e2e", () => {
     const cmd = findCommand(commandStr);
     return parseCommandArgs(rest, cmd.params);
   }
+
+  describe("/timewarp", () => {
+    it("normalizes the documented form into numeric MCP arguments", () => {
+      const parsed = simulateParse("/timewarp", "vid-10s-og 0-4.2s 1.5x");
+      expect(normalizeTimewarpCommandArgs(parsed)).toEqual({
+        asset_id: "vid-10s-og",
+        start_seconds: 0,
+        end_seconds: 4.2,
+        stretch_factor: 1.5,
+      });
+    });
+
+    it("accepts an at-sign and colon timestamps", () => {
+      const parsed = simulateParse("/timewarp", "@vid-10s-og 0:01-0:04.2s 0.5x");
+      expect(normalizeTimewarpCommandArgs(parsed)).toEqual({
+        asset_id: "vid-10s-og",
+        start_seconds: 1,
+        end_seconds: 4.2,
+        stretch_factor: 0.5,
+      });
+    });
+
+    it.each([
+      "vid-10s-og",
+      "vid-10s-og 0-4.2s",
+      "vid-10s-og 4.2-0s 1.5x",
+      "vid-10s-og 0-4.2s 1x",
+      "vid-10s-og 0-4.2s 1.5x extra",
+    ])("rejects malformed arguments: %s", (rest) => {
+      expect(() => normalizeTimewarpCommandArgs(simulateParse("/timewarp", rest))).toThrow();
+    });
+  });
 
   // -----------------------------------------------------------------------
   // 1. /download — download_video

@@ -25,6 +25,19 @@ describe("getRoutableTool", () => {
     expect(tool!.category).toBe("generation");
   });
 
+  it("returns timewarp routing parameters", () => {
+    const tool = getRoutableTool("timewarp_video");
+    expect(tool).toBeDefined();
+    expect(tool!.actualTool).toBe("timewarp_video");
+    expect(tool!.category).toBe("action");
+    expect(tool!.params).toEqual([
+      "asset_id",
+      "start_seconds",
+      "end_seconds",
+      "stretch_factor",
+    ]);
+  });
+
   it("returns correct tool info for generate_image", () => {
     const tool = getRoutableTool("generate_image");
     expect(tool).toBeDefined();
@@ -79,6 +92,7 @@ describe("buildChatRoutingPrompt", () => {
     expect(prompt).toContain("create_watermark");
     expect(prompt).toContain("concat_images");
     expect(prompt).toContain("create_qr_outro");
+    expect(prompt).toContain("timewarp_video");
     expect(prompt).toContain("Available tools:");
   });
 
@@ -123,6 +137,10 @@ describe("TIMESTAMP_PARAMS", () => {
     expect(TIMESTAMP_PARAMS.download_video).toContain("end_time");
   });
 
+  it("has entries for timewarp_video", () => {
+    expect(TIMESTAMP_PARAMS.timewarp_video).toEqual(["start_seconds", "end_seconds"]);
+  });
+
   it("does not have entries for tools without timestamps", () => {
     expect(TIMESTAMP_PARAMS.reverse_video).toBeUndefined();
     expect(TIMESTAMP_PARAMS.generate_image).toBeUndefined();
@@ -131,7 +149,7 @@ describe("TIMESTAMP_PARAMS", () => {
 
 describe("ROUTABLE_TOOLS", () => {
   it("has the expected number of entries", () => {
-    expect(ROUTABLE_TOOLS.length).toBe(32);
+    expect(ROUTABLE_TOOLS.length).toBe(33);
   });
 
   it("includes create_watermark for QR/watermark routing", () => {

@@ -16,6 +16,8 @@ export type ProcessVideoPayload = {
   provenance: Record<string, unknown>;
   force?: boolean;
   skipDownstreamJobs?: boolean;
+  preserveAudioArtifacts?: boolean;
+  reviveVisualAnalysis?: boolean;
 };
 
 export type ProcessVideoResult = {
@@ -59,7 +61,7 @@ export async function processVideoFiles(
 ): Promise<ProcessVideoResult> {
     const {
       videoPath, assetId, assetDir, projectSlug, provenance,
-      force, skipDownstreamJobs,
+      force, skipDownstreamJobs, preserveAudioArtifacts, reviveVisualAnalysis,
     } = payload;
 
     signal?.throwIfAborted();
@@ -160,7 +162,10 @@ export async function processVideoFiles(
 
     // Extract original.mp3 from the video (kept in sync with original.mp4 so
     // standalone audio reads — timeline, transcription — match the source).
-    if (probe.hasAudio) {
+    const existingMp3 = preserveAudioArtifacts
+      ? await fs.readFile(assetId, "original.mp3", projectSlug)
+      : null;
+    if (probe.hasAudio && (!existingMp3 || !existingMp3.ok)) {
       const mp3TempPath = join(assetDir, "original.mp3.tmp");
       await runFfmpeg(["-y", "-i", activeVideoPath, "-vn", "-acodec", "libmp3lame", "-q:a", "2", "-f", "mp3", mp3TempPath], { signal });
       try {
@@ -171,19 +176,18 @@ export async function processVideoFiles(
       }
     }
 
-    // Extract waveform and persist via the typed primitive (committed to git
-    // alongside metadata.sqlite + the per-asset canonical export). Failures
-    // here are non-fatal: the waveform is a timeline-UI nicety, not a
-    // load-bearing dependency. Marking the whole asset 'error' over a
-    // missing waveform was wiping out otherwise-good chunks (e.g. when
-    // even_split's parallel process_video jobs raced the git index).
-    const waveform = await extractWaveform(activeVideoPath);
-    if (waveform.length > 0) {
-      const wavResult = await fs.writeAudioWaveform(assetId, waveform, projectSlug);
-      if (!wavResult.ok) {
-        console.warn(
-          `[process_video] writeAudioWaveform soft-failed for ${assetId}: ${wavResult.error.message}`,
-        );
+    const existingWaveform = preserveAudioArtifacts
+      ? await fs.readAudioWaveform(assetId, projectSlug)
+      : null;
+    if (!existingWaveform || !existingWaveform.ok) {
+      const waveform = await extractWaveform(activeVideoPath);
+      if (waveform.length > 0) {
+        const wavResult = await fs.writeAudioWaveform(assetId, waveform, projectSlug);
+        if (!wavResult.ok) {
+          console.warn(
+            `[process_video] writeAudioWaveform soft-failed for ${assetId}: ${wavResult.error.message}`,
+          );
+        }
       }
     }
 
@@ -217,14 +221,14 @@ export async function processVideoFiles(
     // analysis (Gemini) is gated to slot drop in tools/assign-slot.ts — plus
     // the slot-gated revival below for re-processed (trimmed/re-downloaded)
     // videos, whose analysis sidecar was just invalidated.
-    if (process.env.NODE_ENV !== "test" && !skipDownstreamJobs) {
-      if (probe.hasAudio) {
+    if (process.env.NODE_ENV !== "test") {
+      if (!skipDownstreamJobs && probe.hasAudio) {
         const transcribeJobId = `transcribe-video-audio-${assetId}-${Date.now()}`;
         await queue.enqueue(transcribeJobId, {
           type: "transcribe_video_audio",
           videoPath: activeVideoPath, assetId, assetDir, projectSlug,
         } as unknown as Record<string, unknown>);
-      } else {
+      } else if (!skipDownstreamJobs || reviveVisualAnalysis) {
         // Silent video: no transcribe job will run, so revive the slot-drop
         // vision analysis here; transcribe_video_audio's tail owns it for
         // videos with audio (after the fresh transcript lands).

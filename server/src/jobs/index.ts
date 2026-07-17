@@ -15,6 +15,7 @@ import { registerCropImageJob } from "./crop-image.js";
 import { registerApplyCutsJob } from "./apply-cuts.js";
 import { registerApplySfxJob } from "./apply-sfx.js";
 import { registerChangeVideoSpeedJob } from "./change-video-speed.js";
+import { registerTimewarpVideoJob } from "./timewarp-video.js";
 import { registerAudioBoostJob } from "./audio-boost.js";
 import { registerReverseVideoJob } from "./reverse-video.js";
 import { registerExtractFrameJob } from "./extract-frame.js";
@@ -133,6 +134,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerApplyCutsJob(fs);
   registerApplySfxJob(fs);
   registerChangeVideoSpeedJob(fs);
+  registerTimewarpVideoJob(fs);
   registerAudioBoostJob(fs);
   registerReverseVideoJob(fs);
   registerExtractFrameJob(fs);

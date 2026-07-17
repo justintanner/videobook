@@ -30,6 +30,13 @@ export interface QrOutroCommandArgs {
   aspect_ratio?: '16:9' | '9:16' | '1:1';
 }
 
+export interface TimewarpCommandArgs {
+  asset_id: string;
+  start_seconds: number;
+  end_seconds: number;
+  stretch_factor: number;
+}
+
 export function filterCommandsByMountKeys(
   commands: ServerCommand[],
   activeKeys: ReadonlySet<string>,
@@ -77,6 +84,66 @@ export function normalizeQrOutroCommandArgs(tokens: readonly string[]): QrOutroC
     qr_image_slugs: qrImages,
     ...(soundEffect ? { sound_effect_slug: soundEffect } : {}),
     ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
+  };
+}
+
+function parseTimewarpTimestamp(raw: string): number {
+  const token = raw.trim().replace(/s$/i, '');
+  const parts = token.split(':');
+  if (parts.length === 1) {
+    const seconds = Number(parts[0]);
+    if (Number.isFinite(seconds) && seconds >= 0) return seconds;
+    throw new Error(`Invalid /timewarp timestamp: ${raw}`);
+  }
+  if (parts.length !== 2 && parts.length !== 3) {
+    throw new Error(`Invalid /timewarp timestamp: ${raw}`);
+  }
+  if (!parts.every((part) => /^\d+(?:\.\d+)?$/.test(part))) {
+    throw new Error(`Invalid /timewarp timestamp: ${raw}`);
+  }
+  const values = parts.map(Number);
+  if (parts.length === 2) return values[0] * 60 + values[1];
+  return values[0] * 3600 + values[1] * 60 + values[2];
+}
+
+export function normalizeTimewarpCommandArgs(
+  args: Readonly<Record<string, unknown>>,
+): TimewarpCommandArgs {
+  const assetValue = args.asset_id;
+  const rangeValue = args.range;
+  const factorValue = args.factor;
+  if (typeof assetValue !== 'string' || !assetValue.trim()) {
+    throw new Error('/timewarp requires a video asset');
+  }
+  const assetId = stripAt(assetValue.trim());
+  if (!assetId.startsWith('vid-')) throw new Error('/timewarp requires a vid-* asset');
+  if (typeof rangeValue !== 'string') {
+    throw new Error('/timewarp requires a <start>-<end> range');
+  }
+  const rangeMatch = /^(.+)-(.+)$/.exec(rangeValue.trim());
+  if (!rangeMatch) throw new Error('/timewarp requires a <start>-<end> range');
+  const startSeconds = parseTimewarpTimestamp(rangeMatch[1]);
+  const endSeconds = parseTimewarpTimestamp(rangeMatch[2]);
+  if (startSeconds >= endSeconds) {
+    throw new Error('/timewarp start must be before end');
+  }
+  if (typeof factorValue !== 'string' && typeof factorValue !== 'number') {
+    throw new Error('/timewarp requires a stretch factor');
+  }
+  const factorToken = String(factorValue).trim();
+  if (!/^\d+(?:\.\d+)?x?$/i.test(factorToken)) {
+    throw new Error(`Invalid /timewarp stretch factor: ${factorToken}`);
+  }
+  const stretchFactor = Number(factorToken.replace(/x$/i, ''));
+  if (!Number.isFinite(stretchFactor) || stretchFactor < 0.25 || stretchFactor > 4) {
+    throw new Error('/timewarp stretch factor must be between 0.25x and 4x');
+  }
+  if (stretchFactor === 1) throw new Error('/timewarp stretch factor 1x is a no-op');
+  return {
+    asset_id: assetId,
+    start_seconds: startSeconds,
+    end_seconds: endSeconds,
+    stretch_factor: stretchFactor,
   };
 }
 

@@ -34,6 +34,13 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     category: "action",
   },
   {
+    name: "timewarp_video",
+    actualTool: "timewarp_video",
+    description: "Retime one selected video range by a duration multiplier while compensating the remaining picture to preserve runtime and audio",
+    params: ["asset_id", "start_seconds", "end_seconds", "stretch_factor"],
+    category: "action",
+  },
+  {
     name: "reverse_video",
     actualTool: "reverse_video",
     description: "Reverse video playback (play backwards)",
@@ -248,6 +255,7 @@ const TIMESTAMP_PARAMS: Record<string, string[]> = {
   trim_video: ["trim_start", "trim_end", "cut_start", "cut_end"],
   download_video: ["start_time", "end_time"],
   split_video: ["chunk_a_end", "chunk_b_start"],
+  timewarp_video: ["start_seconds", "end_seconds"],
 };
 
 function buildChatRoutingPrompt(slug: string, historyContext?: string): string {
@@ -273,7 +281,8 @@ Given a user query (possibly with @asset references), determine:
 
 Parameter guidelines:
 - For asset_id: use the resolved asset ID from the referenced @tag (e.g., @vid-foo → asset_id: "vid-foo")
-- For timestamps (trim_start, trim_end, cut_start, cut_end, start_time, end_time): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)
+- For timestamps (trim_start, trim_end, cut_start, cut_end, start_time, end_time, start_seconds, end_seconds): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)
+- For timewarp_video: stretch_factor is a duration multiplier; values above 1 slow and lengthen the selected picture, while values below 1 accelerate and shorten it
 - For generate_video: put the generation description in "prompt"
 - For generate_image: put the image description in "prompt"; use image_slugs ONLY for @img-* reference images (include @ prefix). Never put @vid-* or @aud-* in image_slugs — if the user wants an image inspired by a video, describe that in the text prompt instead
 - For create_watermark (QR code / watermark card): use this tool for real scannable QR codes — never generate_image. Pass url from the referenced asset's source_url/webpage_url when the user says "from the url in @vid-…" or similar; optional handle is an X handle without @

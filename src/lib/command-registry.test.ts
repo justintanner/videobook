@@ -3,6 +3,7 @@ import {
   parseCommandArgs,
   filterCommandsByMountKeys,
   normalizeQrOutroCommandArgs,
+  normalizeTimewarpCommandArgs,
   selectCommandForInput,
 } from "./command-registry.js";
 import type { CommandParam, ServerCommand } from "./command-registry.js";
@@ -390,6 +391,46 @@ describe("normalizeQrOutroCommandArgs", () => {
       "img-qr",
       "wide",
     ])).toThrow();
+  });
+});
+
+describe("normalizeTimewarpCommandArgs", () => {
+  it.each([
+    ["vid-clip", "0-4.2s", "1.5x", 0, 4.2, 1.5],
+    ["@vid-clip", "0s-4.2s", "0.5", 0, 4.2, 0.5],
+    ["vid-clip", "0:30-1:02.5", "2x", 30, 62.5, 2],
+    ["vid-clip", "1:00:00-1:00:04.2s", "4X", 3600, 3604.2, 4],
+  ])("normalizes asset, range, and factor %#", (
+    assetId,
+    range,
+    factor,
+    startSeconds,
+    endSeconds,
+    stretchFactor,
+  ) => {
+    expect(normalizeTimewarpCommandArgs({
+      asset_id: String(assetId),
+      range: String(range),
+      factor: String(factor),
+    })).toEqual({
+      asset_id: "vid-clip",
+      start_seconds: startSeconds,
+      end_seconds: endSeconds,
+      stretch_factor: stretchFactor,
+    });
+  });
+
+  it.each([
+    [{}, "video asset"],
+    [{ asset_id: "img-wrong", range: "0-2", factor: "1.5x" }, "vid-*"],
+    [{ asset_id: "vid-clip", range: "bad", factor: "1.5x" }, "range"],
+    [{ asset_id: "vid-clip", range: "2-1", factor: "1.5x" }, "before"],
+    [{ asset_id: "vid-clip", range: "0-2", factor: "nope" }, "factor"],
+    [{ asset_id: "vid-clip", range: "0-2", factor: "1x" }, "no-op"],
+    [{ asset_id: "vid-clip", range: "0-2", factor: "5x" }, "between"],
+    [{ asset_id: "vid-clip", range: "0-2", factor: "1.5x extra" }, "factor"],
+  ])("rejects malformed input %#", (args, message) => {
+    expect(() => normalizeTimewarpCommandArgs(args)).toThrow(message);
   });
 });
 

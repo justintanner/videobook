@@ -1375,6 +1375,22 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "change_video_speed", autoInject: ["project_slug"] },
   },
   {
+    command: "/timewarp",
+    description: "Retime one scene while compensating the rest of the picture and preserving the original audio and duration",
+    example: "/timewarp @vid-clip 0-4.2s 1.5x",
+    category: "context_menu",
+    icon: "Gauge",
+    size: "default",
+    variant: "violet",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset to timewarp" },
+      { name: "range", type: "string", required: true, description: "Selected range as start-end" },
+      { name: "factor", type: "string", required: true, description: "Duration multiplier from 0.25x to 4x" },
+    ],
+    mcpTool: { tool: "timewarp_video", autoInject: ["project_slug"] },
+  },
+  {
     command: "/split",
     description: "Open frame-accurate split editor; creates two video assets. Original preserved.",
     example: "/split @vid-clip 10",

@@ -73,6 +73,7 @@ describe("freeform chat commands", () => {
       "list all assets",
       "list my projects",
       "make it slower",
+      "timewarp the first 4.2 seconds by 1.5x",
       "show me the first frame",
       "get the last frame",
       "what videos do I have",
