@@ -524,6 +524,9 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           <input
             ref={inputRef}
             type="text"
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="none"
             autoFocus
             value={displayText}
             onChange={handleInputChange}
