@@ -8,6 +8,7 @@ import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { findApplySfxSourceFile } from "./apply-sfx.js";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -91,6 +92,14 @@ describe("apply_sfx tool", () => {
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toContain("ELEVENLABS_API_KEY");
+  });
+
+  it("prefers the canonical video over a stale partial SFX output", () => {
+    const file = findApplySfxSourceFile([
+      { name: "original_sfx.mp4", size_bytes: 10, extension: ".mp4", mtimeMs: 2 },
+      { name: "original.mp4", size_bytes: 10, extension: ".mp4", mtimeMs: 1 },
+    ]);
+    expect(file?.name).toBe("original.mp4");
   });
 
   it("returns error for nonexistent asset", async () => {

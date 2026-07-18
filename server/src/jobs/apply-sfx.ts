@@ -3,7 +3,7 @@ import { join, basename } from "node:path";
 import { createElevenLabs } from "@apicity/elevenlabs";
 import { registerJobHandler, queue } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
-import { runFfmpeg, AUDIO_OPTS } from "../ffmpeg.js";
+import { probeVideo, runFfmpeg, AUDIO_OPTS } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 
 const LOCK_DURATION_MS = 1_800_000;
@@ -18,7 +18,7 @@ const STALE_DERIVATIVES = [
   ".suggest-sfx.json",
 ];
 
-type SfxEntry = {
+export type SfxEntry = {
   timestamp: number;
   type: string;
   description: string;
@@ -31,7 +31,6 @@ type ApplySfxPayload = {
   videoPath: string;
   outputPath: string;
   sfx: SfxEntry[];
-  hasAudio: boolean;
   assetId: string;
   assetDir: string;
   projectSlug: string;
@@ -57,15 +56,22 @@ async function generateAndWriteSfx(
   return filename;
 }
 
-function buildMixFilter(sfx: SfxEntry[], hasAudio: boolean): string {
+export function buildMixFilter(
+  sfx: SfxEntry[],
+  hasAudio: boolean,
+  videoDurationSeconds: number,
+): string {
   const parts: string[] = [];
   if (hasAudio) {
     parts.push(
       "[0:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[base]",
     );
   } else {
+    if (!Number.isFinite(videoDurationSeconds) || videoDurationSeconds <= 0) {
+      throw new Error(`Invalid silent video duration: ${videoDurationSeconds}`);
+    }
     parts.push(
-      "anullsrc=channel_layout=stereo:sample_rate=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[base]",
+      `anullsrc=channel_layout=stereo:sample_rate=48000,atrim=duration=${videoDurationSeconds},asetpts=PTS-STARTPTS,aformat=sample_fmts=fltp:channel_layouts=stereo[base]`,
     );
   }
   sfx.forEach((entry, i) => {
@@ -88,10 +94,36 @@ function buildMixFilter(sfx: SfxEntry[], hasAudio: boolean): string {
   return parts.join(";");
 }
 
+export async function mixSfxIntoVideo(
+  videoPath: string,
+  sfxPaths: string[],
+  outputPath: string,
+  sfx: SfxEntry[],
+  signal?: AbortSignal,
+): Promise<void> {
+  if (sfxPaths.length !== sfx.length) {
+    throw new Error("SFX file count does not match the requested cue count");
+  }
+  const source = await probeVideo(videoPath, { signal });
+  const duration = source.videoDuration > 0 ? source.videoDuration : source.duration;
+  const filter = buildMixFilter(sfx, source.hasAudio, duration);
+  const ffmpegArgs: string[] = ["-y", "-i", videoPath];
+  for (const sfxPath of sfxPaths) {
+    ffmpegArgs.push("-i", sfxPath);
+  }
+  ffmpegArgs.push(
+    "-filter_complex", filter,
+    "-map", "0:v", "-c:v", "copy",
+    "-map", "[outa]", ...AUDIO_OPTS,
+    outputPath,
+  );
+  await runFfmpeg(ffmpegArgs, { signal });
+}
+
 export function registerApplySfxJob(fs: VideocityFs): void {
   registerJobHandler("apply_sfx", async (payload, ctx) => {
     const {
-      videoPath, outputPath, sfx, hasAudio,
+      videoPath, outputPath, sfx,
       assetId, assetDir, projectSlug,
     } = payload as ApplySfxPayload;
 
@@ -112,18 +144,13 @@ export function registerApplySfxJob(fs: VideocityFs): void {
         sfx.map((entry, i) => generateAndWriteSfx(provider, fs, entry, i, assetId, projectSlug)),
       );
 
-      const filter = buildMixFilter(sfx, hasAudio);
-      const ffmpegArgs: string[] = ["-y", "-i", videoPath];
-      for (const fn of generatedFilenames) {
-        ffmpegArgs.push("-i", join(assetDir, fn));
-      }
-      ffmpegArgs.push(
-        "-filter_complex", filter,
-        "-map", "0:v", "-c:v", "copy",
-        "-map", "[outa]", ...AUDIO_OPTS,
+      await mixSfxIntoVideo(
+        videoPath,
+        generatedFilenames.map((filename) => join(assetDir, filename)),
         outputPath,
+        sfx,
+        ctx.signal,
       );
-      await runFfmpeg(ffmpegArgs);
 
       const inputFilename = basename(videoPath);
       const outputFilename = basename(outputPath);

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { AssetManifestFile, VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -63,6 +63,13 @@ function validateSfx(
   return { resolved, dropped };
 }
 
+export function findApplySfxSourceFile(
+  files: AssetManifestFile[],
+): AssetManifestFile | null {
+  return files.find((file) => file.name.toLowerCase() === "original.mp4")
+    ?? findVideoFile(files);
+}
+
 export function applySfxDef(fs: VideocityFs): ToolDef {
   return {
     name: "apply_sfx",
@@ -111,7 +118,7 @@ export function applySfxDef(fs: VideocityFs): ToolDef {
         };
       }
       const manifest = manifestResult.value;
-      const videoFile = findVideoFile(manifest.files);
+      const videoFile = findApplySfxSourceFile(manifest.files);
       if (!videoFile) {
         return {
           isError: true as const,
@@ -119,15 +126,12 @@ export function applySfxDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const metaResult = await fs.readMetadata<{ duration?: number; hasAudio?: boolean }>(
+      const metaResult = await fs.readMetadata<{ duration?: number }>(
         assetId, "original", project_slug,
       );
       const duration = metaResult.ok && typeof metaResult.value.duration === "number"
         ? metaResult.value.duration
         : null;
-      const hasAudio = metaResult.ok && typeof metaResult.value.hasAudio === "boolean"
-        ? metaResult.value.hasAudio
-        : true;
 
       const { resolved, dropped } = validateSfx(sfx, duration);
       if (resolved.length === 0) {
@@ -137,6 +141,17 @@ export function applySfxDef(fs: VideocityFs): ToolDef {
           content: [{
             type: "text" as const,
             text: `All SFX entries were rejected: ${reasons || "no valid entries"}`,
+          }],
+        };
+      }
+
+      const cleared = await fs.generationErrors.clear(project_slug, assetId);
+      if (!cleared.ok) {
+        return {
+          isError: true as const,
+          content: [{
+            type: "text" as const,
+            text: `Failed to clear the previous SFX error: ${cleared.error.message}`,
           }],
         };
       }
@@ -152,7 +167,6 @@ export function applySfxDef(fs: VideocityFs): ToolDef {
           videoPath: inputPath,
           outputPath,
           sfx: resolved,
-          hasAudio,
           assetId,
           assetDir,
           projectSlug: project_slug,
@@ -179,4 +193,3 @@ export function applySfxDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

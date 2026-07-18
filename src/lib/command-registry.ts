@@ -18,7 +18,18 @@ export interface SyncAudioCommandArgs {
   anchors: SyncAudioAnchor[];
 }
 
-export type CommandToolArgValue = CommandArgValue | SyncAudioAnchor[];
+export interface ApplySfxCommandEntry {
+  timestamp: number;
+  type: string;
+  description: string;
+}
+
+export interface ApplySfxCommandArgs {
+  asset_id: string;
+  sfx: ApplySfxCommandEntry[];
+}
+
+export type CommandToolArgValue = CommandArgValue | SyncAudioAnchor[] | ApplySfxCommandEntry[];
 export type CommandToolArgs = Record<string, CommandToolArgValue>;
 
 export interface ServerCommand {
@@ -142,6 +153,45 @@ export function normalizeQrOutroCommandArgs(tokens: readonly string[]): QrOutroC
   return {
     qr_image_slugs: qrImages,
     ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
+  };
+}
+
+export function normalizeApplySfxCommandArgs(
+  args: Readonly<Record<string, unknown>>,
+): ApplySfxCommandArgs {
+  const assetValue = args.asset_id;
+  const timestampValue = args.timestamp;
+  const typeValue = args.type;
+  const descriptionValue = args.description;
+  if (typeof assetValue !== 'string' || !assetValue.trim()) {
+    throw new Error('/apply-sfx requires a video asset');
+  }
+  const assetId = stripAt(assetValue.trim());
+  if (!assetId.startsWith('vid-')) {
+    throw new Error('/apply-sfx requires a vid-* asset');
+  }
+  if (typeof timestampValue !== 'string' && typeof timestampValue !== 'number') {
+    throw new Error('/apply-sfx requires a timestamp');
+  }
+  const timestamp = typeof timestampValue === 'number'
+    ? timestampValue
+    : parseCommandTimestamp(timestampValue, '/apply-sfx');
+  if (!Number.isFinite(timestamp) || timestamp < 0) {
+    throw new Error('/apply-sfx timestamp must be 0 or later');
+  }
+  if (typeof typeValue !== 'string' || !typeValue.trim()) {
+    throw new Error('/apply-sfx requires an effect type');
+  }
+  if (typeof descriptionValue !== 'string' || !descriptionValue.trim()) {
+    throw new Error('/apply-sfx requires an effect description');
+  }
+  return {
+    asset_id: assetId,
+    sfx: [{
+      timestamp,
+      type: typeValue.trim(),
+      description: descriptionValue.trim(),
+    }],
   };
 }
 

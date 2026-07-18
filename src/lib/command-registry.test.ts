@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseCommandArgs,
   filterCommandsByMountKeys,
+  normalizeApplySfxCommandArgs,
   normalizeKeywordCommandArgs,
   normalizeQrOutroCommandArgs,
   normalizeSyncAudioCommandArgs,
@@ -388,6 +389,35 @@ describe("normalizeQrOutroCommandArgs", () => {
       "img-qr",
       "wide",
     ])).toThrow();
+  });
+});
+
+describe("normalizeApplySfxCommandArgs", () => {
+  it("maps slash arguments to one structured SFX cue", () => {
+    expect(normalizeApplySfxCommandArgs({
+      asset_id: "@vid-intro",
+      timestamp: "1:02.5",
+      type: " whoosh ",
+      description: " fast cinematic transition whoosh ",
+    })).toEqual({
+      asset_id: "vid-intro",
+      sfx: [{
+        timestamp: 62.5,
+        type: "whoosh",
+        description: "fast cinematic transition whoosh",
+      }],
+    });
+  });
+
+  it.each([
+    [{ timestamp: 1, type: "whoosh", description: "fast" }, "video asset"],
+    [{ asset_id: "aud-intro", timestamp: 1, type: "whoosh", description: "fast" }, "vid-*"],
+    [{ asset_id: "vid-intro", timestamp: "later", type: "whoosh", description: "fast" }, "timestamp"],
+    [{ asset_id: "vid-intro", timestamp: -1, type: "whoosh", description: "fast" }, "timestamp"],
+    [{ asset_id: "vid-intro", timestamp: 1, description: "fast" }, "effect type"],
+    [{ asset_id: "vid-intro", timestamp: 1, type: "whoosh" }, "effect description"],
+  ])("rejects malformed arguments: %o", (args, message) => {
+    expect(() => normalizeApplySfxCommandArgs(args)).toThrow(message);
   });
 });
 

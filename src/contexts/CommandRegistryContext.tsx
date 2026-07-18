@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { ServerCommand, CommandArgValue, CommandToolArgs } from '@/lib/command-registry';
-import { filterCommandsByMountKeys, normalizeKeywordCommandArgs, normalizeQrOutroCommandArgs, normalizeSyncAudioCommandArgs, normalizeTimewarpCommandArgs, parseCommandArgs, selectCommandForInput } from '@/lib/command-registry';
+import { filterCommandsByMountKeys, normalizeApplySfxCommandArgs, normalizeKeywordCommandArgs, normalizeQrOutroCommandArgs, normalizeSyncAudioCommandArgs, normalizeTimewarpCommandArgs, parseCommandArgs, selectCommandForInput } from '@/lib/command-registry';
 import { useMountKeys } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
 import { executeUiAction } from '@/lib/ui-actions';
@@ -134,6 +134,13 @@ export function CommandRegistryProvider({
             if (cmd.mcpTool.tool === 'sync_video_to_audio') {
               const normalized = normalizeSyncAudioCommandArgs(toolArgs);
               delete toolArgs.mappings;
+              Object.assign(toolArgs, normalized);
+            }
+            if (cmd.mcpTool.tool === 'apply_sfx') {
+              const normalized = normalizeApplySfxCommandArgs(toolArgs);
+              delete toolArgs.timestamp;
+              delete toolArgs.type;
+              delete toolArgs.description;
               Object.assign(toolArgs, normalized);
             }
             const result = await callTool(cmd.mcpTool.tool, toolArgs);

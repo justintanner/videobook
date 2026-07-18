@@ -14,7 +14,7 @@ import { createTestClient } from "../test-client.js";
 import { createFs } from "videocity-engine";
 import { registerJobHandler } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { parseCommandArgs, filterCommandsByMountKeys, normalizeSyncAudioCommandArgs, normalizeTimewarpCommandArgs } from "../../../src/lib/command-registry.js";
+import { parseCommandArgs, filterCommandsByMountKeys, normalizeApplySfxCommandArgs, normalizeSyncAudioCommandArgs, normalizeTimewarpCommandArgs } from "../../../src/lib/command-registry.js";
 import type { ServerCommand } from "../../../src/lib/command-registry.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -127,6 +127,33 @@ describe("slash commands e2e", () => {
       "vid-frankenstein 6s=America; 3s=England",
     ])("rejects malformed arguments: %s", (rest) => {
       expect(() => normalizeSyncAudioCommandArgs(simulateParse("/sync-audio", rest))).toThrow();
+    });
+  });
+
+  describe("/apply-sfx", () => {
+    it("normalizes a free-text effect into the structured MCP payload", () => {
+      const parsed = simulateParse(
+        "/apply-sfx",
+        "@vid-full 2.5 whoosh fast cinematic transition whoosh",
+      );
+      expect(normalizeApplySfxCommandArgs(parsed)).toEqual({
+        asset_id: "vid-full",
+        sfx: [{
+          timestamp: 2.5,
+          type: "whoosh",
+          description: "fast cinematic transition whoosh",
+        }],
+      });
+    });
+
+    it.each([
+      "vid-full",
+      "vid-full later whoosh fast transition",
+      "vid-full 2.5 whoosh",
+    ])("rejects malformed arguments: %s", (rest) => {
+      expect(() => normalizeApplySfxCommandArgs(
+        simulateParse("/apply-sfx", rest),
+      )).toThrow();
     });
   });
 

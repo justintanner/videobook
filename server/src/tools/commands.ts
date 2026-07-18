@@ -404,6 +404,23 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "suggest_sfx", autoInject: ["project_slug"] },
   },
   {
+    command: "/apply-sfx",
+    description: "Generate an ElevenLabs sound effect and mix it into a video in place",
+    example: "/apply-sfx @vid-full 2.5 whoosh fast cinematic transition whoosh",
+    category: "action",
+    icon: "Volume2",
+    size: "default",
+    variant: "emerald",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset to modify in place (@vid-*)" },
+      { name: "timestamp", type: "number", required: true, description: "Seconds into the video where the effect starts" },
+      { name: "type", type: "string", required: true, description: "Short effect type such as whoosh, impact, or ding" },
+      { name: "description", type: "string", required: true, description: "Description of the sound effect to generate" },
+    ],
+    mcpTool: { tool: "apply_sfx", autoInject: ["project_slug"] },
+  },
+  {
     command: "/notebook",
     description: "Open a project Notebook — a workflow of prompt, image, and video steps. Opens the existing notebook when present; creates 'scratch' by default.",
     example: "/notebook scratch",
@@ -490,7 +507,7 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/outroqr",
-    description: "Generate a silent animated QR outro that remains on screen for 10 seconds",
+    description: "Generate a 10-second animated QR outro with bundled impact sound",
     example: "/outroqr @img-qr1 @img-qr2 16:9",
     category: "action",
     icon: "QrCode",
@@ -503,7 +520,7 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: {
       tool: "create_qr_outro",
       autoInject: ["project_slug"],
-      injectParams: { duration_seconds: 10, include_audio: false },
+      injectParams: { duration_seconds: 10, include_audio: true },
     },
   },
   {

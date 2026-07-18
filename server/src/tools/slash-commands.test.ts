@@ -113,6 +113,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/connect-x");
     expect(commandNames).toContain("/play");
     expect(commandNames).toContain("/qart");
+    expect(commandNames).toContain("/apply-sfx");
 
     const timewarp = commands.find((c) => c.command === "/timewarp")!;
     expect(timewarp.mcpTool?.tool).toBe("timewarp_video");
@@ -143,8 +144,9 @@ describe("slash_commands tool", () => {
     expect(qrOutro.mcpTool?.autoInject).toContain("project_slug");
     expect(qrOutro.mcpTool?.injectParams).toEqual({
       duration_seconds: 10,
-      include_audio: false,
+      include_audio: true,
     });
+    expect(qrOutro.description).toContain("bundled impact sound");
     expect(qrOutro.params.map((p) => p.name)).toEqual(["inputs"]);
     expect(qrOutro.params[0].type).toBe("string[]");
 
@@ -154,6 +156,16 @@ describe("slash_commands tool", () => {
     expect(cleanAudio.params.map((p) => p.name)).toEqual([
       "asset_id",
       "add_light_music",
+    ]);
+
+    const applySfx = commands.find((c) => c.command === "/apply-sfx")!;
+    expect(applySfx.mcpTool?.tool).toBe("apply_sfx");
+    expect(applySfx.mcpTool?.autoInject).toContain("project_slug");
+    expect(applySfx.params.map((p) => p.name)).toEqual([
+      "asset_id",
+      "timestamp",
+      "type",
+      "description",
     ]);
 
     const notebook = commands.find((c) => c.command === "/notebook")!;
