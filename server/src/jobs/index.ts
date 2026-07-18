@@ -81,6 +81,7 @@ import { registerRewriteScriptJob } from "./rewrite-script.js";
 import { registerRenderTimelineJob } from "./render-timeline.js";
 import { registerProcessImageJob } from "./process-image.js";
 import { registerIsolateVocalsJob } from "./isolate-vocals.js";
+import { registerCleanVideoAudioJob } from "./clean-video-audio.js";
 import { registerGenerateSeedance2I2vFalJob } from "./generate-seedance2-i2v-fal.js";
 import { registerGenerateSeedance2T2vFalJob } from "./generate-seedance2-t2v-fal.js";
 import { registerGenerateNanoBananaProFalJob } from "./generate-nano-banana-pro-fal.js";
@@ -204,6 +205,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerRenderTimelineJob(fs);
   registerProcessImageJob(fs);
   registerIsolateVocalsJob(fs);
+  registerCleanVideoAudioJob(fs);
   registerGenerateSeedance2I2vFalJob(fs);
   registerGenerateSeedance2T2vFalJob(fs);
   registerGenerateNanoBananaProFalJob(fs);

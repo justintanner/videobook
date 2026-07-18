@@ -162,7 +162,8 @@ function jobTypeToAssetWorkKind(
     case "change_video_speed":
     case "timewarp_video":         return { kind: "change_speed" };
     case "sync_video_to_audio":    return { kind: "change_speed" };
-    case "replace_video_audio":    return { kind: "replace_audio" };
+    case "replace_video_audio":
+    case "clean_video_audio":      return { kind: "replace_audio" };
     case "apply_cuts":             return { kind: "apply_cuts" };
     case "apply_sfx":              return { kind: "apply_sfx" };
     case "extract_frame":

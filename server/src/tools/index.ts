@@ -140,6 +140,7 @@ import { rewritePromptDef } from "./rewrite-prompt.js";
 import { describeImageDef } from "./describe-image.js";
 import { rewriteScriptDef } from "./rewrite-script.js";
 import { isolateVocalsDef } from "./isolate-vocals.js";
+import { cleanVideoAudioDef } from "./clean-video-audio.js";
 import { assignSlotDef } from "./assign-slot.js";
 import { clearSlotDef } from "./clear-slot.js";
 import { addTimelineAudioDef } from "./add-timeline-audio.js";
@@ -354,6 +355,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     describeImageDef(fs),
     rewriteScriptDef(fs),
     isolateVocalsDef(fs),
+    cleanVideoAudioDef(fs),
     assignSlotDef(fs),
     clearSlotDef(fs),
     addTimelineAudioDef(fs),
