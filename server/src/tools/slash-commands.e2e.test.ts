@@ -14,7 +14,7 @@ import { createTestClient } from "../test-client.js";
 import { createFs } from "videocity-engine";
 import { registerJobHandler } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { parseCommandArgs, filterCommandsByMountKeys, normalizeTimewarpCommandArgs } from "../../../src/lib/command-registry.js";
+import { parseCommandArgs, filterCommandsByMountKeys, normalizeSyncAudioCommandArgs, normalizeTimewarpCommandArgs } from "../../../src/lib/command-registry.js";
 import type { ServerCommand } from "../../../src/lib/command-registry.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -102,6 +102,31 @@ describe("slash commands e2e", () => {
       "vid-10s-og 0-4.2s 1.5x extra",
     ])("rejects malformed arguments: %s", (rest) => {
       expect(() => normalizeTimewarpCommandArgs(simulateParse("/timewarp", rest))).toThrow();
+    });
+  });
+
+  describe("/sync-audio", () => {
+    it("normalizes transcript and numeric targets into nested MCP anchors", () => {
+      const parsed = simulateParse(
+        "/sync-audio",
+        "@vid-frankenstein 3s=England; 6s=0:05.96",
+      );
+      expect(normalizeSyncAudioCommandArgs(parsed)).toEqual({
+        asset_id: "vid-frankenstein",
+        anchors: [
+          { video_seconds: 3, audio_cue: "England" },
+          { video_seconds: 6, audio_seconds: 5.96 },
+        ],
+      });
+    });
+
+    it.each([
+      "vid-frankenstein",
+      "vid-frankenstein 3s England",
+      "vid-frankenstein 3s=England 6s=America",
+      "vid-frankenstein 6s=America; 3s=England",
+    ])("rejects malformed arguments: %s", (rest) => {
+      expect(() => normalizeSyncAudioCommandArgs(simulateParse("/sync-audio", rest))).toThrow();
     });
   });
 

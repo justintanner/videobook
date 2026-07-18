@@ -27,10 +27,42 @@ export interface ProbeResult {
   width: number;
   height: number;
   duration: number;
+  videoDuration: number;
+  audioDuration: number | null;
   fps: number;
   hasAudio: boolean;
   videoCodec: string | null;
   audioCodec: string | null;
+}
+
+function rationalValue(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const [numerator, denominator] = value.split("/").map(Number);
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) return null;
+  return numerator / denominator;
+}
+
+function taggedDuration(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const match = /^(\d+):(\d+):(\d+(?:\.\d+)?)$/.exec(value);
+  if (!match) return null;
+  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+}
+
+function streamDuration(stream: Record<string, unknown> | undefined, fallback: number): number {
+  if (!stream) return 0;
+  const direct = Number(stream.duration);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+  const durationTs = Number(stream.duration_ts);
+  const timeBase = rationalValue(stream.time_base);
+  if (Number.isFinite(durationTs) && timeBase !== null && durationTs * timeBase > 0) {
+    return durationTs * timeBase;
+  }
+  const tags = typeof stream.tags === "object" && stream.tags !== null
+    ? stream.tags as Record<string, unknown>
+    : undefined;
+  const tagged = taggedDuration(tags?.DURATION ?? tags?.duration);
+  return tagged !== null && tagged > 0 ? tagged : fallback;
 }
 
 function interruptionMessage(
@@ -93,6 +125,7 @@ export async function probeVideo(
   const width = Number(videoStream?.width ?? 0);
   const height = Number(videoStream?.height ?? 0);
   const duration = Number(data.format?.duration ?? 0);
+  const videoDuration = streamDuration(videoStream, duration);
 
   let fps = 30;
   const rFrameRate = videoStream?.r_frame_rate;
@@ -105,11 +138,22 @@ export async function probeVideo(
     (s) => s.codec_type === "audio",
   );
   const hasAudio = audioStream !== undefined;
+  const audioDuration = audioStream ? streamDuration(audioStream, duration) : null;
 
   const videoCodec = typeof videoStream?.codec_name === "string" ? videoStream.codec_name : null;
   const audioCodec = typeof audioStream?.codec_name === "string" ? audioStream.codec_name : null;
 
-  return { width, height, duration, fps, hasAudio, videoCodec, audioCodec };
+  return {
+    width,
+    height,
+    duration,
+    videoDuration,
+    audioDuration,
+    fps,
+    hasAudio,
+    videoCodec,
+    audioCodec,
+  };
 }
 
 export function summarizeFfmpegStderr(stderr: string, maxChars = 600): string {

@@ -1,0 +1,271 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { VideocityFs } from "videocity-engine";
+import { findVideoFile } from "videocity-engine";
+import { execFile } from "node:child_process";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
+import { FFMPEG, probeVideo } from "../ffmpeg.js";
+import { createFsForTest } from "../fs.js";
+import { queue, waitForJob } from "../queue.js";
+import { createTestClient } from "../test-client.js";
+
+const execFileAsync = promisify(execFile);
+const PROJECT = "audio-sync-media-e2e";
+
+type TextContent = Array<{ type: string; text: string }>;
+
+function parse(result: { content: unknown }): Record<string, unknown> {
+  return JSON.parse((result.content as TextContent)[0].text);
+}
+
+function valueOf<T>(result: { ok: true; value: T } | { ok: false; error: { message: string } }): T {
+  if (!result.ok) throw new Error(result.error.message);
+  return result.value;
+}
+
+async function generateSource(outputPath: string): Promise<void> {
+  await execFileAsync(FFMPEG, [
+    "-y",
+    "-f", "lavfi", "-i", "color=c=red:s=160x90:r=10:d=1",
+    "-f", "lavfi", "-i", "color=c=green:s=160x90:r=10:d=1",
+    "-f", "lavfi", "-i", "color=c=blue:s=160x90:r=10:d=1.8",
+    "-f", "lavfi", "-i", "sine=frequency=440:duration=4",
+    "-filter_complex", "[0:v][1:v][2:v]concat=n=3:v=1:a=0[v]",
+    "-map", "[v]",
+    "-map", "3:a:0",
+    "-c:v", "libx264",
+    "-preset", "ultrafast",
+    "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    outputPath,
+  ]);
+}
+
+async function extractMp3(inputPath: string, outputPath: string): Promise<void> {
+  await execFileAsync(FFMPEG, [
+    "-y",
+    "-i", inputPath,
+    "-vn",
+    "-acodec", "libmp3lame",
+    "-q:a", "2",
+    outputPath,
+  ]);
+}
+
+async function audioStreamHash(filePath: string): Promise<string> {
+  const { stdout } = await execFileAsync(FFMPEG, [
+    "-v", "error",
+    "-i", filePath,
+    "-map", "0:a:0",
+    "-c:a", "copy",
+    "-f", "hash",
+    "-hash", "sha256",
+    "pipe:1",
+  ]);
+  return stdout.trim();
+}
+
+async function readFrameColors(filePath: string): Promise<Array<[number, number, number]>> {
+  const { stdout } = await execFileAsync(FFMPEG, [
+    "-v", "error",
+    "-i", filePath,
+    "-map", "0:v:0",
+    "-vf", "scale=1:1",
+    "-pix_fmt", "rgb24",
+    "-f", "rawvideo",
+    "pipe:1",
+  ], { encoding: "buffer", maxBuffer: 1024 * 1024 });
+  const bytes = stdout as unknown as Buffer;
+  const colors: Array<[number, number, number]> = [];
+  for (let offset = 0; offset + 2 < bytes.length; offset += 3) {
+    colors.push([bytes[offset], bytes[offset + 1], bytes[offset + 2]]);
+  }
+  return colors;
+}
+
+function firstDominantFrame(
+  colors: ReadonlyArray<readonly [number, number, number]>,
+  channel: 0 | 1 | 2,
+): number {
+  const index = colors.findIndex((color) => {
+    const otherChannels = color.filter((_, colorIndex) => colorIndex !== channel);
+    return color[channel] > 80 && color[channel] > Math.max(...otherChannels) + 40;
+  });
+  if (index < 0) throw new Error(`No frame dominated by RGB channel ${channel}`);
+  return index;
+}
+
+async function waitForMetadata(
+  fs: VideocityFs,
+  assetId: string,
+  timeoutMs = 120_000,
+): Promise<Record<string, unknown>> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const result = await fs.readMetadata<Record<string, unknown>>(assetId, "original", PROJECT);
+    if (result.ok && result.value.origin === "audio_sync") return result.value;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("Timed out waiting for audio-sync metadata");
+}
+
+async function waitForAssetIdle(
+  fs: VideocityFs,
+  assetDir: string,
+  timeoutMs = 120_000,
+): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (!await fs.isLocked(assetDir)) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("Timed out waiting for audio-sync asset to become idle");
+}
+
+describe("sync_video_to_audio end to end", () => {
+  let client: Client;
+  let fs: VideocityFs;
+  let tempDir: string;
+  let sourcePath: string;
+  let assetId: string;
+  let assetDir: string;
+  let sourceMp3: Buffer;
+  let transcript: Buffer;
+
+  beforeAll(async () => {
+    await queue.start();
+    tempDir = await mkdtemp(join(tmpdir(), "videocity-audio-sync-e2e-"));
+    sourcePath = join(tempDir, "source.mp4");
+    const mp3Path = join(tempDir, "source.mp3");
+    await generateSource(sourcePath);
+    await extractMp3(sourcePath, mp3Path);
+    sourceMp3 = await readFile(mp3Path);
+    transcript = Buffer.from(JSON.stringify({
+      words: [
+        { text: "England,", start: 1.2, end: 1.6, type: "word" },
+        { text: "America!", start: 2.2, end: 2.7, type: "word" },
+      ],
+    }));
+
+    client = await createTestClient(tempDir);
+    fs = createFsForTest(tempDir);
+    valueOf(await fs.createProject(PROJECT));
+    const created = valueOf(await fs.createAsset("vid", "audio sync source", PROJECT));
+    assetId = created.assetId;
+    assetDir = created.path;
+    valueOf(await fs.writeFile(assetId, "original.mp4", await readFile(sourcePath), PROJECT));
+    valueOf(await fs.writeFile(assetId, "original.mp3", sourceMp3, PROJECT));
+    valueOf(await fs.writeFile(assetId, "elevenlabs.json", transcript, PROJECT));
+    valueOf(await fs.writeFile(assetId, ".original.analysis.json", "{}", PROJECT));
+    valueOf(await fs.writeFile(assetId, ".detect-scenes.json", "{}", PROJECT));
+    valueOf(await fs.writeFile(assetId, "landscape.mp4", Buffer.from("stale"), PROJECT));
+  }, 120_000);
+
+  afterAll(async () => {
+    await client?.close();
+    await queue.stop();
+    fs?.close();
+    if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  it("retimes in place through transcript cues while preserving audio and sidecars", async () => {
+    const initialCount = (await fs.listAssets(PROJECT)).length;
+    const result = await client.callTool({
+      name: "sync_video_to_audio",
+      arguments: {
+        asset_id: assetId,
+        project_slug: PROJECT,
+        anchors: [
+          { video_seconds: 1, audio_cue: "england" },
+          { video_seconds: 2, audio_cue: "AMERICA?" },
+        ],
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    const response = parse(result);
+    expect(response.asset_id).toBe(assetId);
+    expect(response.job_id).toMatch(/^sync-audio-/);
+    expect(response.status).toBe("enqueued");
+
+    await waitForJob(String(response.job_id), 120_000);
+    const metadata = await waitForMetadata(fs, assetId);
+    await waitForAssetIdle(fs, assetDir);
+    const manifest = valueOf(await fs.getManifest(assetId, PROJECT, { includeDotfiles: true }));
+    const videoFile = findVideoFile(manifest.files);
+    expect(videoFile).not.toBeNull();
+    const outputPath = join(assetDir, videoFile!.name);
+    const [sourceProbe, outputProbe, frameColors] = await Promise.all([
+      probeVideo(sourcePath),
+      probeVideo(outputPath),
+      readFrameColors(outputPath),
+    ]);
+    expect(sourceProbe.videoDuration).toBeCloseTo(3.8, 6);
+    expect(sourceProbe.audioDuration).toBeCloseTo(4, 6);
+    expect(sourceProbe.audioDuration).not.toBe(sourceProbe.videoDuration);
+    expect(outputProbe.fps).toBeCloseTo(sourceProbe.fps, 6);
+    expect(Math.abs(outputProbe.videoDuration - outputProbe.audioDuration!))
+      .toBeLessThanOrEqual((1 / outputProbe.fps) + 0.001);
+
+    const greenTransitionSeconds = firstDominantFrame(frameColors, 1) / outputProbe.fps;
+    const blueTransitionSeconds = firstDominantFrame(frameColors, 2) / outputProbe.fps;
+    const outputFrameDuration = 1 / outputProbe.fps;
+    expect(Math.abs(greenTransitionSeconds - 1.2)).toBeLessThanOrEqual(outputFrameDuration);
+    expect(Math.abs(blueTransitionSeconds - 2.2)).toBeLessThanOrEqual(outputFrameDuration);
+
+    expect(await audioStreamHash(outputPath)).toBe(await audioStreamHash(sourcePath));
+    expect(valueOf(await fs.readFile(assetId, "original.mp3", PROJECT))).toEqual(sourceMp3);
+    expect(valueOf(await fs.readFile(assetId, "elevenlabs.json", PROJECT))).toEqual(transcript);
+    expect((await fs.readFile(assetId, ".original.analysis.json", PROJECT)).ok).toBe(false);
+    expect((await fs.readFile(assetId, ".detect-scenes.json", PROJECT)).ok).toBe(false);
+    expect((await fs.readFile(assetId, "landscape.mp4", PROJECT)).ok).toBe(false);
+    expect(manifest.files.some((file) => file.name.startsWith(".sync-audio-"))).toBe(false);
+    expect((await fs.listAssets(PROJECT)).length).toBe(initialCount);
+
+    expect(metadata.requested_anchors).toEqual([
+      { video_seconds: 1, audio_cue: "england" },
+      { video_seconds: 2, audio_cue: "AMERICA?" },
+    ]);
+    expect(metadata.resolved_anchors).toEqual([
+      { video_seconds: 0, audio_seconds: 0 },
+      { video_seconds: 1, audio_seconds: 1.2 },
+      { video_seconds: 2, audio_seconds: 2.2 },
+      { video_seconds: sourceProbe.videoDuration, audio_seconds: sourceProbe.audioDuration },
+    ]);
+    expect(metadata.mapping_method).toBe("monotone_cubic_hermite");
+    expect(metadata.audio_preserved).toBe(true);
+    expect(metadata.audio_mode).toBe("copy");
+  }, 120_000);
+
+  it("leaves media, sidecars, derivatives, and history unchanged when rendering fails", async () => {
+    const sourceBytes = await readFile(sourcePath);
+    const created = valueOf(await fs.createAsset("vid", "failed audio sync", PROJECT));
+    valueOf(await fs.writeFile(created.assetId, "original.mp4", sourceBytes, PROJECT));
+    valueOf(await fs.writeFile(created.assetId, "original.mp3", sourceMp3, PROJECT));
+    valueOf(await fs.writeFile(created.assetId, "elevenlabs.json", transcript, PROJECT));
+    valueOf(await fs.writeFile(created.assetId, ".original.analysis.json", "{}", PROJECT));
+    const historyCount = (await fs.getAssetHistory(created.assetId, PROJECT)).length;
+    const outputPath = join(created.path, "missing", ".sync-audio-failed.mp4");
+
+    await expect(queue.enqueueAndWait(`sync-audio-render-failure-${created.assetId}`, {
+      type: "sync_video_to_audio",
+      inputPath: join(created.path, "original.mp4"),
+      outputPath,
+      anchors: [{ videoSeconds: 1, audioSeconds: 1.2 }],
+      assetId: created.assetId,
+      assetDir: created.path,
+      projectSlug: PROJECT,
+    } as unknown as Parameters<typeof queue.enqueueAndWait>[1])).rejects.toThrow("ffmpeg failed");
+
+    expect(valueOf(await fs.readFile(created.assetId, "original.mp4", PROJECT))).toEqual(sourceBytes);
+    expect(valueOf(await fs.readFile(created.assetId, "original.mp3", PROJECT))).toEqual(sourceMp3);
+    expect(valueOf(await fs.readFile(created.assetId, "elevenlabs.json", PROJECT))).toEqual(transcript);
+    expect((await fs.readFile(created.assetId, ".original.analysis.json", PROJECT)).ok).toBe(true);
+    expect((await fs.getAssetHistory(created.assetId, PROJECT)).length).toBe(historyCount);
+    await expect(stat(outputPath)).rejects.toThrow();
+    const manifest = valueOf(await fs.getManifest(created.assetId, PROJECT, { includeDotfiles: true }));
+    expect(manifest.files.some((file) => file.name.startsWith(".sync-audio-"))).toBe(false);
+  }, 120_000);
+});

@@ -4,7 +4,7 @@
 import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { resolveAllAssets, expandSlotRefs } from "videocity-engine";
-import { buildChatRoutingPrompt, getRoutableTool, TIMESTAMP_PARAMS } from "../chat-router.js";
+import { buildChatRoutingPrompt, getRoutableTool, NESTED_TIMESTAMP_PARAMS, TIMESTAMP_PARAMS } from "../chat-router.js";
 import { getRecentHistory, formatHistoryForPrompt, logUserTurn, logAssistantTurn } from "videocity-engine";
 import { parseTime } from "../time-parse.js";
 import { withLogging } from "./log-wrapper.js";
@@ -48,6 +48,45 @@ export function sanitizeGenerateImageParams(
     next.prompt = base ? `${base} (${note})` : note;
   }
   return next;
+}
+
+export function normalizeChatTimestampParams(
+  tool: string,
+  source: Record<string, unknown>,
+): Record<string, unknown> {
+  const params: Record<string, unknown> = { ...source };
+  const timestampParams = TIMESTAMP_PARAMS[tool];
+  if (timestampParams) {
+    for (const paramName of timestampParams) {
+      if (!(paramName in params)) continue;
+      try {
+        params[paramName] = parseTime(params[paramName] as string | number | undefined);
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  const nestedTimestampParams = NESTED_TIMESTAMP_PARAMS[tool];
+  if (!nestedTimestampParams) return params;
+  for (const [collectionName, fieldNames] of Object.entries(nestedTimestampParams)) {
+    const collection = params[collectionName];
+    if (!Array.isArray(collection)) continue;
+    params[collectionName] = collection.map((item) => {
+      if (typeof item !== "object" || item === null || Array.isArray(item)) return item;
+      const normalized: Record<string, unknown> = { ...(item as Record<string, unknown>) };
+      for (const fieldName of fieldNames) {
+        if (!(fieldName in normalized)) continue;
+        try {
+          normalized[fieldName] = parseTime(normalized[fieldName] as string | number | undefined);
+        } catch {
+          continue;
+        }
+      }
+      return normalized;
+    });
+  }
+  return params;
 }
 
 /** Close open strings / braces / brackets so truncated Gemini JSON can parse. */
@@ -333,24 +372,10 @@ Determine which tool to use and what parameters to pass.`;
       }
 
       // 7. Apply fixups (spread to avoid mutating decision.params for logging)
-      const params: Record<string, unknown> = { ...(decision.params ?? {}) };
+      const params = normalizeChatTimestampParams(decision.tool, decision.params ?? {});
 
       // Inject project_slug
       params.project_slug = slug;
-
-      // Safety-net parseTime on timestamp params
-      const tsParams = TIMESTAMP_PARAMS[decision.tool];
-      if (tsParams) {
-        for (const paramName of tsParams) {
-          if (paramName in params) {
-            try {
-              params[paramName] = parseTime(params[paramName] as string | number | undefined);
-            } catch {
-              // Leave as-is if parsing fails — the downstream tool will validate
-            }
-          }
-        }
-      }
 
       // generate_image only accepts @img-* refs; models often put @vid-* in
       // image_slugs for "from the source of @vid-…". Drop non-image slugs and

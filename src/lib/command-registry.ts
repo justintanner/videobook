@@ -7,6 +7,20 @@ export interface CommandParam {
 
 export type CommandArgValue = string | number | boolean | string[];
 
+export interface SyncAudioAnchor {
+  video_seconds: number;
+  audio_cue?: string;
+  audio_seconds?: number;
+}
+
+export interface SyncAudioCommandArgs {
+  asset_id: string;
+  anchors: SyncAudioAnchor[];
+}
+
+export type CommandToolArgValue = CommandArgValue | SyncAudioAnchor[];
+export type CommandToolArgs = Record<string, CommandToolArgValue>;
+
 export interface ServerCommand {
   command: string;
   description: string;
@@ -87,19 +101,19 @@ export function normalizeQrOutroCommandArgs(tokens: readonly string[]): QrOutroC
   };
 }
 
-function parseTimewarpTimestamp(raw: string): number {
+function parseCommandTimestamp(raw: string, command: string): number {
   const token = raw.trim().replace(/s$/i, '');
   const parts = token.split(':');
   if (parts.length === 1) {
     const seconds = Number(parts[0]);
     if (Number.isFinite(seconds) && seconds >= 0) return seconds;
-    throw new Error(`Invalid /timewarp timestamp: ${raw}`);
+    throw new Error(`Invalid ${command} timestamp: ${raw}`);
   }
   if (parts.length !== 2 && parts.length !== 3) {
-    throw new Error(`Invalid /timewarp timestamp: ${raw}`);
+    throw new Error(`Invalid ${command} timestamp: ${raw}`);
   }
   if (!parts.every((part) => /^\d+(?:\.\d+)?$/.test(part))) {
-    throw new Error(`Invalid /timewarp timestamp: ${raw}`);
+    throw new Error(`Invalid ${command} timestamp: ${raw}`);
   }
   const values = parts.map(Number);
   if (parts.length === 2) return values[0] * 60 + values[1];
@@ -122,8 +136,8 @@ export function normalizeTimewarpCommandArgs(
   }
   const rangeMatch = /^(.+)-(.+)$/.exec(rangeValue.trim());
   if (!rangeMatch) throw new Error('/timewarp requires a <start>-<end> range');
-  const startSeconds = parseTimewarpTimestamp(rangeMatch[1]);
-  const endSeconds = parseTimewarpTimestamp(rangeMatch[2]);
+  const startSeconds = parseCommandTimestamp(rangeMatch[1], '/timewarp');
+  const endSeconds = parseCommandTimestamp(rangeMatch[2], '/timewarp');
   if (startSeconds >= endSeconds) {
     throw new Error('/timewarp start must be before end');
   }
@@ -145,6 +159,76 @@ export function normalizeTimewarpCommandArgs(
     end_seconds: endSeconds,
     stretch_factor: stretchFactor,
   };
+}
+
+function stripOptionalQuotes(raw: string): string {
+  const value = raw.trim();
+  const first = value[0];
+  const last = value[value.length - 1];
+  const startsQuoted = first === '"' || first === "'";
+  const endsQuoted = last === '"' || last === "'";
+  if (startsQuoted || endsQuoted) {
+    if (!startsQuoted || first !== last || value.length < 2) {
+      throw new Error(`/sync-audio has mismatched quotes: ${raw}`);
+    }
+    return value.slice(1, -1).trim();
+  }
+  return value;
+}
+
+function isCommandTimestamp(raw: string): boolean {
+  const token = raw.trim().replace(/s$/i, '');
+  const parts = token.split(':');
+  if (parts.length < 1 || parts.length > 3) return false;
+  return parts.every((part) => /^\d+(?:\.\d+)?$/.test(part));
+}
+
+function parseSyncAudioTarget(raw: string): Omit<SyncAudioAnchor, 'video_seconds'> {
+  const untrimmedTarget = raw.trim();
+  const quoted = untrimmedTarget.startsWith('"') || untrimmedTarget.startsWith("'");
+  const target = stripOptionalQuotes(raw);
+  if (!target) throw new Error('/sync-audio anchor target cannot be empty');
+  if (!quoted && isCommandTimestamp(target)) {
+    return { audio_seconds: parseCommandTimestamp(target, '/sync-audio') };
+  }
+  return { audio_cue: target };
+}
+
+export function normalizeSyncAudioCommandArgs(
+  args: Readonly<Record<string, unknown>>,
+): SyncAudioCommandArgs {
+  const assetValue = args.asset_id;
+  const mappingsValue = args.mappings;
+  if (typeof assetValue !== 'string' || !assetValue.trim()) {
+    throw new Error('/sync-audio requires a video asset');
+  }
+  const assetId = stripAt(assetValue.trim());
+  if (!assetId.startsWith('vid-')) throw new Error('/sync-audio requires a vid-* asset');
+  if (typeof mappingsValue !== 'string' || !mappingsValue.trim()) {
+    throw new Error('/sync-audio requires at least one video-time=audio-target mapping');
+  }
+
+  const mappings = mappingsValue.split(';');
+  const anchors: SyncAudioAnchor[] = [];
+  for (const mapping of mappings) {
+    const separator = mapping.indexOf('=');
+    if (separator <= 0 || separator !== mapping.lastIndexOf('=')) {
+      throw new Error(`Invalid /sync-audio mapping: ${mapping.trim()}`);
+    }
+    const videoRaw = mapping.slice(0, separator).trim();
+    const targetRaw = mapping.slice(separator + 1).trim();
+    if (!videoRaw || !targetRaw) {
+      throw new Error(`Invalid /sync-audio mapping: ${mapping.trim()}`);
+    }
+    const videoSeconds = parseCommandTimestamp(videoRaw, '/sync-audio');
+    const previous = anchors[anchors.length - 1];
+    if (previous && videoSeconds <= previous.video_seconds) {
+      throw new Error('/sync-audio video timestamps must be strictly increasing');
+    }
+    anchors.push({ video_seconds: videoSeconds, ...parseSyncAudioTarget(targetRaw) });
+  }
+
+  return { asset_id: assetId, anchors };
 }
 
 function parseNumberToken(token: string): string | number {

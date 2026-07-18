@@ -41,6 +41,13 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     category: "action",
   },
   {
+    name: "sync_video_to_audio",
+    actualTool: "sync_video_to_audio",
+    description: "Smoothly retime video action against fixed original audio using exact video-to-audio timestamp or transcript-cue anchors",
+    params: ["asset_id", "anchors"],
+    category: "action",
+  },
+  {
     name: "reverse_video",
     actualTool: "reverse_video",
     description: "Reverse video playback (play backwards)",
@@ -258,6 +265,12 @@ const TIMESTAMP_PARAMS: Record<string, string[]> = {
   timewarp_video: ["start_seconds", "end_seconds"],
 };
 
+const NESTED_TIMESTAMP_PARAMS: Record<string, Record<string, string[]>> = {
+  sync_video_to_audio: {
+    anchors: ["video_seconds", "audio_seconds"],
+  },
+};
+
 function buildChatRoutingPrompt(slug: string, historyContext?: string): string {
   const toolLines = ROUTABLE_TOOLS.map(
     (t) => `- ${t.name}: ${t.description} (params: ${t.params.join(", ")})`,
@@ -283,6 +296,7 @@ Parameter guidelines:
 - For asset_id: use the resolved asset ID from the referenced @tag (e.g., @vid-foo → asset_id: "vid-foo")
 - For timestamps (trim_start, trim_end, cut_start, cut_end, start_time, end_time, start_seconds, end_seconds): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)
 - For timewarp_video: stretch_factor is a duration multiplier; values above 1 slow and lengthen the selected picture, while values below 1 accelerate and shorten it
+- For sync_video_to_audio: anchors is an ordered array. Each anchor has video_seconds plus exactly one target: audio_seconds for an explicit audio time or audio_cue for transcript words. Convert nested timestamp values to seconds and preserve audio_cue text exactly. The original audio stays fixed; only the picture is retimed
 - For generate_video: put the generation description in "prompt"
 - For generate_image: put the image description in "prompt"; use image_slugs ONLY for @img-* reference images (include @ prefix). Never put @vid-* or @aud-* in image_slugs — if the user wants an image inspired by a video, describe that in the text prompt instead
 - For create_watermark (QR code / watermark card): use this tool for real scannable QR codes — never generate_image. Pass url from the referenced asset's source_url/webpage_url when the user says "from the url in @vid-…" or similar; optional handle is an X handle without @
@@ -302,5 +316,5 @@ function getRoutableTool(name: string): RoutableToolInfo | undefined {
   return ROUTABLE_TOOLS.find((t) => t.name === name);
 }
 
-export { ROUTABLE_TOOLS, TIMESTAMP_PARAMS, buildChatRoutingPrompt, getRoutableTool };
+export { ROUTABLE_TOOLS, TIMESTAMP_PARAMS, NESTED_TIMESTAMP_PARAMS, buildChatRoutingPrompt, getRoutableTool };
 export type { RoutableToolInfo };

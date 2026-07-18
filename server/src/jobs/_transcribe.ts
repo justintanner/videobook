@@ -50,6 +50,23 @@ export async function transcribeAssetToElevenLabsJson(
   audioFilename: string,
   options: TranscribeOptions,
 ): Promise<void> {
+  const response = await requestElevenLabsTranscript(
+    fs,
+    projectSlug,
+    assetId,
+    audioFilename,
+    options,
+  );
+  await writeElevenLabsTranscript(fs, projectSlug, assetId, response, options);
+}
+
+export async function requestElevenLabsTranscript(
+  fs: VideocityFs,
+  projectSlug: string,
+  assetId: string,
+  audioFilename: string,
+  options: TranscribeOptions,
+): Promise<ElevenLabsSpeechToTextResponse> {
   const apiKey = requireApiKey("ELEVENLABS_API_KEY");
 
   const readResult = await fs.readFile(assetId, audioFilename, projectSlug);
@@ -67,8 +84,16 @@ export async function transcribeAssetToElevenLabsJson(
     diarize: options.diarize,
     ...(options.languageCode ? { language_code: options.languageCode } : {}),
   };
-  const response: ElevenLabsSpeechToTextResponse = await provider.v1.speechToText(request);
+  return provider.v1.speechToText(request);
+}
 
+export async function writeElevenLabsTranscript(
+  fs: VideocityFs,
+  projectSlug: string,
+  assetId: string,
+  response: ElevenLabsSpeechToTextResponse,
+  options: TranscribeOptions,
+): Promise<void> {
   const transcriptionStr = JSON.stringify(response, null, 2);
   const writeResult = await fs.writeFile(
     assetId,

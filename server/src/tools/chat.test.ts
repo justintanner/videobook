@@ -6,6 +6,7 @@ import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
 import {
   loadScriptContentsForChat,
+  normalizeChatTimestampParams,
   parseChatDecision,
   repairChatRoutingJson,
   sanitizeGenerateImageParams,
@@ -15,6 +16,40 @@ import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
+
+describe("normalizeChatTimestampParams", () => {
+  it("normalizes nested sync anchors without changing cue strings", () => {
+    const source = {
+      asset_id: "vid-frankenstein",
+      anchors: [
+        { video_seconds: "0:03", audio_cue: "England" },
+        { video_seconds: "6s", audio_seconds: "0:05.96" },
+        { video_seconds: "bad", audio_cue: "America" },
+      ],
+    };
+    expect(normalizeChatTimestampParams("sync_video_to_audio", source)).toEqual({
+      asset_id: "vid-frankenstein",
+      anchors: [
+        { video_seconds: 3, audio_cue: "England" },
+        { video_seconds: 6, audio_seconds: 5.96 },
+        { video_seconds: "bad", audio_cue: "America" },
+      ],
+    });
+    expect(source.anchors[0].video_seconds).toBe("0:03");
+  });
+
+  it("retains top-level timestamp normalization", () => {
+    expect(normalizeChatTimestampParams("timewarp_video", {
+      start_seconds: "0:03",
+      end_seconds: "6.5s",
+      stretch_factor: 1.5,
+    })).toEqual({
+      start_seconds: 3,
+      end_seconds: 6.5,
+      stretch_factor: 1.5,
+    });
+  });
+});
 
 // Per-test createTestClient + create_project under parallel test load was
 // blowing past the 60s hook budget — every per-test call stomps the queue's

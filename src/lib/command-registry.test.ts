@@ -3,6 +3,7 @@ import {
   parseCommandArgs,
   filterCommandsByMountKeys,
   normalizeQrOutroCommandArgs,
+  normalizeSyncAudioCommandArgs,
   normalizeTimewarpCommandArgs,
   selectCommandForInput,
 } from "./command-registry.js";
@@ -431,6 +432,65 @@ describe("normalizeTimewarpCommandArgs", () => {
     [{ asset_id: "vid-clip", range: "0-2", factor: "1.5x extra" }, "factor"],
   ])("rejects malformed input %#", (args, message) => {
     expect(() => normalizeTimewarpCommandArgs(args)).toThrow(message);
+  });
+});
+
+describe("normalizeSyncAudioCommandArgs", () => {
+  it("normalizes transcript cue anchors from the documented form", () => {
+    expect(normalizeSyncAudioCommandArgs({
+      asset_id: "@vid-frankenstein",
+      mappings: "3s=England; 6s=America",
+    })).toEqual({
+      asset_id: "vid-frankenstein",
+      anchors: [
+        { video_seconds: 3, audio_cue: "England" },
+        { video_seconds: 6, audio_cue: "America" },
+      ],
+    });
+  });
+
+  it("accepts colon and decimal times and strips optional cue quotes", () => {
+    expect(normalizeSyncAudioCommandArgs({
+      asset_id: "vid-frankenstein",
+      mappings: "0:03=\"British guy\"; 0:06.5s='American guy'; 8.25=0:09.75",
+    })).toEqual({
+      asset_id: "vid-frankenstein",
+      anchors: [
+        { video_seconds: 3, audio_cue: "British guy" },
+        { video_seconds: 6.5, audio_cue: "American guy" },
+        { video_seconds: 8.25, audio_seconds: 9.75 },
+      ],
+    });
+  });
+
+  it("treats quoted and non-timestamp digit-leading targets as cues", () => {
+    expect(normalizeSyncAudioCommandArgs({
+      asset_id: "vid-frankenstein",
+      mappings: "3s=\"10\"; 6s=10 Downing Street; 9s=4minutes",
+    })).toEqual({
+      asset_id: "vid-frankenstein",
+      anchors: [
+        { video_seconds: 3, audio_cue: "10" },
+        { video_seconds: 6, audio_cue: "10 Downing Street" },
+        { video_seconds: 9, audio_cue: "4minutes" },
+      ],
+    });
+  });
+
+  it.each([
+    [{}, "video asset"],
+    [{ asset_id: "img-wrong", mappings: "3s=England" }, "vid-*"],
+    [{ asset_id: "vid-clip" }, "at least one"],
+    [{ asset_id: "vid-clip", mappings: "3s England" }, "mapping"],
+    [{ asset_id: "vid-clip", mappings: "3s=England=America" }, "mapping"],
+    [{ asset_id: "vid-clip", mappings: "bad=England" }, "timestamp"],
+    [{ asset_id: "vid-clip", mappings: "3s=" }, "mapping"],
+    [{ asset_id: "vid-clip", mappings: "3s=England;" }, "mapping"],
+    [{ asset_id: "vid-clip", mappings: "6s=America; 3s=England" }, "increasing"],
+    [{ asset_id: "vid-clip", mappings: "3s=England; 3s=America" }, "increasing"],
+    [{ asset_id: "vid-clip", mappings: "3s=\"England'" }, "quotes"],
+  ])("rejects malformed input %#", (args, message) => {
+    expect(() => normalizeSyncAudioCommandArgs(args)).toThrow(message);
   });
 });
 

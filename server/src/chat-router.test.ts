@@ -3,6 +3,7 @@ import {
   getRoutableTool,
   buildChatRoutingPrompt,
   ROUTABLE_TOOLS,
+  NESTED_TIMESTAMP_PARAMS,
   TIMESTAMP_PARAMS,
 } from "./chat-router.js";
 
@@ -36,6 +37,14 @@ describe("getRoutableTool", () => {
       "end_seconds",
       "stretch_factor",
     ]);
+  });
+
+  it("returns audio sync routing parameters", () => {
+    const tool = getRoutableTool("sync_video_to_audio");
+    expect(tool).toBeDefined();
+    expect(tool!.actualTool).toBe("sync_video_to_audio");
+    expect(tool!.category).toBe("action");
+    expect(tool!.params).toEqual(["asset_id", "anchors"]);
   });
 
   it("returns correct tool info for generate_image", () => {
@@ -93,6 +102,7 @@ describe("buildChatRoutingPrompt", () => {
     expect(prompt).toContain("concat_images");
     expect(prompt).toContain("create_qr_outro");
     expect(prompt).toContain("timewarp_video");
+    expect(prompt).toContain("sync_video_to_audio");
     expect(prompt).toContain("Available tools:");
   });
 
@@ -141,6 +151,12 @@ describe("TIMESTAMP_PARAMS", () => {
     expect(TIMESTAMP_PARAMS.timewarp_video).toEqual(["start_seconds", "end_seconds"]);
   });
 
+  it("has nested timestamp entries for sync_video_to_audio", () => {
+    expect(NESTED_TIMESTAMP_PARAMS.sync_video_to_audio).toEqual({
+      anchors: ["video_seconds", "audio_seconds"],
+    });
+  });
+
   it("does not have entries for tools without timestamps", () => {
     expect(TIMESTAMP_PARAMS.reverse_video).toBeUndefined();
     expect(TIMESTAMP_PARAMS.generate_image).toBeUndefined();
@@ -149,7 +165,7 @@ describe("TIMESTAMP_PARAMS", () => {
 
 describe("ROUTABLE_TOOLS", () => {
   it("has the expected number of entries", () => {
-    expect(ROUTABLE_TOOLS.length).toBe(33);
+    expect(ROUTABLE_TOOLS.length).toBe(34);
   });
 
   it("includes create_watermark for QR/watermark routing", () => {

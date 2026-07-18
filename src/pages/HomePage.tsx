@@ -58,6 +58,7 @@ import { toast } from '@/hooks/useToast';
 import { CommandRegistryProvider } from '@/contexts/CommandRegistryContext';
 import { MountKeyProvider } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
+import type { CommandToolArgs } from '@/lib/command-registry';
 import type { GenerationLifecycleEvent } from '@/lib/generation-lifecycle';
 import { runOptimisticRenderRequest } from '@/lib/render-request';
 import type { MediaItem, AssetType, ClipState, PendingState, OsgInfo } from '@/components/sidebar/types';
@@ -771,7 +772,7 @@ export function HomePage() {
     setTimelineSlotIndex(slotIndex);
   }, []);
 
-  const handleAfterDispatch = useCallback((toolName: string, toolArgs: Record<string, string | number | boolean | string[]>) => {
+  const handleAfterDispatch = useCallback((toolName: string, toolArgs: CommandToolArgs) => {
     if (!projectSlug) return;
     fetchTimeline(projectSlug);
     listAssets(projectSlug, sortOrder);

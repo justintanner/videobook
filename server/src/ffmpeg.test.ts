@@ -72,8 +72,35 @@ describe("probeVideo", () => {
     expect(result.height).toBe(240);
     expect(result.duration).toBeGreaterThan(0.8);
     expect(result.duration).toBeLessThan(1.5);
+    expect(result.videoDuration).toBeGreaterThan(0.8);
+    expect(result.videoDuration).toBeLessThan(1.5);
+    expect(result.audioDuration).not.toBeNull();
+    expect(result.audioDuration!).toBeGreaterThan(0.8);
+    expect(result.audioDuration!).toBeLessThan(1.5);
     expect(result.fps).toBe(30);
     expect(result.hasAudio).toBe(true);
+  });
+
+  it("reports separate video and audio stream durations", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "ffmpeg-test-"));
+    const videoPath = join(tempDir, "different-durations.mp4");
+
+    await execFileAsync(FFMPEG, [
+      "-f", "lavfi", "-i", "testsrc=duration=1:size=320x240:rate=30",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=1.6",
+      "-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac",
+      "-pix_fmt", "yuv420p",
+      "-y", videoPath,
+    ]);
+
+    const result = await probeVideo(videoPath);
+
+    expect(result.videoDuration).toBeGreaterThan(0.9);
+    expect(result.videoDuration).toBeLessThan(1.1);
+    expect(result.audioDuration).not.toBeNull();
+    expect(result.audioDuration!).toBeGreaterThan(1.5);
+    expect(result.audioDuration!).toBeLessThan(1.7);
+    expect(result.duration).toBeGreaterThanOrEqual(result.audioDuration!);
   });
 
   it("returns hasAudio false for video without audio", async () => {
@@ -91,6 +118,8 @@ describe("probeVideo", () => {
 
     expect(result.width).toBe(320);
     expect(result.height).toBe(240);
+    expect(result.videoDuration).toBeGreaterThan(0.8);
+    expect(result.audioDuration).toBeNull();
     expect(result.hasAudio).toBe(false);
   });
 });

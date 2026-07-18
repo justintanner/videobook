@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import type { ServerCommand, CommandArgValue } from '@/lib/command-registry';
-import { filterCommandsByMountKeys, normalizeQrOutroCommandArgs, normalizeTimewarpCommandArgs, parseCommandArgs, selectCommandForInput } from '@/lib/command-registry';
+import type { ServerCommand, CommandArgValue, CommandToolArgs } from '@/lib/command-registry';
+import { filterCommandsByMountKeys, normalizeQrOutroCommandArgs, normalizeSyncAudioCommandArgs, normalizeTimewarpCommandArgs, parseCommandArgs, selectCommandForInput } from '@/lib/command-registry';
 import { useMountKeys } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
 import { executeUiAction } from '@/lib/ui-actions';
@@ -27,7 +27,7 @@ export function CommandRegistryProvider({
   state: string;
   projectSlug: string | undefined;
   uiActions: UiActionMap;
-  onAfterDispatch?: (toolName: string, toolArgs: Record<string, string | number | boolean | string[]>) => void;
+  onAfterDispatch?: (toolName: string, toolArgs: CommandToolArgs) => void;
   children: React.ReactNode;
 }) {
   const mountKeys = useMountKeys();
@@ -96,7 +96,7 @@ export function CommandRegistryProvider({
 
           // mcpTool dispatch
           if (cmd.mcpTool) {
-            const toolArgs: Record<string, string | number | boolean | string[]> = { ...args };
+            const toolArgs: CommandToolArgs = { ...args };
             if (cmd.mcpTool.autoInject?.includes('project_slug') && projectSlug) {
               toolArgs.project_slug = projectSlug;
             }
@@ -105,7 +105,9 @@ export function CommandRegistryProvider({
             }
             if (cmd.mcpTool.tool === 'create_qr_outro') {
               const inputs = toolArgs.inputs;
-              if (!Array.isArray(inputs)) throw new Error('/qr-outro inputs are required');
+              if (!Array.isArray(inputs) || !inputs.every((input) => typeof input === 'string')) {
+                throw new Error('/qr-outro inputs are required');
+              }
               delete toolArgs.inputs;
               Object.assign(toolArgs, normalizeQrOutroCommandArgs(inputs));
             }
@@ -122,6 +124,11 @@ export function CommandRegistryProvider({
               const normalized = normalizeTimewarpCommandArgs(toolArgs);
               delete toolArgs.range;
               delete toolArgs.factor;
+              Object.assign(toolArgs, normalized);
+            }
+            if (cmd.mcpTool.tool === 'sync_video_to_audio') {
+              const normalized = normalizeSyncAudioCommandArgs(toolArgs);
+              delete toolArgs.mappings;
               Object.assign(toolArgs, normalized);
             }
             const result = await callTool(cmd.mcpTool.tool, toolArgs);

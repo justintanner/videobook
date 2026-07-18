@@ -1391,6 +1391,21 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "timewarp_video", autoInject: ["project_slug"] },
   },
   {
+    command: "/sync-audio",
+    description: "Smoothly retime video action to match fixed original-audio cues at multiple anchors",
+    example: "/sync-audio @vid-frankenstein 3s=England; 6s=America",
+    category: "context_menu",
+    icon: "Gauge",
+    size: "default",
+    variant: "violet",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset to synchronize" },
+      { name: "mappings", type: "string", required: true, description: "Semicolon-separated video-time=audio-cue-or-time anchors" },
+    ],
+    mcpTool: { tool: "sync_video_to_audio", autoInject: ["project_slug"] },
+  },
+  {
     command: "/split",
     description: "Open frame-accurate split editor; creates two video assets. Original preserved.",
     example: "/split @vid-clip 10",

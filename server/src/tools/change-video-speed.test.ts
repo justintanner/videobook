@@ -30,11 +30,12 @@ async function uploadVideo(
   client: Client,
   projectSlug: string,
   videoPath: string,
+  filename = "original.mp4",
 ): Promise<{ assetId: string; path: string }> {
   const data = (await readFile(videoPath)).toString("base64");
   const result = await client.callTool({
     name: "upload_file",
-    arguments: { project_slug: projectSlug, filename: "original.mp4", data },
+    arguments: { project_slug: projectSlug, filename, data },
   });
   return JSON.parse((result.content as TextContent)[0].text);
 }
@@ -49,6 +50,7 @@ describe("change_video_speed tool", () => {
   let fixtureDir: string;
   let videoPath: string;
   let sharedVideoAssetId: string;
+  let targetDurationVideoAssetId: string;
 
   beforeAll(async () => {
     await queue.start();
@@ -63,6 +65,13 @@ describe("change_video_speed tool", () => {
     });
     const uploaded = await uploadVideo(client, "speed-proj", videoPath);
     sharedVideoAssetId = uploaded.assetId;
+    const targetDurationVideo = await uploadVideo(
+      client,
+      "speed-proj",
+      videoPath,
+      "target-duration.mp4",
+    );
+    targetDurationVideoAssetId = targetDurationVideo.assetId;
   });
 
   afterAll(async () => {
@@ -175,7 +184,7 @@ describe("change_video_speed tool", () => {
     const result = await client.callTool({
       name: "change_video_speed",
       arguments: {
-        asset_id: sharedVideoAssetId,
+        asset_id: targetDurationVideoAssetId,
         project_slug: "speed-proj",
         target_duration_seconds: 0.5,
       },
@@ -183,7 +192,7 @@ describe("change_video_speed tool", () => {
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.asset_id).toBe(sharedVideoAssetId);
+    expect(parsed.asset_id).toBe(targetDurationVideoAssetId);
     expect(parsed.job_id).toMatch(/^speed-/);
     expect(parsed.status).toBe("enqueued");
   });
