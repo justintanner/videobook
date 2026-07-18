@@ -199,7 +199,7 @@ export async function enqueueLazyTimelineRender(
 
   const action = renderActions[0];
   const stored = await readStoredRenderDefaults(fs, assetId, projectSlug, orientation);
-  const subtitlesEnabled = action.hasElevenlabs && stored.subtitlesEnabled !== false;
+  const subtitlesEnabled = action.hasElevenlabs && stored.subtitlesEnabled === true;
   // Stable dedupe key: concurrent triggers (job-completion hooks racing a
   // sync poll) collapse onto one queued render instead of double-rendering.
   const jobId = `auto-render-${assetId}-${orientation}`;
@@ -222,8 +222,8 @@ export async function enqueueLazyTimelineRender(
     fontSize: isFontSizePreset(stored.fontSize) ? stored.fontSize : "medium",
     textColor: stringOr(stored.textColor, "#FFFFFF"),
     highlightColor: stringOr(stored.highlightColor, "#991B1B"),
-    audioFadeIn: numberOr(stored.audioFadeIn, 150),
-    audioFadeOut: numberOr(stored.audioFadeOut, 100),
+    audioFadeIn: numberOr(stored.audioFadeIn, 0),
+    audioFadeOut: numberOr(stored.audioFadeOut, 0),
     audioVolume: numberOr(stored.audioVolume, 100),
     osgImagePath: nullableString(stored.osgImagePath),
     osgAssetId: nullableString(stored.osgAssetId),

@@ -89,7 +89,7 @@ async function placementSummary(
     );
     const stored = storedResult.ok ? storedResult.value : {};
     const settings: KeywordPlacementSettings = {
-      subtitlesEnabled: stored.subtitlesEnabled !== false,
+      subtitlesEnabled: stored.subtitlesEnabled === true,
       subtitlePosition: isSubtitlePosition(stored.position) ? stored.position : "bottom",
       subtitleStyle: isSubtitleStyle(stored.highlightStyle) ? stored.highlightStyle : "impact",
       subtitleFontSize: isFontSize(stored.fontSize) ? stored.fontSize : "medium",

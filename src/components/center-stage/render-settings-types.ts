@@ -53,7 +53,7 @@ export interface RenderSettings {
 }
 
 export const DEFAULT_RENDER_SETTINGS: RenderSettings = {
-  subtitlesEnabled: true,
+  subtitlesEnabled: false,
   subtitleLanguage: 'original',
   subtitleStyle: 'impact',
   subtitlePosition: 'bottom',
@@ -61,8 +61,8 @@ export const DEFAULT_RENDER_SETTINGS: RenderSettings = {
   textColor: '#F8FAFC',
   highlightColor: '#991B1B',
   audioVolume: 100,
-  audioFadeIn: 150,
-  audioFadeOut: 100,
+  audioFadeIn: 0,
+  audioFadeOut: 0,
   osgAssetId: null,
   osgAssetSrc: null,
   osgPosition: 'top-right',

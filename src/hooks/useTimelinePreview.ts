@@ -87,8 +87,8 @@ export function useTimelinePreview(
         src,
         durationInFrames,
         volume: timelineSlot.volume ?? 100,
-        fadeIn: timelineSlot.audioFadeIn ?? 150,
-        fadeOut: timelineSlot.audioFadeOut ?? 100,
+        fadeIn: timelineSlot.audioFadeIn ?? 0,
+        fadeOut: timelineSlot.audioFadeOut ?? 0,
       });
       cumulativeFrames += durationInFrames;
     }

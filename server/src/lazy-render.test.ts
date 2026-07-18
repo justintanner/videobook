@@ -40,7 +40,7 @@ describe("enqueueLazyTimelineRender", () => {
     return assetId;
   }
 
-  it("enqueues assigned video renders with subtitles enabled by default", async () => {
+  it("enqueues assigned video renders with clean audio and subtitles off by default", async () => {
     const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
     const assetId = await createVideoAsset();
     const timeline = await fs.writeProjectMeta("timeline", {
@@ -58,10 +58,37 @@ describe("enqueueLazyTimelineRender", () => {
     const payload = enqueue.mock.calls[0][1];
     expect(payload.type).toBe("render_project");
     expect(payload.orientation).toBe("portrait");
-    expect(payload.subtitlesEnabled).toBe(true);
+    expect(payload.subtitlesEnabled).toBe(false);
     expect(payload.subtitleLanguage).toBe("original");
     expect(payload.fontSize).toBe("medium");
+    expect(payload.audioVolume).toBe(100);
+    expect(payload.audioFadeIn).toBe(0);
+    expect(payload.audioFadeOut).toBe(0);
     expect(payload.strokeWidth).toBe(6);
+  });
+
+  it("carries stored subtitle and audio overrides through to the render payload", async () => {
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const assetId = await createVideoAsset();
+    await fs.writeMetadata(assetId, "landscape.render", {
+      subtitlesEnabled: true,
+      audioVolume: 70,
+      audioFadeIn: 200,
+      audioFadeOut: 300,
+    }, projectSlug);
+    await fs.writeProjectMeta("timeline", {
+      slots: [{ slug: assetId }],
+      render: "portrait",
+    }, projectSlug);
+
+    await enqueueLazyTimelineRender(fs, projectSlug, assetId);
+
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    const payload = enqueue.mock.calls[0][1];
+    expect(payload.subtitlesEnabled).toBe(true);
+    expect(payload.audioVolume).toBe(70);
+    expect(payload.audioFadeIn).toBe(200);
+    expect(payload.audioFadeOut).toBe(300);
   });
 
   it("carries a stored subtitleLanguage through to the render payload", async () => {

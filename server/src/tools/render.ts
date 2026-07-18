@@ -53,7 +53,7 @@ export function renderDef(fs: VideocityFs): ToolDef {
       subtitles_enabled: z
         .boolean()
         .optional()
-        .describe("Enable subtitle overlay (default: true when elevenlabs.json exists)"),
+        .describe("Enable subtitle overlay (default: false)"),
       subtitle_language: z
         .string()
         .regex(/^(original|[a-z]{2})$/)
@@ -82,11 +82,11 @@ export function renderDef(fs: VideocityFs): ToolDef {
       audio_fade_in: z
         .number()
         .optional()
-        .describe("Audio fade-in in ms (default: 150)"),
+        .describe("Audio fade-in in ms (default: 0)"),
       audio_fade_out: z
         .number()
         .optional()
-        .describe("Audio fade-out in ms (default: 100)"),
+        .describe("Audio fade-out in ms (default: 0)"),
       audio_volume: z
         .number()
         .optional()
@@ -186,8 +186,8 @@ export function renderDef(fs: VideocityFs): ToolDef {
         font_size = "medium",
         text_color = "#F8FAFC",
         highlight_color = "#991B1B",
-        audio_fade_in = 150,
-        audio_fade_out = 100,
+        audio_fade_in = 0,
+        audio_fade_out = 0,
         audio_volume = 100,
         osg_asset_id,
         osg_position = "top-right",
@@ -316,16 +316,7 @@ export function renderDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const hasElevenlabs = manifest.files.some((f) => f.name === "elevenlabs.json");
-
-      // Default subtitles on iff a transcript already exists; an explicit
-      // request wins. When subtitles are requested without a transcript, the
-      // render job auto-transcribes inline (under its asset lease) rather than
-      // blocking here — see ensureTranscript in render-project.ts.
-      const subsEnabled =
-        subtitles_enabled !== undefined
-          ? subtitles_enabled
-          : hasElevenlabs;
+      const subsEnabled = subtitles_enabled ?? false;
 
       // Resolve OSG image
       let osgImagePath: string | null = null;

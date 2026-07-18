@@ -266,12 +266,12 @@ export async function readRenderSettings(
 }
 
 const BASE_DEFAULTS: Record<string, unknown> = {
-  subtitlesEnabled: true,
+  subtitlesEnabled: false,
   subtitleLanguage: "original",
   position: "bottom",
   fontSize: "medium",
-  audioFadeIn: 150,
-  audioFadeOut: 100,
+  audioFadeIn: 0,
+  audioFadeOut: 0,
   audioVolume: 100,
   osgImagePath: null,
   osgAssetId: null,
@@ -352,9 +352,6 @@ async function readAnalysisRecommendations(
     if (typeof osgPos === "string" && VALID_OSG_POSITIONS.has(osgPos)) {
       recs.osgPosition = osgPos;
     }
-
-    const burned = analysis.burnedInSubtitles as { detected?: boolean } | null;
-    recs.subtitlesEnabled = !(burned && burned.detected === true);
 
     return recs;
   } catch {

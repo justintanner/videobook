@@ -45,13 +45,45 @@ describe("render tool", () => {
 
     const result = await client.callTool({
       name: "render",
-      arguments: { asset_id: assetId, project_slug: projectSlug, subtitles_enabled: false },
+      arguments: { asset_id: assetId, project_slug: projectSlug },
     });
 
     expect(result.isError).toBeFalsy();
     expect(enqueue).toHaveBeenCalledTimes(3);
     const orientations = enqueue.mock.calls.map((call) => call[1].orientation);
     expect(orientations).toEqual(["landscape", "portrait", "square"]);
+    for (const call of enqueue.mock.calls) {
+      expect(call[1].subtitlesEnabled).toBe(false);
+      expect(call[1].audioVolume).toBe(100);
+      expect(call[1].audioFadeIn).toBe(0);
+      expect(call[1].audioFadeOut).toBe(0);
+    }
+  });
+
+  it("preserves explicit subtitle and audio settings", async () => {
+    const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
+    const assetId = await createVideoAsset();
+
+    const result = await client.callTool({
+      name: "render",
+      arguments: {
+        asset_id: assetId,
+        project_slug: projectSlug,
+        orientation: "portrait",
+        subtitles_enabled: true,
+        audio_volume: 75,
+        audio_fade_in: 200,
+        audio_fade_out: 300,
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    const payload = enqueue.mock.calls[0][1];
+    expect(payload.subtitlesEnabled).toBe(true);
+    expect(payload.audioVolume).toBe(75);
+    expect(payload.audioFadeIn).toBe(200);
+    expect(payload.audioFadeOut).toBe(300);
   });
 
   it("clears a stale error row so a re-render can claim the asset", async () => {

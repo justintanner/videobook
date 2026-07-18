@@ -1,5 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import { storedToRenderSettings } from './render-settings-types';
+import { getDefaultRenderSettings, storedToRenderSettings } from './render-settings-types';
+
+describe('render setting defaults', () => {
+  it.each(['portrait', 'landscape'])('starts %s clips with clean audio and subtitles off', (orientation) => {
+    const result = getDefaultRenderSettings(orientation);
+
+    expect(result.subtitlesEnabled).toBe(false);
+    expect(result.audioVolume).toBe(100);
+    expect(result.audioFadeIn).toBe(0);
+    expect(result.audioFadeOut).toBe(0);
+  });
+
+  it('uses the same defaults for missing stored fields while preserving overrides', () => {
+    const defaults = storedToRenderSettings({});
+    const overridden = storedToRenderSettings({
+      subtitlesEnabled: true,
+      audioVolume: 65,
+      audioFadeIn: 250,
+      audioFadeOut: 300,
+    });
+
+    expect(defaults.subtitlesEnabled).toBe(false);
+    expect(defaults.audioVolume).toBe(100);
+    expect(defaults.audioFadeIn).toBe(0);
+    expect(defaults.audioFadeOut).toBe(0);
+    expect(overridden.subtitlesEnabled).toBe(true);
+    expect(overridden.audioVolume).toBe(65);
+    expect(overridden.audioFadeIn).toBe(250);
+    expect(overridden.audioFadeOut).toBe(300);
+  });
+});
 
 describe('storedToRenderSettings OSG resolution', () => {
   it('resolves osgAssetSrc from the asset id via the injected resolver', () => {
