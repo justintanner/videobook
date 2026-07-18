@@ -40,7 +40,6 @@ export type CommandDescriptor = ServerCommand;
 
 export interface QrOutroCommandArgs {
   qr_image_slugs: string[];
-  sound_effect_slug?: string;
   aspect_ratio?: '16:9' | '9:16' | '1:1';
 }
 
@@ -118,37 +117,30 @@ export function normalizeKeywordCommandArgs(
 export function normalizeQrOutroCommandArgs(tokens: readonly string[]): QrOutroCommandArgs {
   const inputs = tokens.map(stripAt);
   const qrImages: string[] = [];
-  let soundEffect: string | undefined;
   let aspectRatio: QrOutroCommandArgs['aspect_ratio'];
 
   for (const token of inputs) {
     if (token.startsWith('img-')) {
       qrImages.push(token);
       if (qrImages.length > 4) {
-        throw new Error('/qr-outro accepts at most 4 QR images');
+        throw new Error('/outroqr accepts at most 4 QR images');
       }
       continue;
     }
-    if (token.startsWith('aud-')) {
-      if (soundEffect) throw new Error('/qr-outro accepts only one sound effect');
-      soundEffect = token;
-      continue;
-    }
     if (token === '16:9' || token === '9:16' || token === '1:1') {
-      if (aspectRatio) throw new Error('/qr-outro accepts only one aspect ratio');
+      if (aspectRatio) throw new Error('/outroqr accepts only one aspect ratio');
       aspectRatio = token;
       continue;
     }
-    throw new Error(`Unrecognized /qr-outro input: ${token}`);
+    throw new Error(`Unrecognized /outroqr input: ${token}`);
   }
 
   if (qrImages.length === 0) {
-    throw new Error('/qr-outro requires at least one QR img-* asset');
+    throw new Error('/outroqr requires at least one QR img-* asset');
   }
 
   return {
     qr_image_slugs: qrImages,
-    ...(soundEffect ? { sound_effect_slug: soundEffect } : {}),
     ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
   };
 }

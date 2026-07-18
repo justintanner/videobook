@@ -339,11 +339,9 @@ describe("normalizeQrOutroCommandArgs", () => {
       "@img-qr-zero",
       "@img-qr-one",
       "@img-qr-two",
-      "@aud-slap",
       "16:9",
     ])).toEqual({
       qr_image_slugs: ["img-qr-zero", "img-qr-one", "img-qr-two"],
-      sound_effect_slug: "aud-slap",
       aspect_ratio: "16:9",
     });
   });
@@ -352,11 +350,9 @@ describe("normalizeQrOutroCommandArgs", () => {
     expect(normalizeQrOutroCommandArgs([
       "img-qr-one",
       "9:16",
-      "aud-hit",
       "img-qr-two",
     ])).toEqual({
       qr_image_slugs: ["img-qr-one", "img-qr-two"],
-      sound_effect_slug: "aud-hit",
       aspect_ratio: "9:16",
     });
   });
@@ -378,11 +374,10 @@ describe("normalizeQrOutroCommandArgs", () => {
     ])).toThrow();
   });
 
-  it("rejects duplicate optional inputs and unknown tokens", () => {
+  it("rejects audio, duplicate aspect ratios, and unknown tokens", () => {
     expect(() => normalizeQrOutroCommandArgs([
       "img-qr",
       "aud-one",
-      "aud-two",
     ])).toThrow();
     expect(() => normalizeQrOutroCommandArgs([
       "img-qr",

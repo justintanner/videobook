@@ -12,7 +12,11 @@ interface Command {
   description: string;
   category: string;
   params: Array<{ name: string; type: string; required: boolean }>;
-  mcpTool?: { tool: string; autoInject?: string[] };
+  mcpTool?: {
+    tool: string;
+    autoInject?: string[];
+    injectParams?: Record<string, string | number | boolean>;
+  };
   uiAction?: string;
   onMount?: string[];
 }
@@ -70,6 +74,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/rewrite");
     expect(commandNames).toContain("/rewrite-script");
     expect(commandNames).toContain("/render");
+    expect(commandNames).toContain("/clean-audio");
     expect(commandNames).toContain("/vocals");
     expect(commandNames).toContain("/original");
     expect(commandNames).toContain("/landscape");
@@ -131,12 +136,25 @@ describe("slash_commands tool", () => {
     expect(qrbtf.mcpTool?.autoInject).toContain("project_slug");
     expect(qrbtf.params.map((p) => p.name)).toEqual(["value", "style"]);
 
-    expect(commandNames).toContain("/qr-outro");
-    const qrOutro = commands.find((c) => c.command === "/qr-outro")!;
+    expect(commandNames).not.toContain("/qr-outro");
+    expect(commandNames).toContain("/outroqr");
+    const qrOutro = commands.find((c) => c.command === "/outroqr")!;
     expect(qrOutro.mcpTool?.tool).toBe("create_qr_outro");
     expect(qrOutro.mcpTool?.autoInject).toContain("project_slug");
+    expect(qrOutro.mcpTool?.injectParams).toEqual({
+      duration_seconds: 10,
+      include_audio: false,
+    });
     expect(qrOutro.params.map((p) => p.name)).toEqual(["inputs"]);
     expect(qrOutro.params[0].type).toBe("string[]");
+
+    const cleanAudio = commands.find((c) => c.command === "/clean-audio")!;
+    expect(cleanAudio.mcpTool?.tool).toBe("clean_video_audio");
+    expect(cleanAudio.mcpTool?.autoInject).toContain("project_slug");
+    expect(cleanAudio.params.map((p) => p.name)).toEqual([
+      "asset_id",
+      "add_light_music",
+    ]);
 
     const notebook = commands.find((c) => c.command === "/notebook")!;
     expect(notebook.uiAction).toBe("open_notebook");

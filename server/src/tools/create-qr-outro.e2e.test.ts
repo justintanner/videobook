@@ -113,6 +113,8 @@ describe("create_qr_outro e2e", () => {
   let outputPath: string;
   let defaultSoundOutputAssetId: string;
   let defaultSoundOutputPath: string;
+  let silentOutputAssetId: string;
+  let silentOutputPath: string;
   let qrOne: string;
   let qrTwo: string;
 
@@ -161,7 +163,30 @@ describe("create_qr_outro e2e", () => {
     const defaultSoundManifest = await fs.getManifest(defaultSoundOutputAssetId, PROJECT);
     if (!defaultSoundManifest.ok) throw new Error(defaultSoundManifest.error.message);
     defaultSoundOutputPath = join(defaultSoundManifest.value.path, "original.mp4");
-  }, 600_000);
+
+    const silentResult = await client.callTool({
+      name: "create_qr_outro",
+      arguments: {
+        project_slug: PROJECT,
+        qr_image_slugs: [qrOne],
+        aspect_ratio: "16:9",
+        duration_seconds: 10,
+        include_audio: false,
+      },
+    });
+    expect(silentResult.isError).toBeFalsy();
+    const silentData = parseResult(silentResult);
+    expect(silentData).toMatchObject({
+      duration_seconds: 10,
+      include_audio: false,
+      sound_effect_source: "none",
+    });
+    silentOutputAssetId = String(silentData.asset_id);
+    await waitForJob(String(silentData.job_id), 600_000);
+    const silentManifest = await fs.getManifest(silentOutputAssetId, PROJECT);
+    if (!silentManifest.ok) throw new Error(silentManifest.error.message);
+    silentOutputPath = join(silentManifest.value.path, "original.mp4");
+  }, 900_000);
 
   afterAll(async () => {
     await client?.close();
@@ -254,6 +279,46 @@ describe("create_qr_outro e2e", () => {
     expect(rmsAt(pcm, 1.4, 1.5)).toBeLessThan(0.005);
     const status = await fs.getAssetStatus(defaultSoundOutputAssetId, PROJECT);
     expect(status.ok && status.value).toBe("ready");
+  });
+
+  it("renders a silent ten-second outro and keeps the QR visible", async () => {
+    const probe = await probeVideo(silentOutputPath);
+    expect(probe.width).toBe(1920);
+    expect(probe.height).toBe(1080);
+    expect(probe.duration).toBeGreaterThanOrEqual(9.9);
+    expect(probe.duration).toBeLessThanOrEqual(10.15);
+    expect(probe.hasAudio).toBe(false);
+
+    const manifest = await fs.getManifest(silentOutputAssetId, PROJECT);
+    if (!manifest.ok) throw new Error(manifest.error.message);
+    expect(manifest.value.files.map((file) => file.name)).not.toContain("original.mp3");
+
+    const metadata = await fs.readMetadata<Record<string, unknown>>(
+      silentOutputAssetId,
+      "qr-outro",
+      PROJECT,
+    );
+    if (!metadata.ok) throw new Error(metadata.error.message);
+    expect(metadata.value).toMatchObject({
+      sound_effect_slug: null,
+      sound_effect_source: "none",
+      sound_effect_filename: null,
+      include_audio: false,
+      duration_seconds: 10,
+    });
+
+    const finalFramePath = join(tempDir, "silent-final-frame.png");
+    await extractFrame(silentOutputPath, 9.5, finalFramePath);
+    const spec = buildOutroSpec("16:9", 1, 10);
+    const center = spec.cards[0];
+    const pixel = await pixelAt(
+      finalFramePath,
+      Math.floor(center.x + center.w / 2),
+      Math.floor(center.y + center.h / 2),
+    );
+    expect(pixel[0]).toBeGreaterThan(180);
+    expect(pixel[1]).toBeLessThan(90);
+    expect(pixel[2]).toBeLessThan(90);
   });
 
   it("lands every QR input one at a time across the full canvas", async () => {

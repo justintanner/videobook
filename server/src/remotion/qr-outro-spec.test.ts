@@ -203,6 +203,13 @@ describe("buildOutroSpec", () => {
       }
     }
   });
+
+  it("extends the final QR frame to a requested duration", () => {
+    const spec = buildOutroSpec("16:9", 4, 10);
+    expect(spec.totalDurationSeconds).toBe(10);
+    expect(spec.totalDurationFrames).toBe(300);
+    expect(spec.impacts.at(-1)?.frame).toBeLessThan(300);
+  });
 });
 
 describe("orientationForAspectRatio", () => {

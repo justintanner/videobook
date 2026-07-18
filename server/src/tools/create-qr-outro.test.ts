@@ -108,6 +108,40 @@ describe("create_qr_outro", () => {
     expect(parseResult(result)).not.toHaveProperty("sound_effect_slug");
   });
 
+  it("queues a silent ten-second outro", async () => {
+    const qr = await createImage("silent-qr", "#ffffff");
+
+    const result = await createQrOutroDef(fs).handler({
+      project_slug: PROJECT,
+      qr_image_slugs: [qr],
+      duration_seconds: 10,
+      include_audio: false,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({
+      duration_seconds: 10,
+      include_audio: false,
+      sound_effect_source: "none",
+    });
+    expect(parseResult(result)).not.toHaveProperty("sound_effect_slug");
+  });
+
+  it("rejects an audio override for a silent outro", async () => {
+    const qr = await createImage("silent-qr", "#ffffff");
+    const sound = await createAudio("slap");
+
+    const result = await createQrOutroDef(fs).handler({
+      project_slug: PROJECT,
+      qr_image_slugs: [qr],
+      sound_effect_slug: sound,
+      include_audio: false,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("sound_effect_slug cannot be used");
+  });
+
   it("rejects missing media files before creating an output", async () => {
     const empty = await fs.createAsset("img", "empty-qr", PROJECT);
     if (!empty.ok) throw new Error(empty.error.message);

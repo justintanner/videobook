@@ -106,7 +106,7 @@ export function CommandRegistryProvider({
             if (cmd.mcpTool.tool === 'create_qr_outro') {
               const inputs = toolArgs.inputs;
               if (!Array.isArray(inputs) || !inputs.every((input) => typeof input === 'string')) {
-                throw new Error('/qr-outro inputs are required');
+                throw new Error('/outroqr inputs are required');
               }
               delete toolArgs.inputs;
               Object.assign(toolArgs, normalizeQrOutroCommandArgs(inputs));

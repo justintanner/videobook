@@ -70,7 +70,7 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
   return {
     name: "create_qr_outro",
     description:
-      "Build a standalone animated outro from 1-4 QR image assets with a bundled impact sound or an optional audio override.",
+      "Build a standalone animated outro from 1-4 QR image assets with configurable duration and optional impact audio.",
     schema: {
       project_slug: z.string().describe("Project slug"),
       qr_image_slugs: z
@@ -86,6 +86,16 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
         .enum(["16:9", "9:16", "1:1"])
         .optional()
         .describe("Output aspect ratio (default: 16:9)"),
+      duration_seconds: z
+        .number()
+        .min(3)
+        .max(60)
+        .optional()
+        .describe("Output duration in seconds from 3 to 60; defaults to the animation minimum"),
+      include_audio: z
+        .boolean()
+        .optional()
+        .describe("Include impact audio (default: true); set false for a silent output"),
     },
     handler: async (args) => {
       const {
@@ -93,12 +103,20 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
         qr_image_slugs,
         sound_effect_slug,
         aspect_ratio = "16:9",
+        duration_seconds,
+        include_audio = true,
       } = args as {
         project_slug: string;
         qr_image_slugs: string[];
         sound_effect_slug?: string;
         aspect_ratio?: AspectRatio;
+        duration_seconds?: number;
+        include_audio?: boolean;
       };
+
+      if (!include_audio && sound_effect_slug) {
+        return toolError("sound_effect_slug cannot be used when include_audio is false");
+      }
 
       const qrImages: QrOutroAssetRef[] = [];
       for (const raw of qr_image_slugs) {
@@ -113,13 +131,17 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
       }
 
       let soundEffect: QrOutroAssetRef | null = null;
-      if (sound_effect_slug) {
+      if (include_audio && sound_effect_slug) {
         const resolved = await resolveAudioRef(fs, sound_effect_slug, project_slug);
         if (!resolved.ok) return toolError(resolved.error);
         soundEffect = resolved.value;
       }
 
-      const spec = buildOutroSpec(aspect_ratio, qrImages.length);
+      const spec = buildOutroSpec(
+        aspect_ratio,
+        qrImages.length,
+        duration_seconds,
+      );
       const firstQrStem = qrImages[0].assetId.replace(/^img-/, "");
       const created = await fs.createAsset(
         "vid",
@@ -141,6 +163,8 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
           qrImages,
           soundEffect,
           aspectRatio: aspect_ratio,
+          durationSeconds: spec.totalDurationSeconds,
+          includeAudio: include_audio,
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -163,7 +187,10 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
             aspect_ratio,
             duration_seconds: spec.totalDurationSeconds,
             qr_image_slugs: qrImages.map((image) => image.assetId),
-            sound_effect_source: soundEffect ? "asset" : "bundled_default",
+            include_audio,
+            sound_effect_source: include_audio
+              ? soundEffect ? "asset" : "bundled_default"
+              : "none",
             ...(soundEffect ? { sound_effect_slug: soundEffect.assetId } : {}),
           }),
         }],

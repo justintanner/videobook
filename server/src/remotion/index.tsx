@@ -43,6 +43,8 @@ const defaultQrOutroProps: QrOutroInputProps = {
   qrSrcs: [""],
   audioSrc: null,
   aspectRatio: "16:9",
+  durationSeconds: null,
+  includeAudio: true,
 };
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -74,7 +76,11 @@ const RemotionRoot: React.FC = () => {
         defaultProps={defaultQrOutroProps}
         calculateMetadata={({ props }) => {
           const input = props as QrOutroInputProps;
-          const spec = buildOutroSpec(input.aspectRatio, input.qrSrcs.length);
+          const spec = buildOutroSpec(
+            input.aspectRatio,
+            input.qrSrcs.length,
+            input.durationSeconds ?? undefined,
+          );
           return {
             durationInFrames: spec.totalDurationFrames,
             fps: spec.fps,

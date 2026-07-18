@@ -22,6 +22,8 @@ export interface QrOutroInputProps extends Record<string, unknown> {
   qrSrcs: string[];
   audioSrc: string | null;
   aspectRatio: AspectRatio;
+  durationSeconds: number | null;
+  includeAudio: boolean;
 }
 
 const QrCard: React.FC<{
@@ -71,10 +73,20 @@ export const QrOutroComposition: React.FC<QrOutroInputProps> = ({
   qrSrcs,
   audioSrc,
   aspectRatio,
+  durationSeconds,
+  includeAudio,
 }) => {
-  const spec = buildOutroSpec(aspectRatio, qrSrcs.length);
-  const resolvedAudioSrc = audioSrc ?? staticFile(DEFAULT_QR_OUTRO_SOUND_FILENAME);
-  const windows = cueWindows(qrSrcs.length, spec.totalDurationFrames);
+  const spec = buildOutroSpec(
+    aspectRatio,
+    qrSrcs.length,
+    durationSeconds ?? undefined,
+  );
+  const resolvedAudioSrc = includeAudio
+    ? audioSrc ?? staticFile(DEFAULT_QR_OUTRO_SOUND_FILENAME)
+    : null;
+  const windows = resolvedAudioSrc
+    ? cueWindows(qrSrcs.length, spec.totalDurationFrames)
+    : [];
 
   return (
     <AbsoluteFill style={{ backgroundColor: BACKGROUND_COLOR }}>
@@ -99,7 +111,7 @@ export const QrOutroComposition: React.FC<QrOutroInputProps> = ({
             durationInFrames={cueDuration}
           >
             <Audio
-              src={resolvedAudioSrc}
+              src={resolvedAudioSrc as string}
               endAt={cueDuration}
               volume={(localFrame: number) => {
                 if (localFrame < cueDuration - fadeDuration) return 1;

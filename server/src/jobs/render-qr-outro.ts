@@ -38,6 +38,8 @@ type RenderQrOutroPayload = {
   qrImages: QrOutroAssetRef[];
   soundEffect: QrOutroAssetRef | null;
   aspectRatio: AspectRatio;
+  durationSeconds?: number;
+  includeAudio?: boolean;
 };
 
 async function stageAssetFile(
@@ -74,6 +76,8 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
       qrImages,
       soundEffect,
       aspectRatio,
+      durationSeconds,
+      includeAudio = true,
     } = payload as RenderQrOutroPayload;
 
     const outputManifest = await fs.getManifest(assetId, projectSlug);
@@ -116,7 +120,7 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
           }
 
           let audioSrc: string | null = null;
-          if (soundEffect) {
+          if (includeAudio && soundEffect) {
             const audio = await stageAssetFile(
               fs,
               projectSlug,
@@ -132,6 +136,8 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
             qrSrcs,
             audioSrc,
             aspectRatio,
+            durationSeconds: durationSeconds ?? null,
+            includeAudio,
           };
           const composition = await selectComposition({
             serveUrl: bundleDir,
@@ -147,7 +153,7 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
               serveUrl: bundleDir,
               codec: "h264",
               audioCodec: "aac",
-              muted: false,
+              muted: !includeAudio,
               outputLocation: tempOutputPath,
               inputProps: inputProps as unknown as Record<string, unknown>,
               videoBitrate: "8M",
@@ -163,13 +169,22 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
             await fs.writeFile(assetId, "original.mp4", output, projectSlug),
           );
 
-          const spec = buildOutroSpec(aspectRatio, qrImages.length);
+          const spec = buildOutroSpec(
+            aspectRatio,
+            qrImages.length,
+            durationSeconds,
+          );
           const provenance = {
             origin: "create_qr_outro",
             qr_image_slugs: qrImages.map((image) => image.assetId),
-            sound_effect_slug: soundEffect?.assetId ?? null,
-            sound_effect_source: soundEffect ? "asset" : "bundled_default",
-            sound_effect_filename: soundEffect?.filename ?? DEFAULT_QR_OUTRO_SOUND_FILENAME,
+            sound_effect_slug: includeAudio ? soundEffect?.assetId ?? null : null,
+            sound_effect_source: includeAudio
+              ? soundEffect ? "asset" : "bundled_default"
+              : "none",
+            sound_effect_filename: includeAudio
+              ? soundEffect?.filename ?? DEFAULT_QR_OUTRO_SOUND_FILENAME
+              : null,
+            include_audio: includeAudio,
             aspect_ratio: aspectRatio,
             fps: spec.fps,
             duration_seconds: spec.totalDurationSeconds,

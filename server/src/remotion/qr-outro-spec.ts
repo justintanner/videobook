@@ -215,18 +215,29 @@ export function impactFrames(qrCount: number): ImpactTiming[] {
   return impacts;
 }
 
-export function totalDuration(qrCount: number): { frames: number; seconds: number } {
+export function totalDuration(
+  qrCount: number,
+  requestedSeconds?: number,
+): { frames: number; seconds: number } {
   const lastImpactS = FIRST_IMPACT_S + (qrCount - 1) * IMPACT_INTERVAL_S;
-  const durationS = Math.max(MIN_DURATION_S, lastImpactS + TAIL_AFTER_LAST_IMPACT_S);
+  const minimumDurationS = Math.max(
+    MIN_DURATION_S,
+    lastImpactS + TAIL_AFTER_LAST_IMPACT_S,
+  );
+  const durationS = Math.max(minimumDurationS, requestedSeconds ?? 0);
   const frames = Math.round(durationS * FPS);
   return { frames, seconds: frames / FPS };
 }
 
-export function buildOutroSpec(ratio: AspectRatio, qrCount: number): OutroSpec {
+export function buildOutroSpec(
+  ratio: AspectRatio,
+  qrCount: number,
+  requestedSeconds?: number,
+): OutroSpec {
   const layout = qrLayout(ratio);
   const cards = cardPlacements(qrCount, layout.contentRect);
   const impacts = impactFrames(qrCount);
-  const dur = totalDuration(qrCount);
+  const dur = totalDuration(qrCount, requestedSeconds);
   return {
     layout,
     cards,
