@@ -31,6 +31,7 @@ const defaultProps: RenderInputProps = {
   osgStartSeconds: null,
   osgEndSeconds: null,
   osgTailSeconds: null,
+  keywordGraphics: [],
   backgroundMode: "blur",
   strokeWidth: 6,
   strokeColor: "#000000",

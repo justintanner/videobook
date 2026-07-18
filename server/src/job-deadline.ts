@@ -4,6 +4,7 @@ const JOB_TIMEOUTS_MS = new Map<string, number>([
   ["render_project", 30 * 60_000],
   ["render_timeline", 30 * 60_000],
   ["render_qr_outro", 15 * 60_000],
+  ["analyze_keyword_placement", 5 * 60_000],
 ]);
 
 export class JobDeadlineError extends Error {

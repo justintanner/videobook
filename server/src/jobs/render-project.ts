@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import { findVideoFile, type VideocityFs } from "videocity-engine";
 import { copyFile, mkdir, unlink } from "node:fs/promises";
 import { join, resolve, basename } from "node:path";
 import { renderMedia, selectComposition } from "@remotion/renderer";
@@ -40,6 +40,19 @@ import {
   SQUARE_HEIGHT,
 } from "../remotion/constants.js";
 import { getSharedBundleLocation } from "../remotion/shared-bundle.js";
+import {
+  DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
+  DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
+  parseKeywordTranscript,
+  selectKeywordGraphics,
+  selectRequestedKeywordGraphics,
+} from "../remotion/keyword-graphics.js";
+import {
+  isKeywordPlacementCacheValid,
+  keywordPlacementFingerprint,
+  readKeywordPlacementAnalysis,
+} from "../keyword-placement-cache.js";
+import { resolveKeywordPlacements } from "../remotion/keyword-placement.js";
 
 const LOCK_DURATION_MS = 1_800_000; // 30 min for renders
 const CLAIM_WAIT_MS = 30_000;
@@ -74,6 +87,10 @@ type RenderProjectPayload = {
   osgStartSeconds?: number | null;
   osgEndSeconds?: number | null;
   osgTailSeconds?: number | null;
+  keywordGraphicsEnabled?: boolean;
+  keywordGraphicsMaxCount?: number;
+  keywordGraphicsLingerSeconds?: number;
+  keywordGraphicsKeywords?: string[] | null;
   backgroundMode: BackgroundMode;
   strokeWidth: number;
   strokeColor: string;
@@ -158,6 +175,10 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
       osgStartSeconds,
       osgEndSeconds,
       osgTailSeconds,
+      keywordGraphicsEnabled = false,
+      keywordGraphicsMaxCount = DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
+      keywordGraphicsLingerSeconds = DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
+      keywordGraphicsKeywords = null,
       backgroundMode,
       strokeWidth,
       strokeColor,
@@ -226,18 +247,72 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
             // When subtitles are requested but no transcript exists yet,
             // transcribe inline under this asset's render lease.
             let allSegments = null;
-            if (subtitlesEnabled && !(await fs.readFile(asset.assetId, "elevenlabs.json", projectSlug)).ok) {
+            let rawTranscript: unknown = null;
+            if ((subtitlesEnabled || keywordGraphicsEnabled) && !(await fs.readFile(asset.assetId, "elevenlabs.json", projectSlug)).ok) {
               await ensureElevenLabsTranscript(fs, projectSlug, asset.assetId);
             }
             const elevenlabsResult = await fs.readFile(asset.assetId, "elevenlabs.json", projectSlug);
             if (elevenlabsResult.ok) {
-              const raw = JSON.parse(elevenlabsResult.value.toString()) as unknown;
-              allSegments = await resolveSubtitleSegments(fs, projectSlug, asset.assetId, raw, subtitleLanguage);
+              rawTranscript = JSON.parse(elevenlabsResult.value.toString()) as unknown;
+              allSegments = await resolveSubtitleSegments(fs, projectSlug, asset.assetId, rawTranscript, subtitleLanguage);
             }
 
             let chunks: Chunk[] = [];
             if (subtitlesEnabled && allSegments) {
               chunks = chunkSegments(allSegments, orientation, highlightStyle);
+            }
+            const keywordSegments = rawTranscript ? parseKeywordTranscript(rawTranscript) : [];
+            const selectedKeywordGraphics = keywordGraphicsEnabled && rawTranscript
+              ? keywordGraphicsKeywords?.length
+                ? selectRequestedKeywordGraphics(keywordSegments, keywordGraphicsKeywords, {
+                    lingerSeconds: keywordGraphicsLingerSeconds,
+                  }).graphics
+                : selectKeywordGraphics(keywordSegments, {
+                    maxCount: keywordGraphicsMaxCount,
+                    lingerSeconds: keywordGraphicsLingerSeconds,
+                  })
+              : [];
+            let keywordGraphics = selectedKeywordGraphics;
+            let keywordGraphicsSkipped: string[] = [];
+            let keywordGraphicsPlacementFingerprint: string | null = null;
+            if (keywordGraphicsEnabled && rawTranscript && elevenlabsResult.ok) {
+              const manifestResult = await fs.getManifest(asset.assetId, projectSlug, { includeDotfiles: true });
+              if (!manifestResult.ok) throw new Error(manifestResult.error.message);
+              const sourceVideoFile = findVideoFile(manifestResult.value.files);
+              if (!sourceVideoFile) throw new Error(`No source video found for ${asset.assetId}`);
+              const fingerprint = keywordPlacementFingerprint(
+                sourceVideoFile,
+                elevenlabsResult.value,
+                selectedKeywordGraphics,
+              );
+              const analysis = await readKeywordPlacementAnalysis(fs, asset.assetId, projectSlug);
+              const valid = await isKeywordPlacementCacheValid(
+                fs,
+                asset.assetId,
+                projectSlug,
+                analysis,
+                fingerprint,
+                selectedKeywordGraphics,
+              );
+              if (!analysis || !valid) {
+                throw new Error(
+                  `Face-safe keyword placement is missing or stale for ${asset.assetId}. Run /keywords @${asset.assetId} again.`,
+                );
+              }
+              const resolved = resolveKeywordPlacements(
+                selectedKeywordGraphics,
+                analysis,
+                orientation,
+                {
+                  subtitlesEnabled,
+                  subtitlePosition: position,
+                  subtitleStyle: highlightStyle,
+                  subtitleFontSize: fontSize,
+                },
+              );
+              keywordGraphics = resolved.graphics;
+              keywordGraphicsSkipped = resolved.skipped;
+              keywordGraphicsPlacementFingerprint = analysis.fingerprint;
             }
 
             // Copy video into bundle dir
@@ -271,6 +346,7 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
                 osgStartSeconds: osgStartSeconds ?? null,
                 osgEndSeconds: osgEndSeconds ?? null,
                 osgTailSeconds: osgTailSeconds ?? null,
+                keywordGraphics,
                 backgroundMode,
                 strokeWidth,
                 strokeColor,
@@ -360,6 +436,12 @@ export function registerRenderProjectJob(fs: VideocityFs): void {
                 osgStartSeconds: osgStartSeconds ?? null,
                 osgEndSeconds: osgEndSeconds ?? null,
                 osgTailSeconds: osgTailSeconds ?? null,
+                keywordGraphicsEnabled,
+                keywordGraphicsMaxCount,
+                keywordGraphicsLingerSeconds,
+                keywordGraphicsKeywords,
+                keywordGraphicsPlacementFingerprint,
+                keywordGraphicsSkipped,
                 renderedAt: new Date().toISOString(),
                 outputs: [outputFilename, jpgFilename, orientFramesDirName],
               };

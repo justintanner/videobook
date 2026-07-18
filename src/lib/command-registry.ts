@@ -51,6 +51,14 @@ export interface TimewarpCommandArgs {
   stretch_factor: number;
 }
 
+export interface KeywordCommandArgs {
+  asset_id: string;
+  enabled?: boolean;
+  max_keywords?: number;
+  linger_seconds?: number;
+  keywords?: string[];
+}
+
 export function filterCommandsByMountKeys(
   commands: ServerCommand[],
   activeKeys: ReadonlySet<string>,
@@ -62,6 +70,50 @@ export function filterCommandsByMountKeys(
 }
 
 const stripAt = (token: string): string => (token.startsWith('@') ? token.slice(1) : token);
+
+export function normalizeKeywordCommandArgs(
+  args: Readonly<Record<string, unknown>>,
+): KeywordCommandArgs {
+  const assetValue = args.asset_id
+  if (typeof assetValue !== 'string' || !assetValue.trim()) {
+    throw new Error('/keywords requires a video asset')
+  }
+  const assetId = stripAt(assetValue.trim())
+  if (!assetId.startsWith('vid-')) throw new Error('/keywords requires a vid-* asset')
+
+  const inputsValue = args.inputs
+  if (inputsValue === undefined) return { asset_id: assetId }
+  if (!Array.isArray(inputsValue) || !inputsValue.every((input) => typeof input === 'string')) {
+    throw new Error('/keywords inputs must be words')
+  }
+  const inputs = inputsValue.map((input) => input.trim()).filter(Boolean)
+  if (inputs.length === 0) return { asset_id: assetId }
+
+  const mode = inputs[0].toLowerCase()
+  if (['off', 'false', 'no', '0'].includes(mode)) {
+    if (inputs.length > 1) throw new Error('/keywords off does not accept extra inputs')
+    return { asset_id: assetId, enabled: false }
+  }
+  if (['on', 'true', 'yes', '1'].includes(mode)) {
+    if (inputs.length > 3) throw new Error('/keywords on accepts only [max] [linger]')
+    const maxKeywords = inputs[1] === undefined ? undefined : Number(inputs[1])
+    const lingerSeconds = inputs[2] === undefined ? undefined : Number(inputs[2])
+    if (maxKeywords !== undefined && (!Number.isInteger(maxKeywords) || maxKeywords < 1 || maxKeywords > 20)) {
+      throw new Error('/keywords max must be an integer from 1 to 20')
+    }
+    if (lingerSeconds !== undefined && (!Number.isFinite(lingerSeconds) || lingerSeconds < 0.8 || lingerSeconds > 5)) {
+      throw new Error('/keywords linger must be between 0.8 and 5 seconds')
+    }
+    return {
+      asset_id: assetId,
+      enabled: true,
+      ...(maxKeywords === undefined ? {} : { max_keywords: maxKeywords }),
+      ...(lingerSeconds === undefined ? {} : { linger_seconds: lingerSeconds }),
+    }
+  }
+
+  return { asset_id: assetId, keywords: inputs }
+}
 
 export function normalizeQrOutroCommandArgs(tokens: readonly string[]): QrOutroCommandArgs {
   const inputs = tokens.map(stripAt);

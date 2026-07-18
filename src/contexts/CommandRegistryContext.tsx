@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { ServerCommand, CommandArgValue, CommandToolArgs } from '@/lib/command-registry';
-import { filterCommandsByMountKeys, normalizeQrOutroCommandArgs, normalizeSyncAudioCommandArgs, normalizeTimewarpCommandArgs, parseCommandArgs, selectCommandForInput } from '@/lib/command-registry';
+import { filterCommandsByMountKeys, normalizeKeywordCommandArgs, normalizeQrOutroCommandArgs, normalizeSyncAudioCommandArgs, normalizeTimewarpCommandArgs, parseCommandArgs, selectCommandForInput } from '@/lib/command-registry';
 import { useMountKeys } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
 import { executeUiAction } from '@/lib/ui-actions';
@@ -110,6 +110,11 @@ export function CommandRegistryProvider({
               }
               delete toolArgs.inputs;
               Object.assign(toolArgs, normalizeQrOutroCommandArgs(inputs));
+            }
+            if (cmd.mcpTool.tool === 'animate_keywords') {
+              const normalized = normalizeKeywordCommandArgs(toolArgs)
+              delete toolArgs.inputs
+              Object.assign(toolArgs, normalized)
             }
             if (cmd.mcpTool.tool === 'change_video_speed' && 'speed' in toolArgs) {
               const val = toolArgs.speed;

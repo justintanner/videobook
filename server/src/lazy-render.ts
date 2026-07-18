@@ -11,6 +11,10 @@ import type {
 import { queue } from "./queue.js";
 import { isLanguageSetting } from "./jobs/_translate-transcript.js";
 import { findAutoRenderActions, readStoredRenderDefaults } from "./tools/sync.js";
+import {
+  DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
+  DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
+} from "./remotion/keyword-graphics.js";
 
 type TimelineSlot = {
   slug: string;
@@ -109,6 +113,10 @@ function numberOr(value: unknown, fallback: number): number {
 
 function nullableString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
+}
+
+function stringArrayOrNull(value: unknown): string[] | null {
+  return Array.isArray(value) && value.every((item) => typeof item === "string") ? value : null;
 }
 
 /**
@@ -225,6 +233,13 @@ export async function enqueueLazyTimelineRender(
     osgStartSeconds: typeof stored.osgStartSeconds === "number" ? stored.osgStartSeconds : null,
     osgEndSeconds: typeof stored.osgEndSeconds === "number" ? stored.osgEndSeconds : null,
     osgTailSeconds: typeof stored.osgTailSeconds === "number" ? stored.osgTailSeconds : null,
+    keywordGraphicsEnabled: stored.keywordGraphicsEnabled === true,
+    keywordGraphicsMaxCount: numberOr(stored.keywordGraphicsMaxCount, DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT),
+    keywordGraphicsLingerSeconds: numberOr(
+      stored.keywordGraphicsLingerSeconds,
+      DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
+    ),
+    keywordGraphicsKeywords: stringArrayOrNull(stored.keywordGraphicsKeywords),
     backgroundMode: isBackgroundMode(stored.backgroundMode) ? stored.backgroundMode : "blur",
     strokeWidth: numberOr(stored.strokeWidth, 6),
     strokeColor: stringOr(stored.strokeColor, "#000000"),

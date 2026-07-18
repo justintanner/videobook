@@ -145,6 +145,7 @@ function jobTypeToAssetWorkKind(
     case "process_video":
     case "process_image":          return { kind: "process" };
     case "analyze_video":
+    case "analyze_keyword_placement":
     case "suggest_cuts":
     case "suggest_sfx":
     case "analyze_jokes":

@@ -6,6 +6,10 @@ import { findVideoFile } from "videocity-engine";
 import { isValidHex } from "../remotion/util.js";
 import type { Orientation, OsgPosition } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
+import {
+  DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
+  DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
+} from "../remotion/keyword-graphics.js";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "svg"]);
 
@@ -126,6 +130,29 @@ export function renderDef(fs: VideocityFs): ToolDef {
         .min(0)
         .optional()
         .describe("Legacy: show the OSG only during the last N seconds (end-card); omit for full duration"),
+      keyword_graphics_enabled: z
+        .boolean()
+        .optional()
+        .describe("Enable transcript-timed cinematic keyword graphics (default: stored setting or false)"),
+      keyword_graphics_max_count: z
+        .number()
+        .int()
+        .min(1)
+        .max(20)
+        .optional()
+        .describe("Maximum automatic keyword graphics (default: stored setting or 8)"),
+      keyword_graphics_linger_seconds: z
+        .number()
+        .min(0.8)
+        .max(5)
+        .optional()
+        .describe("How long each keyword lingers after it is spoken (default: stored setting or 2.4 seconds)"),
+      keyword_graphics_keywords: z
+        .array(z.string().min(1))
+        .max(20)
+        .nullable()
+        .optional()
+        .describe("Exact transcript keywords to animate; null selects keywords automatically"),
       background_mode: z
         .enum(["blur", "black"])
         .optional()
@@ -169,6 +196,10 @@ export function renderDef(fs: VideocityFs): ToolDef {
         osg_start_seconds,
         osg_end_seconds,
         osg_tail_seconds,
+        keyword_graphics_enabled,
+        keyword_graphics_max_count,
+        keyword_graphics_linger_seconds,
+        keyword_graphics_keywords,
         background_mode = "blur",
         stroke_width = 6,
         stroke_color = "#000000",
@@ -195,6 +226,10 @@ export function renderDef(fs: VideocityFs): ToolDef {
         osg_start_seconds?: number | null;
         osg_end_seconds?: number | null;
         osg_tail_seconds?: number;
+        keyword_graphics_enabled?: boolean;
+        keyword_graphics_max_count?: number;
+        keyword_graphics_linger_seconds?: number;
+        keyword_graphics_keywords?: string[] | null;
         background_mode?: "blur" | "black";
         stroke_width?: number;
         stroke_color?: string;
@@ -335,6 +370,30 @@ export function renderDef(fs: VideocityFs): ToolDef {
       const jobs: Array<{ job_id: string; orientation: Orientation }> = [];
 
       for (const orientation of orientations) {
+        const storedResult = await fs.readMetadata<Record<string, unknown>>(
+          asset_id,
+          `${orientation}.render`,
+          project_slug,
+        );
+        const stored = storedResult.ok ? storedResult.value : {};
+        const storedMaxCount = stored.keywordGraphicsMaxCount;
+        const storedLingerSeconds = stored.keywordGraphicsLingerSeconds;
+        const storedKeywords = stored.keywordGraphicsKeywords;
+        const keywordGraphicsEnabled = keyword_graphics_enabled
+          ?? stored.keywordGraphicsEnabled === true;
+        const keywordGraphicsMaxCount = keyword_graphics_max_count
+          ?? (typeof storedMaxCount === "number" && Number.isInteger(storedMaxCount) && storedMaxCount >= 1 && storedMaxCount <= 20
+            ? storedMaxCount
+            : DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT);
+        const keywordGraphicsLingerSeconds = keyword_graphics_linger_seconds
+          ?? (typeof storedLingerSeconds === "number" && storedLingerSeconds >= 0.8 && storedLingerSeconds <= 5
+            ? storedLingerSeconds
+            : DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS);
+        const keywordGraphicsKeywords = keyword_graphics_keywords !== undefined
+          ? keyword_graphics_keywords
+          : Array.isArray(storedKeywords) && storedKeywords.every((keyword) => typeof keyword === "string")
+            ? storedKeywords
+            : null;
         const jobId = `render-${asset_id}-${orientation}-${Date.now()}`;
         await queue.enqueue(jobId, {
           type: "render_project",
@@ -365,6 +424,10 @@ export function renderDef(fs: VideocityFs): ToolDef {
           osgStartSeconds: osg_start_seconds ?? null,
           osgEndSeconds: osg_end_seconds ?? null,
           osgTailSeconds: osg_tail_seconds ?? null,
+          keywordGraphicsEnabled,
+          keywordGraphicsMaxCount,
+          keywordGraphicsLingerSeconds,
+          keywordGraphicsKeywords,
           backgroundMode: background_mode,
           strokeWidth: stroke_width,
           strokeColor: stroke_color,

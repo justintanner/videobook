@@ -4,6 +4,7 @@ import type { RenderInputProps } from "./subtitles/types.js";
 import { BlurFillVideo } from "./BlurFillVideo.js";
 import { SubtitleOverlay } from "./subtitles/SubtitleOverlay.js";
 import { OsgOverlay } from "./OsgOverlay.js";
+import { KeywordGraphicsOverlay } from "./KeywordGraphicsOverlay.js";
 
 export const RenderComposition: React.FC<RenderInputProps> = ({
   videoSrc,
@@ -26,6 +27,7 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
   osgStartSeconds,
   osgEndSeconds,
   osgTailSeconds,
+  keywordGraphics,
   backgroundMode,
   strokeWidth,
   strokeColor,
@@ -67,6 +69,9 @@ export const RenderComposition: React.FC<RenderInputProps> = ({
           endSeconds={osgEndSeconds}
           tailSeconds={osgTailSeconds}
         />
+      )}
+      {keywordGraphics.length > 0 && (
+        <KeywordGraphicsOverlay graphics={keywordGraphics} />
       )}
     </AbsoluteFill>
   );

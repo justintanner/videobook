@@ -54,6 +54,7 @@ import { cropVideoDef } from "./crop-video.js";
 import { cropImageDef } from "./crop-image.js";
 import { invertImageDef } from "./invert-image.js";
 import { setOsgDef } from "./set-osg.js";
+import { animateKeywordsDef } from "./animate-keywords.js";
 import { downloadVideoDef } from "./download-video.js";
 import { archiveClipDef } from "./archive-clip.js";
 import { searchArchiveDef } from "./search-archive.js";
@@ -266,6 +267,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     cropImageDef(fs),
     invertImageDef(fs),
     setOsgDef(fs),
+    animateKeywordsDef(fs),
     downloadVideoDef(fs),
     archiveClipDef(fs),
     searchArchiveDef(),

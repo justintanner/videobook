@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseCommandArgs,
   filterCommandsByMountKeys,
+  normalizeKeywordCommandArgs,
   normalizeQrOutroCommandArgs,
   normalizeSyncAudioCommandArgs,
   normalizeTimewarpCommandArgs,
@@ -392,6 +393,55 @@ describe("normalizeQrOutroCommandArgs", () => {
       "img-qr",
       "wide",
     ])).toThrow();
+  });
+});
+
+describe("normalizeKeywordCommandArgs", () => {
+  it("maps transcript words to explicit keyword input", () => {
+    expect(normalizeKeywordCommandArgs({
+      asset_id: "vid-intro",
+      inputs: ["Multicultural", "Revolution", "Success"],
+    })).toEqual({
+      asset_id: "vid-intro",
+      keywords: ["Multicultural", "Revolution", "Success"],
+    });
+  });
+
+  it("keeps automatic mode when no words are supplied", () => {
+    expect(normalizeKeywordCommandArgs({ asset_id: "@vid-intro" })).toEqual({
+      asset_id: "vid-intro",
+    });
+  });
+
+  it("supports the legacy on, count, and linger syntax", () => {
+    expect(normalizeKeywordCommandArgs({
+      asset_id: "vid-intro",
+      inputs: ["on", "3", "2.4"],
+    })).toEqual({
+      asset_id: "vid-intro",
+      enabled: true,
+      max_keywords: 3,
+      linger_seconds: 2.4,
+    });
+  });
+
+  it("supports turning keyword graphics off", () => {
+    expect(normalizeKeywordCommandArgs({
+      asset_id: "vid-intro",
+      inputs: ["off"],
+    })).toEqual({
+      asset_id: "vid-intro",
+      enabled: false,
+    });
+  });
+
+  it.each([
+    [{ asset_id: "img-wrong", inputs: ["Success"] }, "vid-*"],
+    [{ asset_id: "vid-intro", inputs: ["on", "0"] }, "integer"],
+    [{ asset_id: "vid-intro", inputs: ["on", "3", "5.1"] }, "between"],
+    [{ asset_id: "vid-intro", inputs: ["off", "extra"] }, "extra"],
+  ])("rejects invalid input %#", (args, message) => {
+    expect(() => normalizeKeywordCommandArgs(args)).toThrow(message);
   });
 });
 

@@ -28,6 +28,21 @@ export type OsgPosition =
   | "bottom-left" | "bottom-center" | "bottom-right";
 export type OsgSize = "small" | "medium" | "large";
 export type BackgroundMode = "blur" | "black";
+export type KeywordGraphicAnchor =
+  | "upper-left"
+  | "upper-right"
+  | "middle-left"
+  | "middle-right";
+
+export interface KeywordGraphic {
+  text: string;
+  start: number;
+  end: number;
+  side: "left" | "right";
+  frameTime?: number;
+  anchor?: KeywordGraphicAnchor;
+  scale?: number;
+}
 
 export interface RenderSettings {
   subtitlesEnabled: boolean;
@@ -67,6 +82,7 @@ export interface RenderInputProps extends Record<string, unknown> {
   osgStartSeconds: number | null;
   osgEndSeconds: number | null;
   osgTailSeconds: number | null;
+  keywordGraphics: KeywordGraphic[];
   backgroundMode: BackgroundMode;
   strokeWidth: number;
   strokeColor: string;

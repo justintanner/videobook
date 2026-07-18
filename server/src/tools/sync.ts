@@ -25,6 +25,10 @@ import { findUnprocessedUploads, processExternalUpload } from "../jobs/process-u
 import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
 import { submitQueuedKieTask } from "../jobs/kie-paygate.js";
+import {
+  DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
+  DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
+} from "../remotion/keyword-graphics.js";
 
 /** Upper bound on how long a pending task may sit without reaching success/fail
  *  before sync ages it out. Guards against providers leaving jobs in an
@@ -276,6 +280,10 @@ const BASE_DEFAULTS: Record<string, unknown> = {
   osgStartSeconds: null,
   osgEndSeconds: null,
   osgTailSeconds: null,
+  keywordGraphicsEnabled: false,
+  keywordGraphicsMaxCount: DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
+  keywordGraphicsLingerSeconds: DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
+  keywordGraphicsKeywords: null,
   backgroundMode: "blur",
   strokeWidth: 6,
   strokeColor: "#000000",

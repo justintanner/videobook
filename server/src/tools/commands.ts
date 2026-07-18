@@ -182,6 +182,21 @@ const HARDCODED_COMMANDS: Command[] = [
     uiAction: "open_osg",
   },
   {
+    command: "/keywords",
+    description: "Animate transcript keywords in face-safe open space, or omit words for automatic selection",
+    example: "/keywords @vid-interview Multicultural Revolution Success",
+    category: "action",
+    icon: "Sparkles",
+    size: "default",
+    variant: "violet",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset with a timed transcript" },
+      { name: "inputs", type: "string[]", required: false, description: "Exact transcript words, or: on [max] [linger] | off" },
+    ],
+    mcpTool: { tool: "animate_keywords", autoInject: ["project_slug"] },
+  },
+  {
     command: "/trim-audio",
     description: "Trim audio clip",
     example: "/trim-audio @voiceover-main 0:00 0:30",

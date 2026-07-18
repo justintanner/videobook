@@ -70,6 +70,7 @@ import { registerRenderQrOutroJob } from "./render-qr-outro.js";
 import { registerProcessVideoJob } from "./process-video.js";
 import { registerTranscribeVideoAudioJob } from "./transcribe-video-audio.js";
 import { registerAnalyzeVideoJob } from "./analyze-video.js";
+import { registerAnalyzeKeywordPlacementJob } from "./analyze-keyword-placement.js";
 import { registerSuggestCutsJob } from "./suggest-cuts.js";
 import { registerSuggestSfxJob } from "./suggest-sfx.js";
 import { registerAnalyzeJokesJob } from "./analyze-jokes.js";
@@ -192,6 +193,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerProcessVideoJob(fs);
   registerTranscribeVideoAudioJob(fs);
   registerAnalyzeVideoJob(fs);
+  registerAnalyzeKeywordPlacementJob(fs);
   registerSuggestCutsJob(fs);
   registerSuggestSfxJob(fs);
   registerAnalyzeJokesJob(fs);
