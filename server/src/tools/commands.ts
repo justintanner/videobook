@@ -756,6 +756,22 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "audio_boost", autoInject: ["project_slug"] },
   },
   {
+    command: "/audio-mix",
+    description: "Mix a video or audio asset onto another at a lower volume, editing the target in-place.",
+    example: "/audio-mix @vid-main @aud-music 30",
+    category: "context_menu",
+    icon: "AudioLines",
+    size: "default",
+    variant: "emerald",
+    chevron: "right",
+    params: [
+      { name: "target_asset_id", type: "string", required: true, description: "Asset to edit in-place (vid-* or aud-*)" },
+      { name: "layer_asset_id", type: "string", required: true, description: "Asset whose audio is layered on (vid-* or aud-*)" },
+      { name: "volume", type: "number", required: true, description: "Layer volume percentage (0-100)" },
+    ],
+    mcpTool: { tool: "audio_mix", autoInject: ["project_slug"] },
+  },
+  {
     command: "/replace-audio",
     description: "Replace the audio track of a video asset with an aud- asset's audio",
     example: "/replace-audio @vid-clip @aud-voice",

@@ -111,6 +111,19 @@ describe("parseCommandArgs", () => {
     });
   });
 
+  it("parses /audio-mix target, layer, and percentage volume", () => {
+    const params: CommandParam[] = [
+      { name: "target_asset_id", type: "string", required: true, description: "" },
+      { name: "layer_asset_id", type: "string", required: true, description: "" },
+      { name: "volume", type: "number", required: true, description: "" },
+    ];
+    expect(parseCommandArgs("@vid-main @aud-music 30", params)).toEqual({
+      target_asset_id: "vid-main",
+      layer_asset_id: "aud-music",
+      volume: 30,
+    });
+  });
+
   it("parses /split style optional trailing number left absent", () => {
     const params: CommandParam[] = [
       { name: "asset_id", type: "string", required: true, description: "" },

@@ -95,6 +95,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/keys");
     expect(commandNames).toContain("/archive-browse");
     expect(commandNames).toContain("/audio-add");
+    expect(commandNames).toContain("/audio-mix");
     expect(commandNames).toContain("/audio-move");
     expect(commandNames).toContain("/audio-remove");
     expect(commandNames).toContain("/audio-set");
@@ -166,6 +167,15 @@ describe("slash_commands tool", () => {
       "timestamp",
       "type",
       "description",
+    ]);
+
+    const audioMix = commands.find((c) => c.command === "/audio-mix")!;
+    expect(audioMix.mcpTool?.tool).toBe("audio_mix");
+    expect(audioMix.mcpTool?.autoInject).toContain("project_slug");
+    expect(audioMix.params.map((p) => p.name)).toEqual([
+      "target_asset_id",
+      "layer_asset_id",
+      "volume",
     ]);
 
     const notebook = commands.find((c) => c.command === "/notebook")!;

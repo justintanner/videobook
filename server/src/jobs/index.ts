@@ -18,6 +18,7 @@ import { registerChangeVideoSpeedJob } from "./change-video-speed.js";
 import { registerTimewarpVideoJob } from "./timewarp-video.js";
 import { registerSyncVideoToAudioJob } from "./sync-video-to-audio.js";
 import { registerAudioBoostJob } from "./audio-boost.js";
+import { registerAudioMixJob } from "./audio-mix.js";
 import { registerReverseVideoJob } from "./reverse-video.js";
 import { registerExtractFrameJob } from "./extract-frame.js";
 import { registerExtractAudioJob } from "./extract-audio.js";
@@ -140,6 +141,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerTimewarpVideoJob(fs);
   registerSyncVideoToAudioJob(fs);
   registerAudioBoostJob(fs);
+  registerAudioMixJob(fs);
   registerReverseVideoJob(fs);
   registerExtractFrameJob(fs);
   registerExtractAudioJob(fs);

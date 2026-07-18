@@ -157,6 +157,19 @@ describe("slash commands e2e", () => {
     });
   });
 
+  describe("/audio-mix", () => {
+    it("parses target, layer, and percentage volume", () => {
+      expect(simulateParse(
+        "/audio-mix",
+        "@vid-main @aud-music 30",
+      )).toEqual({
+        target_asset_id: "vid-main",
+        layer_asset_id: "aud-music",
+        volume: 30,
+      });
+    });
+  });
+
   // -----------------------------------------------------------------------
   // 1. /download — download_video
   // -----------------------------------------------------------------------
