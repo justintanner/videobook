@@ -935,6 +935,44 @@ describe("slash commands e2e", () => {
       expect(cmd.mcpTool?.autoInject).toContain("project_slug");
     });
 
+    it("parses and dispatches /extend-audio for the 6.05s to 15s workflow", () => {
+      const args = simulateParse(
+        "/extend-audio",
+        "@aud-ext-google-omni-collabin 15",
+      );
+      expect(args).toEqual({
+        asset_id: "aud-ext-google-omni-collabin",
+        target_duration_seconds: 15,
+      });
+      const cmd = findCommand("/extend-audio");
+      expect(cmd.mcpTool?.tool).toBe("extend_audio");
+      expect(cmd.mcpTool?.autoInject).toContain("project_slug");
+    });
+
+    it("parses a trailing free-text /extend-audio continuation prompt", () => {
+      const args = simulateParse(
+        "/extend-audio",
+        "@aud-ext-google-omni-collabin 15 add outro music",
+      );
+      expect(args).toEqual({
+        asset_id: "aud-ext-google-omni-collabin",
+        target_duration_seconds: 15,
+        continuation_prompt: "add outro music",
+      });
+    });
+
+    it("passes a parenthesized /extend-audio prompt through for the server to unwrap", () => {
+      const args = simulateParse(
+        "/extend-audio",
+        "@aud-ext-google-omni-collabin 15 (add outro music)",
+      );
+      expect(args).toEqual({
+        asset_id: "aud-ext-google-omni-collabin",
+        target_duration_seconds: 15,
+        continuation_prompt: "(add outro music)",
+      });
+    });
+
     it("/generate parseCommandArgs only captures first token as prompt (model gets rest)", () => {
       // /generate has 2 string params: prompt + model. parseCommandArgs assigns
       // the first token to prompt and remaining tokens to model (the last string param).

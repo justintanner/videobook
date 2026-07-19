@@ -469,3 +469,22 @@ behavior).
 - `createGoogleFlowCharacter` and `replaceGoogleFlowCharacter` check if the provider returns an unexpected name, surfacing `status: "partial-success"` + `warning` instead of a false clean success.
 
 **Ask apicity:** Confirm if the `Untitled Character` / missing notes on singleton retrieve is a provider-level useapi.net bug. If so, push upstream to fix `GET /characters/{ref}` to match the list response.
+
+---
+
+## 19. (bug) `@apicity/elevenlabs@0.7.3` omits the Sound Generation text-length limit
+
+`ElevenLabsSoundGenerationRequestSchema.shape.text` is only
+`z.string().min(1)`, but the live `/v1/sound-generation` endpoint rejects text
+longer than 450 characters with `400 Invalid text length`. The provider accepts
+the request locally, so the mismatch is only visible after a billed network
+request begins.
+
+**Workaround (`server/src/elevenlabs-audio-extension.ts`):**
+`MAX_SOUND_GENERATION_PROMPT_CHARS = 450` constrains the `extend_audio` tool
+schema and caps both its first-pass and retry prompts before calling
+`provider.v1.soundGeneration`.
+
+**Ask apicity:** add `.max(450)` to
+`ElevenLabsSoundGenerationRequestSchema.shape.text` so provider validation
+matches the live API.

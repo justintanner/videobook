@@ -122,6 +122,7 @@ import { registerGenerateGrokImagineVideoExtendFalJob } from "./generate-grok-im
 import { registerGenerateGrokImagineVideoEditFalJob } from "./generate-grok-imagine-video-edit-fal.js";
 import { registerPostToXJob } from "./post-to-x.js";
 import { registerGenerateElevenlabsT2aJob } from "./generate-elevenlabs-t2a.js";
+import { registerExtendAudioJob } from "./extend-audio.js";
 
 export function registerAllJobHandlers(fs: VideocityFs): void {
   registerTranscribeJob(fs);
@@ -247,6 +248,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerGenerateGrokImagineVideoExtendFalJob(fs);
   registerGenerateGrokImagineVideoEditFalJob(fs);
   registerGenerateElevenlabsT2aJob(fs);
+  registerExtendAudioJob(fs);
   registerPostToXJob(fs);
 
   // Formula plan jobs were removed in the plan-notebook rework, but project

@@ -757,6 +757,22 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "archive_clip", autoInject: ["project_slug"] },
   },
   {
+    command: "/extend-audio",
+    description: "Extend an aud-* asset to a longer total duration with a matching ElevenLabs continuation, creating a new aud-* asset",
+    example: "/extend-audio @aud-ext-google-omni-collabin 15 add outro music",
+    category: "context_menu",
+    icon: "AudioLines",
+    size: "default",
+    variant: "emerald",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Source aud-* asset" },
+      { name: "target_duration_seconds", type: "number", required: true, description: "Requested total duration in seconds" },
+      { name: "continuation_prompt", type: "string", required: false, description: "Optional free-text direction for the continuation, e.g. add outro music" },
+    ],
+    mcpTool: { tool: "extend_audio", autoInject: ["project_slug"] },
+  },
+  {
     command: "/audio-boost",
     description: "Boost audio volume of a video or audio asset (linear multiplier, 1.0–4.0). In-place with git versioning.",
     example: "/audio-boost @vid-clip 2",

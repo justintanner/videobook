@@ -96,6 +96,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/archive-browse");
     expect(commandNames).toContain("/audio-add");
     expect(commandNames).toContain("/audio-mix");
+    expect(commandNames).toContain("/extend-audio");
     expect(commandNames).toContain("/audio-move");
     expect(commandNames).toContain("/audio-remove");
     expect(commandNames).toContain("/audio-set");
@@ -177,6 +178,15 @@ describe("slash_commands tool", () => {
       "target_asset_id",
       "layer_asset_id",
       "volume",
+    ]);
+
+    const extendAudio = commands.find((c) => c.command === "/extend-audio")!;
+    expect(extendAudio.mcpTool?.tool).toBe("extend_audio");
+    expect(extendAudio.mcpTool?.autoInject).toContain("project_slug");
+    expect(extendAudio.params.map((p) => p.name)).toEqual([
+      "asset_id",
+      "target_duration_seconds",
+      "continuation_prompt",
     ]);
 
     const injectFirstFrame = commands.find((c) => c.command === "/inject-first-frame")!;
