@@ -961,6 +961,20 @@ describe("slash commands e2e", () => {
       });
     });
 
+    it("parses /remove-sound with a multi-word sound description", () => {
+      const args = simulateParse(
+        "/remove-sound",
+        "@vid-clip horse neighing",
+      );
+      expect(args).toEqual({
+        asset_id: "vid-clip",
+        sound: "horse neighing",
+      });
+      const cmd = findCommand("/remove-sound");
+      expect(cmd.mcpTool?.tool).toBe("remove_sound");
+      expect(cmd.mcpTool?.autoInject).toContain("project_slug");
+    });
+
     it("passes a parenthesized /extend-audio prompt through for the server to unwrap", () => {
       const args = simulateParse(
         "/extend-audio",

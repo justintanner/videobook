@@ -165,6 +165,7 @@ function jobTypeToAssetWorkKind(
     case "sync_video_to_audio":    return { kind: "change_speed" };
     case "replace_video_audio":
     case "clean_video_audio":
+    case "remove_sound":
     case "audio_mix":              return { kind: "replace_audio" };
     case "apply_cuts":             return { kind: "apply_cuts" };
     case "apply_sfx":              return { kind: "apply_sfx" };

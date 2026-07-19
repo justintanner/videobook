@@ -773,6 +773,21 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "extend_audio", autoInject: ["project_slug"] },
   },
   {
+    command: "/remove-sound",
+    description: "Remove a described sound from a vid-* or aud-* asset in place by silencing its Scribe-tagged audio events",
+    example: "/remove-sound @vid-clip horse neighing",
+    category: "context_menu",
+    icon: "VolumeX",
+    size: "default",
+    variant: "emerald",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Asset to edit in-place (vid-* or aud-*)" },
+      { name: "sound", type: "string", required: true, description: "Sound to remove, e.g. horse neighing" },
+    ],
+    mcpTool: { tool: "remove_sound", autoInject: ["project_slug"] },
+  },
+  {
     command: "/audio-boost",
     description: "Boost audio volume of a video or audio asset (linear multiplier, 1.0–4.0). In-place with git versioning.",
     example: "/audio-boost @vid-clip 2",

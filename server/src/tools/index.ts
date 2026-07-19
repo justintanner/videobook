@@ -69,6 +69,7 @@ import { injectFirstFrameDef } from "./inject-first-frame.js";
 import { extractFrameDefs } from "./extract-frame.js";
 import { extractAudioDef } from "./extract-audio.js";
 import { extendAudioDef } from "./extend-audio.js";
+import { removeSoundDef } from "./remove-sound.js";
 import { replaceVideoAudioDef } from "./replace-video-audio.js";
 import { spliceVideoDef } from "./splice-video.js";
 import { transcribeDef } from "./transcribe.js";
@@ -286,6 +287,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     ...extractFrameDefs(fs),
     extractAudioDef(fs),
     extendAudioDef(fs),
+    removeSoundDef(fs),
     replaceVideoAudioDef(fs),
     spliceVideoDef(fs),
     transcribeDef(fs),
