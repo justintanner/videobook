@@ -73,6 +73,7 @@ import { removeSoundDef } from "./remove-sound.js";
 import { verifyXMentionsDef } from "./verify-x-mentions.js";
 import { replaceVideoAudioDef } from "./replace-video-audio.js";
 import { spliceVideoDef } from "./splice-video.js";
+import { smoothSceneConcatDef } from "./smooth-scene-concat.js";
 import { transcribeDef } from "./transcribe.js";
 import { readTranscriptDef } from "./read-transcript.js";
 import { translateSubtitlesDef } from "./translate-subtitles.js";
@@ -293,6 +294,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     verifyXMentionsDef(),
     replaceVideoAudioDef(fs),
     spliceVideoDef(fs),
+    smoothSceneConcatDef(fs),
     transcribeDef(fs),
     readTranscriptDef(fs),
     translateSubtitlesDef(fs),

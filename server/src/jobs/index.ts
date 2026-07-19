@@ -26,6 +26,7 @@ import { registerExtractAudioJob } from "./extract-audio.js";
 import { registerExtractWaveformJob } from "./extract-waveform.js";
 import { registerReplaceVideoAudioJob } from "./replace-video-audio.js";
 import { registerSpliceVideoJob } from "./splice-video.js";
+import { registerSmoothSceneConcatJob } from "./smooth-scene-concat.js";
 import { registerGenerateGrokImagineVideoJob } from "./generate-grok-imagine-video.js";
 import { registerGenerateGrokImagineRefVideoJob } from "./generate-grok-imagine-ref-video.js";
 import { registerGenerateGrokImagineT2vVideoJob } from "./generate-grok-imagine-t2v-video.js";
@@ -152,6 +153,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerExtractWaveformJob(fs);
   registerReplaceVideoAudioJob(fs);
   registerSpliceVideoJob(fs);
+  registerSmoothSceneConcatJob(fs);
   registerGenerateGrokImagineVideoJob(fs);
   registerGenerateGrokImagineRefVideoJob(fs);
   registerGenerateGrokImagineT2vVideoJob(fs);

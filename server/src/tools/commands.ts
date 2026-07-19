@@ -850,6 +850,22 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "splice_video", autoInject: ["project_slug"] },
   },
   {
+    command: "/scene-concat",
+    description: "Smoothly join two video scenes, automatically aligning shared boundary audio",
+    example: "/scene-concat @vid-first @vid-second",
+    category: "context_menu",
+    icon: "GitMerge",
+    size: "default",
+    variant: "violet",
+    chevron: "right",
+    params: [
+      { name: "first_asset_id", type: "string", required: true, description: "First video in playback order" },
+      { name: "second_asset_id", type: "string", required: true, description: "Second video in playback order" },
+      { name: "transition_seconds", type: "number", required: false, description: "Optional fixed crossfade duration; omit for automatic audio alignment" },
+    ],
+    mcpTool: { tool: "smooth_scene_concat", autoInject: ["project_slug"] },
+  },
+  {
     command: "/even-split",
     description: "Split a video into N targeted chunks plus a leftover with the rest. One target → 2 chunks (e.g. 10s + rest); two targets → 3 chunks; etc. Original preserved.",
     example: "/even-split @vid-source 10 15",

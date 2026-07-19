@@ -157,7 +157,8 @@ function jobTypeToAssetWorkKind(
     case "split_video":            return { kind: "trim" };
     case "crop_video":
     case "crop_image":             return { kind: "crop" };
-    case "splice_video":           return { kind: "splice" };
+    case "splice_video":
+    case "smooth_scene_concat":    return { kind: "splice" };
     case "reverse_video":          return { kind: "reverse" };
     case "inject_first_frame":     return { kind: "process" };
     case "change_video_speed":

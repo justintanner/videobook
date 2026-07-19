@@ -119,6 +119,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/qart");
     expect(commandNames).toContain("/apply-sfx");
     expect(commandNames).toContain("/inject-first-frame");
+    expect(commandNames).toContain("/scene-concat");
 
     const timewarp = commands.find((c) => c.command === "/timewarp")!;
     expect(timewarp.mcpTool?.tool).toBe("timewarp_video");
@@ -196,6 +197,16 @@ describe("slash_commands tool", () => {
       "overlap",
     ]);
     expect(splice.params[2]).toMatchObject({ type: "number", required: true });
+
+    const sceneConcat = commands.find((c) => c.command === "/scene-concat")!;
+    expect(sceneConcat.mcpTool?.tool).toBe("smooth_scene_concat");
+    expect(sceneConcat.mcpTool?.autoInject).toContain("project_slug");
+    expect(sceneConcat.params.map((p) => p.name)).toEqual([
+      "first_asset_id",
+      "second_asset_id",
+      "transition_seconds",
+    ]);
+    expect(sceneConcat.params[2]).toMatchObject({ type: "number", required: false });
 
     const extendAudio = commands.find((c) => c.command === "/extend-audio")!;
     expect(extendAudio.mcpTool?.tool).toBe("extend_audio");

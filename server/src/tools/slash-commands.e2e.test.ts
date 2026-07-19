@@ -183,6 +183,29 @@ describe("slash commands e2e", () => {
     });
   });
 
+  describe("/scene-concat", () => {
+    it("parses two videos with automatic audio alignment", () => {
+      expect(simulateParse(
+        "/scene-concat",
+        "@vid-first @vid-second",
+      )).toEqual({
+        first_asset_id: "vid-first",
+        second_asset_id: "vid-second",
+      });
+    });
+
+    it("parses an optional fixed transition duration", () => {
+      expect(simulateParse(
+        "/scene-concat",
+        "@vid-first @vid-second 0.25",
+      )).toEqual({
+        first_asset_id: "vid-first",
+        second_asset_id: "vid-second",
+        transition_seconds: 0.25,
+      });
+    });
+  });
+
   // -----------------------------------------------------------------------
   // 1. /download — download_video
   // -----------------------------------------------------------------------
