@@ -60,10 +60,12 @@ const VERDICTS_JSON_SCHEMA: Record<string, unknown> = {
 };
 
 const VERIFY_INSTRUCTIONS = [
-  "You verify X (Twitter) handles using live X search.",
+  "You verify X (Twitter) handles using web search.",
   "For each handle, determine whether an account with EXACTLY that username exists on X.",
   "Usernames are case-insensitive; ignore lookalike or similar usernames.",
-  "Set exists=true only when you find the exact username, exists=false when it clearly does not exist, and exists=null when uncertain.",
+  "Set exists=true only when you confirm the exact username.",
+  "Set exists=false only when search results positively indicate the username is nonexistent, unclaimed, or suspended.",
+  "When you can neither confirm nor refute the exact profile (for example a small account you cannot load), set exists=null.",
   "display_name is the account's current display name and summary is one short sentence about the account from its bio or posts; use null for either when unknown.",
   "Never guess.",
 ].join(" ");
@@ -93,18 +95,15 @@ export async function verifyXMentionsWithXai(
   handles: string[],
   signal?: AbortSignal,
 ): Promise<XMentionVerification> {
+  // xAI retired the live-search search_parameters API (410) in favor of
+  // server-side agent tools; web_search reaches x.com profiles and cites them.
   const response = await provider.post.v1.responses({
     model: XAI_MENTION_MODEL,
     input: [
       { role: "system", content: VERIFY_INSTRUCTIONS },
       { role: "user", content: `Verify these X handles: ${handles.map((handle) => `@${handle}`).join(", ")}` },
     ],
-    search_parameters: {
-      mode: "on",
-      sources: ["x"],
-      return_citations: true,
-      max_search_results: Math.min(20, handles.length * 4),
-    },
+    tools: [{ type: "web_search" }],
     text: {
       format: {
         type: "json_schema",

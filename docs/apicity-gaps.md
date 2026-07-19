@@ -488,3 +488,28 @@ schema and caps both its first-pass and retry prompts before calling
 **Ask apicity:** add `.max(450)` to
 `ElevenLabsSoundGenerationRequestSchema.shape.text` so provider validation
 matches the live API.
+
+---
+
+## 20. (bug) `@apicity/xai@0.7.3` Responses search is stale: dead `search_parameters`, no `x_search` tool type
+
+Two mismatches against the live xAI Responses API (verified 2026-07-19):
+
+- `XaiResponseRequestSchema.shape.search_parameters.sources` is
+  `z.array(z.string())`, but the live API deserializes sources as an
+  internally tagged enum, so `sources: ["x"]` fails with
+  `422 invalid type: string "x", expected internally tagged enum SearchSource`.
+- Even with object sources the whole parameter family is dead: the live API
+  returns `410 Live search is deprecated. Please switch to the Agent Tools
+  API`. The replacement is `tools`, but `XaiResponseToolSchema` only types
+  `function`, `web_search`/`web_search_preview`, and `file_search` — the
+  agent-tools `x_search` tool has no type. (Runtime passthrough works:
+  `tools: [{ type: "x_search" }] as never` reaches the API and returns
+  `x.com/i/user/...` citations.)
+
+**Workaround (`server/src/tools/verify-x-mentions.ts`):** `verify_x_mentions`
+uses `tools: [{ type: "web_search" }]`, which is typed, accepted by the live
+API, searches x.com, and returns `url_citation` annotations.
+
+**Ask apicity:** drop or fix `search_parameters` (dead endpoint contract), and
+add `x_search` (plus its output item type) to the Responses tools union.

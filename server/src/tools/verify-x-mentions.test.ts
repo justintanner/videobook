@@ -78,6 +78,10 @@ describe("verifyXMentionsWithXai", () => {
           status: "completed",
           model: XAI_MENTION_MODEL,
           output: [{
+            type: "web_search_call",
+            id: "ws-1",
+            status: "completed",
+          }, {
             type: "message",
             id: "msg-1",
             role: "assistant",
@@ -136,13 +140,13 @@ describe("verifyXMentionsWithXai", () => {
     const request = captured as unknown as {
       model: string;
       input: Array<{ role: string; content: string }>;
-      search_parameters: { mode: string; sources: string[]; return_citations: boolean };
+      tools: Array<{ type: string }>;
+      search_parameters?: unknown;
       text: { format: { type: string; name: string } };
     };
     expect(request.model).toBe(XAI_MENTION_MODEL);
-    expect(request.search_parameters.mode).toBe("on");
-    expect(request.search_parameters.sources).toEqual(["x"]);
-    expect(request.search_parameters.return_citations).toBe(true);
+    expect(request.tools).toEqual([{ type: "web_search" }]);
+    expect(request.search_parameters).toBeUndefined();
     expect(request.text.format.type).toBe("json_schema");
     expect(request.input.some((message) => message.role === "user" && message.content.includes("@JackMunro, @GhostHandle, @Unmentioned"))).toBe(true);
   });
