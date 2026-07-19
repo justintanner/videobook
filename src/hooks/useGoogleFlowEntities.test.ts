@@ -61,7 +61,7 @@ describe('normalizeGoogleFlowEntities', () => {
 })
 
 describe('mergeVoiceLists', () => {
-  it('falls back to 30 hard-coded presets when system list is empty', () => {
+  it('falls back to the Apicity presets when the system list is empty', () => {
     const merged = mergeVoiceLists([], [])
     expect(merged.filter((e) => e.source === 'system')).toHaveLength(GOOGLE_FLOW_VOICE_PRESETS.length)
     expect(merged.map((e) => e.ref)).toContain('Kore')

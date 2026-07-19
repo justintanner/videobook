@@ -3,16 +3,20 @@ import { z } from "zod";
 import {
   GrokImageToVideoRequestSchema,
   NanoBananaProRequestSchema,
+  Seedance2MiniInputSchema,
   Wan27TextToVideoRequestSchema,
   Wan27ResolutionSchema,
 } from "@apicity/kie/zod";
+import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import { AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
 import { FalNanoBananaProTextToImageRequestSchema } from "@apicity/fal/zod";
 import {
   zodDefault,
   zodEnumOptionsOrNull,
+  zodFiniteNumberOptions,
   zodIsRequired,
   zodNumberRange,
+  readSlotConstraints,
   zodStringMaxLength,
   zodStringMinLength,
 } from "./zod-slots.js";
@@ -55,7 +59,7 @@ describe("zodNumberRange", () => {
     });
   });
 
-  it("reads a Zod 3 (alibaba) ZodNumber with int/min/max", () => {
+  it("reads the number branch of the Alibaba duration union", () => {
     expect(zodNumberRange(AlibabaVideoSynthesisParametersSchema.shape.duration)).toEqual({
       min: 2,
       max: 10,
@@ -72,6 +76,31 @@ describe("zodNumberRange", () => {
     expect(zodNumberRange(z.string())).toBeNull();
     expect(zodNumberRange(Wan27ResolutionSchema)).toBeNull();
     expect(zodNumberRange(null)).toBeNull();
+  });
+});
+
+describe("zodFiniteNumberOptions", () => {
+  it("reads a union of numeric literals", () => {
+    expect(zodFiniteNumberOptions(XaiVideoGenerateRequestSchema.shape.duration)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    ]);
+  });
+
+  it("combines literal and bounded integer branches", () => {
+    expect(zodFiniteNumberOptions(AlibabaVideoSynthesisParametersSchema.shape.duration)).toEqual([
+      0, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    ]);
+  });
+
+  it("does not expand large or unbounded ranges", () => {
+    expect(zodFiniteNumberOptions(z.number().int().min(0).max(2_000))).toBeNull();
+    expect(zodFiniteNumberOptions(z.number().int())).toBeNull();
+  });
+});
+
+describe("readSlotConstraints", () => {
+  it("reads default-wrapped Apicity arrays as optional slots", () => {
+    expect(readSlotConstraints(Seedance2MiniInputSchema.shape.reference_video_urls)).toEqual({ min: 0, max: 3 });
   });
 });
 

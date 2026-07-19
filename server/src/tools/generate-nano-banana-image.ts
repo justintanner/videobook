@@ -1,12 +1,12 @@
 import { modelSlug } from "@apicity/cost";
 import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
-import { NanoBananaOutputFormatSchema, NanoBananaProRequestSchema, NanoBananaResolutionSchema } from "@apicity/kie/zod";
+import { NanoBananaProRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 import { resolveImageSlugs } from "./_image-inputs.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 function slugify(text: string): string {
   return text
@@ -20,12 +20,12 @@ function slugify(text: string): string {
 const nanoBananaProInputSchema = NanoBananaProRequestSchema.shape.input.shape;
 
 const generateNanoBananaImageSchema = {
-  prompt: z.string().describe("Text prompt for image generation"),
+  prompt: apicityStringField(nanoBananaProInputSchema.prompt, "Text prompt for image generation", { required: true }),
   project_slug: z.string().describe("Project slug"),
-  image_slugs: z.array(z.string()).optional().describe("0-8 @img-* slugs for reference images"),
+  image_slugs: apicityStringArrayField(nanoBananaProInputSchema.image_input, "0-8 @img-* slugs for reference images"),
   aspect_ratio: apicityField(nanoBananaProInputSchema.aspect_ratio, "Aspect ratio"),
-  resolution: apicityField(NanoBananaResolutionSchema, "Output resolution"),
-  output_format: apicityField(NanoBananaOutputFormatSchema, "Output image format"),
+  resolution: apicityField(nanoBananaProInputSchema.resolution, "Output resolution"),
+  output_format: apicityField(nanoBananaProInputSchema.output_format, "Output image format"),
 
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;
@@ -108,4 +108,3 @@ export function generateNanoBananaImageDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

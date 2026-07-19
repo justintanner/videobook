@@ -5,20 +5,20 @@ import { FalKlingVideoV3StandardImageToVideoRequestSchema } from "@apicity/fal/z
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
 const base = FalKlingVideoV3StandardImageToVideoRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().optional().describe("Video description (max 2500 chars)"),
-  first_frame_slug: z.string().describe("First frame image asset (e.g., @img-start)"),
-  end_frame_slug: z.string().optional().describe("Optional end frame image asset"),
-  duration: z.string().optional().describe("Video duration as string (model-specific)"),
-  generate_audio: z.boolean().optional().describe("Generate accompanying audio"),
+  prompt: apicityStringField(base.prompt, "Video description (max 2500 chars)"),
+  first_frame_slug: apicityStringField(base.start_image_url, "First frame image asset (e.g., @img-start)", { required: true }),
+  end_frame_slug: apicityStringField(base.end_image_url, "Optional end frame image asset"),
+  duration: apicityStringField(base.duration, "Video duration as string (model-specific)"),
+  generate_audio: apicityField(base.generate_audio, "Generate accompanying audio"),
   shot_type: apicityField(base.shot_type, "Shot type"),
-  negative_prompt: z.string().optional().describe("Things to avoid"),
-  cfg_scale: z.number().min(0).max(2).optional().describe("CFG scale (0-2)"),
+  negative_prompt: apicityStringField(base.negative_prompt, "Things to avoid"),
+  cfg_scale: apicityField(base.cfg_scale, "CFG scale (0-2)"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;

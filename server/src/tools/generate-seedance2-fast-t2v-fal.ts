@@ -5,18 +5,18 @@ import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 import { modelSlug } from "@apicity/cost";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
 const base = FalSeedance2p0FastTextToVideoRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description"),
+  prompt: apicityStringField(base.prompt, "Video description", { required: true }),
   resolution: apicityField(base.resolution, "Output resolution"),
   duration: apicityField(base.duration, "Video duration in seconds"),
   aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
-  generate_audio: z.boolean().optional().describe("Generate accompanying audio"),
-  seed: z.number().optional().describe("Seed for deterministic output"),
+  generate_audio: apicityField(base.generate_audio, "Generate accompanying audio"),
+  seed: apicityField(base.seed, "Seed for deterministic output"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;

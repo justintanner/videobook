@@ -24,18 +24,33 @@ import {
   Wan27ImageRequestSchema,
 } from "@apicity/kie/zod";
 import {
+  AlibabaImageGenerationParametersSchema,
+  AlibabaImageTextContentSchema,
   AlibabaImageReferenceSlotsSchema,
+  AlibabaMultimodalGenerationParametersSchema,
   AlibabaQwenImageEditImageSlotsSchema,
+  AlibabaQwenImageEditStableModelSchema,
   AlibabaQwenImageGenerationImageSlotsSchema,
+  AlibabaQwenImageGenerationStableModelSchema,
 } from "@apicity/alibaba/zod";
-import { readSlotConstraints, zodDefault, type SlotConstraints } from "./zod-slots.js";
+import {
+  enumOptions,
+  readSlotConstraints,
+  zodDefault,
+  zodEnumOptionsOrNull,
+  zodIsBoolean,
+  zodNumberRange,
+  zodStringMaxLength,
+  zodStringMinLength,
+  type SlotConstraints,
+} from "./zod-slots.js";
 
 // Qwen multimodal endpoint accepts 0-3 reference images for qwen-image-2.0*
 // generation, and 1-3 required for qwen-image-edit*. Slot constraints come from
 // @apicity/alibaba (AlibabaQwenImageGenerationImageSlotsSchema = .max(3),
 // AlibabaQwenImageEditImageSlotsSchema = .min(1).max(3)).
-const QWEN_GENERATION_MODEL_VALUES = ["qwen-image-2.0-pro", "qwen-image-2.0"] as const;
-const QWEN_EDIT_MODEL_VALUES = ["qwen-image-edit-plus", "qwen-image-edit-max", "qwen-image-edit"] as const;
+const QWEN_GENERATION_MODEL_VALUES = enumOptions(AlibabaQwenImageGenerationStableModelSchema);
+const QWEN_EDIT_MODEL_VALUES = enumOptions(AlibabaQwenImageEditStableModelSchema);
 const GOOGLE_NBP_ASPECT_RATIOS = ["16:9", "4:3", "1:1", "3:4", "9:16", "auto"] as const;
 const GOOGLE_NBP_IMAGE_SLOTS: SlotConstraints = { min: 0, max: 10 };
 
@@ -302,6 +317,12 @@ type ParamSchema = {
   items?: Record<string, unknown>;
   minimum?: number;
   maximum?: number;
+  exclusiveMinimum?: number;
+  exclusiveMaximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  minItems?: number;
   maxItems?: number;
 };
 
@@ -332,8 +353,43 @@ function kieFieldToParam(field: PayloadFieldSchema, config: ImageModelConfig, fi
 
   if (field.enum) param.enum = [...field.enum];
   if (isImageField || field.items) param.items = { type: "string" };
+  if (field.minimum !== undefined) param.minimum = field.minimum;
+  if (field.maximum !== undefined) param.maximum = field.maximum;
+  if (field.exclusiveMinimum !== undefined) param.exclusiveMinimum = field.exclusiveMinimum;
+  if (field.exclusiveMaximum !== undefined) param.exclusiveMaximum = field.exclusiveMaximum;
+  if (field.minLength !== undefined) param.minLength = field.minLength;
+  if (field.maxLength !== undefined) param.maxLength = field.maxLength;
+  if (field.pattern !== undefined) param.pattern = field.pattern;
+  if (field.minItems !== undefined) param.minItems = field.minItems;
+  if (field.maxItems !== undefined) param.maxItems = field.maxItems;
+  if (isImageField) {
+    const slots = getImageSlotsForConfig(config);
+    if (slots) {
+      if (slots.min > 0) param.minItems = slots.min;
+      if (slots.max !== null) param.maxItems = slots.max;
+    }
+  }
   if (outputName in defaults) param.default = defaults[outputName];
 
+  return param;
+}
+
+function zodFieldToParam(schema: ZodLike, description: string): ParamSchema {
+  const enumValues = zodEnumOptionsOrNull(schema);
+  const range = zodNumberRange(schema);
+  const param: ParamSchema = {
+    type: enumValues ? "string" : zodIsBoolean(schema) ? "boolean" : range ? (range.int ? "integer" : "number") : "string",
+    description,
+  };
+  if (enumValues) param.enum = [...enumValues];
+  if (range?.min !== undefined) param.minimum = range.min;
+  if (range?.max !== undefined) param.maximum = range.max;
+  const minLength = zodStringMinLength(schema);
+  const maxLength = zodStringMaxLength(schema);
+  if (minLength !== undefined) param.minLength = minLength;
+  if (maxLength !== undefined) param.maxLength = maxLength;
+  const defaultResult = zodDefault(schema);
+  if (defaultResult.hasDefault) param.default = defaultResult.value;
   return param;
 }
 
@@ -421,17 +477,17 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
   // Alibaba image models — custom schema
   if (config.tool_name === "generate_alibaba_image" || config.tool_name === "generate_alibaba_image_pro") {
     const properties: Record<string, ParamSchema> = {
-      prompt: { type: "string", description: "Text prompt for image generation (max 5000 chars)" },
+      prompt: zodFieldToParam(AlibabaImageTextContentSchema.shape.text, "Text prompt for image generation (max 5000 chars)"),
       image_slugs: {
         type: "array",
         items: { type: "string" },
         description: imageSlotsDescription(getImageSlotsForConfig(config)),
       },
-      size: { type: "string", description: "Output size (e.g., '1024*1024', '720*1280', '1280*720')" },
-      n: { type: "integer", description: "Number of images to generate (1-12)", minimum: 1, maximum: 12 },
-      watermark: { type: "boolean", description: "Add watermark to generated image" },
-      thinking_mode: { type: "boolean", description: "Enable thinking mode for better quality" },
-      seed: { type: "integer", description: "Random seed for reproducibility (0-2147483647)", minimum: 0, maximum: 2147483647 },
+      size: zodFieldToParam(AlibabaImageGenerationParametersSchema.shape.size, "Output size (e.g., '1024*1024', '720*1280', '1280*720')"),
+      n: zodFieldToParam(AlibabaImageGenerationParametersSchema.shape.n, "Number of images to generate (1-12)"),
+      watermark: zodFieldToParam(AlibabaImageGenerationParametersSchema.shape.watermark, "Add watermark to generated image"),
+      thinking_mode: zodFieldToParam(AlibabaImageGenerationParametersSchema.shape.thinking_mode, "Enable thinking mode for better quality"),
+      seed: zodFieldToParam(AlibabaImageGenerationParametersSchema.shape.seed, "Random seed for reproducibility (0-2147483647)"),
     };
     return { type: "object", properties, required: ["prompt"], defaults };
   }
@@ -448,12 +504,12 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
         description: imageSlotsDescription(getImageSlotsForConfig(config)),
       },
       model: { type: "string", description: "Qwen model variant", enum: modelEnum },
-      size: { type: "string", description: "Output size (e.g., '1024*1024'). Not allowed for qwen-image-edit." },
-      n: { type: "integer", description: "Number of images (1-6). qwen-image-edit supports only n=1", minimum: 1, maximum: 6 },
-      negative_prompt: { type: "string", description: "Negative prompt (max 500 chars)" },
-      prompt_extend: { type: "boolean", description: "Let the model expand the prompt. Not allowed for qwen-image-edit." },
-      watermark: { type: "boolean", description: "Add watermark to generated image" },
-      seed: { type: "integer", description: "Random seed for reproducibility (0-2147483647)", minimum: 0, maximum: 2147483647 },
+      size: zodFieldToParam(AlibabaMultimodalGenerationParametersSchema.shape.size, "Output size (e.g., '1024*1024'). Not allowed for qwen-image-edit."),
+      n: zodFieldToParam(AlibabaMultimodalGenerationParametersSchema.shape.n, "Number of images (1-6). qwen-image-edit supports only n=1"),
+      negative_prompt: zodFieldToParam(AlibabaMultimodalGenerationParametersSchema.shape.negative_prompt, "Negative prompt (max 500 chars)"),
+      prompt_extend: zodFieldToParam(AlibabaMultimodalGenerationParametersSchema.shape.prompt_extend, "Let the model expand the prompt. Not allowed for qwen-image-edit."),
+      watermark: zodFieldToParam(AlibabaMultimodalGenerationParametersSchema.shape.watermark, "Add watermark to generated image"),
+      seed: zodFieldToParam(AlibabaMultimodalGenerationParametersSchema.shape.seed, "Random seed for reproducibility (0-2147483647)"),
     };
     const required = isEdit ? ["prompt", "image_slugs", "model"] : ["prompt", "model"];
     return { type: "object", properties, required, defaults };

@@ -71,6 +71,13 @@ describe('deriveStepEstimateCall', () => {
     expect(derived?.toolName).toBe('generate_default')
   })
 
+  it('includes the selected provider in the estimate input', () => {
+    const opt = option({ key: 'grok', tool_name: 'generate_grok', selected_provider: 'xai' })
+    const imageStep = step({ id: 'i1', type: 'image', properties: { model: 'grok', values: {} } })
+    const derived = deriveStepEstimateCall(definition(imageStep), imageStep, preview('grok', [opt]), 'proj')
+    expect(derived?.input).toEqual({ project_slug: 'proj', _provider: 'xai' })
+  })
+
   it('resolves the mode-specific tool name for moded options', () => {
     const opt = option({
       key: 'omni',

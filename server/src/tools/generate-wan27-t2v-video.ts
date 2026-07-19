@@ -1,11 +1,11 @@
 import type { VideocityFs } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
-import { Wan27AspectRatioSchema, Wan27ResolutionSchema } from "@apicity/kie/zod";
+import { Wan27TextToVideoRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import { findAudioFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField, apicityStringNumberField } from "./schema-from-apicity.js";
 
 function slugify(text: string): string {
   return text
@@ -19,6 +19,7 @@ function slugify(text: string): string {
 type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
+const wan27T2v = Wan27TextToVideoRequestSchema.shape.input.shape;
 
 async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
@@ -32,16 +33,16 @@ async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: strin
 
 const generateWan27T2vVideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description (max 5000 chars)"),
-  negative_prompt: z.string().optional().describe("Negative prompt — things to avoid (max 500 chars)"),
-  audio_slug: z.string().optional().describe("Optional custom audio asset (e.g., @aud-music)"),
-  resolution: apicityField(Wan27ResolutionSchema, "Video resolution (default 1080p)"),
-  aspect_ratio: apicityField(Wan27AspectRatioSchema, "Video aspect ratio"),
-  duration: z.string().optional().describe("Video duration in seconds (2-15)"),
-  prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
-  watermark: z.boolean().optional().describe("Add provider watermark to output (default false)"),
-  nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
-  seed: z.number().int().optional().describe("Random seed for reproducibility"),
+  prompt: apicityStringField(wan27T2v.prompt, "Video description (max 5000 chars)", { required: true }),
+  negative_prompt: apicityStringField(wan27T2v.negative_prompt, "Negative prompt — things to avoid (max 500 chars)"),
+  audio_slug: apicityStringField(wan27T2v.audio_url, "Optional custom audio asset (e.g., @aud-music)"),
+  resolution: apicityField(wan27T2v.resolution, "Video resolution (default 1080p)"),
+  aspect_ratio: apicityField(wan27T2v.ratio, "Video aspect ratio"),
+  duration: apicityStringNumberField(wan27T2v.duration, "Video duration in seconds (2-15)"),
+  prompt_extend: apicityField(wan27T2v.prompt_extend, "Intelligent prompt rewriting (default true)"),
+  watermark: apicityField(wan27T2v.watermark, "Add provider watermark to output (default false)"),
+  nsfw_checker: apicityField(wan27T2v.nsfw_checker, "Content safety filter (default false)"),
+  seed: apicityField(wan27T2v.seed, "Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 

@@ -373,6 +373,58 @@ describe("getVideoToolSchema", () => {
     expect(schema!.properties.image_slugs.maxItems).toBe(7);
     expect(schema!.defaults).toEqual({ resolution: "720p" });
   });
+
+  it("derives xAI reference-video fields and the documented reference limit", () => {
+    const schema = getVideoToolSchema("generate_grok_imagine_ref_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.required).toContain("prompt");
+    expect(schema!.properties.prompt.minLength).toBe(1);
+    expect(schema!.properties.duration.enum).toEqual([
+      "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+    ]);
+    expect(schema!.properties.image_slugs.maxItems).toBe(7);
+  });
+
+  it("derives Fal Grok reference and extension duration ranges", () => {
+    const reference = getVideoToolSchema("generate_grok_imagine_r2v_fal_video");
+    const extension = getVideoToolSchema("generate_grok_imagine_extend_fal_video");
+
+    expect(reference!.properties.duration).toMatchObject({ type: "integer", minimum: 1, maximum: 10 });
+    expect(extension!.properties.duration).toMatchObject({ type: "integer", minimum: 2, maximum: 10 });
+  });
+
+  it("derives Alibaba's exact model, duration, prompt, and seed constraints", () => {
+    const schema = getVideoToolSchema("generate_alibaba_video");
+    expect(schema).not.toBeNull();
+    expect(schema!.properties.model.enum).toEqual(["wan2.7-i2v", "wan2.7-videoedit"]);
+    expect(schema!.properties.duration.enum).toEqual([0, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(schema!.properties.prompt.maxLength).toBe(5000);
+    expect(schema!.properties.negative_prompt.maxLength).toBe(500);
+    expect(schema!.properties.seed.minimum).toBe(0);
+    expect(schema!.properties.seed.maximum).toBe(2147483647);
+  });
+
+  it("uses Apicity's exported Wan Video Edit and HappyHorse duration domains", () => {
+    const wan = getVideoToolSchema("generate_wan27_videoedit_video");
+    const happyHorse = getVideoToolSchema("generate_happyhorse_t2v_video");
+    expect(wan!.properties.duration.enum).toEqual(["0", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
+    expect(happyHorse!.properties.duration.enum).toEqual([
+      "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
+    ]);
+  });
+
+  it("derives Fal Wan reference and edit contracts from their matching schemas", () => {
+    const reference = getVideoToolSchema("generate_wan27_r2v_fal_video");
+    const edit = getVideoToolSchema("generate_wan27_videoedit_fal_video");
+    expect(reference!.properties.image_slugs.maxItems).toBe(4);
+    expect(reference!.properties.video_slugs.maxItems).toBe(4);
+    expect(reference!.properties.duration.minimum).toBe(2);
+    expect(reference!.properties.duration.maximum).toBe(10);
+    expect(reference!.properties.prompt.maxLength).toBe(5000);
+    expect(reference!.properties.seed.maximum).toBe(2147483647);
+    expect(edit!.properties.duration.minimum).toBe(0);
+    expect(edit!.properties.duration.maximum).toBe(10);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -463,6 +515,20 @@ describe("validateVideoParams", () => {
     expect(grokResult.image_slots).toEqual({ min: 1, max: 7 });
     const tooManyGrokImages = validateVideoParams("generate_grok_imagine_video", { image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e", "@img-f", "@img-g", "@img-h"] });
     expect(tooManyGrokImages.warnings).toContain("Grok Imagine 1.5 supports up to 7 reference images (got 8)");
+  });
+
+  it("enforces xAI's cross-field duration cap only when references are present", () => {
+    const withReference = validateVideoParams("generate_grok_imagine_ref_video", {
+      prompt: "test",
+      duration: "15",
+      image_slugs: ["@img-a"],
+    });
+    const withoutReference = validateVideoParams("generate_grok_imagine_ref_video", {
+      prompt: "test",
+      duration: "15",
+    });
+    expect(withReference.warnings).toContain("xAI reference-to-video supports at most 10 seconds when reference images are supplied");
+    expect(withoutReference.warnings).not.toContain("xAI reference-to-video supports at most 10 seconds when reference images are supplied");
   });
 
   it("tools without image-array fields return null image_slots", () => {

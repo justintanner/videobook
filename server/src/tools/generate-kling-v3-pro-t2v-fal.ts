@@ -5,19 +5,19 @@ import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 import { modelSlug } from "@apicity/cost";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
 const base = FalKlingVideoV3ProTextToVideoRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description (max 2500 chars)"),
-  duration: z.string().optional().describe("Video duration as string (model-specific)"),
+  prompt: apicityStringField(base.prompt, "Video description (max 2500 chars)", { required: true }),
+  duration: apicityStringField(base.duration, "Video duration as string (model-specific)"),
   aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
-  generate_audio: z.boolean().optional().describe("Generate accompanying audio"),
+  generate_audio: apicityField(base.generate_audio, "Generate accompanying audio"),
   shot_type: apicityField(base.shot_type, "Shot type"),
-  negative_prompt: z.string().optional().describe("Things to avoid"),
-  cfg_scale: z.number().min(0).max(2).optional().describe("CFG scale (0-2)"),
+  negative_prompt: apicityStringField(base.negative_prompt, "Things to avoid"),
+  cfg_scale: apicityField(base.cfg_scale, "CFG scale (0-2)"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;

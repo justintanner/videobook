@@ -34,16 +34,10 @@ function unknown(toolName: string): CostEstimate {
   };
 }
 
-// Tools where the model's billable duration is the input motion video's
-// duration rather than a parameter the user types. The cost adapter still
-// reads `input.duration`, so we enrich the input here (for the estimate only —
-// the actual generation payload doesn't carry a duration field).
-async function enrichInput(
+async function enrichMotionControlInput(
   fs: VideocityFs,
-  toolName: string,
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  if (toolName !== "generate_kling30_motion_control_video") return input;
   if (typeof input.duration === "number") return input;
 
   const projectSlug = typeof input.project_slug === "string" ? input.project_slug : null;
@@ -59,6 +53,46 @@ async function enrichInput(
   if (typeof duration !== "number" || duration <= 0) return input;
 
   return { ...input, duration };
+}
+
+async function enrichGrokExtendInput(
+  fs: VideocityFs,
+  input: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  if (typeof input.resolution === "string" && input.resolution) return input;
+  const projectSlug = typeof input.project_slug === "string" ? input.project_slug : null;
+  const source = typeof input.video_slug === "string"
+    ? input.video_slug
+    : typeof input.asset_id === "string"
+      ? input.asset_id
+      : null;
+  if (!projectSlug || !source) return input;
+
+  const assetId = source.replace(/^@/, "");
+  const meta = await fs.readMetadata<{ resolution?: unknown; input?: { resolution?: unknown } }>(
+    assetId,
+    "generation-payload",
+    projectSlug,
+  );
+  if (!meta.ok) return input;
+  const resolution = meta.value.input?.resolution ?? meta.value.resolution;
+  return typeof resolution === "string" && resolution
+    ? { ...input, resolution }
+    : input;
+}
+
+async function enrichInput(
+  fs: VideocityFs,
+  toolName: string,
+  input: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  if (toolName === "generate_kling30_motion_control_video") {
+    return enrichMotionControlInput(fs, input);
+  }
+  if (toolName === "extend_grok_imagine_video") {
+    return enrichGrokExtendInput(fs, input);
+  }
+  return input;
 }
 
 async function estimateOne(

@@ -1,9 +1,92 @@
 import { describe, expect, it } from "vitest";
-import { Seedance2MiniRequestSchema } from "@apicity/kie/zod";
+import {
+  GrokVideoExtendRequestSchema,
+  KlingV3TurboImageToVideoRequestSchema,
+  KlingV3TurboTextToVideoRequestSchema,
+  Seedance2MiniRequestSchema,
+  VolcengineVideoToVideoLipSyncRequestSchema,
+  Wan27ImageRequestSchema,
+} from "@apicity/kie/zod";
 import { GoogleFlowVideosRequestSchema } from "@apicity/googleflow/zod";
 import { translateToolPayload } from "./payload-builders.js";
 
 describe("translateToolPayload", () => {
+  it("uses Apicity defaults for Kling Turbo text-to-video", () => {
+    const result = translateToolPayload("generate_kling30_turbo_video", {
+      prompt: "clouds crossing a mountain",
+    });
+
+    expect(result?.payload).toEqual({
+      model: "kling/v3-turbo-text-to-video",
+      input: {
+        prompt: "clouds crossing a mountain",
+        duration: "5",
+        aspect_ratio: "16:9",
+        resolution: "720p",
+      },
+    });
+    expect(KlingV3TurboTextToVideoRequestSchema.safeParse(result?.payload).success).toBe(true);
+  });
+
+  it("honors Kling Turbo image-to-video resolution and applies shared defaults", () => {
+    const result = translateToolPayload("generate_kling30_turbo_video", {
+      prompt: "turn toward the camera",
+      image_slugs: ["https://example.test/input.png"],
+      resolution: "1080p",
+    });
+
+    expect(result?.payload).toEqual({
+      model: "kling/v3-turbo-image-to-video",
+      input: {
+        prompt: "turn toward the camera",
+        image_urls: ["https://example.test/input.png"],
+        duration: "5",
+        resolution: "1080p",
+      },
+    });
+    expect(KlingV3TurboImageToVideoRequestSchema.safeParse(result?.payload).success).toBe(true);
+  });
+
+  it("uses Apicity defaults for Wan 2.7 image generation", () => {
+    const result = translateToolPayload("generate_wan27_image", {
+      prompt: "a quiet lakeside cabin",
+    });
+
+    expect(result?.payload).toEqual({
+      model: "wan/2-7-image",
+      input: {
+        prompt: "a quiet lakeside cabin",
+        aspect_ratio: "16:9",
+        resolution: "2K",
+        nsfw_checker: false,
+      },
+    });
+    expect(Wan27ImageRequestSchema.safeParse(result?.payload).success).toBe(true);
+  });
+
+  it("uses Apicity defaults for Volcengine lip sync", () => {
+    const result = translateToolPayload("generate_volcengine_lipsync_video", {
+      video_slug: "https://example.test/input.mp4",
+      audio_slug: "https://example.test/input.mp3",
+      mode: "lite",
+    });
+
+    expect(result?.payload).toEqual({
+      model: "volcengine/video-to-video-lip-sync",
+      input: {
+        mode: "lite",
+        video_url: "https://example.test/input.mp4",
+        audio_url: "https://example.test/input.mp3",
+        separate_vocal: false,
+        open_scenedet: false,
+        align_audio: true,
+        align_audio_reverse: false,
+        templ_start_seconds: 0,
+      },
+    });
+    expect(VolcengineVideoToVideoLipSyncRequestSchema.safeParse(result?.payload).success).toBe(true);
+  });
+
   it("builds current Kie Grok image-to-video payload with mode", () => {
     const result = translateToolPayload("generate_grok_imagine_video", {
       image_slugs: ["https://example.test/input.png"],
@@ -39,6 +122,25 @@ describe("translateToolPayload", () => {
     expect(result?.payload.input).toMatchObject({
       mode: "normal",
     });
+  });
+
+  it("builds a schema-valid Grok video extension payload", () => {
+    const result = translateToolPayload("extend_grok_imagine_video", {
+      prompt: "continue through the doorway",
+      extend_at: 3,
+      extend_times: "10",
+    });
+
+    expect(result?.payload).toEqual({
+      model: "grok-imagine/extend",
+      input: {
+        task_id: "<task_id_from_source_video_metadata>",
+        prompt: "continue through the doorway",
+        extend_at: "3",
+        extend_times: "10",
+      },
+    });
+    expect(GrokVideoExtendRequestSchema.safeParse(result?.payload).success).toBe(true);
   });
 
   it("builds a schema-valid Seedance 2 Mini payload (refs, no first/last frame)", () => {

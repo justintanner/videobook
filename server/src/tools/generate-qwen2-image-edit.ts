@@ -5,7 +5,7 @@ import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 import { resolveImageSlugs } from "./_image-inputs.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 function deriveImageName(imageAssetId: string): string {
   const baseName = imageAssetId.startsWith("img-") ? imageAssetId.slice(4) : imageAssetId;
@@ -15,12 +15,12 @@ function deriveImageName(imageAssetId: string): string {
 const qwen2ImageEditInputSchema = Qwen2ImageEditRequestSchema.shape.input.shape;
 
 const generateQwen2ImageEditSchema = {
-  prompt: z.string().describe("Image editing prompt (max 800 chars)"),
+  prompt: apicityStringField(qwen2ImageEditInputSchema.prompt, "Image editing prompt (max 800 chars)", { required: true }),
   project_slug: z.string().describe("Project slug"),
-  image_slugs: z.array(z.string()).min(1).max(1).describe("Exactly 1 @img-* slug for the reference image to edit"),
+  image_slugs: apicityStringArrayField(qwen2ImageEditInputSchema.image_url, "Exactly 1 @img-* slug for the reference image to edit", { required: true }),
   image_size: apicityField(qwen2ImageEditInputSchema.image_size, "Output aspect ratio (default 16:9)"),
   output_format: apicityField(qwen2ImageEditInputSchema.output_format, "Output image format (default png)"),
-  seed: z.number().optional().describe("Random seed"),
+  seed: apicityField(qwen2ImageEditInputSchema.seed, "Random seed"),
 
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
@@ -117,4 +117,3 @@ export function generateQwen2ImageEditDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

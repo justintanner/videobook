@@ -97,6 +97,20 @@ async function waitForTimewarpMetadata(
   throw new Error("Timed out waiting for timewarp metadata");
 }
 
+async function waitForAssetReady(
+  fs: VideocityFs,
+  assetId: string,
+  timeoutMs = 120_000,
+): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const result = await fs.assetWork.read(PROJECT, assetId);
+    if (result.ok && result.value?.status === "ready" && result.value.ownerId === null) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("Timed out waiting for timewarp asset to become ready");
+}
+
 async function waitForAssetFile(
   fs: VideocityFs,
   assetId: string,
@@ -183,6 +197,7 @@ describe("timewarp_video end to end", () => {
 
     await waitForJob(String(response.job_id), 120_000);
     const metadata = await waitForTimewarpMetadata(fs, assetId);
+    await waitForAssetReady(fs, assetId);
     const manifest = valueOf(await fs.getManifest(assetId, PROJECT, { includeDotfiles: true }));
     const videoFile = findVideoFile(manifest.files);
     expect(videoFile).not.toBeNull();
@@ -233,6 +248,7 @@ describe("timewarp_video end to end", () => {
     const response = parse(result);
     await waitForJob(String(response.job_id), 120_000);
     await waitForTimewarpMetadata(fs, created.assetId);
+    await waitForAssetReady(fs, created.assetId);
 
     const savedAudio = await waitForAssetFile(fs, created.assetId, "original.mp3");
     expect(savedAudio.length).toBeGreaterThan(0);

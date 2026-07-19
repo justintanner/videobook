@@ -5,6 +5,7 @@ import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildQwen2ImageEditPayload } from "../payload-builders.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
+import type { Qwen2ImageEditRequest } from "@apicity/kie";
 
 type GenerateQwen2ImageEditPayload = {
   type: "generate_qwen2_image_edit";
@@ -14,8 +15,8 @@ type GenerateQwen2ImageEditPayload = {
   imgAssetDir: string;
   sourceImageIds: string[];
   projectSlug: string;
-  imageSize?: string;
-  outputFormat?: "png" | "jpeg";
+  imageSize?: Qwen2ImageEditRequest["input"]["image_size"];
+  outputFormat?: Qwen2ImageEditRequest["input"]["output_format"];
   seed?: number;
 };
 

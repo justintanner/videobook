@@ -4,7 +4,8 @@ import { z, type ZodRawShape } from "zod";
 import { GrokImageToVideoRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { enumOptions } from "../zod-slots.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
 import { resolveAudioSlug, type RefInput } from "./_seedance2-shared.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
@@ -25,19 +26,19 @@ function deriveVideoName(firstAssetId: string): string {
 }
 
 // Apicity's mode enum includes "spicy", which this i2v endpoint rejects (docs/apicity-gaps.md).
-const GROK_IMAGE_TO_VIDEO_MODES = ["fun", "normal"] as const;
 const grokI2v = GrokImageToVideoRequestSchema.shape.input.shape;
+const GROK_IMAGE_TO_VIDEO_MODES = enumOptions(grokI2v.mode).filter((mode) => mode !== "spicy") as [string, ...string[]];
 
 const generateGrokImagineVideoSchema = {
-  image_slugs: z.array(z.string()).min(1).max(7).optional().describe("1-7 reference image asset slugs (e.g., ['@img-sunset'])"),
+  image_slugs: apicityStringArrayField(grokI2v.image_urls, "1-7 reference image asset slugs (e.g., ['@img-sunset'])"),
   asset_id: z.string().optional().describe("Single image asset ID (must be img-*); back-compat alias for image_slugs[0]"),
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().max(4096).optional().describe("Optional prompt to guide video generation (max 4096 chars)"),
+  prompt: apicityStringField(grokI2v.prompt, "Optional prompt to guide video generation (max 4096 chars)"),
   mode: z.enum(GROK_IMAGE_TO_VIDEO_MODES).optional().describe("Generation mode: fun / normal"),
   duration: apicityField(grokI2v.duration, "Video duration in seconds (6-30)"),
   resolution: apicityField(grokI2v.resolution, "Output resolution"),
   aspect_ratio: apicityField(grokI2v.aspect_ratio, "Output aspect ratio"),
-  nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default true)"),
+  nsfw_checker: apicityField(grokI2v.nsfw_checker, "Enable NSFW content safety filter (default false)"),
   replace_audio_with: z.string().optional().describe("After generation, splice this audio over the Grok output (aud-* slug or `<assetId>/<filename>` form, e.g. `plan/s1.mp3`). Runs server-side so the asset only reaches ready once the splice is in."),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;

@@ -9,22 +9,14 @@ import type { JobHandlerContext } from "../queue.js";
 import { QUEUED_TASK_ID } from "videocity-engine";
 import type { PendingTask, TaskType, VideocityFs } from "videocity-engine";
 import { requireApiKey } from "../api-key.js";
+import { normalizeKieCostPayload } from "../cost-adapters.js";
 
 export const KIE_PAYGATE_DOT_PATH = "api.v1.jobs.createTask";
 export const VEO_PAYGATE_DOT_PATH = "api.v1.veo.generate";
 
-// Local shim: @apicity/cost has no rate for the Volcengine v2v lip-sync,
-// OmniHuman 1.5, or Gemini Omni Video models shipped in @apicity/kie, so
-// computeEstimate flags them as unbounded. The paygate only binds the request
-// hash — it never recomputes cost downstream — so admitting these models here
-// is safe. (Gemini Omni Video has no priced rate and surfaces as "—" in the
-// UI.) Remove each entry once @apicity/cost prices the corresponding model.
-// HappyHorse 1.1 and Seedance 2 Mini were removed here once cost@0.6.1 priced
-// them directly (see cost-adapters.ts + docs/apicity-gaps.md §9/§10).
 const COST_TABLE_PENDING_MODELS = new Set<string>([
   "volcengine/video-to-video-lip-sync",
   "omnihuman-1-5",
-  "gemini-omni-video",
 ]);
 
 type SubmitKieTaskArgs = {
@@ -73,8 +65,8 @@ export function mintKieOtp(
   dotPath: string = KIE_PAYGATE_DOT_PATH,
 ): string {
   const payload = request as unknown as Record<string, unknown>;
-  const estimate = computeEstimate({ provider: "kie", payload });
-  if (estimate.warnings.length > 0 && !COST_TABLE_PENDING_MODELS.has(modelOf(payload))) {
+  const estimate = computeEstimate({ provider: "kie", payload: normalizeKieCostPayload(payload) });
+  if (estimate.warnings.length > 0 && !hasPendingCostTableEntry(payload)) {
     throw new Error(`KIE cost estimate is not bounded: ${estimate.warnings.join("; ")}`);
   }
 
@@ -90,6 +82,14 @@ export function mintKieOtp(
 function modelOf(payload: Record<string, unknown>): string {
   const model = payload.model;
   return typeof model === "string" ? model : "";
+}
+
+function hasPendingCostTableEntry(payload: Record<string, unknown>): boolean {
+  if (COST_TABLE_PENDING_MODELS.has(modelOf(payload))) return true;
+  if (modelOf(payload) !== "gemini-omni-video") return false;
+  const input = payload.input;
+  if (!input || typeof input !== "object" || Array.isArray(input)) return false;
+  return Array.isArray((input as Record<string, unknown>).video_list);
 }
 
 function createKieProvider(apiKey: string) {

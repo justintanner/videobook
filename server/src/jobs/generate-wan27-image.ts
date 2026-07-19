@@ -4,6 +4,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildWan27ImagePayload } from "../payload-builders.js";
+import type { Wan27ImageRequest } from "@apicity/kie";
 
 type GenerateWan27ImagePayload = {
   type: "generate_wan27_image";
@@ -13,8 +14,8 @@ type GenerateWan27ImagePayload = {
   imgAssetDir: string;
   sourceImageIds: string[];
   projectSlug: string;
-  aspectRatio?: string;
-  resolution?: string;
+  aspectRatio?: Wan27ImageRequest["input"]["aspect_ratio"];
+  resolution?: Wan27ImageRequest["input"]["resolution"];
   seed?: number;
   nsfwChecker?: boolean;
 };

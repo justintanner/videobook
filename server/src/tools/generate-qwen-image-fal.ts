@@ -1,27 +1,31 @@
 import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
+import { FalQwenImageRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 import { modelSlug } from "@apicity/cost";
+import {
+  apicityField,
+  apicityStringField,
+  apicityUnionEnumField,
+} from "./schema-from-apicity.js";
 
-const QWEN_IMAGE_SIZES = ["square_hd", "square", "portrait_4_3", "portrait_16_9", "landscape_4_3", "landscape_16_9"] as const;
-const QWEN_OUTPUT_FORMATS = ["jpeg", "png"] as const;
-const QWEN_ACCELERATION = ["none", "regular", "high"] as const;
+const qwen = FalQwenImageRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Text prompt for image generation"),
-  image_size: z.enum(QWEN_IMAGE_SIZES).optional().describe("Output size preset"),
-  num_inference_steps: z.number().int().min(2).max(250).optional().describe("Inference steps (2-250)"),
-  guidance_scale: z.number().min(0).max(20).optional().describe("Guidance scale (0-20)"),
-  num_images: z.number().int().min(1).max(4).optional().describe("Number of images (1-4)"),
-  output_format: z.enum(QWEN_OUTPUT_FORMATS).optional().describe("Output image format"),
-  negative_prompt: z.string().optional().describe("Negative prompt"),
-  acceleration: z.enum(QWEN_ACCELERATION).optional().describe("Acceleration level"),
-  enable_safety_checker: z.boolean().optional().describe("Enable safety checker"),
-  use_turbo: z.boolean().optional().describe("Use turbo mode"),
-  seed: z.number().int().optional().describe("Seed for deterministic output"),
+  prompt: apicityStringField(qwen.prompt, "Text prompt for image generation", { required: true }),
+  image_size: apicityUnionEnumField(qwen.image_size, "Output size preset"),
+  num_inference_steps: apicityField(qwen.num_inference_steps, "Inference steps (2-250)"),
+  guidance_scale: apicityField(qwen.guidance_scale, "Guidance scale (0-20)"),
+  num_images: apicityField(qwen.num_images, "Number of images (1-4)"),
+  output_format: apicityField(qwen.output_format, "Output image format"),
+  negative_prompt: apicityStringField(qwen.negative_prompt, "Negative prompt"),
+  acceleration: apicityField(qwen.acceleration, "Acceleration level"),
+  enable_safety_checker: apicityField(qwen.enable_safety_checker, "Enable safety checker"),
+  use_turbo: apicityField(qwen.use_turbo, "Use turbo mode"),
+  seed: apicityField(qwen.seed, "Seed for deterministic output"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;

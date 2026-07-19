@@ -6,7 +6,7 @@ import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
 
 type MediaInput = { assetId: string; filename: string };
@@ -55,15 +55,15 @@ const base = FalSeedance2p0ReferenceToVideoRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description (reference items can be mentioned as @Image1, @Video1, @Audio1, etc.)"),
-  image_slugs: z.array(z.string()).max(9).optional().describe("0-9 reference image @slugs"),
-  video_slugs: z.array(z.string()).max(3).optional().describe("0-3 reference video @slugs (combined 2-15s)"),
-  audio_slugs: z.array(z.string()).max(3).optional().describe("0-3 reference audio @slugs (combined ≤15s)"),
+  prompt: apicityStringField(base.prompt, "Video description (reference items can be mentioned as @Image1, @Video1, @Audio1, etc.)", { required: true }),
+  image_slugs: apicityStringArrayField(base.image_urls, "0-9 reference image @slugs"),
+  video_slugs: apicityStringArrayField(base.video_urls, "0-3 reference video @slugs (combined 2-15s)"),
+  audio_slugs: apicityStringArrayField(base.audio_urls, "0-3 reference audio @slugs (combined ≤15s)"),
   resolution: apicityField(base.resolution, "Output resolution (default 720p)"),
   duration: apicityField(base.duration, "Duration in seconds or 'auto' (default auto)"),
   aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
-  generate_audio: z.boolean().optional().describe("Generate synchronized audio (default true)"),
-  seed: z.number().int().optional().describe("Seed for deterministic output"),
+  generate_audio: apicityField(base.generate_audio, "Generate synchronized audio (default true)"),
+  seed: apicityField(base.seed, "Seed for deterministic output"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;

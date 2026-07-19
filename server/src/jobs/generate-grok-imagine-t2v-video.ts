@@ -3,6 +3,7 @@ import { submitKieTask } from "./kie-paygate.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildGrokImagineT2vVideoPayload } from "../payload-builders.js";
+import type { GrokTextToVideoRequest } from "@apicity/kie";
 
 type GenerateGrokImagineT2vVideoPayload = {
   type: "generate_grok_imagine_t2v_video";
@@ -10,10 +11,10 @@ type GenerateGrokImagineT2vVideoPayload = {
   vidAssetDir: string;
   projectSlug: string;
   prompt: string;
-  mode?: "fun" | "normal" | "spicy";
+  mode?: GrokTextToVideoRequest["input"]["mode"];
   duration?: number;
-  resolution?: "480p" | "720p";
-  aspect_ratio?: "16:9" | "9:16" | "1:1" | "2:3" | "3:2";
+  resolution?: GrokTextToVideoRequest["input"]["resolution"];
+  aspect_ratio?: GrokTextToVideoRequest["input"]["aspect_ratio"];
   nsfw_checker?: boolean;
 };
 

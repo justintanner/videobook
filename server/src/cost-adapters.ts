@@ -1,4 +1,20 @@
 import type { EstimateRequest } from "@apicity/cost";
+import {
+  GeminiOmniVideoRequestSchema,
+  GptImage2ImageToImageRequestSchema,
+  GptImage2TextToImageRequestSchema,
+  GrokImageToVideoRequestSchema,
+  HappyHorse11ImageToVideoRequestSchema,
+  HappyHorse11ReferenceToVideoRequestSchema,
+  HappyHorse11TextToVideoRequestSchema,
+  KlingV3TurboTextToVideoRequestSchema,
+  NanoBananaProRequestSchema,
+  Seedance2FastInputSchema,
+  Seedance2InputSchema,
+  Seedance2MiniInputSchema,
+  Wan27ImageProRequestSchema,
+  Wan27ImageRequestSchema,
+} from "@apicity/kie/zod";
 
 export type CostAdapter = (input: Record<string, unknown>) => EstimateRequest | null;
 
@@ -11,6 +27,39 @@ const num = (v: unknown): number | undefined => {
   }
   return undefined;
 };
+
+type DefaultSchema = {
+  safeParse: (value: undefined) =>
+    | { success: true; data: unknown }
+    | { success: false };
+};
+
+function apicityDefault<T>(schema: DefaultSchema, field: string): T {
+  const result = schema.safeParse(undefined);
+  if (!result.success) throw new Error(`@apicity schema has no default for ${field}`);
+  return result.data as T;
+}
+
+const SEEDANCE2_DURATION = apicityDefault<number>(Seedance2InputSchema.shape.duration, "Seedance 2 duration");
+const SEEDANCE2_FAST_DURATION = apicityDefault<number>(Seedance2FastInputSchema.shape.duration, "Seedance 2 Fast duration");
+const SEEDANCE2_MINI_DURATION = apicityDefault<number>(Seedance2MiniInputSchema.shape.duration, "Seedance 2 Mini duration");
+const SEEDANCE2_MINI_RESOLUTION = apicityDefault<string>(Seedance2MiniInputSchema.shape.resolution, "Seedance 2 Mini resolution");
+const GROK_I2V_DURATION = apicityDefault<number>(GrokImageToVideoRequestSchema.shape.input.shape.duration, "Grok image-to-video duration");
+const GROK_I2V_RESOLUTION = apicityDefault<string>(GrokImageToVideoRequestSchema.shape.input.shape.resolution, "Grok image-to-video resolution");
+const KLING_TURBO_DURATION = apicityDefault<string>(KlingV3TurboTextToVideoRequestSchema.shape.input.shape.duration, "Kling Turbo duration");
+const KLING_TURBO_RESOLUTION = apicityDefault<string>(KlingV3TurboTextToVideoRequestSchema.shape.input.shape.resolution, "Kling Turbo resolution");
+const HAPPYHORSE_T2V_DURATION = apicityDefault<number>(HappyHorse11TextToVideoRequestSchema.shape.input.shape.duration, "HappyHorse text-to-video duration");
+const HAPPYHORSE_T2V_RESOLUTION = apicityDefault<string>(HappyHorse11TextToVideoRequestSchema.shape.input.shape.resolution, "HappyHorse text-to-video resolution");
+const HAPPYHORSE_I2V_DURATION = apicityDefault<number>(HappyHorse11ImageToVideoRequestSchema.shape.input.shape.duration, "HappyHorse image-to-video duration");
+const HAPPYHORSE_I2V_RESOLUTION = apicityDefault<string>(HappyHorse11ImageToVideoRequestSchema.shape.input.shape.resolution, "HappyHorse image-to-video resolution");
+const HAPPYHORSE_R2V_DURATION = apicityDefault<number>(HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.duration, "HappyHorse reference-to-video duration");
+const HAPPYHORSE_R2V_RESOLUTION = apicityDefault<string>(HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.resolution, "HappyHorse reference-to-video resolution");
+const GPT_IMAGE_I2I_RESOLUTION = apicityDefault<string>(GptImage2ImageToImageRequestSchema.shape.input.shape.resolution, "GPT Image image-to-image resolution");
+const GPT_IMAGE_T2I_RESOLUTION = apicityDefault<string>(GptImage2TextToImageRequestSchema.shape.input.shape.resolution, "GPT Image text-to-image resolution");
+const NANO_BANANA_PRO_RESOLUTION = apicityDefault<string>(NanoBananaProRequestSchema.shape.input.shape.resolution, "Nano Banana Pro resolution");
+const WAN27_IMAGE_RESOLUTION = apicityDefault<string>(Wan27ImageRequestSchema.shape.input.shape.resolution, "Wan 2.7 Image resolution");
+const WAN27_IMAGE_PRO_RESOLUTION = apicityDefault<string>(Wan27ImageProRequestSchema.shape.input.shape.resolution, "Wan 2.7 Image Pro resolution");
+const GEMINI_OMNI_RESOLUTION = apicityDefault<string>(GeminiOmniVideoRequestSchema.shape.input.shape.resolution, "Gemini Omni resolution");
 
 // OpenAI text payloads mirror the upstream API body. The cost lib's
 // extractor flattens chat/responses payloads to a single string for the
@@ -31,7 +80,10 @@ const openaiText = (model: string, defaultMaxOut?: number): CostAdapter => (inpu
 // uses payload.input.first_frame_url to discriminate i2v vs t2v. Each unified
 // tool entry locks the apiModel; we surface i2v pricing when any first/last
 // frame or reference input is present, else t2v.
-const kieSeedance = (apiModel: "bytedance/seedance-2" | "bytedance/seedance-2-fast"): CostAdapter => (input) => {
+const kieSeedance = (
+  apiModel: "bytedance/seedance-2" | "bytedance/seedance-2-fast",
+  defaultDuration: number,
+): CostAdapter => (input) => {
   const hasInput =
     Boolean(str(input.first_frame_slug)) ||
     Boolean(str(input.last_frame_slug)) ||
@@ -44,7 +96,7 @@ const kieSeedance = (apiModel: "bytedance/seedance-2" | "bytedance/seedance-2-fa
       model: apiModel,
       input: {
         resolution: str(input.resolution) || "720p",
-        duration: num(input.duration) ?? num(input.seconds) ?? 5,
+        duration: num(input.duration) ?? num(input.seconds) ?? defaultDuration,
         ...(hasInput ? { first_frame_url: "stub" } : {}),
       },
     },
@@ -52,7 +104,6 @@ const kieSeedance = (apiModel: "bytedance/seedance-2" | "bytedance/seedance-2-fa
 };
 
 // kling-3.0/video keys by mode + sound (sound===true selects "|sound").
-// Defaults match buildKling30VideoPayload in payload-builders.ts.
 const kieKling30Video: CostAdapter = (input) => ({
   provider: "kie",
   payload: {
@@ -150,36 +201,79 @@ const kieGrokImagineImageEdit: CostAdapter = () => ({
   payload: { model: "grok-imagine/image-to-image", input: {} },
 });
 
+const kieGrokImagineExtend: CostAdapter = (input) => ({
+  provider: "kie",
+  payload: {
+    model: "grok-imagine/extend",
+    resolution: str(input.resolution) || "480p",
+    input: {
+      extend_times: str(input.extend_times) || "6",
+    },
+  },
+});
+
+const kieGrokImagineUpscale: CostAdapter = () => ({
+  provider: "kie",
+  payload: { model: "grok-imagine/upscale", input: {} },
+});
+
+const elevenLabsTts: CostAdapter = (input) => ({
+  provider: "elevenlabs",
+  payload: {
+    model_id: str(input.model_id) || "eleven_multilingual_v2",
+    text: str(input.text),
+  },
+});
+
+const kieGeminiOmniVideo: CostAdapter = (input) => ({
+  provider: "kie",
+  payload: {
+    model: "gemini-omni-video",
+    input: {
+      duration: num(input.duration) ?? 4,
+      resolution: str(input.resolution) || GEMINI_OMNI_RESOLUTION,
+      ...(str(input.video_slug) ? { video_list: [{ url: "stub", start: 0, ends: 4 }] } : {}),
+    },
+  },
+});
+
+export function normalizeKieCostPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  if (payload.model !== "gemini-omni-video") return payload;
+  const input = payload.input;
+  if (!input || typeof input !== "object" || Array.isArray(input)) return payload;
+  const normalizedDuration = num((input as Record<string, unknown>).duration);
+  if (normalizedDuration === undefined) return payload;
+  return {
+    ...payload,
+    input: { ...(input as Record<string, unknown>), duration: normalizedDuration },
+  };
+}
+
 // Map MCP tool_name -> EstimateRequest builder. Tools not listed here return
 // null from getCostAdapter() and surface in the UI as "—" (no rate available),
 // unless a local estimator handles them (see estimateGoogleFlowCost).
-// Fal-backed tools have no entry: @apicity/cost dropped fal coverage when it
-// switched to a pure-local pricing table.
+// Fal-backed tools have no entry: @apicity/cost EstimateRequest excludes fal
+// and its local pricing table has no Fal rates (docs/apicity-gaps.md §26).
 // Google Flow tools (generate_veo31_*, generate_google_omni_video,
 // generate_nano_banana_pro_google) have no ADAPTERS entry because
 // @apicity/cost has no google provider — priced instead by the local
 // credits→USD table in google-flow-cost.ts (docs/apicity-gaps.md §15).
-const ADAPTERS: Record<string, CostAdapter> = {
-  // --- text rewrites / chat ---
-  rewrite_prompt: openaiText("gpt-5.2", 1000),
-
+const KIE_ADAPTERS: Record<string, CostAdapter> = {
   // --- KIE per-second video ---
-  generate_seedance2_video: kieSeedance("bytedance/seedance-2"),
-  generate_seedance2_fast_video: kieSeedance("bytedance/seedance-2-fast"),
+  generate_seedance2_video: kieSeedance("bytedance/seedance-2", SEEDANCE2_DURATION),
+  generate_seedance2_fast_video: kieSeedance("bytedance/seedance-2-fast", SEEDANCE2_FAST_DURATION),
   // Mini prices per-second by resolution (480p / 720p — the only tiers the tool
   // exposes); no first/last-frame split, so kieResolutionVideo is the right
   // shape. @apicity/cost@0.6.1 added this rate (was "—" under 0.6.0). See
   // docs/apicity-gaps.md §10.
-  generate_seedance2_mini_video: kieResolutionVideo("bytedance/seedance-2-mini", "720p"),
-  // generate_gemini_omni_video has no entry: @apicity/cost@0.6.1 prices no
-  // gemini-omni-video rate, so it surfaces as "—" in the UI and is admitted by
-  // the paygate via COST_TABLE_PENDING_MODELS. See docs/apicity-gaps.md §12.
+  generate_seedance2_mini_video: kieResolutionVideo("bytedance/seedance-2-mini", SEEDANCE2_MINI_RESOLUTION, SEEDANCE2_MINI_DURATION),
+  generate_gemini_omni_video: kieGeminiOmniVideo,
   generate_kling30_video: kieKling30Video,
   generate_kling30_motion_control_video: kieKling30MotionControl,
   generate_kling30_turbo_video: (args: Record<string, unknown>) => {
     const imageSlugs = (args.image_slugs as string[] | undefined) ?? [];
     const model = imageSlugs.length > 0 ? "kling/v3-turbo-image-to-video" : "kling/v3-turbo-text-to-video";
-    return kieResolutionVideo(model, "720p")(args);
+    return kieResolutionVideo(model, KLING_TURBO_RESOLUTION, Number(KLING_TURBO_DURATION))(args);
   },
 
   // --- KIE Veo 3 / Veo 3 Fast (flat per-second, priced in cost@0.7.0) ---
@@ -197,8 +291,10 @@ const ADAPTERS: Record<string, CostAdapter> = {
   extend_wan27_video: kieFlatVideo("wan/2-7-image-to-video"),
 
   // --- KIE Grok Imagine video (resolution-tiered, $0.008/$0.015 per sec) ---
-  generate_grok_imagine_video: kieResolutionVideo("grok-imagine/image-to-video", "480p", 8),
+  generate_grok_imagine_video: kieResolutionVideo("grok-imagine/image-to-video", GROK_I2V_RESOLUTION, GROK_I2V_DURATION),
   generate_grok_imagine_t2v_video: kieResolutionVideo("grok-imagine/text-to-video", "480p", 6),
+  extend_grok_imagine_video: kieGrokImagineExtend,
+  upscale_grok_imagine_video: kieGrokImagineUpscale,
 
   // --- KIE HappyHorse video (resolution-tiered, per-second) ---
   // t2v/i2v/ref generate against happyhorse-1-1/* (see payload-builders.ts), and
@@ -206,21 +302,21 @@ const ADAPTERS: Record<string, CostAdapter> = {
   // from 1.0 ($0.165/$0.22 per sec vs $0.155/$0.265), so we key off the actual
   // 1.1 slugs here rather than borrowing 1.0. videoedit stays on the 1.0
   // happyhorse/video-edit slug (no 1.1 video-edit endpoint exists).
-  generate_happyhorse_t2v_video: kieResolutionVideo("happyhorse-1-1/text-to-video", "1080p"),
-  generate_happyhorse_i2v_video: kieResolutionVideo("happyhorse-1-1/image-to-video", "1080p"),
-  generate_happyhorse_ref_video: kieResolutionVideo("happyhorse-1-1/reference-to-video", "1080p"),
+  generate_happyhorse_t2v_video: kieResolutionVideo("happyhorse-1-1/text-to-video", HAPPYHORSE_T2V_RESOLUTION, HAPPYHORSE_T2V_DURATION),
+  generate_happyhorse_i2v_video: kieResolutionVideo("happyhorse-1-1/image-to-video", HAPPYHORSE_I2V_RESOLUTION, HAPPYHORSE_I2V_DURATION),
+  generate_happyhorse_ref_video: kieResolutionVideo("happyhorse-1-1/reference-to-video", HAPPYHORSE_R2V_RESOLUTION, HAPPYHORSE_R2V_DURATION),
   generate_happyhorse_videoedit_video: kieResolutionVideo("happyhorse/video-edit", "1080p"),
 
   // --- KIE GPT Image 2 (per-image, tiered by resolution) ---
-  generate_gpt_image: kieTieredImage("gpt-image-2-image-to-image", "1K"),
-  generate_gpt_image_text: kieTieredImage("gpt-image-2-text-to-image", "1K"),
+  generate_gpt_image: kieTieredImage("gpt-image-2-image-to-image", GPT_IMAGE_I2I_RESOLUTION),
+  generate_gpt_image_text: kieTieredImage("gpt-image-2-text-to-image", GPT_IMAGE_T2I_RESOLUTION),
 
   // --- KIE Nano Banana Pro (per-image, tiered by resolution) ---
-  generate_nano_banana_image: kieTieredImage("nano-banana-pro", "2K"),
+  generate_nano_banana_image: kieTieredImage("nano-banana-pro", NANO_BANANA_PRO_RESOLUTION),
 
   // --- KIE Wan 2.7 image (per-image, tiered by resolution) ---
-  generate_wan27_image: kieTieredImage("wan/2-7-image", "2K"),
-  generate_wan27_image_pro: kieTieredImage("wan/2-7-image-pro", "2K"),
+  generate_wan27_image: kieTieredImage("wan/2-7-image", WAN27_IMAGE_RESOLUTION),
+  generate_wan27_image_pro: kieTieredImage("wan/2-7-image-pro", WAN27_IMAGE_PRO_RESOLUTION),
 
   // --- KIE flat per-image (qwen2 $0.028, seedream/5-lite $0.0275) ---
   generate_qwen2_image_edit: kieFlatImage("qwen2/image-edit"),
@@ -232,6 +328,19 @@ const ADAPTERS: Record<string, CostAdapter> = {
   generate_grok_imagine_image: kieGrokImagineImageEdit,
 };
 
+const ADAPTERS: Record<string, CostAdapter> = {
+  rewrite_prompt: openaiText("gpt-5.2", 1000),
+  generate_elevenlabs_t2a: elevenLabsTts,
+  ...KIE_ADAPTERS,
+};
+
 export function getCostAdapter(toolName: string): CostAdapter | null {
-  return ADAPTERS[toolName] ?? null;
+  const adapter = ADAPTERS[toolName];
+  if (!adapter) return null;
+  if (!Object.hasOwn(KIE_ADAPTERS, toolName)) return adapter;
+  return (input) => {
+    const provider = str(input._provider);
+    if (provider && provider !== "kie") return null;
+    return adapter(input);
+  };
 }

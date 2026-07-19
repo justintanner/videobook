@@ -6,7 +6,6 @@ import {
   GrokImageToVideoRequestSchema,
   GrokTextToVideoRequestSchema,
   GrokVideoExtendRequestSchema,
-  GrokImagineDurationSchema,
   GrokImagineModeSchema,
   KlingMotionControlRequestSchema,
   KlingVideoRequestSchema,
@@ -18,6 +17,8 @@ import {
   Wan27RefToVideoRequestSchema,
   Wan27TextToVideoRequestSchema,
   Wan27VideoEditRequestSchema,
+  Wan27VideoEditDurationValues,
+  HappyHorseDurationSchema,
   HappyHorse11ImageToVideoRequestSchema,
   HappyHorse11ReferenceToVideoRequestSchema,
   HappyHorse11TextToVideoRequestSchema,
@@ -30,12 +31,19 @@ import {
   KlingV3TurboTextToVideoRequestSchema,
 } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
-import { AlibabaVideoSynthesisModelSchema, AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
+import {
+  AlibabaVideoSynthesisInputSchema,
+  AlibabaVideoSynthesisModelSchema,
+  AlibabaVideoSynthesisParametersSchema,
+} from "@apicity/alibaba/zod";
 import {
   FalWanV2p7EditVideoRequestSchema,
   FalWanV2p7ImageToVideoRequestSchema,
+  FalWanV2p7ReferenceToVideoRequestSchema,
   FalWanV2p7TextToVideoRequestSchema,
+  FalSeedance2p0FastReferenceToVideoRequestSchema,
   FalSeedance2p0ReferenceToVideoRequestSchema,
+  FalXaiGrokImagineVideoExtendVideoRequestSchema,
   FalXaiGrokImagineVideoReferenceToVideoRequestSchema,
   FalXaiGrokImagineVideoEditVideoRequestSchema,
 } from "@apicity/fal/zod";
@@ -44,8 +52,11 @@ import {
   enumOptions,
   zodDefault,
   zodEnumOptionsOrNull,
+  zodFiniteNumberOptions,
   zodIsRequired,
   zodNumberRange,
+  zodStringMaxLength,
+  zodStringMinLength,
   type SlotConstraints,
 } from "./zod-slots.js";
 import { totalOmniReferenceSlots } from "./google-flow-refs.js";
@@ -337,7 +348,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   grok_imagine_ref: {
     label: "Grok Imagine Reference",
     tool_name: "generate_grok_imagine_ref_video",
-    description: "Video generation guided by reference images (0-4 optional)",
+    description: "Video generation guided by reference images (0-7 optional)",
     params: ["prompt", "image_slugs", "duration", "resolution", "aspect_ratio"],
     defaults: {},
     providers: [
@@ -764,6 +775,7 @@ const IMAGE_FIELD_SCHEMAS: Record<string, ZodLike> = {
 
 const IMAGE_SLOT_OVERRIDES: Record<string, SlotConstraints> = {
   generate_grok_imagine_video: { min: 1, max: 7 },
+  generate_grok_imagine_ref_video: { min: 0, max: 7 },
   // Google Flow veo 3.1 reference slots are positional referenceImage_1..3
   // keys with no array field in @apicity/googleflow to read (gaps doc §14).
   generate_google_omni_video: { min: 0, max: 7 },
@@ -839,6 +851,7 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     nsfw_checker: GrokTextToVideoRequestSchema.shape.input.shape.nsfw_checker,
   },
   generate_grok_imagine_ref_video: {
+    prompt: XaiVideoGenerateRequestSchema.shape.prompt,
     duration: XaiVideoGenerateRequestSchema.shape.duration,
     resolution: XaiVideoGenerateRequestSchema.shape.resolution,
     aspect_ratio: XaiVideoGenerateRequestSchema.shape.aspect_ratio,
@@ -864,61 +877,81 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     extend_times: GrokVideoExtendRequestSchema.shape.input.shape.extend_times,
   },
   generate_wan27_t2v_video: {
+    prompt: Wan27TextToVideoRequestSchema.shape.input.shape.prompt,
+    negative_prompt: Wan27TextToVideoRequestSchema.shape.input.shape.negative_prompt,
     resolution: Wan27TextToVideoRequestSchema.shape.input.shape.resolution,
     aspect_ratio: Wan27TextToVideoRequestSchema.shape.input.shape.ratio,
     duration: Wan27TextToVideoRequestSchema.shape.input.shape.duration,
     prompt_extend: Wan27TextToVideoRequestSchema.shape.input.shape.prompt_extend,
     watermark: Wan27TextToVideoRequestSchema.shape.input.shape.watermark,
+    seed: Wan27TextToVideoRequestSchema.shape.input.shape.seed,
     nsfw_checker: Wan27TextToVideoRequestSchema.shape.input.shape.nsfw_checker,
   },
   generate_wan27_i2v_video: {
+    prompt: Wan27ImageToVideoRequestSchema.shape.input.shape.prompt,
+    negative_prompt: Wan27ImageToVideoRequestSchema.shape.input.shape.negative_prompt,
     resolution: Wan27ImageToVideoRequestSchema.shape.input.shape.resolution,
     duration: Wan27ImageToVideoRequestSchema.shape.input.shape.duration,
     prompt_extend: Wan27ImageToVideoRequestSchema.shape.input.shape.prompt_extend,
     watermark: Wan27ImageToVideoRequestSchema.shape.input.shape.watermark,
+    seed: Wan27ImageToVideoRequestSchema.shape.input.shape.seed,
     nsfw_checker: Wan27ImageToVideoRequestSchema.shape.input.shape.nsfw_checker,
   },
   generate_wan27_videoedit_video: {
+    prompt: Wan27VideoEditRequestSchema.shape.input.shape.prompt,
+    negative_prompt: Wan27VideoEditRequestSchema.shape.input.shape.negative_prompt,
     resolution: Wan27VideoEditRequestSchema.shape.input.shape.resolution,
     aspect_ratio: Wan27VideoEditRequestSchema.shape.input.shape.aspect_ratio,
     duration: Wan27VideoEditRequestSchema.shape.input.shape.duration,
     audio_setting: Wan27VideoEditRequestSchema.shape.input.shape.audio_setting,
     prompt_extend: Wan27VideoEditRequestSchema.shape.input.shape.prompt_extend,
     watermark: Wan27VideoEditRequestSchema.shape.input.shape.watermark,
+    seed: Wan27VideoEditRequestSchema.shape.input.shape.seed,
     nsfw_checker: Wan27VideoEditRequestSchema.shape.input.shape.nsfw_checker,
   },
   generate_wan27_r2v_video: {
+    prompt: Wan27RefToVideoRequestSchema.shape.input.shape.prompt,
+    negative_prompt: Wan27RefToVideoRequestSchema.shape.input.shape.negative_prompt,
     resolution: Wan27RefToVideoRequestSchema.shape.input.shape.resolution,
     aspect_ratio: Wan27RefToVideoRequestSchema.shape.input.shape.aspect_ratio,
     duration: Wan27RefToVideoRequestSchema.shape.input.shape.duration,
     prompt_extend: Wan27RefToVideoRequestSchema.shape.input.shape.prompt_extend,
     watermark: Wan27RefToVideoRequestSchema.shape.input.shape.watermark,
+    seed: Wan27RefToVideoRequestSchema.shape.input.shape.seed,
     nsfw_checker: Wan27RefToVideoRequestSchema.shape.input.shape.nsfw_checker,
   },
   extend_wan27_video: {
+    prompt: Wan27ImageToVideoRequestSchema.shape.input.shape.prompt,
+    negative_prompt: Wan27ImageToVideoRequestSchema.shape.input.shape.negative_prompt,
     resolution: Wan27ImageToVideoRequestSchema.shape.input.shape.resolution,
     duration: Wan27ImageToVideoRequestSchema.shape.input.shape.duration,
     prompt_extend: Wan27ImageToVideoRequestSchema.shape.input.shape.prompt_extend,
     watermark: Wan27ImageToVideoRequestSchema.shape.input.shape.watermark,
+    seed: Wan27ImageToVideoRequestSchema.shape.input.shape.seed,
     nsfw_checker: Wan27ImageToVideoRequestSchema.shape.input.shape.nsfw_checker,
   },
   generate_happyhorse_t2v_video: {
+    prompt: HappyHorse11TextToVideoRequestSchema.shape.input.shape.prompt,
     resolution: HappyHorse11TextToVideoRequestSchema.shape.input.shape.resolution,
     aspect_ratio: HappyHorse11TextToVideoRequestSchema.shape.input.shape.aspect_ratio,
-    duration: HappyHorse11TextToVideoRequestSchema.shape.input.shape.duration,
+    duration: HappyHorseDurationSchema,
   },
   generate_happyhorse_i2v_video: {
+    prompt: HappyHorse11ImageToVideoRequestSchema.shape.input.shape.prompt,
     resolution: HappyHorse11ImageToVideoRequestSchema.shape.input.shape.resolution,
-    duration: HappyHorse11ImageToVideoRequestSchema.shape.input.shape.duration,
+    duration: HappyHorseDurationSchema,
   },
   generate_happyhorse_ref_video: {
+    prompt: HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.prompt,
     resolution: HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.resolution,
     aspect_ratio: HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.aspect_ratio,
-    duration: HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.duration,
+    duration: HappyHorseDurationSchema,
   },
   generate_happyhorse_videoedit_video: {
+    prompt: HappyHorseVideoEditRequestSchema.shape.input.shape.prompt,
     resolution: HappyHorseVideoEditRequestSchema.shape.input.shape.resolution,
     audio_setting: HappyHorseVideoEditRequestSchema.shape.input.shape.audio_setting,
+    seed: HappyHorseVideoEditRequestSchema.shape.input.shape.seed,
   },
   generate_volcengine_lipsync_video: {
     mode: VolcengineVideoToVideoLipSyncRequestSchema.shape.input.shape.mode,
@@ -929,11 +962,15 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     templ_start_seconds: VolcengineVideoToVideoLipSyncRequestSchema.shape.input.shape.templ_start_seconds,
   },
   generate_omnihuman_video: {
+    prompt: Omnihuman15RequestSchema.shape.input.shape.prompt,
     output_resolution: Omnihuman15RequestSchema.shape.input.shape.output_resolution,
     pe_fast_mode: Omnihuman15RequestSchema.shape.input.shape.pe_fast_mode,
     seed: Omnihuman15RequestSchema.shape.input.shape.seed,
   },
   generate_alibaba_video: {
+    prompt: AlibabaVideoSynthesisInputSchema.shape.prompt,
+    negative_prompt: AlibabaVideoSynthesisInputSchema.shape.negative_prompt,
+    model: AlibabaVideoSynthesisModelSchema,
     resolution: AlibabaVideoSynthesisParametersSchema.shape.resolution,
     duration: AlibabaVideoSynthesisParametersSchema.shape.duration,
     prompt_extend: AlibabaVideoSynthesisParametersSchema.shape.prompt_extend,
@@ -942,46 +979,87 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     seed: AlibabaVideoSynthesisParametersSchema.shape.seed,
   },
   generate_seedance2_r2v_fal_video: {
+    prompt: FalSeedance2p0ReferenceToVideoRequestSchema.shape.prompt,
+    image_slugs: FalSeedance2p0ReferenceToVideoRequestSchema.shape.image_urls,
+    video_slugs: FalSeedance2p0ReferenceToVideoRequestSchema.shape.video_urls,
+    audio_slugs: FalSeedance2p0ReferenceToVideoRequestSchema.shape.audio_urls,
     resolution: FalSeedance2p0ReferenceToVideoRequestSchema.shape.resolution,
     duration: FalSeedance2p0ReferenceToVideoRequestSchema.shape.duration,
     aspect_ratio: FalSeedance2p0ReferenceToVideoRequestSchema.shape.aspect_ratio,
     generate_audio: FalSeedance2p0ReferenceToVideoRequestSchema.shape.generate_audio,
+    seed: FalSeedance2p0ReferenceToVideoRequestSchema.shape.seed,
   },
   generate_seedance2_fast_r2v_fal_video: {
-    resolution: FalSeedance2p0ReferenceToVideoRequestSchema.shape.resolution,
-    duration: FalSeedance2p0ReferenceToVideoRequestSchema.shape.duration,
-    aspect_ratio: FalSeedance2p0ReferenceToVideoRequestSchema.shape.aspect_ratio,
-    generate_audio: FalSeedance2p0ReferenceToVideoRequestSchema.shape.generate_audio,
+    prompt: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.prompt,
+    image_slugs: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.image_urls,
+    video_slugs: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.video_urls,
+    audio_slugs: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.audio_urls,
+    resolution: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.resolution,
+    duration: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.duration,
+    aspect_ratio: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.aspect_ratio,
+    generate_audio: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.generate_audio,
+    seed: FalSeedance2p0FastReferenceToVideoRequestSchema.shape.seed,
   },
   generate_wan27_t2v_fal_video: {
+    prompt: FalWanV2p7TextToVideoRequestSchema.shape.prompt,
+    negative_prompt: FalWanV2p7TextToVideoRequestSchema.shape.negative_prompt,
     aspect_ratio: FalWanV2p7TextToVideoRequestSchema.shape.aspect_ratio,
     resolution: FalWanV2p7TextToVideoRequestSchema.shape.resolution,
     duration: FalWanV2p7TextToVideoRequestSchema.shape.duration,
+    enable_prompt_expansion: FalWanV2p7TextToVideoRequestSchema.shape.enable_prompt_expansion,
     enable_safety_checker: FalWanV2p7TextToVideoRequestSchema.shape.enable_safety_checker,
+    seed: FalWanV2p7TextToVideoRequestSchema.shape.seed,
   },
   generate_wan27_i2v_fal_video: {
+    prompt: FalWanV2p7ImageToVideoRequestSchema.shape.prompt,
+    negative_prompt: FalWanV2p7ImageToVideoRequestSchema.shape.negative_prompt,
+    first_frame_slug: FalWanV2p7ImageToVideoRequestSchema.shape.image_url,
+    end_frame_slug: FalWanV2p7ImageToVideoRequestSchema.shape.end_image_url,
     resolution: FalWanV2p7ImageToVideoRequestSchema.shape.resolution,
     duration: FalWanV2p7ImageToVideoRequestSchema.shape.duration,
+    enable_prompt_expansion: FalWanV2p7ImageToVideoRequestSchema.shape.enable_prompt_expansion,
     enable_safety_checker: FalWanV2p7ImageToVideoRequestSchema.shape.enable_safety_checker,
+    seed: FalWanV2p7ImageToVideoRequestSchema.shape.seed,
   },
   generate_wan27_r2v_fal_video: {
-    aspect_ratio: FalWanV2p7EditVideoRequestSchema.shape.aspect_ratio,
-    resolution: FalWanV2p7EditVideoRequestSchema.shape.resolution,
-    duration: FalWanV2p7EditVideoRequestSchema.shape.duration,
-    enable_safety_checker: FalWanV2p7EditVideoRequestSchema.shape.enable_safety_checker,
+    prompt: FalWanV2p7ReferenceToVideoRequestSchema.shape.prompt,
+    negative_prompt: FalWanV2p7ReferenceToVideoRequestSchema.shape.negative_prompt,
+    image_slugs: FalWanV2p7ReferenceToVideoRequestSchema.shape.reference_image_urls,
+    video_slugs: FalWanV2p7ReferenceToVideoRequestSchema.shape.reference_video_urls,
+    aspect_ratio: FalWanV2p7ReferenceToVideoRequestSchema.shape.aspect_ratio,
+    resolution: FalWanV2p7ReferenceToVideoRequestSchema.shape.resolution,
+    duration: FalWanV2p7ReferenceToVideoRequestSchema.shape.duration,
+    multi_shots: FalWanV2p7ReferenceToVideoRequestSchema.shape.multi_shots,
+    enable_safety_checker: FalWanV2p7ReferenceToVideoRequestSchema.shape.enable_safety_checker,
+    seed: FalWanV2p7ReferenceToVideoRequestSchema.shape.seed,
   },
   generate_wan27_videoedit_fal_video: {
+    prompt: FalWanV2p7EditVideoRequestSchema.shape.prompt,
+    negative_prompt: FalWanV2p7EditVideoRequestSchema.shape.negative_prompt,
+    video_slug: FalWanV2p7EditVideoRequestSchema.shape.video_url,
+    image_slug: FalWanV2p7EditVideoRequestSchema.shape.reference_image_url,
     aspect_ratio: FalWanV2p7EditVideoRequestSchema.shape.aspect_ratio,
     resolution: FalWanV2p7EditVideoRequestSchema.shape.resolution,
     duration: FalWanV2p7EditVideoRequestSchema.shape.duration,
     audio_setting: FalWanV2p7EditVideoRequestSchema.shape.audio_setting,
     enable_safety_checker: FalWanV2p7EditVideoRequestSchema.shape.enable_safety_checker,
+    seed: FalWanV2p7EditVideoRequestSchema.shape.seed,
   },
   generate_grok_imagine_r2v_fal_video: {
+    prompt: FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.prompt,
+    image_slugs: FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.reference_image_urls,
+    duration: FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.duration,
     aspect_ratio: FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.aspect_ratio,
     resolution: FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.resolution,
   },
+  generate_grok_imagine_extend_fal_video: {
+    prompt: FalXaiGrokImagineVideoExtendVideoRequestSchema.shape.prompt,
+    video_slug: FalXaiGrokImagineVideoExtendVideoRequestSchema.shape.video_url,
+    duration: FalXaiGrokImagineVideoExtendVideoRequestSchema.shape.duration,
+  },
   generate_grok_imagine_edit_fal_video: {
+    prompt: FalXaiGrokImagineVideoEditVideoRequestSchema.shape.prompt,
+    video_slug: FalXaiGrokImagineVideoEditVideoRequestSchema.shape.video_url,
     resolution: FalXaiGrokImagineVideoEditVideoRequestSchema.shape.resolution,
   },
 };
@@ -1016,13 +1094,9 @@ const SEEDANCE2_TOOL_NAMES = [
 // grok image-to-video rejects "spicy" though the Apicity mode enum includes it.
 const GROK_IMAGINE_MODES = enumOptions(GrokImagineModeSchema);
 const GROK_IMAGE_TO_VIDEO_MODES = GROK_IMAGINE_MODES.filter((mode) => mode !== "spicy");
-// grok ref-to-video routes through xAI (unbounded duration); kie's enum is 6/10.
-const GROK_IMAGINE_DURATIONS = enumOptions(GrokImagineDurationSchema);
-
 // Feeds the shared audio_setting entry in PARAM_SCHEMAS.
 const WAN27_AUDIO_SETTINGS = enumOptions(Wan27AudioSettingSchema);
-
-const ALIBABA_VIDEO_MODELS = enumOptions(AlibabaVideoSynthesisModelSchema);
+const WAN27_VIDEO_EDIT_DURATIONS = Wan27VideoEditDurationValues.map(String);
 
 const PARAM_SCHEMAS: Record<string, ParamSchema> = {
   prompt: { type: "string", description: "Text description of what to generate" },
@@ -1130,16 +1204,7 @@ function normalizeDefaultForParam(prop: ParamSchema, value: unknown): unknown {
 const APICITY_DERIVE_SKIP: Record<string, ReadonlySet<string>> = {
   // grok image-to-video rejects "spicy" though the Apicity mode enum includes it.
   generate_grok_imagine_video: new Set(["mode"]),
-  // Apicity Wan27VideoEditDurationSchema now bounds 0-10, but a custom refine
-  // excludes 1 (allowed: 0, 2-10). zodNumberRange cannot introspect refines, so
-  // auto-deriving would offer "1" which the endpoint rejects. Override stays.
   generate_wan27_videoedit_video: new Set(["duration"]),
-  // Apicity allows duration 0 (full-source) but reference-to-video has no source
-  // clip, so the app restricts to >= 2.
-  generate_wan27_r2v_fal_video: new Set(["duration"]),
-  // Apicity routes ref-to-video through xAI, whose duration is an unbounded
-  // number; the real endpoint only accepts 6 or 10 (kie's GrokImagineDuration).
-  generate_grok_imagine_ref_video: new Set(["duration"]),
 };
 
 function rangeToStringEnum(min: number, max: number): string[] {
@@ -1154,25 +1219,49 @@ function rangeToStringEnum(min: number, max: number): string[] {
 // string-typed duration-style params, an expanded string enum to preserve the
 // existing wire shape.
 function applyApicityConstraints(prop: ParamSchema, schema: ZodLike): void {
+  const slots = readSlotConstraints(schema);
+  if (slots && prop.type === "array") {
+    prop.minItems = slots.min;
+    if (slots.max === null) delete prop.maxItems;
+    else prop.maxItems = slots.max;
+  }
   const enumOpts = zodEnumOptionsOrNull(schema);
   if (enumOpts) {
     prop.enum = [...enumOpts];
   } else {
+    const finiteNumbers = zodFiniteNumberOptions(schema);
     const range = zodNumberRange(schema);
-    if (range && (range.min !== undefined || range.max !== undefined)) {
-      if (prop.type === "integer" || prop.type === "number") {
-        prop.type = range.int ? "integer" : "number";
-        if (range.min !== undefined) prop.minimum = range.min;
-        if (range.max !== undefined) prop.maximum = range.max;
-        prop.enum = undefined;
-      } else if (range.int && range.min !== undefined && range.max !== undefined) {
-        prop.enum = rangeToStringEnum(range.min, range.max);
+    const isNumericParam = prop.type === "integer" || prop.type === "number";
+    const isContiguousRange = finiteNumbers !== null
+      && range?.int === true
+      && range.min !== undefined
+      && range.max !== undefined
+      && finiteNumbers.length === range.max - range.min + 1
+      && finiteNumbers.every((value, index) => value === range.min! + index);
+    if (finiteNumbers && (!isNumericParam || !isContiguousRange)) {
+      if (isNumericParam) {
+        prop.type = finiteNumbers.every(Number.isInteger) ? "integer" : "number";
+        prop.enum = finiteNumbers;
+      } else {
+        prop.enum = finiteNumbers.map(String);
+      }
+    } else {
+      if (range && (range.min !== undefined || range.max !== undefined)) {
+        if (prop.type === "integer" || prop.type === "number") {
+          prop.type = range.int ? "integer" : "number";
+          if (range.min !== undefined) prop.minimum = range.min;
+          if (range.max !== undefined) prop.maximum = range.max;
+          prop.enum = undefined;
+        } else if (range.int && range.min !== undefined && range.max !== undefined) {
+          prop.enum = rangeToStringEnum(range.min, range.max);
+        }
       }
     }
   }
-  // NOTE: string min/max length is intentionally NOT derived here. Prompt caps
-  // are hand-tuned and diverge from Apicity in places (e.g. grok i2v hardcodes
-  // 4096 where Apicity says 5000) — see docs/apicity-gaps.md.
+  const minLength = zodStringMinLength(schema);
+  const maxLength = zodStringMaxLength(schema);
+  if (minLength !== undefined) prop.minLength = minLength;
+  if (maxLength !== undefined) prop.maxLength = maxLength;
 }
 
 function getVideoToolSchema(toolName: string): ToolSchema | null {
@@ -1286,7 +1375,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       || toolName === "generate_veo31_lite_video"
       || toolName === "generate_veo31_lite_low_priority_video"
     ) {
-      // The 0.7.2 @apicity/googleflow schemas carry only loose `.or(z.string())`
+      // The 0.7.3 @apicity/googleflow schemas carry only loose `.or(z.string())`
       // model/aspect enums, not the per-model restrictions, so allowed values are
       // hand-typed from the useapi.net Google Flow docs (docs/apicity-gaps.md §14).
       if (param === "prompt") prop.description = "Video description";
@@ -1303,31 +1392,29 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "seed") prop.description = "Random seed for reproducibility";
     }
     if (toolName === "generate_wan27_t2v_video") {
-      if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
+      if (param === "prompt") prop.description = "Video description (max 5000 chars)";
       if (param === "audio_slug") prop.description = "Optional custom audio asset (e.g., @aud-music)";
       if (param === "resolution") prop.description = "Video resolution: 720p / 1080p";
       if (param === "aspect_ratio") prop.description = "Video aspect ratio";
       if (param === "duration") prop.description = "Video duration: 2-15 seconds";
     }
     if (toolName === "generate_wan27_i2v_video") {
-      if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
+      if (param === "prompt") prop.description = "Video description (max 5000 chars)";
       if (param === "resolution") prop.description = "Video resolution: 720p / 1080p";
       if (param === "duration") prop.description = "Video duration: 2-15 seconds";
     }
     if (toolName === "generate_wan27_videoedit_video") {
-      if (param === "prompt") { prop.description = "Edit description (max 5000 chars)"; prop.maxLength = 5000; }
+      if (param === "prompt") prop.description = "Edit description (max 5000 chars)";
       if (param === "video_slug") prop.description = "Source video asset to edit (e.g., @vid-scene)";
       if (param === "image_slug") prop.description = "Reference image for character/style guidance (e.g., @img-outfit)";
       if (param === "resolution") prop.description = "Video resolution: 720p / 1080p";
       if (param === "aspect_ratio") prop.description = "Video aspect ratio (omit to match source)";
-      // Apicity bounds 0-10 but a refine excludes 1; zodNumberRange can't read
-      // refines, so the enum stays hand-typed (APICITY_DERIVE_SKIP). See gap §8.
-      if (param === "duration") { prop.enum = ["0", "2", "3", "4", "5", "6", "7", "8", "9", "10"]; prop.description = "Video duration: 0 (full source) or 2-10 seconds"; }
+      if (param === "duration") { prop.enum = WAN27_VIDEO_EDIT_DURATIONS; prop.description = "Video duration: 0 (full source) or 2-10 seconds"; }
       if (param === "audio_setting") prop.description = "Audio: auto (model decides) or origin (keep original)";
       if (param === "watermark") { prop.type = "boolean"; prop.description = "Add 'AI generated' watermark to lower-right corner (default false)"; }
     }
     if (toolName === "generate_wan27_r2v_video") {
-      if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
+      if (param === "prompt") prop.description = "Video description (max 5000 chars)";
       if (param === "image_slugs") prop.description = "Reference image assets (max 5 total with videos, e.g., @img-style)";
       if (param === "video_slugs") prop.description = "Reference video assets (max 5 total with images, e.g., @vid-motion)";
       if (param === "aspect_ratio") prop.description = "Video aspect ratio (ignored if first_frame_slug set)";
@@ -1336,12 +1423,12 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     }
     if (toolName === "extend_wan27_video") {
       if (param === "video_slug") { prop.description = "Video asset to extend (e.g., @vid-scene)"; }
-      if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
+      if (param === "prompt") prop.description = "Video description (max 5000 chars)";
       if (param === "resolution") prop.description = "Video resolution: 720p / 1080p";
       if (param === "duration") prop.description = "Video duration: 2-15 seconds";
     }
     if (toolName === "generate_grok_imagine_video") {
-      if (param === "prompt") { prop.description = "Video motion description (optional, max 4096 chars)"; prop.maxLength = 4096; }
+      if (param === "prompt") prop.description = "Video motion description (optional, max 4096 chars)";
       // Apicity mode enum includes "spicy" which this i2v endpoint rejects (APICITY_DERIVE_SKIP).
       if (param === "mode") { prop.enum = GROK_IMAGE_TO_VIDEO_MODES; prop.description = "Generation mode: fun / normal"; }
       if (param === "duration") { prop.type = "integer"; prop.description = "Video duration in seconds (6-30)"; }
@@ -1355,7 +1442,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       }
     }
     if (toolName === "generate_grok_imagine_t2v_video") {
-      if (param === "prompt") { prop.description = "Video description (max 5000 chars)"; prop.maxLength = 5000; }
+      if (param === "prompt") prop.description = "Video description";
       if (param === "mode") prop.description = "Generation mode: fun / normal / spicy";
       if (param === "duration") { prop.type = "integer"; prop.description = "Video duration in seconds (6-30)"; }
       if (param === "resolution") prop.description = "Output resolution: 480p / 720p";
@@ -1364,11 +1451,13 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     }
     if (toolName === "generate_grok_imagine_ref_video") {
       if (param === "prompt") { prop.description = "Video description"; }
-      // Apicity routes this through xAI whose duration is unbounded; the real endpoint only accepts 6/10 (APICITY_DERIVE_SKIP).
-      if (param === "duration") { prop.enum = GROK_IMAGINE_DURATIONS; prop.description = "Video duration: 6s / 10s"; }
+      if (param === "duration") prop.description = "Video duration: 1-15 seconds (max 10 with references)";
       if (param === "resolution") prop.description = "Video resolution: 480p / 720p";
       if (param === "aspect_ratio") prop.description = "Video aspect ratio";
-      if (param === "image_slugs") prop.description = "Reference images (0-4 optional, guide style/content)";
+      if (param === "image_slugs") {
+        prop.description = "Reference images (0-7 optional, guide style/content)";
+        prop.maxItems = 7;
+      }
     }
     if (toolName === "extend_grok_imagine_video") {
       if (param === "prompt") { prop.description = "Describe how to extend the video (actions, scenes, style)"; prop.maxLength = 5000; }
@@ -1382,8 +1471,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "video_slugs") prop.description = "Reference video assets (max 4, e.g., @vid-motion)";
       if (param === "aspect_ratio") prop.description = "Video aspect ratio";
       if (param === "resolution") prop.description = "Video resolution: 720p / 1080p";
-      // Apicity allows duration 0 (full-source) but ref-to-video has no source clip (APICITY_DERIVE_SKIP).
-      if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 2; prop.maximum = 10; prop.description = "Video duration in seconds (2-10)"; }
+      if (param === "duration") { prop.type = "integer"; prop.description = "Video duration in seconds (2-10)"; }
       if (param === "multi_shots") prop.description = "Enable multi-shot mode";
       if (param === "negative_prompt") { prop.description = "Things to avoid (max 500 chars)"; prop.maxLength = 500; }
       if (param === "enable_safety_checker") { prop.description = "Content safety filter"; }
@@ -1401,16 +1489,14 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     if (toolName === "generate_grok_imagine_r2v_fal_video") {
       if (param === "prompt") prop.description = "Video description";
       if (param === "image_slugs") prop.description = "Reference image assets (1-7 required, e.g., @img-style)";
-      // duration is not present in VIDEO_PARAM_ZOD_SCHEMAS for this tool — kept hardcoded.
-      if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 1; prop.maximum = 10; prop.description = "Video duration in seconds (1-10)"; }
+      if (param === "duration") { prop.type = "integer"; prop.description = "Video duration in seconds (1-10)"; }
       if (param === "aspect_ratio") prop.description = "Output aspect ratio";
       if (param === "resolution") prop.description = "Output resolution: 480p / 720p";
     }
     if (toolName === "generate_grok_imagine_extend_fal_video") {
       if (param === "prompt") prop.description = "Describe how to extend the video";
       if (param === "video_slug") prop.description = "Source video asset to extend (e.g., @vid-scene)";
-      // duration is not present in VIDEO_PARAM_ZOD_SCHEMAS for this tool — kept hardcoded.
-      if (param === "duration") { prop.type = "integer"; prop.enum = undefined; prop.minimum = 2; prop.maximum = 10; prop.description = "Extension duration in seconds (2-10)"; }
+      if (param === "duration") { prop.type = "integer"; prop.description = "Extension duration in seconds (2-10)"; }
     }
     if (toolName === "generate_grok_imagine_edit_fal_video") {
       if (param === "prompt") prop.description = "Edit instruction";
@@ -1429,26 +1515,26 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "enable_safety_checker") { prop.description = "Content safety filter"; }
     }
     if (toolName === "generate_happyhorse_t2v_video") {
-      if (param === "prompt") { prop.description = "Video description (max 5000 chars / 2500 Chinese chars)"; prop.maxLength = 5000; }
+      if (param === "prompt") prop.description = "Video description (max 5000 chars / 2500 Chinese chars)";
       if (param === "resolution") prop.description = "Output resolution: 720p / 1080p";
       if (param === "aspect_ratio") prop.description = "Output aspect ratio";
       if (param === "duration") prop.description = "Video duration: 3-15 seconds";
     }
     if (toolName === "generate_happyhorse_i2v_video") {
-      if (param === "prompt") { prop.description = "Optional video description (max 5000 chars / 2500 Chinese chars)"; prop.maxLength = 5000; }
+      if (param === "prompt") prop.description = "Optional video description (max 5000 chars / 2500 Chinese chars)";
       if (param === "first_frame_slug") prop.description = "First frame image asset (required, e.g., @img-start)";
       if (param === "resolution") prop.description = "Output resolution: 720p / 1080p";
       if (param === "duration") prop.description = "Video duration: 3-15 seconds";
     }
     if (toolName === "generate_happyhorse_ref_video") {
-      if (param === "prompt") { prop.description = "Video description (max 5000 chars / 2500 Chinese chars)"; prop.maxLength = 5000; }
+      if (param === "prompt") prop.description = "Video description (max 5000 chars / 2500 Chinese chars)";
       if (param === "image_slugs") prop.description = "Reference image assets (1-9, order defines character1/character2/...)";
       if (param === "resolution") prop.description = "Output resolution: 720p / 1080p";
       if (param === "aspect_ratio") prop.description = "Output aspect ratio";
       if (param === "duration") prop.description = "Video duration: 3-15 seconds";
     }
     if (toolName === "generate_happyhorse_videoedit_video") {
-      if (param === "prompt") { prop.description = "Edit instruction (max 5000 chars / 2500 Chinese chars)"; prop.maxLength = 5000; }
+      if (param === "prompt") prop.description = "Edit instruction (max 5000 chars / 2500 Chinese chars)";
       if (param === "video_slug") prop.description = "Source video asset to edit (3-60s, e.g., @vid-scene)";
       if (param === "image_slugs") prop.description = "0-5 optional reference images for character/style guidance";
       if (param === "resolution") prop.description = "Output resolution: 720p / 1080p";
@@ -1463,7 +1549,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     if (toolName === "generate_omnihuman_video") {
       if (param === "image_slug") prop.description = "Portrait image asset to animate (required, e.g., @img-face)";
       if (param === "audio_slug") prop.description = "Driving audio asset whose speech/song drives the avatar (required, max 60s, e.g., @aud-voice)";
-      if (param === "prompt") { prop.description = "Optional motion/expression description (e.g. 'speaking naturally with gentle expressions')"; prop.maxLength = 5000; }
+      if (param === "prompt") prop.description = "Optional motion/expression description (e.g. 'speaking naturally with gentle expressions')";
       if (param === "output_resolution") prop.description = "Output resolution: 720 / 1080 (default 1080)";
       if (param === "pe_fast_mode") prop.description = "Prompt-enhance fast mode — faster, lower-fidelity (default false)";
       if (param === "seed") prop.description = "Random seed for reproducibility (-1 = random)";
@@ -1471,15 +1557,14 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     if (toolName === "generate_alibaba_video") {
       if (param === "prompt") { prop.description = "Video description"; }
       if (param === "negative_prompt") { prop.description = "Negative prompt — things to avoid"; }
-      // model is not present in VIDEO_PARAM_ZOD_SCHEMAS; Apicity exposes no standalone model enum (docs/apicity-gaps.md).
-      if (param === "model") { prop.enum = ALIBABA_VIDEO_MODELS; prop.description = "DashScope video model: wan2.7-i2v (image-to-video) or wan2.7-videoedit (video editing)"; }
+      if (param === "model") prop.description = "DashScope video model: wan2.7-i2v (image-to-video) or wan2.7-videoedit (video editing)";
       if (param === "first_frame_slug") { prop.description = "First frame image asset (e.g., @img-start)"; }
       if (param === "last_frame_slug") { prop.description = "Last frame image asset (e.g., @img-end)"; }
       if (param === "first_clip_slug") { prop.description = "Video asset for clip continuation (e.g., @vid-scene)"; }
       if (param === "driving_audio_slug") { prop.description = "Audio asset for audio-driven motion (e.g., @aud-music)"; }
       if (param === "video_slug") { prop.description = "Reference video asset (e.g., @vid-ref)"; }
       if (param === "resolution") prop.description = "Output resolution";
-      if (param === "duration") { prop.type = "integer"; prop.description = "Video duration in seconds (2-15)"; }
+      if (param === "duration") { prop.type = "integer"; prop.description = "Video duration: 0 (full source) or 2-10 seconds"; }
       if (param === "prompt_extend") { prop.description = "Intelligent prompt rewriting (default true)"; }
       if (param === "watermark") { prop.description = "Add watermark to output video (default false)"; }
       if (param === "audio_setting") prop.description = "Driving-audio behavior: auto (model decides) or origin (keep original)";
@@ -1574,6 +1659,16 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
 
   if (toolName === "generate_grok_imagine_video" && totalImages > 7) {
     warnings.push(`Grok Imagine 1.5 supports up to 7 reference images (got ${totalImages})`);
+  }
+
+  if (toolName === "generate_grok_imagine_ref_video") {
+    if (totalImages > 7) {
+      warnings.push(`xAI reference-to-video supports up to 7 reference images (got ${totalImages})`);
+    }
+    const duration = Number(params.duration);
+    if (totalImages > 0 && Number.isFinite(duration) && duration > 10) {
+      warnings.push("xAI reference-to-video supports at most 10 seconds when reference images are supplied");
+    }
   }
 
   if (toolName === "generate_kling30_video") {
@@ -1811,7 +1906,7 @@ KEY CONSTRAINTS:
 - For generate_wan27_videoedit_video: REQUIRES video_slug (source video must be ≤10s), optional image_slug for reference, duration "0" (full source) or "2"-"10", resolution "720p"/"1080p", audio_setting "auto"/"origin"
 - For generate_wan27_r2v_video: max 5 combined image_slugs + video_slugs, duration "2"-"10", resolution "720p"/"1080p"
 - For extend_wan27_video: REQUIRES video_slug and prompt, duration "2"-"15", resolution "720p"/"1080p"
-- For generate_alibaba_video: REQUIRES at least one media input (first_frame_slug / last_frame_slug / first_clip_slug / driving_audio_slug / video_slug), resolution "720P"/"1080P", duration 2-15 (integer seconds), audio_setting "auto"/"origin"
+- For generate_alibaba_video: REQUIRES at least one media input (first_frame_slug / last_frame_slug / first_clip_slug / driving_audio_slug / video_slug), resolution "720P"/"1080P", duration 0 (full source) or 2-10 (integer seconds), audio_setting "auto"/"origin"
 - For generate_volcengine_lipsync_video: REQUIRES video_slug (source video) and audio_slug (driving audio); mode "lite"/"basic"
 - For generate_omnihuman_video: REQUIRES image_slug (portrait) and audio_slug (driving audio ≤60s); output_resolution "720"/"1080", pe_fast_mode boolean, optional prompt
 

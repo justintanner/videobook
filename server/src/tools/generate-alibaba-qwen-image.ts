@@ -1,14 +1,18 @@
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
+import {
+  AlibabaMultimodalGenerationParametersSchema,
+  AlibabaImageTextContentSchema,
+  AlibabaQwenImageGenerationImageSlotsSchema,
+  AlibabaQwenImageGenerationStableModelSchema,
+} from "@apicity/alibaba/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
-
-const QWEN_GENERATION_MODELS = ["qwen-image-2.0-pro", "qwen-image-2.0"] as const;
-type QwenGenerationModel = typeof QWEN_GENERATION_MODELS[number];
 
 function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
   const images = files.filter((f) => {
@@ -28,16 +32,16 @@ function slugify(text: string): string {
 }
 
 const generateAlibabaQwenImageSchema = {
-  prompt: z.string().describe("Text prompt for image generation"),
+  prompt: apicityStringField(AlibabaImageTextContentSchema.shape.text, "Text prompt for image generation", { required: true }),
   project_slug: z.string().describe("Project slug"),
-  image_slugs: z.array(z.string()).optional().describe("0-3 @img-* slugs for reference images"),
-  model: z.enum(QWEN_GENERATION_MODELS).describe("Qwen generation model"),
-  size: z.string().optional().describe("Output size (e.g., '1024*1024')"),
-  n: z.number().int().min(1).max(6).optional().describe("Number of images to generate (1-6)"),
-  negative_prompt: z.string().max(500).optional().describe("Negative prompt (max 500 chars)"),
-  prompt_extend: z.boolean().optional().describe("Let the model expand the prompt"),
-  watermark: z.boolean().optional().describe("Add watermark to generated image"),
-  seed: z.number().int().min(0).max(2147483647).optional().describe("Random seed for reproducibility"),
+  image_slugs: apicityStringArrayField(AlibabaQwenImageGenerationImageSlotsSchema, "0-3 @img-* slugs for reference images"),
+  model: apicityField(AlibabaQwenImageGenerationStableModelSchema, "Qwen generation model", { required: true }),
+  size: apicityField(AlibabaMultimodalGenerationParametersSchema.shape.size, "Output size (e.g., '1024*1024')"),
+  n: apicityField(AlibabaMultimodalGenerationParametersSchema.shape.n, "Number of images to generate (1-6)"),
+  negative_prompt: apicityField(AlibabaMultimodalGenerationParametersSchema.shape.negative_prompt, "Negative prompt (max 500 chars)"),
+  prompt_extend: apicityField(AlibabaMultimodalGenerationParametersSchema.shape.prompt_extend, "Let the model expand the prompt"),
+  watermark: apicityField(AlibabaMultimodalGenerationParametersSchema.shape.watermark, "Add watermark to generated image"),
+  seed: apicityField(AlibabaMultimodalGenerationParametersSchema.shape.seed, "Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'alibaba')"),
 } satisfies ZodRawShape;
 
@@ -97,7 +101,7 @@ export function generateAlibabaQwenImageDef(fs: VideocityFs): ToolDef {
         sourceImageIds.push(id);
       }
 
-      const resolvedModel: QwenGenerationModel = model;
+      const resolvedModel = AlibabaQwenImageGenerationStableModelSchema.parse(model);
 
       const assetResult = await fs.createAsset("img", `${modelSlug("alibaba", resolvedModel)}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) {

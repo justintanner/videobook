@@ -3,6 +3,7 @@ import { submitKieTask } from "./kie-paygate.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildSeedreamTextImagePayload } from "../payload-builders.js";
+import type { SeedreamTextToImageRequest } from "@apicity/kie";
 
 type GenerateSeedreamTextImagePayload = {
   type: "generate_seedream_text_image";
@@ -10,8 +11,8 @@ type GenerateSeedreamTextImagePayload = {
   imgAssetId: string;
   imgAssetDir: string;
   projectSlug: string;
-  aspectRatio?: "1:1" | "4:3" | "3:4" | "16:9" | "9:16" | "2:3" | "3:2" | "21:9";
-  quality?: "basic" | "high";
+  aspectRatio?: SeedreamTextToImageRequest["input"]["aspect_ratio"];
+  quality?: SeedreamTextToImageRequest["input"]["quality"];
   nsfwChecker?: boolean;
 };
 

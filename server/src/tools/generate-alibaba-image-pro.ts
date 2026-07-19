@@ -1,9 +1,15 @@
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
+import {
+  AlibabaImageGenerationParametersSchema,
+  AlibabaImageReferenceSlotsSchema,
+  AlibabaImageTextContentSchema,
+} from "@apicity/alibaba/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -25,14 +31,14 @@ function slugify(text: string): string {
 }
 
 const generateAlibabaImageProSchema = {
-  prompt: z.string().describe("Text prompt for image generation (max 5000 chars)"),
+  prompt: apicityStringField(AlibabaImageTextContentSchema.shape.text, "Text prompt for image generation (max 5000 chars)", { required: true }),
   project_slug: z.string().describe("Project slug"),
-  image_slugs: z.array(z.string()).optional().describe("0-9 @img-* slugs for reference images"),
-  size: z.string().optional().describe("Output size (e.g., '1024*1024', '720*1280', '1280*720')"),
-  n: z.number().int().min(1).max(12).optional().describe("Number of images to generate (1-12)"),
-  watermark: z.boolean().optional().describe("Add watermark to generated image"),
-  thinking_mode: z.boolean().optional().describe("Enable thinking mode for better quality"),
-  seed: z.number().int().min(0).max(2147483647).optional().describe("Random seed for reproducibility"),
+  image_slugs: apicityStringArrayField(AlibabaImageReferenceSlotsSchema, "0-9 @img-* slugs for reference images"),
+  size: apicityStringField(AlibabaImageGenerationParametersSchema.shape.size, "Output size (e.g., '1024*1024', '720*1280', '1280*720')"),
+  n: apicityField(AlibabaImageGenerationParametersSchema.shape.n, "Number of images to generate (1-12)"),
+  watermark: apicityField(AlibabaImageGenerationParametersSchema.shape.watermark, "Add watermark to generated image"),
+  thinking_mode: apicityField(AlibabaImageGenerationParametersSchema.shape.thinking_mode, "Enable thinking mode for better quality"),
+  seed: apicityField(AlibabaImageGenerationParametersSchema.shape.seed, "Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'alibaba')"),
 } satisfies ZodRawShape;
 

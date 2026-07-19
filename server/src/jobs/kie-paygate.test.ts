@@ -173,11 +173,7 @@ describe("kie paygate", () => {
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 
-  it("admits a Gemini Omni Video request via the cost-table-pending shim", () => {
-    // @apicity/cost@0.6.1 ships no slug/pricing for gemini-omni-video, so
-    // computeEstimate returns $0 + a "not found" warning. The model is listed in
-    // COST_TABLE_PENDING_MODELS, so mintKieOtp admits it and binds the request
-    // hash instead of rejecting as unbounded.
+  it("mints a bounded OTP for a priced Gemini Omni text-to-video request", () => {
     process.env.APICITY_PAYGATE_SECRET = "test-secret";
 
     const request = {
@@ -187,6 +183,49 @@ describe("kie paygate", () => {
         duration: "6" as const,
         aspect_ratio: "16:9" as const,
         resolution: "720p" as const,
+      },
+    };
+    const otp = mintKieOtp(request, 60);
+    const parsed = parseOtp(otp);
+
+    expect(parsed.payload.requestHash).toBe(canonicalHash(request));
+  });
+
+  it.each([
+    {
+      model: "omnihuman-1-5" as const,
+      input: {
+        image_url: "https://kie.example/portrait.png",
+        audio_url: "https://kie.example/voice.mp3",
+      },
+    },
+    {
+      model: "volcengine/video-to-video-lip-sync" as const,
+      input: {
+        video_url: "https://kie.example/source.mp4",
+        audio_url: "https://kie.example/voice.mp3",
+        mode: "lite" as const,
+      },
+    },
+  ])("admits $model while its Kie cost entry is pending", (request) => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+
+    const otp = mintKieOtp(request, 60);
+    const parsed = parseOtp(otp);
+
+    expect(parsed.payload.requestHash).toBe(canonicalHash(request));
+  });
+
+  it("admits Gemini Omni video-to-video while its upstream cost selector is unresolved", () => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+
+    const request = {
+      model: "gemini-omni-video" as const,
+      input: {
+        prompt: "extend the ocean sunset",
+        duration: "6" as const,
+        resolution: "720p" as const,
+        video_list: [{ url: "https://kie.example/source.mp4", start: 0, ends: 4 }],
       },
     };
     const otp = mintKieOtp(request, 60);

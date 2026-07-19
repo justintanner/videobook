@@ -2,11 +2,12 @@ import type { VideocityFs } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalQwenImageEditRequestSchema } from "@apicity/fal/zod";
+import { Qwen2ImageEditRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { zodUnionEnumOptions } from "../zod-slots.js";
+import { enumOptions, zodUnionEnumOptions } from "../zod-slots.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 const base = FalQwenImageEditRequestSchema.shape;
 
@@ -18,10 +19,10 @@ type FalImageSize = typeof falImageSizeOptions[number];
 
 // The UI sends the Kie-canonical aspect-ratio strings (matching Qwen2ImageEditRequestSchema
 // on Kie). Accept either those or the Fal enum, then normalize to the Fal enum for the job.
-const KIE_ASPECT_RATIOS = ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9", "21:9"] as const;
+const KIE_ASPECT_RATIOS = enumOptions(Qwen2ImageEditRequestSchema.shape.input.shape.image_size);
 const ACCEPTED_IMAGE_SIZES = [...falImageSizeOptions, ...KIE_ASPECT_RATIOS] as [string, ...string[]];
 
-const KIE_TO_FAL_IMAGE_SIZE: Record<typeof KIE_ASPECT_RATIOS[number], FalImageSize> = {
+const KIE_TO_FAL_IMAGE_SIZE: Record<string, FalImageSize> = {
   "1:1": "square_hd",
   "2:3": "portrait_4_3",
   "3:2": "landscape_4_3",
@@ -40,17 +41,17 @@ function normalizeImageSize(value: string | undefined): FalImageSize | undefined
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Edit instruction"),
-  image_slugs: z.array(z.string()).min(1).describe("@img-* slug for the reference image (first entry is used; Qwen edit takes one image)"),
+  prompt: apicityStringField(base.prompt, "Edit instruction", { required: true }),
+  image_slugs: apicityStringArrayField(base.image_url, "Exactly one @img-* slug for the reference image", { required: true }),
   image_size: z.enum(ACCEPTED_IMAGE_SIZES).optional().describe("Output size — Fal enum (square_hd, landscape_16_9, ...) or aspect-ratio shorthand (1:1, 16:9, 9:16, 4:3, 3:4, ...)"),
-  num_inference_steps: z.number().int().min(2).max(50).optional().describe("Inference steps (2-50)"),
-  guidance_scale: z.number().min(0).max(20).optional().describe("Guidance scale (0-20)"),
-  num_images: z.number().int().min(1).max(4).optional().describe("Number of images (1-4)"),
+  num_inference_steps: apicityField(base.num_inference_steps, "Inference steps (2-50)"),
+  guidance_scale: apicityField(base.guidance_scale, "Guidance scale (0-20)"),
+  num_images: apicityField(base.num_images, "Number of images (1-4)"),
   output_format: apicityField(base.output_format, "Output image format"),
-  negative_prompt: z.string().optional().describe("Negative prompt"),
+  negative_prompt: apicityStringField(base.negative_prompt, "Negative prompt"),
   acceleration: apicityField(base.acceleration, "Acceleration level"),
-  enable_safety_checker: z.boolean().optional().describe("Enable safety checker"),
-  seed: z.number().int().optional().describe("Seed for deterministic output"),
+  enable_safety_checker: apicityField(base.enable_safety_checker, "Enable safety checker"),
+  seed: apicityField(base.seed, "Seed for deterministic output"),
 
 } satisfies ZodRawShape;
 

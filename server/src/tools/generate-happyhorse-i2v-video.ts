@@ -1,11 +1,17 @@
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
-import { HappyHorseResolutionSchema } from "@apicity/kie/zod";
+import {
+  HappyHorse11ImageToVideoRequestSchema,
+  HappyHorseDurationSchema,
+  HappyHorseResolutionSchema,
+} from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField, apicityStringNumberField } from "./schema-from-apicity.js";
+
+const SLUG = modelSlug("kie", "happyhorse-1-1/image-to-video");
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -20,9 +26,9 @@ function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
 const generateHappyhorseI2vVideoSchema = {
   project_slug: z.string().describe("Project slug"),
   first_frame_slug: z.string().describe("First frame image asset (e.g., @img-start)"),
-  prompt: z.string().optional().describe("Optional video description (max 5000 chars / 2500 Chinese chars)"),
+  prompt: apicityStringField(HappyHorse11ImageToVideoRequestSchema.shape.input.shape.prompt, "Optional video description (max 5000 chars / 2500 Chinese chars)"),
   resolution: apicityField(HappyHorseResolutionSchema, "Output resolution: 720p / 1080p (default 1080p)"),
-  duration: z.string().optional().describe("Video duration in seconds (3-15, default 5)"),
+  duration: apicityStringNumberField(HappyHorseDurationSchema, "Video duration in seconds (3-15, default 5)"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 
@@ -49,9 +55,7 @@ export function generateHappyhorseI2vVideoDef(fs: VideocityFs): ToolDef {
       const file = findImageFile(manifest.value.files);
       if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
 
-      // Naming keys off the 1.0 happyhorse/* slug ("hh"); the payload targets
-      // happyhorse-1-1. See docs/apicity-gaps.md.
-      const videoName = `${modelSlug("kie", "happyhorse/image-to-video")}-${assetId.replace(/^img-/, "")}`;
+      const videoName = `${SLUG}-${assetId.replace(/^img-/, "")}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
@@ -59,7 +63,7 @@ export function generateHappyhorseI2vVideoDef(fs: VideocityFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = [assetId];
-      const jobId = `${modelSlug("kie", "happyhorse/image-to-video")}-i2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `${SLUG}-i2v-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_happyhorse_i2v_video",

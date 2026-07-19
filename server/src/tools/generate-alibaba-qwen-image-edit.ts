@@ -1,14 +1,18 @@
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
+import {
+  AlibabaMultimodalGenerationParametersSchema,
+  AlibabaImageTextContentSchema,
+  AlibabaQwenImageEditImageSlotsSchema,
+  AlibabaQwenImageEditStableModelSchema,
+} from "@apicity/alibaba/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
-
-const QWEN_EDIT_MODELS = ["qwen-image-edit-plus", "qwen-image-edit-max", "qwen-image-edit"] as const;
-type QwenEditModel = typeof QWEN_EDIT_MODELS[number];
 
 function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
   const images = files.filter((f) => {
@@ -28,16 +32,16 @@ function slugify(text: string): string {
 }
 
 const generateAlibabaQwenImageEditSchema = {
-  prompt: z.string().describe("Edit instruction text"),
+  prompt: apicityStringField(AlibabaImageTextContentSchema.shape.text, "Edit instruction text", { required: true }),
   project_slug: z.string().describe("Project slug"),
-  image_slugs: z.array(z.string()).min(1).max(3).describe("1-3 @img-* slugs for source images (required)"),
-  model: z.enum(QWEN_EDIT_MODELS).describe("Qwen edit model"),
-  size: z.string().optional().describe("Output size. Not allowed when model is 'qwen-image-edit'"),
-  n: z.number().int().min(1).max(6).optional().describe("Number of images (1-6). 'qwen-image-edit' supports only n=1"),
-  negative_prompt: z.string().max(500).optional().describe("Negative prompt (max 500 chars)"),
-  prompt_extend: z.boolean().optional().describe("Let the model expand the prompt. Not allowed when model is 'qwen-image-edit'"),
-  watermark: z.boolean().optional().describe("Add watermark to generated image"),
-  seed: z.number().int().min(0).max(2147483647).optional().describe("Random seed for reproducibility"),
+  image_slugs: apicityStringArrayField(AlibabaQwenImageEditImageSlotsSchema, "1-3 @img-* slugs for source images (required)", { required: true }),
+  model: apicityField(AlibabaQwenImageEditStableModelSchema, "Qwen edit model", { required: true }),
+  size: apicityField(AlibabaMultimodalGenerationParametersSchema.shape.size, "Output size. Not allowed when model is 'qwen-image-edit'"),
+  n: apicityField(AlibabaMultimodalGenerationParametersSchema.shape.n, "Number of images (1-6). 'qwen-image-edit' supports only n=1"),
+  negative_prompt: apicityField(AlibabaMultimodalGenerationParametersSchema.shape.negative_prompt, "Negative prompt (max 500 chars)"),
+  prompt_extend: apicityField(AlibabaMultimodalGenerationParametersSchema.shape.prompt_extend, "Let the model expand the prompt. Not allowed when model is 'qwen-image-edit'"),
+  watermark: apicityField(AlibabaMultimodalGenerationParametersSchema.shape.watermark, "Add watermark to generated image"),
+  seed: apicityField(AlibabaMultimodalGenerationParametersSchema.shape.seed, "Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'alibaba')"),
 } satisfies ZodRawShape;
 
@@ -69,7 +73,7 @@ export function generateAlibabaQwenImageEditDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const resolvedModel: QwenEditModel = model;
+      const resolvedModel = AlibabaQwenImageEditStableModelSchema.parse(model);
 
       if (resolvedModel === "qwen-image-edit") {
         if (n !== undefined && n !== 1) {

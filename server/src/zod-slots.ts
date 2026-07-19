@@ -38,6 +38,7 @@ type ZodDef = {
   items?: unknown[];
   options?: unknown[];
   entries?: unknown;
+  values?: unknown[];
 };
 
 type ZodLike = { _def?: unknown; unwrap?: () => unknown };
@@ -76,6 +77,7 @@ function unwrapOptional(schema: unknown): { inner: unknown; optional: boolean } 
     def &&
     (isType(cur, "ZodOptional", "optional") ||
       isType(cur, "ZodNullable", "nullable") ||
+      isType(cur, "ZodDefault", "default") ||
       isType(cur, "ZodEffects", "effects") ||
       isType(cur, "ZodPipe", "pipe"))
   ) {
@@ -89,7 +91,10 @@ function unwrapOptional(schema: unknown): { inner: unknown; optional: boolean } 
   return { inner: cur, optional };
 }
 
-export function readSlotConstraints(schema: ZodLike | null | undefined): SlotConstraints | null {
+export function readSlotConstraints(
+  schema: ZodLike | null | undefined,
+  options?: { whenPresent?: boolean },
+): SlotConstraints | null {
   if (!schema) return null;
   const { inner, optional } = unwrapOptional(schema);
   const def = defOf(inner);
@@ -97,16 +102,16 @@ export function readSlotConstraints(schema: ZodLike | null | undefined): SlotCon
 
   if (isType(inner, "ZodTuple", "tuple")) {
     const len = def.items?.length ?? 0;
-    return { min: len, max: len };
+    return { min: optional && !options?.whenPresent ? 0 : len, max: len };
   }
 
   if (isType(inner, "ZodArray", "array")) {
     const { min, max } = readArrayBounds(def);
-    return { min: optional ? 0 : min, max };
+    return { min: optional && !options?.whenPresent ? 0 : min, max };
   }
 
   if (isType(inner, "ZodString", "string")) {
-    return { min: optional ? 0 : 1, max: 1 };
+    return { min: optional && !options?.whenPresent ? 0 : 1, max: 1 };
   }
 
   return null;
@@ -264,6 +269,40 @@ export function zodNumberRange(schema: ZodLike | null | undefined): NumberRange 
   if (!isType(inner, "ZodNumber", "number")) return null;
   const def = defOf(inner);
   return def ? readNumberChecks(def) : null;
+}
+
+export function zodFiniteNumberOptions(schema: ZodLike | null | undefined): number[] | null {
+  if (!schema) return null;
+  const inner = unwrapToCore(schema);
+  const def = defOf(inner);
+  if (!def) return null;
+
+  const branches = isType(inner, "ZodUnion", "union")
+    ? (def.options ?? [])
+    : [inner];
+  const values: number[] = [];
+
+  for (const branch of branches) {
+    const core = unwrapToCore(branch);
+    const branchDef = defOf(core);
+    if (!branchDef) return null;
+
+    if (isType(core, "ZodLiteral", "literal")) {
+      const literals = (branchDef.values ?? []).filter((value): value is number => typeof value === "number");
+      if (literals.length !== (branchDef.values ?? []).length) return null;
+      values.push(...literals);
+      continue;
+    }
+
+    if (!isType(core, "ZodNumber", "number")) return null;
+    const range = readNumberChecks(branchDef);
+    if (!range.int || range.min === undefined || range.max === undefined || range.max - range.min > 1_000) {
+      return null;
+    }
+    for (let value = range.min; value <= range.max; value++) values.push(value);
+  }
+
+  return values.length > 0 ? [...new Set(values)] : null;
 }
 
 function readStringLength(def: ZodDef, which: "min" | "max"): number | undefined {

@@ -5,6 +5,7 @@ import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildSeedreamImageEditPayload } from "../payload-builders.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
+import type { SeedreamImageToImageRequest } from "@apicity/kie";
 
 type GenerateSeedreamImagePayload = {
   type: "generate_seedream_image";
@@ -14,8 +15,8 @@ type GenerateSeedreamImagePayload = {
   imgAssetDir: string;
   sourceImageIds: string[];
   projectSlug: string;
-  aspectRatio?: "1:1" | "4:3" | "3:4" | "16:9" | "9:16" | "2:3" | "3:2" | "21:9";
-  quality?: "basic" | "high";
+  aspectRatio?: SeedreamImageToImageRequest["input"]["aspect_ratio"];
+  quality?: SeedreamImageToImageRequest["input"]["quality"];
   nsfwChecker?: boolean;
 };
 

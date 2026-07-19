@@ -7,22 +7,22 @@ import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
 import type { ImageInput } from "./_image-inputs.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
 const editBase = FalWanV2p7EditVideoRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Edit instruction"),
-  video_slug: z.string().describe("Source video asset to edit (e.g., @vid-scene)"),
-  image_slug: z.string().optional().describe("Optional reference image for character/style guidance"),
+  prompt: apicityStringField(editBase.prompt, "Edit instruction", { required: true }),
+  video_slug: apicityStringField(editBase.video_url, "Source video asset to edit (e.g., @vid-scene)", { required: true }),
+  image_slug: apicityStringField(editBase.reference_image_url, "Optional reference image for character/style guidance"),
   aspect_ratio: apicityField(editBase.aspect_ratio, "Output aspect ratio"),
   resolution: apicityField(editBase.resolution, "Output resolution"),
-  duration: z.number().int().min(2).max(15).optional().describe("Video duration in seconds"),
+  duration: apicityField(editBase.duration, "Video duration in seconds (0=full source, or 2-10)"),
   audio_setting: apicityField(editBase.audio_setting, "Audio: auto or origin"),
-  negative_prompt: z.string().optional().describe("Things to avoid"),
-  enable_safety_checker: z.boolean().optional().describe("Enable safety checker"),
-  seed: z.number().int().optional().describe("Seed for deterministic output"),
+  negative_prompt: apicityStringField(editBase.negative_prompt, "Things to avoid"),
+  enable_safety_checker: apicityField(editBase.enable_safety_checker, "Enable safety checker"),
+  seed: apicityField(editBase.seed, "Seed for deterministic output"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;

@@ -1,12 +1,12 @@
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
-import { KlingAspectRatioSchema, KlingDurationSchema, KlingModeSchema } from "@apicity/kie/zod";
+import { KlingVideoRequestSchema, MultiShotPromptSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -39,19 +39,21 @@ type ElementInput = {
   desc: string;
   hasVideo: boolean;
 };
+const klingVideo = KlingVideoRequestSchema.shape.input.shape;
+const multiShotPrompt = MultiShotPromptSchema.shape;
 
 const generateKling30VideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().optional().describe("Video description"),
-  image_slugs: z.array(z.string()).optional().describe("0-2 reference image @slugs (e.g., @img-sunset)"),
-  mode: apicityField(KlingModeSchema, "Resolution mode: std (standard) / pro (professional) / 4K", { required: true }),
-  duration: apicityField(KlingDurationSchema, "Video duration: 3s-15s", { required: true }),
-  sound: z.boolean().describe("Generate audio for the video"),
-  aspect_ratio: apicityField(KlingAspectRatioSchema, "Video aspect ratio"),
-  multi_shots: z.boolean().describe("Enable multi-shot mode"),
+  prompt: apicityStringField(klingVideo.prompt, "Video description"),
+  image_slugs: apicityStringArrayField(klingVideo.image_urls, "0-2 reference image @slugs (e.g., @img-sunset)"),
+  mode: apicityField(klingVideo.mode, "Resolution mode: std (standard) / pro (professional) / 4K", { required: true }),
+  duration: apicityField(klingVideo.duration, "Video duration: 3s-15s", { required: true }),
+  sound: apicityField(klingVideo.sound, "Generate audio for the video", { required: true }),
+  aspect_ratio: apicityField(klingVideo.aspect_ratio, "Video aspect ratio"),
+  multi_shots: apicityField(klingVideo.multi_shots, "Enable multi-shot mode", { required: true }),
   multi_prompt: z.array(z.object({
-    prompt: z.string(),
-    duration: z.number(),
+    prompt: apicityStringField(multiShotPrompt.prompt, undefined, { required: true }),
+    duration: apicityField(multiShotPrompt.duration, undefined, { required: true }),
   })).optional().describe("Scene list for multi-shot mode"),
   element1_slugs: z.array(z.string()).optional().describe("1-4 image @slugs or 1 video @slug for element 1"),
   element1_name: z.string().optional().describe("Name for element 1"),
@@ -192,11 +194,11 @@ export function generateKling30VideoDef(fs: VideocityFs): ToolDef {
         vidAssetDir,
         projectSlug: project_slug,
         ...(prompt !== undefined ? { prompt } : {}),
-        ...(mode !== undefined ? { mode } : {}),
-        ...(duration !== undefined ? { duration } : {}),
-        ...(sound !== undefined ? { sound } : {}),
+        mode,
+        duration,
+        sound,
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
-        ...(multi_shots !== undefined ? { multi_shots } : {}),
+        multi_shots,
         ...(multi_prompt !== undefined && multi_prompt.length > 0 ? { multi_prompt } : {}),
       } as unknown as Record<string, unknown>);
 

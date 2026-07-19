@@ -1,5 +1,5 @@
 import type { VideocityFs } from "videocity-engine";
-import type { KlingElement, MultiShotPrompt } from "@apicity/kie";
+import type { KlingElement, KlingVideoRequest, MultiShotPrompt } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -23,11 +23,11 @@ type GenerateKling30VideoPayload = {
   vidAssetDir: string;
   projectSlug: string;
   prompt?: string;
-  mode?: "std" | "pro";
-  duration?: string;
-  sound?: boolean;
-  aspect_ratio?: string;
-  multi_shots?: boolean;
+  mode: KlingVideoRequest["input"]["mode"];
+  duration: KlingVideoRequest["input"]["duration"];
+  sound: boolean;
+  aspect_ratio?: KlingVideoRequest["input"]["aspect_ratio"];
+  multi_shots: boolean;
   multi_prompt?: MultiShotPrompt[];
 };
 

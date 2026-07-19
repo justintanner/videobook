@@ -1,15 +1,16 @@
 import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
-import { VolcengineVideoToVideoLipSyncModeSchema } from "@apicity/kie/zod";
+import { VolcengineVideoToVideoLipSyncRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
 // modelSlug("kie", "volcengine/video-to-video-lip-sync") would throw —
-// @apicity/cost@0.4.2 has no slug registered for the Volcengine model yet, so
-// asset/job names use this literal until the cost table catches up.
+// @apicity/cost@0.7.3 has no slug registered for the Volcengine model, so
+// asset/job names use this literal until the cost table catches up (§25).
 const SLUG = "volcengine-lipsync";
+const volcengineLipSync = VolcengineVideoToVideoLipSyncRequestSchema.shape.input.shape;
 
 type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
@@ -37,14 +38,14 @@ async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: strin
 
 const generateVolcengineLipsyncVideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  video_slug: z.string().describe("Source video asset to lip-sync (e.g., @vid-scene)"),
-  audio_slug: z.string().describe("Driving audio asset whose speech drives the lips (e.g., @aud-voice)"),
-  mode: apicityField(VolcengineVideoToVideoLipSyncModeSchema, "Quality mode: lite (faster) or basic", { required: true }),
-  separate_vocal: z.boolean().optional().describe("Separate vocals from background audio before sync"),
-  open_scenedet: z.boolean().optional().describe("Enable scene-cut detection"),
-  align_audio: z.boolean().optional().describe("Align audio to the video timeline"),
-  align_audio_reverse: z.boolean().optional().describe("Reverse the audio alignment direction"),
-  templ_start_seconds: z.number().min(0).optional().describe("Template start offset in seconds"),
+  video_slug: apicityStringField(volcengineLipSync.video_url, "Source video asset to lip-sync (e.g., @vid-scene)", { required: true }),
+  audio_slug: apicityStringField(volcengineLipSync.audio_url, "Driving audio asset whose speech drives the lips (e.g., @aud-voice)", { required: true }),
+  mode: apicityField(volcengineLipSync.mode, "Quality mode: lite (faster) or basic", { required: true }),
+  separate_vocal: apicityField(volcengineLipSync.separate_vocal, "Separate vocals from background audio before sync"),
+  open_scenedet: apicityField(volcengineLipSync.open_scenedet, "Enable scene-cut detection"),
+  align_audio: apicityField(volcengineLipSync.align_audio, "Align audio to the video timeline"),
+  align_audio_reverse: apicityField(volcengineLipSync.align_audio_reverse, "Reverse the audio alignment direction"),
+  templ_start_seconds: apicityField(volcengineLipSync.templ_start_seconds, "Template start offset in seconds"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 
@@ -107,7 +108,7 @@ export function generateVolcengineLipsyncVideoDef(fs: VideocityFs): ToolDef {
         audioInput,
         sourceVideoIds,
         sourceAudioIds,
-        ...(mode !== undefined ? { mode } : {}),
+        mode,
         ...(separate_vocal !== undefined ? { separate_vocal } : {}),
         ...(open_scenedet !== undefined ? { open_scenedet } : {}),
         ...(align_audio !== undefined ? { align_audio } : {}),

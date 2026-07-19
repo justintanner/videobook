@@ -13,7 +13,7 @@ import {
 } from "../google-flow-refs.js";
 
 // Allowed values are hand-typed from the useapi.net Google Flow docs — the
-// 0.7.2 @apicity/googleflow images.aspectRatio enum mixes ratio + keyword forms
+// 0.7.3 @apicity/googleflow images.aspectRatio enum mixes ratio + keyword forms
 // and images.model stays loose, so the app pins its own set (docs/apicity-gaps.md §14).
 // "auto" derives the ratio from the reference images, so it is only valid
 // when references are supplied.

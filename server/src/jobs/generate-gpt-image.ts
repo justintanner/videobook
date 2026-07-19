@@ -5,6 +5,7 @@ import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildGptImagePayload } from "../payload-builders.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
+import type { GptImage2ImageToImageRequest } from "@apicity/kie";
 
 type GenerateGptImagePayload = {
   type: "generate_gpt_image";
@@ -14,8 +15,8 @@ type GenerateGptImagePayload = {
   imgAssetDir: string;
   sourceImageIds: string[];
   projectSlug: string;
-  aspectRatio?: string;
-  resolution?: string;
+  aspectRatio?: GptImage2ImageToImageRequest["input"]["aspect_ratio"];
+  resolution?: GptImage2ImageToImageRequest["input"]["resolution"];
   nsfwChecker?: boolean;
 };
 

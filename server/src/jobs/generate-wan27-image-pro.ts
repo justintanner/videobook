@@ -5,6 +5,7 @@ import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildWan27ImageProPayload } from "../payload-builders.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
+import type { Wan27ImageProRequest } from "@apicity/kie";
 
 type GenerateWan27ImageProPayload = {
   type: "generate_wan27_image_pro";
@@ -14,8 +15,8 @@ type GenerateWan27ImageProPayload = {
   imgAssetDir: string;
   sourceImageIds: string[];
   projectSlug: string;
-  aspectRatio?: string;
-  resolution?: string;
+  aspectRatio?: Wan27ImageProRequest["input"]["aspect_ratio"];
+  resolution?: Wan27ImageProRequest["input"]["resolution"];
   seed?: number;
   nsfwChecker?: boolean;
 };

@@ -1,12 +1,12 @@
 import type { VideocityFs } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
-import { FalWanV2p7EditVideoRequestSchema } from "@apicity/fal/zod";
+import { FalWanV2p7ReferenceToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
 
 type VideoInput = { assetId: string; filename: string };
@@ -31,20 +31,20 @@ async function resolveVideoSlugs(
   return { ok: true, inputs, sourceVideoIds };
 }
 
-const editBase = FalWanV2p7EditVideoRequestSchema.shape;
+const base = FalWanV2p7ReferenceToVideoRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description"),
-  image_slugs: z.array(z.string()).optional().describe("Reference image @slugs (optional)"),
-  video_slugs: z.array(z.string()).optional().describe("Reference video @slugs (optional)"),
-  aspect_ratio: apicityField(editBase.aspect_ratio, "Output aspect ratio"),
-  resolution: apicityField(editBase.resolution, "Output resolution"),
-  duration: z.number().int().min(2).max(15).optional().describe("Video duration in seconds"),
-  multi_shots: z.boolean().optional().describe("Enable multi-shot mode"),
-  negative_prompt: z.string().optional().describe("Things to avoid"),
-  enable_safety_checker: z.boolean().optional().describe("Enable safety checker"),
-  seed: z.number().int().optional().describe("Seed for deterministic output"),
+  prompt: apicityStringField(base.prompt, "Video description", { required: true }),
+  image_slugs: apicityStringArrayField(base.reference_image_urls, "Reference image @slugs (optional)"),
+  video_slugs: apicityStringArrayField(base.reference_video_urls, "Reference video @slugs (optional)"),
+  aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
+  resolution: apicityField(base.resolution, "Output resolution"),
+  duration: apicityField(base.duration, "Video duration in seconds (2-10)"),
+  multi_shots: apicityField(base.multi_shots, "Enable multi-shot mode"),
+  negative_prompt: apicityStringField(base.negative_prompt, "Things to avoid"),
+  enable_safety_checker: apicityField(base.enable_safety_checker, "Enable safety checker"),
+  seed: apicityField(base.seed, "Seed for deterministic output"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;

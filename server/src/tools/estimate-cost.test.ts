@@ -71,6 +71,21 @@ describe("estimate_cost tool", () => {
     expect(payload.estimate.breakdown.units).toBe(5);
   });
 
+  it("uses Apicity duration defaults in Kie cost adapters", async () => {
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [
+          { tool_name: "generate_seedance2_mini_video", input: {} },
+          { tool_name: "generate_grok_imagine_video", input: {} },
+        ],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.per_call[0].estimate.breakdown.units).toBe(15);
+    expect(payload.per_call[1].estimate.breakdown.units).toBe(6);
+  });
+
   it("estimates a heuristic-token text tool (openai rewrite_prompt)", async () => {
     const result = await client.callTool({
       name: "estimate_cost",
@@ -96,9 +111,12 @@ describe("estimate_cost tool", () => {
       ["extend_wan27_video", { duration: "5" }],
       // Seedance 2 Mini (resolution-tiered per-second; priced by @apicity/cost@0.6.1)
       ["generate_seedance2_mini_video", { resolution: "720p", duration: "5" }],
+      ["generate_gemini_omni_video", { resolution: "720p", duration: "6" }],
       // Grok-imagine video (resolution-tiered)
       ["generate_grok_imagine_video", { resolution: "480p", duration: 8 }],
       ["generate_grok_imagine_t2v_video", { resolution: "480p", duration: 6 }],
+      ["extend_grok_imagine_video", { resolution: "720p", extend_times: "10" }],
+      ["upscale_grok_imagine_video", {}],
       // HappyHorse video (resolution-tiered)
       ["generate_happyhorse_t2v_video", { resolution: "1080p", duration: "5" }],
       ["generate_happyhorse_i2v_video", { resolution: "720p", duration: "5" }],
@@ -124,6 +142,67 @@ describe("estimate_cost tool", () => {
       expect(payload.estimate.source, `${tool_name} source`).toBe("per-unit-table");
       expect(payload.estimate.usd, `${tool_name} usd`).toBeGreaterThan(0);
     }
+  });
+
+  it("prices ElevenLabs text-to-speech from the Apicity character rate", async () => {
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "generate_elevenlabs_t2a",
+          input: { model_id: "eleven_multilingual_v2", text: "x".repeat(100) },
+        }],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.estimate.warnings).toEqual([]);
+    expect(payload.estimate.breakdown.unit).toBe("characters");
+    expect(payload.estimate.usd).toBeCloseTo(0.012, 6);
+  });
+
+  it("does not quote Kie rates for an xAI provider selection", async () => {
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "generate_grok_imagine_text_image",
+          input: { prompt: "a lighthouse", _provider: "xai" },
+        }],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.estimate.usd).toBe(0);
+    expect(payload.estimate.warnings.join(" ")).toContain("no cost adapter registered");
+  });
+
+  it("uses Gemini Omni's requested text-to-video duration tier", async () => {
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "generate_gemini_omni_video",
+          input: { duration: "6", resolution: "720p" },
+        }],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.estimate.warnings).toEqual([]);
+    expect(payload.estimate.usd).toBeCloseTo(0.4725, 6);
+  });
+
+  it("reports the upstream Gemini Omni video-to-video selector gap", async () => {
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "generate_gemini_omni_video",
+          input: { duration: "6", video_slug: "@vid-source" },
+        }],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.estimate.usd).toBe(0);
+    expect(payload.estimate.warnings.join(" ")).toContain("no rate for variant 'v2v|6'");
   });
 
   it("uses the motion video's actual duration for kling-3.0/motion-control", async () => {
@@ -216,6 +295,41 @@ describe("estimate_cost tool", () => {
     });
     const payload = parse(result);
     expect(payload.estimate.breakdown.units).toBe(ACTUAL_DURATION);
+  });
+
+  it("uses the source video's stored resolution for Grok extension pricing", async () => {
+    const fs = createFsForTest(tempDir);
+    const projectResult = await fs.createProject("grok-extend-estimate");
+    expect(projectResult.ok).toBe(true);
+
+    const assetResult = await fs.createAsset("vid", "grok-source", "grok-extend-estimate");
+    expect(assetResult.ok).toBe(true);
+    if (!assetResult.ok) return;
+
+    const writeMeta = await fs.writeMetadata(
+      assetResult.value.assetId,
+      "generation-payload",
+      { model: "grok-imagine/image-to-video", input: { resolution: "720p" } },
+      "grok-extend-estimate",
+    );
+    expect(writeMeta.ok).toBe(true);
+
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "extend_grok_imagine_video",
+          input: {
+            project_slug: "grok-extend-estimate",
+            video_slug: `@${assetResult.value.assetId}`,
+            extend_times: "10",
+          },
+        }],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.estimate.warnings).toEqual([]);
+    expect(payload.estimate.usd).toBeCloseTo(0.15, 6);
   });
 
   it("sums multiple calls into one summed estimate", async () => {

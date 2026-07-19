@@ -1,5 +1,5 @@
 import type { VideocityFs } from "videocity-engine";
-import type { MediaGenerationRequest } from "@apicity/kie";
+import type { KlingMotionControlRequest, MediaGenerationRequest } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -23,9 +23,9 @@ type GenerateKling30MotionControlPayload = {
   sourceImageIds: string[];
   sourceVideoIds: string[];
   prompt?: string;
-  mode?: "720p" | "1080p";
-  character_orientation?: "video" | "image";
-  background_source?: "input_video" | "input_image";
+  mode?: KlingMotionControlRequest["input"]["mode"];
+  character_orientation?: KlingMotionControlRequest["input"]["character_orientation"];
+  background_source?: KlingMotionControlRequest["input"]["background_source"];
 };
 
 async function uploadInputs(fs: VideocityFs, inputs: RefInput[], projectSlug: string): Promise<string[]> {

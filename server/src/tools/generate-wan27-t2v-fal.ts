@@ -5,20 +5,20 @@ import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 import { modelSlug } from "@apicity/cost";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
 const base = FalWanV2p7TextToVideoRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description"),
+  prompt: apicityStringField(base.prompt, "Video description", { required: true }),
   aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
   resolution: apicityField(base.resolution, "Output resolution"),
-  duration: z.number().int().min(2).max(15).optional().describe("Video duration in seconds (2-15)"),
-  negative_prompt: z.string().optional().describe("Things to avoid"),
-  enable_prompt_expansion: z.boolean().optional().describe("Enable prompt expansion"),
-  enable_safety_checker: z.boolean().optional().describe("Enable safety checker"),
-  seed: z.number().int().optional().describe("Seed for deterministic output"),
+  duration: apicityField(base.duration, "Video duration in seconds (2-15)"),
+  negative_prompt: apicityStringField(base.negative_prompt, "Things to avoid"),
+  enable_prompt_expansion: apicityField(base.enable_prompt_expansion, "Enable prompt expansion"),
+  enable_safety_checker: apicityField(base.enable_safety_checker, "Enable safety checker"),
+  seed: apicityField(base.seed, "Seed for deterministic output"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;

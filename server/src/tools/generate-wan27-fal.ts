@@ -1,19 +1,21 @@
 import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
+import { FalWanV2p7TextToImageRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 import { modelSlug } from "@apicity/cost";
+import { apicityField, apicityStringField, apicityUnionEnumField } from "./schema-from-apicity.js";
 
-const WAN27_IMAGE_SIZES = ["square_hd", "square", "portrait_4_3", "portrait_16_9", "landscape_4_3", "landscape_16_9"] as const;
+const wan = FalWanV2p7TextToImageRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Text prompt for image generation"),
-  negative_prompt: z.string().optional().describe("Negative prompt"),
-  image_size: z.enum(WAN27_IMAGE_SIZES).optional().describe("Output size preset"),
-  max_images: z.number().int().min(1).max(5).optional().describe("Max images returned (1-5)"),
-  seed: z.number().int().optional().describe("Seed for deterministic output"),
+  prompt: apicityStringField(wan.prompt, "Text prompt for image generation", { required: true }),
+  negative_prompt: apicityStringField(wan.negative_prompt, "Negative prompt"),
+  image_size: apicityUnionEnumField(wan.image_size, "Output size preset"),
+  max_images: apicityField(wan.max_images, "Max images returned (1-5)"),
+  seed: apicityField(wan.seed, "Seed for deterministic output"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;

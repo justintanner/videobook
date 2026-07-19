@@ -650,11 +650,13 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     // kling-3.0/motion-control where the billable seconds come from the input
     // motion video, not a user-typed parameter.
     const base = coerceArgsToSchema(submitValues, selectedOption.schema.properties);
-    const input: Record<string, unknown> = projectSlug
-      ? { ...base, project_slug: projectSlug }
-      : base;
+    const input: Record<string, unknown> = {
+      ...base,
+      ...(projectSlug ? { project_slug: projectSlug } : {}),
+      ...(selectedProviderKey ? { _provider: selectedProviderKey } : {}),
+    };
     return [{ toolName: submitToolName, input }];
-  }, [selectedOption, submitToolName, submitValues, projectSlug]);
+  }, [selectedOption, submitToolName, submitValues, projectSlug, selectedProviderKey]);
   const cost = useEstimateCost(callTool, { calls: estimateCalls });
   const charEntities = useGoogleFlowEntities('character', (category === 'video' || (modeVisible?.has('character_refs') ?? !!selectedOption?.schema.properties.character_refs)) ? callTool : undefined, mcpState);
   const characterRefs = useMemo(

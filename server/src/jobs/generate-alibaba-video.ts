@@ -1,5 +1,9 @@
 import type { VideocityFs } from "videocity-engine";
-import { createAlibaba, type AlibabaVideoSynthesisParameters } from "@apicity/alibaba";
+import {
+  createAlibaba,
+  type AlibabaVideoSynthesisParameters,
+  type AlibabaVideoSynthesisRequest,
+} from "@apicity/alibaba";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -14,7 +18,7 @@ type GenerateAlibabaVideoPayload = {
   projectSlug: string;
   prompt: string;
   negative_prompt?: string;
-  model?: string;
+  model: AlibabaVideoSynthesisRequest["model"];
   firstFrame?: RefInput;
   lastFrame?: RefInput;
   firstClip?: RefInput;
@@ -51,12 +55,11 @@ export function registerGenerateAlibabaVideoJob(fs: VideocityFs): void {
 
     const apiKey = requireApiKey("DASHSCOPE_API_KEY");
 
-    const uploadModel = model ?? "wan2.7-i2v";
-    const firstFrameUrl = firstFrame ? await uploadInput(fs, firstFrame, projectSlug, uploadModel) : undefined;
-    const lastFrameUrl = lastFrame ? await uploadInput(fs, lastFrame, projectSlug, uploadModel) : undefined;
-    const firstClipUrl = firstClip ? await uploadInput(fs, firstClip, projectSlug, uploadModel) : undefined;
-    const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio, projectSlug, uploadModel) : undefined;
-    const videoUrl = videoRef ? await uploadInput(fs, videoRef, projectSlug, uploadModel) : undefined;
+    const firstFrameUrl = firstFrame ? await uploadInput(fs, firstFrame, projectSlug, model) : undefined;
+    const lastFrameUrl = lastFrame ? await uploadInput(fs, lastFrame, projectSlug, model) : undefined;
+    const firstClipUrl = firstClip ? await uploadInput(fs, firstClip, projectSlug, model) : undefined;
+    const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio, projectSlug, model) : undefined;
+    const videoUrl = videoRef ? await uploadInput(fs, videoRef, projectSlug, model) : undefined;
 
     const provider = createAlibaba({ apiKey, timeout: 120_000 });
 

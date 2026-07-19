@@ -1,20 +1,27 @@
 import type { VideocityFs } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
+import { FalWanV2p7EditRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
+import {
+  apicityField,
+  apicityStringArrayField,
+  apicityStringField,
+  apicityUnionEnumField,
+} from "./schema-from-apicity.js";
 
-const WAN27_IMAGE_SIZES = ["square_hd", "square", "portrait_4_3", "portrait_16_9", "landscape_4_3", "landscape_16_9"] as const;
+const wan = FalWanV2p7EditRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Edit instruction"),
-  image_slugs: z.array(z.string()).min(1).max(4).describe("1-4 @img-* slugs for reference images"),
-  negative_prompt: z.string().optional().describe("Negative prompt"),
-  image_size: z.enum(WAN27_IMAGE_SIZES).optional().describe("Output size preset"),
-  num_images: z.number().int().min(1).max(4).optional().describe("Number of images to generate (1-4)"),
-  seed: z.number().int().optional().describe("Seed for deterministic output"),
+  prompt: apicityStringField(wan.prompt, "Edit instruction", { required: true }),
+  image_slugs: apicityStringArrayField(wan.image_urls, "1-4 @img-* slugs for reference images", { required: true }),
+  negative_prompt: apicityStringField(wan.negative_prompt, "Negative prompt"),
+  image_size: apicityUnionEnumField(wan.image_size, "Output size preset"),
+  num_images: apicityField(wan.num_images, "Number of images to generate (1-4)"),
+  seed: apicityField(wan.seed, "Seed for deterministic output"),
 
 } satisfies ZodRawShape;
 

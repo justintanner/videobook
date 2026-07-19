@@ -1,16 +1,17 @@
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { extname } from "node:path";
-import { Omnihuman15OutputResolutionSchema } from "@apicity/kie/zod";
+import { Omnihuman15RequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import { findAudioFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
 // modelSlug("kie", "omnihuman-1-5") would throw — @apicity/cost has no slug
 // registered for OmniHuman yet, so asset/job names use this literal until the
-// cost table catches up (mirrors generate-volcengine-lipsync-video.ts).
+// cost table catches up (docs/apicity-gaps.md §25).
 const SLUG = "omnihuman";
+const omnihuman = Omnihuman15RequestSchema.shape.input.shape;
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -50,12 +51,12 @@ async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: strin
 
 const generateOmnihumanVideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  image_slug: z.string().describe("Portrait image asset to animate (e.g., @img-face)"),
-  audio_slug: z.string().describe("Driving audio asset whose speech/song drives the avatar (max 60s, e.g., @aud-voice)"),
-  prompt: z.string().optional().describe("Optional motion/expression description (e.g. 'speaking naturally with gentle expressions')"),
-  output_resolution: apicityField(Omnihuman15OutputResolutionSchema, "Output resolution: 720 / 1080 (default 1080)"),
-  pe_fast_mode: z.boolean().optional().describe("Prompt-enhance fast mode — faster, lower-fidelity (default false)"),
-  seed: z.number().int().optional().describe("Random seed for reproducibility (-1 = random)"),
+  image_slug: apicityStringField(omnihuman.image_url, "Portrait image asset to animate (e.g., @img-face)", { required: true }),
+  audio_slug: apicityStringField(omnihuman.audio_url, "Driving audio asset whose speech/song drives the avatar (max 60s, e.g., @aud-voice)", { required: true }),
+  prompt: apicityStringField(omnihuman.prompt, "Optional motion/expression description (e.g. 'speaking naturally with gentle expressions')"),
+  output_resolution: apicityField(omnihuman.output_resolution, "Output resolution: 720 / 1080 (default 1080)"),
+  pe_fast_mode: apicityField(omnihuman.pe_fast_mode, "Prompt-enhance fast mode — faster, lower-fidelity (default false)"),
+  seed: apicityField(omnihuman.seed, "Random seed for reproducibility (-1 = random)"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 

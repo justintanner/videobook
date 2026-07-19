@@ -1,5 +1,5 @@
 import type { VideocityFs } from "videocity-engine";
-import type { VeoModel } from "@apicity/kie";
+import type { VeoGenerateRequest, VeoModel } from "@apicity/kie";
 import { submitVeoTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -17,7 +17,7 @@ type GenerateVeo3VideoPayload = {
   imageInputs: RefInput[];
   sourceImageIds: string[];
   prompt: string;
-  aspect_ratio?: "16:9" | "9:16" | "Auto";
+  aspect_ratio?: VeoGenerateRequest["aspectRatio"];
   seed?: number;
 };
 

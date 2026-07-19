@@ -1,19 +1,23 @@
 import type { VideocityFs } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
+import { FalKlingVideoV3ProImageToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
+
+const kling = FalKlingVideoV3ProImageToVideoRequestSchema.shape;
 
 const generateKlingV3ProI2vFalSchema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().optional().describe("Video description (max 2500 chars)"),
-  first_frame_slug: z.string().describe("First frame image asset (e.g., @img-start)"),
-  end_frame_slug: z.string().optional().describe("Optional end frame image asset"),
-  duration: z.string().optional().describe("Video duration in seconds"),
-  generate_audio: z.boolean().optional().describe("Generate accompanying audio"),
-  negative_prompt: z.string().optional().describe("Things to avoid (max 2500 chars)"),
-  cfg_scale: z.number().min(0).max(1).optional().describe("Classifier-free guidance scale (0-1)"),
+  prompt: apicityStringField(kling.prompt, "Video description (max 2500 chars)"),
+  first_frame_slug: apicityStringField(kling.start_image_url, "First frame image asset (e.g., @img-start)", { required: true }),
+  end_frame_slug: apicityStringField(kling.end_image_url, "Optional end frame image asset"),
+  duration: apicityStringField(kling.duration, "Video duration in seconds"),
+  generate_audio: apicityField(kling.generate_audio, "Generate accompanying audio"),
+  negative_prompt: apicityStringField(kling.negative_prompt, "Things to avoid (max 2500 chars)"),
+  cfg_scale: apicityField(kling.cfg_scale, "Classifier-free guidance scale (0-1)"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof generateKlingV3ProI2vFalSchema>;

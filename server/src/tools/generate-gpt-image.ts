@@ -2,10 +2,10 @@ import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { GptImage2ImageToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { enumOptions } from "../zod-slots.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 import { resolveImageSlugs } from "./_image-inputs.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 function slugify(text: string): string {
   return text
@@ -19,12 +19,12 @@ function slugify(text: string): string {
 const gptImageToImageInputSchema = GptImage2ImageToImageRequestSchema.shape.input.shape;
 
 const generateGptImageSchema = {
-  prompt: z.string().describe("Text prompt for image editing"),
+  prompt: apicityStringField(gptImageToImageInputSchema.prompt, "Text prompt for image editing", { required: true }),
   project_slug: z.string().describe("Project slug"),
-  image_slugs: z.array(z.string()).describe("1-16 @img-* slugs for reference images"),
-  aspect_ratio: z.enum(enumOptions(gptImageToImageInputSchema.aspect_ratio)).optional().describe("Aspect ratio"),
-  resolution: z.enum(enumOptions(gptImageToImageInputSchema.resolution)).optional().describe("Output resolution. 1:1 cannot upscale to 4K; auto/unset aspect_ratio is 1K only."),
-  nsfw_checker: z.boolean().optional().describe("Enable NSFW content filter"),
+  image_slugs: apicityStringArrayField(gptImageToImageInputSchema.input_urls, "1-16 @img-* slugs for reference images", { required: true }),
+  aspect_ratio: apicityField(gptImageToImageInputSchema.aspect_ratio, "Aspect ratio"),
+  resolution: apicityField(gptImageToImageInputSchema.resolution, "Output resolution. 1:1 cannot upscale to 4K; auto/unset aspect_ratio is 1K only."),
+  nsfw_checker: apicityField(gptImageToImageInputSchema.nsfw_checker, "Enable NSFW content filter"),
 
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
@@ -107,4 +107,3 @@ export function generateGptImageDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

@@ -1,20 +1,22 @@
 import { modelSlug } from "@apicity/cost";
 import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
-import { GrokImagineDurationSchema } from "@apicity/kie/zod";
+import { GrokVideoExtendRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
+
+const grokExtend = GrokVideoExtendRequestSchema.shape.input.shape;
 
 const extendGrokImagineVideoSchema = {
   asset_id: z.string().optional().describe("Video asset ID (must be vid-*)"),
   video_slug: z.string().optional().describe("Video slug (e.g., '@vid-sunset'). Used as fallback when asset_id is not provided."),
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().min(1).max(5000).describe("Describe how to extend the video"),
+  prompt: apicityStringField(grokExtend.prompt, "Describe how to extend the video", { required: true }),
   extend_at: z.number().describe("Seconds into the source video to start extending from"),
-  extend_times: apicityField(GrokImagineDurationSchema, "Extension duration in seconds: 6 or 10", { required: true }),
+  extend_times: apicityField(grokExtend.extend_times, "Extension duration in seconds: 6 or 10", { required: true }),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof extendGrokImagineVideoSchema>;

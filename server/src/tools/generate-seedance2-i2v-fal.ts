@@ -5,21 +5,21 @@ import { FalSeedance2p0ImageToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
 const base = FalSeedance2p0ImageToVideoRequestSchema.shape;
 
 const generateSeedance2I2vFalSchema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description"),
+  prompt: apicityStringField(base.prompt, "Video description", { required: true }),
   first_frame_slug: z.string().describe("First frame image asset (e.g., @img-start)"),
   end_frame_slug: z.string().optional().describe("Optional end frame image asset (fal-native name)"),
   last_frame_slug: z.string().optional().describe("Optional last frame image asset (alias for end_frame_slug used by the dual-provider UI)"),
   resolution: apicityField(base.resolution, "Output resolution"),
   duration: apicityField(base.duration, "Video duration in seconds"),
   aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
-  generate_audio: z.boolean().optional().describe("Generate accompanying audio"),
-  seed: z.number().optional().describe("Seed for deterministic output"),
+  generate_audio: apicityField(base.generate_audio, "Generate accompanying audio"),
+  seed: apicityField(base.seed, "Seed for deterministic output"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof generateSeedance2I2vFalSchema>;

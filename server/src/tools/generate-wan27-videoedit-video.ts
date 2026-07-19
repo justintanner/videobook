@@ -1,14 +1,21 @@
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
-import { Wan27AspectRatioSchema, Wan27AudioSettingSchema, Wan27ResolutionSchema } from "@apicity/kie/zod";
+import {
+  Wan27AspectRatioSchema,
+  Wan27AudioSettingSchema,
+  Wan27ResolutionSchema,
+  Wan27VideoEditDurationValues,
+  Wan27VideoEditRequestSchema,
+} from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+const WAN27_VIDEO_EDIT_DURATIONS = Wan27VideoEditDurationValues.map(String) as [string, ...string[]];
 
 function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
   const images = files.filter((f) => {
@@ -53,18 +60,18 @@ async function resolveImageSlug(fs: VideocityFs, raw: string, projectSlug: strin
 
 const generateWan27VideoeditVideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().optional().describe("Edit description (max 5000 chars)"),
-  negative_prompt: z.string().optional().describe("Negative prompt — things to avoid (max 500 chars)"),
+  prompt: apicityStringField(Wan27VideoEditRequestSchema.shape.input.shape.prompt, "Edit description (max 5000 chars)"),
+  negative_prompt: apicityStringField(Wan27VideoEditRequestSchema.shape.input.shape.negative_prompt, "Negative prompt — things to avoid (max 500 chars)"),
   video_slug: z.string().describe("Source video asset to edit (e.g., @vid-scene)"),
   image_slug: z.string().optional().describe("Reference image for character/style guidance (e.g., @img-outfit)"),
   resolution: apicityField(Wan27ResolutionSchema, "Video resolution (default 1080p)"),
   aspect_ratio: apicityField(Wan27AspectRatioSchema, "Video aspect ratio (omit to match source)"),
-  duration: z.string().optional().describe("Video duration in seconds (0=full source, or 2-10)"),
+  duration: z.enum(WAN27_VIDEO_EDIT_DURATIONS).optional().describe("Video duration in seconds (0=full source, or 2-10)"),
   audio_setting: apicityField(Wan27AudioSettingSchema, "Audio: auto (model decides) or origin (keep original)"),
-  prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
-  watermark: z.boolean().optional().describe("Add 'AI generated' watermark (default false)"),
-  nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
-  seed: z.number().int().optional().describe("Random seed for reproducibility"),
+  prompt_extend: apicityField(Wan27VideoEditRequestSchema.shape.input.shape.prompt_extend, "Intelligent prompt rewriting (default true)"),
+  watermark: apicityField(Wan27VideoEditRequestSchema.shape.input.shape.watermark, "Add 'AI generated' watermark (default false)"),
+  nsfw_checker: apicityField(Wan27VideoEditRequestSchema.shape.input.shape.nsfw_checker, "Content safety filter (default false)"),
+  seed: apicityField(Wan27VideoEditRequestSchema.shape.input.shape.seed, "Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 

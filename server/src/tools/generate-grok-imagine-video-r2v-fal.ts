@@ -5,15 +5,15 @@ import { FalXaiGrokImagineVideoReferenceToVideoRequestSchema } from "@apicity/fa
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 const base = FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description"),
-  image_slugs: z.array(z.string()).min(1).max(7).describe("1-7 reference image @slugs"),
-  duration: z.coerce.number().int().min(1).max(10).optional().describe("Video duration in seconds (1-10)"),
+  prompt: apicityStringField(base.prompt, "Video description", { required: true }),
+  image_slugs: apicityStringArrayField(base.reference_image_urls, "1-7 reference image @slugs", { required: true }).min(1),
+  duration: apicityField(base.duration, "Video duration in seconds (1-10)"),
   aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
   resolution: apicityField(base.resolution, "Output resolution (480p / 720p)"),
 } satisfies ZodRawShape;

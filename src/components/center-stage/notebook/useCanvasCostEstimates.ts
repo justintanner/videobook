@@ -55,7 +55,13 @@ export function deriveStepEstimateCall(
       : inferModeKey(option.modes, merged))
     : null
   const toolName = effectiveToolName(option, modeKey)
-  const input = { ...merged, project_slug: projectSlug }
+  const storedProvider = typeof step.properties.provider === 'string' ? step.properties.provider : ''
+  const provider = storedProvider || option.selected_provider || preview.selected_provider || ''
+  const input = {
+    ...merged,
+    project_slug: projectSlug,
+    ...(provider ? { _provider: provider } : {}),
+  }
   return { stepId: step.id, key: `${toolName} ${JSON.stringify(input)}`, toolName, input }
 }
 

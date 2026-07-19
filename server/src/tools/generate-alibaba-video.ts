@@ -1,11 +1,15 @@
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
-import { AlibabaVideoSynthesisModelSchema, AlibabaVideoSynthesisParametersSchema } from "@apicity/alibaba/zod";
+import {
+  AlibabaVideoSynthesisInputSchema,
+  AlibabaVideoSynthesisModelSchema,
+  AlibabaVideoSynthesisParametersSchema,
+} from "@apicity/alibaba/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -87,20 +91,20 @@ async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: strin
 
 const generateAlibabaVideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description"),
-  negative_prompt: z.string().optional().describe("Negative prompt — things to avoid"),
-  model: z.enum(AlibabaVideoSynthesisModelSchema.options).describe("DashScope video model name ('wan2.7-i2v' or 'wan2.7-videoedit')"),
+  prompt: apicityStringField(AlibabaVideoSynthesisInputSchema.shape.prompt, "Video description", { required: true }),
+  negative_prompt: apicityStringField(AlibabaVideoSynthesisInputSchema.shape.negative_prompt, "Negative prompt — things to avoid"),
+  model: apicityField(AlibabaVideoSynthesisModelSchema, "DashScope video model name ('wan2.7-i2v' or 'wan2.7-videoedit')", { required: true }),
   first_frame_slug: z.string().optional().describe("First frame image asset (e.g., @img-start)"),
   last_frame_slug: z.string().optional().describe("Last frame image asset (e.g., @img-end)"),
   first_clip_slug: z.string().optional().describe("Video asset for clip continuation (e.g., @vid-scene)"),
   driving_audio_slug: z.string().optional().describe("Audio asset for audio-driven motion (e.g., @aud-music)"),
   video_slug: z.string().optional().describe("Reference video asset (e.g., @vid-ref)"),
   resolution: apicityField(AlibabaVideoSynthesisParametersSchema.shape.resolution, "Output resolution"),
-  duration: z.number().int().optional().describe("Video duration in seconds (2-15)"),
-  prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting"),
-  watermark: z.boolean().optional().describe("Add watermark to output video"),
+  duration: apicityField(AlibabaVideoSynthesisParametersSchema.shape.duration, "Video duration in seconds (0=full source, or 2-10)"),
+  prompt_extend: apicityField(AlibabaVideoSynthesisParametersSchema.shape.prompt_extend, "Intelligent prompt rewriting"),
+  watermark: apicityField(AlibabaVideoSynthesisParametersSchema.shape.watermark, "Add watermark to output video"),
   audio_setting: apicityField(AlibabaVideoSynthesisParametersSchema.shape.audio_setting, "Driving-audio behavior: auto or origin"),
-  seed: z.number().int().optional().describe("Random seed for reproducibility"),
+  seed: apicityField(AlibabaVideoSynthesisParametersSchema.shape.seed, "Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'alibaba')"),
 } satisfies ZodRawShape;
 
@@ -117,6 +121,7 @@ export function generateAlibabaVideoDef(fs: VideocityFs): ToolDef {
         first_frame_slug, last_frame_slug, first_clip_slug, driving_audio_slug, video_slug,
         resolution, duration, prompt_extend, watermark, audio_setting, seed,
       } = args as Args;
+      const resolvedModel = AlibabaVideoSynthesisModelSchema.parse(model);
 
       if (!process.env.DASHSCOPE_API_KEY) {
         return toolError("DASHSCOPE_API_KEY environment variable is not set");
@@ -186,7 +191,7 @@ export function generateAlibabaVideoDef(fs: VideocityFs): ToolDef {
         projectSlug: project_slug,
         prompt,
         ...(negative_prompt !== undefined ? { negative_prompt } : {}),
-        ...(model !== undefined ? { model } : {}),
+        model: resolvedModel,
         ...(firstFrame ? { firstFrame } : {}),
         ...(lastFrame ? { lastFrame } : {}),
         ...(firstClip ? { firstClip } : {}),

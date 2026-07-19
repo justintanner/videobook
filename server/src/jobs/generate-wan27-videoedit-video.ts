@@ -1,5 +1,5 @@
 import type { VideocityFs } from "videocity-engine";
-import type { Wan27Resolution } from "@apicity/kie";
+import type { Wan27Resolution, Wan27VideoEditRequest } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -21,9 +21,9 @@ type GenerateWan27VideoeditVideoPayload = {
   sourceVideoIds: string[];
   sourceAudioIds: string[];
   resolution?: Wan27Resolution;
-  aspect_ratio?: string;
+  aspect_ratio?: Wan27VideoEditRequest["input"]["aspect_ratio"];
   duration?: string;
-  audio_setting?: "auto" | "origin";
+  audio_setting?: Wan27VideoEditRequest["input"]["audio_setting"];
   prompt_extend?: boolean;
   watermark?: boolean;
   nsfw_checker?: boolean;

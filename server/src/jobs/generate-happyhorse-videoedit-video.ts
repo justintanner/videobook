@@ -1,5 +1,5 @@
 import type { VideocityFs } from "videocity-engine";
-import type { MediaGenerationRequest } from "@apicity/kie";
+import type { HappyHorseVideoEditRequest, MediaGenerationRequest } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -23,8 +23,8 @@ type GenerateHappyhorseVideoeditPayload = {
   imageInputs: RefInput[];
   sourceVideoIds: string[];
   sourceImageIds: string[];
-  resolution?: "720p" | "1080p";
-  audio_setting?: "auto" | "origin";
+  resolution?: HappyHorseVideoEditRequest["input"]["resolution"];
+  audio_setting?: HappyHorseVideoEditRequest["input"]["audio_setting"];
   seed?: number;
 };
 

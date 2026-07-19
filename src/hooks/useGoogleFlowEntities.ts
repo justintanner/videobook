@@ -95,7 +95,7 @@ export function normalizeGoogleFlowEntities(
   return out
 }
 
-/** Merge live system/user voice lists; fall back to the 30 hard-coded presets
+/** Merge live system/user voice lists; fall back to the Apicity preset schema
  *  when the system list is empty so the picker is never blank. */
 export function mergeVoiceLists(
   systemLive: GoogleFlowEntityOption[],
@@ -181,7 +181,7 @@ export function useGoogleFlowEntities(
       try {
         if (kind === 'voice') {
           // System + custom in parallel. System list failure still falls back
-          // to hard-coded presets so the picker is never empty.
+          // to the Apicity preset schema so the picker is never empty.
           const [systemResult, userResult] = await Promise.allSettled([
             callListTool(callTool, 'list_google_flow_voices', { source: 'system' }),
             callListTool(callTool, 'list_google_flow_voices', { source: 'user' }),

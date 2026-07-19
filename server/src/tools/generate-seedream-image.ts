@@ -6,7 +6,7 @@ import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
 import { resolveImageSlugs } from "./_image-inputs.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 function slugify(text: string): string {
   return text
@@ -20,12 +20,12 @@ function slugify(text: string): string {
 const seedreamInputSchema = SeedreamImageToImageRequestSchema.shape.input.shape;
 
 const generateSeedreamImageSchema = {
-  prompt: z.string().describe("Modification prompt (3-3000 chars)"),
+  prompt: apicityStringField(seedreamInputSchema.prompt, "Modification prompt (3-3000 chars)", { required: true }),
   project_slug: z.string().describe("Project slug"),
-  image_slugs: z.array(z.string()).describe("1-14 @img-* slugs for reference images"),
-  aspect_ratio: apicityField(seedreamInputSchema.aspect_ratio, "Output aspect ratio (default 1:1)"),
-  quality: apicityField(seedreamInputSchema.quality, "Output quality (basic=2K, high=4K). Defaults to basic."),
-  nsfw_checker: z.boolean().optional().describe("Content safety filter"),
+  image_slugs: apicityStringArrayField(seedreamInputSchema.image_urls, "1-14 @img-* slugs for reference images", { required: true }),
+  aspect_ratio: apicityField(seedreamInputSchema.aspect_ratio, "Output aspect ratio (default 16:9)"),
+  quality: apicityField(seedreamInputSchema.quality, "Output quality (basic=2K, high=4K)", { required: true }),
+  nsfw_checker: apicityField(seedreamInputSchema.nsfw_checker, "Content safety filter"),
 
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'fal')"),
 } satisfies ZodRawShape;
@@ -110,4 +110,3 @@ export function generateSeedreamImageDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

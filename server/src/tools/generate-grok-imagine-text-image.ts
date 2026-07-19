@@ -3,8 +3,8 @@ import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { GrokTextToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { enumOptions } from "../zod-slots.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
 function slugify(text: string): string {
   return text
@@ -18,11 +18,11 @@ function slugify(text: string): string {
 const grokTextToImageInputSchema = GrokTextToImageRequestSchema.shape.input.shape;
 
 const generateGrokImagineTextImageSchema = {
-  prompt: z.string().describe("Text prompt for image generation"),
+  prompt: apicityStringField(grokTextToImageInputSchema.prompt, "Text prompt for image generation", { required: true }),
   project_slug: z.string().describe("Project slug"),
-  aspect_ratio: z.enum(enumOptions(grokTextToImageInputSchema.aspect_ratio)).optional().describe("Aspect ratio"),
-  enable_pro: z.boolean().optional().describe("Quality mode when true, speed mode when false"),
-  nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default false)"),
+  aspect_ratio: apicityField(grokTextToImageInputSchema.aspect_ratio, "Aspect ratio"),
+  enable_pro: apicityField(grokTextToImageInputSchema.enable_pro, "Quality mode when true, speed mode when false"),
+  nsfw_checker: apicityField(grokTextToImageInputSchema.nsfw_checker, "Enable NSFW content safety filter (default false)"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;
 

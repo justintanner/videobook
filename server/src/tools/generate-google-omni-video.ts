@@ -22,7 +22,7 @@ const SLUG = "google-omni";
 // (Google receives every character entity twice — see google-flow-refs.ts), so
 // at most 3 characters ever fit despite the API exposing character_1..7.
 // Voices feed referenceAudio_1..5 (3 alongside a clip). Enums are hand-typed —
-// the 0.7.2 @apicity/googleflow schemas carry only loose `.or(z.string())`
+// the 0.7.3 @apicity/googleflow schemas carry only loose `.or(z.string())`
 // model/aspect enums, not the per-model restrictions (docs/apicity-gaps.md §14)
 // — and mirror the kie gemini-omni tool's values so provider switching keeps
 // params valid.

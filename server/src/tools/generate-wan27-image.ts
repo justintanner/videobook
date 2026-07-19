@@ -1,13 +1,14 @@
 import { modelSlug } from "@apicity/cost";
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
-import { Wan27ImageAspectRatioSchema, Wan27ImageResolutionSchema } from "@apicity/kie/zod";
+import { Wan27ImageInputSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+const wan27ImageInput = Wan27ImageInputSchema.shape;
 
 function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
   const images = files.filter((f) => {
@@ -27,13 +28,13 @@ function slugify(text: string): string {
 }
 
 const generateWan27ImageSchema = {
-  prompt: z.string().describe("Text prompt for image generation (max 5000 chars)"),
+  prompt: apicityStringField(wan27ImageInput.prompt, "Text prompt for image generation (max 5000 chars)", { required: true }),
   project_slug: z.string().describe("Project slug"),
-  image_slugs: z.array(z.string()).optional().describe("0-9 @img-* slugs for reference images"),
-  aspect_ratio: apicityField(Wan27ImageAspectRatioSchema, "Output aspect ratio (default 1:1)"),
-  resolution: apicityField(Wan27ImageResolutionSchema, "Output resolution (default 2K)"),
-  seed: z.number().optional().describe("Random seed (0-2147483647)"),
-  nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
+  image_slugs: apicityStringArrayField(wan27ImageInput.input_urls, "0-9 @img-* slugs for reference images"),
+  aspect_ratio: apicityField(wan27ImageInput.aspect_ratio, "Output aspect ratio (default 16:9)"),
+  resolution: apicityField(wan27ImageInput.resolution, "Output resolution (default 2K)"),
+  seed: apicityField(wan27ImageInput.seed, "Random seed (0-2147483647)"),
+  nsfw_checker: apicityField(wan27ImageInput.nsfw_checker, "Content safety filter (default false)"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 
@@ -119,7 +120,7 @@ export function generateWan27ImageDef(fs: VideocityFs): ToolDef {
         sourceImageIds,
         projectSlug: project_slug,
         ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
-        resolution: resolution ?? "2K",
+        ...(resolution !== undefined ? { resolution } : {}),
         ...(seed !== undefined ? { seed } : {}),
         ...(nsfw_checker !== undefined ? { nsfwChecker: nsfw_checker } : {}),
       } as unknown as Record<string, unknown>);
@@ -137,4 +138,3 @@ export function generateWan27ImageDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

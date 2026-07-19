@@ -112,17 +112,18 @@ async function waitForMetadata(
   throw new Error("Timed out waiting for audio-sync metadata");
 }
 
-async function waitForAssetIdle(
+async function waitForAssetReady(
   fs: VideocityFs,
-  assetDir: string,
+  assetId: string,
   timeoutMs = 120_000,
 ): Promise<void> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    if (!await fs.isLocked(assetDir)) return;
+    const result = await fs.assetWork.read(PROJECT, assetId);
+    if (result.ok && result.value?.status === "ready" && result.value.ownerId === null) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error("Timed out waiting for audio-sync asset to become idle");
+  throw new Error("Timed out waiting for audio-sync asset to become ready");
 }
 
 describe("sync_video_to_audio end to end", () => {
@@ -192,7 +193,7 @@ describe("sync_video_to_audio end to end", () => {
 
     await waitForJob(String(response.job_id), 120_000);
     const metadata = await waitForMetadata(fs, assetId);
-    await waitForAssetIdle(fs, assetDir);
+    await waitForAssetReady(fs, assetId);
     const manifest = valueOf(await fs.getManifest(assetId, PROJECT, { includeDotfiles: true }));
     const videoFile = findVideoFile(manifest.files);
     expect(videoFile).not.toBeNull();

@@ -4,6 +4,14 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildKlingV3TurboVideoPayload } from "../payload-builders.js";
+import type {
+  KlingV3TurboAspectRatio,
+  KlingV3TurboDuration,
+  KlingV3TurboImageToVideoRequest,
+  KlingV3TurboResolution,
+  KlingV3TurboTextToVideoDuration,
+  KlingV3TurboTextToVideoRequest,
+} from "@apicity/kie";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -15,10 +23,10 @@ type GenerateKling30TurboVideoPayload = {
   imageInputs: RefInput[];
   sourceImageIds: string[];
   prompt: string;
-  model: "kling/v3-turbo-image-to-video" | "kling/v3-turbo-text-to-video";
-  duration?: string;
-  resolution?: "720p" | "1080p";
-  aspect_ratio?: "16:9" | "9:16" | "1:1";
+  model: KlingV3TurboImageToVideoRequest["model"] | KlingV3TurboTextToVideoRequest["model"];
+  duration?: KlingV3TurboDuration | KlingV3TurboTextToVideoDuration;
+  resolution?: KlingV3TurboResolution;
+  aspect_ratio?: KlingV3TurboAspectRatio;
 };
 
 async function uploadAll(fs: VideocityFs, inputs: RefInput[], projectSlug: string): Promise<string[]> {

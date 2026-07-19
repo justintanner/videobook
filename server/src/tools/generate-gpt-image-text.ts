@@ -2,9 +2,9 @@ import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { GptImage2TextToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { enumOptions } from "../zod-slots.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
 function slugify(text: string): string {
   return text
@@ -18,11 +18,11 @@ function slugify(text: string): string {
 const gptImageTextInputSchema = GptImage2TextToImageRequestSchema.shape.input.shape;
 
 const generateGptImageTextSchema = {
-  prompt: z.string().describe("Text prompt for image generation (1-20000 chars)"),
+  prompt: apicityStringField(gptImageTextInputSchema.prompt, "Text prompt for image generation (1-20000 chars)", { required: true }),
   project_slug: z.string().describe("Project slug"),
-  aspect_ratio: z.enum(enumOptions(gptImageTextInputSchema.aspect_ratio)).optional().describe("Aspect ratio"),
-  resolution: z.enum(enumOptions(gptImageTextInputSchema.resolution)).optional().describe("Output resolution. 1:1 cannot upscale to 4K; auto/unset aspect_ratio is 1K only."),
-  nsfw_checker: z.boolean().optional().describe("Enable NSFW content filter"),
+  aspect_ratio: apicityField(gptImageTextInputSchema.aspect_ratio, "Aspect ratio"),
+  resolution: apicityField(gptImageTextInputSchema.resolution, "Output resolution. 1:1 cannot upscale to 4K; auto/unset aspect_ratio is 1K only."),
+  nsfw_checker: apicityField(gptImageTextInputSchema.nsfw_checker, "Enable NSFW content filter"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 
@@ -91,4 +91,3 @@ export function generateGptImageTextDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

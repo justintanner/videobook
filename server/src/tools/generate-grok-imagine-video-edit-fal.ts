@@ -6,13 +6,13 @@ import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 import { modelSlug } from "@apicity/cost";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
 const base = FalXaiGrokImagineVideoEditVideoRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Edit instruction"),
+  prompt: apicityStringField(base.prompt, "Edit instruction", { required: true }),
   video_slug: z.string().describe("Source video asset to edit (e.g., @vid-scene)"),
   resolution: apicityField(base.resolution, "Output resolution (auto / 480p / 720p)"),
 } satisfies ZodRawShape;

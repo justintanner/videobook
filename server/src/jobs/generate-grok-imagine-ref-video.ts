@@ -19,8 +19,8 @@ type GenerateGrokImagineRefVideoPayload = {
   projectSlug: string;
   refImages: RefImageInput[];
   duration?: string;
-  resolution?: string;
-  aspectRatio?: string;
+  resolution?: XaiVideoGenerateRequest["resolution"];
+  aspectRatio?: XaiVideoGenerateRequest["aspect_ratio"];
 };
 
 export function registerGenerateGrokImagineRefVideoJob(fs: VideocityFs): void {

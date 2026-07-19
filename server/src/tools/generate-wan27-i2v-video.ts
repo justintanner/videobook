@@ -1,15 +1,16 @@
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
-import { Wan27ImageToVideoRequestSchema, Wan27ResolutionSchema } from "@apicity/kie/zod";
+import { Wan27ImageToVideoRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField, apicityStringNumberField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+const wan27I2v = Wan27ImageToVideoRequestSchema.shape.input.shape;
 
 function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
   const images = files.filter((f) => {
@@ -64,18 +65,18 @@ async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: strin
 
 const generateWan27I2vVideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description (max 5000 chars)"),
-  negative_prompt: z.string().optional().describe("Negative prompt — things to avoid (max 500 chars)"),
-  first_frame_slug: z.string().optional().describe("First frame image asset (e.g., @img-start)"),
-  last_frame_slug: z.string().optional().describe("Last frame image asset (e.g., @img-end)"),
-  first_clip_slug: z.string().optional().describe("Video asset for continuation (e.g., @vid-scene)"),
-  driving_audio_slug: z.string().optional().describe("Audio asset for audio-driven motion (e.g., @aud-music)"),
-  resolution: apicityField(Wan27ResolutionSchema, "Video resolution (default 1080p)"),
-  duration: z.string().optional().describe("Video duration in seconds (2-15)"),
-  prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
-  watermark: z.boolean().optional().describe("Add provider watermark to output (default false)"),
-  nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
-  seed: z.number().int().optional().describe("Random seed for reproducibility"),
+  prompt: apicityStringField(wan27I2v.prompt, "Video description (max 5000 chars)", { required: true }),
+  negative_prompt: apicityStringField(wan27I2v.negative_prompt, "Negative prompt — things to avoid (max 500 chars)"),
+  first_frame_slug: apicityStringField(wan27I2v.first_frame_url, "First frame image asset (e.g., @img-start)"),
+  last_frame_slug: apicityStringField(wan27I2v.last_frame_url, "Last frame image asset (e.g., @img-end)"),
+  first_clip_slug: apicityStringField(wan27I2v.first_clip_url, "Video asset for continuation (e.g., @vid-scene)"),
+  driving_audio_slug: apicityStringField(wan27I2v.driving_audio_url, "Audio asset for audio-driven motion (e.g., @aud-music)"),
+  resolution: apicityField(wan27I2v.resolution, "Video resolution (default 1080p)"),
+  duration: apicityStringNumberField(wan27I2v.duration, "Video duration in seconds (2-15)"),
+  prompt_extend: apicityField(wan27I2v.prompt_extend, "Intelligent prompt rewriting (default true)"),
+  watermark: apicityField(wan27I2v.watermark, "Add provider watermark to output (default false)"),
+  nsfw_checker: apicityField(wan27I2v.nsfw_checker, "Content safety filter (default false)"),
+  seed: apicityField(wan27I2v.seed, "Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 

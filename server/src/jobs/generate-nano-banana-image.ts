@@ -5,6 +5,7 @@ import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildNanoBananaImagePayload } from "../payload-builders.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
+import type { NanoBananaProRequest } from "@apicity/kie";
 
 type GenerateNanoBananaImagePayload = {
   type: "generate_nano_banana_image";
@@ -14,9 +15,9 @@ type GenerateNanoBananaImagePayload = {
   imgAssetDir: string;
   sourceImageIds: string[];
   projectSlug: string;
-  aspectRatio?: string;
-  resolution?: string;
-  outputFormat?: string;
+  aspectRatio?: NanoBananaProRequest["input"]["aspect_ratio"];
+  resolution?: NanoBananaProRequest["input"]["resolution"];
+  outputFormat?: NanoBananaProRequest["input"]["output_format"];
 };
 
 export function registerGenerateNanoBananaImageJob(fs: VideocityFs): void {

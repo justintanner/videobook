@@ -16,7 +16,6 @@ type Payload = {
   image_size?: string;
   num_images?: number;
   max_images?: number;
-  seed?: number;
 };
 
 export function registerGenerateSeedreamV5LiteEditFalJob(fs: VideocityFs): void {
@@ -36,7 +35,6 @@ export function registerGenerateSeedreamV5LiteEditFalJob(fs: VideocityFs): void 
         ...(p.image_size !== undefined ? { image_size: p.image_size } : {}),
         ...(p.num_images !== undefined ? { num_images: p.num_images } : {}),
         ...(p.max_images !== undefined ? { max_images: p.max_images } : {}),
-        ...(p.seed !== undefined ? { seed: p.seed } : {}),
       };
   
       const taskId = await submitFalJob({
@@ -51,7 +49,6 @@ export function registerGenerateSeedreamV5LiteEditFalJob(fs: VideocityFs): void 
           prompt: p.prompt,
           sourceImageIds: p.sourceImageIds,
           ...(p.image_size !== undefined ? { imageSize: p.image_size } : {}),
-          ...(p.seed !== undefined ? { seed: p.seed } : {}),
         },
         expectedOwnerId: ownerId,
       });

@@ -5,7 +5,12 @@ import { modelSlug } from "@apicity/cost";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
-import { apicityField } from "./schema-from-apicity.js";
+import {
+  apicityField,
+  apicityStringArrayField,
+  apicityStringField,
+  apicityStringNumberField,
+} from "./schema-from-apicity.js";
 import {
   resolveAudioSlug,
   resolveImageSlug,
@@ -24,16 +29,16 @@ const miniInput = Seedance2MiniInputSchema.shape;
 // pure prompt and/or reference images, videos (≤3), and audio (≤3).
 const generateSeedance2MiniVideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().optional().describe("Video description (optional, max 20000 characters)"),
-  image_slugs: z.array(z.string()).optional().describe("Reference image @slugs (e.g., @img-style)"),
-  video_slugs: z.array(z.string()).optional().describe("Reference video @slugs (0-3, total ≤15s, e.g., @vid-motion)"),
-  audio_slugs: z.array(z.string()).optional().describe("Reference audio @slugs (0-3, total ≤15s, e.g., @aud-music)"),
+  prompt: apicityStringField(miniInput.prompt, "Video description (optional, max 20000 characters)"),
+  image_slugs: apicityStringArrayField(miniInput.reference_image_urls, "Reference image @slugs (e.g., @img-style)"),
+  video_slugs: apicityStringArrayField(miniInput.reference_video_urls, "Reference video @slugs (0-3, total ≤15s, e.g., @vid-motion)"),
+  audio_slugs: apicityStringArrayField(miniInput.reference_audio_urls, "Reference audio @slugs (0-3, total ≤15s, e.g., @aud-music)"),
   aspect_ratio: apicityField(miniInput.aspect_ratio, "Output aspect ratio (adaptive auto-fits to content, default 16:9)"),
   resolution: apicityField(miniInput.resolution, "Output resolution: 480p / 720p (default 720p)"),
-  duration: z.string().optional().describe("Video duration in seconds (4-15, default 15)"),
-  generate_audio: z.boolean().optional().describe("Generate accompanying audio (default true)"),
-  web_search: z.boolean().optional().describe("Use web search for grounding (default false)"),
-  nsfw_checker: z.boolean().optional().describe("Content safety filter (default true)"),
+  duration: apicityStringNumberField(miniInput.duration, "Video duration in seconds (4-15, default 15)"),
+  generate_audio: apicityField(miniInput.generate_audio, "Generate accompanying audio (default true)"),
+  web_search: apicityField(miniInput.web_search, "Use web search for grounding (default false)"),
+  nsfw_checker: apicityField(miniInput.nsfw_checker, "Content safety filter (default true)"),
   replace_audio_with: z.string().optional().describe("After generation, splice this audio over the seedance output (aud-* slug or `<assetId>/<filename>` form, e.g. `plan/s1.mp3`). Runs server-side as part of the generation pipeline so the asset only reaches 'ready' once the splice is in."),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
@@ -64,24 +69,6 @@ export function generateSeedance2MiniVideoDef(fs: VideocityFs): ToolDef {
       const imgs = dropBlanks(image_slugs);
       const vids = dropBlanks(video_slugs);
       const auds = dropBlanks(audio_slugs);
-
-      // Seedance 2 Mini's apicity input schema validates reference_*_urls with
-      // z.string().url(), but at this layer they are still @slugs — the job
-      // (jobs/generate-seedance2-mini-video.ts) uploads them to real URLs via
-      // uploadAssetToKie before submit. (The regular/fast Seedance schemas use
-      // plain z.string(), so they tolerate slugs.) Validate the slug arrays with
-      // a slug-friendly mirror that keeps apicity's max counts, then omit them
-      // from the apicity pre-check below. See docs/apicity-gaps.md §11.
-      const refSlugCheck = z.object({
-        reference_image_urls: z.array(z.string()).optional(),
-        reference_video_urls: z.array(z.string()).max(3).optional(),
-        reference_audio_urls: z.array(z.string()).max(3).optional(),
-      }).safeParse({
-        ...(imgs.length > 0 ? { reference_image_urls: imgs } : {}),
-        ...(vids.length > 0 ? { reference_video_urls: vids } : {}),
-        ...(auds.length > 0 ? { reference_audio_urls: auds } : {}),
-      });
-      if (!refSlugCheck.success) return zodErrorToToolResult(refSlugCheck.error);
 
       const apicityCheck = Seedance2MiniRequestSchema.safeParse({
         model: "bytedance/seedance-2-mini",

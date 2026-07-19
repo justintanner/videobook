@@ -1,14 +1,15 @@
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
-import { HappyHorseAudioSettingSchema, HappyHorseResolutionSchema } from "@apicity/kie/zod";
+import { HappyHorseVideoEditRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+const happyHorseVideoEdit = HappyHorseVideoEditRequestSchema.shape.input.shape;
 
 function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
   const images = files.filter((f) => {
@@ -31,12 +32,12 @@ type RefInput = { assetId: string; filename: string };
 
 const generateHappyhorseVideoeditVideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  video_slug: z.string().describe("Source video asset to edit (3-60s, e.g., @vid-scene)"),
-  prompt: z.string().describe("Edit instruction (max 5000 chars / 2500 Chinese chars)"),
-  image_slugs: z.array(z.string()).max(5).optional().describe("0-5 optional reference images for character/style guidance"),
-  resolution: apicityField(HappyHorseResolutionSchema, "Output resolution: 720p / 1080p (default 1080p)"),
-  audio_setting: apicityField(HappyHorseAudioSettingSchema, "Audio: auto (model decides) or origin (keep original, default auto)"),
-  seed: z.number().int().optional().describe("Random seed for reproducibility"),
+  video_slug: apicityStringField(happyHorseVideoEdit.video_url, "Source video asset to edit (3-60s, e.g., @vid-scene)", { required: true }),
+  prompt: apicityStringField(happyHorseVideoEdit.prompt, "Edit instruction (max 5000 chars / 2500 Chinese chars)", { required: true }),
+  image_slugs: apicityStringArrayField(happyHorseVideoEdit.reference_image, "0-5 optional reference images for character/style guidance"),
+  resolution: apicityField(happyHorseVideoEdit.resolution, "Output resolution: 720p / 1080p (default 1080p)"),
+  audio_setting: apicityField(happyHorseVideoEdit.audio_setting, "Audio: auto (model decides) or origin (keep original, default auto)"),
+  seed: apicityField(happyHorseVideoEdit.seed, "Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 

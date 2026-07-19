@@ -1,27 +1,21 @@
 import type { VideocityFs } from "videocity-engine";
+import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { GeminiOmniVideoRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 import { resolveImageSlug, resolveVideoSlug, slugify, type RefInput } from "./_seedance2-shared.js";
 
-// modelSlug("kie", "gemini-omni-video") throws — @apicity/cost@0.6.1 prices no
-// gemini-omni-video rate, so no slug is registered. Asset/job names use this
-// literal until the cost table catches up (see docs/apicity-gaps.md §13).
-const SLUG = "gemini-omni";
+const SLUG = modelSlug("kie", "gemini-omni-video");
 
 const omniInput = GeminiOmniVideoRequestSchema.shape.input.shape;
 
-// Gemini Omni Video: Google Gemini multimodal text/image/clip-to-video on KIE.
-// audio_ids/character_ids exist upstream but are intentionally omitted — they
-// reference IDs minted by the gemini-omni-audio/-character create endpoints,
-// which videocity does not wire (character has no apicity endpoint at all).
 const generateGeminiOmniVideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().max(20000).describe("Multimodal video generation prompt (max 20000 characters)"),
-  image_slugs: z.array(z.string()).max(7).optional().describe("Reference image @slugs (0-7, each ≤20MB, e.g., @img-style)"),
+  prompt: apicityStringField(omniInput.prompt, "Multimodal video generation prompt (max 20000 characters)", { required: true }),
+  image_slugs: apicityStringArrayField(omniInput.image_urls, "Reference image @slugs (0-7, each ≤20MB, e.g., @img-style)"),
   video_slug: z.string().optional().describe("Reference video clip @slug (one clip, e.g., @vid-motion)"),
   video_clip_start: z.number().min(0).optional().describe("Reference clip start time in seconds (requires video_slug)"),
   video_clip_ends: z.number().min(0).optional().describe("Reference clip end time in seconds; must be > start and < start+10s (requires video_slug)"),

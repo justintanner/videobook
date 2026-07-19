@@ -1,16 +1,20 @@
 import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
+import { FalXaiGrokImagineVideoExtendVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import { findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 import { modelSlug } from "@apicity/cost";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
+
+const grok = FalXaiGrokImagineVideoExtendVideoRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description"),
+  prompt: apicityStringField(grok.prompt, "Video description", { required: true }),
   video_slug: z.string().describe("Source video asset to extend (e.g., @vid-scene)"),
-  duration: z.coerce.number().int().min(2).max(10).optional().describe("Extension duration in seconds (2-10)"),
+  duration: apicityField(grok.duration, "Extension duration in seconds (2-10)"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;

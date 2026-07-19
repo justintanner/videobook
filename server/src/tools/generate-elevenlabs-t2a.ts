@@ -1,11 +1,14 @@
 import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
+import { ElevenLabsTextToSpeechRequestSchema } from "@apicity/elevenlabs/zod";
 import { queue } from "../queue.js";
 
 import type { ToolDef } from "./tool-def.js";
+import { apicityStringField } from "./schema-from-apicity.js";
 
 const DEFAULT_MODEL_ID = "eleven_multilingual_v2";
 const DEFAULT_OUTPUT_FORMAT = "mp3_44100_128";
+const elevenLabsTts = ElevenLabsTextToSpeechRequestSchema.shape;
 
 function slugify(text: string): string {
   return text
@@ -25,10 +28,10 @@ export function generateElevenlabsT2aDef(fs: VideocityFs): ToolDef {
     schema: {
       project_slug: z.string().describe("Project slug"),
       voice_id: z.string().describe("ElevenLabs voice ID"),
-      text: z.string().min(1).max(5000).describe("Text to synthesize"),
+      text: apicityStringField(elevenLabsTts.text, "Text to synthesize", { required: true }),
       asset_name: z.string().optional().describe("Optional output audio asset name"),
-      model_id: z.string().optional().describe(`ElevenLabs TTS model ID (default ${DEFAULT_MODEL_ID})`),
-      output_format: z.string().optional().describe(`ElevenLabs output format (default ${DEFAULT_OUTPUT_FORMAT})`),
+      model_id: apicityStringField(elevenLabsTts.model_id, `ElevenLabs TTS model ID (default ${DEFAULT_MODEL_ID})`),
+      output_format: apicityStringField(elevenLabsTts.output_format, `ElevenLabs output format (default ${DEFAULT_OUTPUT_FORMAT})`),
     },
     handler: async (args) => {
       const {

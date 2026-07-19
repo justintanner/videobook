@@ -3,6 +3,7 @@ import { submitKieTask } from "./kie-paygate.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildGptImageTextPayload } from "../payload-builders.js";
+import type { GptImage2TextToImageRequest } from "@apicity/kie";
 
 type GenerateGptImageTextPayload = {
   type: "generate_gpt_image_text";
@@ -10,8 +11,8 @@ type GenerateGptImageTextPayload = {
   imgAssetId: string;
   imgAssetDir: string;
   projectSlug: string;
-  aspectRatio?: string;
-  resolution?: string;
+  aspectRatio?: GptImage2TextToImageRequest["input"]["aspect_ratio"];
+  resolution?: GptImage2TextToImageRequest["input"]["resolution"];
   nsfwChecker?: boolean;
 };
 

@@ -17,9 +17,9 @@ type GenerateGrokImagineVideoPayload = {
   vidAssetDir: string;
   projectSlug: string;
   prompt?: string;
-  mode?: "fun" | "normal";
+  mode?: Exclude<NonNullable<GrokImageToVideoRequest["input"]["mode"]>, "spicy">;
   duration?: number;
-  resolution?: "480p" | "720p";
+  resolution?: GrokImageToVideoRequest["input"]["resolution"];
   aspect_ratio?: GrokImageToVideoRequest["input"]["aspect_ratio"];
   nsfw_checker?: boolean;
   replaceAudioWith?: { assetId: string; filename: string };

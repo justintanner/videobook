@@ -1,5 +1,5 @@
 import type { VideocityFs } from "videocity-engine";
-import type { GrokImagineResolution, MediaGenerationRequest } from "@apicity/kie";
+import type { GrokImagineResolution, GrokVideoExtendRequest, MediaGenerationRequest } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -12,7 +12,7 @@ type ExtendGrokImagineVideoPayload = {
   projectSlug: string;
   prompt: string;
   extend_at?: number;
-  extend_times?: "6" | "10";
+  extend_times?: GrokVideoExtendRequest["input"]["extend_times"];
 };
 
 export function registerExtendGrokImagineVideoJob(fs: VideocityFs): void {

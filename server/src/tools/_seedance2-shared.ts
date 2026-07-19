@@ -2,8 +2,10 @@ import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { findAudioFile, findVideoFile } from "videocity-engine";
 import { extname } from "node:path";
 import { modelSlug } from "@apicity/cost";
+import type { Seedance2FastRequest, Seedance2Request } from "@apicity/kie";
 import { z, type ZodRawShape } from "zod";
 import {
+  Seedance2InputSchema,
   Seedance2FastInputSchema,
   Seedance2FastRequestSchema,
   Seedance2RequestSchema,
@@ -11,10 +13,14 @@ import {
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { zodErrorToToolResult } from "./_shared.js";
-import { apicityField } from "./schema-from-apicity.js";
+import {
+  apicityField,
+  apicityStringArrayField,
+  apicityStringField,
+  apicityStringNumberField,
+} from "./schema-from-apicity.js";
 
-type Seedance2Model = "bytedance/seedance-2" | "bytedance/seedance-2-fast";
-type Resolution = "480p" | "720p" | "1080p";
+type Seedance2Model = Seedance2Request["model"] | Seedance2FastRequest["model"];
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -99,23 +105,24 @@ export async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-const seedance2InputSchema = Seedance2FastInputSchema.shape;
-
-function buildSchema(resolutions: readonly Resolution[]) {
+export function buildSeedance2Schema(apiModel: Seedance2Model) {
+  const inputSchema = apiModel === "bytedance/seedance-2"
+    ? Seedance2InputSchema.shape
+    : Seedance2FastInputSchema.shape;
   return {
     project_slug: z.string().describe("Project slug"),
-    prompt: z.string().describe("Video description (3-20000 characters)"),
-    first_frame_slug: z.string().optional().describe("First frame image asset (e.g., @img-start)"),
-    last_frame_slug: z.string().optional().describe("Last frame image asset (e.g., @img-end)"),
-    image_slugs: z.array(z.string()).optional().describe("Reference image @slugs (0-9, e.g., @img-style)"),
-    video_slugs: z.array(z.string()).optional().describe("Reference video @slugs (0-3, total ≤15s, e.g., @vid-motion)"),
-    audio_slugs: z.array(z.string()).optional().describe("Reference audio @slugs (0-3, total ≤15s, e.g., @aud-music)"),
-    aspect_ratio: apicityField(seedance2InputSchema.aspect_ratio, "Output aspect ratio"),
-    resolution: z.enum(resolutions as [Resolution, ...Resolution[]]).optional().describe("Output resolution"),
-    duration: z.string().optional().describe("Video duration in seconds (4-15)"),
-    generate_audio: z.boolean().optional().describe("Generate accompanying audio (default true)"),
-    web_search: z.boolean().optional().describe("Use web search for grounding (default false)"),
-    nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
+    prompt: apicityStringField(inputSchema.prompt, "Video description (3-20000 characters)", { required: true }),
+    first_frame_slug: apicityStringField(inputSchema.first_frame_url, "First frame image asset (e.g., @img-start)"),
+    last_frame_slug: apicityStringField(inputSchema.last_frame_url, "Last frame image asset (e.g., @img-end)"),
+    image_slugs: apicityStringArrayField(inputSchema.reference_image_urls, "Reference image @slugs (0-9, e.g., @img-style)"),
+    video_slugs: apicityStringArrayField(inputSchema.reference_video_urls, "Reference video @slugs (0-3, total ≤15s, e.g., @vid-motion)"),
+    audio_slugs: apicityStringArrayField(inputSchema.reference_audio_urls, "Reference audio @slugs (0-3, total ≤15s, e.g., @aud-music)"),
+    aspect_ratio: apicityField(inputSchema.aspect_ratio, "Output aspect ratio"),
+    resolution: apicityField(inputSchema.resolution, "Output resolution"),
+    duration: apicityStringNumberField(inputSchema.duration, "Video duration in seconds (4-15)"),
+    generate_audio: apicityField(inputSchema.generate_audio, "Generate accompanying audio (default true)"),
+    web_search: apicityField(inputSchema.web_search, "Use web search for grounding (default false)"),
+    nsfw_checker: apicityField(inputSchema.nsfw_checker, "Content safety filter (default false)"),
     replace_audio_with: z.string().optional().describe("After generation, splice this audio over the seedance output (aud-* slug or `<assetId>/<filename>` form, e.g. `plan/s1.mp3`). Runs server-side as part of the generation pipeline so the asset only reaches 'ready' once the splice is in."),
     _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
   } satisfies ZodRawShape;
@@ -125,14 +132,13 @@ type Seedance2ToolFactoryOpts = {
   toolName: string;
   description: string;
   apiModel: Seedance2Model;
-  resolutions: readonly Resolution[];
 };
 
 export function buildSeedance2ToolDef(
   fs: VideocityFs,
   opts: Seedance2ToolFactoryOpts,
 ): ToolDef {
-  const schema = buildSchema(opts.resolutions);
+  const schema = buildSeedance2Schema(opts.apiModel);
   type Args = SchemaArgs<typeof schema>;
 
   return {
@@ -156,13 +162,6 @@ export function buildSeedance2ToolDef(
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
-        };
-      }
-
-      if (resolution !== undefined && !opts.resolutions.includes(resolution as Resolution)) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: `resolution '${resolution}' not supported by ${opts.apiModel} (allowed: ${opts.resolutions.join(", ")})` }],
         };
       }
 

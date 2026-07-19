@@ -1,19 +1,22 @@
 import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
-import { KlingV3TurboResolutionSchema, KlingV3TurboAspectRatioSchema } from "@apicity/kie/zod";
+import { KlingV3TurboImageToVideoRequestSchema, KlingV3TurboTextToVideoRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 import { resolveImageSlug, slugify, type RefInput } from "./_seedance2-shared.js";
 import { modelSlug } from "@apicity/cost";
 
+const klingTurboI2v = KlingV3TurboImageToVideoRequestSchema.shape.input.shape;
+const klingTurboT2v = KlingV3TurboTextToVideoRequestSchema.shape.input.shape;
+
 const generateKling30TurboVideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description"),
-  image_slugs: z.array(z.string()).optional().describe("0-1 reference image @slugs (optional)"),
-  duration: z.string().optional().describe("Video duration: 3s-15s (default '5')"),
-  resolution: apicityField(KlingV3TurboResolutionSchema, "Video resolution: 720p / 1080p"),
-  aspect_ratio: apicityField(KlingV3TurboAspectRatioSchema, "Video aspect ratio (only for text-to-video)"),
+  prompt: apicityStringField(klingTurboT2v.prompt, "Video description", { required: true }),
+  image_slugs: apicityStringArrayField(klingTurboI2v.image_urls, "0-1 reference image @slugs (optional)"),
+  duration: apicityField(klingTurboT2v.duration, "Video duration: 3s-15s (default '5')"),
+  resolution: apicityField(klingTurboT2v.resolution, "Video resolution: 720p / 1080p"),
+  aspect_ratio: apicityField(klingTurboT2v.aspect_ratio, "Video aspect ratio (only for text-to-video)"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof generateKling30TurboVideoSchema>;

@@ -1,515 +1,381 @@
-# @apicity bugs, gaps & quirks that videocity works around
+# @apicity bugs, gaps, and quirks that Videocity works around
 
-This catalogs every place the videocity server compensates for a **bug, gap, or
-packaging quirk** in the `@apicity/*` provider packages. It exists so the work
-can be fixed upstream in apicity; the videocity-side workarounds are left **in
-place and unchanged** until then.
+This document tracks provider-package behavior that Videocity cannot consume
+directly. It was re-audited against the installed `@apicity/*@0.7.3` packages on
+2026-07-20. Where Apicity exposes a correct schema or registry entry, Videocity
+derives the corresponding enum, range, default, string length, slot count, model
+slug, or price instead of re-declaring it.
 
-It is the companion to the "apicity = single source of truth" refactor: where
-apicity exposes a *correct* schema, videocity now derives enums / ranges /
-defaults from it instead of re-typing them (see `server/src/zod-slots.ts`,
-`server/src/video-models.ts`). The items below are the cases where apicity is
-**not** usable as-is.
+Legend: **bug** = the published contract is wrong or internally inconsistent;
+**gap** = the published contract omits required information; **quirk** = correct
+provider behavior that cannot be represented directly in Videocity's field-level
+UI schema.
 
-Legend: **bug** = schema/type is wrong or self-inconsistent · **gap** =
-something that should be exported isn't · **quirk** = packaging/versioning.
+## 1. (quirk) ~~Mixed Zod major versions~~ — RESOLVED in 0.6.1
 
----
+All installed provider packages use Zod 4. Videocity's readers in
+`server/src/zod-slots.ts` therefore inspect only the Zod 4 layout.
 
-## 1. (quirk) ~~Mixed Zod major versions across the workspace~~ — RESOLVED in 0.6.1
+## 2. (quirk) Grok image-to-video `spicy` mode is conditional — RESOLVED UPSTREAM
 
-**Resolved by `@apicity/* 0.6.1`:** every provider now depends on `zod ^4.4.3`,
-so the workspace is unified on **Zod 4** end to end (the app's own zod is 4.3.6;
-both are Zod 4 with identical `_def.type` / `_def.checks[]._zod.def` /
-`_def.entries` internals). There is no longer any Zod-3 runtime anywhere.
+`@apicity/kie@0.7.3` now constrains the image-to-video prompt to 4096 characters,
+removes `auto` from its aspect ratios, bounds duration to integer seconds from 6
+through 30, and rejects `spicy` when external `image_urls` are supplied. `spicy`
+remains valid for the separate `task_id` reuse path.
 
-The dual-version readers in `server/src/zod-slots.ts` were collapsed to
-**Zod-4-only** (the Zod-3 `_def.typeName` / flat `_def.checks[].kind` /
-`_def.minLength.value` / `.options` paths were removed), and the duplicated
-union-introspection in `server/src/tools/generate-qwen-image-edit-fal.ts` was
-replaced with the shared `zodUnionEnumOptions` helper.
+Videocity's `generate_grok_imagine_video` tool only exposes the external-image
+path, while its generated form schema is field-level and cannot express that
+cross-field condition. It therefore derives the provider's base mode enum and
+filters out `spicy`; the payload builder also normalizes stale saved `spicy`
+values to `normal`.
 
-Historical note — under 0.6.0, `@apicity/kie` ran Zod 4 while
-`@apicity/alibaba`/`xai`/`fal` ran nested Zod 3 (3.25.76) despite Zod-4-shaped
-`.d.ts`; reading constraints required handling both layouts.
+## 3. (gap) Fal model parameter aliases still use output types — OPEN in 0.7.3
 
----
+Kie, Alibaba, xAI, and the other request-oriented packages now export request
+aliases as `z.input<typeof Schema>`, matching `*RequestInput` aliases, and
+separate parsed output aliases. Videocity removed the broad assembled-object
+assertions that had compensated for output-typed defaults in
+`server/src/payload-builders.ts`. Narrow casts remain only at app boundaries
+where Videocity intentionally accepts a different local wire shape and converts
+it to a provider enum or number.
 
-## 2. (bug) grok image-to-video `mode` enum includes `"spicy"`; `aspect_ratio` includes `"auto"`
+`@apicity/fal` is the exception. Its model aliases remain declarations such as
+`FalNanoBanana2TextToImageParams = z.infer<typeof
+FalNanoBanana2TextToImageRequestSchema>`, so fields with defaults are required in
+the alias even though callers may omit them. The generic Fal queue submission
+also types `input` as `Record<string, unknown>` rather than associating an
+endpoint ID with its request schema.
 
-`GrokImageToVideoRequestSchema.shape.input.shape.mode` is the full
-`["fun","normal","spicy"]` enum, but the Kie grok **image-to-video** endpoint
-rejects `"spicy"` (only **text**-to-video accepts it). The `aspect_ratio` enum
-similarly includes `"auto"`, which the i2v endpoint does not honor.
+**Workaround:** Videocity derives every Fal-facing tool constraint from the live
+request schemas, then assembles the background queue payload as a generic record.
 
-**Workaround:**
-- `server/src/video-models.ts` — `GROK_IMAGE_TO_VIDEO_MODES = GROK_IMAGINE_MODES.filter(m => m !== "spicy")`, and `generate_grok_imagine_video.mode` is listed in `APICITY_DERIVE_SKIP` so it is **not** auto-derived from the apicity enum.
-- `applyVideoToolConstraints()` maps `mode === "spicy" → "normal"` and `aspect_ratio === "auto" → "16:9"` at submit time.
-- `server/src/payload-builders.ts` (~`buildGrokImagineVideoPayload`) maps `spicy → normal`.
+**Ask Apicity:** export `z.input` and `z.output` aliases for every Fal model
+schema, and expose an endpoint-to-input type map for queue submission.
 
-**Ask apicity:** split the grok mode enum into i2v (`fun`/`normal`) vs t2v
-(`fun`/`normal`/`spicy`) variants, and drop `"auto"` from the i2v aspect_ratio
-enum (or document that the endpoint silently remaps it).
+## 4. (gap) ~~Alibaba Qwen stable model and slot schemas~~ — RESOLVED in 0.7.3
 
----
+`@apicity/alibaba` exports:
 
-## 3. (gap) Request types are `z.infer` (output) only — no `z.input` / `*Input` exports
+- `AlibabaQwenImageGenerationImageSlotsSchema` and
+  `AlibabaQwenImageEditImageSlotsSchema`;
+- `AlibabaQwenImageGenerationStableModelSchema` and
+  `AlibabaQwenImageEditStableModelSchema`;
+- the shared multimodal parameter schemas.
 
-Every apicity request type is `z.infer<typeof Schema>` (i.e. **z.output**).
-Because fields use `.default(...)`, those fields become **required** in the
-output type, so an assembled *partial* payload (the common case — let the
-provider fill defaults) does not type-check against the request type.
+The Qwen generation/edit tools and image-model registry now derive their model
+lists, reference cardinality, parameter ranges, defaults, and string limits from
+those exports. No curated stable-model mirror remains.
 
-**Workaround:** the `as <Type>["input"]` and `as unknown as Record<string, unknown>`
-casts throughout `server/src/payload-builders.ts`, plus the `valueOrZodDefault()`
-helper that exists only to read apicity defaults the output type doesn't surface
-ergonomically. Origin documented in commit `7d5282d`: *"…making
-nsfw_checker/aspect_ratio/resolution required in the output type. Cast assembled
-inputs to the request input type (same wire bytes; the provider fills
-defaults)."*
+## 5. (gap) ~~No standalone Alibaba video model enum~~ — RESOLVED
 
-> Per the agreed scope this is **reported only** — the casts are intentionally
-> left as-is rather than re-plumbed through locally-derived `z.input<>` aliases.
+`AlibabaVideoSynthesisModelSchema` exports the exact
+`wan2.7-i2v`/`wan2.7-videoedit` domain. The tool, UI registry, job payload, and
+payload builder now use that schema/type directly.
 
-**Ask apicity:** export an input-typed alias per request, e.g.
-`export type GrokImageToVideoRequestInput = z.input<typeof GrokImageToVideoRequestSchema>`.
+## 6. (gap) ~~No exported HappyHorse duration schema~~ — RESOLVED
 
----
+`@apicity/kie` exports `HappyHorseDurationSchema` for integer durations from 3
+through 15 seconds. All three HappyHorse 1.1 generation tools and their generated
+form schemas now derive from it.
 
-## 4. (gap) ~~No exported Alibaba Qwen image slot enums~~ — RESOLVED; model-enum part PARTIAL
+## 7. (gap) ~~`@apicity/x` had no `users/me` endpoint~~ — RESOLVED in 0.7.0
 
-**Slot schemas — RESOLVED (≤0.6.2):** `@apicity/alibaba` now exports
-`AlibabaQwenImageGenerationImageSlotsSchema` (`.max(3)`) and
-`AlibabaQwenImageEditImageSlotsSchema` (`.min(1).max(3)`), matching the reference
-cardinality exactly. The local shims `AlibabaQwenImageReferenceSlotsSchema` /
-`AlibabaQwenImageEditReferenceSlotsSchema` in `server/src/image-models.ts` were
-deleted and replaced with the apicity imports.
+Videocity uses `x.get.v2.users.me()` through
+`server/src/x/authenticated-handle.ts`, retaining its local handle cache only as
+an offline fallback.
 
-**Model enums — PARTIAL:** apicity now also exports
-`AlibabaQwenImageGenerationModelSchema` / `AlibabaQwenImageEditModelSchema`
-(split generation vs edit — good), but they **still intermix dated snapshot ids**
-(`qwen-image-2.0-pro-2026-03-03`, `qwen-image-edit-plus-2025-12-15`, …) with the
-stable ids. videocity keeps the curated stable-only `QWEN_GENERATION_MODEL_VALUES`
-/ `QWEN_EDIT_MODEL_VALUES` in `server/src/image-models.ts` as a **deliberate
-divergence** (we expose stable ids only to MCP clients).
+## 8. (quirk) Deliberate Videocity restrictions that differ from a base schema
 
-**Ask apicity:** offer stable-only variants of the Qwen image model enums (or a
-flag to exclude dated snapshots), so the curated lists can be derived too.
-
----
-
-## 5. (gap) ~~No standalone Alibaba video-model enum~~ — RESOLVED (≤0.6.2)
-
-**Resolved:** `@apicity/alibaba` now exports `AlibabaVideoSynthesisModelSchema`
-(`z.enum(["wan2.7-i2v", "wan2.7-videoedit"])`). The hardcoded `ALIBABA_VIDEO_MODELS`
-in `server/src/video-models.ts` and `server/src/tools/generate-alibaba-video.ts`
-were replaced with `enumOptions(AlibabaVideoSynthesisModelSchema)` /
-`z.enum(AlibabaVideoSynthesisModelSchema.options)` respectively.
-
----
-
-## 6. (gap) No exported HappyHorse duration schema
-
-HappyHorse request schemas type `duration` as a bare `z.number().int().min(3).max(15)`
-on each request (no shared, named `HappyHorseDurationSchema`). This is now
-*derivable* (videocity expands the numeric range into the `"3".."15"` string
-enum), but a named export would be cleaner and explicit.
-
-**Workaround:** previously a hardcoded `HAPPYHORSE_DURATIONS` array (now removed —
-derived from the per-request `duration` field).
-
-**Ask apicity:** export a shared `HappyHorseDurationSchema`.
-
----
-
-## 7. (gap) ~~`@apicity/x` exposes no `users/me` endpoint~~ — RESOLVED in 0.7.0
-
-**Resolved by `@apicity/x@0.7.0`:** the provider now exposes
-`x.get.v2.users.me()` (`XUsersMeMethod`), returning `{ data: { id, name, username, ... } }`.
-The watermark dialog reads the authenticated handle live via
-`server/src/x/authenticated-handle.ts` → `fetchAuthenticatedXHandle()`, with a
-read-through cache in `watermark-config.ts` (`authenticatedHandle` field) so the
-dialog still pre-fills when the API is unreachable. The local
-`~/.videocity/watermark-config.json` store remains for explicit user preferences
-(`savedHandle`, `recent`) and as the fallback cache.
-
----
-
-## 8. (bug) FE-vs-apicity value divergences surfaced during the refactor
-
-While wiring apicity as the source of truth, these hand-typed videocity values
-were found to **disagree** with the apicity schema. They are left at the
-videocity value (it may be a deliberate, provider-correct restriction) and
-flagged here for confirmation:
-
-| Where | videocity value | apicity says | Likely reason |
+| Tool/field | Videocity | Base Apicity schema | Reason |
 |---|---|---|---|
-| `generate_grok_imagine_video.prompt` max length | 4096 | 5000 | unclear — codebase uses 4096 in two places; confirm real endpoint cap |
-| `generate_wan27_videoedit_video.duration` | `"0"/2-10` string enum | `Wan27VideoEditDurationSchema` (0-10 int + refine excluding 1) | bound now exported; refine excluding 1 is not introspectable by `zodNumberRange` (opaque custom check), so derive-skip stays |
-| `generate_wan27_r2v_fal_video.duration` | int `2-10` | int `0-10` | r2v has no source clip, so `0` (full-source) is intentionally excluded |
-| `generate_grok_imagine_ref_video.duration` | `6`/`10` (kie enum) | unbounded number (xAI schema) | xAI schema is loose; real endpoint only accepts 6 or 10 |
+| `generate_grok_imagine_video.mode` | `fun`/`normal` | includes conditionally valid `spicy` | Videocity exposes only the external-image path; see §2 |
+| `generate_wan27_videoedit_video.duration` | exact string values `0,2..10` | numeric schema with an opaque refine | the exact values are derived from `Wan27VideoEditDurationValues` |
+| `generate_grok_imagine_ref_video` reference limits | max 7 images; max 10 seconds with references | general video schema allows 1..15 seconds and leaves references unbounded | xAI documents stricter reference-to-video limits; see §22 |
 
-Each is encoded in `APICITY_DERIVE_SKIP` (`server/src/video-models.ts`) with an
-inline comment. **Action:** confirm whether the videocity value or the apicity
-value is correct for each, and fix whichever is wrong.
+These are the only deliberate restrictions represented by
+`APICITY_DERIVE_SKIP` or by targeted validation against an otherwise reusable
+strict provider schema. Google Flow's broader local contract is tracked in §14.
+Fal Wan reference-to-video now derives from
+`FalWanV2p7ReferenceToVideoRequestSchema`; Wan Video Edit's value list itself
+is no longer hardcoded.
 
----
+## 9. (gap) ~~HappyHorse 1.1 slugs and pricing~~ — RESOLVED in 0.6.1
 
-### Notes for the apicity-correct changes this refactor *did* make
+`@apicity/cost` prices the three `happyhorse-1-1/*` generation endpoints.
+Videocity uses their actual model slugs and no longer admits them through a
+missing-cost paygate exception.
 
-Deriving from apicity surfaced validation the FE was silently missing. These are
-**new, apicity-backed** constraints now applied (not regressions):
+## 10. (gap) ~~Seedance 2 Mini slug and pricing~~ — RESOLVED in 0.6.1
 
-- `generate_wan27_t2v_fal_video` / `generate_wan27_i2v_fal_video`: aspect_ratio /
-  resolution / duration now carry the apicity enums (previously free-text).
-- `generate_omnihuman_video.seed` (min `-1`) and `generate_alibaba_video.seed`
-  (`0`–`2147483647`) now carry apicity's numeric bounds.
+`@apicity/cost` registers `bytedance/seedance-2-mini` and its 480p/720p
+per-second rates. Videocity uses `modelSlug`, a normal cost adapter, and bounded
+paygate pricing.
 
----
+## 11. (bug) Seedance 2 Mini reference arrays require public URLs — OPEN in 0.7.3
 
-## 9. (gap) ~~`@apicity/cost@0.6.0` has no slugs/pricing for HappyHorse 1.1~~ — RESOLVED in 0.6.1
+`Seedance2MiniInputSchema` still declares all three pre-upload reference arrays
+with `z.string().url()`:
 
-**Resolved by `@apicity/cost@0.6.1`:** it now prices the **HappyHorse 1.1**
-endpoints (`happyhorse-1-1/{text,image,reference}-to-video`) directly —
-`modelSlug` resolves and `computeEstimate` returns a bounded estimate with no
-warnings.
-
-Note the 1.1 rates **differ** from 1.0 (1.1 is `$0.165`/`$0.22` per second by
-resolution vs 1.0's `$0.155`/`$0.265`), so the prior cost-display borrow of the
-1.0 slugs **over-charged** at 1080p. Fixes applied:
-
-- **Cost display** (`server/src/cost-adapters.ts`) now keys t2v/i2v/ref off the
-  actual `happyhorse-1-1/*` slugs. `video-edit` stays on 1.0
-  (`happyhorse/video-edit` — no 1.1 video-edit endpoint exists).
-- The three `happyhorse-1-1/*` entries were removed from
-  `COST_TABLE_PENDING_MODELS` (`server/src/jobs/kie-paygate.ts`) — admitted via
-  real pricing now.
-- Generation payloads already targeted `happyhorse-1-1/*`; unchanged.
-
----
-
-## 10. (gap) ~~`@apicity/cost@0.6.0` has no slug/pricing for Seedance 2 Mini~~ — RESOLVED in 0.6.1
-
-**Resolved by `@apicity/cost@0.6.1`:** it now registers a `bytedance/seedance-2-mini`
-slug (`"sd2m"`) and per-second pricing (resolution-tiered, 480p/720p — the only
-tiers the tool exposes). Fixes applied:
-
-- **Cost display** (`server/src/cost-adapters.ts`) gained a
-  `generate_seedance2_mini_video: kieResolutionVideo("bytedance/seedance-2-mini", "720p")`
-  entry — the UI now shows a real number instead of `—`.
-- Asset/job **naming** switched from the literal `"seedance2mini"` to
-  `modelSlug("kie", "bytedance/seedance-2-mini")` (`server/src/tools/generate-seedance2-mini-video.ts`),
-  matching the sibling fast/regular tools.
-- The `bytedance/seedance-2-mini` entry was removed from
-  `COST_TABLE_PENDING_MODELS` (`server/src/jobs/kie-paygate.ts`).
-- Still reuses the shared `seedance2_video` TaskType + `completeSeedance2Video`
-  handler; the exact model rides in `meta.apiModel`.
-
----
-
-## 11. (bug) Seedance 2 Mini reference arrays enforce `.url()`; regular/fast use plain `z.string()` — FIXED upstream in 0.6.1
-
-**Fixed by `@apicity/kie@0.6.1`:** `Seedance2MiniInputSchema`'s `reference_*_urls`
-are now plain `z.array(z.string())` (no `.url()`), matching the regular/fast
-schemas. The slug-friendly `refSlugCheck` workaround below is therefore
-**redundant** — it still passes harmlessly and is left in place for now; a
-follow-up can drop it and validate the slug arrays directly against
-`Seedance2MiniRequestSchema`. (The new `generate_gemini_omni_video` tool relies
-on this same loosening: its `image_urls` / `video_list[].url` are plain
-`z.string()`, so it validates `@slug`s against the full request schema with no
-mirror — see §13.)
-
-Original report (0.6.0):
-
-`Seedance2MiniInputSchema` validates all three reference arrays with
-`z.array(z.string().url())`:
-
-```js
-reference_image_urls: z.array(z.string().url()).default([]),
-reference_video_urls: z.array(z.string().url()).max(3).default([]),
-reference_audio_urls: z.array(z.string().url()).max(3).default([]),
+```ts
+reference_image_urls: z.array(z.string().url()).default([])
+reference_video_urls: z.array(z.string().url()).max(3).default([])
+reference_audio_urls: z.array(z.string().url()).max(3).default([])
 ```
 
-But the sibling `Seedance2InputSchema` (regular) and `Seedance2FastInputSchema`
-use plain `z.array(z.string())` for the same fields. videocity tools validate
-the *request shape* against these schemas **before** resolving references — at
-which point reference fields hold `@slug` / `@plan/<file>` addresses, not URLs
-(the job uploads them to real Kie URLs via `uploadAssetToKie` just before
-submit). The lax regular/fast schemas tolerate slugs; the Mini schema's `.url()`
-rejects every slug with `Invalid URL`, so `generate_seedance2_mini_video`
-returned an error for every call carrying references — surfacing as
-`[SCENE N FAILED]` in the char_swap flow once Mini became its default model.
+The regular and Fast schemas use plain strings. Videocity validates local
+`@asset` and `@plan/file` references before its job uploads them, so Mini's URL
+checks reject valid local inputs too early.
 
-**Workaround (`server/src/tools/generate-seedance2-mini-video.ts`):** validate
-the incoming slug arrays against a slug-friendly mirror
-(`z.array(z.string())` + the apicity max counts) and **omit** `reference_*_urls`
-from the `Seedance2MiniRequestSchema.safeParse` pre-check. Everything else
-(prompt length, duration range, enums) is still validated against apicity; the
-slugs are validated for existence/type by `resolveImageSlug` /
-`resolveVideoSlug` / `resolveAudioSlug` and uploaded to real URLs in the job.
+**Workaround:** `generate-seedance2-mini-video.ts` uses
+`apicityStringArrayField` to copy each upstream array's cardinality while
+intentionally rebuilding its item type as a local string. The full Apicity
+pre-check omits the reference arrays; asset resolution validates them locally,
+and the submitted job payload contains real uploaded URLs.
 
-**Ask apicity:** make the Seedance 2 Mini reference arrays consistent with the
-regular/fast schemas (plain `z.string()`), or expose a separate slot for
-pre-upload validation. The `.url()` constraint is only correct at the live REST
-boundary, not at the SDK's request-construction layer.
+**Ask Apicity:** use plain strings at the SDK construction boundary, or export a
+separate pre-upload reference schema.
 
----
+## 12. (gap) ~~Gemini Omni slug and pricing~~ — RESOLVED in 0.7.3
 
-## 12. (gap) `@apicity/cost@0.6.1` has no slug/pricing for Gemini Omni Video
+`@apicity/cost@0.7.3` registers `gemini-omni-video`, the `geminiomni` model slug,
+and T2V/V2V rate rows. Videocity now uses `modelSlug` for asset/job names and a
+normal cost adapter. T2V estimates are bounded after normalizing the Kie
+request's string duration to the numeric shape expected by the cost selector.
+The remaining V2V selector defect is tracked in §21.
 
-`@apicity/kie@0.6.1` ships the new **Gemini Omni Video** endpoint
-(`gemini-omni-video`) — zod, types, `model-schemas` — but `@apicity/cost@0.6.1`
-prices no `gemini-omni-video` rate. So `modelSlug("kie", "gemini-omni-video")`
-throws and `computeEstimate` returns `$0` + a `not found in pricing table`
-warning. Same shape as the (now-resolved) §10.
+## 13. (gap) ~~No Gemini Omni character-create endpoint~~ — RESOLVED UPSTREAM
 
-**Workaround (`generate_gemini_omni_video`):**
+`@apicity/kie@0.7.3` exports both
+`kie.post.api.v1.omni.audio.create` and
+`kie.post.api.v1.omni.character.create`, including request/response schemas.
+Videocity does not yet expose Kie audio/character ID-minting workflows, so its
+Gemini Omni generation tool intentionally omits optional `audio_ids` and
+`character_ids`. That is now a Videocity product gap, not an Apicity gap.
 
-- Asset/job **naming** uses a literal `SLUG = "gemini-omni"` in
-  `server/src/tools/generate-gemini-omni-video.ts` (modelSlug would throw).
-- **Cost display**: intentionally *no* `cost-adapters.ts` entry → the UI shows
-  `—` (honest "no rate available").
-- The **paygate** admits `gemini-omni-video` via `COST_TABLE_PENDING_MODELS` in
-  `server/src/jobs/kie-paygate.ts`.
-- Reuses the shared `seedance2_video` TaskType + `completeSeedance2Video`
-  handler; the exact model rides in `meta.apiModel`.
+## 14. (gap) Google Flow schemas have loose enums and generic responses — OPEN in 0.7.3
 
-**Ask apicity:** add a `gemini-omni-video` slug + pricing to `@apicity/cost`.
-Remove the naming/paygate workarounds and wire a `cost-adapters.ts` entry once
-priced.
+`@apicity/googleflow` correctly types positional reference fields and several
+numeric bounds, but video/image model fields still use loose
+`z.enum(...).or(z.string())` contracts and responses remain
+`Record<string, unknown>`. Its shared video duration schema includes
+4/6/8/10, while the actual allowed subset varies by model.
 
----
+**Workaround:** Google Flow tools keep per-model model/aspect/duration domains,
+positional reference-slot mapping, and tolerant response readers. The generic
+numeric-literal reader can inspect the shared duration domain, but Videocity
+cannot use it as a per-model source of truth.
 
-## 13. (gap) No `gemini-omni-audio` / `gemini-omni-character` create flow wired
+**Ask Apicity:** export strict per-model schemas and typed job/entity responses.
 
-`gemini-omni-video`'s input accepts `audio_ids` (≤3) and `character_ids` (≤3)
-that reference assets minted by **separate create endpoints**:
+## 15. (gap) `@apicity/cost` has no Google Flow provider — OPEN in 0.7.3
 
-- `gemini-omni-audio` exists in `@apicity/kie@0.6.1` as
-  `kie.post.api.v1.omni.audio.create` (`GeminiOmniAudioCreateRequestSchema`, a
-  voice picked from 30 named voices) — but videocity has no asset-creation flow
-  for "mint an ID, then reference it later", so it is **not** wired.
-- `gemini-omni-character` has **no apicity endpoint at all** — it's only
-  referenced by ID in the video schema's description, with no create
-  method/schema to produce those IDs.
+The cost table has no `googleflow` provider or Google Flow model slugs.
+Videocity therefore prices these tools in `server/src/google-flow-cost.ts`, with
+USD based on official Gemini API list rates and Flow credits included as
+secondary metadata.
 
-**Workaround (`server/src/tools/generate-gemini-omni-video.ts` +
-`payload-builders.ts`):** `audio_ids` and `character_ids` are **omitted** from
-the tool's input schema and payload. Both are optional upstream, so omitting them
-keeps requests valid; the model still runs from prompt + reference images +
-reference video clip.
+**Ask Apicity:** add Google Flow credit rates and model slugs, or support a
+credits-denominated estimate alongside USD.
 
-**Ask apicity:** (a) add a `gemini-omni-character` create endpoint so character
-IDs can be produced; (b) once both create flows exist, videocity can add an
-audio/character asset-minting flow and surface `audio_ids` / `character_ids`.
+## 16. (bug) Google Flow path IDs are percent-encoded — OPEN in 0.7.3
 
-**Note:** the **Google Flow** (`omni-flash`) side of this *is* now wired — its
-`referenceAudio_1..5` (voices) and `character_1..7` refs are minted by the
-`create_google_flow_voice` / `create_google_flow_character` tools and surfaced on
-`generate_google_omni_video` as `voice_refs` / `character_refs`. Only the
-kie-proxied `gemini-omni-video` side remains unwired (no create flow there).
+The provider applies `encodeURIComponent` to job, asset, account, character, and
+voice path IDs. useapi.net IDs contain `:` and `@` and require those characters
+raw; encoded job IDs return `400 Invalid job ID format`.
 
----
+**Workaround:** `server/src/jobs/_google-flow.ts` supplies the provider's fetch
+override and decodes the pathname before sending it.
 
-## 14. (gap) `@apicity/googleflow` schemas carry reference slots but weak enums and no response types — PARTIALLY RESOLVED in 0.7.2
+**Ask Apicity:** preserve the raw path-ID characters required by useapi.net.
 
-The google-flow endpoints moved to a dedicated `@apicity/googleflow` package
-in 0.7.1 (split out of `@apicity/google`, which now hosts only Vertex
-express-mode / Gemini content calls — the `@apicity/google@0.7.1` Flow removal
-is resolved by the split provider). `@apicity/googleflow@0.7.1`'s request
-schemas (`GoogleFlowImagesRequestSchema`, `GoogleFlowVideosRequestSchema`)
-**do** type the positional reference fields as named optional strings —
-`startImage`, `endImage`, `referenceImage_1..7`, `reference_1..10`,
-`referenceVideo_1`, `startFrameIndex_1`/`endFrameIndex_1`, `character_1..7`,
-`referenceAudio_1..5`.
+## 17. (gap) Google Flow requires email where the service defaults it — OPEN in 0.7.3
 
-**0.7.2 tightened some fields but not enough to derive from:**
-- `videos.model` / `videos.aspectRatio` / `images.model` gained
-  `z.enum([...]).or(z.string())` — still **loose** (arbitrary strings accepted),
-  so `zodEnumOptionsOrNull` reads nothing, and deriving `aspectRatio` would
-  clobber the app-side ratio-string → `landscape`/`portrait` mapping anyway.
-- `videos.duration` **tightened to `z.union([literal(4), literal(6), literal(8),
-  literal(10)])`** — a numeric-literal union, not a derivable enum-of-strings. The
-  app keeps duration as a string enum per tool and converts via the
-  `GOOGLE_FLOW_DURATION_SECONDS` map in `payload-builders.ts`.
-- `videos.startFrameIndex_1` / `endFrameIndex_1` gained int ranges (0-239 / 1-240);
-  the omni payload builder already clamps to exactly that.
-- `images.aspectRatio` became a **strict** enum (`16:9/4:3/1:1/3:4/9:16/auto/
-  landscape/portrait`); the app only ever sends the first six.
-- New `GoogleFlowVoicePresetSchema` (30 named presets) — exported **only from the
-  `@apicity/googleflow/zod` subpath**, not the package root — is consumed via
-  `apicityField` in `create_google_flow_voice`.
-- `videos.trimStart`/`trimEnd` were **removed** from the exported type (the app
-  never used them; omni trims via the frame-index fields).
+Voice create/list and character list schemas require `email`, although
+useapi.net defaults it for a single configured account and related generation
+schemas leave it optional.
 
-Still weak: `seed`/`count` remain plain optional numbers, the loose model/aspect
-enums can't be derived, and **every response is still
-`GoogleFlowResponse = Record<string, unknown>`** (see the tolerant readers in
-`server/src/jobs/_google-flow.ts` and `server/src/tools/_google-flow-entities.ts`).
+**Workaround:** `resolveGoogleFlowEmail` uses an explicit email or resolves the
+sole account before calling those methods.
 
-**Workaround (`generate_veo31_*`, `generate_google_omni_video`,
-`generate_nano_banana_pro_google`):**
+**Ask Apicity:** make those email fields optional consistently.
 
-- Tool schemas and the `getVideoToolSchema` per-tool blocks in
-  `server/src/video-models.ts` hand-type the allowed values from the
-  useapi.net Google Flow docs (video models `veo-3.1-quality/-fast/-lite`,
-  `omni-flash`; image model `nano-banana-pro`; video aspect
-  `landscape`/`portrait`/`1:1`/`4:3`/`3:4`; veo durations 4/6/8; omni
-  durations 4/6/8/10; image aspect `16:9`/`4:3`/`1:1`/`3:4`/`9:16`/`auto`).
-- These tools are intentionally **not** registered in
-  `VIDEO_PARAM_ZOD_SCHEMAS` — there is nothing to derive, and deriving later
-  would clobber the app-side ratio-string → `landscape`/`portrait` mapping in
-  `payload-builders.ts` (`googleFlowVideoAspect`).
-- Reference assets are spread into the named `referenceImage_N` /
-  `reference_N` keys by `googleFlowReferenceSlots` in `payload-builders.ts`;
-  image-slot limits are hand-set in `IMAGE_SLOT_OVERRIDES`.
-- The nested asset-upload response (`mediaGenerationId.mediaGenerationId`) is
-  unwrapped defensively in `server/src/jobs/_google-flow.ts`.
+## 18. (bug) Google Flow singleton character reads lose metadata — OPEN
 
-**Ask apicity:** make the loose `model`/`aspectRatio` enums strict (drop the
-`.or(z.string())`), and add a `GoogleFlowVideosResponse` / `GoogleFlowJobResponse`
-/ `GoogleFlowVoiceResponse` / `GoogleFlowCharacterResponse` shape — today every
-response is still `GoogleFlowResponse = Record<string, unknown>`, which is why
-the voices/characters/accounts tools ship hand-written tolerant readers.
+Singleton character retrieval can return `Untitled Character` and omit
+`personalityNotes` while list/create responses retain them.
 
----
+**Workaround:** `server/src/tools/google-flow-characters.ts` reconciles singleton
+and list records and reports conflicts/partial success.
 
-## 15. (gap) `@apicity/cost` has no `google` provider — Google Flow models unpriced
+This may be a useapi.net service bug rather than an SDK bug; confirm upstream.
 
-`@apicity/cost@0.7.1`'s `PRICING` covers `openai, anthropic, xai, kimicoding,
-fireworks, alibaba, elevenlabs, kie` — no `google`. useapi.net bills Google
-Flow in plan credits (veo-3.1-quality 100, -fast 20/10, -lite 10/5,
-omni-flash 15–40 per clip), not USD, so `modelSlug("google", …)` throws and
-no estimate is possible via `@apicity/cost`.
+## 19. (bug) ElevenLabs Sound Generation omits the 450-character cap — OPEN in 0.7.3
 
-**Workaround (`generate_veo31_*`, `generate_google_omni_video`,
-`generate_nano_banana_pro_google`):**
+`ElevenLabsSoundGenerationRequestSchema.shape.text` has only `.min(1)`, while
+the live endpoint rejects text longer than 450 characters.
 
-- **No `cost-adapters.ts` entries** (apicity cannot price these).
-- **Local cost table** in `server/src/google-flow-cost.ts`, called from
-  `estimate_cost` before the adapter path. Badge **USD** uses official Gemini
-  Developer API list rates (Omni/Veo $/s @ 720p, Nano Banana Pro $/image) —
-  **not** credits × subscription amortization. Flow **credits** are secondary
-  (`breakdown.credits` + tooltip); `GOOGLE_FLOW_PLAN_TIER` (default ultra99)
-  only affects Lite/Fast credit counts and tooltip copy.
-- Asset/job **naming** uses literal slugs (`veo31`, `veo31-fast`,
-  `veo31-lite`, `google-omni`; the image tool borrows the kie
-  `nano-banana-pro` slug `nbp` for cross-provider consistency).
-- No paygate involvement — the kie OTP paygate does not apply to google-flow
-  requests.
+**Workaround:** `MAX_SOUND_GENERATION_PROMPT_CHARS = 450` constrains and caps
+extension prompts in `server/src/elevenlabs-audio-extension.ts`.
 
-**Ask apicity:** add a `google`/`googleflow` provider to `@apicity/cost` with
-credits-based rates (or a credits→USD conversion) for the google-flow
-models, plus `MODEL_SLUGS.google` entries — then drop the local table.
+**Ask Apicity:** add `.max(450)` to the request schema.
 
----
+## 20. (bug) xAI Responses search contract is stale — OPEN in 0.7.3
 
-## 16. (bug) `@apicity/googleflow` percent-encodes path IDs — useapi.net requires them raw
+The package still types deprecated `search_parameters` and omits the Agent Tools
+`x_search` tool from `XaiResponseToolSchema`. The live API rejects the old
+search path.
 
-`@apicity/googleflow@0.7.1` **and 0.7.2** (still unfixed — re-verify on each
-upgrade; the `google.js` URL builders are byte-identical between the two) build
-their GET/DELETE path segments with `encodeURIComponent` (`google.js`:
-`jobs.retrieve`, `assets.retrieve`, `accounts.retrieve`, `characters.retrieve`,
-`voices.retrieve`, and the DELETE-by-ref routes). useapi.net IDs
-carry `:` and `@` — e.g. a job id is
-`j0707051013179185608v-u2935-email:justinwtanner@gmail.com-bot:google-flow` —
-and the server expects them **RAW**: an encoded job id returns
-`400 Invalid job ID format`. Confirmed by direct probe (raw unencoded `fetch`
-→ `200`; package `provider.get.v1.jobs.retrieve` → `400`).
+**Workaround:** `verify_x_mentions` uses the typed and accepted
+`tools: [{ type: "web_search" }]` path.
 
-**Workaround (`server/src/jobs/_google-flow.ts`):** a `googleFlowFetch` hook
-passed via `createGoogleFlow({ fetch })` (the provider's sanctioned fetch
-override) decodes the over-encoded pathname back to raw before the request
-leaves the process. Wired into both provider construction sites
-(`createGoogleFlowProvider` and the `sync.ts` poll branch). POST endpoints are
-unaffected (the job id travels in the response body, not the path), so submit
-and asset upload worked without it; `jobs.retrieve` polling broke, and the same
-hook now also covers the `voices`/`characters` GET-list-item and DELETE-by-ref
-paths (their refs carry `:`/`@` too).
+**Ask Apicity:** remove or repair `search_parameters` and add `x_search` plus its
+output item types.
 
-**Ask apicity:** stop `encodeURIComponent`-ing path IDs (or use an encoding
-that preserves `:` / `@`, which useapi.net accepts verbatim). Note
-`assets.retrieve` (`mediaGenerationId`) carries `:` too, so it would break the
-same way if ever wired.
+## 21. (bug) Gemini Omni cost selectors cannot price the published request shape correctly — OPEN in 0.7.3
 
----
+Two issues exist in `@apicity/cost`'s `gemini-omni-video` entry:
 
-## 17. (gap) `@apicity/googleflow@0.7.2` requires `email` on voices create/list and characters list — useapi.net defaults it
+1. `@apicity/kie` defines duration as the string enum
+   `"4" | "6" | "8" | "10"`, but the cost selector calls `asNumber` on
+   `input.duration`. String durations therefore fall back to 4 seconds.
+2. V2V deliberately selects an empty resolution and publishes rate keys such as
+   `v2v|6|`. The generic evaluator removes falsey selector values before
+   joining, producing `v2v|6`, so no V2V rate is reachable.
 
-`GoogleFlowVoicesCreateRequestSchema`, `GoogleFlowVoicesListRequestSchema`, and
-`GoogleFlowCharactersListRequestSchema` all declare `email: z.string()`
-(**required**), so the provider's client-side `safeParse` throws a 400 before the
-request leaves the process if `email` is omitted. But useapi.net treats `email`
-as optional — it defaults to the single configured account — and the omni
-**generation** endpoints (`videos`, `images`, `assets`, `characters` *create*)
-correctly leave `email` optional. The asymmetry is inconsistent: `characters`
-create has no `email` field at all, yet `characters` list requires it.
+**Workaround:** Videocity normalizes Gemini's duration to a number for cost
+evaluation, which makes T2V pricing exact. V2V still surfaces an unbounded-cost
+warning and alone retains a narrow paygate exception.
 
-**Workaround (`server/src/tools/_google-flow-entities.ts`):**
-`resolveGoogleFlowEmail(provider, explicit?)` — an explicit `email` wins;
-otherwise it calls `GET /accounts` and uses the sole configured account (erroring
-with the account list when zero or several exist). The voice/character list and
-voice create tools resolve `email` this way before calling the provider, so the
-common single-account case needs no `email` argument.
+**Ask Apicity:** accept numeric strings in the duration selector and either keep
+empty selector positions or publish V2V keys without the trailing delimiter.
 
-**Ask apicity:** make `email` optional on `voices` create/list and `characters`
-list (matching the generation endpoints and useapi.net's own default-account
-behavior).
+## 22. (gap) xAI's reference-video limits are absent from the general video schema — OPEN in 0.7.3
 
----
+`XaiVideoGenerateRequestSchema` correctly exposes the general 1–15 second
+duration domain, but `reference_images` has no `.max(7)` and the schema does not
+enforce the reference-specific duration cap. xAI documents at most seven
+reference images and at most ten seconds for reference-to-video:
 
-## 18. (bug) `@apicity/googleflow` singleton retrieve drops displayName and personalityNotes
+- [Video generation](https://docs.x.ai/developers/model-capabilities/video/generation?campaign=imagine-blog)
+- [Reference-to-video](https://docs.x.ai/developers/model-capabilities/video/reference-to-video)
 
-`GET /characters/{ref}` (singleton retrieve) currently returns `displayName: "Untitled Character"` and drops `personalityNotes` entirely, even though `GET /characters` (the list endpoint) and the initial `POST /characters` response correctly return the user-provided name and notes. The official useapi.net contract claims these fields exist on all three responses.
+**Workaround:** Videocity derives the general duration options, caps local
+reference slots at seven, and rejects durations over ten only when references
+are present.
 
-**Workaround (`server/src/tools/google-flow-characters.ts`):**
-- `getGoogleFlowCharacter` (used by the manager UI and the list enricher) now fetches the list record alongside the singleton retrieve.
-- `reconcileGoogleFlowCharacter` merges the two, preserving the list record's intended `display_name`, `personalityNotes`, and `voice` while incorporating the singleton's `thumbnail_url` and media IDs.
-- If the singleton disagrees with the list intent, `_conflict: "singleton-read-disagrees"` is attached to `raw`, and the UI surfaces an "Upstream Sync Conflict" warning.
-- `createGoogleFlowCharacter` and `replaceGoogleFlowCharacter` check if the provider returns an unexpected name, surfacing `status: "partial-success"` + `warning` instead of a false clean success.
+**Ask Apicity:** add `.max(7)` and a cross-field refinement for the
+reference-specific ten-second limit.
 
-**Ask apicity:** Confirm if the `Untitled Character` / missing notes on singleton retrieve is a provider-level useapi.net bug. If so, push upstream to fix `GET /characters/{ref}` to match the list response.
+## 23. (bug) Fal Seedream 5 Lite input schema is incomplete — OPEN in 0.7.3
 
----
+The official Fal schemas for both Seedream 5 Lite endpoints include
+`auto_4K` as an `image_size` value, but `FalSeedreamV5LiteImageSizeSchema`
+stops at `auto_3K`. The published Apicity request schemas also type
+`num_images`/`max_images` as unconstrained numbers even though Fal declares
+integer generation counts. The text-to-image schema also omits Fal's
+`return_byteplus_urls` input.
 
-## 19. (bug) `@apicity/elevenlabs@0.7.3` omits the Sound Generation text-length limit
+- [Fal text-to-image schema](https://fal.ai/models/bytedance/seedream/v5/lite/text-to-image/api)
+- [Fal edit schema](https://fal.ai/models/bytedance/seedream/v5/lite/edit/api)
 
-`ElevenLabsSoundGenerationRequestSchema.shape.text` is only
-`z.string().min(1)`, but the live `/v1/sound-generation` endpoint rejects text
-longer than 450 characters with `400 Invalid text length`. The provider accepts
-the request locally, so the mismatch is only visible after a billed network
-request begins.
+**Workaround:** Videocity derives the published size enum and adds only the
+documented `auto_4K` value, while retaining integer validation for image counts.
+It no longer sends `seed`; Fal documents seed as an output value, not an input.
 
-**Workaround (`server/src/elevenlabs-audio-extension.ts`):**
-`MAX_SOUND_GENERATION_PROMPT_CHARS = 450` constrains the `extend_audio` tool
-schema and caps both its first-pass and retry prompts before calling
-`provider.v1.soundGeneration`.
+**Ask Apicity:** add `auto_4K` and `return_byteplus_urls`, and match Fal's
+integer count contract.
 
-**Ask apicity:** add `.max(450)` to
-`ElevenLabsSoundGenerationRequestSchema.shape.text` so provider validation
-matches the live API.
+## 24. (bug) Fal Nano Banana count and reference constraints are incomplete — OPEN in 0.7.3
 
----
+Fal documents `num_images` as an integer from 1 through 4 for Nano Banana 2
+and Nano Banana Pro, with integer seeds and up to 14 edit references. The
+corresponding Apicity 0.7.3 schemas use unconstrained `z.number()` fields for
+the non-Lite models and leave their edit arrays unbounded. The original Nano
+Banana schemas bound `num_images` correctly but still leave `seed` as a generic
+number.
 
-## 20. (bug) `@apicity/xai@0.7.3` Responses search is stale: dead `search_parameters`, no `x_search` tool type
+- [Fal Nano Banana 2 API](https://fal.ai/docs/model-api-reference/image-generation-api/nano-banana-2)
+- [Fal Nano Banana Pro API](https://fal.ai/docs/model-api-reference/image-generation-api/nano-banana-pro)
+- [Fal Nano Banana API](https://fal.ai/docs/model-api-reference/image-generation-api/nano-banana)
 
-Two mismatches against the live xAI Responses API (verified 2026-07-19):
+**Workaround:** Videocity derives the published prompt, enums, and booleans,
+but retains integer 1–4 count validation, integer seeds, and the 14-reference
+edit cap where Apicity omits them. Nano Banana 2 Lite already has the correct
+integer count constraints and is fully derived.
 
-- `XaiResponseRequestSchema.shape.search_parameters.sources` is
-  `z.array(z.string())`, but the live API deserializes sources as an
-  internally tagged enum, so `sources: ["x"]` fails with
-  `422 invalid type: string "x", expected internally tagged enum SearchSource`.
-- Even with object sources the whole parameter family is dead: the live API
-  returns `410 Live search is deprecated. Please switch to the Agent Tools
-  API`. The replacement is `tools`, but `XaiResponseToolSchema` only types
-  `function`, `web_search`/`web_search_preview`, and `file_search` — the
-  agent-tools `x_search` tool has no type. (Runtime passthrough works:
-  `tools: [{ type: "x_search" }] as never` reaches the API and returns
-  `x.com/i/user/...` citations.)
+**Ask Apicity:** use `.int().min(1).max(4)` for `num_images`, `.int()` for
+`seed`, and `.max(14)` for Nano Banana 2/Pro edit image arrays.
 
-**Workaround (`server/src/tools/verify-x-mentions.ts`):** `verify_x_mentions`
-uses `tools: [{ type: "web_search" }]`, which is typed, accepted by the live
-API, searches x.com, and returns `url_citation` annotations.
+## 25. (gap) Kie OmniHuman and Volcengine models are absent from the cost registry — OPEN in 0.7.3
 
-**Ask apicity:** drop or fix `search_parameters` (dead endpoint contract), and
-add `x_search` (plus its output item type) to the Responses tools union.
+`@apicity/kie` exposes `omnihuman-1-5` and
+`volcengine/video-to-video-lip-sync`, but `@apicity/cost` has neither model in
+its Kie slug map or pricing table. `modelSlug` throws for both and
+`computeEstimate` returns an unbounded unknown-model warning.
+
+**Workaround:** the tools retain local `omnihuman` and `volcengine-lipsync`
+asset/job slugs, have no cost-display adapters, and are the only complete Kie
+models admitted through `COST_TABLE_PENDING_MODELS`.
+
+**Ask Apicity:** publish slugs and rates for both models, and keep Kie model and
+cost coverage in lockstep.
+
+## 26. (gap) Fal generation has no cost-estimate contract — OPEN in 0.7.3
+
+`@apicity/cost` classifies Fal endpoints as prohibitive in its endpoint policy,
+but `EstimateRequest` does not accept `provider: "fal"` and the bundled pricing
+registry contains no Fal models. Videocity therefore cannot ask the package for
+a bounded estimate for any Fal queue endpoint.
+
+**Workaround:** Fal-backed tools have no cost adapters and display no estimated
+USD price. Their provider-specific request constraints still come from
+`@apicity/fal`.
+
+**Ask Apicity:** expose a Fal estimate input keyed by endpoint ID, with either a
+maintained local rate snapshot or an explicit dynamic-pricing integration.
+
+## 27. (gap) xAI media generation has no per-unit cost contract — OPEN in 0.7.3
+
+`@apicity/cost` accepts `provider: "xai"`, but its xAI registry and extractor
+cover token-billed text models only. The image and video generation endpoints
+share Videocity tool names with Kie routes, so using the existing Kie adapter
+for an xAI selection would quote the wrong provider's rate.
+
+**Workaround:** Videocity carries `_provider` into cost requests and suppresses
+the Kie adapter whenever xAI is selected. xAI image/video calls display an
+unknown estimate instead of a false Kie price.
+
+**Ask Apicity:** add endpoint-discriminated per-image and per-second xAI media
+rates to `EstimateRequest`.
+
+## 28. (gap) Alibaba media generation has slugs but no cost rates — OPEN in 0.7.3
+
+`@apicity/cost` includes Alibaba slugs for the stable Qwen image models and Wan
+2.7 Image Pro, but its Alibaba pricing registry contains token rates only. It
+also has no slugs for `wan2.7-image`, `wan2.7-i2v`, or
+`wan2.7-videoedit`. Passing these media bodies through the Alibaba token
+extractor cannot produce a valid generation estimate.
+
+**Workaround:** Videocity uses the available Qwen/Pro slugs only for naming,
+keeps local names for the uncovered models, and registers no Alibaba media cost
+adapters.
+
+**Ask Apicity:** add the missing media slugs and endpoint-aware per-image and
+per-second Alibaba rates.
+
+## 29. (gap) ElevenLabs TTS text limits are model-specific but absent from the schema — OPEN in 0.7.3
+
+`ElevenLabsTextToSpeechRequestSchema.shape.text` enforces only a one-character
+minimum. ElevenLabs publishes different per-request caps by model: for example,
+Multilingual v2 accepts more text than Eleven v3, and Flash/Turbo v2.5 accept
+substantially more than either.
+
+- [ElevenLabs text-to-speech model limits](https://elevenlabs.io/docs/overview/capabilities/text-to-speech)
+
+Videocity previously imposed one 5,000-character limit on every model. That
+rejected valid requests for its default Multilingual v2 model and the larger
+Flash/Turbo limits, so the tool now derives the published minimum and leaves the
+model-specific maximum to ElevenLabs.
+
+**Ask Apicity:** add a model/text cross-field refinement or export a model-limit
+registry that SDK consumers can reuse before submission.

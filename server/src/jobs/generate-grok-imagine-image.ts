@@ -18,7 +18,6 @@ type GenerateGrokImagineImagePayload = {
   sourceImageId: string;
   projectSlug: string;
   prompt?: string;
-  aspectRatio?: string;
   _provider?: string;
 };
 
@@ -26,10 +25,8 @@ export function registerGenerateGrokImagineImageJob(fs: VideocityFs): void {
   registerJobHandler("generate_grok_imagine_image", async (payload, ctx) => {
     const {
       imageFilename, imgAssetId, imgAssetDir,
-      sourceImageId, projectSlug, prompt, aspectRatio, _provider,
+      sourceImageId, projectSlug, prompt, _provider,
     } = payload as GenerateGrokImagineImagePayload;
-    // NOTE: KIE's Grok Imagine 1.5 image-to-image no longer accepts aspect_ratio,
-    // so it is recorded in meta below but not forwarded to the generation request.
 
     const isXai = _provider !== undefined && _provider.startsWith("xai");
 
@@ -93,7 +90,6 @@ export function registerGenerateGrokImagineImageJob(fs: VideocityFs): void {
       meta: {
         sourceImageId,
         ...(prompt !== undefined ? { prompt } : {}),
-        ...(aspectRatio !== undefined ? { aspectRatio } : {}),
       },
     });
 

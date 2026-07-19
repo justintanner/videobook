@@ -5,20 +5,20 @@ import { FalNanoBananaProEditRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 const base = FalNanoBananaProEditRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Edit instruction"),
-  image_slugs: z.array(z.string()).min(1).describe("1 or more @img-* slugs for reference images"),
-  num_images: z.number().int().optional().describe("Number of images to generate"),
+  prompt: apicityStringField(base.prompt, "Edit instruction", { required: true }),
+  image_slugs: apicityStringArrayField(base.image_urls, "1-14 @img-* slugs for reference images", { required: true }).min(1).max(14),
+  num_images: z.number().int().min(1).max(4).optional().describe("Number of images to generate (1-4)"),
   aspect_ratio: apicityField(base.aspect_ratio, "Aspect ratio"),
   resolution: apicityField(base.resolution, "Output resolution (1K/2K/4K)"),
   output_format: apicityField(base.output_format, "Output image format"),
-  seed: z.number().optional().describe("Seed for deterministic output"),
-  enable_web_search: z.boolean().optional().describe("Enable web search grounding"),
+  seed: z.number().int().optional().describe("Seed for deterministic output"),
+  enable_web_search: apicityField(base.enable_web_search, "Enable web search grounding"),
 
 } satisfies ZodRawShape;
 

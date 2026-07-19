@@ -8,7 +8,7 @@ import {
 } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
 function slugify(text: string): string {
   return text
@@ -23,12 +23,12 @@ const grokT2vInputSchema = GrokTextToVideoRequestSchema.shape.input.shape;
 
 const generateGrokImagineT2vVideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description (max 5000 chars)"),
+  prompt: apicityStringField(grokT2vInputSchema.prompt, "Video description (max 5000 chars)", { required: true }),
   mode: apicityField(GrokImagineModeSchema, "Generation mode: fun / normal / spicy"),
-  duration: z.coerce.number().int().min(6).max(30).optional().describe("Video duration in seconds (6-30)"),
+  duration: apicityField(grokT2vInputSchema.duration, "Video duration in seconds (6-30)"),
   resolution: apicityField(GrokImagineResolutionSchema, "Output resolution: 480p / 720p"),
   aspect_ratio: apicityField(grokT2vInputSchema.aspect_ratio, "Output aspect ratio"),
-  nsfw_checker: z.boolean().optional().describe("Enable NSFW content safety filter (default false)"),
+  nsfw_checker: apicityField(grokT2vInputSchema.nsfw_checker, "Enable NSFW content safety filter (default false)"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 

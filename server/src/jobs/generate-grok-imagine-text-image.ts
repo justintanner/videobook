@@ -6,6 +6,7 @@ import { requireApiKey } from "../api-key.js";
 import { downloadUrlIntoAsset } from "./_download-into-asset.js";
 import { buildGrokImagineTextPayload } from "../payload-builders.js";
 import { callXaiPaid, createXaiPaygatedProvider, XAI_IMAGE_GENERATIONS_DOT_PATH } from "./xai-paygate.js";
+import type { GrokTextToImageRequest } from "@apicity/kie";
 
 type GenerateGrokImagineTextImagePayload = {
   type: "generate_grok_imagine_text_image";
@@ -13,7 +14,7 @@ type GenerateGrokImagineTextImagePayload = {
   imgAssetId: string;
   imgAssetDir: string;
   projectSlug: string;
-  aspectRatio?: string;
+  aspectRatio?: GrokTextToImageRequest["input"]["aspect_ratio"];
   enablePro?: boolean;
   nsfwChecker?: boolean;
   _provider?: string;

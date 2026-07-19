@@ -5,18 +5,18 @@ import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 import { modelSlug } from "@apicity/cost";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
 const base = FalNanoBananaTextToImageRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Text prompt for image generation"),
-  num_images: z.number().int().min(1).max(4).optional().describe("Number of images to generate (1-4)"),
+  prompt: apicityStringField(base.prompt, "Text prompt for image generation", { required: true }),
+  num_images: apicityField(base.num_images, "Number of images to generate (1-4)"),
   aspect_ratio: apicityField(base.aspect_ratio, "Aspect ratio"),
   output_format: apicityField(base.output_format, "Output image format"),
   safety_tolerance: apicityField(base.safety_tolerance, "Safety tolerance 1-6"),
-  seed: z.number().optional().describe("Seed for deterministic output"),
+  seed: z.number().int().optional().describe("Seed for deterministic output"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;

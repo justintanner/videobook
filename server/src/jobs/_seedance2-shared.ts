@@ -4,8 +4,9 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildSeedance2VideoPayload } from "../payload-builders.js";
+import type { Seedance2FastRequest, Seedance2Request } from "@apicity/kie";
 
-type Seedance2Model = "bytedance/seedance-2" | "bytedance/seedance-2-fast";
+type Seedance2Model = Seedance2Request["model"] | Seedance2FastRequest["model"];
 type RefInput = { assetId: string; filename: string };
 
 export type Seedance2JobPayload = {
@@ -22,8 +23,8 @@ export type Seedance2JobPayload = {
   sourceImageIds: string[];
   sourceVideoIds: string[];
   sourceAudioIds: string[];
-  aspect_ratio?: string;
-  resolution?: "480p" | "720p" | "1080p";
+  aspect_ratio?: Seedance2Request["input"]["aspect_ratio"];
+  resolution?: Seedance2Request["input"]["resolution"];
   duration?: string;
   generate_audio?: boolean;
   web_search?: boolean;

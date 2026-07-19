@@ -24,7 +24,7 @@ type GenerateVolcengineLipsyncVideoPayload = {
   audioInput: RefInput;
   sourceVideoIds: string[];
   sourceAudioIds: string[];
-  mode?: VolcengineVideoToVideoLipSyncMode;
+  mode: VolcengineVideoToVideoLipSyncMode;
   separate_vocal?: boolean;
   open_scenedet?: boolean;
   align_audio?: boolean;

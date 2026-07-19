@@ -1,30 +1,25 @@
 import type { VideocityFs } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
+import { FalSeedreamV5LiteEditRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
+import { zodUnionEnumOptions } from "../zod-slots.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
+import { apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
+
+const seedream = FalSeedreamV5LiteEditRequestSchema.shape;
+const publishedImageSizes = zodUnionEnumOptions(seedream.image_size);
+if (!publishedImageSizes) throw new Error("FalSeedreamV5LiteEditRequestSchema.image_size changed shape");
+const IMAGE_SIZES = [...publishedImageSizes, "auto_4K"] as [string, ...string[]];
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Edit instruction"),
-  image_slugs: z.array(z.string()).min(1).describe("1 or more @img-* slugs for reference images"),
-  image_size: z
-    .enum([
-      "square_hd",
-      "square",
-      "portrait_4_3",
-      "portrait_16_9",
-      "landscape_4_3",
-      "landscape_16_9",
-      "auto_2K",
-      "auto_3K",
-    ])
-    .optional()
-    .describe("Output size preset"),
+  prompt: apicityStringField(seedream.prompt, "Edit instruction", { required: true }),
+  image_slugs: apicityStringArrayField(seedream.image_urls, "1-10 @img-* slugs for reference images", { required: true }),
+  image_size: z.enum(IMAGE_SIZES).optional().describe("Output size preset"),
   num_images: z.number().int().optional().describe("Number of images to generate"),
   max_images: z.number().int().optional().describe("Max images returned"),
-  seed: z.number().optional().describe("Seed for deterministic output"),
 
 } satisfies ZodRawShape;
 
@@ -36,7 +31,7 @@ export function generateSeedreamV5LiteEditFalDef(fs: VideocityFs): ToolDef {
     description: "Edit or compose images via fal.ai using ByteDance Seedream V5 Lite with one or more @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, image_slugs, image_size, num_images, max_images, seed } = args as Args;
+      const { project_slug, prompt, image_slugs, image_size, num_images, max_images } = args as Args;
       const prefix = "img";
 
       if (!process.env.FAL_API_KEY) {
@@ -63,7 +58,6 @@ export function generateSeedreamV5LiteEditFalDef(fs: VideocityFs): ToolDef {
         ...(image_size !== undefined ? { image_size } : {}),
         ...(num_images !== undefined ? { num_images } : {}),
         ...(max_images !== undefined ? { max_images } : {}),
-        ...(seed !== undefined ? { seed } : {}),
       } as unknown as Record<string, unknown>);
 
       return { content: [{ type: "text" as const, text: JSON.stringify({ img_asset_id: imgAssetId, source_images: resolved.sourceImageIds, job_id: jobId, status: "enqueued" }) }] };

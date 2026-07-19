@@ -5,19 +5,19 @@ import { FalNanoBananaEditRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 const base = FalNanoBananaEditRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Edit instruction"),
-  image_slugs: z.array(z.string()).min(1).describe("1 or more @img-* slugs for reference images"),
-  num_images: z.number().int().min(1).max(4).optional().describe("Number of images to generate (1-4)"),
+  prompt: apicityStringField(base.prompt, "Edit instruction", { required: true }),
+  image_slugs: apicityStringArrayField(base.image_urls, "1 or more @img-* slugs for reference images", { required: true }).min(1),
+  num_images: apicityField(base.num_images, "Number of images to generate (1-4)"),
   aspect_ratio: apicityField(base.aspect_ratio, "Aspect ratio"),
   output_format: apicityField(base.output_format, "Output image format"),
   safety_tolerance: apicityField(base.safety_tolerance, "Safety tolerance 1-6"),
-  seed: z.number().optional().describe("Seed for deterministic output"),
+  seed: z.number().int().optional().describe("Seed for deterministic output"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;

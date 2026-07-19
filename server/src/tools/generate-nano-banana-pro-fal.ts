@@ -5,19 +5,19 @@ import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 import { modelSlug } from "@apicity/cost";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
 const base = FalNanoBananaProTextToImageRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Text prompt for image generation"),
-  num_images: z.number().int().optional().describe("Number of images to generate"),
+  prompt: apicityStringField(base.prompt, "Text prompt for image generation", { required: true }),
+  num_images: z.number().int().min(1).max(4).optional().describe("Number of images to generate (1-4)"),
   aspect_ratio: apicityField(base.aspect_ratio, "Aspect ratio"),
   resolution: apicityField(base.resolution, "Output resolution (1K/2K/4K)"),
   output_format: apicityField(base.output_format, "Output image format"),
-  seed: z.number().optional().describe("Seed for deterministic output"),
-  enable_web_search: z.boolean().optional().describe("Enable web search grounding"),
+  seed: z.number().int().optional().describe("Seed for deterministic output"),
+  enable_web_search: apicityField(base.enable_web_search, "Enable web search grounding"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;

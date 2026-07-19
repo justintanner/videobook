@@ -1,11 +1,18 @@
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
-import { HappyHorse11AspectRatioSchema, HappyHorseResolutionSchema } from "@apicity/kie/zod";
+import {
+  HappyHorse11AspectRatioSchema,
+  HappyHorse11ReferenceToVideoRequestSchema,
+  HappyHorseDurationSchema,
+  HappyHorseResolutionSchema,
+} from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField, apicityStringNumberField } from "./schema-from-apicity.js";
+
+const SLUG = modelSlug("kie", "happyhorse-1-1/reference-to-video");
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -30,11 +37,11 @@ type RefInput = { assetId: string; filename: string };
 
 const generateHappyhorseRefVideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description (max 5000 chars / 2500 Chinese chars)"),
-  image_slugs: z.array(z.string()).min(1).max(9).describe("1-9 reference image @slugs (order defines character1, character2, ...)"),
+  prompt: apicityStringField(HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.prompt, "Video description (max 5000 chars / 2500 Chinese chars)", { required: true }),
+  image_slugs: apicityStringArrayField(HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.reference_image, "1-9 reference image @slugs (order defines character1, character2, ...)", { required: true }),
   resolution: apicityField(HappyHorseResolutionSchema, "Output resolution: 720p / 1080p (default 1080p)"),
   aspect_ratio: apicityField(HappyHorse11AspectRatioSchema, "Output aspect ratio (default 16:9)"),
-  duration: z.string().optional().describe("Video duration in seconds (3-15, default 5)"),
+  duration: apicityStringNumberField(HappyHorseDurationSchema, "Video duration in seconds (3-15, default 5)"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 
@@ -65,9 +72,7 @@ export function generateHappyhorseRefVideoDef(fs: VideocityFs): ToolDef {
         imageInputs.push({ assetId, filename: file.name });
       }
 
-      // Naming keys off the 1.0 happyhorse/* slug ("hh"); the payload targets
-      // happyhorse-1-1. See docs/apicity-gaps.md.
-      const videoName = `${modelSlug("kie", "happyhorse/reference-to-video")}-${slugify(prompt) || String(Date.now())}`;
+      const videoName = `${SLUG}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
@@ -75,7 +80,7 @@ export function generateHappyhorseRefVideoDef(fs: VideocityFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = imageInputs.map((i) => i.assetId);
-      const jobId = `${modelSlug("kie", "happyhorse/reference-to-video")}-r2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `${SLUG}-r2v-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_happyhorse_ref_video",

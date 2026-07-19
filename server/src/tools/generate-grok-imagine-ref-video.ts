@@ -1,12 +1,11 @@
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
-import { GrokImagineDurationSchema, GrokImagineResolutionSchema } from "@apicity/kie/zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringField, apicityStringNumberField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -33,14 +32,15 @@ type RefImageInput = {
 };
 
 const generateGrokImagineRefVideoSchema = {
-  prompt: z.string().describe("Text prompt for video generation"),
+  prompt: apicityStringField(XaiVideoGenerateRequestSchema.shape.prompt, "Text prompt for video generation", { required: true }),
   project_slug: z.string().describe("Project slug"),
   image_slugs: z
     .array(z.string())
+    .max(7)
     .optional()
-    .describe("Optional reference image slugs (0-4, e.g., ['@img-sunset'])"),
-  duration: apicityField(GrokImagineDurationSchema, "Video duration in seconds"),
-  resolution: apicityField(GrokImagineResolutionSchema, "Output resolution"),
+    .describe("Optional reference image slugs (0-7, e.g., ['@img-sunset'])"),
+  duration: apicityStringNumberField(XaiVideoGenerateRequestSchema.shape.duration, "Video duration in seconds (1-15; max 10 with references)"),
+  resolution: apicityField(XaiVideoGenerateRequestSchema.shape.resolution, "Output resolution"),
   aspect_ratio: apicityField(XaiVideoGenerateRequestSchema.shape.aspect_ratio, "Video aspect ratio"),
   _provider: z.string().optional().describe("Provider key (always xai)"),
 } satisfies ZodRawShape;
@@ -51,7 +51,7 @@ export function generateGrokImagineRefVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "generate_grok_imagine_ref_video",
     description:
-      "Generate a video using xAI Grok Imagine with optional reference images (0-4). Creates a new vid- asset and enqueues a background job.",
+      "Generate a video using xAI Grok Imagine with optional reference images (0-7). Creates a new vid- asset and enqueues a background job.",
     schema: generateGrokImagineRefVideoSchema,
     handler: async (args) => {
       const { prompt, project_slug, image_slugs, duration, resolution, aspect_ratio } = args as Args;
@@ -63,11 +63,16 @@ export function generateGrokImagineRefVideoDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      // Resolve reference images (0-4)
       const refImages: RefImageInput[] = [];
       const slugs = image_slugs ?? [];
+      if (slugs.length > 0 && duration !== undefined && Number(duration) > 10) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "xAI reference-to-video supports at most 10 seconds" }],
+        };
+      }
 
-      for (const rawSlug of slugs.slice(0, 4)) {
+      for (const rawSlug of slugs) {
         const assetId = rawSlug.replace(/^@/, "");
         if (!assetId.startsWith("img-")) {
           return {
@@ -95,7 +100,6 @@ export function generateGrokImagineRefVideoDef(fs: VideocityFs): ToolDef {
         refImages.push({ assetId, filename: imageFile.name });
       }
 
-      // Create output video asset
       const assetName = `${modelSlug("kie", "grok-imagine/image-to-video")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", assetName, project_slug);
       if (!assetResult.ok) {

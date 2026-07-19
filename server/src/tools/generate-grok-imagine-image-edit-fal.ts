@@ -5,15 +5,15 @@ import { FalXaiGrokImagineImageEditRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 const base = FalXaiGrokImagineImageEditRequestSchema.shape;
 
 const schema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Edit instruction"),
-  image_slugs: z.array(z.string()).min(1).max(3).describe("1-3 @img-* slugs for reference images"),
-  num_images: z.number().int().min(1).max(4).optional().describe("Number of images to generate (1-4)"),
+  prompt: apicityStringField(base.prompt, "Edit instruction", { required: true }),
+  image_slugs: apicityStringArrayField(base.image_urls, "1-3 @img-* slugs for reference images", { required: true }).min(1),
+  num_images: apicityField(base.num_images, "Number of images to generate (1-4)"),
   resolution: apicityField(base.resolution, "Output resolution"),
   output_format: apicityField(base.output_format, "Output image format"),
 } satisfies ZodRawShape;

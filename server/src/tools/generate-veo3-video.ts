@@ -4,17 +4,17 @@ import { VeoGenerateRequestSchema } from "@apicity/kie/zod";
 import type { VeoModel } from "@apicity/kie";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 import { resolveImageSlug, slugify, type RefInput } from "./_seedance2-shared.js";
 
 const veoInput = VeoGenerateRequestSchema.shape;
 
 const veo3VideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description"),
-  image_slugs: z.array(z.string()).optional().describe("Reference image @slugs for image-to-video (optional)"),
+  prompt: apicityStringField(veoInput.prompt, "Video description", { required: true }),
+  image_slugs: apicityStringArrayField(veoInput.imageUrls, "Reference image @slugs for image-to-video (optional)"),
   aspect_ratio: apicityField(veoInput.aspectRatio, "Output aspect ratio: 16:9 / 9:16 / Auto"),
-  seed: z.number().optional().describe("Random seed for reproducibility"),
+  seed: apicityField(veoInput.seeds, "Random seed for reproducibility"),
 } satisfies ZodRawShape;
 
 type Veo3VideoArgs = SchemaArgs<typeof veo3VideoSchema>;

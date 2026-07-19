@@ -1,5 +1,5 @@
 import type { VideocityFs } from "videocity-engine";
-import type { Wan27Resolution } from "@apicity/kie";
+import type { Wan27Resolution, Wan27TextToVideoRequest } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -18,7 +18,7 @@ type GenerateWan27T2vVideoPayload = {
   audioRef?: RefInput;
   sourceAudioIds: string[];
   resolution?: Wan27Resolution;
-  aspect_ratio?: string;
+  aspect_ratio?: Wan27TextToVideoRequest["input"]["ratio"];
   duration?: string;
   prompt_extend?: boolean;
   watermark?: boolean;

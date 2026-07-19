@@ -1,10 +1,12 @@
 import { modelSlug } from "@apicity/cost";
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
+import { GrokImageToImageRequestSchema } from "@apicity/kie/zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
+import { apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -23,10 +25,9 @@ function deriveImageName(imageAssetId: string): string {
 
 const generateGrokImagineImageSchema = {
   asset_id: z.string().optional().describe("Image asset ID (must be img-*)"),
-  image_slugs: z.array(z.string()).optional().describe("Image slugs (e.g., ['@img-sunset']). Used as fallback when asset_id is not provided."),
+  image_slugs: apicityStringArrayField(GrokImageToImageRequestSchema.shape.input.shape.image_urls, "Exactly one image slug (e.g., ['@img-sunset']). Used as fallback when asset_id is not provided."),
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().optional().describe("Optional prompt to guide image transformation"),
-  aspect_ratio: z.string().optional().describe("Aspect ratio"),
+  prompt: apicityStringField(GrokImageToImageRequestSchema.shape.input.shape.prompt, "Optional prompt to guide image transformation"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;
 
@@ -38,7 +39,7 @@ export function generateGrokImagineImageDef(fs: VideocityFs): ToolDef {
     description: "Generate an image from an image asset using Grok Imagine image-to-image. Creates a new img- asset and enqueues a background job. Requires at least one of asset_id or image_slugs.",
     schema: generateGrokImagineImageSchema,
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, aspect_ratio, _provider } = args as Args;
+      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, _provider } = args as Args;
 
       const isXai = _provider !== undefined && _provider.startsWith("xai");
       const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
@@ -93,7 +94,6 @@ export function generateGrokImagineImageDef(fs: VideocityFs): ToolDef {
         sourceImageId: asset_id,
         projectSlug: project_slug,
         ...(prompt !== undefined ? { prompt } : {}),
-        ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
         ...(_provider !== undefined ? { _provider } : {}),
       } as unknown as Record<string, unknown>);
 
@@ -111,4 +111,3 @@ export function generateGrokImagineImageDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

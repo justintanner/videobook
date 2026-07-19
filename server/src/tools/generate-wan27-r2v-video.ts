@@ -1,14 +1,15 @@
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
-import { Wan27AspectRatioSchema, Wan27ResolutionSchema } from "@apicity/kie/zod";
+import { Wan27RefToVideoRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField, apicityStringNumberField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+const wan27R2v = Wan27RefToVideoRequestSchema.shape.input.shape;
 
 function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
   const images = files.filter((f) => {
@@ -65,19 +66,19 @@ async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: strin
 
 const generateWan27R2vVideoSchema = {
   project_slug: z.string().describe("Project slug"),
-  prompt: z.string().describe("Video description (max 5000 chars)"),
-  negative_prompt: z.string().optional().describe("Negative prompt — things to avoid (max 500 chars)"),
-  image_slugs: z.array(z.string()).optional().describe("Reference image @slugs (max 5 combined with videos)"),
-  video_slugs: z.array(z.string()).optional().describe("Reference video @slugs (max 5 combined with images)"),
-  first_frame_slug: z.string().optional().describe("First frame image asset (overrides aspect_ratio, e.g., @img-start)"),
-  audio_slug: z.string().optional().describe("Voice timbre audio asset (wav/mp3, 1-10s, e.g., @aud-voice)"),
-  resolution: apicityField(Wan27ResolutionSchema, "Video resolution (default 1080p)"),
-  aspect_ratio: apicityField(Wan27AspectRatioSchema, "Video aspect ratio (ignored if first_frame_slug set)"),
-  duration: z.string().optional().describe("Video duration in seconds (2-10)"),
-  prompt_extend: z.boolean().optional().describe("Intelligent prompt rewriting (default true)"),
-  watermark: z.boolean().optional().describe("Add provider watermark to output (default false)"),
-  nsfw_checker: z.boolean().optional().describe("Content safety filter (default false)"),
-  seed: z.number().int().optional().describe("Random seed for reproducibility"),
+  prompt: apicityStringField(wan27R2v.prompt, "Video description (max 5000 chars)", { required: true }),
+  negative_prompt: apicityStringField(wan27R2v.negative_prompt, "Negative prompt — things to avoid (max 500 chars)"),
+  image_slugs: apicityStringArrayField(wan27R2v.reference_image, "Reference image @slugs (max 5 combined with videos)"),
+  video_slugs: apicityStringArrayField(wan27R2v.reference_video, "Reference video @slugs (max 5 combined with images)"),
+  first_frame_slug: apicityStringField(wan27R2v.first_frame, "First frame image asset (overrides aspect_ratio, e.g., @img-start)"),
+  audio_slug: apicityStringField(wan27R2v.reference_voice, "Voice timbre audio asset (wav/mp3, 1-10s, e.g., @aud-voice)"),
+  resolution: apicityField(wan27R2v.resolution, "Video resolution (default 1080p)"),
+  aspect_ratio: apicityField(wan27R2v.aspect_ratio, "Video aspect ratio (ignored if first_frame_slug set)"),
+  duration: apicityStringNumberField(wan27R2v.duration, "Video duration in seconds (2-10)"),
+  prompt_extend: apicityField(wan27R2v.prompt_extend, "Intelligent prompt rewriting (default true)"),
+  watermark: apicityField(wan27R2v.watermark, "Add provider watermark to output (default false)"),
+  nsfw_checker: apicityField(wan27R2v.nsfw_checker, "Content safety filter (default false)"),
+  seed: apicityField(wan27R2v.seed, "Random seed for reproducibility"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 

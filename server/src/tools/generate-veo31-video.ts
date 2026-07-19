@@ -7,7 +7,7 @@ import type { ToolDef } from "./tool-def.js";
 import { resolveImageSlug, slugify, type RefInput } from "./_seedance2-shared.js";
 
 // Allowed values are hand-typed from the useapi.net Google Flow docs — the
-// 0.7.2 @apicity/googleflow schemas carry only loose `.or(z.string())`
+// 0.7.3 @apicity/googleflow schemas carry only loose `.or(z.string())`
 // model/aspect enums, not the per-model restrictions (docs/apicity-gaps.md §14).
 const VEO31_ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const;
 const VEO31_DURATIONS = ["4", "6", "8"] as const;
