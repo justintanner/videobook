@@ -1,5 +1,18 @@
-import { describe, it, expect } from "vitest";
-import { buildAudioFilter } from "./render-timeline.js";
+import { execFile } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { FFMPEG, probeVideo } from "../ffmpeg.js";
+import {
+  buildAudioFilter,
+  buildReencodeArgs,
+  planTimelineVideo,
+  type TimelineVideoProbe,
+} from "./render-timeline.js";
+
+const execFileAsync = promisify(execFile);
 
 describe("render-timeline job handler", () => {
   it("exports registerRenderTimelineJob function", async () => {
@@ -43,4 +56,120 @@ describe("buildAudioFilter", () => {
     expect(filter).not.toMatch(/\[2:a:0\]/);
     expect(filter.endsWith("[a2]")).toBe(true);
   });
+});
+
+describe("planTimelineVideo", () => {
+  const cfr30: TimelineVideoProbe = {
+    fps: 30,
+    avgFps: 30,
+    width: 1920,
+    height: 1080,
+    videoCodec: "h264",
+  };
+
+  it("stream-copies when all inputs are uniform CFR h264", () => {
+    expect(planTimelineVideo([cfr30, { ...cfr30 }])).toEqual({ mode: "copy" });
+  });
+
+  it("re-encodes at 30fps when slot frame rates differ", () => {
+    const plan = planTimelineVideo([cfr30, { ...cfr30, fps: 24, avgFps: 24 }]);
+    expect(plan.mode).toBe("reencode");
+    if (plan.mode !== "reencode") return;
+    expect(plan.targetFps).toBe(30);
+    expect(plan.reasons).toContain("mixed frame rates");
+  });
+
+  it("re-encodes VFR input at its own nominal rate", () => {
+    // The skips-on-X shape: nominal 24fps, measured ~25.2fps.
+    const plan = planTimelineVideo([{ ...cfr30, fps: 24, avgFps: 25.19 }]);
+    expect(plan.mode).toBe("reencode");
+    if (plan.mode !== "reencode") return;
+    expect(plan.targetFps).toBe(24);
+    expect(plan.reasons).toContain("variable frame rate input");
+  });
+
+  it("tolerates rounding noise in the measured rate", () => {
+    expect(planTimelineVideo([{ ...cfr30, avgFps: 30.001 }])).toEqual({ mode: "copy" });
+  });
+
+  it("re-encodes non-h264 and mixed-resolution inputs", () => {
+    const hevc = planTimelineVideo([{ ...cfr30, videoCodec: "hevc" }]);
+    expect(hevc.mode).toBe("reencode");
+    const mixedSize = planTimelineVideo([cfr30, { ...cfr30, width: 1280, height: 720 }]);
+    expect(mixedSize.mode).toBe("reencode");
+    if (mixedSize.mode !== "reencode") return;
+    expect(mixedSize.reasons).toContain("mixed resolutions");
+  });
+
+  it("treats a null measured rate as not-VFR", () => {
+    expect(planTimelineVideo([{ ...cfr30, avgFps: null }])).toEqual({ mode: "copy" });
+  });
+});
+
+describe("timeline re-encode with real ffmpeg", () => {
+  let workDir: string;
+  let clip24: string;
+  let clip30: string;
+
+  async function makeClip(path: string, rate: number): Promise<void> {
+    await execFileAsync(FFMPEG, [
+      "-f", "lavfi", "-i", `testsrc=duration=1:size=320x240:rate=${rate}`,
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p",
+      "-c:a", "aac", "-shortest",
+      "-y", path,
+    ]);
+  }
+
+  beforeAll(async () => {
+    workDir = await mkdtemp(join(tmpdir(), "render-timeline-test-"));
+    clip24 = join(workDir, "clip24.mp4");
+    clip30 = join(workDir, "clip30.mp4");
+    await Promise.all([makeClip(clip24, 24), makeClip(clip30, 30)]);
+  }, 60_000);
+
+  afterAll(async () => {
+    await rm(workDir, { recursive: true, force: true });
+  });
+
+  it("concatenating mixed-fps slots produces a constant-frame-rate file", async () => {
+    const slots = [
+      { slug: "vid-a", volume: 100, fadeIn: 0, fadeOut: 0, assetDir: workDir },
+      { slug: "vid-b", volume: 100, fadeIn: 0, fadeOut: 0, assetDir: workDir },
+    ];
+    const probes = await Promise.all([probeVideo(clip24), probeVideo(clip30)]);
+    const plan = planTimelineVideo(
+      probes.map((p) => ({
+        fps: p.fps,
+        avgFps: p.avgFps,
+        width: p.width,
+        height: p.height,
+        videoCodec: p.videoCodec,
+      })),
+    );
+    expect(plan.mode).toBe("reencode");
+    if (plan.mode !== "reencode") return;
+
+    const outputPath = join(workDir, "timeline.mp4");
+    const args = buildReencodeArgs({
+      inputPaths: [clip24, clip30],
+      resolvedSlots: slots,
+      durations: probes.map((p) => p.duration),
+      hasAudioFlags: probes.map((p) => p.hasAudio),
+      resolvedAudio: [],
+      plan,
+      outputPath,
+    });
+    await execFileAsync(FFMPEG, args);
+
+    const result = await probeVideo(outputPath);
+    expect(result.fps).toBe(30);
+    expect(result.avgFps).not.toBeNull();
+    expect(Math.abs((result.avgFps ?? 0) - result.fps)).toBeLessThan(0.05);
+    expect(result.width).toBe(320);
+    expect(result.height).toBe(240);
+    expect(result.hasAudio).toBe(true);
+    expect(result.duration).toBeGreaterThan(1.8);
+    expect(result.duration).toBeLessThan(2.3);
+  }, 60_000);
 });

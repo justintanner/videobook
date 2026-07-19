@@ -30,6 +30,10 @@ export interface ProbeResult {
   videoDuration: number;
   audioDuration: number | null;
   fps: number;
+  /** Measured average frame rate (frames/duration). Diverges from `fps`
+   * (the container's nominal rate) on variable-frame-rate files; null when
+   * ffprobe reports no measurable rate (e.g. "0/0"). */
+  avgFps: number | null;
   hasAudio: boolean;
   videoCodec: string | null;
   audioCodec: string | null;
@@ -133,6 +137,7 @@ export async function probeVideo(
     const [num, den] = rFrameRate.split("/").map(Number);
     if (den > 0) fps = num / den;
   }
+  const avgFps = rationalValue(videoStream?.avg_frame_rate);
 
   const audioStream = (data.streams as Array<Record<string, unknown>>)?.find(
     (s) => s.codec_type === "audio",
@@ -150,6 +155,7 @@ export async function probeVideo(
     videoDuration,
     audioDuration,
     fps,
+    avgFps,
     hasAudio,
     videoCodec,
     audioCodec,
