@@ -26,6 +26,7 @@ import {
   getMode,
   visibleParams,
   filterValuesForMode,
+  inferModeKey,
   modeRequiredMissing,
   modeAssetParams,
   modeBudgetWarnings,
@@ -237,16 +238,6 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       setSelectedModelKey(data.selected_model);
       const option = data.model_options.find((o) => o.key === data.selected_model);
       setSelectedProviderKey(option?.selected_provider ?? data.selected_provider ?? '');
-      // Seed /type for moded models. Initial load may be overwritten by the
-      // saved-settings restore effect; model switches land here after clear.
-      if (option?.modes) {
-        setSelectedModeKey((prev) => {
-          if (prev && option.modes!.modes.some((m) => m.key === prev)) return prev;
-          return option.modes!.default_mode;
-        });
-      } else {
-        setSelectedModeKey(null);
-      }
       const currentValues = formValuesRef.current;
       const currentPrompt = isRefresh ? currentValues.prompt : undefined;
       const prefilled = option?.prefilled_values ?? {};
@@ -266,6 +257,15 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         }
       }
       const mergedValues = { ...prefilled, ...preservedSlugFields, prompt: seededPrompt };
+      const optionModes = option?.modes;
+      if (optionModes) {
+        setSelectedModeKey((prev) => {
+          if (prev && optionModes.modes.some((m) => m.key === prev)) return prev;
+          return inferModeKey(optionModes, mergedValues);
+        });
+      } else {
+        setSelectedModeKey(null);
+      }
       setFormValues(mergedValues);
       if (!isRefresh) setDroppedAssets(new Map());
     } catch (e) {
@@ -297,30 +297,34 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     appliedSavedRef.current = true;
     const saved = savedRef.current;
     const option = preview.model_options.find(o => o.key === selectedModelKey);
+    if (!option) return;
+    const overrides: Record<string, unknown> = {};
+    if (saved?.fields && option.schema) {
+      for (const [key, value] of Object.entries(saved.fields)) {
+        if (key in option.schema.properties && key !== 'prompt' && key !== 'project_slug') {
+          const prop = option.schema.properties[key];
+          const coerced = coerceValueToSchemaType(value, prop);
+          if (prop.enum && !(prop.enum as unknown[]).includes(coerced as string | number)) continue;
+          overrides[key] = coerced;
+        }
+      }
+    }
     if (option?.modes) {
       const savedMode = saved?.mode;
       const validSaved = savedMode && option.modes.modes.some((m) => m.key === savedMode)
         ? savedMode
         : null;
-      setSelectedModeKey(validSaved ?? option.modes.default_mode);
+      setSelectedModeKey(validSaved ?? inferModeKey(option.modes, {
+        ...option.prefilled_values,
+        ...overrides,
+      }));
     } else {
       setSelectedModeKey(null);
-    }
-    if (!saved?.fields) return;
-    if (!option?.schema) return;
-    const overrides: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(saved.fields)) {
-      if (key in option.schema.properties && key !== 'prompt' && key !== 'project_slug') {
-        const prop = option.schema.properties[key];
-        const coerced = coerceValueToSchemaType(value, prop);
-        if (prop.enum && !(prop.enum as unknown[]).includes(coerced as string | number)) continue;
-        overrides[key] = coerced;
-      }
     }
     if (Object.keys(overrides).length > 0) {
       setFormValues(prev => ({ ...prev, ...overrides }));
     }
-    if (saved.droppedAssets?.length) {
+    if (saved?.droppedAssets?.length) {
       // Drop img-* entries that no longer exist in the project (e.g. after rename).
       const live = saved.droppedAssets.filter((a) => {
         if (!stripSlugPrefix(a.slug).startsWith('img-') || !imageAssets) return true;
@@ -866,8 +870,27 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     if (activeMode) {
       warnings.push(...modeBudgetWarnings(activeMode, formValues));
     }
+    if (submitToolName === 'generate_google_omni_video') {
+      const prompt = typeof submitValues.prompt === 'string' ? submitValues.prompt : '';
+      const rewrittenPrompt = rewriteCharacterMentions(
+        prompt,
+        charMentions.map((c) => ({ handle: c.handle, n: c.n })),
+      );
+      const referenceCount = (value: unknown): number =>
+        Array.isArray(value)
+          ? value.filter((ref): ref is string => typeof ref === 'string' && ref.trim() !== '').length
+          : 0;
+      const cleanedPrompt = stripOrphanedReferenceMarkers(rewrittenPrompt, {
+        character: referenceCount(submitValues.character_refs),
+        referenceImage: referenceCount(submitValues.image_slugs),
+        referenceAudio: referenceCount(submitValues.voice_refs),
+      });
+      if (cleanedPrompt !== rewrittenPrompt) {
+        warnings.push('Attach every @character_N, @referenceImage_N, and @referenceAudio_N marker used in the prompt before generating.');
+      }
+    }
     return warnings;
-  }, [selectedOption?.tool_name, activeMode, formValues]);
+  }, [selectedOption?.tool_name, activeMode, formValues, submitToolName, submitValues, charMentions]);
 
   // Live required-field check derived from current form values. The server
   // computes validation.missing_required once at preview time; this recomputes
@@ -958,6 +981,32 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
 
   const handleGenerate = useCallback(async () => {
     if (!selectedOption || !projectSlug) return;
+    const outValues = modes && activeMode ? filterValuesForMode(modes, activeMode.key, formValues) : formValues;
+    const outToolName = resolveEffectiveToolName(selectedOption, activeModeKey);
+    const rewrittenPrompt = rewriteCharacterMentions(
+      typeof outValues.prompt === 'string' ? outValues.prompt : '',
+      charMentions.map((c) => ({ handle: c.handle, n: c.n })),
+    );
+    const outImageSlugs = Array.isArray(outValues.image_slugs)
+      ? (outValues.image_slugs as string[]).filter((s) => s.trim() !== '')
+      : [];
+    let outCharacterRefs = Array.isArray(outValues.character_refs)
+      ? (outValues.character_refs as string[]).filter((s) => s.trim() !== '')
+      : [];
+    const outVoiceRefs = Array.isArray(outValues.voice_refs)
+      ? (outValues.voice_refs as string[]).filter((s) => s.trim() !== '')
+      : [];
+    if (
+      outToolName === 'generate_google_omni_video'
+      && stripOrphanedReferenceMarkers(rewrittenPrompt, {
+        character: outCharacterRefs.length,
+        referenceImage: outImageSlugs.length,
+        referenceAudio: outVoiceRefs.length,
+      }) !== rewrittenPrompt
+    ) {
+      setError('Attach every reference used by the prompt before generating.');
+      return;
+    }
     const requestId = createGenerationRequestId(category);
     const submittedPrompt = typeof formValues.prompt === 'string' ? formValues.prompt : '';
     onGenerationLifecycle?.({
@@ -970,8 +1019,8 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
     // Persist settings for next generation
     const fields: Record<string, unknown> = {};
     for (const key of Object.keys(selectedOption.schema.properties)) {
-      if (key !== 'prompt' && key !== 'project_slug' && key in formValues) {
-        fields[key] = formValues[key];
+      if (key !== 'prompt' && key !== 'project_slug' && key in outValues) {
+        fields[key] = outValues[key];
       }
     }
     const droppedArr = Array.from(droppedAssets.entries()).map(([, a]) => ({
@@ -985,27 +1034,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
       droppedAssets: droppedArr,
     });
     try {
-      // Filter to the active mode's params (no-op for non-moded models) and
-      // resolve the mode's tool. The wire payload stays byte-identical since
-      // the omni tool coalesces absent/blank identically.
-      const outValues = modes && activeMode ? filterValuesForMode(modes, activeMode.key, formValues) : formValues;
-      const outToolName = resolveEffectiveToolName(selectedOption, activeModeKey);
-      const rewrittenPrompt = rewriteCharacterMentions(
-        typeof outValues.prompt === 'string' ? outValues.prompt : '',
-        charMentions.map((c) => ({ handle: c.handle, n: c.n })),
-      );
-      const outImageSlugs = Array.isArray(outValues.image_slugs)
-        ? (outValues.image_slugs as string[]).filter((s) => s.trim() !== '')
-        : [];
-      let outCharacterRefs = Array.isArray(outValues.character_refs)
-        ? (outValues.character_refs as string[]).filter((s) => s.trim() !== '')
-        : [];
       if (outCharacterRefs.length > 0) {
         outCharacterRefs = await resolveGoogleFlowCharacterRefs(callToolRef.current, outCharacterRefs);
       }
-      const outVoiceRefs = Array.isArray(outValues.voice_refs)
-        ? (outValues.voice_refs as string[]).filter((s) => s.trim() !== '')
-        : [];
       const cleanedPrompt = stripOrphanedReferenceMarkers(rewrittenPrompt, {
         character: outCharacterRefs.length,
         referenceImage: outImageSlugs.length,
