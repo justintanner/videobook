@@ -62,6 +62,13 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     category: "action",
   },
   {
+    name: "inject_first_frame",
+    actualTool: "inject_first_frame",
+    description: "Replace frame zero of a video or final output with an image without changing timing or audio",
+    params: ["target_asset_id", "image_asset_id", "orientation"],
+    category: "action",
+  },
+  {
     name: "extract_last_frame",
     actualTool: "extract_last_frame",
     description: "Extract the last frame of a video as a new image asset",

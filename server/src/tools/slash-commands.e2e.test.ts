@@ -920,6 +920,21 @@ describe("slash commands e2e", () => {
       expect(cmd.uiAction).toBeUndefined();
     });
 
+    it("parses and dispatches /inject-first-frame", () => {
+      const args = simulateParse(
+        "/inject-first-frame",
+        "@final @img-cover portrait",
+      );
+      expect(args).toEqual({
+        target_asset_id: "final",
+        image_asset_id: "img-cover",
+        orientation: "portrait",
+      });
+      const cmd = findCommand("/inject-first-frame");
+      expect(cmd.mcpTool?.tool).toBe("inject_first_frame");
+      expect(cmd.mcpTool?.autoInject).toContain("project_slug");
+    });
+
     it("/generate parseCommandArgs only captures first token as prompt (model gets rest)", () => {
       // /generate has 2 string params: prompt + model. parseCommandArgs assigns
       // the first token to prompt and remaining tokens to model (the last string param).

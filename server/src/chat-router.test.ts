@@ -165,7 +165,14 @@ describe("TIMESTAMP_PARAMS", () => {
 
 describe("ROUTABLE_TOOLS", () => {
   it("has the expected number of entries", () => {
-    expect(ROUTABLE_TOOLS.length).toBe(34);
+    expect(ROUTABLE_TOOLS.length).toBe(35);
+  });
+
+  it("includes inject_first_frame for image-to-video routing", () => {
+    const tool = getRoutableTool("inject_first_frame");
+    expect(tool).toBeDefined();
+    expect(tool!.actualTool).toBe("inject_first_frame");
+    expect(tool!.params).toEqual(["target_asset_id", "image_asset_id", "orientation"]);
   });
 
   it("includes create_watermark for QR/watermark routing", () => {

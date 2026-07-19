@@ -684,6 +684,22 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "rename_asset", autoInject: ["project_slug"] },
   },
   {
+    command: "/inject-first-frame",
+    description: "Replace frame zero of a video or final output with an image while preserving audio and timing",
+    example: "/inject-first-frame @vid-clip @img-cover",
+    category: "context_menu",
+    icon: "ImagePlus",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "target_asset_id", type: "string", required: true, description: "Target vid-* asset or final" },
+      { name: "image_asset_id", type: "string", required: true, description: "Source img-* asset" },
+      { name: "orientation", type: "string", required: false, description: "For final: landscape, portrait, or square" },
+    ],
+    mcpTool: { tool: "inject_first_frame", autoInject: ["project_slug"] },
+  },
+  {
     command: "/extract-first-frame",
     description: "Extract first frame from video as image asset",
     example: "/extract-first-frame @vid-clip",

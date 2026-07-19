@@ -1,0 +1,179 @@
+import type { AssetManifestFile, VideocityFs } from "videocity-engine";
+import { z } from "zod";
+import { extname, join } from "node:path";
+import { probeVideo } from "../ffmpeg.js";
+import { queue } from "../queue.js";
+import type { ToolDef } from "./tool-def.js";
+import { toolError } from "./_shared.js";
+
+type Orientation = "landscape" | "portrait" | "square";
+
+const FINAL_FILENAMES: Record<Orientation, string> = {
+  landscape: "timeline_landscape.mp4",
+  portrait: "timeline_portrait.mp4",
+  square: "timeline_square.mp4",
+};
+
+const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
+
+function cleanAssetId(value: string): string {
+  return value.trim().replace(/^@/, "");
+}
+
+function isOrientation(value: unknown): value is Orientation {
+  return value === "landscape" || value === "portrait" || value === "square";
+}
+
+function orientationForDimensions(width: number, height: number): Orientation {
+  if (width === height) return "square";
+  return width > height ? "landscape" : "portrait";
+}
+
+function findImageFile(files: AssetManifestFile[], orientation: Orientation): AssetManifestFile | null {
+  const preferred = files.find((file) => file.name.toLowerCase() === `${orientation}.jpg`);
+  if (preferred) return preferred;
+  return files.find((file) => {
+    const extension = extname(file.name).toLowerCase();
+    return file.name.toLowerCase().startsWith("original.") && IMAGE_EXTENSIONS.has(extension);
+  }) ?? null;
+}
+
+function findCanonicalVideo(files: AssetManifestFile[]): AssetManifestFile | null {
+  return files.find((file) => /^original\.(mp4|mov)$/i.test(file.name)) ?? null;
+}
+
+async function timelineOrientation(fs: VideocityFs, projectSlug: string): Promise<Orientation | null> {
+  const result = await fs.readProjectMeta<Record<string, unknown> | unknown[]>("timeline", projectSlug);
+  if (!result.ok || Array.isArray(result.value)) return null;
+  if (isOrientation(result.value.currentOrientation)) return result.value.currentOrientation;
+  return isOrientation(result.value.render) ? result.value.render : null;
+}
+
+async function findFinalVideo(
+  fs: VideocityFs,
+  projectSlug: string,
+  files: AssetManifestFile[],
+  requested?: Orientation,
+): Promise<{ file: AssetManifestFile; orientation: Orientation } | null> {
+  const preferred = requested ?? await timelineOrientation(fs, projectSlug);
+  const candidates: Orientation[] = [
+    ...(preferred ? [preferred] : []),
+    "landscape",
+    "portrait",
+    "square",
+  ];
+  for (const orientation of [...new Set(candidates)]) {
+    const filename = FINAL_FILENAMES[orientation];
+    const file = files.find((entry) => entry.name.toLowerCase() === filename);
+    if (file) return { file, orientation };
+    if (requested === orientation) return null;
+  }
+  return null;
+}
+
+export function injectFirstFrameDef(fs: VideocityFs): ToolDef {
+  return {
+    name: "inject_first_frame",
+    description: "Replace exactly the first frame of a vid-* or final video with an img-* asset in place. Preserves runtime and stream-copies the original audio unchanged. For final, orientation defaults to the active timeline orientation.",
+    schema: {
+      target_asset_id: z.string().describe("Target vid-* asset or final"),
+      image_asset_id: z.string().describe("Source img-* asset"),
+      project_slug: z.string().describe("Project slug"),
+      orientation: z
+        .enum(["landscape", "portrait", "square"])
+        .optional()
+        .describe("Final output orientation; defaults to the active timeline orientation"),
+    },
+    handler: async (args) => {
+      const {
+        target_asset_id,
+        image_asset_id,
+        project_slug,
+        orientation,
+      } = args as {
+        target_asset_id: string;
+        image_asset_id: string;
+        project_slug: string;
+        orientation?: Orientation;
+      };
+      const targetAssetId = cleanAssetId(target_asset_id);
+      const imageAssetId = cleanAssetId(image_asset_id);
+
+      if (targetAssetId !== "final" && !targetAssetId.startsWith("vid-")) {
+        return toolError(`inject_first_frame requires a vid-* or final target, got ${target_asset_id}`);
+      }
+      if (!imageAssetId.startsWith("img-")) {
+        return toolError(`inject_first_frame requires an img-* source, got ${image_asset_id}`);
+      }
+      if (targetAssetId !== "final" && orientation !== undefined) {
+        return toolError("orientation is only valid when target_asset_id is final");
+      }
+
+      const [targetManifest, imageManifest] = await Promise.all([
+        fs.getManifest(targetAssetId, project_slug),
+        fs.getManifest(imageAssetId, project_slug),
+      ]);
+      if (!targetManifest.ok) return toolError(targetManifest.error.message);
+      if (!imageManifest.ok) return toolError(imageManifest.error.message);
+
+      let targetFile: AssetManifestFile | null;
+      let targetOrientation: Orientation;
+      if (targetAssetId === "final") {
+        const resolved = await findFinalVideo(
+          fs,
+          project_slug,
+          targetManifest.value.files,
+          orientation,
+        );
+        if (!resolved) {
+          const detail = orientation ? ` for ${orientation}` : "";
+          return toolError(`No final video output found${detail}`);
+        }
+        targetFile = resolved.file;
+        targetOrientation = resolved.orientation;
+      } else {
+        targetFile = findCanonicalVideo(targetManifest.value.files);
+        if (!targetFile) return toolError(`No original MP4 or MOV found in asset ${targetAssetId}`);
+        const probe = await probeVideo(join(targetManifest.value.path, targetFile.name));
+        if (probe.videoCodec === null || probe.width <= 0 || probe.height <= 0) {
+          return toolError(`No usable video stream found in asset ${targetAssetId}`);
+        }
+        targetOrientation = orientationForDimensions(probe.width, probe.height);
+      }
+
+      const imageFile = findImageFile(imageManifest.value.files, targetOrientation);
+      if (!imageFile) return toolError(`No usable image file found in asset ${imageAssetId}`);
+
+      const now = Date.now();
+      const extension = extname(targetFile.name).toLowerCase();
+      const outputFilename = `.inject-first-frame-${now}${extension}`;
+      const jobId = `inject-first-frame-${targetAssetId}-${now}`;
+      await queue.enqueue(jobId, {
+        type: "inject_first_frame",
+        assetId: targetAssetId,
+        assetDir: targetManifest.value.path,
+        targetFilename: targetFile.name,
+        inputPath: join(targetManifest.value.path, targetFile.name),
+        outputPath: join(targetManifest.value.path, outputFilename),
+        imageAssetId,
+        imagePath: join(imageManifest.value.path, imageFile.name),
+        projectSlug: project_slug,
+        orientation: targetAssetId === "final" ? targetOrientation : null,
+      });
+
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            target_asset_id: targetAssetId,
+            image_asset_id: imageAssetId,
+            target_filename: targetFile.name,
+            orientation: targetAssetId === "final" ? targetOrientation : null,
+            job_id: jobId,
+            status: "enqueued",
+          }),
+        }],
+      };
+    },
+  };
+}

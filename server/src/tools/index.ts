@@ -65,6 +65,7 @@ import { syncVideoToAudioDef } from "./sync-video-to-audio.js";
 import { audioBoostDef } from "./audio-boost.js";
 import { audioMixDef } from "./audio-mix.js";
 import { reverseVideoDef } from "./reverse-video.js";
+import { injectFirstFrameDef } from "./inject-first-frame.js";
 import { extractFrameDefs } from "./extract-frame.js";
 import { extractAudioDef } from "./extract-audio.js";
 import { replaceVideoAudioDef } from "./replace-video-audio.js";
@@ -280,6 +281,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     audioBoostDef(fs),
     audioMixDef(fs),
     reverseVideoDef(fs),
+    injectFirstFrameDef(fs),
     ...extractFrameDefs(fs),
     extractAudioDef(fs),
     replaceVideoAudioDef(fs),

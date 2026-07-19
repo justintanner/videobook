@@ -20,6 +20,7 @@ import { registerSyncVideoToAudioJob } from "./sync-video-to-audio.js";
 import { registerAudioBoostJob } from "./audio-boost.js";
 import { registerAudioMixJob } from "./audio-mix.js";
 import { registerReverseVideoJob } from "./reverse-video.js";
+import { registerInjectFirstFrameJob } from "./inject-first-frame.js";
 import { registerExtractFrameJob } from "./extract-frame.js";
 import { registerExtractAudioJob } from "./extract-audio.js";
 import { registerExtractWaveformJob } from "./extract-waveform.js";
@@ -143,6 +144,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerAudioBoostJob(fs);
   registerAudioMixJob(fs);
   registerReverseVideoJob(fs);
+  registerInjectFirstFrameJob(fs);
   registerExtractFrameJob(fs);
   registerExtractAudioJob(fs);
   registerExtractWaveformJob(fs);

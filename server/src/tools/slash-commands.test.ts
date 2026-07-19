@@ -115,6 +115,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/play");
     expect(commandNames).toContain("/qart");
     expect(commandNames).toContain("/apply-sfx");
+    expect(commandNames).toContain("/inject-first-frame");
 
     const timewarp = commands.find((c) => c.command === "/timewarp")!;
     expect(timewarp.mcpTool?.tool).toBe("timewarp_video");
@@ -176,6 +177,15 @@ describe("slash_commands tool", () => {
       "target_asset_id",
       "layer_asset_id",
       "volume",
+    ]);
+
+    const injectFirstFrame = commands.find((c) => c.command === "/inject-first-frame")!;
+    expect(injectFirstFrame.mcpTool?.tool).toBe("inject_first_frame");
+    expect(injectFirstFrame.mcpTool?.autoInject).toContain("project_slug");
+    expect(injectFirstFrame.params.map((p) => p.name)).toEqual([
+      "target_asset_id",
+      "image_asset_id",
+      "orientation",
     ]);
 
     const notebook = commands.find((c) => c.command === "/notebook")!;
