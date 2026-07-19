@@ -70,6 +70,7 @@ import { extractFrameDefs } from "./extract-frame.js";
 import { extractAudioDef } from "./extract-audio.js";
 import { extendAudioDef } from "./extend-audio.js";
 import { removeSoundDef } from "./remove-sound.js";
+import { verifyXMentionsDef } from "./verify-x-mentions.js";
 import { replaceVideoAudioDef } from "./replace-video-audio.js";
 import { spliceVideoDef } from "./splice-video.js";
 import { transcribeDef } from "./transcribe.js";
@@ -288,6 +289,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     extractAudioDef(fs),
     extendAudioDef(fs),
     removeSoundDef(fs),
+    verifyXMentionsDef(),
     replaceVideoAudioDef(fs),
     spliceVideoDef(fs),
     transcribeDef(fs),
