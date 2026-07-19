@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { createFs } from "videocity-engine";
 
 describe("rename_asset tool", () => {
   let client: Client;
@@ -91,5 +92,45 @@ describe("rename_asset tool", () => {
       },
     });
     expect(result.isError).toBe(true);
+  });
+
+  it("moves ignored audio media, removes the ghost asset, and preserves its waveform", async () => {
+    const fs = createFs({ projectsDir: tempDir });
+    const created = await fs.createAsset("aud", "old track", "test-proj");
+    if (!created.ok) throw new Error(created.error.message);
+    const sourceId = created.value.assetId;
+    const audio = Buffer.from("fake-mp3-audio");
+    const write = await fs.writeFile(sourceId, "original.mp3", audio, "test-proj");
+    if (!write.ok) throw new Error(write.error.message);
+    const waveform = await fs.writeAudioWaveform(sourceId, [0.1, 0.8, 0.3], "test-proj");
+    if (!waveform.ok) throw new Error(waveform.error.message);
+
+    const result = await client.callTool({
+      name: "rename_asset",
+      arguments: {
+        asset_id: sourceId,
+        new_name: "new track",
+        project_slug: "test-proj",
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse(
+      (result.content as Array<{ type: string; text: string }>)[0].text
+    ) as { new_asset_id: string };
+
+    const renamedAudio = await fs.readFile(parsed.new_asset_id, "original.mp3", "test-proj");
+    expect(renamedAudio.ok).toBe(true);
+    if (renamedAudio.ok) expect(renamedAudio.value).toEqual(audio);
+    const assets = await fs.listAssets("test-proj");
+    expect(assets.map((asset) => asset.id)).not.toContain(sourceId);
+    const oldAlias = await fs.getManifest(sourceId, "test-proj");
+    const newManifest = await fs.getManifest(parsed.new_asset_id, "test-proj");
+    expect(oldAlias.ok).toBe(true);
+    expect(newManifest.ok).toBe(true);
+    if (oldAlias.ok && newManifest.ok) expect(oldAlias.value.path).toBe(newManifest.value.path);
+    const renamedWaveform = await fs.readAudioWaveform(parsed.new_asset_id, "test-proj");
+    expect(renamedWaveform.ok).toBe(true);
+    if (renamedWaveform.ok) expect(renamedWaveform.value.peaks).toEqual([0.1, 0.8, 0.3]);
+    fs.close();
   });
 });
