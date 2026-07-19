@@ -893,6 +893,21 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "unassign_slot", autoInject: ["project_slug"] },
   },
   {
+    command: "/insert-slot",
+    description: "Insert an empty timeline slot before or after another slot",
+    example: "/insert-slot @s02 before",
+    category: "action",
+    icon: "LayoutGrid",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "slot", type: "string", required: true, description: "Timeline slot (e.g. @s01)" },
+      { name: "position", type: "string", required: true, description: "Insert before or after the selected slot" },
+    ],
+    mcpTool: { tool: "insert_timeline_slot", autoInject: ["project_slug"] },
+  },
+  {
     command: "/rewrite",
     description: "Optimize a prompt",
     example: '/rewrite "make it more cinematic"',

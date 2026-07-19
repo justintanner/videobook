@@ -71,6 +71,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/rename");
     expect(commandNames).toContain("/assign");
     expect(commandNames).toContain("/unassign");
+    expect(commandNames).toContain("/insert-slot");
     expect(commandNames).toContain("/rewrite");
     expect(commandNames).toContain("/rewrite-script");
     expect(commandNames).toContain("/render");
@@ -123,6 +124,11 @@ describe("slash_commands tool", () => {
     expect(timewarp.mcpTool?.tool).toBe("timewarp_video");
     expect(timewarp.mcpTool?.autoInject).toContain("project_slug");
     expect(timewarp.params.map((p) => p.name)).toEqual(["asset_id", "range", "factor"]);
+
+    const insertSlot = commands.find((c) => c.command === "/insert-slot")!;
+    expect(insertSlot.mcpTool?.tool).toBe("insert_timeline_slot");
+    expect(insertSlot.mcpTool?.autoInject).toContain("project_slug");
+    expect(insertSlot.params.map((p) => p.name)).toEqual(["slot", "position"]);
 
     const syncAudio = commands.find((c) => c.command === "/sync-audio")!;
     expect(syncAudio.mcpTool?.tool).toBe("sync_video_to_audio");

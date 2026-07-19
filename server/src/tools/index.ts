@@ -148,6 +148,7 @@ import { isolateVocalsDef } from "./isolate-vocals.js";
 import { cleanVideoAudioDef } from "./clean-video-audio.js";
 import { assignSlotDef } from "./assign-slot.js";
 import { clearSlotDef } from "./clear-slot.js";
+import { insertTimelineSlotDef } from "./insert-timeline-slot.js";
 import { addTimelineAudioDef } from "./add-timeline-audio.js";
 import { removeTimelineAudioDef } from "./remove-timeline-audio.js";
 import { moveTimelineAudioDef } from "./move-timeline-audio.js";
@@ -368,6 +369,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     cleanVideoAudioDef(fs),
     assignSlotDef(fs),
     clearSlotDef(fs),
+    insertTimelineSlotDef(fs),
     addTimelineAudioDef(fs),
     removeTimelineAudioDef(fs),
     moveTimelineAudioDef(fs),
