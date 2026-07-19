@@ -31,98 +31,110 @@ function getDimensions(orientation: Orientation): { width: number; height: numbe
   }
 }
 
+export function computeTimelinePreview(
+  timeline: TimelineConfig | undefined,
+  mediaItems: MediaItem[],
+  projectSlug: string | null | undefined,
+  orientation: Orientation,
+): TimelinePreviewData {
+  const empty: TimelinePreviewData = {
+    slots: [],
+    audioClips: [],
+    totalDurationInFrames: 1,
+    fps: FPS,
+    compositionWidth: LANDSCAPE_WIDTH,
+    compositionHeight: LANDSCAPE_HEIGHT,
+    slotOffsets: [],
+    ready: false,
+    emptySlots: [],
+    missingRenders: [],
+  };
+
+  if (!timeline || !projectSlug) return empty;
+
+  const { width, height } = getDimensions(orientation);
+  const slots: TimelineSlotData[] = [];
+  const slotOffsets: number[] = [];
+  const emptySlots: number[] = [];
+  const missingRenders: string[] = [];
+  let cumulativeFrames = 0;
+
+  for (let i = 0; i < timeline.slots.length; i++) {
+    const timelineSlot = timeline.slots[i];
+    // One offset per timeline slot (empty ones included) so indices line up
+    // with the displayed slot order when seeking or drawing boundaries.
+    slotOffsets.push(cumulativeFrames);
+    if (!timelineSlot.slug) {
+      emptySlots.push(i);
+      continue;
+    }
+
+    const item = mediaItems.find(m => m.id === timelineSlot.slug);
+    if (!item) {
+      emptySlots.push(i);
+      continue;
+    }
+
+    const hasRender = item.renders?.includes(orientation);
+    if (!hasRender) {
+      missingRenders.push(item.id);
+    }
+
+    const durationInFrames = Math.max(1, Math.round((item.duration ?? 0) * FPS));
+    const file = hasRender ? `${orientation}.mp4` : 'original.mp4';
+    const src = `/files/${projectSlug}/${item.id}/${file}`;
+
+    slots.push({
+      src,
+      durationInFrames,
+      volume: timelineSlot.volume ?? 100,
+      fadeIn: timelineSlot.audioFadeIn ?? 0,
+      fadeOut: timelineSlot.audioFadeOut ?? 0,
+    });
+    cumulativeFrames += durationInFrames;
+  }
+
+  const totalDurationInFrames = Math.max(1, cumulativeFrames);
+  const ready = slots.length > 0;
+
+  const audioClips: TimelineAudioOverlayData[] = [];
+  for (const clip of timeline.audio ?? []) {
+    const item = mediaItems.find((m) => m.id === clip.slug);
+    if (!item) continue;
+    const src = item.filePath || `/files/${projectSlug}/${item.id}/original.mp3`;
+    audioClips.push({
+      id: clip.id,
+      src,
+      startFrame: clip.startFrame,
+      durationFrames: clip.durationFrames,
+      volume: clip.volume ?? 100,
+      fadeIn: clip.fadeIn ?? 0,
+      fadeOut: clip.fadeOut ?? 0,
+    });
+  }
+
+  return {
+    slots,
+    audioClips,
+    totalDurationInFrames,
+    fps: FPS,
+    compositionWidth: width,
+    compositionHeight: height,
+    slotOffsets,
+    ready,
+    emptySlots,
+    missingRenders,
+  };
+}
+
 export function useTimelinePreview(
   timeline: TimelineConfig | undefined,
   mediaItems: MediaItem[],
   projectSlug: string | null | undefined,
   orientation: Orientation,
 ): TimelinePreviewData {
-  return useMemo(() => {
-    const empty: TimelinePreviewData = {
-      slots: [],
-      audioClips: [],
-      totalDurationInFrames: 1,
-      fps: FPS,
-      compositionWidth: LANDSCAPE_WIDTH,
-      compositionHeight: LANDSCAPE_HEIGHT,
-      slotOffsets: [],
-      ready: false,
-      emptySlots: [],
-      missingRenders: [],
-    };
-
-    if (!timeline || !projectSlug) return empty;
-
-    const { width, height } = getDimensions(orientation);
-    const slots: TimelineSlotData[] = [];
-    const slotOffsets: number[] = [];
-    const emptySlots: number[] = [];
-    const missingRenders: string[] = [];
-    let cumulativeFrames = 0;
-
-    for (let i = 0; i < timeline.slots.length; i++) {
-      const timelineSlot = timeline.slots[i];
-      if (!timelineSlot.slug) {
-        emptySlots.push(i);
-        continue;
-      }
-
-      const item = mediaItems.find(m => m.id === timelineSlot.slug);
-      if (!item) {
-        emptySlots.push(i);
-        continue;
-      }
-
-      const hasRender = item.renders?.includes(orientation);
-      if (!hasRender) {
-        missingRenders.push(item.id);
-      }
-
-      const durationInFrames = Math.max(1, Math.round((item.duration ?? 0) * FPS));
-      const file = hasRender ? `${orientation}.mp4` : 'original.mp4';
-      const src = `/files/${projectSlug}/${item.id}/${file}`;
-
-      slotOffsets.push(cumulativeFrames);
-      slots.push({
-        src,
-        durationInFrames,
-        volume: timelineSlot.volume ?? 100,
-        fadeIn: timelineSlot.audioFadeIn ?? 0,
-        fadeOut: timelineSlot.audioFadeOut ?? 0,
-      });
-      cumulativeFrames += durationInFrames;
-    }
-
-    const totalDurationInFrames = Math.max(1, cumulativeFrames);
-    const ready = slots.length > 0;
-
-    const audioClips: TimelineAudioOverlayData[] = [];
-    for (const clip of timeline.audio ?? []) {
-      const item = mediaItems.find((m) => m.id === clip.slug);
-      if (!item) continue;
-      const src = item.filePath || `/files/${projectSlug}/${item.id}/original.mp3`;
-      audioClips.push({
-        id: clip.id,
-        src,
-        startFrame: clip.startFrame,
-        durationFrames: clip.durationFrames,
-        volume: clip.volume ?? 100,
-        fadeIn: clip.fadeIn ?? 0,
-        fadeOut: clip.fadeOut ?? 0,
-      });
-    }
-
-    return {
-      slots,
-      audioClips,
-      totalDurationInFrames,
-      fps: FPS,
-      compositionWidth: width,
-      compositionHeight: height,
-      slotOffsets,
-      ready,
-      emptySlots,
-      missingRenders,
-    };
-  }, [timeline, mediaItems, projectSlug, orientation]);
+  return useMemo(
+    () => computeTimelinePreview(timeline, mediaItems, projectSlug, orientation),
+    [timeline, mediaItems, projectSlug, orientation],
+  );
 }
