@@ -10,6 +10,7 @@ import {
   ContextMenuSeparator,
 } from '@/components/ui/context-menu'
 import { SlotHourglass } from './SlotHourglass'
+import { getClearSlotCommand, getRemoveSlotCommand } from './slot-actions'
 import { OsgBadge } from '@/components/sidebar/cards/badges'
 import type { ClipState, OsgInfo } from '@/components/sidebar/types'
 
@@ -81,6 +82,7 @@ interface TimelineSlotProps {
   isActive?: boolean
   isDragOver?: boolean
   hasContent?: boolean
+  isStored?: boolean
   frameUrls?: string[]
   duration?: number
   assetId?: string
@@ -101,6 +103,7 @@ export function TimelineSlot({
   isActive = false,
   isDragOver: isDragOverProp = false,
   hasContent = false,
+  isStored = false,
   frameUrls,
   duration,
   assetId,
@@ -144,7 +147,10 @@ export function TimelineSlot({
   }, [onAnimateCommand, label, assetId, hasContent])
 
   const hasMenu = !!onAnimateCommand
-  const canClear = hasContent && hasMenu
+  const clearCommand = getClearSlotCommand(label, hasContent, hasMenu)
+  const removeCommand = getRemoveSlotCommand(label, isStored, hasMenu)
+  const canClear = clearCommand !== null
+  const canRemove = removeCommand !== null
 
   const handleMenuClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -312,14 +318,23 @@ export function TimelineSlot({
             <span className="text-sm font-semibold leading-none text-foreground">Insert Empty Slot After</span>
             <span className="font-mono text-muted-foreground text-xs tracking-wider leading-none">/insert-slot {label} after</span>
           </ContextMenuItem>
-          {canClear && <ContextMenuSeparator />}
+          {(canClear || canRemove) && <ContextMenuSeparator />}
           {canClear && (
             <ContextMenuItem
-              onSelect={() => onAnimateCommand?.(`/unassign ${label}`)}
+              onSelect={() => onAnimateCommand?.(clearCommand)}
               className="!flex flex-col !items-stretch gap-1.5 py-3 px-3 border-l-[3px] bg-white/[0.02] border-l-cyan-500/30 focus:!bg-white/[0.12] focus:!text-inherit focus:!border-l-[3px] focus:border-l-cyan-500/60"
             >
               <span className="text-sm font-semibold leading-none text-foreground">Clear Slot</span>
-              <span className="font-mono text-muted-foreground text-xs tracking-wider leading-none">/unassign {label}</span>
+              <span className="font-mono text-muted-foreground text-xs tracking-wider leading-none">{clearCommand}</span>
+            </ContextMenuItem>
+          )}
+          {canRemove && (
+            <ContextMenuItem
+              onSelect={() => onAnimateCommand?.(removeCommand)}
+              className="!flex flex-col !items-stretch gap-1.5 py-3 px-3 border-l-[3px] bg-white/[0.02] border-l-red-500/40 focus:!bg-red-500/10 focus:!text-inherit focus:!border-l-[3px] focus:border-l-red-500/70"
+            >
+              <span className="text-sm font-semibold leading-none text-red-400">Remove Slot</span>
+              <span className="font-mono text-muted-foreground text-xs tracking-wider leading-none">{removeCommand}</span>
             </ContextMenuItem>
           )}
         </ContextMenuContent>

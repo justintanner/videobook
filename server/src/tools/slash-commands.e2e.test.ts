@@ -206,6 +206,12 @@ describe("slash commands e2e", () => {
     });
   });
 
+  describe("/remove-slot", () => {
+    it("parses a stored timeline slot", () => {
+      expect(simulateParse("/remove-slot", "@s02")).toEqual({ slot: "s02" });
+    });
+  });
+
   // -----------------------------------------------------------------------
   // 1. /download — download_video
   // -----------------------------------------------------------------------

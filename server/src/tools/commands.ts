@@ -925,6 +925,20 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "insert_timeline_slot", autoInject: ["project_slug"] },
   },
   {
+    command: "/remove-slot",
+    description: "Remove a timeline slot, shift later slots left, and clean up trailing empty slots",
+    example: "/remove-slot @s02",
+    category: "action",
+    icon: "Scissors",
+    size: "default",
+    variant: "default",
+    chevron: "right",
+    params: [
+      { name: "slot", type: "string", required: true, description: "Stored timeline slot (e.g. @s01)" },
+    ],
+    mcpTool: { tool: "remove_timeline_slot", autoInject: ["project_slug"] },
+  },
+  {
     command: "/rewrite",
     description: "Optimize a prompt",
     example: '/rewrite "make it more cinematic"',

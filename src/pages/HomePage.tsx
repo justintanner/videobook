@@ -774,6 +774,7 @@ export function HomePage() {
 
   const handleAfterDispatch = useCallback((toolName: string, toolArgs: CommandToolArgs) => {
     if (!projectSlug) return;
+    if (toolName === 'remove_timeline_slot') setTimelineSlotIndex(null);
     fetchTimeline(projectSlug);
     listAssets(projectSlug, sortOrder);
     sync(projectSlug);
@@ -1995,6 +1996,7 @@ export function HomePage() {
                     label={slotRef.ref}
                     isActive={timelineSlotIndex === i}
                     hasContent={!!slotSlug}
+                    isStored={i < (timeline?.slots.length ?? 0)}
                     frameUrls={frameUrls}
                     duration={slotAsset?.duration ?? undefined}
                     assetId={slotSlug ? `@${slotSlug}` : undefined}

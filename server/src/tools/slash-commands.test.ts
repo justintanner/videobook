@@ -72,6 +72,7 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/assign");
     expect(commandNames).toContain("/unassign");
     expect(commandNames).toContain("/insert-slot");
+    expect(commandNames).toContain("/remove-slot");
     expect(commandNames).toContain("/rewrite");
     expect(commandNames).toContain("/rewrite-script");
     expect(commandNames).toContain("/render");
@@ -130,6 +131,11 @@ describe("slash_commands tool", () => {
     expect(insertSlot.mcpTool?.tool).toBe("insert_timeline_slot");
     expect(insertSlot.mcpTool?.autoInject).toContain("project_slug");
     expect(insertSlot.params.map((p) => p.name)).toEqual(["slot", "position"]);
+
+    const removeSlot = commands.find((c) => c.command === "/remove-slot")!;
+    expect(removeSlot.mcpTool?.tool).toBe("remove_timeline_slot");
+    expect(removeSlot.mcpTool?.autoInject).toContain("project_slug");
+    expect(removeSlot.params.map((p) => p.name)).toEqual(["slot"]);
 
     const syncAudio = commands.find((c) => c.command === "/sync-audio")!;
     expect(syncAudio.mcpTool?.tool).toBe("sync_video_to_audio");
