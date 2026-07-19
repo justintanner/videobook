@@ -2,7 +2,7 @@ import type { VideocityFs } from "videocity-engine";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { registerJobHandler, queue } from "../queue.js";
-import { runFfmpeg, FFMPEG, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
+import { runFfmpeg, FFMPEG, H264_MEDIUM, AUDIO_OPTS, probeVideo } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 
 const execFileAsync = promisify(execFile);
@@ -30,8 +30,10 @@ type SpliceVideoPayload = {
   targetWidth: number;
   targetHeight: number;
   firstFps: number;
+  firstDuration?: number;
   firstHasAudio: boolean;
   secondHasAudio: boolean;
+  overlap?: number;
 };
 
 async function extractTargetFrame(videoPath: string): Promise<Buffer> {
@@ -64,8 +66,11 @@ async function findBestMatch(
   videoPath: string,
   target: Buffer,
   fps: number,
+  startFrame: number,
 ): Promise<MatchResult> {
+  const startTime = startFrame / fps;
   const proc = spawn(FFMPEG, [
+    ...(startFrame > 0 ? ["-ss", String(startTime)] : []),
     "-i", videoPath,
     "-vf", `fps=${fps},scale=${MATCH_W}:${MATCH_H},format=gray`,
     "-an",
@@ -108,8 +113,8 @@ async function findBestMatch(
   if (bestIndex < 0) throw new Error(`No frames decoded from ${videoPath}`);
 
   return {
-    frameIndex: bestIndex,
-    timestamp: bestIndex / fps,
+    frameIndex: startFrame + bestIndex,
+    timestamp: startTime + bestIndex / fps,
     score: bestScore / MATCH_FRAME_BYTES,
   };
 }
@@ -117,27 +122,27 @@ async function findBestMatch(
 async function spliceConcat(
   firstPath: string,
   secondPath: string,
-  splicePoint: number,
+  splicePoint: number | null,
   outputPath: string,
   width: number,
   height: number,
   fps: number,
   withAudio: boolean,
 ): Promise<void> {
-  // Cut first video at splicePoint (exclusive); second video plays from start.
-  // Both streams are scaled+padded to the first video's dimensions and SAR
-  // normalized so concat=n=2 doesn't error on aspect-ratio or dimension mismatch.
-  // The `fps` filter normalizes frame rate across inputs — without it, mismatched
-  // input rates produce a degenerate output timebase that makes libx264 attempt
-  // to encode at billions of frames per second.
   const scalePad = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1`;
+  const firstVideo = splicePoint === null
+    ? `[0:v]fps=${fps},${scalePad},setpts=PTS-STARTPTS[v0]`
+    : `[0:v]trim=end=${splicePoint},fps=${fps},${scalePad},setpts=PTS-STARTPTS[v0]`;
   const filterParts: string[] = [
-    `[0:v]trim=end=${splicePoint},fps=${fps},${scalePad},setpts=PTS-STARTPTS[v0]`,
+    firstVideo,
     `[1:v]fps=${fps},${scalePad},setpts=PTS-STARTPTS[v1]`,
   ];
 
   if (withAudio) {
-    filterParts.push(`[0:a]atrim=end=${splicePoint},asetpts=PTS-STARTPTS[a0]`);
+    const firstAudio = splicePoint === null
+      ? `[0:a]asetpts=PTS-STARTPTS[a0]`
+      : `[0:a]atrim=end=${splicePoint},asetpts=PTS-STARTPTS[a0]`;
+    filterParts.push(firstAudio);
     filterParts.push(`[1:a]asetpts=PTS-STARTPTS[a1]`);
     filterParts.push(`[v0][a0][v1][a1]concat=n=2:v=1:a=1[v][a]`);
   } else {
@@ -158,14 +163,87 @@ async function spliceConcat(
   await runFfmpeg(args);
 }
 
+export type SpliceFilesResult = {
+  timestamp: number;
+  frameIndex: number | null;
+  score: number | null;
+};
+
+export type SpliceFilesOptions = {
+  firstPath: string;
+  secondPath: string;
+  outputPath: string;
+  width: number;
+  height: number;
+  fps: number;
+  firstDuration: number;
+  withAudio: boolean;
+  overlap: number;
+};
+
+export async function spliceVideoFiles(options: SpliceFilesOptions): Promise<SpliceFilesResult> {
+  const {
+    firstPath,
+    secondPath,
+    outputPath,
+    width,
+    height,
+    fps,
+    firstDuration,
+    withAudio,
+    overlap,
+  } = options;
+  if (!Number.isFinite(firstDuration) || firstDuration <= 0) {
+    throw new Error(`Invalid first video duration: ${firstDuration}`);
+  }
+  if (!Number.isFinite(fps) || fps <= 0) {
+    throw new Error(`Invalid first video frame rate: ${fps}`);
+  }
+  if (!Number.isFinite(overlap) || overlap < 0) {
+    throw new Error(`Overlap must be a non-negative number, got: ${overlap}`);
+  }
+
+  if (overlap === 0) {
+    await spliceConcat(
+      firstPath,
+      secondPath,
+      null,
+      outputPath,
+      width,
+      height,
+      fps,
+      withAudio,
+    );
+    return { timestamp: firstDuration, frameIndex: null, score: null };
+  }
+
+  const minimumWindow = 1 / fps;
+  const searchStart = Math.max(0, firstDuration - Math.max(overlap, minimumWindow));
+  const startFrame = Math.floor(searchStart * fps);
+  const target = await extractTargetFrame(secondPath);
+  const match = await findBestMatch(firstPath, target, fps, startFrame);
+  await spliceConcat(
+    firstPath,
+    secondPath,
+    match.timestamp,
+    outputPath,
+    width,
+    height,
+    fps,
+    withAudio,
+  );
+  return match;
+}
+
 export function registerSpliceVideoJob(fs: VideocityFs): void {
   registerJobHandler("splice_video", async (payload, ctx) => {
     const {
       firstPath, secondPath, outputPath,
       firstAssetId, secondAssetId,
       assetId, assetDir, projectSlug,
-      targetWidth, targetHeight, firstFps,
+      targetWidth, targetHeight, firstFps, firstDuration,
       firstHasAudio, secondHasAudio,
+      overlap,
     } = payload as SpliceVideoPayload;
 
     const result = await withLockedLocalLease(
@@ -177,27 +255,36 @@ export function registerSpliceVideoJob(fs: VideocityFs): void {
       "splice",
       { durationMs: LOCK_DURATION_MS, data: { state: "splicing" } },
       async () => {
-      const target = await extractTargetFrame(secondPath);
-      const match = await findBestMatch(firstPath, target, firstFps);
-
+      const resolvedFirstDuration = typeof firstDuration === "number"
+        ? firstDuration
+        : (await probeVideo(firstPath)).videoDuration;
+      const resolvedOverlap = typeof overlap === "number" ? overlap : resolvedFirstDuration;
       const withAudio = firstHasAudio && secondHasAudio;
-      await spliceConcat(
-        firstPath, secondPath, match.timestamp,
-        outputPath, targetWidth, targetHeight, firstFps, withAudio,
-      );
+      const splice = await spliceVideoFiles({
+        firstPath,
+        secondPath,
+        outputPath,
+        width: targetWidth,
+        height: targetHeight,
+        fps: firstFps,
+        firstDuration: resolvedFirstDuration,
+        withAudio,
+        overlap: resolvedOverlap,
+      });
 
       const provenance = {
         origin: "splice",
         first_asset: firstAssetId,
         second_asset: secondAssetId,
-        splice_timestamp: match.timestamp,
-        match_frame_index: match.frameIndex,
-        match_score: match.score,
+        overlap_seconds: resolvedOverlap,
+        splice_timestamp: splice.timestamp,
+        match_frame_index: splice.frameIndex,
+        match_score: splice.score,
         spliced_at: new Date().toISOString(),
       };
       await fs.writeMetadata(assetId, "original", provenance, projectSlug);
 
-      return { provenance, timestamp: match.timestamp, score: match.score };
+      return { provenance, timestamp: splice.timestamp, score: splice.score };
       },
       { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
     );

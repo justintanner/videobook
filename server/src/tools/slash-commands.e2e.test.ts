@@ -170,6 +170,19 @@ describe("slash commands e2e", () => {
     });
   });
 
+  describe("/splice", () => {
+    it("parses two videos and a zero overlap", () => {
+      expect(simulateParse(
+        "/splice",
+        "@vid-first @vid-second 0",
+      )).toEqual({
+        first_asset_id: "vid-first",
+        second_asset_id: "vid-second",
+        overlap: 0,
+      });
+    });
+  });
+
   // -----------------------------------------------------------------------
   // 1. /download — download_video
   // -----------------------------------------------------------------------

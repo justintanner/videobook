@@ -835,8 +835,8 @@ const HARDCODED_COMMANDS: Command[] = [
   },
   {
     command: "/splice",
-    description: "Splice two videos: find the frame in the first video that matches the first frame of the second, then concat at that point",
-    example: "/splice @vid-first @vid-second",
+    description: "Splice two videos with an overlap window; use 0 to concatenate both complete clips",
+    example: "/splice @vid-first @vid-second 0",
     category: "context_menu",
     icon: "GitMerge",
     size: "default",
@@ -845,6 +845,7 @@ const HARDCODED_COMMANDS: Command[] = [
     params: [
       { name: "first_asset_id", type: "string", required: true, description: "Base video — search for the match point inside this one" },
       { name: "second_asset_id", type: "string", required: true, description: "Continuation video — its first frame is the search target" },
+      { name: "overlap", type: "number", required: true, description: "Possible overlap in seconds; 0 means plain concatenation" },
     ],
     mcpTool: { tool: "splice_video", autoInject: ["project_slug"] },
   },

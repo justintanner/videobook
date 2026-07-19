@@ -187,6 +187,16 @@ describe("slash_commands tool", () => {
       "volume",
     ]);
 
+    const splice = commands.find((c) => c.command === "/splice")!;
+    expect(splice.mcpTool?.tool).toBe("splice_video");
+    expect(splice.mcpTool?.autoInject).toContain("project_slug");
+    expect(splice.params.map((p) => p.name)).toEqual([
+      "first_asset_id",
+      "second_asset_id",
+      "overlap",
+    ]);
+    expect(splice.params[2]).toMatchObject({ type: "number", required: true });
+
     const extendAudio = commands.find((c) => c.command === "/extend-audio")!;
     expect(extendAudio.mcpTool?.tool).toBe("extend_audio");
     expect(extendAudio.mcpTool?.autoInject).toContain("project_slug");

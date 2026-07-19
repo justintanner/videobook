@@ -17,16 +17,18 @@ function deriveSpliceName(firstId: string, secondId: string): string {
 export function spliceVideoDef(fs: VideocityFs): ToolDef {
   return {
     name: "splice_video",
-    description: "Splice two videos by finding the frame in the first video that best matches the first frame of the second video, then concatenating the second video onto the trimmed first at that point. Creates a new vid- asset.",
+    description: "Splice two videos with an explicit overlap window. An overlap of 0 concatenates both complete videos; a positive overlap searches that many seconds at the end of the first video for the frame that best matches the first frame of the second. Creates a new vid- asset.",
     schema: {
       first_asset_id: z.string().describe("Base video asset ID (e.g. vid-clip-a). The match point is searched within this video."),
       second_asset_id: z.string().describe("Continuation video asset ID (e.g. vid-clip-b). Its first frame is the search target."),
+      overlap: z.number().min(0).describe("Possible overlap in seconds. Use 0 to concatenate both videos without trimming either one."),
       project_slug: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { first_asset_id, second_asset_id, project_slug } = args as {
+      const { first_asset_id, second_asset_id, overlap, project_slug } = args as {
         first_asset_id: string;
         second_asset_id: string;
+        overlap: number;
         project_slug: string;
       };
 
@@ -110,8 +112,10 @@ export function spliceVideoDef(fs: VideocityFs): ToolDef {
         targetWidth: firstProbe.width,
         targetHeight: firstProbe.height,
         firstFps: firstProbe.fps,
+        firstDuration: firstProbe.videoDuration,
         firstHasAudio: firstProbe.hasAudio,
         secondHasAudio: secondProbe.hasAudio,
+        overlap,
       } as unknown as Record<string, unknown>);
 
       return {
@@ -121,6 +125,7 @@ export function spliceVideoDef(fs: VideocityFs): ToolDef {
             asset_id: assetId,
             first: first_asset_id,
             second: second_asset_id,
+            overlap,
             job_id: jobId,
             status: "enqueued",
           }),
@@ -129,4 +134,3 @@ export function spliceVideoDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

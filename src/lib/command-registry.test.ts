@@ -124,6 +124,19 @@ describe("parseCommandArgs", () => {
     });
   });
 
+  it("parses /splice assets and zero overlap", () => {
+    const params: CommandParam[] = [
+      { name: "first_asset_id", type: "string", required: true, description: "" },
+      { name: "second_asset_id", type: "string", required: true, description: "" },
+      { name: "overlap", type: "number", required: true, description: "" },
+    ];
+    expect(parseCommandArgs("@vid-first @vid-second 0", params)).toEqual({
+      first_asset_id: "vid-first",
+      second_asset_id: "vid-second",
+      overlap: 0,
+    });
+  });
+
   it("parses /split style optional trailing number left absent", () => {
     const params: CommandParam[] = [
       { name: "asset_id", type: "string", required: true, description: "" },
