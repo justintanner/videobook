@@ -30,7 +30,7 @@ import type { SplitTarget } from '@/components/commands/split/types';
 import { parseTimestamp } from '@/components/commands/split/utils';
 import { GenPreviewPanel } from '@/components/gen/GenPreviewPanel';
 import type { GenPreviewPanelHandle } from '@/components/gen/GenPreviewPanel';
-import { PostComposerDialog } from '@/components/post/PostComposerDialog';
+import { PostComposerScreen } from '@/components/post/PostComposerScreen';
 import { useExtractSkeleton } from '@/hooks/useExtractSkeleton';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
 import { TimelineAudioLane } from '@/components/timeline/TimelineAudioLane';
@@ -1494,9 +1494,15 @@ export function HomePage() {
     },
     open_post_composer: (assetSlug: string, text: string) => {
       const cleaned = assetSlug.trim().replace(/^@/, '');
-      const matched = cleaned
+      const explicit = cleaned
         ? mediaItems.find((m) => m.id === cleaned || m.slug === `@${cleaned}` || m.slug === cleaned) ?? null
-        : selectedItem;
+        : null;
+      const postable = activeSelection && ['video', 'final', 'image'].includes(activeSelection.type)
+        ? activeSelection
+        : null;
+      const finalItem = mediaItems.find((m) => m.type === 'final') ?? null;
+      const matched = explicit ?? postable ?? finalItem;
+      resetOpenScreens();
       setPostPanel({ assetId: matched?.id ?? null, text: text ?? '' });
     },
     open_notebook: (new_name?: string) => {
@@ -1826,6 +1832,15 @@ export function HomePage() {
                     onClose={() => setArchiveOpen(false)}
                     onRestoreComplete={handleArchiveRestoreComplete}
                   />
+                ) : postPanel ? (
+                  <PostComposerScreen
+                    key={`${projectSlug ?? ''}:${postPanel.assetId ?? ''}:${postPanel.text}`}
+                    item={postPanel.assetId ? mediaItems.find((m) => m.id === postPanel.assetId) ?? null : null}
+                    initialText={postPanel.text}
+                    projectSlug={projectSlug}
+                    callTool={callTool}
+                    onClose={() => setPostPanel(null)}
+                  />
                 ) : activeSelection ? (
                   <AssetViewer
                     key={`${projectSlug ?? ''}:${activeSelection.id}`}
@@ -2007,14 +2022,6 @@ export function HomePage() {
         </div>
       </div>
 
-      <PostComposerDialog
-        open={!!postPanel}
-        onOpenChange={(next) => { if (!next) setPostPanel(null); }}
-        item={postPanel?.assetId ? mediaItems.find((m) => m.id === postPanel.assetId) ?? null : null}
-        initialText={postPanel?.text ?? ''}
-        projectSlug={projectSlug}
-        callTool={callTool}
-      />
       <WatermarkDialog
         open={!!watermarkPanel}
         onOpenChange={(next) => { if (!next) setWatermarkPanel(null); }}

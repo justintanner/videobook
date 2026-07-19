@@ -62,7 +62,7 @@
 }
 
 /* Stacking scale (Tailwind arbitrary z-[N] values across components):
-     100/101  overlay + panel (drawers, dialogs: ActivityLogDrawer, SplitEditor, PostComposerDialog)
+     100/101  overlay + panel (drawers, dialogs: ActivityLogDrawer, SplitEditor)
 
      130      menus / popovers (AssetMenu)
      140      toasts — always topmost (toast.tsx)
