@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { AlertCircle, Braces, ChevronDown, Crosshair, ImageIcon, Loader2, Play, Video, X } from 'lucide-react'
+import { AlertCircle, Braces, ChevronDown, Crosshair, FlipHorizontal2, ImageIcon, Loader2, Play, Video, X } from 'lucide-react'
 import type { UseMcpResult } from 'use-mcp/react'
 import { GoogleFlowRefPicker } from '@/components/gen/ui/GoogleFlowRefPicker'
 import { DynamicField } from '@/components/gen/ui/DynamicField'
@@ -35,6 +35,7 @@ import {
 } from './model'
 import type { JsonRecord, NotebookPlanDefinition, NotebookPlanStep } from './types'
 import { useGenPreview } from './useGenPreview'
+import { useTranslatePayload } from './useTranslatePayload'
 
 interface NotebookSidebarProps {
   projectSlug: string
@@ -480,6 +481,12 @@ function GenerationSidebar({
       },
     }
   }, [option, modeKey, submitValues, projectSlug, preview.selectedProviderKey])
+  const providerPayload = useTranslatePayload(
+    callTool,
+    toolPayload?.tool_name ?? null,
+    toolPayload?.args ?? null,
+    showPayload && mcpState === 'ready',
+  )
 
   return (
     <aside className={`vc-notebook-sidebar vc-notebook-sidebar-${category}`}>
@@ -514,7 +521,7 @@ function GenerationSidebar({
             aria-pressed={showPayload}
             onClick={() => setShowPayload((open) => !open)}
           >
-            <Braces />
+            {showPayload ? <FlipHorizontal2 /> : <Braces />}
           </button>
         ) : null}
       />
@@ -527,6 +534,19 @@ function GenerationSidebar({
             <pre className="vc-notebook-payload-json">
               <JsonNode data={toolPayload} />
             </pre>
+            <span className="vc-notebook-payload-label">/provider-payload</span>
+            {providerPayload.loading ? (
+              <div className="vc-notebook-loading"><Loader2 /> Translating</div>
+            ) : providerPayload.result ? (
+              <>
+                <span className="vc-notebook-hint">{providerPayload.result.provider_path}</span>
+                <pre className="vc-notebook-payload-json">
+                  <JsonNode data={providerPayload.result.payload} />
+                </pre>
+              </>
+            ) : (
+              <span className="vc-notebook-hint">{providerPayload.error ?? 'Payload preview unavailable for this tool.'}</span>
+            )}
           </div>
         ) : null}
         {option && !showPayload ? (

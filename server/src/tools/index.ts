@@ -157,6 +157,7 @@ import { moveTimelineAudioDef } from "./move-timeline-audio.js";
 import { updateTimelineAudioDef } from "./update-timeline-audio.js";
 import { commandsDef } from "./commands.js";
 import { renderSettingsDef } from "./render-settings.js";
+import { translatePayloadDef } from "./translate-payload.js";
 import { updateScriptDef } from "./update-script.js";
 import { generateSeedance2I2vFalDef } from "./generate-seedance2-i2v-fal.js";
 import { generateSeedance2T2vFalDef } from "./generate-seedance2-t2v-fal.js";
@@ -379,6 +380,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     updateTimelineAudioDef(fs),
     commandsDef(fs),
     renderSettingsDef(fs),
+    translatePayloadDef(),
     updateScriptDef(fs),
     generateSeedance2I2vFalDef(fs),
     generateSeedance2T2vFalDef(fs),
