@@ -81,16 +81,6 @@ export function CommandRegistryProvider({
               const slug = commandStr.slice(1); // remove leading /
               return executeUiAction(cmd.uiAction, uiActions, { raw: slug, args: stringArgs });
             }
-            // For gen commands, call directly to preserve @tags in prompt
-            // (parseCommandArgs strips @ prefix from args)
-            if (cmd.uiAction === 'open_gen_video') {
-              const fn = uiActions.open_gen_video;
-              if (fn) { fn(rest); return true; }
-            }
-            if (cmd.uiAction === 'open_gen_image') {
-              const fn = uiActions.open_gen_image;
-              if (fn) { fn(rest); return true; }
-            }
             return executeUiAction(cmd.uiAction, uiActions, { raw: rest, args: stringArgs });
           }
 

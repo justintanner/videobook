@@ -28,8 +28,7 @@ import { useProjectActivity } from '@/hooks/useProjectActivity';
 import { SplitEditor } from '@/components/commands/split/SplitEditor';
 import type { SplitTarget } from '@/components/commands/split/types';
 import { parseTimestamp } from '@/components/commands/split/utils';
-import { GenPreviewPanel } from '@/components/gen/GenPreviewPanel';
-import type { GenPreviewPanelHandle } from '@/components/gen/GenPreviewPanel';
+
 import { PostComposerScreen } from '@/components/post/PostComposerScreen';
 import { useExtractSkeleton } from '@/hooks/useExtractSkeleton';
 import { TimelineSlot } from '@/components/timeline/TimelineSlot';
@@ -44,6 +43,7 @@ import { useSwitchProject } from '@/hooks/useSwitchProject';
 import { useListAssets } from '@/hooks/useListAssets';
 import { useListProjects } from '@/hooks/useListProjects';
 import { useMarkAssetSeen } from '@/hooks/useMarkAssetSeen';
+import { useEnsureDefaultNotebook } from '@/hooks/useEnsureDefaultNotebook';
 import { useCreateProject } from '@/hooks/useCreateProject';
 import { useRenameProject } from '@/hooks/useRenameProject';
 import { useDeleteProject } from '@/hooks/useDeleteProject';
@@ -129,6 +129,20 @@ function findNotebookByName<T extends { id: string; title: string }>(
   });
 }
 
+function sortedNotebooks(mediaItems: MediaItem[]): MediaItem[] {
+  return mediaItems
+    .filter((m) => m.type === 'notebook')
+    .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+}
+
+function pickDefaultNotebook(notebooks: MediaItem[], selectedNotebookId?: string): MediaItem | undefined {
+  const selectedNotebook = selectedNotebookId
+    ? notebooks.find((n) => n.id === selectedNotebookId)
+    : undefined;
+  const scratch = findNotebookByName(notebooks, DEFAULT_NOTEBOOK_NAME);
+  return selectedNotebook ?? scratch ?? notebooks[0];
+}
+
 function parseWriteNotebookId(text: string): string | null {
   try {
     const parsed = JSON.parse(text) as { notebook_id?: unknown };
@@ -203,7 +217,6 @@ export function HomePage() {
   const [renderSettings, setRenderSettings] = useState<RenderSettings>(DEFAULT_RENDER_SETTINGS);
   const [transcriptInfo, setTranscriptInfo] = useState<TranscriptInfo | null>(null);
   const [timelineSlotIndex, setTimelineSlotIndex] = useState<number | null>(null);
-  const [genPanel, setGenPanel] = useState<{ category: 'video' | 'image'; prompt: string } | null>(null);
   // Optimistic placeholder tiles for just-enqueued generations, shown in the
   // clips bar until the real asset surfaces via sync (or the safety expiry).
   const [ghostClips, setGhostClips] = useState<
@@ -219,7 +232,6 @@ export function HomePage() {
   const [audioReplace, setAudioReplace] = useState<{ videoId: string; videoSlug: string; audioId: string; audioSlug: string } | null>(null);
   const [audioReplaceSubmitting, setAudioReplaceSubmitting] = useState(false);
   const chatInputRef = useRef<ChatInputHandle>(null);
-  const genPanelRef = useRef<GenPreviewPanelHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevStatusOpenRef = useRef(false);
   const creatingNotebookRef = useRef(false);
@@ -292,7 +304,7 @@ export function HomePage() {
   // mousedown + preventDefault stops the browser from moving focus while still
   // allowing click handlers to fire normally.
   useEffect(() => {
-    if (statusOpen || settingsOpen || archiveOpen || genPanel != null) return;
+    if (statusOpen || settingsOpen || archiveOpen) return;
 
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -317,7 +329,7 @@ export function HomePage() {
 
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [statusOpen, settingsOpen, archiveOpen, genPanel]);
+  }, [statusOpen, settingsOpen, archiveOpen]);
 
   useEffect(() => {
     if (!projectSlug || syncCount === 0) return;
@@ -388,37 +400,54 @@ export function HomePage() {
     });
   }, [assetList, result, renderingOverrides, deletingIds]);
 
+  const createNotebook = useCallback(async (name: string): Promise<string | null> => {
+    if (!projectSlug || creatingNotebookRef.current) return null;
+    creatingNotebookRef.current = true;
+    try {
+      const res = await callTool('write_notebook', {
+        project_slug: projectSlug,
+        name,
+        definition: {
+          sequence: [],
+          properties: { name, description: '', stage_count: 1 },
+        },
+      });
+      if (res.isError) return null;
+      const content = res.content as Array<{ type: string; text: string }>;
+      const notebookId = parseWriteNotebookId(content[0]?.text ?? '');
+      if (!notebookId) return null;
+      await listAssets(projectSlug, sortOrder);
+      return notebookId;
+    } catch (e) {
+      console.error('Failed to create notebook', e);
+      return null;
+    } finally {
+      creatingNotebookRef.current = false;
+    }
+  }, [projectSlug, callTool, listAssets, sortOrder]);
+
+  const defaultNotebookSelection = useMemo(() => {
+    const notebooks = sortedNotebooks(mediaItems);
+    return pickDefaultNotebook(notebooks, selectedItem?.type === 'notebook' ? selectedItem.id : undefined);
+  }, [mediaItems, selectedItem]);
+
+  const hasNotebook = useMemo(() => mediaItems.some((m) => m.type === 'notebook'), [mediaItems]);
+
+  useEnsureDefaultNotebook({
+    state,
+    projectSlug,
+    assetList,
+    hasNotebook,
+    createNotebook,
+  });
+
   const assets = useMemo(() =>
     mediaItems.filter((m) => ASSET_TYPES.has(m.type)),
   [mediaItems]);
 
 
 
-  // Ready project assets offered in the gen panel prompt's @ autocomplete.
-  // Image panel gets images only; video panel also lists vid-/aud- for multi-ref models.
-  const genImageAssets = useMemo(() =>
-    assets
-      .filter((a) => a.type === 'image' && (a.status ?? 'ready') === 'ready')
-      .map((a) => ({
-        slug: a.slug,
-        filePath: a.filePath,
-        thumbnailSrc: a.thumbnailSrc ?? null,
-        type: 'image' as const,
-      })),
-    [assets]);
-  const genMediaAssets = useMemo(() =>
-    assets
-      .filter((a) =>
-        (a.type === 'image' || a.type === 'video' || a.type === 'audio')
-        && (a.status ?? 'ready') === 'ready',
-      )
-      .map((a) => ({
-        slug: a.slug,
-        filePath: a.filePath,
-        thumbnailSrc: a.thumbnailSrc ?? null,
-        type: a.type as 'image' | 'video' | 'audio',
-      })),
-    [assets]);
+
 
   const clips = useMemo(() =>
     mediaItems.filter((m) => CLIP_TYPES.has(m.type)),
@@ -473,17 +502,7 @@ export function HomePage() {
     return activeGhostClips.filter((g) => g.category === 'image' && (!g.assetId || !ids.has(g.assetId)));
   }, [activeGhostClips, assets]);
 
-  // Whether a generation of the open panel's category is still running —
-  // drives the dimmed-but-clickable /generate button.
-  const pendingGenForPanel = useMemo(() => {
-    if (!genPanel) return false;
-    const cat = genPanel.category;
-    const live = mediaItems.some((m) =>
-      m.type === cat &&
-      (m.pendingState === 'queued' || m.pendingState === 'processing') &&
-      (m.pendingTaskType?.startsWith('generate') ?? false));
-    return live || activeGhostClips.some((g) => g.category === cat);
-  }, [genPanel, mediaItems, activeGhostClips]);
+
 
   const splitItem = useMemo(() =>
     splitTarget
@@ -509,7 +528,6 @@ export function HomePage() {
     setArchiveOpen(false);
     setRenameAllOpen(false);
     setSelectedItem(item);
-    setGenPanel(null);
     setTimelineSlotIndex(null);
 
     const isClip = item.type === 'video' || item.type === 'final';
@@ -525,7 +543,6 @@ export function HomePage() {
     setSettingsOpen(false);
     setArchiveOpen(false);
     setSelectedItem(null);
-    setGenPanel(null);
     setTimelineSlotIndex(null);
 
     setRenameAllOpen(true);
@@ -726,7 +743,6 @@ export function HomePage() {
     setPendingFilePosition(null);
     setPendingBackTab(null);
     setTimelineSlotIndex(null);
-    setGenPanel(null);
 
     setRenameAllOpen(false);
     setGfCharactersOpen(false);
@@ -769,7 +785,6 @@ export function HomePage() {
     setSettingsOpen(false);
     setArchiveOpen(false);
     setSelectedItem(null);
-    setGenPanel(null);
     setTimelineSlotIndex(slotIndex);
   }, []);
 
@@ -796,7 +811,6 @@ export function HomePage() {
     setArchiveOpen(false);
     setSelectedItem(null);
     setTimelineSlotIndex(null);
-    setGenPanel(null);
 
     setRenderingOverrides(new Map());
     setDeletingIds(new Set());
@@ -1069,7 +1083,6 @@ export function HomePage() {
     setSettingsOpen(false);
     setSelectedItem(null);
     setTimelineSlotIndex(null);
-    setGenPanel(null);
 
     setArchiveInitialResponse(null);
     setArchiveInitialError(null);
@@ -1207,7 +1220,6 @@ export function HomePage() {
 
   const handleCloseViewer = useCallback(() => {
     setSelectedItem(null);
-    setGenPanel(null);
     setTimelineSlotIndex(null);
     setArchiveOpen(false);
     setSettingsOpen(false);
@@ -1404,28 +1416,6 @@ export function HomePage() {
       const osgAssetId = imageId ? imageId.trim().replace(/^@/, '') : undefined;
       setOsgTarget({ assetId: item?.id ?? target, osgAssetId });
     },
-    open_gen: (type: string, prompt: string) => {
-      setSettingsOpen(false);
-      setArchiveOpen(false);
-      setSelectedItem(null);
-      setTimelineSlotIndex(null);
-      const category: 'video' | 'image' = type === 'image' ? 'image' : 'video';
-      setGenPanel({ category, prompt: prompt || '' });
-    },
-    open_gen_video: (prompt: string) => {
-      setSettingsOpen(false);
-      setArchiveOpen(false);
-      setSelectedItem(null);
-      setTimelineSlotIndex(null);
-      setGenPanel({ category: 'video', prompt: prompt || '' });
-    },
-    open_gen_image: (prompt: string) => {
-      setSettingsOpen(false);
-      setArchiveOpen(false);
-      setSelectedItem(null);
-      setTimelineSlotIndex(null);
-      setGenPanel({ category: 'image', prompt: prompt || '' });
-    },
     copy_clipboard: (raw: string) => navigator.clipboard.writeText(raw),
     show_history: (assetId: string) => {
       const item = mediaItems.find(m => m.id === assetId);
@@ -1480,15 +1470,7 @@ export function HomePage() {
         : activeSelection;
       setWatermarkPanel({ assetId: matched?.id ?? null });
     },
-    gen_prompt: (text: string) => genPanelRef.current?.setField('prompt', text),
-    gen_model: (key: string) => genPanelRef.current?.setModel(key),
-    gen_aspect: (ratio: string) => genPanelRef.current?.setField('aspect_ratio', ratio),
-    gen_duration: (value: string) => genPanelRef.current?.setField('duration', value),
-    gen_mode: (value: string) => genPanelRef.current?.setField('mode', value),
-    gen_style: (value: string) => genPanelRef.current?.setField('style', value),
-    gen_neg: (text: string) => genPanelRef.current?.setField('negative_prompt', text),
-    gen_images: (slugs: string) => genPanelRef.current?.setImages(slugs),
-    gen_elements: (index: string, field: string, value: string) => genPanelRef.current?.setElement(index, field, value),
+
 
     open_gf_characters: () => {
       resetOpenScreens();
@@ -1510,9 +1492,7 @@ export function HomePage() {
     open_notebook: (new_name?: string) => {
       setSettingsOpen(false);
       setArchiveOpen(false);
-      const notebooks = mediaItems
-        .filter((m) => m.type === 'notebook')
-        .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+      const notebooks = sortedNotebooks(mediaItems);
       const requested = new_name?.trim() ?? '';
 
       if (requested) {
@@ -1521,33 +1501,18 @@ export function HomePage() {
           handleSelectItem(match);
           return;
         }
-      } else if (notebooks.length > 0) {
-        const selectedNotebook = selectedItem?.type === 'notebook'
-          ? notebooks.find((n) => n.id === selectedItem.id)
-          : undefined;
-        const scratch = findNotebookByName(notebooks, DEFAULT_NOTEBOOK_NAME);
-        handleSelectItem(selectedNotebook ?? scratch ?? notebooks[0]);
-        return;
+      } else {
+        const current = pickDefaultNotebook(notebooks, selectedItem?.type === 'notebook' ? selectedItem.id : undefined);
+        if (current) {
+          handleSelectItem(current);
+          return;
+        }
       }
 
-      if (!projectSlug || creatingNotebookRef.current) return;
       const createName = requested || DEFAULT_NOTEBOOK_NAME;
-      creatingNotebookRef.current = true;
       void (async () => {
-        try {
-          const res = await callTool('write_notebook', {
-            project_slug: projectSlug,
-            name: createName,
-            definition: {
-              sequence: [],
-              properties: { name: createName, description: '', stage_count: 1 },
-            },
-          });
-          if (res.isError) return;
-          const content = res.content as Array<{ type: string; text: string }>;
-          const notebookId = parseWriteNotebookId(content[0]?.text ?? '');
-          if (!notebookId) return;
-          await listAssets(projectSlug, sortOrder);
+        const notebookId = await createNotebook(createName);
+        if (notebookId) {
           setSelectedItem({
             id: notebookId,
             type: 'notebook',
@@ -1555,12 +1520,7 @@ export function HomePage() {
             title: humanizeId(notebookId),
             filePath: '',
           });
-          setGenPanel(null);
           setTimelineSlotIndex(null);
-        } catch (e) {
-          console.error('Failed to create notebook', e);
-        } finally {
-          creatingNotebookRef.current = false;
         }
       })();
     },
@@ -1593,20 +1553,12 @@ export function HomePage() {
     show_voices: handleShowVoices,
     x_connect: () => { void connectX(); },
     open_slot_player: handleOpenSlotPlayer,
-  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, viewerSize, applySubsSetting, applyAudioSetting, applyOsgSetting, activeSelection, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openRenameAll, callTool, listAssets, projectSlug, sortOrder, resetOpenScreens]);
+  }), [triggerUpload, mediaItems, handleSelectItem, handleOpenAsset, handleProjectChange, handleViewerSizeChange, viewerSize, applySubsSetting, applyAudioSetting, applyOsgSetting, activeSelection, selectedItem, setCropTarget, setOsgTarget, handleCreateProject, handleRenameProject, handleRequestDeleteProject, handleCloseViewer, setSidebarsCollapsed, refreshProviderKeyStatus, openArchive, handleTimelineAudioAdd, handleTimelineAudioMove, handleTimelineAudioRemove, handleTimelineAudioUpdate, handleExtractSkeletonCommand, handleRewindCommand, handleShowVoices, connectX, handleOpenSlotPlayer, openRenameAll, resetOpenScreens, createNotebook]);
 
   const notebookCommand = useMemo(() => {
-    const notebooks = mediaItems
-      .filter((m) => m.type === 'notebook')
-      .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
-    const selectedNotebook = selectedItem?.type === 'notebook'
-      ? notebooks.find((n) => n.id === selectedItem.id)
-      : undefined;
-    const scratch = findNotebookByName(notebooks, DEFAULT_NOTEBOOK_NAME);
-    const current = selectedNotebook ?? scratch ?? notebooks[0];
-    const name = current ? notebookCommandName(current.id) : DEFAULT_NOTEBOOK_NAME;
+    const name = defaultNotebookSelection ? notebookCommandName(defaultNotebookSelection.id) : DEFAULT_NOTEBOOK_NAME;
     return `/notebook ${name}`;
-  }, [mediaItems, selectedItem]);
+  }, [defaultNotebookSelection]);
 
   const renderAssetCard = (item: MediaItem) => {
     const canExtractSkeleton = item.type === 'image' && !!item.filePath && !!projectSlug;
@@ -1640,6 +1592,43 @@ export function HomePage() {
         {item.type === 'character' && <CharacterCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} onDelete={handleDeleteClip} onRecover={handleRecoverClip} />}
         {item.type === 'notebook' && <NotebookCard item={item} contextMenuContent={menu} selected={selectedItem?.id === item.id} onClick={() => handleSelectItem(item)} onMarkSeen={onMarkSeen} />}
       </div>
+    );
+  };
+
+  const renderViewer = (item: MediaItem) => {
+    return (
+      <AssetViewer
+        key={`${projectSlug ?? ''}:${item.id}`}
+        item={item}
+        projectSlug={projectSlug ?? ''}
+        size={viewerSize}
+        onSizeChange={handleViewerSizeChange}
+        flipped={viewerFlipped}
+        onFlippedChange={setViewerFlipped}
+        renderOrientation={settingsOrientation}
+        onRender={handleRender}
+        onSplitAtCursor={handleSplitAtCursor}
+        pendingFilePosition={pendingFilePosition}
+        onClearPendingFilePosition={() => setPendingFilePosition(null)}
+        pendingBackTab={pendingBackTab}
+        onClearPendingBackTab={() => setPendingBackTab(null)}
+        settings={renderSettings}
+        onSettingsChange={setRenderSettings}
+        transcript={transcriptInfo}
+        callTool={callTool}
+        callState={state}
+        onClose={() => setSelectedItem(null)}
+        imageAssets={mediaItems.filter((m) => m.type === 'image')}
+        mediaItems={mediaItems}
+        onOpenAsset={handleOpenAsset}
+        cropTarget={cropTarget}
+        onCropConsumed={() => setCropTarget(null)}
+        osgTarget={osgTarget}
+        onOsgConsumed={() => setOsgTarget(null)}
+        onOsgApply={handleOsgApply}
+        onGenerationLifecycle={handleGenerationLifecycle}
+        onManageCharacters={() => uiActions.open_gf_characters?.()}
+      />
     );
   };
 
@@ -1802,25 +1791,7 @@ export function HomePage() {
                     onRefresh={() => { void refreshProviderKeyStatus(); }}
                     onClose={() => setSettingsOpen(false)}
                   />
-                ) : genPanel != null ? (
-                  <GenPreviewPanel
-                    key={genPanel.category}
-                    ref={genPanelRef}
-                    category={genPanel.category}
-                    prompt={genPanel.prompt}
-                    onClose={() => setGenPanel(null)}
-                    callTool={callTool}
-                    mcpState={state}
-                    projectSlug={projectSlug}
-                    pendingGeneration={pendingGenForPanel}
-                    onGenerationLifecycle={handleGenerationLifecycle}
-                    onManageCharacters={() => uiActions.open_gf_characters?.()}
-                    imageAssets={
-                      assetList
-                        ? (genPanel.category === 'video' ? genMediaAssets : genImageAssets)
-                        : undefined
-                    }
-                  />
+
                 ) : archiveOpen ? (
                   <ArchiveBrowser
                     key={`${archiveRequestKey}:${archiveInitialLoading ? 'loading' : 'loaded'}`}
@@ -1844,38 +1815,7 @@ export function HomePage() {
                     onClose={() => setPostPanel(null)}
                   />
                 ) : activeSelection ? (
-                  <AssetViewer
-                    key={`${projectSlug ?? ''}:${activeSelection.id}`}
-                    item={activeSelection}
-                    projectSlug={projectSlug ?? ''}
-                    size={viewerSize}
-                    onSizeChange={handleViewerSizeChange}
-                    flipped={viewerFlipped}
-                    onFlippedChange={setViewerFlipped}
-                    renderOrientation={settingsOrientation}
-                    onRender={handleRender}
-                    onSplitAtCursor={handleSplitAtCursor}
-                    pendingFilePosition={pendingFilePosition}
-                    onClearPendingFilePosition={() => setPendingFilePosition(null)}
-                    pendingBackTab={pendingBackTab}
-                    onClearPendingBackTab={() => setPendingBackTab(null)}
-                    settings={renderSettings}
-                    onSettingsChange={setRenderSettings}
-                    transcript={transcriptInfo}
-                    callTool={callTool}
-                    callState={state}
-                    onClose={() => setSelectedItem(null)}
-                    imageAssets={mediaItems.filter((m) => m.type === 'image')}
-                    mediaItems={mediaItems}
-                    onOpenAsset={handleOpenAsset}
-                    cropTarget={cropTarget}
-                    onCropConsumed={() => setCropTarget(null)}
-                    osgTarget={osgTarget}
-                    onOsgConsumed={() => setOsgTarget(null)}
-                    onOsgApply={handleOsgApply}
-                    onGenerationLifecycle={handleGenerationLifecycle}
-                    onManageCharacters={() => uiActions.open_gf_characters?.()}
-                  />
+                  renderViewer(activeSelection)
                 ) : renameAllOpen ? (
                   <RenameAllPanel
                     projectSlug={projectSlug ?? ''}
@@ -1898,6 +1838,8 @@ export function HomePage() {
                     initialSlotIndex={timelineSlotIndex}
                     onOrientationChange={handleViewerSizeChange}
                   />
+                ) : defaultNotebookSelection ? (
+                  renderViewer(defaultNotebookSelection)
                 ) : (
                   <IdleScreen label="WAITING FOR INPUT" fillParent />
                 )}

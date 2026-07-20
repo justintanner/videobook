@@ -919,12 +919,6 @@ describe("slash commands e2e", () => {
   // 11. Command dispatch wiring
   // -----------------------------------------------------------------------
   describe("command dispatch wiring", () => {
-    it("/generate opens the generation panel via uiAction", () => {
-      const cmd = findCommand("/generate");
-      expect(cmd.uiAction).toBe("open_gen");
-      expect(cmd.mcpTool).toBeUndefined();
-    });
-
     it("/trim has no mcpTool or uiAction (falls to chat)", () => {
       const cmd = findCommand("/trim");
       expect(cmd.mcpTool).toBeUndefined();
@@ -1027,16 +1021,6 @@ describe("slash commands e2e", () => {
         target_duration_seconds: 15,
         continuation_prompt: "(add outro music)",
       });
-    });
-
-    it("/generate parseCommandArgs only captures first token as prompt (model gets rest)", () => {
-      // /generate has 2 string params: prompt + model. parseCommandArgs assigns
-      // the first token to prompt and remaining tokens to model (the last string param).
-      // In production, chat fallback commands bypass parseCommandArgs entirely — the
-      // full input is sent to the chat tool. This test documents the parse behavior.
-      const args = simulateParse("/generate", "video of a dog on a skateboard");
-      expect(args.type).toBe("video");
-      expect(args.prompt).toBe("of a dog on a skateboard");
     });
 
     it("parses '/trim @hero-intro 0:05 0:12'", () => {
@@ -1340,12 +1324,6 @@ describe("slash commands e2e", () => {
       // First token is the url, remaining tokens are lost because it's a multi-param command
       // but /download only has url as first required string + optional start_time, end_time
       expect(args.url).toBe("https://example.com/path");
-    });
-
-    it("/generate with multi-word input: prompt gets first token, model gets rest", () => {
-      const args = simulateParse("/generate", "video of @hero-intro dancing");
-      expect(args.type).toBe("video");
-      expect(args.prompt).toBe("of @hero-intro dancing");
     });
 
     it("/rename strips @ from new_name when it is the last string param", () => {

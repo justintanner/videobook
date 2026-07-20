@@ -3,7 +3,7 @@
 //
 // Two-tier focus rule: native inputs/selects use a 1px ring (FOCUS_RING_INPUT);
 // interactive buttons use a 2px ring with offset (FOCUS_RING_BUTTON), matching
-// the established CommandButton / GenerateCommandButton treatment. The ring
+// the established CommandButton treatment. The ring
 // *color* is supplied per-component (e.g. a domain or tone class).
 
 /** Operation in-flight while the control stays interactive (e.g. queueable buttons). */

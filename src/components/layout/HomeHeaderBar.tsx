@@ -1,4 +1,4 @@
-import { ArchiveRestore, Clapperboard, Film, ImageIcon, Loader2, NotebookPen, Settings, History } from 'lucide-react';
+import { ArchiveRestore, Loader2, NotebookPen, Settings, History } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
 import { ProjectDropdown } from './ProjectDropdown';
 import { useToast } from '@/hooks/useToast';
@@ -11,7 +11,7 @@ interface HomeHeaderBarProps {
   /** Number of assets currently rendering — shows a global rendering indicator. */
   renderingCount?: number;
   /** Header label + command for the notebook shortcut, e.g. "/notebook scratch". */
-  notebookCommand?: string;
+  notebookCommand: string;
   callTool: UseMcpResult['callTool'];
   onProjectChange: (slug: string) => void;
   onStatusClick: () => void;
@@ -24,7 +24,7 @@ interface HomeHeaderBarProps {
   onProjectsOpenChange?: (open: boolean) => void;
 }
 
-export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, renderingCount = 0, notebookCommand = '/notebook scratch', callTool, onProjectChange, onStatusClick, onArchiveClick, onSettingsClick, onAnimateCommand, archiveActive = false, settingsActive = false, projectsOpen, onProjectsOpenChange }: HomeHeaderBarProps) {
+export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, renderingCount = 0, notebookCommand, callTool, onProjectChange, onStatusClick, onArchiveClick, onSettingsClick, onAnimateCommand, archiveActive = false, settingsActive = false, projectsOpen, onProjectsOpenChange }: HomeHeaderBarProps) {
   const { toasts } = useToast();
   const hasOpenToast = toasts.some((toast) => toast.open);
   const isRendering = renderingCount > 0;
@@ -52,10 +52,7 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, renderingCoun
         />
 
         {/* Generation shortcuts */}
- <CommandButton command={notebookCommand} icon={<NotebookPen className="size-3.5" />} variant="notebook" onClick={() => onAnimateCommand(notebookCommand)} />
- <CommandButton command="/image" icon={<ImageIcon className="size-3.5" />} variant="image" onClick={() => onAnimateCommand('/image')} />
- <CommandButton command="/video" icon={<Film className="size-3.5" />} variant="video" onClick={() => onAnimateCommand('/video')} />
- <CommandButton command="/final" icon={<Clapperboard className="size-3.5" />} variant="final" onClick={() => onAnimateCommand('/final')} />
+	<CommandButton command={notebookCommand} icon={<NotebookPen className="size-3.5" />} variant="notebook" onClick={() => onAnimateCommand(notebookCommand)} />
       </div>
 
       {/* Right side */}

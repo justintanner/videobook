@@ -50,11 +50,7 @@ describe("slash_commands tool", () => {
     const content = result.content as TextContent;
     const commands: Command[] = JSON.parse(content[0].text);
 
-    // Check known hardcoded commands exist
     const commandNames = commands.map((c) => c.command);
-    expect(commandNames).toContain("/video");
-    expect(commandNames).toContain("/image");
-    expect(commandNames).toContain("/generate");
     expect(commandNames).toContain("/trim");
     expect(commandNames).toContain("/trim-audio");
     expect(commandNames).toContain("/final");
@@ -399,10 +395,9 @@ describe("slash_commands tool", () => {
 
     const viewerCommands = commands.filter((c) => c.category === "viewer");
     for (const cmd of viewerCommands) {
-      const hasViewerOrGen = cmd.onMount?.includes("viewer") || cmd.onMount?.includes("gen");
       expect(
-        hasViewerOrGen,
-        `Viewer command ${cmd.command} should have onMount containing 'viewer' or 'gen'`,
+        cmd.onMount?.includes("viewer"),
+        `Viewer command ${cmd.command} should have onMount containing 'viewer'`,
       ).toBe(true);
     }
   });

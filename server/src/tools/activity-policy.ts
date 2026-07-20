@@ -34,7 +34,6 @@ const EXCLUDED_TOOLS = new Set([
   "slugs",
   "switch_project",
   "sync",
-  "translate_payload",
   "x_connect_status",
   "x_connect_start",
 ]);

@@ -30,3 +30,16 @@ describe("HomePage viewport layout", () => {
     expect(homepageSrc).not.toContain('className="size-screen');
   });
 });
+
+describe("HomePage notebook default layout", () => {
+  it("renders default notebook fallback before WAITING FOR INPUT", () => {
+    expect(homepageSrc).toMatch(
+      /defaultNotebookSelection\s*\?\s*\(?\s*renderViewer\(defaultNotebookSelection\)[\s\S]*?WAITING FOR INPUT/,
+    );
+  });
+
+  it("wires useEnsureDefaultNotebook hook", () => {
+    expect(homepageSrc).toContain("useEnsureDefaultNotebook({");
+    expect(homepageSrc).toContain("assetList,");
+  });
+});

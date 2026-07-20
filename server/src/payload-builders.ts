@@ -1,8 +1,7 @@
 /**
  * Shared payload builders: MCP tool args → @apicity request bodies.
  *
- * Used by both `translate_payload` (preview, passes raw slugs) and
- * job handlers (passes real upload URLs). Same functions, different strings.
+ * Used by job handlers (passes real upload URLs).
  */
 import type {
   KlingVideoRequest,
@@ -97,8 +96,6 @@ import {
   Wan27ImageProRequestSchema,
   Wan27ImageRequestSchema,
 } from "@apicity/kie/zod";
-import { validateVideoParams } from "./video-models.js";
-import { validateImageParams } from "./image-models.js";
 import { zodDefault } from "./zod-slots.js";
 
 // ---------------------------------------------------------------------------
@@ -1360,7 +1357,7 @@ function extractKlingElements(args: Record<string, unknown>): KlingElement[] {
 }
 
 // ---------------------------------------------------------------------------
-// Dispatcher (used by translate_payload tool)
+// Dispatcher
 // ---------------------------------------------------------------------------
 
 type TranslateResult = {
@@ -1698,39 +1695,7 @@ function translateToolPayload(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Validation warnings helper (for translate_payload tool)
-// ---------------------------------------------------------------------------
 
-const VIDEO_TOOLS = new Set([
-  "generate_kling30_video", "generate_kling30_motion_control_video", "generate_kling30_turbo_video",
-  "generate_veo3_video", "generate_veo3_fast_video",
-  "generate_veo31_video", "generate_veo31_fast_video", "generate_veo31_lite_video", "generate_veo31_lite_low_priority_video",
-  "generate_seedance2_video", "generate_seedance2_fast_video", "generate_seedance2_mini_video",
-  "generate_gemini_omni_video",
-  "generate_grok_imagine_video", "generate_grok_imagine_t2v_video", "generate_grok_imagine_ref_video",
-  "extend_grok_imagine_video",
-  "generate_wan27_t2v_video", "generate_wan27_i2v_video", "generate_wan27_videoedit_video", "generate_wan27_r2v_video", "extend_wan27_video",
-  "generate_happyhorse_t2v_video", "generate_happyhorse_i2v_video", "generate_happyhorse_ref_video", "generate_happyhorse_videoedit_video",
-  "generate_alibaba_video",
-]);
-
-const IMAGE_TOOLS = new Set([
-  "generate_nano_banana_image", "generate_grok_imagine_image", "generate_gpt_image", "generate_gpt_image_text", "generate_grok_imagine_text_image",
-  "generate_qwen2_image_edit", "generate_wan27_image", "generate_wan27_image_pro",
-  "generate_seedream_text_image", "generate_seedream_image",
-  "generate_alibaba_image", "generate_alibaba_image_pro",
-]);
-
-function getValidationWarnings(toolName: string, args: Record<string, unknown>): string[] {
-  if (VIDEO_TOOLS.has(toolName)) {
-    return validateVideoParams(toolName, args).warnings;
-  }
-  if (IMAGE_TOOLS.has(toolName)) {
-    return validateImageParams(toolName, args).warnings;
-  }
-  return [];
-}
 
 // ---------------------------------------------------------------------------
 // Exports
@@ -1772,6 +1737,5 @@ export {
   buildAlibabaQwenImagePayload,
   buildAlibabaVideoPayload,
   translateToolPayload,
-  getValidationWarnings,
 };
 export type { TranslateResult, Seedance2VideoArgs, Seedance2VideoOpts, Seedance2MiniVideoArgs, Seedance2MiniVideoOpts, Wan27FramesVideoArgs, Wan27FramesVideoOpts, Wan27ReferenceVideoArgs, Wan27ReferenceVideoOpts, GoogleVeo31Model, Veo31VideoArgs, Veo31VideoOpts, GoogleOmniVideoArgs, GoogleOmniVideoOpts, GoogleNbpImageArgs };

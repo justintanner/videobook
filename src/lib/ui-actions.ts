@@ -2,9 +2,6 @@ export interface UiActionCallbacks {
   open_upload: () => void;
   open_inbox: () => void;
   open_status: () => void;
-  open_gen: (type: string, prompt: string) => void;
-  open_gen_video: (prompt: string) => void;
-  open_gen_image: (prompt: string) => void;
   copy_clipboard: (raw: string) => void;
   show_history: (assetId: string) => void;
   open_asset: (assetId: string) => void;
@@ -26,15 +23,6 @@ export interface UiActionCallbacks {
   settings_bg: (mode: string) => void;
   settings_osg: (field: string, value: string) => void;
   open_watermark: (assetSlug: string) => void;
-  gen_prompt: (text: string) => void;
-  gen_model: (key: string) => void;
-  gen_aspect: (ratio: string) => void;
-  gen_duration: (value: string) => void;
-  gen_mode: (value: string) => void;
-  gen_style: (value: string) => void;
-  gen_neg: (text: string) => void;
-  gen_images: (slugs: string) => void;
-  gen_elements: (index: string, field: string, value: string) => void;
 
   open_post_composer: (assetSlug: string, text: string) => void;
   open_notebook: (name?: string) => void;
@@ -90,15 +78,6 @@ export function executeUiAction(
     case 'open_osg':
       (fn as UiActionCallbacks['open_osg'])(ctx.args.asset_id ?? ctx.raw, ctx.args.image);
       break;
-    case 'open_gen':
-      (fn as UiActionCallbacks['open_gen'])(ctx.args.type ?? '', ctx.args.prompt ?? ctx.raw);
-      break;
-    case 'open_gen_video':
-      (fn as UiActionCallbacks['open_gen_video'])(ctx.raw || ctx.args.prompt || '');
-      break;
-    case 'open_gen_image':
-      (fn as UiActionCallbacks['open_gen_image'])(ctx.raw || ctx.args.prompt || '');
-      break;
     case 'switch_project':
       // The command is /{slug}, so extract slug from the command itself
       (fn as UiActionCallbacks['switch_project'])(ctx.raw || ctx.args.slug || '');
@@ -120,33 +99,6 @@ export function executeUiAction(
       break;
     case 'open_watermark':
       (fn as UiActionCallbacks['open_watermark'])(ctx.args.asset_slug ?? ctx.raw);
-      break;
-    case 'gen_prompt':
-      (fn as UiActionCallbacks['gen_prompt'])(ctx.args.text ?? ctx.raw);
-      break;
-    case 'gen_model':
-      (fn as UiActionCallbacks['gen_model'])(ctx.args.key ?? ctx.raw);
-      break;
-    case 'gen_aspect':
-      (fn as UiActionCallbacks['gen_aspect'])(ctx.args.ratio ?? ctx.raw);
-      break;
-    case 'gen_duration':
-      (fn as UiActionCallbacks['gen_duration'])(ctx.args.value ?? ctx.raw);
-      break;
-    case 'gen_mode':
-      (fn as UiActionCallbacks['gen_mode'])(ctx.args.value ?? ctx.raw);
-      break;
-    case 'gen_style':
-      (fn as UiActionCallbacks['gen_style'])(ctx.args.value ?? ctx.raw);
-      break;
-    case 'gen_neg':
-      (fn as UiActionCallbacks['gen_neg'])(ctx.args.text ?? ctx.raw);
-      break;
-    case 'gen_images':
-      (fn as UiActionCallbacks['gen_images'])(ctx.args.slugs ?? ctx.raw);
-      break;
-    case 'gen_elements':
-      (fn as UiActionCallbacks['gen_elements'])(ctx.args.index ?? '', ctx.args.field ?? '', ctx.args.value ?? ctx.raw);
       break;
 
     case 'open_post_composer':

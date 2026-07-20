@@ -306,20 +306,6 @@ export function AssetMenu({
   const imageActions: CommandAction[] = itemType === 'image'
     ? [
         {
-          command: `/image ${slug}`,
-          title: 'Generate Image',
-          titleClassName: 'text-primary',
-          accentColor: 'border-l-primary/50 focus:border-l-primary/80',
-          onSelect: () => onAnimateCommand?.(`/image ${slug}`),
-        },
-        {
-          command: `/video ${slug}`,
-          title: 'Generate Video',
-          titleClassName: 'text-violet-400',
-          accentColor: 'border-l-violet-500/50 focus:border-l-violet-500/80',
-          onSelect: () => onAnimateCommand?.(`/video ${slug}`),
-        },
-        {
           command: `/describe ${slug}`,
           title: 'Describe Image',
           titleClassName: 'text-emerald-400',
@@ -341,13 +327,6 @@ export function AssetMenu({
 
   const videoActions: CommandAction[] = itemType === 'video'
     ? [
-        {
-          command: `/video ${slug}`,
-          title: 'Extend Video',
-          titleClassName: 'text-violet-400',
-          accentColor: 'border-l-violet-500/50 focus:border-l-violet-500/80',
-          onSelect: () => onAnimateCommand?.(`/video ${slug}`),
-        },
         {
           command: `/split ${slug}`,
           title: 'Split Video',
