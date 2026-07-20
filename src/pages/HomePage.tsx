@@ -1684,7 +1684,7 @@ export function HomePage() {
   return (
     <MountKeyProvider>
     <CommandRegistryProvider callTool={callTool} state={state} projectSlug={projectSlug} uiActions={uiActions} onAfterDispatch={handleAfterDispatch}>
- <div className="size-screen bg-background overflow-x-auto overflow-y-hidden">
+      <div className="w-screen h-screen bg-background overflow-x-auto overflow-y-hidden">
         <input
           ref={fileInputRef}
           type="file"

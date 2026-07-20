@@ -21,3 +21,12 @@ describe("HomePage optimistic UI reset wiring", () => {
     );
   });
 });
+
+describe("HomePage viewport layout", () => {
+  it("sizes the app root against both viewport axes", () => {
+    expect(homepageSrc).toContain(
+      'className="w-screen h-screen bg-background overflow-x-auto overflow-y-hidden"',
+    );
+    expect(homepageSrc).not.toContain('className="size-screen');
+  });
+});
