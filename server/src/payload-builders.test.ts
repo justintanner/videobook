@@ -139,6 +139,34 @@ describe("translateToolPayload", () => {
     expect(result?.payload.input).not.toHaveProperty("index");
   });
 
+  it("orders image_urls by first prompt mention so @image1 is the first named image", () => {
+    // Tool-call list order is [lay, catblack] but the prompt names catblack first.
+    // Kie @imageN is the Nth entry of image_urls — reorder so mentions stay
+    // natural: "@image1 morphs into @image2".
+    const result = translateToolPayload("generate_grok_imagine_video", {
+      image_slugs: ["@img-lay", "@img-catblack"],
+      prompt: "@img-catblack morphs into @img-lay",
+      mode: "normal",
+      duration: 6,
+      resolution: "720p",
+      aspect_ratio: "1:1",
+      nsfw_checker: false,
+    });
+
+    expect(result?.payload).toEqual({
+      model: "grok-imagine/image-to-video",
+      input: {
+        image_urls: ["@img-catblack", "@img-lay"],
+        prompt: "@image1 morphs into @image2",
+        mode: "normal",
+        aspect_ratio: "1:1",
+        resolution: "720p",
+        duration: 6,
+        nsfw_checker: false,
+      },
+    });
+  });
+
   it("normalizes spicy mode for uploaded Grok image-to-video inputs", () => {
     const result = translateToolPayload("generate_grok_imagine_video", {
       image_slugs: ["https://example.test/input.png"],

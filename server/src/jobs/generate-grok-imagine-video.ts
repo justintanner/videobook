@@ -94,7 +94,17 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
     }
 
     const request = buildGrokImagineVideoPayload(
-      { prompt, mode, duration, resolution, aspect_ratio, nsfw_checker },
+      {
+        prompt,
+        mode,
+        duration,
+        resolution,
+        aspect_ratio,
+        nsfw_checker,
+        // Parallel asset ids so @img-* prompt mentions can reorder image_urls
+        // to match first-mention order (@image1 = first named subject).
+        image_slugs: sourceImageIds,
+      },
       downloadUrls,
     );
     const taskId = await submitKieTask(fs, ctx, {

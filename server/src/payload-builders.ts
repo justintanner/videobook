@@ -209,6 +209,8 @@ type GrokImagineVideoArgs = {
   task_id?: string;
   index?: number;
   nsfw_checker?: boolean;
+  /** Asset ids parallel to `imageUrls` (job path) so prompt @img-* mentions can reorder urls. */
+  image_slugs?: string[];
 };
 
 function numericDuration(value: number | string | undefined): number | undefined {
@@ -228,27 +230,95 @@ function numericDuration(value: number | string | undefined): number | undefined
  * - `index` is only meaningful with `task_id` (0-based among Grok text-to-image
  *   results); it must be omitted when `image_urls` is set.
  * - In prompts, reference uploaded images as `@image1` / `@image2` … not
- *   videocity `@img-*` asset slugs.
+ *   videocity `@img-*` asset slugs. `@imageN` is the Nth entry in `image_urls`
+ *   (1-based), so we reorder urls to match first-mention order in the prompt.
  * - `mode: "spicy"` is only valid on the task_id path; external URLs normalize
  *   spicy → normal.
  */
-function rewriteGrokImageMentions(prompt: string, imageUrlsOrSlugs: readonly string[]): string {
-  // Preview path passes asset slugs; job path passes https URLs. Only rewrite
-  // when we still have slug-shaped refs the user can type as @img-….
-  const slugLike = imageUrlsOrSlugs.filter((u) => {
-    const s = u.replace(/^@/, "");
-    return s.startsWith("img-") || u.startsWith("@");
-  });
-  if (slugLike.length === 0) {
-    // Still normalize any residual @img-… tokens if the prompt carries them
-    // but urls were already resolved — map first occurrence order from prompt.
-    return prompt.replace(/@img-[\w-]+/g, (match, offset, full) => {
-      const seen = [...full.slice(0, offset).matchAll(/@img-[\w-]+/g)].length;
-      return `@image${seen + 1}`;
-    });
+const GROK_IMG_MENTION_RE = /@img-[\w-]+/g;
+
+function bareImageSlug(raw: string): string {
+  return raw.replace(/^@/, "").trim();
+}
+
+/**
+ * Align `image_urls` with prompt mention order so `@image1` is the first
+ * image the user named, then rewrite every `@img-*` token to `@imageN`.
+ * Images present in the list but never mentioned keep their relative order
+ * after the mentioned ones.
+ *
+ * `slugKeys` is parallel to `imageUrls` when urls are already https (job path).
+ * When omitted, slug identity is taken from the url itself if it still looks
+ * like an `@img-*` / `img-*` asset ref (preview/translate path).
+ */
+function alignGrokImageUrlsAndPrompt(
+  prompt: string | undefined,
+  imageUrls: string[],
+  slugKeys?: readonly string[],
+): { prompt?: string; imageUrls: string[] } {
+  if (imageUrls.length === 0) {
+    return prompt === undefined ? { imageUrls } : { prompt, imageUrls };
   }
-  // rewriteImageSlugMentions emits @image_1; Kie wants @image1 (no underscore).
-  return rewriteImageSlugMentions(prompt, slugLike, "image").replace(/@image_(\d+)/g, "@image$1");
+
+  // Parallel keys for each url: asset slug when known, else the url itself.
+  const keys = imageUrls.map((url, i) => {
+    if (slugKeys && slugKeys[i] !== undefined) return bareImageSlug(slugKeys[i]);
+    return bareImageSlug(url);
+  });
+
+  const urlByKey = new Map<string, string>();
+  imageUrls.forEach((url, i) => {
+    urlByKey.set(keys[i], url);
+  });
+
+  if (prompt === undefined) return { imageUrls };
+
+  // Mention order from the prompt (first occurrence wins).
+  const mentioned: string[] = [];
+  for (const m of prompt.matchAll(GROK_IMG_MENTION_RE)) {
+    const bare = bareImageSlug(m[0]);
+    if (urlByKey.has(bare) && !mentioned.includes(bare)) mentioned.push(bare);
+  }
+
+  // If the prompt has no @img-* tokens that match our keys, leave order alone
+  // but still return the prompt unchanged (nothing to rewrite).
+  if (mentioned.length === 0) {
+    return { prompt, imageUrls };
+  }
+
+  // Mentioned first (prompt order), then any remaining urls in original order.
+  const ordered: string[] = [];
+  const orderedKeys: string[] = [];
+  const used = new Set<string>();
+  for (const bare of mentioned) {
+    const url = urlByKey.get(bare);
+    if (url !== undefined) {
+      ordered.push(url);
+      orderedKeys.push(bare);
+      used.add(bare);
+    }
+  }
+  imageUrls.forEach((url, i) => {
+    const bare = keys[i];
+    if (!used.has(bare)) {
+      ordered.push(url);
+      orderedKeys.push(bare);
+      used.add(bare);
+    }
+  });
+
+  const indexByKey = new Map<string, number>();
+  orderedKeys.forEach((bare, i) => {
+    indexByKey.set(bare, i + 1);
+  });
+
+  const rewritten = prompt.replace(GROK_IMG_MENTION_RE, (match) => {
+    const bare = bareImageSlug(match);
+    const n = indexByKey.get(bare);
+    return n !== undefined ? `@image${n}` : match;
+  });
+
+  return { prompt: rewritten, imageUrls: ordered };
 }
 
 function buildGrokImagineVideoPayload(
@@ -265,7 +335,10 @@ function buildGrokImagineVideoPayload(
   ) as GrokImageToVideoRequest["input"]["aspect_ratio"];
   const nsfwChecker = valueOrZodDefault(args.nsfw_checker, GrokImageToVideoRequestSchema.shape.input.shape.nsfw_checker) as boolean;
 
-  const hasImageUrls = imageUrls.length > 0;
+  // Preview passes slugs as imageUrls; job passes https urls + parallel image_slugs.
+  const slugKeys = args.image_slugs?.map(bareImageSlug);
+  const aligned = alignGrokImageUrlsAndPrompt(args.prompt, imageUrls, slugKeys);
+  const hasImageUrls = aligned.imageUrls.length > 0;
   const hasTaskId = typeof args.task_id === "string" && args.task_id.length > 0;
   // Prefer image_urls when both are present (tool path always supplies urls).
   const useTaskId = hasTaskId && !hasImageUrls;
@@ -273,16 +346,12 @@ function buildGrokImagineVideoPayload(
     ? (valueOrZodDefault(args.index, GrokImageToVideoRequestSchema.shape.input.shape.index) as number)
     : undefined;
 
-  const prompt = args.prompt !== undefined
-    ? rewriteGrokImageMentions(args.prompt, imageUrls)
-    : undefined;
-
   return {
     model: "grok-imagine/image-to-video",
     input: {
-      ...(hasImageUrls ? { image_urls: imageUrls } : {}),
+      ...(hasImageUrls ? { image_urls: aligned.imageUrls } : {}),
       ...(useTaskId ? { task_id: args.task_id, index } : {}),
-      ...(prompt !== undefined ? { prompt } : {}),
+      ...(aligned.prompt !== undefined ? { prompt: aligned.prompt } : {}),
       mode: mode as GrokImageToVideoRequest["input"]["mode"],
       aspect_ratio: aspectRatio,
       resolution,
@@ -1448,7 +1517,12 @@ function translateToolPayload(
         const payload = buildXaiGrokImagineVideoPayload(args as GrokImagineVideoArgs, imageSlugs);
         return { provider_path: "xai.post.v1.videos.generations(request, { otp })", payload: payload as unknown as Record<string, unknown> };
       }
-      const payload = buildGrokImagineVideoPayload(args as GrokImagineVideoArgs, imageSlugs);
+      // Pass image_slugs explicitly so mention-order alignment works even when
+      // the preview still shows asset slugs in image_urls.
+      const payload = buildGrokImagineVideoPayload(
+        { ...(args as GrokImagineVideoArgs), image_slugs: imageSlugs },
+        imageSlugs,
+      );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_grok_imagine_t2v_video": {
