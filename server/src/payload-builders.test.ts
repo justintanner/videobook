@@ -98,12 +98,12 @@ describe("translateToolPayload", () => {
       nsfw_checker: false,
     });
 
+    // image_urls path: no index (index is task_id-only per Kie docs)
     expect(result?.payload).toEqual({
       model: "grok-imagine/image-to-video",
       input: {
         image_urls: ["https://example.test/input.png"],
         prompt: "wave at camera",
-        index: 0,
         mode: "fun",
         aspect_ratio: "16:9",
         resolution: "720p",
@@ -111,6 +111,32 @@ describe("translateToolPayload", () => {
         nsfw_checker: false,
       },
     });
+    expect(result?.payload.input).not.toHaveProperty("index");
+    expect(result?.payload.input).not.toHaveProperty("task_id");
+  });
+
+  it("rewrites @img-* prompt mentions to Kie @imageN form", () => {
+    const result = translateToolPayload("generate_grok_imagine_video", {
+      image_slugs: ["@img-nbp-reference-1-reference"],
+      prompt: "@img-nbp-reference-1-reference in bangkok high on shrooms",
+      mode: "fun",
+      duration: 6,
+      resolution: "720p",
+      aspect_ratio: "1:1",
+    });
+
+    expect(result?.payload).toMatchObject({
+      model: "grok-imagine/image-to-video",
+      input: {
+        image_urls: ["@img-nbp-reference-1-reference"],
+        prompt: "@image1 in bangkok high on shrooms",
+        mode: "fun",
+        duration: 6,
+        resolution: "720p",
+        aspect_ratio: "1:1",
+      },
+    });
+    expect(result?.payload.input).not.toHaveProperty("index");
   });
 
   it("normalizes spicy mode for uploaded Grok image-to-video inputs", () => {

@@ -220,6 +220,37 @@ function numericDuration(value: number | string | undefined): number | undefined
   return undefined;
 }
 
+/**
+ * Kie Grok Imagine 1.5 i2v (suite slug `grok-imagine/image-to-video`).
+ *
+ * Upstream contract (docs.kie.ai + @apicity/kie):
+ * - Use either external `image_urls` OR `task_id`+`index` — never both.
+ * - `index` is only meaningful with `task_id` (0-based among Grok text-to-image
+ *   results); it must be omitted when `image_urls` is set.
+ * - In prompts, reference uploaded images as `@image1` / `@image2` … not
+ *   videocity `@img-*` asset slugs.
+ * - `mode: "spicy"` is only valid on the task_id path; external URLs normalize
+ *   spicy → normal.
+ */
+function rewriteGrokImageMentions(prompt: string, imageUrlsOrSlugs: readonly string[]): string {
+  // Preview path passes asset slugs; job path passes https URLs. Only rewrite
+  // when we still have slug-shaped refs the user can type as @img-….
+  const slugLike = imageUrlsOrSlugs.filter((u) => {
+    const s = u.replace(/^@/, "");
+    return s.startsWith("img-") || u.startsWith("@");
+  });
+  if (slugLike.length === 0) {
+    // Still normalize any residual @img-… tokens if the prompt carries them
+    // but urls were already resolved — map first occurrence order from prompt.
+    return prompt.replace(/@img-[\w-]+/g, (match, offset, full) => {
+      const seen = [...full.slice(0, offset).matchAll(/@img-[\w-]+/g)].length;
+      return `@image${seen + 1}`;
+    });
+  }
+  // rewriteImageSlugMentions emits @image_1; Kie wants @image1 (no underscore).
+  return rewriteImageSlugMentions(prompt, slugLike, "image").replace(/@image_(\d+)/g, "@image$1");
+}
+
 function buildGrokImagineVideoPayload(
   args: GrokImagineVideoArgs,
   imageUrls: string[],
@@ -232,14 +263,26 @@ function buildGrokImagineVideoPayload(
     args.aspect_ratio as GrokImageToVideoRequest["input"]["aspect_ratio"] | undefined,
     GrokImageToVideoRequestSchema.shape.input.shape.aspect_ratio,
   ) as GrokImageToVideoRequest["input"]["aspect_ratio"];
-  const index = valueOrZodDefault(args.index, GrokImageToVideoRequestSchema.shape.input.shape.index) as number;
   const nsfwChecker = valueOrZodDefault(args.nsfw_checker, GrokImageToVideoRequestSchema.shape.input.shape.nsfw_checker) as boolean;
+
+  const hasImageUrls = imageUrls.length > 0;
+  const hasTaskId = typeof args.task_id === "string" && args.task_id.length > 0;
+  // Prefer image_urls when both are present (tool path always supplies urls).
+  const useTaskId = hasTaskId && !hasImageUrls;
+  const index = useTaskId
+    ? (valueOrZodDefault(args.index, GrokImageToVideoRequestSchema.shape.input.shape.index) as number)
+    : undefined;
+
+  const prompt = args.prompt !== undefined
+    ? rewriteGrokImageMentions(args.prompt, imageUrls)
+    : undefined;
+
   return {
     model: "grok-imagine/image-to-video",
     input: {
-      image_urls: imageUrls,
-      ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
-      index,
+      ...(hasImageUrls ? { image_urls: imageUrls } : {}),
+      ...(useTaskId ? { task_id: args.task_id, index } : {}),
+      ...(prompt !== undefined ? { prompt } : {}),
       mode: mode as GrokImageToVideoRequest["input"]["mode"],
       aspect_ratio: aspectRatio,
       resolution,
