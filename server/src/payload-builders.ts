@@ -97,6 +97,7 @@ import {
   Wan27ImageRequestSchema,
 } from "@apicity/kie/zod";
 import { zodDefault } from "./zod-slots.js";
+import { rewriteImageSlugMentions, stripSlugMentions } from "./google-flow-refs.js";
 
 // ---------------------------------------------------------------------------
 // Individual builders
@@ -1479,7 +1480,16 @@ function translateToolPayload(
             : "veo-3.1-lite";
       const startImage = args.first_frame_slug as string | undefined;
       const endImage = args.last_frame_slug as string | undefined;
-      const payload = buildVeo31VideoPayload(model, args as Veo31VideoArgs, {
+      // Google Flow prompts only resolve positional @-markers; rewrite/strip
+      // @slug mentions exactly as tools/generate-veo31-video.ts does at submit.
+      const prompt = stripSlugMentions(
+        rewriteImageSlugMentions((args.prompt as string) ?? "", imageSlugs),
+        [
+          ...(startImage !== undefined && startImage.trim() !== "" ? [startImage] : []),
+          ...(endImage !== undefined && endImage.trim() !== "" ? [endImage] : []),
+        ],
+      );
+      const payload = buildVeo31VideoPayload(model, { ...(args as Veo31VideoArgs), prompt }, {
         ...(startImage !== undefined && startImage.trim() !== "" ? { startImageId: startImage } : {}),
         ...(endImage !== undefined && endImage.trim() !== "" ? { endImageId: endImage } : {}),
         ...(imageSlugs.length > 0 ? { referenceImageIds: imageSlugs } : {}),
@@ -1491,7 +1501,14 @@ function translateToolPayload(
       const videoSlug = args.video_slug as string | undefined;
       const voiceRefs = ((args.voice_refs as string[] | undefined) ?? []).filter((s) => s.trim() !== "");
       const characterRefs = ((args.character_refs as string[] | undefined) ?? []).filter((s) => s.trim() !== "");
-      const payload = buildGoogleOmniVideoPayload(args as GoogleOmniVideoArgs, {
+      const prompt = stripSlugMentions(
+        rewriteImageSlugMentions((args.prompt as string) ?? "", imageSlugs),
+        [
+          ...(videoSlug !== undefined && videoSlug.trim() !== "" ? [videoSlug] : []),
+          ...(startImage !== undefined && startImage.trim() !== "" ? [startImage] : []),
+        ],
+      );
+      const payload = buildGoogleOmniVideoPayload({ ...(args as GoogleOmniVideoArgs), prompt }, {
         ...(startImage !== undefined && startImage.trim() !== "" ? { startImageId: startImage } : {}),
         ...(imageSlugs.length > 0 ? { referenceImageIds: imageSlugs } : {}),
         ...(videoSlug !== undefined && videoSlug.trim() !== "" ? { referenceVideoId: videoSlug } : {}),
@@ -1502,7 +1519,10 @@ function translateToolPayload(
     }
     case "generate_nano_banana_pro_google": {
       const characterRefs = ((args.character_refs as string[] | undefined) ?? []).filter((s) => s.trim() !== "");
-      const payload = buildGoogleNbpImagePayload(args as GoogleNbpImageArgs, imageSlugs, characterRefs);
+      // Images use @reference_N markers (not @referenceImage_N), matching
+      // tools/generate-nano-banana-pro-google.ts.
+      const prompt = rewriteImageSlugMentions((args.prompt as string) ?? "", imageSlugs, "reference");
+      const payload = buildGoogleNbpImagePayload({ ...(args as GoogleNbpImageArgs), prompt }, imageSlugs, characterRefs);
       return { provider_path: "googleflow.v1.images()", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_grok_imagine_text_image": {

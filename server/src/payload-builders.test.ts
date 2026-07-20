@@ -319,4 +319,58 @@ describe("translateToolPayload", () => {
     });
     expect(GoogleFlowVideosRequestSchema.safeParse(result?.payload).success).toBe(true);
   });
+
+  it("rewrites @slug prompt mentions to @reference_N for Nano Banana Pro (Google)", () => {
+    const result = translateToolPayload("generate_nano_banana_pro_google", {
+      prompt: "@img-vancat in multiple poses like @img-shots in the purple nebula",
+      image_slugs: ["@img-shots", "@img-vcprof", "@img-vancat"],
+      aspect_ratio: "16:9",
+      project_slug: "realcat",
+    }, "google");
+
+    expect(result?.provider_path).toBe("googleflow.v1.images()");
+    expect(result?.payload).toEqual({
+      prompt: "@reference_3 in multiple poses like @reference_1 in the purple nebula",
+      model: "nano-banana-pro",
+      count: 1,
+      aspectRatio: "16:9",
+      reference_1: "@img-shots",
+      reference_2: "@img-vcprof",
+      reference_3: "@img-vancat",
+    });
+  });
+
+  it("rewrites @slug mentions to @referenceImage_N and strips frame mentions for Veo 3.1", () => {
+    const result = translateToolPayload("generate_veo31_video", {
+      prompt: "pan across @img-set starting from @img-open",
+      image_slugs: ["img-set"],
+      first_frame_slug: "img-open",
+      duration: "4",
+      aspect_ratio: "16:9",
+    });
+
+    expect(result?.payload).toEqual({
+      prompt: "pan across @referenceImage_1 starting from",
+      model: "veo-3.1-quality",
+      duration: 4,
+      aspectRatio: "landscape",
+      startImage: "img-open",
+      referenceImage_1: "img-set",
+    });
+  });
+
+  it("rewrites @slug mentions and strips the clip mention for Google Omni V2V", () => {
+    const result = translateToolPayload("generate_google_omni_video", {
+      prompt: "put @img-hat into @vid-clip",
+      video_slug: "vid-clip",
+      image_slugs: ["img-hat"],
+    });
+
+    expect(result?.payload).toEqual({
+      prompt: "put @referenceImage_1 into",
+      model: "omni-flash",
+      referenceImage_1: "img-hat",
+      referenceVideo_1: "vid-clip",
+    });
+  });
 });
