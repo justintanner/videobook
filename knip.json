@@ -12,12 +12,18 @@
     "server/src/test-client.ts",
     "server/src/**/*.test.ts",
     "server/scripts/**/*.ts",
-    "scripts/**/*.mjs"
+    "scripts/**/*.{mjs,ts}",
+    "server/src/remotion/index.tsx",
+    "extension/vite.config.ts",
+    "extension/src/background.ts",
+    "extension/src/x-post-content.ts",
+    "extension/src/**/*.test.ts"
   ],
   "ignore": [
     "**/dist/**",
     "**/node_modules/**",
-    "server/dist/**"
+    "server/dist/**",
+    "dist-extension/**"
   ],
   "ignoreBinaries": [
     "tsx"
