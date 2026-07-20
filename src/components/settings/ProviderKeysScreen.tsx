@@ -15,7 +15,7 @@ interface ProviderKeysScreenProps {
   onClose: () => void;
 }
 
-const GRID_COLS = 'grid-cols-[0.6fr_0.95fr_0.55fr_1.3fr_0.42fr_0.42fr_0.76fr]';
+const GRID_COLS = 'grid-cols-1 lg:grid-cols-[0.6fr_0.95fr_0.55fr_1.3fr_0.42fr_0.42fr_0.76fr]';
 
 function label(value: string): string {
   return value.replaceAll('_', ' ').toUpperCase();
@@ -68,7 +68,7 @@ function SourceBadge({ source }: { source: ProviderKeySource }) {
         className="inline-flex items-center gap-1 font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground"
         title="Managed in the 1Password vault — read-only here"
       >
-        <Lock className="w-3 h-3 shrink-0" />
+ <Lock className="size-3 shrink-0" />
         1PASSWORD
       </span>
     );
@@ -79,7 +79,7 @@ function SourceBadge({ source }: { source: ProviderKeySource }) {
         className="inline-flex items-center gap-1 font-mono text-[10px] font-bold tracking-[0.18em] text-primary"
         title="Stored in .env — editable"
       >
-        <Pencil className="w-3 h-3 shrink-0" />
+ <Pencil className="size-3 shrink-0" />
         .ENV
       </span>
     );
@@ -89,7 +89,7 @@ function SourceBadge({ source }: { source: ProviderKeySource }) {
       className="inline-flex items-center gap-1 font-mono text-[10px] font-bold tracking-[0.18em] text-amber-400"
       title="Not configured — set a value to store it in .env"
     >
-      <AlertTriangle className="w-3 h-3 shrink-0" />
+ <AlertTriangle className="size-3 shrink-0" />
       MISSING
     </span>
   );
@@ -128,11 +128,11 @@ function ProviderRow({ provider, saving, onSave }: ProviderRowProps) {
   return (
     <div className={`grid ${GRID_COLS} gap-3 items-center px-3 py-3 border-t border-border/60`}>
       <div className="min-w-0">
-        <div className="font-mono text-sm font-bold text-foreground truncate">{provider.label}</div>
+        <div className="font-mono text-sm font-bold text-foreground min-w-0 truncate">{provider.label}</div>
       </div>
 
       <div className="min-w-0">
-        <div className="font-mono text-xs text-zinc-200 truncate">{provider.envKey}</div>
+        <div className="font-mono text-xs text-zinc-200 min-w-0 truncate">{provider.envKey}</div>
       </div>
 
       <div className="min-w-0">
@@ -160,19 +160,19 @@ function ProviderRow({ provider, saving, onSave }: ProviderRowProps) {
               type="button"
               onClick={() => void save()}
               disabled={isSaving || draft.trim() === ''}
-              className="h-8 w-8 shrink-0 rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center"
+ className=" size-8 shrink-0 rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center justify-center"
               title={`Save ${provider.envKey} to .env`}
             >
-              {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+ {isSaving ? <RefreshCw className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
             </button>
             <button
               type="button"
               onClick={cancelEdit}
               disabled={isSaving}
-              className="h-8 w-8 shrink-0 rounded border border-border bg-black/40 text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors inline-flex items-center justify-center"
+ className=" size-8 shrink-0 rounded border border-border bg-black/40 text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors inline-flex items-center justify-center"
               title="Cancel"
             >
-              <X className="w-3.5 h-3.5" />
+ <X className="size-3.5" />
             </button>
           </>
         ) : (
@@ -187,10 +187,10 @@ function ProviderRow({ provider, saving, onSave }: ProviderRowProps) {
               <button
                 type="button"
                 onClick={startEdit}
-                className="h-8 w-8 shrink-0 rounded border border-border bg-black/40 text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors inline-flex items-center justify-center"
+ className=" size-8 shrink-0 rounded border border-border bg-black/40 text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors inline-flex items-center justify-center"
                 title={`Edit ${provider.envKey}`}
               >
-                <Pencil className="w-3.5 h-3.5" />
+ <Pencil className="size-3.5" />
               </button>
             )}
           </>
@@ -198,19 +198,19 @@ function ProviderRow({ provider, saving, onSave }: ProviderRowProps) {
       </div>
 
       <div className="min-w-0">
-        <div className="font-mono text-base font-bold tabular-nums text-foreground truncate" title={provider.credits.message ?? undefined}>
+        <div className="font-mono text-base font-bold tabular-nums text-foreground min-w-0 truncate" title={provider.credits.message ?? undefined}>
           {formatCredits(provider)}
         </div>
       </div>
 
       <div className="min-w-0">
-        <div className="font-mono text-base font-bold tabular-nums text-foreground truncate" title={provider.tokenLookup.model ?? provider.tokenLookup.message ?? undefined}>
+        <div className="font-mono text-base font-bold tabular-nums text-foreground min-w-0 truncate" title={provider.tokenLookup.model ?? provider.tokenLookup.message ?? undefined}>
           {formatTokens(provider)}
         </div>
       </div>
 
       <div className="min-w-0">
-        <span className="font-mono text-xs text-muted-foreground whitespace-nowrap truncate block" title={statusTitle(provider)}>
+        <span className="font-mono text-xs text-muted-foreground whitespace-nowrap min-w-0 truncate block" title={statusTitle(provider)}>
           {formatFetchedAt(checkedAt(provider))}
         </span>
       </div>
@@ -232,7 +232,7 @@ export function ProviderKeysScreen({ data, loading, error, saving, saveError, on
       <div
         role="dialog"
         aria-label="API keys"
-        className="w-full h-full min-h-0 bg-black border-2 border-border/50 relative shadow-lg overflow-hidden flex flex-col"
+ className="size-full min-h-0 bg-black border-2 border-border/50 relative shadow-lg overflow-hidden flex flex-col"
       >
         <div className="flex items-center justify-between gap-3 border-b border-primary/25 px-3 py-2 bg-zinc-950/40 shrink-0">
           <div className="font-mono text-base font-bold tracking-widest text-foreground">API KEYS</div>
@@ -248,20 +248,20 @@ export function ProviderKeysScreen({ data, loading, error, saving, saveError, on
               className="h-8 px-3 rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-2"
               title="Refresh provider status"
             >
-              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+ <RefreshCw className={cn('size-4 ', loading && 'animate-spin')} />
               <span className="text-xs font-mono font-bold tracking-[0.18em]">{loading ? 'REFRESHING' : 'REFRESH'}</span>
             </button>
           </div>
 
           <div className="min-h-0 flex-1 border border-border bg-card/70 rounded overflow-hidden flex flex-col">
-            <div className={`grid ${GRID_COLS} gap-3 items-center px-3 py-2 border-b border-border/80 bg-zinc-950/40 shrink-0`}>
-              <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase truncate">Provider</div>
-              <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase truncate">Environment</div>
-              <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase truncate">Source</div>
-              <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase truncate">Key</div>
-              <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase truncate">Credits</div>
-              <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase truncate">Tokens</div>
-              <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase truncate">Last Checked</div>
+            <div className={`hidden lg:grid ${GRID_COLS} gap-3 items-center px-3 py-2 border-b border-border/80 bg-zinc-950/40 shrink-0`}>
+              <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase min-w-0 truncate">Provider</div>
+              <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase min-w-0 truncate">Environment</div>
+              <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase min-w-0 truncate">Source</div>
+              <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase min-w-0 truncate">Key</div>
+              <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase min-w-0 truncate">Credits</div>
+              <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase min-w-0 truncate">Tokens</div>
+              <div className="font-mono text-[10px] font-bold tracking-[0.18em] text-muted-foreground uppercase min-w-0 truncate">Last Checked</div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto">
@@ -269,15 +269,15 @@ export function ProviderKeysScreen({ data, loading, error, saving, saveError, on
                 <ProviderRow key={provider.envKey} provider={provider} saving={saving} onSave={handleSave} />
               )) : (
                 <div className="h-12 flex items-center justify-center gap-2 text-center">
-                  <ShieldCheck className="w-4 h-4 text-muted-foreground" />
+ <ShieldCheck className="size-4 text-muted-foreground" />
                   <div className="text-sm font-mono text-muted-foreground">{loading ? 'LOADING...' : 'NO PROVIDERS'}</div>
                 </div>
               )}
 
               {(error ?? saveError) && (
                 <div className="m-3 border border-red-400/50 bg-red-500/10 text-red-200 rounded px-3 py-2 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <div className="text-sm truncate">{error ?? saveError}</div>
+ <AlertTriangle className="size-4 shrink-0" />
+                  <div className="text-sm min-w-0 truncate">{error ?? saveError}</div>
                 </div>
               )}
             </div>

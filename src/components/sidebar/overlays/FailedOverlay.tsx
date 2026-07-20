@@ -9,7 +9,7 @@ export function FailedOverlay({ item, onRetry }: OverlayProps & { onRetry?: (ite
   const visual = getCardVisualState(item);
   return (
     <div
-      className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-1 overflow-hidden px-2 pt-2 pb-9"
+      className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-1 overflow-hidden px-2 pt-2 pb-8"
       style={{ backgroundColor: colorWithAlpha(visual, 0.22) }}
       title={message ?? 'Generation failed'}
     >
@@ -47,7 +47,7 @@ export function FailedOverlay({ item, onRetry }: OverlayProps & { onRetry?: (ite
           className="relative z-20 mt-0.5 flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[9px] font-mono font-bold tracking-wider text-white transition-colors"
           style={{ backgroundColor: colorWithAlpha(visual, 0.85) }}
         >
-          <RotateCcw className="w-2.5 h-2.5" />
+ <RotateCcw className="size-2.5" />
           RETRY
         </button>
       )}

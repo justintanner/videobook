@@ -187,7 +187,7 @@ export function ImagePromptRewritePopover({
         <div className="flex flex-col gap-3 p-3">
           <div className={cn('flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider',
             s.textBold)}>
-            <Zap className="w-3.5 h-3.5" />
+ <Zap className="size-3.5" />
             {isVideo ? 'Rewrite Video Prompt' : 'Rewrite Image Prompt'}
           </div>
 
@@ -200,7 +200,7 @@ export function ImagePromptRewritePopover({
                   onChange={(e) => setStyle(e.target.value as RewriteStyle | '')}
                   disabled={disabled || rewriting}
                   className={cn(
-                    'w-full h-7 pl-2.5 pr-7 rounded border appearance-none',
+                    'w-full h-7 pl-2.5 pr-6 rounded border appearance-none',
                     s.selectBorder,
                     'bg-black/60',
                     cn('text-[11px] font-mono font-bold uppercase tracking-wider', s.selectText),
@@ -213,7 +213,7 @@ export function ImagePromptRewritePopover({
                     </option>
                   ))}
                 </select>
-                <ChevronDown className={cn('pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5', s.chevron)} />
+ <ChevronDown className={cn('pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 size-3.5 ', s.chevron)} />
               </div>
             </div>
           )}
@@ -279,8 +279,8 @@ export function ImagePromptRewritePopover({
               )}
             >
               {rewriting
-                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                : <Zap className="w-3.5 h-3.5" />}
+ ? <Loader2 className="size-3.5 animate-spin" />
+ : <Zap className="size-3.5" />}
               Rewrite
             </button>
           </div>

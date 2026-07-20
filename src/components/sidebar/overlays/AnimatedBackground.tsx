@@ -29,7 +29,7 @@ function RisingParticles({ visual }: { visual: CardVisualState }) {
       {PARTICLES.map((i) => (
         <div
           key={i}
-          className="absolute left-1/2 -translate-x-1/2 w-1 h-1 rounded-full"
+ className="absolute left-1/2 -translate-x-1/2 size-1 rounded-full"
           style={{
             bottom: `${12 + i * 20}%`,
             backgroundColor: dotColor,

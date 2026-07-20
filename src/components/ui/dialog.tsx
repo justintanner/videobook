@@ -61,7 +61,7 @@ function DialogHeader({ className, ...props }: ComponentPropsWithoutRef<'div'>) 
   return (
     <div
       className={cn(
-        'flex items-center justify-between px-5 py-3 border-b border-neutral-700/60 bg-neutral-900/95',
+        'flex items-center justify-between px-6 py-3 border-b border-neutral-700/60 bg-neutral-900/95',
         className,
       )}
       {...props}
@@ -92,7 +92,7 @@ function DialogCloseButton({ className, ...props }: ComponentPropsWithoutRef<'bu
     <button
       type="button"
       className={cn(
-        'w-6 h-6 flex items-center justify-center text-neutral-400 transition-colors duration-150 rounded',
+ 'size-6 flex items-center justify-center text-neutral-400 transition-colors duration-150 rounded',
         FOCUS_RING_BUTTON,
         'hover:text-neutral-100 hover:bg-neutral-700/50',
         'focus-visible:ring-neutral-400/60',
@@ -101,7 +101,7 @@ function DialogCloseButton({ className, ...props }: ComponentPropsWithoutRef<'bu
       )}
       {...props}
     >
-      <X className="w-4 h-4 stroke-[2.5]" />
+ <X className="size-4 stroke-[2.5]" />
     </button>
   );
 }

@@ -159,13 +159,13 @@ export function GoogleFlowRefPicker({
               disabled={disabled || loading || !callTool}
               title={`Refresh ${nounPlural}`}
               className={cn(
-                'flex items-center justify-center w-7 h-7 rounded border shrink-0',
+ 'flex items-center justify-center size-7 rounded border shrink-0',
                 t.controlBorder,
                 t.inactiveText,
                 'hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed',
               )}
             >
-              {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+ {loading ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
             </button>
           )}
 
@@ -195,7 +195,7 @@ export function GoogleFlowRefPicker({
                     t.activeText,
                   )}
                 >
-                  <span className="truncate">{labelText}</span>
+                  <span className="min-w-0 truncate">{labelText}</span>
                   <button
                     type="button"
                     disabled={disabled}
@@ -203,7 +203,7 @@ export function GoogleFlowRefPicker({
                     aria-label={`Remove ${ref}`}
                     className="shrink-0 opacity-70 hover:opacity-100"
                   >
-                    <X className="w-3 h-3" />
+ <X className="size-3" />
                   </button>
                 </span>
               )

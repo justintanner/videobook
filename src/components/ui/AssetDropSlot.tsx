@@ -128,22 +128,22 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
       {value ? (
         <>
           {compact ? (
-            <div className="w-full h-full flex items-center gap-2 px-2">
+ <div className="size-full flex items-center gap-2 px-2">
               {hasThumb && (
                 <img
                   src={thumbUrl}
                   alt=""
                   draggable={false}
                   onError={() => setBrokenUrl(thumbUrl)}
-                  className="h-6 w-6 object-contain shrink-0"
+ className=" size-6 object-contain shrink-0"
                 />
               )}
-              <span className={cn('text-xs font-mono truncate', t.labelText)}>{value.slug}</span>
+              <span className={cn('text-xs font-mono min-w-0 truncate', t.labelText)}>{value.slug}</span>
             </div>
           ) : value.type === 'audio' ? (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-1">
-              <Music className={cn('w-5 h-5', t.activeText)} />
-              <span className={cn('text-xs font-mono truncate px-2', t.labelText)}>{value.slug}</span>
+ <div className="size-full flex flex-col items-center justify-center gap-1">
+ <Music className={cn('size-5 ', t.activeText)} />
+              <span className={cn('text-xs font-mono min-w-0 truncate px-2', t.labelText)}>{value.slug}</span>
             </div>
           ) : hasThumb ? (
             <>
@@ -152,11 +152,11 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
                 alt=""
                 draggable={false}
                 onError={() => setBrokenUrl(thumbUrl)}
-                className="w-full h-full object-cover"
+ className="size-full object-cover"
               />
               <div className="absolute bottom-1 left-1 right-1 z-10 flex justify-start">
                 <span className={cn(
-                  'max-w-full text-[10px] font-mono font-bold truncate px-1.5 py-0.5 rounded',
+                  'max-w-full text-[10px] font-mono font-bold min-w-0 truncate px-1.5 py-0.5 rounded',
                   'bg-black/85 backdrop-blur-md border',
                   BADGE_TEXT[variant],
                 )}
@@ -166,9 +166,9 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
               </div>
             </>
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-1 px-2">
-              <ImageIcon className={cn('w-5 h-5', t.inactiveText)} />
-              <span className={cn('text-xs font-mono truncate max-w-full', t.labelText)}>{value.slug}</span>
+ <div className="size-full flex flex-col items-center justify-center gap-1 px-2">
+ <ImageIcon className={cn('size-5 ', t.inactiveText)} />
+              <span className={cn('text-xs font-mono min-w-0 truncate max-w-full', t.labelText)}>{value.slug}</span>
             </div>
           )}
 
@@ -177,12 +177,12 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
             <button
               onClick={handleClear}
               className={cn(
-                'absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center transition-colors',
+ 'absolute top-1 right-1 size-5 rounded flex items-center justify-center transition-colors',
                 t.controlBg, t.controlBorder, 'border',
                 'hover:bg-red-500/30 hover:border-red-500/60',
               )}
             >
-              <X className={cn('w-3 h-3', t.controlText)} />
+ <X className={cn('size-3 ', t.controlText)} />
             </button>
           )}
         </>
@@ -190,15 +190,15 @@ export function AssetDropSlot({ value, onChange, disabled, acceptTypes = ['image
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
           <div className={cn('transition-all duration-200', isDragOver ? cn(t.activeText, 'scale-110') : t.inactiveText)}>
             {isDragOver ? (
-              <Plus className="w-5 h-5" />
+ <Plus className="size-5" />
             ) : emptyIcon ? (
               emptyIcon
             ) : isAudioOnly ? (
-              <Music className="w-5 h-5" />
+ <Music className="size-5" />
             ) : isVideoOnly ? (
-              <Video className="w-5 h-5" />
+ <Video className="size-5" />
             ) : (
-              <ImageIcon className="w-5 h-5" />
+ <ImageIcon className="size-5" />
             )}
           </div>
           <span className={cn('text-[10px] font-mono font-bold tracking-widest', t.inactiveText)}>

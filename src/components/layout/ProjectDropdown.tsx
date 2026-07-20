@@ -178,7 +178,7 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
         <div className="max-h-72 overflow-y-auto py-1">
           {loading && projects.length === 0 ? (
             <div className="flex items-center gap-2 px-3 py-3 text-zinc-500">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+ <Loader2 className="size-3.5 animate-spin" />
               <span className="font-mono text-xs">Loading projects</span>
             </div>
           ) : null}
@@ -209,7 +209,7 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
                     className="p-1 text-green-400 hover:text-green-300 transition-colors"
                     aria-label="Save project name"
                   >
-                    <Check className="w-3.5 h-3.5" />
+ <Check className="size-3.5" />
                   </button>
                   <button
                     type="button"
@@ -217,7 +217,7 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
                     className="p-1 text-red-400 hover:text-red-300 transition-colors"
                     aria-label="Cancel rename"
                   >
-                    <X className="w-3.5 h-3.5" />
+ <X className="size-3.5" />
                   </button>
                 </div>
               )
@@ -231,9 +231,9 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-center gap-2">
-                    <Trash2 className="w-3.5 h-3.5 text-red-300 shrink-0" />
+ <Trash2 className="size-3.5 text-red-300 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <div className="font-mono text-xs text-red-100 truncate">
+                      <div className="font-mono text-xs text-red-100 min-w-0 truncate">
                         Delete {project.slug}?
                       </div>
                       <div className="font-mono text-[10px] text-red-200/60">
@@ -247,7 +247,7 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
                       className="p-1 text-red-300 hover:text-red-100 disabled:opacity-50 transition-colors"
                       aria-label="Confirm delete project"
                     >
-                      {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+ {isDeleting ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
                     </button>
                     <button
                       type="button"
@@ -256,11 +256,11 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
                       className="p-1 text-zinc-400 hover:text-zinc-200 disabled:opacity-50 transition-colors"
                       aria-label="Cancel delete project"
                     >
-                      <X className="w-3.5 h-3.5" />
+ <X className="size-3.5" />
                     </button>
                   </div>
                   {deleteError ? (
-                    <div className="mt-1 font-mono text-[10px] text-red-200/80 truncate">
+                    <div className="mt-1 font-mono text-[10px] text-red-200/80 min-w-0 truncate">
                       {deleteError}
                     </div>
                   ) : null}
@@ -281,11 +281,11 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
               >
                 <div
                   className={cn(
-                    'w-1.5 h-1.5 rounded-full shrink-0',
+ 'size-1.5 rounded-full shrink-0',
                     isActive ? 'bg-zinc-400' : 'bg-transparent'
                   )}
                 />
-                <span className="font-mono text-xs tracking-wide text-zinc-400/80 flex-1 truncate">
+                <span className="font-mono text-xs tracking-wide text-zinc-400/80 flex-1 min-w-0 truncate">
                   {project.slug}
                 </span>
                 <span
@@ -310,7 +310,7 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
                   className="p-1 opacity-0 group-hover/row:opacity-100 text-muted-foreground hover:text-foreground transition-all"
                   aria-label={`Rename ${project.slug}`}
                 >
-                  <Pencil className="w-3 h-3" />
+ <Pencil className="size-3" />
                 </button>
                 <button
                   type="button"
@@ -331,7 +331,7 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
                   title={canDelete ? `Delete ${project.slug}` : 'Create another project before deleting this one'}
                   aria-label={`Delete ${project.slug}`}
                 >
-                  <Trash2 className="w-3 h-3" />
+ <Trash2 className="size-3" />
                 </button>
               </div>
             )
@@ -360,7 +360,7 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
                 className="p-1 text-green-400 hover:text-green-300 transition-colors"
                 aria-label="Create project"
               >
-                <Check className="w-3.5 h-3.5" />
+ <Check className="size-3.5" />
               </button>
               <button
                 type="button"
@@ -368,7 +368,7 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
                 className="p-1 text-red-400 hover:text-red-300 transition-colors"
                 aria-label="Cancel new project"
               >
-                <X className="w-3.5 h-3.5" />
+ <X className="size-3.5" />
               </button>
             </div>
           ) : (
@@ -379,7 +379,7 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
                 setCreatingNew(true)
               }}
             >
-              <Plus className="w-3.5 h-3.5 text-zinc-400/60" />
+ <Plus className="size-3.5 text-zinc-400/60" />
               <span className="font-mono text-xs tracking-wide text-zinc-400/60">
                 New Project
               </span>

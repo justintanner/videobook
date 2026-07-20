@@ -39,7 +39,7 @@ export function CropImage({ cropSrc, fallbackSrc, alt }: { cropSrc: string; fall
     <img
       src={src}
       alt={alt}
-      className="w-full h-full object-contain"
+ className="size-full object-contain"
       draggable={false}
       onError={() => {
         if (!fell.current) {
@@ -68,7 +68,7 @@ export function RenderPrompt({ item, orientation, onRender }: {
   };
 
   return (
-    <div className="w-full h-full bg-black flex flex-col items-center justify-center relative overflow-hidden select-none">
+ <div className="size-full bg-black flex flex-col items-center justify-center relative overflow-hidden select-none">
       {/* CRT scanlines */}
       <div className="absolute inset-0 scanlines pointer-events-none opacity-50" />
 
@@ -82,13 +82,13 @@ export function RenderPrompt({ item, orientation, onRender }: {
       />
 
       {/* Center content */}
-      <div className="relative z-10 flex flex-col items-center gap-5">
-        <VideoOff className="w-10 h-10" style={{ color: `${primaryColor}30` }} />
+      <div className="relative z-10 flex flex-col items-center gap-6">
+ <VideoOff className="size-10" style={{ color:`${primaryColor}30` }} />
 
         {/* CommandButton */}
         <CommandButton
           command={`/render ${orientation}`}
-          icon={<Zap className="w-5 h-5" />}
+ icon={<Zap className="size-5" />}
           size="lg"
           className={isFinal
             ? 'border-amber-400 bg-amber-500/20 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.3)]'
@@ -116,7 +116,7 @@ export function RatioToggle({ active, onSelect, item, sizes: sizesProp }: {
           className="h-8 px-3 flex items-center gap-1 font-mono text-[13px] font-bold text-cyan-400 relative transition-all duration-150 hover:text-white bg-primary/5"
         >
           {ratioLabel(active, item)}
-          <ChevronDown className="w-3 h-3" />
+ <ChevronDown className="size-3" />
           <div className="absolute bottom-0 left-1 right-1 h-[2px] bg-cyan-400" />
         </button>
       </DropdownMenuTrigger>
@@ -127,13 +127,13 @@ export function RatioToggle({ active, onSelect, item, sizes: sizesProp }: {
           return (
             <DropdownMenuItem key={size} onClick={() => onSelect(size)} className="py-2.5">
               <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">
-                {isActive ? <Check className="w-3 h-3 inline text-primary" /> : '\u203A'}
+ {isActive ? <Check className="size-3 inline text-primary" /> : '\u203A'}
               </span>
               <span className={cn('font-mono font-bold text-xs tracking-wider leading-none flex-1', !isActive && 'text-muted-foreground/60')}>
                 {ratioLabel(size, item)}
               </span>
               <span className={cn('ml-2 flex items-center', !isActive && 'opacity-40')}>
-                <Icon className="h-3 w-3" />
+ <Icon className=" size-3" />
               </span>
             </DropdownMenuItem>
           );
@@ -166,7 +166,7 @@ function JsonTerminal({ data, loading }: { data: string | null; loading: boolean
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-8">
-        <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+ <div className="size-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
         <p className="text-xs text-muted-foreground/50 font-mono">Loading...</p>
       </div>
     );
@@ -212,9 +212,9 @@ function FileListPane({ files, selectedFile, onSelectFile, onRefresh, loading }:
         <button
           tabIndex={-1}
           onClick={onRefresh}
-          className="w-6 h-6 flex items-center justify-center text-muted-foreground/60 hover:text-primary transition-colors"
+ className="size-6 flex items-center justify-center text-muted-foreground/60 hover:text-primary transition-colors"
         >
-          <RefreshCw className={cn('w-4 h-4 stroke-[2.5]', loading && 'animate-spin')} />
+ <RefreshCw className={cn('size-4 stroke-[2.5]', loading && 'animate-spin')} />
         </button>
       </div>
       {files.map((f) => (
@@ -230,7 +230,7 @@ function FileListPane({ files, selectedFile, onSelectFile, onRefresh, loading }:
             f.name.startsWith('.') && selectedFile !== f.name && 'text-muted-foreground/40',
           )}
         >
-          <span className="truncate flex-1">{f.name}</span>
+          <span className="min-w-0 truncate flex-1">{f.name}</span>
           <span className="text-xs text-muted-foreground/30 shrink-0">{formatBytes(f.size_bytes)}</span>
         </button>
       ))}
@@ -247,7 +247,7 @@ function FileContentPane({ content, loading, fileName, fileUrl }: {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-8">
-        <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+ <div className="size-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
         <p className="text-xs text-muted-foreground/50 font-mono">Loading...</p>
       </div>
     );
@@ -282,9 +282,9 @@ function FileContentPane({ content, loading, fileName, fileUrl }: {
               toast({ title: 'Copied', description: fileName, duration: 2000 });
             }
           }}
-          className="absolute top-0 right-0 w-7 h-7 flex items-center justify-center text-muted-foreground/60 hover:text-white transition-colors"
+ className="absolute top-0 right-0 size-7 flex items-center justify-center text-muted-foreground/60 hover:text-white transition-colors"
         >
-          <Copy className="w-5 h-5 stroke-[2]" />
+ <Copy className="size-5 stroke-[2]" />
         </button>
         <JsonTerminal data={content} loading={false} />
       </div>
@@ -311,7 +311,7 @@ export function ViewerToolbar({ left, slug, right }: {
     <div className="shrink-0 px-3 py-3 bg-black/60 border-b border-zinc-800/60 flex items-center justify-between relative">
       {left}
       <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span className="font-mono text-xs font-bold text-muted-foreground truncate max-w-[50%]">{slug}</span>
+        <span className="font-mono text-xs font-bold text-muted-foreground min-w-0 truncate max-w-[50%]">{slug}</span>
       </span>
       {right}
     </div>
@@ -345,16 +345,16 @@ export function BackFaceTabBar({ tabs, active, onSelect, slug, onClose, onCloseV
         ))}
       </div>
       <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span className="font-mono text-xs font-bold text-muted-foreground truncate max-w-[50%]">{slug}</span>
+        <span className="font-mono text-xs font-bold text-muted-foreground min-w-0 truncate max-w-[50%]">{slug}</span>
       </span>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 min-w-fit">
         <button
           tabIndex={-1}
           onClick={onClose}
           title="Back"
-          className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+ className="size-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
         >
-          <RotateCcw className="w-4 h-4 stroke-[2.5]" />
+ <RotateCcw className="size-4 stroke-[2.5]" />
         </button>
         {onCloseViewer && <CloseButton tabIndex={-1} onClick={onCloseViewer} />}
       </div>

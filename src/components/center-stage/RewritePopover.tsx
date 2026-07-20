@@ -152,7 +152,7 @@ function RewritePopoverState({
         <div className="flex flex-col gap-3 p-3">
           {/* Header */}
           <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold uppercase tracking-wider text-emerald-300/90">
-            <Zap className="w-3.5 h-3.5" />
+ <Zap className="size-3.5" />
             Rewrite Script
           </div>
 
@@ -190,7 +190,7 @@ function RewritePopoverState({
                 onChange={(e) => setPlatform(e.target.value as RewritePlatform | '')}
                 disabled={disabled || rewriting}
                 className={cn(
-                  'w-full h-7 pl-2.5 pr-7 rounded border appearance-none',
+                  'w-full h-7 pl-2.5 pr-6 rounded border appearance-none',
                   'border-emerald-500/30 bg-black/60',
                   'text-[11px] font-mono font-bold uppercase tracking-wider text-emerald-200',
                   'hover:border-emerald-400/60 focus:outline-none focus:ring-1 focus:ring-emerald-400/60',
@@ -203,7 +203,7 @@ function RewritePopoverState({
                   </option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-emerald-400/70" />
+ <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 size-3.5 text-emerald-400/70" />
             </div>
           </div>
 
@@ -270,8 +270,8 @@ function RewritePopoverState({
               )}
             >
               {rewriting
-                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                : <Zap className="w-3.5 h-3.5" />}
+ ? <Loader2 className="size-3.5 animate-spin" />
+ : <Zap className="size-3.5" />}
               Rewrite
             </button>
           </div>

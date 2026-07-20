@@ -130,7 +130,7 @@ function resizeFromAnchor(
 }
 
 const HANDLE_BASE =
-  'absolute w-3 h-3 bg-white border border-zinc-900 shadow-md';
+ 'absolute size-3 bg-white border border-zinc-900 shadow-md';
 
 export function CropOverlay({ mediaRef, initialRatio, onApply, onCancel }: CropOverlayProps) {
   const [ratio, setRatio] = useState<CropRatio>(initialRatio);
@@ -325,7 +325,7 @@ export function CropOverlay({ mediaRef, initialRatio, onApply, onCancel }: CropO
           onClick={onCancel}
           className="px-2 py-0.5 text-xs flex items-center gap-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition-colors"
         >
-          <X className="w-3 h-3" />
+ <X className="size-3" />
           Cancel
         </button>
         <button
@@ -333,7 +333,7 @@ export function CropOverlay({ mediaRef, initialRatio, onApply, onCancel }: CropO
           onClick={handleApply}
           className="px-2 py-0.5 text-xs flex items-center gap-1 text-primary bg-primary/15 hover:bg-primary/25 rounded transition-colors"
         >
-          <Check className="w-3 h-3" />
+ <Check className="size-3" />
           Apply
         </button>
       </div>

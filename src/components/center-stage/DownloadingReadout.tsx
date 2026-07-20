@@ -9,7 +9,7 @@ interface DownloadingReadoutProps {
 
 function CloudDownloadIcon({ color }: { color: string }) {
   return (
-    <svg viewBox="0 0 32 32" fill="none" className="w-12 h-12">
+ <svg viewBox="0 0 32 32" fill="none" className="size-12 ">
       <path
         d="M9 20a5 5 0 0 1-1-9.9A7 7 0 0 1 22 11h.5a4.5 4.5 0 0 1 .5 8.97"
         stroke={color}
@@ -35,7 +35,7 @@ export function DownloadingReadout({ asset, className }: DownloadingReadoutProps
   return (
     <div
       className={cn(
-        'w-full h-full bg-black font-mono text-xs flex flex-col items-center justify-center relative overflow-hidden select-none',
+ 'size-full bg-black font-mono text-xs flex flex-col items-center justify-center relative overflow-hidden select-none',
         className
       )}
     >
@@ -70,7 +70,7 @@ export function DownloadingReadout({ asset, className }: DownloadingReadoutProps
 
         {asset.origin && (
           <span
-            className="text-[10px] opacity-40 max-w-[80%] truncate"
+            className="text-[10px] opacity-40 max-w-[80%] min-w-0 truncate"
             style={{ color: primaryColor }}
             title={asset.origin}
           >

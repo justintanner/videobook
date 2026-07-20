@@ -65,7 +65,7 @@ function TimelinePlayerHeader({ previewData, onOrientationChange }: { previewDat
 
       {/* Right: duration readout */}
       <div className="flex items-center gap-1.5">
-        <Film className="w-3.5 h-3.5 text-violet-300/30" />
+ <Film className="size-3.5 text-violet-300/30" />
         <span className="text-[11px] font-mono tabular-nums text-muted-foreground/60">{formatTime(totalSeconds)}</span>
       </div>
     </div>
@@ -108,7 +108,7 @@ export function TimelinePlayer({ previewData, initialSlotIndex, onFrameUpdate, o
   if (!previewData.ready) {
     return (
       <div className="flex-1 flex items-center justify-center overflow-hidden">
-        <div className="w-full h-full flex flex-col overflow-hidden border border-zinc-600/50">
+ <div className="size-full flex flex-col overflow-hidden border border-zinc-600/50">
           <TimelinePlayerHeader previewData={previewData} onOrientationChange={onOrientationChange} />
           <div className="flex-1 flex items-center justify-center bg-black">
             <span className="text-sm font-mono text-muted-foreground/50">
@@ -122,7 +122,7 @@ export function TimelinePlayer({ previewData, initialSlotIndex, onFrameUpdate, o
 
   return (
     <div className="flex-1 flex items-center justify-center overflow-hidden">
-      <div className="w-full h-full flex flex-col overflow-hidden border border-zinc-600/50">
+ <div className="size-full flex flex-col overflow-hidden border border-zinc-600/50">
         <TimelinePlayerHeader previewData={previewData} onOrientationChange={onOrientationChange} />
         <div className="flex-1 flex items-center justify-center overflow-hidden bg-black">
           <Player

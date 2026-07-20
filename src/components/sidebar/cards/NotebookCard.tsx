@@ -20,7 +20,7 @@ export function NotebookCard({ item, contextMenuContent, selected, onClick, onMa
   return (
     <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen}>
       {/* CONTENT - Blueprint aesthetic, emerald-toned */}
-      <div className="w-full h-full relative overflow-hidden">
+ <div className="size-full relative overflow-hidden">
         {/* Emerald-to-near-black gradient background */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#0a1f15] via-[#13302a] to-[#1c4438]" />
         {/* Blueprint grid overlay (12px grid) */}
@@ -43,7 +43,7 @@ export function NotebookCard({ item, contextMenuContent, selected, onClick, onMa
           </div>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            <Compass className="w-10 h-10 text-emerald-400/30" />
+ <Compass className="size-10 text-emerald-400/30" />
           </div>
         )}
       </div>

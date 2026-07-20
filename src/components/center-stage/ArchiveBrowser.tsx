@@ -236,7 +236,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/60 px-3 py-2">
           <div className="flex min-w-0 items-center gap-2">
-            <ArchiveRestore className="h-4 w-4 shrink-0 text-amber-300" />
+ <ArchiveRestore className=" size-4 shrink-0 text-amber-300" />
             <div className="min-w-0">
               <div className="font-mono text-[11px] font-bold uppercase tracking-widest text-amber-200">Archive</div>
             </div>
@@ -246,7 +246,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
 
         <form onSubmit={handleSearch} className="flex shrink-0 items-center gap-2 border-b border-border/40 px-3 py-3">
           <div className="flex h-9 min-w-0 flex-1 items-center gap-2 border border-zinc-800 bg-black/40 px-2.5 focus-within:border-amber-400/50">
-            <Search className="h-4 w-4 shrink-0 text-zinc-600" />
+ <Search className=" size-4 shrink-0 text-zinc-600" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -259,7 +259,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
             disabled={loading || initialLoading || restoring || callState !== 'ready'}
             className="flex h-9 items-center gap-2 border border-amber-400/40 bg-amber-500/10 px-3 font-mono text-xs font-bold uppercase tracking-widest text-amber-200 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+ {loading ? <Loader2 className=" size-3.5 animate-spin" /> : <Search className=" size-3.5" />}
             Search
           </button>
         </form>
@@ -295,7 +295,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
               onClick={handleSelectVisible}
               className="flex h-7 items-center gap-1.5 border border-zinc-800 px-2 font-mono text-[10px] uppercase tracking-wider text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {visibleSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
+ {visibleSelected ? <CheckSquare className=" size-3.5" /> : <Square className=" size-3.5" />}
               {visibleSelected ? 'Clear' : 'Select visible'}
             </button>
           </div>
@@ -315,7 +315,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           {loading || initialLoading ? (
             <div className="flex h-full items-center justify-center gap-2 font-mono text-sm text-zinc-500">
-              <Loader2 className="h-4 w-4 animate-spin" />
+ <Loader2 className=" size-4 animate-spin" />
               {initialLoading ? 'Loading latest archived clips' : 'Searching archive'}
             </div>
           ) : results.length === 0 ? (
@@ -339,7 +339,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
                       {result.media.url && isVideoContent(result.media.content_type) ? (
                         <video
                           src={result.media.url}
-                          className="h-full w-full object-contain"
+ className=" size-full object-contain"
                           controls
                           muted
                           preload="metadata"
@@ -362,13 +362,13 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
                       )}
                     </div>
 
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex flex-col gap-2">
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-zinc-100">
+                        <div className="min-w-0 flex flex-col gap-1">
+                          <div className="min-w-0 truncate text-sm font-semibold text-zinc-100">
                             {result.title || result.archive_id.slice(0, 12)}
                           </div>
-                          <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-zinc-500">
+                          <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-zinc-500">
                             <span>{formatDuration(result.duration)}</span>
                             <span>{formatBytes(result.media.size_bytes)}</span>
                             <span>{result.media.content_type}</span>
@@ -380,15 +380,15 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
                             event.stopPropagation()
                             toggleSelected(result.archive_id)
                           }}
-                          className="flex h-7 w-7 shrink-0 items-center justify-center text-amber-200"
+ className="flex size-7 shrink-0 items-center justify-center text-amber-200"
                           title={selected ? 'Deselect clip' : 'Select clip'}
                         >
-                          {selected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+ {selected ? <CheckSquare className=" size-4" /> : <Square className=" size-4" />}
                         </button>
                       </div>
 
                       {(result.topics.length > 0 || result.people.length > 0) && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
+                        <div className="flex flex-wrap gap-1.5">
                           {[...result.topics, ...result.people].slice(0, 8).map((tag) => (
                             <span
                               key={`${tag.key}-${tag.label}`}
@@ -401,7 +401,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
                       )}
 
                       {result.transcript_excerpt && (
-                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-zinc-500">
+                        <p className="line-clamp-2 text-xs leading-5 text-zinc-500">
                           {result.transcript_excerpt}
                         </p>
                       )}
@@ -423,7 +423,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
             onClick={handleRestore}
             className="flex h-9 items-center gap-2 border border-emerald-400/40 bg-emerald-500/10 px-3 font-mono text-xs font-bold uppercase tracking-widest text-emerald-200 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {restoring ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArchiveRestore className="h-3.5 w-3.5" />}
+ {restoring ? <Loader2 className=" size-3.5 animate-spin" /> : <ArchiveRestore className=" size-3.5" />}
             Restore {selectedCount > 0 ? selectedCount : ''}
           </button>
         </div>

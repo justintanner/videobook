@@ -168,8 +168,8 @@ export function PromptSection({
               )}
             >
               {rewriting
-                ? <Loader2 className="w-3 h-3 animate-spin" />
-                : <Zap className="w-3 h-3" />}
+ ? <Loader2 className="size-3 animate-spin" />
+ : <Zap className="size-3" />}
               Rewrite
             </button>
           }

@@ -581,7 +581,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           data-testid="button-generate"
           aria-label={isLoading ? 'Generating' : 'Send message'}
           className={cn(
-            'w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200',
+ 'size-8 shrink-0 rounded-lg flex items-center justify-center transition-all duration-200',
             'border border-primary/20',
             commandResult === 'accepted'
               ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30'
@@ -598,13 +598,13 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
           disabled={isLoading || isTransmitting || disabled || isAnimating || !!commandResult || !chatInput.trim()}
         >
           {commandResult === 'accepted' ? (
-            <Check className="w-4 h-4" />
+ <Check className="size-4" />
           ) : commandResult === 'rejected' ? (
-            <X className="w-4 h-4" />
+ <X className="size-4" />
           ) : isLoading || commandResult === 'transmitting' ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+ <Loader2 className="size-4 animate-spin" />
           ) : (
-            <Rocket className="w-4 h-4 -rotate-45" />
+ <Rocket className="size-4 -rotate-45" />
           )}
         </button>
 

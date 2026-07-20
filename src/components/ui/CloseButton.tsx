@@ -40,7 +40,7 @@ export function CloseButton({
       title={title}
       aria-label={ariaLabel}
       className={cn(
-        'w-6 h-6 flex items-center justify-center',
+ 'size-6 flex items-center justify-center',
         'text-muted-foreground transition-colors duration-150 rounded',
         FOCUS_RING_BUTTON,
         toneClasses[tone],
@@ -49,7 +49,7 @@ export function CloseButton({
         className
       )}
     >
-      <X className="w-4 h-4 stroke-[2.5]" />
+ <X className="size-4 stroke-[2.5]" />
     </button>
   );
 }

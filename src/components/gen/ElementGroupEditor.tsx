@@ -211,7 +211,7 @@ export function ElementGroupEditor({
           {effectiveVisible}/{maxGroups}
         </span>
       }
-      bodyClassName="px-2.5 py-2.5 space-y-2.5"
+      bodyClassName="px-2.5 py-2.5 flex flex-col gap-2.5"
     >
       {activeIndices.map((groupIdx) => {
         const slugsSchema = elementSchemas.get(`element${groupIdx}_slugs`);
@@ -230,7 +230,7 @@ export function ElementGroupEditor({
         if (canAddMore) slots.push({ slug: null, index: filledCount });
 
         return (
-          <div key={groupIdx} className={cn('border rounded p-2.5 space-y-2.5', skin.cardBorder, skin.cardBg)}>
+          <div key={groupIdx} className={cn('border rounded p-2.5 flex flex-col gap-2.5', skin.cardBorder, skin.cardBg)}>
             {/* Header */}
             <div className="flex items-center justify-between">
               <span className={cn('text-[10px] font-bold tracking-[0.15em] uppercase', skin.labelText)}>
@@ -245,7 +245,7 @@ export function ElementGroupEditor({
                   onClick={() => handleRemoveGroup(groupIdx)}
                   disabled={disabled}
                   className={cn(
-                    'w-5 h-5 flex items-center justify-center rounded',
+ 'size-5 flex items-center justify-center rounded',
                     'text-red-400/60 hover:text-red-400 hover:bg-red-400/10',
                     'transition-colors duration-150',
                     'focus-visible:ring-1 focus-visible:ring-red-400/60 focus-visible:outline-none',
@@ -253,7 +253,7 @@ export function ElementGroupEditor({
                   )}
                   aria-label={`Remove element ${groupIdx}`}
                 >
-                  <X className="w-3.5 h-3.5" />
+ <X className="size-3.5" />
                 </button>
               </div>
             </div>
@@ -280,7 +280,7 @@ export function ElementGroupEditor({
                       }}
                       disabled={disabled}
                       acceptTypes={['image', 'video']}
-                      emptyIcon={<Puzzle className="w-5 h-5" />}
+ emptyIcon={<Puzzle className="size-5" />}
                       variant={skin.slotVariant}
                     />
                   </div>
@@ -314,7 +314,7 @@ export function ElementGroupEditor({
 
             {/* Description input */}
             {(hasSlugs || currentName || currentDesc) && (
-              <div className="space-y-1">
+              <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2">
                   <span className={cn('text-[10px] font-bold tracking-[0.15em] uppercase', skin.labelText)}>desc</span>
                   <span className="text-[8px] font-bold text-red-400/80 tracking-wider">*REQ</span>
@@ -368,7 +368,7 @@ export function ElementGroupEditor({
             disabled && 'opacity-50 cursor-not-allowed'
           )}
         >
-          <Plus className="w-3 h-3" />
+ <Plus className="size-3" />
           <span>/elements add</span>
         </button>
       )}

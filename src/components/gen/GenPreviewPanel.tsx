@@ -1095,7 +1095,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   }, [selectedOption, formValues, projectSlug, selectedProviderKey, category, selectedModelKey, droppedAssets, promptHistory, onGenerationLifecycle, modes, activeMode, activeModeKey, charMentions]);
 
   const panelLabel = category === 'video' ? 'VIDEO GENERATION' : 'IMAGE GENERATION';
-  const panelIcon = category === 'video' ? <Film className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />;
+ const panelIcon = category === 'video' ? <Film className="size-3.5" /> : <ImageIcon className="size-3.5" />;
   const buttonVariant = category === 'video' ? 'video' as const : 'image' as const;
   const panelDomain = category === 'video' ? 'video' as const : 'image' as const;
   const panelTheme = genThemes[panelDomain];
@@ -1110,7 +1110,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         domain={panelDomain}
       >
         <div className="flex-1 flex items-center justify-center gap-3 text-primary/60">
-          <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+ <Loader2 className="size-5 animate-spin text-emerald-400" />
           <span className="text-xs font-mono tracking-wider text-emerald-400">generating</span>
         </div>
       </GenPanel>
@@ -1141,7 +1141,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         domain={panelDomain}
       >
         <div className="flex-1 flex items-center justify-center gap-3 text-primary/60">
-          <Loader2 className="w-5 h-5 animate-spin text-emerald-400" />
+ <Loader2 className="size-5 animate-spin text-emerald-400" />
           <span className="text-xs font-mono tracking-wider text-emerald-400">generating</span>
         </div>
       </GenPanel>
@@ -1213,7 +1213,7 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
   return (
     <GenPanel
       label={panelLabel}
-      icon={<Zap className="w-3.5 h-3.5" />}
+ icon={<Zap className="size-3.5" />}
       onClose={onClose}
       closeDisabled={isDisabled}
       domain={panelDomain}
@@ -1227,9 +1227,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
               disabled={isDisabled || !selectedOption}
               title="Reset form"
               aria-label="Reset form"
-              className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10 disabled:opacity-40 disabled:pointer-events-none"
+ className="size-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10 disabled:opacity-40 disabled:pointer-events-none"
             >
-              <RotateCcw className="w-3.5 h-3.5 stroke-[2.5]" />
+ <RotateCcw className="size-3.5 stroke-[2.5]" />
             </button>
           )}
           <button
@@ -1240,9 +1240,9 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
               if (willFlip) fetchTranslatedPayload();
             }}
             title={flipped ? 'Back to form' : 'View JSON payload'}
-            className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
+ className="size-6 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors duration-150 rounded hover:bg-primary/10"
           >
-            <Settings className="w-3.5 h-3.5 stroke-[2.5]" />
+ <Settings className="size-3.5 stroke-[2.5]" />
           </button>
         </>
       }
@@ -1283,23 +1283,23 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         {/* JSON flip face — only mounted when flipped so it can't clip the form */}
         {flipped && (
           <div className="absolute inset-0 overflow-clip flip-card-perspective">
-            <div className="flip-card-inner w-full h-full relative flipped">
+ <div className="flip-card-inner size-full relative flipped">
               <div className="flip-card-back absolute inset-0 flex">
-                <div className="flex-1 overflow-auto pl-4 pr-2 py-4 [scrollbar-gutter:stable]">
-                  <div className="font-mono text-xs font-bold tracking-widest text-emerald-400/70 mb-3">
+                <div className="flex-1 overflow-auto pl-4 pr-2 py-4 flex flex-col gap-3 [scrollbar-gutter:stable]">
+                  <div className="font-mono text-xs font-bold tracking-widest text-emerald-400/70">
                     /tool-call
                   </div>
                   <pre className="text-sm font-mono leading-relaxed whitespace-pre-wrap break-all select-text">
                     <JsonNode data={jsonPayload ?? {}} />
                   </pre>
                 </div>
-                <div className="flex-1 overflow-auto pl-4 pr-2 py-4 border-l border-primary/20 [scrollbar-gutter:stable]">
-                  <div className="font-mono text-xs font-bold tracking-widest text-emerald-400/70 mb-3">
+                <div className="flex-1 overflow-auto pl-4 pr-2 py-4 flex flex-col gap-3 border-l border-primary/20 [scrollbar-gutter:stable]">
+                  <div className="font-mono text-xs font-bold tracking-widest text-emerald-400/70">
                     /provider-payload
                   </div>
                   {translateLoading ? (
                     <div className="flex items-center gap-2 text-emerald-400/40">
-                      <Loader2 className="w-3 h-3 animate-spin" />
+ <Loader2 className="size-3 animate-spin" />
                       <span className="text-[10px] font-mono">Translating...</span>
                     </div>
                   ) : translatedPayload ? (
@@ -1321,17 +1321,17 @@ export const GenPreviewPanel = forwardRef<GenPreviewPanelHandle, GenPreviewPanel
         {!flipped && (
           <div
             className={cn(
-              'flex-1 min-h-0 overflow-y-auto px-3 py-2',
+              'flex-1 min-h-0 overflow-y-auto px-3 py-2 flex flex-col gap-3',
               refreshing && 'opacity-50 pointer-events-none transition-opacity duration-150',
             )}
           >
             {error && (
-              <div className="mb-3 px-3 py-2 rounded border border-red-500/30 bg-red-500/10 text-red-400 text-xs font-mono">
+              <div className="px-3 py-2 rounded border border-red-500/30 bg-red-500/10 text-red-400 text-xs font-mono">
                 {error}
               </div>
             )}
 
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2">
                 {(assetFieldInfos.length > 0 || !!(activeMode?.asset_slots?.length) || characterPills.length > 0) && (
                   <MediaStrip
                     option={selectedOption!}

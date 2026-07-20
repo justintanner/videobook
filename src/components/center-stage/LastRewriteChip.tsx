@@ -29,14 +29,14 @@ export function LastRewriteChip({ meta, onClick }: LastRewriteChipProps) {
         'overflow-hidden',
       )}
     >
-      <RotateCw className="w-3 h-3 shrink-0 text-emerald-400/80" />
+ <RotateCw className="size-3 shrink-0 text-emerald-400/80" />
       <span className="font-bold uppercase tracking-wider shrink-0">
         {parts.join(' · ')}
       </span>
       {promptPreview && (
         <>
           <span className="text-emerald-500/40 shrink-0">·</span>
-          <span className="truncate text-emerald-100/80 italic">
+          <span className="min-w-0 truncate text-emerald-100/80 italic">
             &ldquo;{promptPreview}&rdquo;
           </span>
         </>

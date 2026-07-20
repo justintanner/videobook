@@ -84,7 +84,7 @@ function CommandMenuItem({
         {title}
       </span>
       {showCommand && (
-        <span className="max-w-[8rem] truncate font-mono text-[11px] leading-none tracking-wide text-muted-foreground">
+        <span className="max-w-[8rem] min-w-0 truncate font-mono text-[11px] leading-none tracking-wide text-muted-foreground">
           {command}
         </span>
       )}
@@ -245,7 +245,7 @@ export function ProjectExportPicker({
       >
         <div className="flex items-center justify-between border-b border-cyan-500/15 px-3 py-2">
           <span className="font-mono text-[10px] uppercase tracking-widest text-cyan-300">Export to project</span>
-          <span className="max-w-[11rem] truncate font-mono text-[10px] text-zinc-500">@{assetId}</span>
+          <span className="max-w-[11rem] min-w-0 truncate font-mono text-[10px] text-zinc-500">@{assetId}</span>
         </div>
         <div className="max-h-72 overflow-y-auto p-1.5">
           {targetProjects.length === 0 ? (

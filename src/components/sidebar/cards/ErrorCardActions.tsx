@@ -30,9 +30,9 @@ export function ErrorCardActions({ item, onRecover, onDelete }: ErrorCardActions
           }}
           aria-label={`Recover ${item.slug}`}
           title="Recover (clear error, keep media)"
-          className="flex items-center justify-center w-5 h-5 rounded-sm bg-emerald-500/80 hover:bg-emerald-500 text-white transition-colors"
+ className="flex items-center justify-center size-5 rounded-sm bg-emerald-500/80 hover:bg-emerald-500 text-white transition-colors"
         >
-          <RotateCcw className="w-3 h-3" />
+ <RotateCcw className="size-3" />
         </button>
       )}
       {onDelete && (
@@ -44,9 +44,9 @@ export function ErrorCardActions({ item, onRecover, onDelete }: ErrorCardActions
           }}
           aria-label={`Delete ${item.slug}`}
           title="Delete asset"
-          className="flex items-center justify-center w-5 h-5 rounded-sm bg-red-500/80 hover:bg-red-500 text-white transition-colors"
+ className="flex items-center justify-center size-5 rounded-sm bg-red-500/80 hover:bg-red-500 text-white transition-colors"
         >
-          <X className="w-3 h-3" />
+ <X className="size-3" />
         </button>
       )}
     </div>

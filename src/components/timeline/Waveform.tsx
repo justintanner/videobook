@@ -20,7 +20,7 @@ export function Waveform({ data, className }: WaveformProps) {
       <svg
         viewBox="0 0 100 40"
         preserveAspectRatio="none"
-        className="absolute inset-0 w-full h-full opacity-40 blur-[2px]"
+ className="absolute inset-0 size-full opacity-40 blur-[2px]"
       >
         {bars.map((h, i) => {
           const barH = Math.max(2, h * 38);
@@ -40,7 +40,7 @@ export function Waveform({ data, className }: WaveformProps) {
       <svg
         viewBox="0 0 100 40"
         preserveAspectRatio="none"
-        className="relative w-full h-full"
+ className="relative size-full "
       >
         {bars.map((h, i) => {
           const barH = Math.max(2, h * 38);

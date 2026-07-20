@@ -42,12 +42,12 @@ function ImageContent({
   // Interactive crop always targets the true original source (object-contain).
   if (cropMode || size === 'original') {
     return (
-      <div className="relative w-full h-full">
+ <div className="relative size-full ">
         <img
           ref={imgRef}
           src={item.filePath}
           alt={item.title}
-          className="w-full h-full object-contain"
+ className="size-full object-contain"
           draggable={false}
         />
         {cropMode && (
@@ -153,14 +153,14 @@ export function ImageViewer({ item, projectSlug, size, onSizeChange, flipped, on
       <div
         className={cn(
           'flip-card-perspective',
-          size === 'original' ? 'w-full h-full'
-          : size === 'landscape' ? 'aspect-video w-full h-full'
-          : size === 'square' ? 'aspect-square w-full h-full'
-          : 'w-full h-full',
+ size === 'original' ? 'size-full '
+ : size === 'landscape' ? 'aspect-video size-full '
+ : size === 'square' ? 'aspect-square size-full '
+ : 'size-full ',
         )}
       >
         <div className={cn(
-          'flip-card-inner w-full h-full relative',
+ 'flip-card-inner size-full relative',
           flipped && 'flipped',
         )}>
           {/* FRONT FACE */}
@@ -178,21 +178,21 @@ export function ImageViewer({ item, projectSlug, size, onSizeChange, flipped, on
                     onClick={() => setCropMode((v) => !v)}
                     title="/crop"
                     className={cn(
-                      'w-6 h-6 flex items-center justify-center rounded transition-colors duration-150',
+ 'size-6 flex items-center justify-center rounded transition-colors duration-150',
                       cropMode
                         ? 'text-violet-300 bg-violet-500/15'
                         : 'text-muted-foreground hover:text-violet-300 hover:bg-violet-500/10',
                     )}
                   >
-                    <Crop className="w-4 h-4 stroke-[2.5]" />
+ <Crop className="size-4 stroke-[2.5]" />
                   </button>
                   <button
                     tabIndex={-1}
                     onClick={bf.handleFlipToBack}
                     title="/files"
-                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-cyan-300 transition-colors duration-150 rounded hover:bg-cyan-500/10"
+ className="size-6 flex items-center justify-center text-muted-foreground hover:text-cyan-300 transition-colors duration-150 rounded hover:bg-cyan-500/10"
                   >
-                    <Settings className="w-4 h-4 stroke-[2.5]" />
+ <Settings className="size-4 stroke-[2.5]" />
                   </button>
                   <CloseButton tabIndex={-1} onClick={onClose} tone="cyan" />
                 </div>

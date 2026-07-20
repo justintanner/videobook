@@ -1,5 +1,6 @@
 import type { Tool } from "use-mcp/react";
 import { cn } from "@/lib/utils";
+import { ACTION_GROUP } from "@/components/ui/interaction-states";
 
 const dotClass: Record<string, string> = {
   ready: "bg-emerald-400",
@@ -26,7 +27,7 @@ export function McpStatus({ state, tools, error, retry }: McpStatusProps) {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="flex items-center gap-2.5 font-mono text-2xl font-bold tracking-widest text-foreground">
-        <span aria-hidden className="inline-block w-3.5 h-3.5 rounded-full bg-primary ring-4 ring-primary/25" />
+ <span aria-hidden className="inline-block size-3.5 rounded-full bg-primary ring-4 ring-primary/25" />
         VIDEOCITY
       </h1>
 
@@ -36,13 +37,13 @@ export function McpStatus({ state, tools, error, retry }: McpStatusProps) {
           ok ? "border-emerald-400/40 bg-emerald-400/10" : "border-border bg-card"
         )}
       >
-        <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", dot)} />
+ <span className={cn("size-2.5 rounded-full shrink-0", dot)} />
         <span className="font-mono text-sm font-medium text-foreground">
           MCP {ok ? "connected" : state}
         </span>
         {showAside && (
-          <div className="ml-auto flex min-w-0 items-center gap-2">
-            {error && <span className="truncate font-mono text-xs text-destructive">{error}</span>}
+          <div className={ACTION_GROUP}>
+            {error && <span className="min-w-0 truncate font-mono text-xs text-destructive">{error}</span>}
             {state === "failed" && retry && (
               <button
                 onClick={retry}

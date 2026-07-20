@@ -50,7 +50,7 @@ function FrameThumb({ url, className }: { url: string; className?: string }) {
       <img
         src={url}
         alt=""
-        className="absolute inset-0 h-full w-full object-cover"
+ className="absolute inset-0 size-full object-cover"
         draggable={false}
       />
       {hovered && popupPos && createPortal(
@@ -252,7 +252,7 @@ export function TimelineSlot({
         <button
           tabIndex={-1}
           className={cn(
-            'w-5 h-5 flex items-center justify-center rounded transition-colors',
+ 'size-5 flex items-center justify-center rounded transition-colors',
             'opacity-0 group-hover:opacity-100',
             hasContent
               ? 'text-white/50 hover:text-white hover:bg-white/10'
@@ -260,14 +260,14 @@ export function TimelineSlot({
           )}
           onClick={handleMenuClick}
         >
-          <MoreHorizontal className="w-3.5 h-3.5" />
+ <MoreHorizontal className="size-3.5" />
         </button>
       </div>
 
       {/* Asset ID — bottom-left */}
       {assetId && !isRendering && (
         <div className="absolute bottom-1 left-1.5 z-20 max-w-[calc(100%-12px)]">
-          <span className="text-[9px] font-mono text-white/50 truncate block leading-tight drop-shadow-sm">
+          <span className="text-[9px] font-mono text-white/50 min-w-0 truncate block leading-tight drop-shadow-sm">
             {assetId}
           </span>
         </div>
@@ -277,7 +277,7 @@ export function TimelineSlot({
       {osg && !isRendering && (
         <OsgBadge
           osg={osg}
-          sizeClassName="w-6 h-6"
+ sizeClassName="size-6 "
           onClick={() => {
             const slotVideoId = assetId?.replace(/^@/, '')
             if (slotVideoId && onAnimateCommand) onAnimateCommand(`/osg @${slotVideoId}`)

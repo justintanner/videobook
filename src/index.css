@@ -10,6 +10,8 @@
   --color-background: hsl(220 15% 6%);
   --color-foreground: hsl(195 90% 95%);
 
+  --spacing-toast-top: 52px; /* 48px header + 4px offset */
+
   --color-card: hsl(220 20% 10%);
   --color-card-foreground: hsl(195 90% 95%);
 

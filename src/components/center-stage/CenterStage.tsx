@@ -172,10 +172,10 @@ function AssetViewShell({ fillParent, children }: { fillParent: boolean; childre
       <div
         className={cn(
           'bg-black border-2 border-border/50 relative shadow-lg group',
-          fillParent ? 'w-full h-full' : 'w-full max-w-4xl aspect-video'
+ fillParent ? 'size-full' : 'w-full max-w-4xl aspect-video'
         )}
       >
-        <div className="w-full h-full flex items-center justify-center bg-zinc-900 relative overflow-hidden">
+ <div className="size-full flex items-center justify-center bg-zinc-900 relative overflow-hidden">
           {children}
         </div>
       </div>
@@ -194,9 +194,9 @@ export function IdleScreen({
 }) {
   return (
     <AssetViewShell fillParent={fillParent}>
-      <div className="text-center space-y-4">
-        <div className="w-16 h-16 rounded-full border border-primary/30 flex items-center justify-center mx-auto animate-pulse">
-          <div className="w-12 h-12 rounded-full bg-primary/10" />
+      <div className="text-center flex flex-col gap-4">
+ <div className="size-16 rounded-full border border-primary/30 flex items-center justify-center mx-auto animate-pulse">
+ <div className="size-12 rounded-full bg-primary/10" />
         </div>
         <p className="font-mono text-primary/50 text-sm">{label}</p>
       </div>

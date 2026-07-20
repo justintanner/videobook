@@ -1,6 +1,7 @@
 import React from 'react'
 import { FolderOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { CHEVRON_DOWN_HACK } from '@/components/ui/interaction-states'
 
 interface ProjectButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   projectSlug: string | undefined
@@ -32,7 +33,7 @@ export const ProjectButton = React.forwardRef<HTMLButtonElement, ProjectButtonPr
         )}>
           <span className={cn(
             'font-mono select-none transition-all text-sm',
-            '-translate-y-1 group-hover:animate-pulse'
+            CHEVRON_DOWN_HACK
           )}>
             {'⌄'}
           </span>
@@ -71,7 +72,7 @@ export const ProjectButton = React.forwardRef<HTMLButtonElement, ProjectButtonPr
 
         {/* Icon zone */}
         <div className="flex items-center justify-center h-full px-2 text-zinc-400/80 group-hover:text-zinc-400 transition-colors">
-          <FolderOpen className="w-3.5 h-3.5" />
+ <FolderOpen className="size-3.5" />
         </div>
       </button>
     )

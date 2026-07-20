@@ -25,12 +25,12 @@ export function UploadSlot({ onClick, loading }: UploadSlotProps) {
     >
       {loading ? (
         <>
-          <Loader2 className="w-5 h-5 animate-spin" />
+ <Loader2 className="size-5 animate-spin" />
           <span>UPLOADING...</span>
         </>
       ) : (
         <>
-          <Upload className="w-5 h-5" />
+ <Upload className="size-5" />
           <span>/upload</span>
         </>
       )}

@@ -46,8 +46,8 @@ function MentionChip({ verdict }: { verdict: MentionVerdict }) {
       )}
       title={verdict.summary ?? undefined}
     >
-      <Icon className="w-3 h-3 shrink-0" />
-      <span className="truncate max-w-[240px]">{label}</span>
+ <Icon className="size-3 shrink-0" />
+      <span className="min-w-0 truncate max-w-[240px]">{label}</span>
     </span>
   );
   if (verdict.exists !== true) return chip;
@@ -165,16 +165,16 @@ export function PostComposerScreen({
   };
 
   const buttonLabel = scheduleEnabled ? 'Schedule' : 'Post now';
-  const buttonIcon = scheduleEnabled ? <Calendar className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />;
+ const buttonIcon = scheduleEnabled ? <Calendar className="size-3.5" /> : <Send className="size-3.5" />;
 
   return (
     <div className="flex-1 min-w-0 flex items-center justify-center overflow-hidden">
-      <div className="w-full h-full min-w-0 relative bg-zinc-950">
+ <div className="size-full min-w-0 relative bg-zinc-950">
         <div className="absolute inset-0 flex flex-col overflow-hidden border border-zinc-600/50">
           <ViewerToolbar
             left={
               <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold tracking-widest text-blue-300/80 uppercase">
-                <Share2 className="w-3.5 h-3.5" />
+ <Share2 className="size-3.5" />
                 <span>POST</span>
               </span>
             }
@@ -183,8 +183,8 @@ export function PostComposerScreen({
           />
 
           <div className="flex-1 min-h-0 overflow-y-auto p-6">
-            <div className="min-h-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-[minmax(320px,1fr)_minmax(360px,560px)] gap-8 items-center">
-              <div className="space-y-2">
+            <div className="min-h-full grid grid-cols-1 md:grid-cols-[minmax(320px,1fr)_minmax(360px,560px)] gap-8 items-center">
+              <div className="flex flex-col gap-2">
                 <div className="text-[10px] font-mono uppercase tracking-wider text-blue-300/70">Asset</div>
                 {item && previewKind === 'video' && item.filePath ? (
                   <video
@@ -214,22 +214,22 @@ export function PostComposerScreen({
                   />
                 ) : (
                   <div className="w-full aspect-video rounded border border-dashed border-border/40 bg-black/40 flex flex-col items-center justify-center gap-1 text-[11px] font-mono text-muted-foreground">
-                    <ImageIcon className="w-5 h-5 opacity-50" />
+ <ImageIcon className="size-5 opacity-50" />
                     <span>No asset selected</span>
                     <span className="text-[10px]">Run /post @vid-… or @img-…</span>
                   </div>
                 )}
                 {item ? (
-                  <div className="text-[11px] font-mono text-blue-100/90 truncate flex items-center gap-1.5" title={item.slug}>
-                    {previewKind === 'video' ? <Film className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />}
-                    {item.slug}
+                  <div className="flex items-center min-w-0 gap-1.5 text-[11px] font-mono text-blue-100/90" title={item.slug}>
+ {previewKind === 'video' ? <Film className="size-3 shrink-0" /> : <ImageIcon className="size-3 shrink-0" />}
+                    <span className="min-w-0 truncate">{item.slug}</span>
                   </div>
                 ) : null}
               </div>
 
-              <div className="space-y-3">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
                     <label className="text-[10px] font-mono uppercase tracking-wider text-blue-300/70">Text</label>
                     <div className="flex items-center gap-2">
                       <PromptHistoryArrows
@@ -279,7 +279,7 @@ export function PostComposerScreen({
                 </div>
 
                 {mentions.length > 0 || mentionCheck.status === 'error' ? (
-                  <div className="space-y-1.5">
+                  <div className="flex flex-col gap-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       <button
                         type="button"
@@ -293,8 +293,8 @@ export function PostComposerScreen({
                         )}
                       >
                         {mentionCheck.status === 'checking'
-                          ? <Loader2 className="w-3 h-3 animate-spin" />
-                          : <AtSign className="w-3 h-3" />}
+ ? <Loader2 className="size-3 animate-spin" />
+ : <AtSign className="size-3" />}
                         Verify mentions
                       </button>
                       {mentionVerdicts.map((verdict) => (
@@ -309,8 +309,8 @@ export function PostComposerScreen({
                   </div>
                 ) : null}
 
-                <div>
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-blue-300/70 block mb-1">Platform</label>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-mono uppercase tracking-wider text-blue-300/70 block">Platform</label>
                   <div className="flex gap-2">
                     <span className="px-6 py-1.5 text-xs font-mono rounded border border-blue-400/60 bg-blue-500/10 text-blue-100">
                       X
@@ -319,8 +319,8 @@ export function PostComposerScreen({
                 </div>
 
                 {previewKind === 'video' ? (
-                  <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-blue-300/70 block mb-1">Orientation</label>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-mono uppercase tracking-wider text-blue-300/70 block">Orientation</label>
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -374,7 +374,7 @@ export function PostComposerScreen({
                           : 'border-amber-400/60 bg-amber-500/20 text-amber-100 hover:bg-amber-500/30',
                       )}
                     >
-                      {connecting ? <Loader2 className="w-3 h-3 animate-spin" /> : <LogIn className="w-3 h-3" />}
+ {connecting ? <Loader2 className="size-3 animate-spin" /> : <LogIn className="size-3" />}
                       {connecting ? 'Waiting…' : 'Connect X'}
                     </button>
                   </div>
@@ -440,7 +440,7 @@ export function PostComposerScreen({
                         : 'border-border/30 text-muted-foreground/50 cursor-not-allowed',
                     )}
                   >
-                    {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : buttonIcon}
+ {submitting ? <Loader2 className="size-3.5 animate-spin" /> : buttonIcon}
                     {buttonLabel}
                   </button>
                 </div>

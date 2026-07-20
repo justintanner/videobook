@@ -176,7 +176,7 @@ const ANCHOR_LABEL: Record<OsgPosition, string> = {
   'bottom-left': 'BL', 'bottom-center': 'BC', 'bottom-right': 'BR',
 };
 
-const HANDLE_BASE = 'absolute w-3 h-3 bg-emerald-300 border border-zinc-900 shadow-md';
+const HANDLE_BASE = 'absolute size-3 bg-emerald-300 border border-zinc-900 shadow-md';
 
 export function OsgOverlay({
   videoRef, imageAssets, initialOsgAssetId, initialPosition, initialSize, initialScale,
@@ -370,7 +370,7 @@ export function OsgOverlay({
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 backdrop-blur-sm">
       <div className="max-w-[min(90%,520px)] max-h-[80%] overflow-auto rounded-lg border border-emerald-500/40 bg-zinc-950/95 p-4">
         <div className="mb-3 flex items-center gap-2 text-emerald-300">
-          <ImageIcon className="w-4 h-4" />
+ <ImageIcon className="size-4" />
           <span className="text-xs font-mono font-bold tracking-widest">CHOOSE OSG IMAGE</span>
         </div>
         {imageAssets.length === 0 ? (
@@ -388,9 +388,9 @@ export function OsgOverlay({
                 className="group relative aspect-square overflow-hidden rounded border border-zinc-700 hover:border-emerald-400 transition-colors"
               >
                 {(img.thumbnailSrc || img.filePath) ? (
-                  <img src={img.thumbnailSrc || img.filePath} alt={img.title} draggable={false} className="w-full h-full object-cover" />
+ <img src={img.thumbnailSrc || img.filePath} alt={img.title} draggable={false} className="size-full object-cover" />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center"><ImageIcon className="w-4 h-4 text-zinc-600" /></div>
+ <div className="flex size-full items-center justify-center"><ImageIcon className="size-4 text-zinc-600" /></div>
                 )}
               </button>
             ))}
@@ -402,7 +402,7 @@ export function OsgOverlay({
             onClick={onCancel}
             className="px-2 py-0.5 text-xs flex items-center gap-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition-colors"
           >
-            <X className="w-3 h-3" /> Cancel
+ <X className="size-3" /> Cancel
           </button>
         </div>
       </div>
@@ -444,7 +444,7 @@ export function OsgOverlay({
             key={pos}
             className={cn(
               'absolute rounded-full pointer-events-none transition-all',
-              active ? 'w-2.5 h-2.5 bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.9)]' : 'w-1.5 h-1.5 bg-white/30',
+ active ? 'size-2.5 bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.9)]' : 'size-1.5 bg-white/30',
             )}
             style={{
               left: content.x + (parseFloat(left) / 100) * content.w,
@@ -461,7 +461,7 @@ export function OsgOverlay({
         style={{ left: rectPx.x, top: rectPx.y, width: rectPx.w, height: rectPx.h }}
         onPointerDown={handleMoveStart}
       >
-        <img src={imageSrc} alt="" draggable={false} onLoad={handleImageLoad} className="w-full h-full object-contain pointer-events-none" />
+ <img src={imageSrc} alt="" draggable={false} onLoad={handleImageLoad} className="size-full object-contain pointer-events-none" />
         <div data-corner="nw" className={cn(HANDLE_BASE, 'cursor-nwse-resize')} style={{ left: -6, top: -6 }} onPointerDown={handleResizeStart} />
         <div data-corner="ne" className={cn(HANDLE_BASE, 'cursor-nesw-resize')} style={{ right: -6, top: -6 }} onPointerDown={handleResizeStart} />
         <div data-corner="sw" className={cn(HANDLE_BASE, 'cursor-nesw-resize')} style={{ left: -6, bottom: -6 }} onPointerDown={handleResizeStart} />
@@ -482,7 +482,7 @@ export function OsgOverlay({
           title="Change image"
           className="ml-1 text-muted-foreground hover:text-emerald-300 transition-colors"
         >
-          <RefreshCw className="w-3 h-3" />
+ <RefreshCw className="size-3" />
         </button>
       </div>
 
@@ -518,14 +518,16 @@ export function OsgOverlay({
               data-time-drag="start"
               onPointerDown={handleTimeDragStart}
               title="OSG appears"
-              className="absolute -ml-[6px] w-3 h-5 rounded-sm bg-emerald-300 border border-zinc-900 shadow-md cursor-ew-resize"
+              // -ml-1.5 centers a w-3 handle on a percentage left
+              className="absolute -ml-1.5 w-3 h-5 rounded-sm bg-emerald-300 border border-zinc-900 shadow-md cursor-ew-resize"
               style={{ left: `${(winStart / duration) * 100}%` }}
             />
             <div
               data-time-drag="end"
               onPointerDown={handleTimeDragStart}
               title="OSG disappears"
-              className="absolute -ml-[6px] w-3 h-5 rounded-sm bg-emerald-300 border border-zinc-900 shadow-md cursor-ew-resize"
+              // -ml-1.5 centers a w-3 handle on a percentage left
+              className="absolute -ml-1.5 w-3 h-5 rounded-sm bg-emerald-300 border border-zinc-900 shadow-md cursor-ew-resize"
               style={{ left: `${(winEnd / duration) * 100}%` }}
             />
           </div>
@@ -539,21 +541,21 @@ export function OsgOverlay({
           onClick={onCancel}
           className="px-2 py-0.5 text-xs flex items-center gap-1 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded transition-colors"
         >
-          <X className="w-3 h-3" /> Cancel
+ <X className="size-3" /> Cancel
         </button>
         <button
           tabIndex={-1}
           onClick={onRemove}
           className="px-2 py-0.5 text-xs flex items-center gap-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
         >
-          <Trash2 className="w-3 h-3" /> Remove
+ <Trash2 className="size-3" /> Remove
         </button>
         <button
           tabIndex={-1}
           onClick={handleApply}
           className="px-2 py-0.5 text-xs flex items-center gap-1 text-emerald-300 bg-emerald-500/15 hover:bg-emerald-500/25 rounded transition-colors"
         >
-          <Check className="w-3 h-3" /> Apply
+ <Check className="size-3" /> Apply
         </button>
       </div>
     </div>

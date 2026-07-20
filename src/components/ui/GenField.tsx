@@ -29,7 +29,7 @@ export function GenField({ label, children, className, required, actions, theme,
   }
 
   return (
-    <div className={cn('space-y-2', className)}>
+    <div className={cn('flex flex-col gap-2', className)}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className={cn('text-xs font-mono font-bold tracking-widest', theme?.labelText ?? 'text-primary/70')}>{label}</span>

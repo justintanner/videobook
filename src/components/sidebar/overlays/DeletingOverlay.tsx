@@ -17,7 +17,7 @@ export function DeletingOverlay({ item }: OverlayProps) {
 
       {/* Center content */}
       <div className="relative flex flex-col items-center z-10">
-        <Trash2 className="w-7 h-7" style={{ color: visual.color, filter: `drop-shadow(0 0 10px ${visual.glow})` }} />
+ <Trash2 className="size-7" style={{ color: visual.color, filter:`drop-shadow(0 0 10px ${visual.glow})` }} />
         <div className="mt-2 text-xs font-mono font-bold tracking-[0.15em]" style={{ color: visual.color }}>DELETING</div>
       </div>
     </div>

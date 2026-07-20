@@ -155,21 +155,21 @@ function AutocompleteDropdown({
             >
               <CommandBadge value={item.label} colorScheme={item.colorScheme} />
               {item.example && item.example !== item.value ? (
-                <span className="text-muted-foreground/50 text-xs font-mono truncate">
+                <span className="text-muted-foreground/50 text-xs font-mono min-w-0 truncate">
                   {item.example.replace(item.value, '').trimStart()}
                 </span>
               ) : (
-                <span className="text-muted-foreground text-xs truncate">{item.description}</span>
+                <span className="text-muted-foreground text-xs min-w-0 truncate">{item.description}</span>
               )}
               {item.thumbnailSrc && (
                 <img
                   src={item.thumbnailSrc}
                   alt=""
-                  className="ml-auto h-5 w-5 shrink-0 rounded object-cover border border-primary/20"
+ className="ml-auto size-5 shrink-0 rounded object-cover border border-primary/20"
                   draggable={false}
                 />
               )}
-              {Icon && !item.thumbnailSrc && <Icon className="ml-auto h-3 w-3 shrink-0 opacity-50" />}
+ {Icon && !item.thumbnailSrc && <Icon className="ml-auto size-3 shrink-0 opacity-50" />}
             </button>
           );
         })}

@@ -25,7 +25,7 @@ function RenderIcon({ isFinal, color }: { isFinal: boolean; color: string }) {
   if (isFinal) {
     // Clapperboard — angular, bold strokes
     return (
-      <svg viewBox="0 0 32 32" fill="none" className="w-10 h-10">
+ <svg viewBox="0 0 32 32" fill="none" className="size-10 ">
         <path d="M4 10L28 10L28 28L4 28Z" stroke={color} strokeWidth="1.5" fill={`${color}08`} />
         <path d="M4 10L8 4L28 4L28 10" stroke={color} strokeWidth="1.5" fill={`${color}10`} />
         <path d="M10 4L12 10M16 4L18 10M22 4L24 10" stroke={color} strokeWidth="1" opacity="0.5" />
@@ -36,7 +36,7 @@ function RenderIcon({ isFinal, color }: { isFinal: boolean; color: string }) {
   }
   // Film reel — concentric rings
   return (
-    <svg viewBox="0 0 32 32" fill="none" className="w-10 h-10">
+ <svg viewBox="0 0 32 32" fill="none" className="size-10 ">
       <circle cx="16" cy="16" r="12" stroke={color} strokeWidth="1.5" fill={`${color}08`} />
       <circle cx="16" cy="16" r="4" stroke={color} strokeWidth="1" opacity="0.6" />
       <circle cx="16" cy="16" r="1.5" fill={color} opacity="0.4" />
@@ -57,7 +57,7 @@ export function RenderingReadout({ asset, className }: RenderingReadoutProps) {
   return (
     <div
       className={cn(
-        'w-full h-full bg-black font-mono text-xs flex flex-col items-center justify-center relative overflow-hidden select-none',
+ 'size-full bg-black font-mono text-xs flex flex-col items-center justify-center relative overflow-hidden select-none',
         className
       )}
     >

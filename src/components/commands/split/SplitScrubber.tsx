@@ -110,7 +110,7 @@ export function SplitScrubber({
             style={{ left: `${splitPct}%`, transform: 'translateX(-50%)', width: 16 }}
           >
             <div className="w-0.5 mx-auto bg-violet-400 shadow-[0_0_12px_rgba(167,139,250,0.7)]" />
-            <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-violet-300 border border-violet-100" />
+ <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 size-2.5 rounded-full bg-violet-300 border border-violet-100" />
           </div>
         )}
       </div>

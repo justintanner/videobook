@@ -27,7 +27,7 @@ export function Toaster() {
           <Toast key={id} variant={variant} {...props}>
             <Icon
               className={cn(
-                'w-3.5 h-3.5 mt-0.5 shrink-0',
+ 'size-3.5 mt-0.5 shrink-0',
                 isDestructive
                   ? 'text-red-300 drop-shadow-[0_0_6px_rgba(239,68,68,0.75)]'
                   : 'text-emerald-300 drop-shadow-[0_0_6px_rgba(16,185,129,0.55)]'

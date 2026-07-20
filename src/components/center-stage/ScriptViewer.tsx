@@ -426,9 +426,9 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
 
   return (
     <div className="flex-1 flex items-center justify-center overflow-hidden">
-      <div className="flip-card-perspective w-full h-full">
+ <div className="flip-card-perspective size-full ">
         <div className={cn(
-          'flip-card-inner w-full h-full relative',
+ 'flip-card-inner size-full relative',
           flipped && 'flipped',
         )}>
           {/* FRONT FACE */}
@@ -439,17 +439,17 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
             <ViewerToolbar
               left={
                 <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-emerald-300/90 drop-shadow-[0_0_4px_rgba(52,211,153,0.5)]">
-                  <FileText className="w-3.5 h-3.5" />
+ <FileText className="size-3.5" />
                   <span>MARKDOWN</span>
                   {saving && (
                     <span className="flex items-center gap-1 text-yellow-400/80 text-[10px]">
-                      <Loader2 className="w-3 h-3 animate-spin" />
+ <Loader2 className="size-3 animate-spin" />
                       Saving…
                     </span>
                   )}
                   {!saving && justSaved && (
                     <span className="flex items-center gap-1 text-emerald-400/90 text-[10px]">
-                      <Check className="w-3 h-3" />
+ <Check className="size-3" />
                       Saved
                     </span>
                   )}
@@ -465,9 +465,9 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                     tabIndex={-1}
                     onClick={handleFlipToBack}
                     title="/files"
-                    className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-emerald-300 transition-colors duration-150 rounded hover:bg-emerald-500/10"
+ className="size-6 flex items-center justify-center text-muted-foreground hover:text-emerald-300 transition-colors duration-150 rounded hover:bg-emerald-500/10"
                   >
-                    <Settings className="w-4 h-4 stroke-[2.5]" />
+ <Settings className="size-4 stroke-[2.5]" />
                   </button>
                   <CloseButton tabIndex={-1} onClick={onClose} tone="emerald" title="Close (ESC)" />
                 </div>
@@ -493,8 +493,8 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                   )}
                 >
                   {genInFlight
-                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    : <Images className="w-3.5 h-3.5" />}
+ ? <Loader2 className="size-3.5 animate-spin" />
+ : <Images className="size-3.5" />}
                   Gen Images
                 </button>
                 <CostBadge
@@ -530,8 +530,8 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                       )}
                     >
                       {rewriting
-                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        : <Zap className="w-3.5 h-3.5" />}
+ ? <Loader2 className="size-3.5 animate-spin" />
+ : <Zap className="size-3.5" />}
                       Rewrite
                     </button>
                   }
@@ -554,7 +554,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                       disabled={!historyNav.canPrev || historyNav.loading || isGenerating}
                       title="Restore previous version"
                       className={cn(
-                        'h-7 w-7 flex items-center justify-center',
+' size-7 flex items-center justify-center',
                         'text-emerald-300/90 hover:text-emerald-200',
                         'bg-emerald-500/5 hover:bg-emerald-500/15',
                         'transition-colors duration-150',
@@ -562,8 +562,8 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                       )}
                     >
                       {historyNav.loading
-                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        : <ChevronLeft className="w-3.5 h-3.5" />}
+ ? <Loader2 className="size-3.5 animate-spin" />
+ : <ChevronLeft className="size-3.5" />}
                     </button>
                     <button
                       type="button"
@@ -572,14 +572,14 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                       disabled={!historyNav.canNext || historyNav.loading || isGenerating}
                       title="Restore next version"
                       className={cn(
-                        'h-7 w-7 flex items-center justify-center border-l border-emerald-500/30',
+' size-7 flex items-center justify-center border-l border-emerald-500/30',
                         'text-emerald-300/90 hover:text-emerald-200',
                         'bg-emerald-500/5 hover:bg-emerald-500/15',
                         'transition-colors duration-150',
                         'disabled:opacity-50 disabled:cursor-not-allowed',
                       )}
                     >
-                      <ChevronRight className="w-3.5 h-3.5" />
+ <ChevronRight className="size-3.5" />
                     </button>
                   </div>
                   <button
@@ -595,7 +595,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                       'transition-colors duration-150',
                     )}
                   >
-                    <Copy className="w-3.5 h-3.5" />
+ <Copy className="size-3.5" />
                     Copy
                   </button>
                 </div>
@@ -623,7 +623,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                   placeholder="Write your script here..."
                   style={{ '--scrollbar-rgb': '52, 211, 153' } as React.CSSProperties}
                   className={cn(
-                    'relative z-10 w-full h-full resize-none px-8 py-6',
+ 'relative z-10 size-full resize-none px-8 py-6',
                     'bg-transparent',
                     'text-[15px] leading-7 tracking-[0.01em] text-sky-300 placeholder:text-sky-300/25 caret-sky-200',
                     'font-mono',
@@ -656,7 +656,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                           animation: 'generating-model-pulse 2s ease-in-out infinite',
                         }}
                       >
-                        <Loader2 className="w-4 h-4 animate-spin" />
+ <Loader2 className="size-4 animate-spin" />
                         <span className="text-[11px] font-mono font-bold uppercase tracking-[0.18em]">
                           Rewriting Script
                         </span>

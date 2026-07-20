@@ -14,19 +14,19 @@ interface SidebarMicroThumbProps {
 function ThumbIcon({ type }: { type: MediaItem['type'] }) {
   switch (type) {
     case 'audio':
-      return <AudioLines className="w-3.5 h-3.5 text-primary/50" />;
+ return <AudioLines className="size-3.5 text-primary/50" />;
     case 'script':
-      return <FileText className="w-3.5 h-3.5 text-primary/50" />;
+ return <FileText className="size-3.5 text-primary/50" />;
     case 'notebook':
-      return <Compass className="w-3.5 h-3.5 text-emerald-400/50" />;
+ return <Compass className="size-3.5 text-emerald-400/50" />;
     case 'video':
-      return <Film className="w-3.5 h-3.5 text-primary/50" />;
+ return <Film className="size-3.5 text-primary/50" />;
     case 'image':
-      return <ImageIcon className="w-3.5 h-3.5 text-primary/50" />;
+ return <ImageIcon className="size-3.5 text-primary/50" />;
     case 'character':
-      return <User className="w-3.5 h-3.5 text-violet-400/60" />;
+ return <User className="size-3.5 text-violet-400/60" />;
     case 'final':
-      return <Film className="w-3.5 h-3.5 text-amber-400/50" />;
+ return <Film className="size-3.5 text-amber-400/50" />;
   }
 }
 
@@ -44,7 +44,7 @@ export function SidebarMicroThumb({ item, selected, onClick }: SidebarMicroThumb
           type="button"
           onClick={onClick}
           className={cn(
-            'relative w-6 h-6 rounded-sm overflow-hidden shrink-0 transition-all border border-border/40',
+ 'relative size-6 rounded-sm overflow-hidden shrink-0 transition-all border border-border/40',
             'hover:ring-1 hover:ring-primary/50',
             selected && !isGold && 'ring-1 ring-primary',
             selected && isGold && 'ring-1 ring-amber-400/60',
@@ -57,16 +57,16 @@ export function SidebarMicroThumb({ item, selected, onClick }: SidebarMicroThumb
               alt={item.slug}
               loading="lazy"
               draggable={false}
-              className="w-full h-full object-cover"
+ className="size-full object-cover"
               onError={() => setErroredSrc(src)}
             />
           ) : (
-            <span className="flex items-center justify-center w-full h-full">
+ <span className="flex items-center justify-center size-full ">
               <ThumbIcon type={item.type} />
             </span>
           )}
           {dot && (
-            <span className={cn('absolute bottom-0 right-0 w-[5px] h-[5px] rounded-full', dot)} />
+ <span className={cn('absolute bottom-0 right-0 size-[5px] rounded-full', dot)} />
           )}
         </button>
       </TooltipTrigger>

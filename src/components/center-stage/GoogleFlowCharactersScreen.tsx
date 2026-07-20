@@ -230,12 +230,12 @@ export function GoogleFlowCharactersScreen({
 
   return (
     <div className="flex-1 min-w-0 flex items-center justify-center overflow-hidden">
-      <div className="w-full h-full min-w-0 relative bg-zinc-950">
+ <div className="size-full min-w-0 relative bg-zinc-950">
         <div className="absolute inset-0 flex flex-col overflow-hidden border border-zinc-600/50">
           <ViewerToolbar
             left={
               <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-cyan-300/90 drop-shadow-[0_0_4px_rgba(45,212,191,0.5)]">
-                <Users className="w-3.5 h-3.5" />
+ <Users className="size-3.5" />
                 <span>GOOGLE FLOW CHARACTERS</span>
               </span>
             }
@@ -254,19 +254,19 @@ export function GoogleFlowCharactersScreen({
                     disabled={charsLoading}
                     className="p-1.5 rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-50"
                   >
-                    <RefreshCw className={cn("w-4 h-4", charsLoading && "animate-spin")} />
+ <RefreshCw className={cn("size-4 ", charsLoading && "animate-spin")} />
                   </button>
                   <button
                     onClick={handleCreateNew}
                     className="p-1.5 rounded text-cyan-400 hover:text-cyan-300 hover:bg-cyan-400/10 transition-colors ml-1"
                     title="Create new character"
                   >
-                    <Plus className="w-4 h-4" />
+ <Plus className="size-4" />
                   </button>
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+              <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
                 {charsError && (
                   <div className="p-3 text-sm text-red-400 bg-red-950/30 rounded font-mono border border-red-900/50">
                     {charsError}
@@ -274,7 +274,7 @@ export function GoogleFlowCharactersScreen({
                 )}
                 {!charsError && charsLoading && characters.length === 0 && (
                   <div className="flex items-center justify-center p-8 text-zinc-500">
-                    <Loader2 className="w-5 h-5 animate-spin" />
+ <Loader2 className="size-5 animate-spin" />
                   </div>
                 )}
                 {!charsError && !charsLoading && characters.length === 0 && (
@@ -289,18 +289,18 @@ export function GoogleFlowCharactersScreen({
                       selectedRef === char.ref ? "bg-cyan-950/40 border border-cyan-900/50" : "hover:bg-zinc-800/50 border border-transparent"
                     )}
                   >
-                    <div className="w-10 h-10 rounded overflow-hidden bg-zinc-800 shrink-0 border border-zinc-700/50 flex items-center justify-center">
+ <div className="size-10 rounded overflow-hidden bg-zinc-800 shrink-0 border border-zinc-700/50 flex items-center justify-center">
                       {char.thumbnailUrl ? (
-                        <img src={char.thumbnailUrl} alt={char.displayName} className="w-full h-full object-cover" />
+ <img src={char.thumbnailUrl} alt={char.displayName} className="size-full object-cover" />
                       ) : (
-                        <User className="w-5 h-5 text-zinc-600" />
+ <User className="size-5 text-zinc-600" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className={cn("text-sm font-semibold truncate", selectedRef === char.ref ? "text-cyan-300" : "text-zinc-200")}>
+                      <div className={cn("text-sm font-semibold min-w-0 truncate", selectedRef === char.ref ? "text-cyan-300" : "text-zinc-200")}>
                         {char.displayName}
                       </div>
-                      <div className="text-[10px] font-mono text-zinc-500 truncate mt-0.5 opacity-80" title={char.ref}>
+                      <div className="text-[10px] font-mono text-zinc-500 min-w-0 truncate mt-0.5 opacity-80" title={char.ref}>
                         {char.ref}
                       </div>
                     </div>
@@ -315,31 +315,31 @@ export function GoogleFlowCharactersScreen({
                 <div className="p-6">
                   {detailLoading ? (
                     <div className="flex flex-col items-center justify-center h-64 text-zinc-500 gap-3">
-                      <Loader2 className="w-6 h-6 animate-spin" />
+ <Loader2 className="size-6 animate-spin" />
                       <span className="font-mono text-xs">Loading detail...</span>
                     </div>
                   ) : detail ? (
-                    <div className="max-w-2xl mx-auto space-y-6">
+                    <div className="max-w-2xl mx-auto flex flex-col gap-6">
                       <div className="flex items-start justify-between">
                         <div className="flex gap-4 items-center">
-                          <div className="w-20 h-20 rounded overflow-hidden bg-zinc-800 border border-zinc-700">
+ <div className="size-20 shrink-0 rounded overflow-hidden bg-zinc-800 border border-zinc-700">
                             {detail.thumbnail_url ? (
-                              <img src={detail.thumbnail_url} alt={detail.display_name} className="w-full h-full object-cover" />
+ <img src={detail.thumbnail_url} alt={detail.display_name} className="size-full object-cover" />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center"><User className="w-8 h-8 text-zinc-600" /></div>
+ <div className="size-full flex items-center justify-center"><User className="size-8 text-zinc-600" /></div>
                             )}
                           </div>
                           <div>
                             <h2 className="text-xl font-bold text-white">{detail.display_name}</h2>
                             <button onClick={() => copyRef(detail.ref)} className="mt-1 flex items-center gap-1.5 text-xs font-mono text-zinc-500 hover:text-zinc-300 transition-colors">
-                              <span className="truncate max-w-[300px]">{detail.ref}</span>
-                              <Copy className="w-3 h-3" />
+                              <span className="min-w-0 truncate max-w-[300px]">{detail.ref}</span>
+ <Copy className="size-3 shrink-0" />
                             </button>
                           </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 min-w-fit">
                           <button onClick={handleEdit} className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded text-xs font-mono font-semibold transition-colors flex items-center gap-1.5">
-                            <Edit2 className="w-3.5 h-3.5" /> Edit
+ <Edit2 className="size-3.5" /> Edit
                           </button>
                           {deleteConfirmRef === detail.ref ? (
                             <div className="flex items-center gap-1 bg-red-950/40 border border-red-900/50 rounded px-1 py-1">
@@ -360,35 +360,35 @@ export function GoogleFlowCharactersScreen({
                             </div>
                           ) : (
                             <button onClick={() => setDeleteConfirmRef(detail.ref)} className="px-3 py-1.5 bg-transparent hover:bg-red-900/30 text-zinc-400 hover:text-red-400 rounded text-xs font-mono font-semibold transition-colors flex items-center gap-1.5 border border-transparent hover:border-red-900/50">
-                              <Trash2 className="w-3.5 h-3.5" /> Delete
+ <Trash2 className="size-3.5" /> Delete
                             </button>
                           )}
                         </div>
                       </div>
 
-                      <div className="space-y-4">
+                      <div className="flex flex-col gap-4">
                         {detail.raw?._conflict === 'singleton-read-disagrees' && (
                           <div className="bg-amber-950/30 border border-amber-900/50 rounded p-3 flex items-start gap-3">
-                            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                            <div className="text-sm text-amber-200/90 leading-relaxed">
-                              <strong className="text-amber-400 block mb-1">Upstream Sync Conflict</strong>
-                              The upstream provider's detail record lost the name or notes (read disagreement). The intended metadata has been preserved from the list model.
+ <AlertTriangle className="size-5 text-amber-500 shrink-0 mt-0.5" />
+                            <div className="text-sm text-amber-200/90 leading-relaxed flex flex-col gap-1">
+                              <strong className="text-amber-400 block">Upstream Sync Conflict</strong>
+                              <span>The upstream provider's detail record lost the name or notes (read disagreement). The intended metadata has been preserved from the list model.</span>
                             </div>
                           </div>
                         )}
-                        <div className="bg-zinc-900/50 border border-zinc-800 rounded p-4">
-                          <h4 className="text-xs font-mono text-zinc-500 mb-1">PERSONALITY NOTES</h4>
+                        <div className="bg-zinc-900/50 border border-zinc-800 rounded p-4 flex flex-col gap-1">
+                          <h4 className="text-xs font-mono text-zinc-500">PERSONALITY NOTES</h4>
                           <p className="text-sm text-zinc-300 whitespace-pre-wrap">{detail.raw?.personalityNotes || <span className="italic text-zinc-600">None</span>}</p>
                         </div>
                         <div className="bg-zinc-900/50 border border-zinc-800 rounded p-4 flex items-center justify-between">
-                          <div>
-                            <h4 className="text-xs font-mono text-zinc-500 mb-1">VOICE</h4>
+                          <div className="flex flex-col gap-1">
+                            <h4 className="text-xs font-mono text-zinc-500">VOICE</h4>
                             <p className="text-sm text-zinc-300 font-mono">
                               {typeof detail.raw?.voice === 'object' ? Object.values(detail.raw.voice)[0] : <span className="italic text-zinc-600">None</span>}
                             </p>
                           </div>
-                          <div>
-                            <h4 className="text-xs font-mono text-zinc-500 mb-1 text-right">SOURCE IMAGES</h4>
+                          <div className="flex flex-col gap-1">
+                            <h4 className="text-xs font-mono text-zinc-500 text-right">SOURCE IMAGES</h4>
                             <p className="text-sm text-zinc-300 text-right">{detail.image_count}</p>
                           </div>
                         </div>
@@ -404,7 +404,7 @@ export function GoogleFlowCharactersScreen({
                 <div className="p-6 max-w-2xl mx-auto w-full">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                      {mode === 'create' ? <Plus className="w-5 h-5 text-cyan-400" /> : <Edit2 className="w-5 h-5 text-cyan-400" />}
+ {mode === 'create' ? <Plus className="size-5 text-cyan-400" /> : <Edit2 className="size-5 text-cyan-400" />}
                       {mode === 'create' ? 'Create Character' : 'Replace Character'}
                     </h2>
                     <button onClick={() => setMode('list')} className="text-xs font-mono text-zinc-400 hover:text-white transition-colors">
@@ -414,16 +414,16 @@ export function GoogleFlowCharactersScreen({
 
                   {mode === 'edit' && (
                     <div className="mb-6 bg-amber-950/30 border border-amber-900/50 rounded p-3 flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                      <div className="text-sm text-amber-200/90 leading-relaxed">
-                        <strong className="text-amber-400 block mb-1">Destructive Replacement</strong>
-                        Google Flow does not support native updates. This operation will create a <strong>new character</strong> and attempt to delete the old one. The character ref will change.
+ <AlertTriangle className="size-5 text-amber-500 shrink-0 mt-0.5" />
+                      <div className="text-sm text-amber-200/90 leading-relaxed flex flex-col gap-1">
+                        <strong className="text-amber-400 block">Destructive Replacement</strong>
+                        <span>Google Flow does not support native updates. This operation will create a <strong>new character</strong> and attempt to delete the old one. The character ref will change.</span>
                       </div>
                     </div>
                   )}
 
-                  <form onSubmit={handleFormSubmit} className="space-y-6">
-                    <div className="space-y-2">
+                  <form onSubmit={handleFormSubmit} className="flex flex-col gap-6">
+                    <div className="flex flex-col gap-2">
                       <label className="block text-xs font-mono text-zinc-400">DISPLAY NAME (Required)</label>
                       <input
                         type="text"
@@ -436,7 +436,7 @@ export function GoogleFlowCharactersScreen({
                       />
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2">
                       <label className="block text-xs font-mono text-zinc-400">
                         SOURCE IMAGES {mode === 'create' ? '(1-2 Required)' : '(Optional - select to replace existing)'}
                       </label>
@@ -458,20 +458,20 @@ export function GoogleFlowCharactersScreen({
                               )}
                             >
                               {asset.thumbnailSrc || asset.filePath ? (
-                                <img src={asset.thumbnailSrc || asset.filePath} alt={asset.title} className="w-full h-full object-cover" />
+ <img src={asset.thumbnailSrc || asset.filePath} alt={asset.title} className="size-full object-cover" />
                               ) : (
-                                <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-800 text-zinc-500">
-                                  <ImageIcon className="w-6 h-6 mb-1" />
-                                  <span className="text-[10px] font-mono px-1 truncate w-full text-center">{asset.title}</span>
+ <div className="size-full flex flex-col items-center justify-center gap-1 bg-zinc-800 text-zinc-500">
+ <ImageIcon className="size-6" />
+                                  <span className="text-[10px] font-mono px-1 min-w-0 truncate w-full text-center">{asset.title}</span>
                                 </div>
                               )}
                               {isSelected && (
                                 <div className="absolute top-1 right-1 bg-cyan-500 rounded-full p-0.5">
-                                  <CheckCircle2 className="w-3 h-3 text-white" />
+ <CheckCircle2 className="size-3 text-white" />
                                 </div>
                               )}
                               <div className="absolute bottom-0 inset-x-0 bg-black/60 p-1">
-                                <p className="text-[9px] font-mono text-white truncate text-center">{asset.id}</p>
+                                <p className="text-[9px] font-mono text-white min-w-0 truncate text-center">{asset.id}</p>
                               </div>
                             </button>
                           );
@@ -487,7 +487,7 @@ export function GoogleFlowCharactersScreen({
                       </p>
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2">
                       <label className="block text-xs font-mono text-zinc-400">PERSONALITY NOTES (Optional)</label>
                       <textarea
                         maxLength={2000}
@@ -499,7 +499,7 @@ export function GoogleFlowCharactersScreen({
                       />
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2">
                       <label className="block text-xs font-mono text-zinc-400">VOICE (Optional)</label>
                       <select
                         value={form.voice}
@@ -521,7 +521,7 @@ export function GoogleFlowCharactersScreen({
                         disabled={submitting || (mode === 'create' && (!form.displayName.trim() || form.imageSlugs.length === 0))}
                         className="px-6 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold font-mono text-sm rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                       >
-                        {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+ {submitting && <Loader2 className="size-4 animate-spin" />}
                         {mode === 'create' ? 'Create Character' : 'Apply Replace'}
                       </button>
                     </div>

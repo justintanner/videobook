@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { ChevronDown } from 'lucide-react';
 import { sizes, variants } from './command-styles';
+import { CHEVRON_DOWN_HACK } from '@/components/ui/interaction-states';
 
 interface CommandDropdownOption {
   value: string;
@@ -62,7 +63,7 @@ export function CommandDropdown({
           className={cn(
             'font-mono select-none transition-all',
             s.chevron,
-            !disabled && '-translate-y-1 group-hover:animate-pulse',
+            !disabled && CHEVRON_DOWN_HACK,
           )}
         >
           {'\u2304'}

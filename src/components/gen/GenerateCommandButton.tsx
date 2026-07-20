@@ -92,9 +92,9 @@ export function GenerateCommandButton({
 
   const displayText = state ? stateText[state] ?? '/generate' : '/generate';
 
-  let displayIcon = <Zap className="w-3.5 h-3.5" />;
-  if (isLoading) displayIcon = <Loader2 className="w-3.5 h-3.5 animate-spin" />;
-  else if (isSuccess) displayIcon = <CheckCircle2 className="w-3.5 h-3.5" />;
+ let displayIcon = <Zap className="size-3.5" />;
+ if (isLoading) displayIcon = <Loader2 className="size-3.5 animate-spin" />;
+ else if (isSuccess) displayIcon = <CheckCircle2 className="size-3.5" />;
 
   const handleSlotClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -203,9 +203,9 @@ export function GenerateCommandButton({
 
         {state === 'queued' && (
           <div className="flex gap-1 ml-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
-            <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
-            <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
+ <div className="size-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
+ <div className="size-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
+ <div className="size-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
           </div>
         )}
       </div>

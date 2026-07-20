@@ -64,7 +64,7 @@ export function FinalVideoCard({ item, contextMenuContent, selected, onClick, on
           alt={item.title}
           loading="lazy"
           draggable={false}
-          className="w-full h-full object-cover transition-opacity"
+ className="size-full object-cover transition-opacity"
           onError={() => setErroredSrc(thumbSrc)}
         />
       )}

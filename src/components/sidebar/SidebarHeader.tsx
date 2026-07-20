@@ -28,7 +28,7 @@ function CollapsedSidebarHeader({
   return (
     <div className="flex flex-col items-center gap-3 pt-2 cursor-pointer group" onClick={onToggle}>
       <div className="p-2 rounded group-hover:bg-primary/10 text-muted-foreground group-hover:text-primary transition-colors">
-        <ExpandIcon className="w-5 h-5" />
+ <ExpandIcon className="size-5" />
       </div>
       <span className="text-xs font-semibold text-muted-foreground group-hover:text-primary uppercase tracking-[0.15em] transition-colors [writing-mode:vertical-rl]">
         {title}
@@ -47,7 +47,7 @@ function SortButton({ sortOrder, onChange }: { sortOrder: SortOrder; onChange: (
           onClick={onChange}
           className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
         >
-          {sortOrder === 'newest' ? <ArrowDown className="w-3.5 h-3.5" /> : <ArrowUp className="w-3.5 h-3.5" />}
+ {sortOrder === 'newest' ? <ArrowDown className="size-3.5" /> : <ArrowUp className="size-3.5" />}
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom">{label}</TooltipContent>
@@ -76,7 +76,7 @@ export function SidebarHeader({ icon, title, collapsed, onToggle, side, sortOrde
               onClick={onToggle}
               className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
             >
-              <CollapseIcon className="w-4 h-4" />
+ <CollapseIcon className="size-4" />
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom">Collapse sidebar</TooltipContent>

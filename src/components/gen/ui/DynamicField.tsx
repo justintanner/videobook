@@ -30,6 +30,7 @@ interface DynamicFieldProps {
 const SLIDER_RANGE_DEFAULT =
   'flex-1 min-w-[120px] h-1 cursor-pointer appearance-none bg-transparent ' +
   '[&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full ' +
+  // -mt-[5px] centers the h-3.5 thumb on the h-1 track: -(14-4)/2 = -5px
   '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:-mt-[5px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer ' +
   '[&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-full ' +
   '[&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer';
@@ -37,6 +38,7 @@ const SLIDER_RANGE_DEFAULT =
 const SLIDER_RANGE_COMPACT =
   'flex-1 min-w-[72px] max-w-[140px] h-0.5 cursor-pointer appearance-none bg-transparent ' +
   '[&::-webkit-slider-runnable-track]:h-0.5 [&::-webkit-slider-runnable-track]:rounded-full ' +
+  // -mt-[4px] centers the h-2.5 thumb on the h-0.5 track: -(10-2)/2 = -4px
   '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:-mt-[4px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer ' +
   '[&::-moz-range-track]:h-0.5 [&::-moz-range-track]:rounded-full ' +
   '[&::-moz-range-thumb]:h-2.5 [&::-moz-range-thumb]:w-2.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer';

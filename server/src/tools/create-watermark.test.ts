@@ -22,11 +22,17 @@ describe("create_watermark tool", () => {
   let client: Client | undefined;
   let tempDir: string;
   let fs: ReturnType<typeof createFs>;
+  let originalEnv: NodeJS.ProcessEnv;
 
   beforeEach(async () => {
+    originalEnv = { ...process.env };
     tempDir = await mkdtemp(join(tmpdir(), "videocity-create-watermark-"));
     // Isolate the remembered-handle store to this temp dir.
     process.env.WATERMARK_CONFIG_PATH = join(tempDir, "watermark-config.json");
+    // Isolate from ambient X credentials to prevent outbound API calls
+    process.env.X_TOKENS_PATH = join(tempDir, "x-tokens.json");
+    delete process.env.X_ACCESS_TOKEN;
+    
     fs = createFs({ projectsDir: tempDir });
     client = await createTestClient(tempDir);
     await client.callTool({
@@ -37,7 +43,7 @@ describe("create_watermark tool", () => {
 
   afterEach(async () => {
     await client?.close();
-    delete process.env.WATERMARK_CONFIG_PATH;
+    process.env = originalEnv;
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 

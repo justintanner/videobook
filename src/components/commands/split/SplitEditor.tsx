@@ -314,14 +314,14 @@ export function SplitEditor({
               </div>
               <ActionButton
                 label="Clear"
-                icon={<Eraser className="w-4 h-4" />}
+ icon={<Eraser className="size-4" />}
                 variant="neutral"
                 disabled={isBusy || !hasSplit}
                 onClick={() => { clear(); setError(null) }}
               />
               <ActionButton
                 label="Split here"
-                icon={<Scissors className="w-4 h-4" />}
+ icon={<Scissors className="size-4" />}
                 state={execState ?? (hasSplit ? undefined : 'disabled')}
                 disabledReason="Set a split point on the timeline first"
                 onClick={() => { void runManualSplit() }}
@@ -382,8 +382,8 @@ function ActionButton({
   const blocked = isDisabled || isLoading || isSuccess
 
   let displayIcon = icon
-  if (isLoading) displayIcon = <Loader2 className="w-4 h-4 animate-spin" />
-  else if (isSuccess) displayIcon = <CheckCircle2 className="w-4 h-4" />
+ if (isLoading) displayIcon = <Loader2 className="size-4 animate-spin" />
+ else if (isSuccess) displayIcon = <CheckCircle2 className="size-4" />
 
   const displayLabel = isLoading
     ? (state === 'charging' ? 'Preparing…' : 'Splitting…')
@@ -398,7 +398,7 @@ function ActionButton({
       title={isDisabled && disabledReason ? disabledReason : undefined}
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-2 h-9 px-3 rounded font-mono text-[11px] tracking-wide',
+        'inline-flex shrink-0 items-center gap-2 h-9 px-3 rounded font-mono text-[11px] tracking-wide',
         'border transition-colors',
         FOCUS_RING_BUTTON,
         'focus-visible:ring-neutral-400/60',
@@ -418,7 +418,7 @@ function ActionButton({
 
   if (isDisabled && disabledReason) {
     return (
-      <span className="inline-flex" title={disabledReason}>
+      <span className="inline-flex shrink-0" title={disabledReason}>
         {button}
       </span>
     )

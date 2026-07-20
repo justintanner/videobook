@@ -27,7 +27,7 @@ function formatElapsed(ms: number): string {
 }
 
 function TypeIcon({ type }: { type: MediaItem['type'] }) {
-  const className = 'w-10 h-10';
+ const className = 'size-10 ';
   switch (type) {
     case 'audio': return <AudioLines className={className} />;
     case 'script': return <FileText className={className} />;

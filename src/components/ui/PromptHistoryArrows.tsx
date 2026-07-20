@@ -30,15 +30,15 @@ const SIZE_CLASSES: Record<PromptHistorySize, {
 }> = {
   sm: {
     root: 'gap-0.5 text-[10px]',
-    button: 'h-4 w-4',
-    icon: 'h-3 w-3',
+ button:' size-4',
+ icon:' size-3',
     count: 'px-1',
     empty: 'ml-1.5',
   },
   lg: {
     root: 'gap-1 text-sm',
-    button: 'h-7 w-7',
-    icon: 'h-4 w-4',
+ button:' size-7',
+ icon:' size-4',
     count: 'px-2',
     empty: 'ml-2',
   },

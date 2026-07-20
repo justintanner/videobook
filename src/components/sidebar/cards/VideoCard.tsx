@@ -111,7 +111,7 @@ export function VideoCard({ item, contextMenuContent, selected, onClick, onMarkS
           alt={item.title}
           loading="lazy"
           draggable={false}
-          className={cn('w-full h-full object-cover transition-opacity', isProcessing && 'opacity-80')}
+ className={cn('size-full object-cover transition-opacity', isProcessing && 'opacity-80')}
           onError={() => setErroredSrc(thumbSrc)}
         />
       )}

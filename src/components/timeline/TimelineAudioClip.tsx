@@ -127,7 +127,7 @@ export function TimelineAudioClip({
             />
           )}
           <div className="absolute top-0.5 left-1.5 z-10">
-            <span className="text-[9px] font-mono font-bold text-violet-100/90 truncate block leading-tight drop-shadow-sm">
+            <span className="text-[9px] font-mono font-bold text-violet-100/90 min-w-0 truncate block leading-tight drop-shadow-sm">
               @{slug}
             </span>
           </div>
@@ -139,10 +139,10 @@ export function TimelineAudioClip({
                   draggable={false}
                   onDragStart={(e) => e.preventDefault()}
                   onMouseDown={suppressChipDrag}
-                  className="pointer-events-auto w-4 h-4 flex items-center justify-center rounded bg-black/40 text-violet-100 hover:bg-black/60 hover:text-white"
+ className="pointer-events-auto size-4 flex items-center justify-center rounded bg-black/40 text-violet-100 hover:bg-black/60 hover:text-white"
                   aria-label="Audio settings"
                 >
-                  <Volume2 className="w-3 h-3" />
+ <Volume2 className="size-3" />
                 </button>
               </PopoverTrigger>
               <PopoverContent
@@ -186,10 +186,10 @@ export function TimelineAudioClip({
               onDragStart={(e) => e.preventDefault()}
               onMouseDown={suppressChipDrag}
               onClick={(e) => { e.stopPropagation(); onRemove(); }}
-              className="pointer-events-auto w-4 h-4 flex items-center justify-center rounded bg-black/40 text-violet-100 hover:bg-red-500/80 hover:text-white"
+ className="pointer-events-auto size-4 flex items-center justify-center rounded bg-black/40 text-violet-100 hover:bg-red-500/80 hover:text-white"
               aria-label="Remove audio"
             >
-              <X className="w-3 h-3" />
+ <X className="size-3" />
             </button>
           </div>
         </div>

@@ -224,7 +224,7 @@ export function TimelineAudioLane({
           >
             <div
               className={cn(
-                'w-full h-full',
+ 'size-full ',
                 preview?.snapped
                   ? 'bg-violet-500 shadow-[0_0_10px_var(--clip-domain-video),0_0_18px_var(--clip-domain-video)]'
                   : 'bg-violet-500/60',

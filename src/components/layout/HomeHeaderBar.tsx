@@ -34,7 +34,7 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, renderingCoun
       <div className="flex items-center gap-1">
         {/* Logo */}
         <div className="flex items-center gap-2 px-3 h-full">
-          <div key={pulseKey} className="w-2.5 h-2.5 rounded-full bg-primary shrink-0 logo-dot-pulse" />
+ <div key={pulseKey} className="size-2.5 rounded-full bg-primary shrink-0 logo-dot-pulse" />
           <span className="font-mono font-bold text-sm uppercase tracking-wider">
             <span className="text-foreground">VIDEO</span>
             <span className="text-primary">CITY</span>
@@ -52,10 +52,10 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, renderingCoun
         />
 
         {/* Generation shortcuts */}
-        <CommandButton command={notebookCommand} icon={<NotebookPen className="w-3.5 h-3.5" />} variant="notebook" onClick={() => onAnimateCommand(notebookCommand)} />
-        <CommandButton command="/image" icon={<ImageIcon className="w-3.5 h-3.5" />} variant="image" onClick={() => onAnimateCommand('/image')} />
-        <CommandButton command="/video" icon={<Film className="w-3.5 h-3.5" />} variant="video" onClick={() => onAnimateCommand('/video')} />
-        <CommandButton command="/final" icon={<Clapperboard className="w-3.5 h-3.5" />} variant="final" onClick={() => onAnimateCommand('/final')} />
+ <CommandButton command={notebookCommand} icon={<NotebookPen className="size-3.5" />} variant="notebook" onClick={() => onAnimateCommand(notebookCommand)} />
+ <CommandButton command="/image" icon={<ImageIcon className="size-3.5" />} variant="image" onClick={() => onAnimateCommand('/image')} />
+ <CommandButton command="/video" icon={<Film className="size-3.5" />} variant="video" onClick={() => onAnimateCommand('/video')} />
+ <CommandButton command="/final" icon={<Clapperboard className="size-3.5" />} variant="final" onClick={() => onAnimateCommand('/final')} />
       </div>
 
       {/* Right side */}
@@ -67,7 +67,7 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, renderingCoun
             title={`${renderingCount} clip${renderingCount > 1 ? 's' : ''} rendering`}
             className="flex items-center gap-1.5 h-8 px-2.5 rounded bg-violet-500/10 text-violet-300 hover:bg-violet-500/20 transition-colors"
           >
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+ <Loader2 className="size-3.5 animate-spin" />
             <span className="font-mono text-xs tracking-wider">
               rendering{renderingCount > 1 ? ` ×${renderingCount}` : ''}
             </span>
@@ -76,7 +76,7 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, renderingCoun
 
         <CommandButton
           command="/activity"
-          icon={<History className="w-3.5 h-3.5" />}
+ icon={<History className="size-3.5" />}
           variant="projects"
           onClick={onStatusClick}
           className={hasOpenToast ? 'toast-origin-pulse border-emerald-500/60' : undefined}
@@ -85,19 +85,19 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, renderingCoun
         <button
           type="button"
           onClick={onArchiveClick}
-          className={`flex items-center justify-center w-8 h-8 rounded transition-colors ${archiveActive ? 'text-amber-300 bg-amber-500/10' : 'text-muted-foreground/60 hover:text-amber-300/80 hover:bg-amber-500/10'}`}
+ className={`flex items-center justify-center size-8 rounded transition-colors ${archiveActive ? 'text-amber-300 bg-amber-500/10' : 'text-muted-foreground/60 hover:text-amber-300/80 hover:bg-amber-500/10'}`}
           title="Archive"
         >
-          <ArchiveRestore className="w-4 h-4" />
+ <ArchiveRestore className="size-4" />
         </button>
 
         <button
           type="button"
           onClick={onSettingsClick}
-          className={`flex items-center justify-center w-8 h-8 rounded transition-colors ${settingsActive ? 'text-primary bg-primary/10' : 'text-muted-foreground/60 hover:text-primary hover:bg-primary/10'}`}
+ className={`flex items-center justify-center size-8 rounded transition-colors ${settingsActive ? 'text-primary bg-primary/10' : 'text-muted-foreground/60 hover:text-primary hover:bg-primary/10'}`}
           title="Settings"
         >
-          <Settings className="w-4 h-4" />
+ <Settings className="size-4" />
         </button>
       </div>
     </div>

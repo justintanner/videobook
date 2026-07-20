@@ -89,7 +89,7 @@ function Section({ tag, icon, theme, children }: { tag: string; icon: React.Reac
         <span className={cn('ml-auto', theme.headerIcon)}>{icon}</span>
       </div>
       {/* Body */}
-      <div className="px-3 py-2.5 space-y-2">
+      <div className="px-3 py-2.5 flex flex-col gap-2">
         {children}
       </div>
     </div>
@@ -213,11 +213,11 @@ function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1, disa
         disabled={disabled}
         onClick={() => onChange?.(clamp(value - step))}
         className={cn(
-          'w-8 h-8 flex items-center justify-center rounded-l border transition-colors',
+ 'size-8 flex items-center justify-center rounded-l border transition-colors',
           theme.controlBorder, theme.controlBg, theme.controlText, theme.controlHover,
         )}
       >
-        <Minus className="w-3 h-3" />
+ <Minus className="size-3" />
       </button>
       <div
         className={cn(
@@ -234,7 +234,7 @@ function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1, disa
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commitDraft}
             onKeyDown={(e) => { if (e.key === 'Enter') commitDraft(); if (e.key === 'Escape') setEditing(false); }}
-            className={cn('w-full h-full bg-transparent text-right text-sm font-mono font-bold outline-none tabular-nums', theme.activeText)}
+ className={cn('size-full bg-transparent text-right text-sm font-mono font-bold outline-none tabular-nums', theme.activeText)}
           />
         ) : (
           <>
@@ -249,11 +249,11 @@ function NumberInput({ value, onChange, unit, min = 0, max = 999, step = 1, disa
         disabled={disabled}
         onClick={() => onChange?.(clamp(value + step))}
         className={cn(
-          'w-8 h-8 flex items-center justify-center rounded-r border transition-colors',
+ 'size-8 flex items-center justify-center rounded-r border transition-colors',
           theme.controlBorder, theme.controlBg, theme.controlText, theme.controlHover,
         )}
       >
-        <Plus className="w-3 h-3" />
+ <Plus className="size-3" />
       </button>
     </div>
   );
@@ -265,7 +265,7 @@ function ColorSwatch({ value, onChange, disabled, theme }: { value: string; onCh
   return (
     <div className={cn('flex items-center gap-2', disabled && 'opacity-30 pointer-events-none')}>
       <div className={cn(
-        'relative w-8 h-8 rounded border flex items-center justify-center overflow-hidden',
+ 'relative size-8 rounded border flex items-center justify-center overflow-hidden',
         theme.controlBorder, theme.controlBg,
       )}>
         <input
@@ -273,7 +273,7 @@ function ColorSwatch({ value, onChange, disabled, theme }: { value: string; onCh
           value={value}
           disabled={disabled}
           onChange={(e) => onChange?.(e.target.value)}
-          className="w-6 h-6 border-0 bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch]:rounded-sm"
+ className="size-6 border-0 bg-transparent cursor-pointer [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch]:rounded-sm"
         />
       </div>
       <span className={cn('text-[11px] font-mono tracking-wider', theme.hexText)}>{value}</span>
@@ -309,7 +309,7 @@ function LanguagePicker({ value, sourceLabel, cached, onChange, disabled, theme 
           )}
         >
           {languageLabel(value, sourceLabel)}
-          <ChevronDown className="w-3 h-3" />
+ <ChevronDown className="size-3" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
@@ -319,12 +319,12 @@ function LanguagePicker({ value, sourceLabel, cached, onChange, disabled, theme 
           return (
             <DropdownMenuItem key={language} onClick={() => onChange?.(language)} className="py-2">
               <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">
-                {active ? <Check className="w-3 h-3 inline text-primary" /> : '›'}
+ {active ? <Check className="size-3 inline text-primary" /> : '›'}
               </span>
               <span className={cn('font-mono font-bold text-xs tracking-wider leading-none flex-1', !active && 'text-muted-foreground/60')}>
                 {languageLabel(language, sourceLabel)}
               </span>
-              {isCached && <span className="ml-2 w-1.5 h-1.5 rounded-full bg-cyan-400/70" />}
+ {isCached && <span className="ml-2 size-1.5 rounded-full bg-cyan-400/70" />}
             </DropdownMenuItem>
           );
         })}
@@ -381,7 +381,7 @@ export function RenderSettingsPanel({
         {/* Settings in 2 columns */}
         <div className="grid grid-cols-2 gap-3 items-start mt-3">
           {/* Left column: /subs */}
-          <Section tag="/subs" icon={<Type className="w-4 h-4" />} theme={cyan}>
+ <Section tag="/subs" icon={<Type className="size-4" />} theme={cyan}>
             <SettingRow label="Enabled" theme={cyan}>
               <PillToggle theme={cyan} disabled={disabled} options={[{ label: 'ON', value: 'on' }, { label: 'OFF', value: 'off' }]} value={subtitlesEnabled ? 'on' : 'off'} onChange={(v) => onSubtitleChange?.('enabled', v === 'on')} />
             </SettingRow>
@@ -423,9 +423,9 @@ export function RenderSettingsPanel({
           </Section>
 
           {/* Right column: /audio, /bg, /osg */}
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3">
             {/* /audio */}
-            <Section tag="/audio" icon={<Volume2 className="w-4 h-4" />} theme={violet}>
+ <Section tag="/audio" icon={<Volume2 className="size-4" />} theme={violet}>
               <SettingRow label="Volume" theme={violet}>
                 <NumberInput theme={violet} disabled={disabled} value={audioVolume} onChange={(v) => onAudioChange?.('audioVolume', v)} min={0} max={100} step={5} unit="%" />
               </SettingRow>
@@ -438,7 +438,7 @@ export function RenderSettingsPanel({
             </Section>
 
             {/* /bg */}
-            <Section tag="/bg" icon={<ImageIcon className="w-4 h-4" />} theme={amber}>
+ <Section tag="/bg" icon={<ImageIcon className="size-4" />} theme={amber}>
               <SegmentedControl theme={amber} disabled={disabled} options={[{ label: 'BLUR', value: 'blur' }, { label: 'BLACK', value: 'black' }]} value={backgroundMode} onChange={onBackgroundChange} />
             </Section>
           </div>
@@ -449,7 +449,7 @@ export function RenderSettingsPanel({
       <div className="shrink-0 flex items-center justify-end px-4 py-2.5 border-t border-zinc-800/60">
         <CommandButton
           command="/render"
-          icon={<Zap className="w-5 h-5" />}
+ icon={<Zap className="size-5" />}
           size="lg"
           state={applyState}
           onClick={handleRenderClick}

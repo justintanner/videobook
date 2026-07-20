@@ -347,7 +347,7 @@ export function RichPromptField({
             'placeholder:text-zinc-500/40',
             // Keep section chrome (/prompt header) in view if a parent scrolls to us.
             'scroll-mt-10',
-            fill && 'h-full w-full flex-1',
+ fill &&' size-full flex-1',
           )}
         />
       </div>

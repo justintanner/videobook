@@ -19,7 +19,7 @@ export function ModelSelector({ selectedModelKey, modelOptions, onChange, disabl
       options={modelOptions.map((o) => ({ value: o.key, label: o.label }))}
       onChange={onChange}
       disabled={disabled}
-      icon={<Box className="w-3.5 h-3.5" />}
+ icon={<Box className="size-3.5" />}
       variant={variant}
     />
   );
@@ -41,7 +41,7 @@ export function ProviderSelector({ selectedProvider, providers, onChange, disabl
       options={providers.map((p) => ({ value: p, label: p }))}
       onChange={onChange}
       disabled={disabled}
-      icon={<Globe className="w-3.5 h-3.5" />}
+ icon={<Globe className="size-3.5" />}
       variant={variant}
     />
   );
@@ -82,7 +82,7 @@ export function ModelProviderSelector({ selectedModelKey, selectedProviderKey, m
         onChange(raw.slice(0, idx), raw.slice(idx + 2));
       }}
       disabled={disabled}
-      icon={<Box className="w-3.5 h-3.5" />}
+ icon={<Box className="size-3.5" />}
       variant={variant}
     />
   );
@@ -107,7 +107,7 @@ export function ModeSelector({ modes, selectedModeKey, onChange, disabled, varia
       options={modes.modes.map((m) => ({ value: m.key, label: m.label }))}
       onChange={onChange}
       disabled={disabled}
-      icon={<Layers className="w-3.5 h-3.5" />}
+ icon={<Layers className="size-3.5" />}
       variant={variant}
     />
   );

@@ -77,9 +77,9 @@ export function HistoryListPane({ commits, selectedHash, onSelectCommit, onRefre
         <button
           tabIndex={-1}
           onClick={onRefresh}
-          className="w-6 h-6 flex items-center justify-center text-muted-foreground/60 hover:text-primary transition-colors"
+ className="size-6 flex items-center justify-center text-muted-foreground/60 hover:text-primary transition-colors"
         >
-          <RefreshCw className={cn('w-4 h-4 stroke-[2.5]', loading && 'animate-spin')} />
+ <RefreshCw className={cn('size-4 stroke-[2.5]', loading && 'animate-spin')} />
         </button>
       </div>
       {commits.map((commit) => {
@@ -116,7 +116,7 @@ function RewriteMetadataBlock({ rewrite, onReuse }: {
   return (
     <div className="flex flex-col gap-2 rounded border border-amber-500/30 bg-amber-500/5 p-3">
       <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-widest text-amber-300/90">
-        <Zap className="w-3 h-3" />
+ <Zap className="size-3" />
         Rewrite
       </div>
       <div className="flex flex-col gap-1.5">
@@ -155,7 +155,7 @@ function RewriteMetadataBlock({ rewrite, onReuse }: {
             'transition-colors duration-150',
           )}
         >
-          <Zap className="w-3.5 h-3.5" />
+ <Zap className="size-3.5" />
           Use this prompt
         </button>
       )}
@@ -181,7 +181,7 @@ export function HistoryDetailPane({ commit, isHead, onRestore, onReusePrompt }: 
   const style = OPERATION_STYLES[op];
 
   return (
-    <div className="h-full flex flex-col p-5 gap-5">
+    <div className="h-full flex flex-col p-6 gap-6">
       {/* Top row: operation label + copy icon */}
       <div className="flex items-center gap-3">
         <span className={cn('font-mono text-base font-bold uppercase tracking-widest', style.label)}>
@@ -199,9 +199,9 @@ export function HistoryDetailPane({ commit, isHead, onRestore, onReusePrompt }: 
             navigator.clipboard.writeText(commit.hash);
             toast({ title: 'Copied', description: commit.hash, duration: 2000 });
           }}
-          className="w-7 h-7 flex items-center justify-center text-muted-foreground/60 hover:text-white transition-colors"
+ className="size-7 shrink-0 flex items-center justify-center text-muted-foreground/60 hover:text-white transition-colors"
         >
-          <Copy className="w-5 h-5 stroke-[2]" />
+ <Copy className="size-5 stroke-[2]" />
         </button>
       </div>
 
@@ -252,7 +252,7 @@ export function HistoryDetailPane({ commit, isHead, onRestore, onReusePrompt }: 
       ) : (
         <CommandButton
           command={`/restore ${commit.hash.slice(0, 7)}`}
-          icon={<History className="w-4 h-4" />}
+ icon={<History className="size-4" />}
           onClick={() => onRestore(commit.hash)}
         />
       )}
@@ -265,7 +265,7 @@ export function HistoryEmptyState({ loading }: { loading: boolean }) {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="flex items-center gap-3">
-          <Loader2 className="w-4 h-4 animate-spin text-cyan-400/50" />
+ <Loader2 className="size-4 animate-spin text-cyan-400/50" />
           <span className="text-sm font-mono text-muted-foreground/50">Loading history...</span>
         </div>
       </div>

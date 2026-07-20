@@ -51,9 +51,9 @@ function findThumbnail(
 }
 
 function slotIcon(kind: StripSlot['kind']): React.ReactNode {
-  if (kind === 'video') return <Video className="w-3 h-3" />
-  if (kind === 'audio') return <Music className="w-3 h-3" />
-  return <ImageIcon className="w-3 h-3" />
+ if (kind === 'video') return <Video className="size-3" />
+ if (kind === 'audio') return <Music className="size-3" />
+ return <ImageIcon className="size-3" />
 }
 
 function slotSlugs(value: unknown): string[] {
@@ -291,7 +291,7 @@ export function MediaStrip({
         <div className="px-3 pb-2 text-[10px] font-mono text-red-400/80">{budget.message}</div>
       )}
       {warnings.length > 0 && (
-        <div className="px-3 pb-2 space-y-0.5">
+        <div className="px-3 pb-2 flex flex-col gap-0.5">
           {warnings.map((w, i) => (
             <p key={i} className="text-[10px] font-mono text-amber-400/60">{w}</p>
           ))}
@@ -383,21 +383,21 @@ function StripChip({
     <div
       className={cn(
         'group relative shrink-0 rounded overflow-hidden border',
-        'w-10 h-10',
+ 'size-10 ',
         pinned ? 'border-amber-400/60 ring-1 ring-amber-400/40' : 'border-primary/30',
       )}
       title={badge ? `@referenceImage_${badge} · ${stripSlugPrefix(slug)}` : `${label} · ${stripSlugPrefix(slug)}`}
     >
       {thumb ? (
-        <img src={thumb} alt={label} className="w-full h-full object-cover" />
+ <img src={thumb} alt={label} className="size-full object-cover" />
       ) : (
-        <div className="w-full h-full flex items-center justify-center text-primary/20">
-          {icon ?? <ImageIcon className="w-3 h-3" />}
+ <div className="size-full flex items-center justify-center text-primary/20">
+ {icon ?? <ImageIcon className="size-3" />}
         </div>
       )}
       {/* Positional index badge (matches @referenceImage_N order) */}
       {badge && (
-        <span className="absolute left-0 top-0 z-10 rounded-br-[3px] bg-black/80 px-[2px] text-[9px] font-mono font-bold leading-none text-cyan-300">
+        <span className="absolute left-0 top-0 z-10 rounded-br-[3px] bg-black/80 px-0.5 text-[9px] font-mono font-bold leading-none text-cyan-300">
           {badge}
         </span>
       )}
@@ -407,13 +407,13 @@ function StripChip({
           type="button"
           onClick={onPin}
           className={cn(
-            'absolute top-0 left-0 w-4 h-4 z-20 flex items-center justify-center',
+ 'absolute top-0 left-0 size-4 z-20 flex items-center justify-center',
             'opacity-0 group-hover:opacity-100 transition-opacity',
             pinned ? 'opacity-100 text-amber-400' : 'text-primary/40 hover:text-amber-400',
           )}
           title={pinned ? 'Unpin first frame' : 'Pin as first frame'}
         >
-          <Pin className="w-2.5 h-2.5" fill={pinned ? 'currentColor' : 'none'} />
+ <Pin className="size-2.5" fill={pinned ? 'currentColor' : 'none'} />
         </button>
       )}
       {/* Remove button */}
@@ -422,13 +422,13 @@ function StripChip({
           type="button"
           onClick={onRemove}
           className={cn(
-            'absolute top-0 right-0 w-4 h-4 flex items-center justify-center',
+ 'absolute top-0 right-0 size-4 flex items-center justify-center',
             'bg-black/70 text-red-400/80 hover:text-red-400',
             'opacity-0 group-hover:opacity-100 transition-opacity',
           )}
           title="Remove"
         >
-          <X className="w-2.5 h-2.5" />
+ <X className="size-2.5" />
         </button>
       )}
     </div>
@@ -461,20 +461,20 @@ function CharacterChip({
       title={name}
     >
       <div className={cn(
-        "w-8 h-8 rounded overflow-hidden shrink-0 flex items-center justify-center",
+ "size-8 rounded overflow-hidden shrink-0 flex items-center justify-center",
         missing ? "bg-red-500/20" : "bg-black/60"
       )}>
         {missing ? (
-          <X className="w-4 h-4 text-red-500/80" />
+ <X className="size-4 text-red-500/80" />
         ) : showImg ? (
-          <img src={thumbnailUrl!} alt={name} className="w-full h-full object-cover" onError={() => setBroken(true)} />
+ <img src={thumbnailUrl!} alt={name} className="size-full object-cover" onError={() => setBroken(true)} />
         ) : (
-          <ImageIcon className="w-3 h-3 text-primary/30" />
+ <ImageIcon className="size-3 text-primary/30" />
         )}
       </div>
-      <div className="flex flex-col">
+      <div className="flex flex-col min-w-0">
         <span className={cn(
-          "text-[9px] font-mono max-w-[60px] truncate leading-tight",
+          "text-[9px] font-mono max-w-[60px] min-w-0 truncate leading-tight",
           missing ? "text-red-400" : "text-primary/70"
         )}>{missing ? 'Missing' : name}</span>
         {!missing && imageCount > 1 && (
@@ -486,13 +486,13 @@ function CharacterChip({
           type="button"
           onClick={onRemove}
           className={cn(
-            'absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center rounded-full',
+ 'absolute -top-1 -right-1 size-4 shrink-0 flex items-center justify-center rounded-full',
             'bg-black/80 text-red-400/80 hover:text-red-400 border border-red-400/30',
             'opacity-0 group-hover:opacity-100 transition-opacity',
           )}
           title={`Remove ${name}`}
         >
-          <X className="w-2.5 h-2.5" />
+ <X className="size-2.5" />
         </button>
       )}
     </div>

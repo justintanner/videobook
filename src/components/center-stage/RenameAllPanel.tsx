@@ -193,12 +193,12 @@ export function RenameAllPanel({
 
   return (
     <div className="flex-1 min-w-0 flex items-center justify-center overflow-hidden">
-      <div className="w-full h-full min-w-0 relative">
+ <div className="size-full min-w-0 relative">
         <div className="absolute inset-0 flex flex-col overflow-hidden border border-zinc-600/50">
           <ViewerToolbar
             left={
               <span className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono font-bold text-cyan-300/90 drop-shadow-[0_0_4px_rgba(45,212,191,0.5)]">
-                <Tags className="w-3.5 h-3.5" />
+ <Tags className="size-3.5" />
                 <span>RENAME ALL</span>
               </span>
             }
@@ -210,7 +210,7 @@ export function RenameAllPanel({
             className="flex-1 min-w-0 overflow-y-auto scrollbar-domain"
             style={{ "--scrollbar-rgb": "45, 212, 191" } as React.CSSProperties}
           >
-            <div className="w-full min-w-0 px-4 sm:px-6 py-5">
+            <div className="w-full min-w-0 px-4 sm:px-6 py-6">
               {error && (
                 <div className="mb-4 rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm font-mono text-red-300">
                   {error}
@@ -220,7 +220,7 @@ export function RenameAllPanel({
               {phase === "loading" && (
                 <div className="h-full flex items-center justify-center py-16">
                   <div className="flex items-center gap-3">
-                    <Loader2 className="w-4 h-4 animate-spin text-cyan-400/60" />
+ <Loader2 className="size-4 animate-spin text-cyan-400/60" />
                     <span className="text-sm font-mono text-muted-foreground/60">
                       Generating name suggestions...
                     </span>
@@ -251,7 +251,7 @@ export function RenameAllPanel({
                       disabled={phase !== "ready"}
                       className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground/60 hover:text-cyan-300 disabled:opacity-40 transition-colors"
                     >
-                      <RefreshCw className="w-3 h-3" />
+ <RefreshCw className="size-3" />
                       Regenerate
                     </button>
                   </div>
@@ -274,11 +274,12 @@ export function RenameAllPanel({
                     ))}
                   </div>
 
+                  {/* full-bleed sticky footer cancelling the parent's px-4 sm:px-6 */}
                   <div className="sticky bottom-0 mt-4 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-black/70 border-t border-zinc-800/60 flex items-center justify-between gap-3">
                     <div className="flex flex-col">
                       {dirty ? (
                         <span className="flex items-center gap-1.5 text-xs font-mono text-amber-300/90">
-                          <AlertTriangle className="w-3.5 h-3.5" />
+ <AlertTriangle className="size-3.5" />
                           Revalidate edits before confirming
                         </span>
                       ) : (
@@ -302,9 +303,9 @@ export function RenameAllPanel({
                           )}
                         >
                           {phase === "revalidating" ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+ <Loader2 className="size-3.5 animate-spin" />
                           ) : (
-                            <RefreshCw className="w-3.5 h-3.5" />
+ <RefreshCw className="size-3.5" />
                           )}
                           Revalidate
                         </button>
@@ -321,9 +322,9 @@ export function RenameAllPanel({
                         )}
                       >
                         {phase === "applying" ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+ <Loader2 className="size-3.5 animate-spin" />
                         ) : (
-                          <CheckCircle2 className="w-3.5 h-3.5" />
+ <CheckCircle2 className="size-3.5" />
                         )}
                         Confirm & Apply
                       </button>
@@ -379,7 +380,7 @@ function RenameRowCard({
         onClick={onToggleIncluded}
         disabled={isSkipped || disabled}
         className={cn(
-          "w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors",
+ "size-5 rounded border flex items-center justify-center shrink-0 transition-colors",
           row.included
             ? "bg-cyan-500/40 border-cyan-400/70 text-cyan-100"
             : "border-zinc-600 text-transparent hover:border-cyan-400/50",
@@ -387,7 +388,7 @@ function RenameRowCard({
         )}
         aria-label={row.included ? "Exclude row" : "Include row"}
       >
-        {row.included && <CheckCircle2 className="w-3.5 h-3.5" />}
+ {row.included && <CheckCircle2 className="size-3.5" />}
       </button>
 
       <AssetPreviewThumb type={row.type} preview={preview} />
@@ -396,10 +397,10 @@ function RenameRowCard({
         <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/40">
           {row.type} · current
         </span>
-        <span className="text-sm font-mono text-zinc-200 truncate" title={row.current_slug}>
+        <span className="text-sm font-mono text-zinc-200 min-w-0 truncate" title={row.current_slug}>
           {row.current_slug}
         </span>
-        <span className="text-xs font-mono text-muted-foreground/50 truncate">
+        <span className="text-xs font-mono text-muted-foreground/50 min-w-0 truncate">
           {row.current_name}
         </span>
       </div>
@@ -442,7 +443,7 @@ function RenameRowCard({
             />
             <span
               className={cn(
-                "text-xs font-mono truncate",
+                "text-xs font-mono min-w-0 truncate",
                 row.dirty ? "text-amber-300/70" : "text-cyan-400/60",
               )}
               title={liveTarget}
@@ -450,7 +451,7 @@ function RenameRowCard({
               → {liveTarget}
             </span>
             {isConflict && row.reason && (
-              <span className="text-[10px] font-mono text-red-400/80 truncate">
+              <span className="text-[10px] font-mono text-red-400/80 min-w-0 truncate">
                 {row.reason}
               </span>
             )}
@@ -501,7 +502,7 @@ function AssetPreviewThumb({
       className="w-20 h-12 rounded border border-zinc-700/70 overflow-hidden shrink-0 bg-black/40"
       title={type === "video" ? "Video poster" : "Image"}
     >
-      <img src={src} alt="" className="w-full h-full object-cover" draggable={false} />
+ <img src={src} alt="" className="size-full object-cover" draggable={false} />
     </div>
   );
 }
@@ -519,7 +520,7 @@ function ApplySummary({
   return (
     <div className="flex flex-col gap-4 py-8">
       <div className="flex items-center gap-2 text-cyan-300">
-        <CheckCircle2 className="w-5 h-5" />
+ <CheckCircle2 className="size-5" />
         <span className="text-sm font-mono font-bold uppercase tracking-wider">
           Applied {succeeded.length} rename{succeeded.length === 1 ? "" : "s"}
         </span>
@@ -537,9 +538,9 @@ function ApplySummary({
             key={a.asset_id}
             className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center text-xs font-mono px-3 py-1.5 rounded border border-zinc-800/60 bg-zinc-900/30"
           >
-            <span className="text-zinc-400 truncate">{a.asset_id}</span>
+            <span className="text-zinc-400 min-w-0 truncate">{a.asset_id}</span>
             <span className="text-cyan-400/60">→</span>
-            <span className="text-cyan-200 truncate">{a.new_asset_id}</span>
+            <span className="text-cyan-200 min-w-0 truncate">{a.new_asset_id}</span>
           </div>
         ))}
       </div>

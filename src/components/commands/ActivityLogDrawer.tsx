@@ -322,17 +322,17 @@ export function ActivityLogDrawer({
                         <span className={cn('shrink-0 w-32 uppercase text-[10px] tracking-[0.15em] pt-0.5 font-bold', style.label)}>
                           [{cat}]
                         </span>
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 flex flex-col gap-0.5">
                           {isFail && errorMsg ? (
-                            <div className="text-red-300/90 truncate">{errorMsg}</div>
+                            <div className="text-red-300/90 min-w-0 truncate">{errorMsg}</div>
                           ) : (
                             <div className="text-emerald-100/80 uppercase tracking-wider text-xs">{title}</div>
                           )}
                           {assetId && (
-                            <div className="text-emerald-400/50 text-[10px] mt-0.5 tracking-wider">› {assetId}</div>
+                            <div className="text-emerald-400/50 text-[10px] tracking-wider">› {assetId}</div>
                           )}
                           {!isFail && prompt && (
-                            <div className="text-emerald-400/40 text-[10px] mt-0.5 italic truncate">"{prompt}"</div>
+                            <div className="text-emerald-400/40 text-[10px] italic min-w-0 truncate">"{prompt}"</div>
                           )}
                         </div>
                         <span className="shrink-0 text-[10px] pt-0.5 text-emerald-400/50 tracking-wider tabular-nums">

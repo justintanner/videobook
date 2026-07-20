@@ -13,7 +13,7 @@ export function SlugBadge({ item, muted }: SlugBadgeProps) {
   return (
     <div className="absolute bottom-2 left-2 right-2 z-40 flex justify-start pointer-events-none">
       <span
-        className="max-w-full text-xs font-mono font-bold truncate px-2 py-1 rounded bg-black/85 backdrop-blur-md border"
+        className="max-w-full text-xs font-mono font-bold min-w-0 truncate px-2 py-1 rounded bg-black/85 backdrop-blur-md border"
         style={{
           borderColor: visual.border,
           color: visual.color,
@@ -126,7 +126,7 @@ const OSG_BADGE_ANCHOR: Record<string, string> = {
   'bottom-left': 'bottom-1 left-1', 'bottom-center': 'bottom-1 left-1/2 -translate-x-1/2', 'bottom-right': 'bottom-1 right-1',
 };
 
-export function OsgBadge({ osg, onClick, sizeClassName = 'w-8 h-8' }: OsgBadgeProps) {
+export function OsgBadge({ osg, onClick, sizeClassName = 'size-8' }: OsgBadgeProps) {
   if (!osg || !osg.src) return null;
   const anchor = OSG_BADGE_ANCHOR[osg.position] ?? OSG_BADGE_ANCHOR['top-right'];
   return (
@@ -137,7 +137,7 @@ export function OsgBadge({ osg, onClick, sizeClassName = 'w-8 h-8' }: OsgBadgePr
       title="Edit on-screen graphic"
       className={`absolute z-40 ${sizeClassName} rounded-sm overflow-hidden border border-emerald-400/70 bg-black/40 shadow-[0_0_8px_rgba(110,231,183,0.5)] transition-transform hover:scale-110 ${anchor}`}
     >
-      <img src={osg.src} alt="OSG" draggable={false} className="w-full h-full object-contain" />
+ <img src={osg.src} alt="OSG" draggable={false} className="size-full object-contain" />
     </button>
   );
 }

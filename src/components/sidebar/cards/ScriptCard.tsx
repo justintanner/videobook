@@ -23,7 +23,7 @@ export function ScriptCard({ item, contextMenuContent, selected, onClick, onMark
   return (
     <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen}>
       {/* CONTENT - Script */}
-      <div className="w-full h-full relative overflow-hidden">
+ <div className="size-full relative overflow-hidden">
         {/* Dark gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/40" />
         {/* Scanlines overlay */}

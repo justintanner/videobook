@@ -35,7 +35,7 @@ export function CharacterCard({ item, contextMenuContent, selected, onClick, onM
           alt={item.title}
           loading="lazy"
           draggable={false}
-          className="w-full h-full object-cover transition-opacity"
+ className="size-full object-cover transition-opacity"
         />
       ) : item.filePath ? (
         <img
@@ -43,10 +43,10 @@ export function CharacterCard({ item, contextMenuContent, selected, onClick, onM
           alt={item.title}
           loading="lazy"
           draggable={false}
-          className="w-full h-full object-cover transition-opacity"
+ className="size-full object-cover transition-opacity"
         />
       ) : (
-        <div className="w-full h-full bg-muted flex items-center justify-center font-mono text-xs opacity-50">
+ <div className="size-full bg-muted flex items-center justify-center font-mono text-xs opacity-50">
           No image
         </div>
       )}

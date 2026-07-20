@@ -269,13 +269,13 @@ export function CharacterFolderViewer({
   }
 
   return (
-    <div className="flex w-full h-full text-zinc-100 p-6 overflow-y-auto gap-6 relative">
+ <div className="flex size-full text-zinc-100 p-6 overflow-y-auto gap-6 relative">
       <div className="absolute top-4 right-4 z-10">
         <CloseButton onClick={onClose} />
       </div>
 
       {/* Files Column */}
-      <div className="flex-1 flex flex-col gap-6">
+      <div className="flex-1 flex flex-col min-w-0 gap-6">
         <div className="flex justify-between items-start gap-4 pr-10">
           <div className="flex flex-col gap-2 min-w-0 flex-1">
             <label className="text-xs font-mono uppercase tracking-wider text-zinc-500">Name</label>
@@ -314,7 +314,7 @@ export function CharacterFolderViewer({
             onClick={() => void handlePublish()}
             disabled={!canPublish || metadataSaving}
           >
-            <Globe className="w-4 h-4" />
+ <Globe className="size-4" />
             {publishing ? 'Publishing...' : 'Publish to Google Flow'}
           </button>
         </div>
@@ -339,13 +339,13 @@ export function CharacterFolderViewer({
               }
             }}
           />
-          <UploadCloud className="w-8 h-8 mb-2 text-zinc-400" />
+ <UploadCloud className="size-8 mb-2 text-zinc-400" />
           <p className="text-zinc-400">Drag & drop files here, or click to select</p>
         </div>
 
         {images.length > 0 && (
-          <div>
-            <h3 className="text-lg font-medium mb-3">Images</h3>
+          <div className="flex flex-col gap-3">
+            <h3 className="text-lg font-medium">Images</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               {images.map((f, i) => {
                 const isHighlight = i < 2
@@ -364,7 +364,7 @@ export function CharacterFolderViewer({
                     <img
                       src={`/files/${projectSlug}/${item.id}/${f.name}`}
                       alt={f.name}
-                      className="w-full h-full object-cover pointer-events-none"
+ className="size-full object-cover pointer-events-none"
                     />
 
                     <div className="absolute top-2 left-2 px-2 py-0.5 bg-black/60 text-white text-xs rounded shadow backdrop-blur-md font-medium">
@@ -387,12 +387,12 @@ export function CharacterFolderViewer({
         )}
 
         {audio.length > 0 && (
-          <div>
-            <h3 className="text-lg font-medium mb-3">Audio</h3>
+          <div className="flex flex-col gap-3">
+            <h3 className="text-lg font-medium">Audio</h3>
             <div className="flex flex-col gap-3">
               {audio.map(f => (
                 <div key={f.name} className="flex flex-col gap-1 p-3 bg-zinc-900 rounded-lg border border-zinc-800">
-                  <span className="text-sm truncate">{f.name}</span>
+                  <span className="text-sm min-w-0 truncate">{f.name}</span>
                   <audio
                     controls
                     className="w-full h-8"
@@ -405,12 +405,12 @@ export function CharacterFolderViewer({
         )}
 
         {others.length > 0 && (
-          <div>
-            <h3 className="text-lg font-medium mb-3">Other Files</h3>
+          <div className="flex flex-col gap-3">
+            <h3 className="text-lg font-medium">Other Files</h3>
             <div className="flex flex-col gap-2">
               {others.map(f => (
                 <div key={f.name} className="flex justify-between items-center p-3 bg-zinc-900 rounded-lg border border-zinc-800">
-                  <span className="text-sm truncate">{f.name}</span>
+                  <span className="text-sm min-w-0 truncate">{f.name}</span>
                   <span className="text-xs text-zinc-500">{(f.size_bytes / 1024).toFixed(1)} KB</span>
                 </div>
               ))}
@@ -420,7 +420,7 @@ export function CharacterFolderViewer({
       </div>
 
       {/* Metadata Column */}
-      <div className="w-[400px] flex flex-col gap-4">
+      <div className="w-full lg:w-[400px] lg:shrink-0 min-w-0 flex flex-col gap-4">
         <div className="flex justify-between items-center">
           <h3 className="text-lg font-medium">Advanced Metadata</h3>
           <button
@@ -428,7 +428,7 @@ export function CharacterFolderViewer({
             onClick={() => void handleSaveMetadata()}
             disabled={metadataSaving}
           >
-            <Save className="w-4 h-4" />
+ <Save className="size-4" />
             Save
           </button>
         </div>

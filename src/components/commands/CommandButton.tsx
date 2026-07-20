@@ -4,7 +4,7 @@ import { Loader2, CheckCircle2 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ExecuteButtonState } from './types';
 import { sizes, variants } from './command-styles';
-import { LOADING_STATE, FOCUS_RING_BUTTON } from '@/components/ui/interaction-states';
+import { LOADING_STATE, FOCUS_RING_BUTTON, CHEVRON_DOWN_HACK } from '@/components/ui/interaction-states';
 
 const stateCommands: Record<string, Record<ExecuteButtonState, string | null>> = {
   default: {
@@ -142,7 +142,7 @@ export function CommandButton({ command, icon, chevron = 'right', size = 'defaul
         <span className={cn(
           'font-mono select-none transition-all',
           s.chevron,
-          chevron === 'down' && !isDisabled && '-translate-y-1 group-hover:animate-pulse',
+          chevron === 'down' && !isDisabled && CHEVRON_DOWN_HACK,
           chevron === 'right' && !state && 'group-hover:opacity-0'
         )}>
           {chevron === 'down' ? '\u2304' : '\u203A'}

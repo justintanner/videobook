@@ -26,7 +26,7 @@ export function AudioCard({ item, contextMenuContent, selected, onClick, onMarkS
   return (
     <CardShell item={item} contextMenuContent={contextMenuContent} selected={selected} onClick={onClick} onMarkSeen={onMarkSeen} draggable dragData={{ slug: item.slug, id: item.id, filePath: item.filePath, thumbnailSrc: item.thumbnailSrc, type: item.type } as DragData}>
       {/* CONTENT - Audio icon */}
-      <div className="w-full h-full relative overflow-hidden">
+ <div className="size-full relative overflow-hidden">
         {/* Dark gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/40" />
         {/* Scanlines overlay */}
@@ -35,7 +35,7 @@ export function AudioCard({ item, contextMenuContent, selected, onClick, onMarkS
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(0,0,0,0.6)_100%)]" />
         {/* Centered audio icon */}
         <div className="absolute inset-0 flex items-center justify-center">
-          <AudioLines className="w-10 h-10 text-primary/30" />
+ <AudioLines className="size-10 text-primary/30" />
         </div>
       </div>
 

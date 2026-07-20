@@ -794,7 +794,7 @@ function InputList({
             ) : source.type === 'prompt' ? (
               <span className="vc-notebook-route-fixed text-xs ml-auto opacity-60">prompt</span>
             ) : null}
-            <button type="button" title="Disconnect" onClick={() => onDisconnect(id, step.id)}><X className="w-4 h-4" /></button>
+ <button type="button" title="Disconnect" onClick={() => onDisconnect(id, step.id)}><X className="size-4" /></button>
           </div>
         )
       })}

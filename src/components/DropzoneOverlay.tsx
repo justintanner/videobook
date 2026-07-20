@@ -32,7 +32,7 @@ export function DropzoneOverlay({ isDragging }: DropzoneOverlayProps) {
       <div className="relative flex flex-col items-center gap-4 z-10">
         {/* Upload icon with glow */}
         <div className="relative">
-          <Upload className="w-12 h-12 text-cyan-400 drop-shadow-[0_0_12px_#00ffff]" />
+ <Upload className="size-12 text-cyan-400 drop-shadow-[0_0_12px_#00ffff]" />
         </div>
 
         {/* Heading */}

@@ -102,23 +102,23 @@ function WatermarkDialogContent({ onOpenChange, item, projectSlug, callTool, onA
       <div className="w-full max-w-lg bg-zinc-950 border border-border/60 rounded-md shadow-2xl flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 shrink-0">
           <div className="flex items-center gap-2 text-xs font-mono font-bold tracking-widest text-teal-300/80 uppercase">
-            <QrCode className="w-3.5 h-3.5" />
+ <QrCode className="size-3.5" />
             Watermark
           </div>
           <CloseButton onClick={() => onOpenChange(false)} tone="teal" />
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className="p-4 flex flex-col gap-4">
           {/* Target preview */}
           <div className="flex items-center gap-3">
             {previewSrc ? (
-              <img src={previewSrc} alt="" className="w-16 h-16 rounded border border-border/40 bg-black object-cover" />
+ <img src={previewSrc} alt="" className="size-16 shrink-0 rounded border border-border/40 bg-black object-cover" />
             ) : (
-              <div className="w-16 h-16 rounded border border-dashed border-border/40 bg-black/40" />
+ <div className="size-16 shrink-0 rounded border border-dashed border-border/40 bg-black/40" />
             )}
             <div className="min-w-0">
               <div className="text-[10px] font-mono uppercase tracking-wider text-teal-300/70">Applies to</div>
-              <div className="text-sm font-mono text-teal-100/90 truncate" title={item?.slug}>
+              <div className="text-sm font-mono text-teal-100/90 min-w-0 truncate" title={item?.slug}>
                 {item?.slug ?? 'No video selected'}
               </div>
               <div className="text-[10px] font-mono text-muted-foreground">QR end-card over the last 2s</div>
@@ -126,8 +126,8 @@ function WatermarkDialogContent({ onOpenChange, item, projectSlug, callTool, onA
           </div>
 
           {/* Handle */}
-          <div>
-            <label className="text-[10px] font-mono uppercase tracking-wider text-teal-300/70 block mb-1">X handle</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-mono uppercase tracking-wider text-teal-300/70 block">X handle</label>
             <div className="relative flex items-center">
               <span className="absolute left-2.5 text-sm font-mono text-muted-foreground">@</span>
               <input
@@ -164,8 +164,8 @@ function WatermarkDialogContent({ onOpenChange, item, projectSlug, callTool, onA
 
           {/* Position + scale */}
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[10px] font-mono uppercase tracking-wider text-teal-300/70 block mb-1">Position</label>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-mono uppercase tracking-wider text-teal-300/70 block">Position</label>
               <select
                 value={position}
                 onChange={(e) => setPosition(e.target.value as OsgPosition)}
@@ -176,8 +176,8 @@ function WatermarkDialogContent({ onOpenChange, item, projectSlug, callTool, onA
                 ))}
               </select>
             </div>
-            <div>
-              <label className="text-[10px] font-mono uppercase tracking-wider text-teal-300/70 block mb-1">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-mono uppercase tracking-wider text-teal-300/70 block">
                 Size <span className="text-muted-foreground/70">{scale.toFixed(2)}×</span>
               </label>
               <input
@@ -223,7 +223,7 @@ function WatermarkDialogContent({ onOpenChange, item, projectSlug, callTool, onA
                 : 'border-border/30 text-muted-foreground/50 cursor-not-allowed',
             )}
           >
-            {loadingConfig ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+ {loadingConfig ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
             Apply
           </button>
         </div>

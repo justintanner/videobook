@@ -18,3 +18,12 @@ export const FOCUS_RING_BUTTON =
 
 /** Focus ring for native inputs / selects. */
 export const FOCUS_RING_INPUT = 'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
+
+/** Layout for trailing action groups (like status row actions). */
+export const ACTION_GROUP = 'ml-auto flex min-w-0 items-center gap-2';
+
+/** Shared base class for icons inside interactive buttons to prevent flex deformation. */
+export const ICON_IN_BUTTON = '[&>svg]:size-4 [&>svg]:shrink-0';
+
+/** Hack to vertically center the unicode chevron down glyph (⌎ / ⌄), which renders artificially low in its em box. */
+export const CHEVRON_DOWN_HACK = '-translate-y-1 group-hover:animate-pulse';

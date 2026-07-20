@@ -35,19 +35,19 @@ export function AssetThumbChip({
       aria-hidden="true"
     >
       {resolved ? (
-        <img src={resolved} alt={thumb?.label ?? rawText} className="h-full w-full object-cover" />
+ <img src={resolved} alt={thumb?.label ?? rawText} className=" size-full shrink-0 object-cover" />
       ) : (
-        <span className="truncate px-px text-[0.82em] font-mono leading-none text-emerald-200/70">
+        <span className="min-w-0 truncate px-px text-[0.82em] font-mono leading-none text-emerald-200/70">
           {rawText}
         </span>
       )}
       {thumb?.badge && (
-        <span className="absolute left-0 top-0 rounded-br-[3px] bg-emerald-500/90 px-[1px] text-[0.62em] font-mono font-bold leading-none text-black">
+        <span className="absolute left-0 top-0 rounded-br-[3px] bg-emerald-500/90 px-px text-[0.62em] font-mono font-bold leading-none text-black">
           {thumb.badge}
         </span>
       )}
       {thumb?.type === 'video' && resolved && (
-        <span className="absolute bottom-0 right-0 rounded-tl-[3px] bg-black/70 px-[1px] text-[0.62em] leading-none text-white">
+        <span className="absolute bottom-0 right-0 rounded-tl-[3px] bg-black/70 px-px text-[0.62em] leading-none text-white">
           ▶
         </span>
       )}

@@ -67,6 +67,7 @@ import type { RenderSettings } from '@/components/center-stage/render-settings-t
 import type { OsgApplyValue } from '@/components/center-stage/OsgOverlay';
 import { isRenderingStatus, supportsOnScreenGraphics } from '@/components/center-stage/viewer-types';
 import { WatermarkDialog, type WatermarkApplyValue } from '@/components/watermark/WatermarkDialog';
+import { ACTION_GROUP } from '@/components/ui/interaction-states';
 
 const ASSET_TYPES = new Set<string>(['image', 'audio', 'script', 'notebook', 'character']);
 const CLIP_TYPES = new Set<string>(['video', 'final']);
@@ -1650,20 +1651,20 @@ export function HomePage() {
       <div className="fixed inset-0 bg-background flex flex-col items-center justify-center p-6 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]">
         <div className="flex flex-col gap-4 max-w-sm w-full">
           <h1 className="flex items-center gap-2.5 font-mono text-2xl font-bold tracking-widest text-foreground justify-center mb-4">
-            <span aria-hidden className="inline-block w-3.5 h-3.5 rounded-full bg-primary ring-4 ring-primary/25" />
+ <span aria-hidden className="inline-block size-3.5 rounded-full bg-primary ring-4 ring-primary/25" />
             VIDEOCITY
           </h1>
 
           <div
             className={`flex items-center gap-2.5 rounded-lg border px-4 py-3 ${isFailed ? "border-destructive/40 bg-destructive/10" : "border-border bg-card"}`}
           >
-            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isFailed ? "bg-destructive" : "bg-amber-400 animate-pulse"}`} />
+ <span className={`size-2.5 rounded-full shrink-0 ${isFailed ? "bg-destructive" : "bg-amber-400 animate-pulse"}`} />
             <span className="font-mono text-sm font-medium text-foreground">
               {statusText}
             </span>
             {isFailed && (mcpError || mcpRetry !== undefined) && (
-              <div className="ml-auto flex min-w-0 items-center gap-2">
-                {mcpError && <span className="truncate font-mono text-xs text-destructive">{mcpError}</span>}
+              <div className={ACTION_GROUP}>
+                {mcpError && <span className="min-w-0 truncate font-mono text-xs text-destructive">{mcpError}</span>}
                 {mcpRetry && (
                   <button
                     onClick={mcpRetry}
@@ -1683,7 +1684,7 @@ export function HomePage() {
   return (
     <MountKeyProvider>
     <CommandRegistryProvider callTool={callTool} state={state} projectSlug={projectSlug} uiActions={uiActions} onAfterDispatch={handleAfterDispatch}>
-      <div className="w-screen h-screen bg-background overflow-x-auto overflow-y-hidden">
+ <div className="size-screen bg-background overflow-x-auto overflow-y-hidden">
         <input
           ref={fileInputRef}
           type="file"
@@ -1755,7 +1756,7 @@ export function HomePage() {
               gap="gap-0"
             >
               <SidebarHeader
-                icon={<Grid3x3 className="w-3.5 h-3.5" />}
+ icon={<Grid3x3 className="size-3.5" />}
                 title="Assets"
                 collapsed={leftCollapsed}
                 onToggle={() => setLeftCollapsed(c => !c)}
@@ -1770,7 +1771,7 @@ export function HomePage() {
                   ))}
                 </div>
               ) : (
-                <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+                <div className="flex-1 overflow-y-auto flex flex-col gap-2.5 pr-2">
                   {sortOrder === 'newest' && imageGhosts.map((g) => (
                     <div key={g.requestId} className="w-full">
                       <GhostClipCard id={g.assetId ?? g.requestId} type="image" prompt={g.prompt} startedAt={g.startedAt} />
@@ -1923,7 +1924,7 @@ export function HomePage() {
               gap="gap-0"
             >
               <SidebarHeader
-                icon={<Grid3x3 className="w-3.5 h-3.5" />}
+ icon={<Grid3x3 className="size-3.5" />}
                 title="Clips"
                 collapsed={rightCollapsed}
                 onToggle={() => setRightCollapsed(c => !c)}
@@ -1938,7 +1939,7 @@ export function HomePage() {
                   ))}
                 </div>
               ) : (
-                <div className="flex-1 overflow-y-auto space-y-2 mt-2 pr-2">
+                <div className="flex-1 overflow-y-auto flex flex-col gap-2.5 pr-2">
                   {sortOrder === 'newest' && videoGhosts.map((g) => (
                     <div key={g.requestId} className="w-full">
                       <GhostClipCard id={g.assetId ?? g.requestId} type="video" prompt={g.prompt} startedAt={g.startedAt} />
@@ -2046,14 +2047,14 @@ export function HomePage() {
           onClick={() => { if (!deleteProjectSubmitting) setDeleteProjectTarget(null); }}
         >
           <div
-            className="w-[360px] max-w-[90vw] bg-zinc-950 border border-red-400/40 rounded p-4 shadow-[0_0_24px_rgba(248,113,113,0.25)]"
+            className="w-[360px] max-w-[90vw] bg-zinc-950 border border-red-400/40 rounded p-4 flex flex-col gap-3 shadow-[0_0_24px_rgba(248,113,113,0.25)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-[10px] font-mono font-bold tracking-widest text-red-400 mb-2">DELETE PROJECT?</div>
-            <div className="text-sm text-zinc-200 mb-3">
+            <div className="text-[10px] font-mono font-bold tracking-widest text-red-400">DELETE PROJECT?</div>
+            <div className="text-sm text-zinc-200">
               Delete <span className="font-mono text-red-300">{deleteProjectTarget}</span> and all of its assets?
             </div>
-            <div className="text-[11px] text-zinc-400 mb-4">
+            <div className="text-[11px] text-zinc-400">
               {formatAssetCount(deleteProjectAssetCount)} will be removed. This cannot be undone.
             </div>
             <div className="flex justify-end gap-2">
@@ -2079,14 +2080,14 @@ export function HomePage() {
           onClick={() => { if (!audioReplaceSubmitting) setAudioReplace(null); }}
         >
           <div
-            className="w-[360px] max-w-[90vw] bg-zinc-950 border border-amber-400/40 rounded p-4 shadow-[0_0_24px_rgba(251,191,36,0.25)]"
+            className="w-[360px] max-w-[90vw] bg-zinc-950 border border-amber-400/40 rounded p-4 flex flex-col gap-3 shadow-[0_0_24px_rgba(251,191,36,0.25)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="text-[10px] font-mono font-bold tracking-widest text-amber-400 mb-2">REPLACE AUDIO?</div>
-            <div className="text-sm text-zinc-200 mb-3">
+            <div className="text-[10px] font-mono font-bold tracking-widest text-amber-400">REPLACE AUDIO?</div>
+            <div className="text-sm text-zinc-200">
               Replace the audio on <span className="font-mono text-amber-300">{audioReplace.videoSlug}</span> with <span className="font-mono text-amber-300">{audioReplace.audioSlug}</span>?
             </div>
-            <div className="text-[11px] text-zinc-400 mb-4">The video file will be rewritten in place. Existing per-orientation renders become stale and need to be re-rendered.</div>
+            <div className="text-[11px] text-zinc-400">The video file will be rewritten in place. Existing per-orientation renders become stale and need to be re-rendered.</div>
             <div className="flex justify-end gap-2">
               <button
                 type="button"

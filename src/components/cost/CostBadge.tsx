@@ -66,11 +66,11 @@ export function CostBadge({
               }}
               title="Recompute estimate"
               className={cn(
-                "inline-flex items-center justify-center w-3 h-3 rounded text-zinc-400 hover:text-zinc-100 transition-colors",
+ "inline-flex items-center justify-center size-3 rounded text-zinc-400 hover:text-zinc-100 transition-colors",
                 loading && "animate-spin",
               )}
             >
-              <RefreshCw className="w-2.5 h-2.5" />
+ <RefreshCw className="size-2.5" />
             </button>
           </span>
         </TooltipTrigger>
