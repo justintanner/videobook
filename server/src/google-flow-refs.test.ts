@@ -7,6 +7,7 @@ import {
   characterRefImageCount,
   totalImageReferenceSlots,
   rewriteImageSlugMentions,
+  replaceHappyHorseAssetMentions,
 } from "./google-flow-refs.js";
 
 describe("totalOmniReferenceSlots", () => {
@@ -90,5 +91,74 @@ describe("stripSlugMentions", () => {
   it("keeps mentions of other slugs", () => {
     expect(stripSlugMentions("keep @img-ref here", ["vid-motion"]))
       .toBe("keep @img-ref here");
+  });
+});
+
+describe("replaceHappyHorseAssetMentions", () => {
+  it("rewrites @<image-slug> to a positional noun phrase by array order", () => {
+    expect(replaceHappyHorseAssetMentions(
+      "the character in @img-a and @img-b are fighting",
+      null,
+      ["img-a", "img-b"],
+    )).toBe("the character in reference image 1 and reference image 2 are fighting");
+  });
+
+  it("numbers noun phrases by imageSlugs position, tolerating @-prefixed slugs", () => {
+    expect(replaceHappyHorseAssetMentions(
+      "@img-b then @img-a",
+      null,
+      ["@img-a", "@img-b"],
+    )).toBe("reference image 2 then reference image 1");
+  });
+
+  it("does not rewrite a slug inside a longer slug mention", () => {
+    expect(replaceHappyHorseAssetMentions(
+      "@img-da-set and @img-da",
+      null,
+      ["img-da", "img-da-set"],
+    )).toBe("reference image 2 and reference image 1");
+  });
+
+  it("rewrites @<video-slug> to 'the source video' (no inline marker for the clip)", () => {
+    expect(replaceHappyHorseAssetMentions(
+      "Make @vid-scene-1 more cinematic",
+      "vid-scene-1",
+      [],
+    )).toBe("Make the source video more cinematic");
+  });
+
+  it("handles both the video and image mentions in one prompt", () => {
+    expect(replaceHappyHorseAssetMentions(
+      "Make @vid-scene-1 look like @img-character",
+      "vid-scene-1",
+      ["img-character"],
+    )).toBe("Make the source video look like reference image 1");
+  });
+
+  it("leaves unrelated @-mentions alone", () => {
+    expect(replaceHappyHorseAssetMentions(
+      "@character_1 waves at @img-x",
+      "vid-other",
+      ["img-y"],
+    )).toBe("@character_1 waves at @img-x");
+  });
+
+  it("does not touch already-canonical [Image N] markers from the 1.1 endpoints", () => {
+    // happyhorse/video-edit (1.0) has no inline marker syntax, so the helper
+    // never produces "[Image N]" — but it must not corrupt one if the user
+    // typed it verbatim, since the model treats it as ordinary text.
+    expect(replaceHappyHorseAssetMentions(
+      "Make [Image 1] wave at the camera",
+      null,
+      ["img-char"],
+    )).toBe("Make [Image 1] wave at the camera");
+  });
+
+  it("preserves descriptive context the user typed around the mention", () => {
+    expect(replaceHappyHorseAssetMentions(
+      "the woman in a red qipao in @img-char waves",
+      null,
+      ["img-char"],
+    )).toBe("the woman in a red qipao in reference image 1 waves");
   });
 });

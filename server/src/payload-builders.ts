@@ -97,7 +97,7 @@ import {
   Wan27ImageRequestSchema,
 } from "@apicity/kie/zod";
 import { zodDefault } from "./zod-slots.js";
-import { rewriteImageSlugMentions, stripSlugMentions } from "./google-flow-refs.js";
+import { rewriteImageSlugMentions, stripSlugMentions, replaceHappyHorseAssetMentions } from "./google-flow-refs.js";
 
 // ---------------------------------------------------------------------------
 // Individual builders
@@ -1772,9 +1772,22 @@ function translateToolPayload(
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_happyhorse_videoedit_video": {
-      const videoUrl = (args.video_slug as string | undefined) ?? "";
+      const videoSlug = (args.video_slug as string | undefined) ?? "";
       const referenceImages = (args.image_slugs as string[] | undefined) ?? [];
-      const payload = buildHappyHorseVideoEditPayload(args as HappyHorseVideoEditArgs, videoUrl, referenceImages);
+      // Kie's happyhorse/video-edit (1.0) prompt is a free-form edit
+      // instruction with no inline marker syntax — the "[Image N]" form belongs
+      // to the 1.1 t2v/i2v/ref endpoints only. Rewrite @<slug> mentions to
+      // natural-language noun phrases so the outbound prompt (and this preview)
+      // carries no local asset IDs while references stay unambiguous to the
+      // model: @<video-slug> -> "the source video"; @<image-slug> ->
+      // "reference image N" matching its position in the reference_image[] field.
+      const rawPrompt = (args.prompt as string | undefined) ?? "";
+      const normalizedPrompt = replaceHappyHorseAssetMentions(rawPrompt, videoSlug, referenceImages);
+      const payload = buildHappyHorseVideoEditPayload(
+        { ...(args as HappyHorseVideoEditArgs), prompt: normalizedPrompt },
+        videoSlug,
+        referenceImages,
+      );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "extend_grok_imagine_video": {

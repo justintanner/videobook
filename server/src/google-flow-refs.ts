@@ -75,3 +75,33 @@ export function stripSlugMentions(prompt: string, slugs: readonly string[]): str
   }
   return out;
 }
+
+/** Replace "@<slug>" mentions with natural-language noun phrases for Kie
+ *  happyhorse/video-edit. The 1.0 video-edit endpoint has NO inline marker
+ *  syntax (the "[Image N]" form belongs to the 1.1 t2v/i2v/ref endpoints only)
+ *  — the prompt is a free-form edit instruction, and the reference_image[]
+ *  field carries the actual assets. To keep references unambiguous without
+ *  leaking local asset IDs or implying a marker syntax the model doesn't
+ *  understand, rewrite @<video-slug> to "the source video" and each
+ *  @<image-slug> to "reference image N" preserving its 1-based position in
+ *  imageSlugs. Mentions of slugs that aren't in the lists are left untouched. */
+export function replaceHappyHorseAssetMentions(
+  prompt: string,
+  videoSlug: string | null,
+  imageSlugs: readonly string[],
+): string {
+  let out = prompt;
+  if (videoSlug) {
+    const video = videoSlug.replace(/^@/, "").trim();
+    if (video) {
+      out = out.replace(new RegExp(`@${escapeRe(video)}(?![\\w-])`, "g"), "the source video");
+    }
+  }
+  for (const { slug, index } of slugMentionEntries(imageSlugs)) {
+    out = out.replace(
+      new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"),
+      `reference image ${index + 1}`,
+    );
+  }
+  return out;
+}

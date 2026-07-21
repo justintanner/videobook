@@ -540,6 +540,9 @@ function GenerationSidebar({
             ) : providerPayload.result ? (
               <>
                 <span className="vc-notebook-hint">{providerPayload.result.provider_path}</span>
+                {/@(vid|img)-[\w-]/.test(JSON.stringify(providerPayload.result.payload)) ? (
+                  <span className="vc-notebook-hint">URL fields show local asset slugs; uploads resolve them at submit.</span>
+                ) : null}
                 <pre className="vc-notebook-payload-json">
                   <JsonNode data={providerPayload.result.payload} />
                 </pre>

@@ -5,6 +5,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildHappyHorseVideoEditPayload } from "../payload-builders.js";
+import { replaceHappyHorseAssetMentions } from "../google-flow-refs.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -51,8 +52,21 @@ export function registerGenerateHappyhorseVideoeditVideoJob(fs: VideocityFs): vo
     // duration when the source predates `original` duration metadata). The hint
     // feeds computeEstimate only; the wire payload carries only documented
     // fields. tools/estimate-cost.ts enriches the same way for the UI preview.
+    //
+    // Kie's happyhorse/video-edit (1.0) prompt is a free-form edit instruction
+    // with no inline marker syntax (the "[Image N]" form belongs to the 1.1
+    // t2v/i2v/ref endpoints only). Rewrite @<slug> mentions to natural-language
+    // noun phrases so local asset IDs don't leak onto the wire: the source
+    // video mention becomes "the source video" (video_url carries the asset);
+    // each reference image mention becomes "reference image N" matching its
+    // position in the reference_image[] field.
+    const normalizedPrompt = replaceHappyHorseAssetMentions(
+      prompt,
+      sourceVideo.assetId,
+      imageInputs.map((input) => input.assetId),
+    );
     const request: MediaGenerationRequest = buildHappyHorseVideoEditPayload(
-      { prompt, resolution, audio_setting, seed },
+      { prompt: normalizedPrompt, resolution, audio_setting, seed },
       videoUrl,
       referenceImages,
     );

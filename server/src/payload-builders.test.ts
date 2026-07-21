@@ -427,4 +427,39 @@ describe("translateToolPayload", () => {
       referenceVideo_1: "vid-clip",
     });
   });
+
+  it("normalizes @slug mentions in HappyHorse video-edit prompts for the preview", () => {
+    // happyhorse/video-edit (1.0) has no inline marker syntax, so the preview
+    // rewrites @<slug> mentions to natural-language noun phrases — the user
+    // sees exactly what will hit the wire (no local asset IDs, references
+    // still unambiguous by position).
+    const result = translateToolPayload("generate_happyhorse_videoedit_video", {
+      prompt: "Replace the boy in @vid-scene-1 with the character in @img-spongebob, then add @img-extra style",
+      video_slug: "@vid-scene-1",
+      image_slugs: ["@img-spongebob", "img-extra"],
+      resolution: "1080p",
+    });
+
+    expect(result?.payload).toEqual({
+      model: "happyhorse/video-edit",
+      input: {
+        prompt: "Replace the boy in the source video with the character in reference image 1, then add reference image 2 style",
+        video_url: "@vid-scene-1",
+        reference_image: ["@img-spongebob", "img-extra"],
+        resolution: "1080p",
+      },
+    });
+  });
+
+  it("passes HappyHorse video-edit prompts that already read naturally", () => {
+    const result = translateToolPayload("generate_happyhorse_videoedit_video", {
+      prompt: "Replace the teenage boy in the video with SpongeBob SquarePants.",
+      video_slug: "vid-clip",
+      image_slugs: ["img-char"],
+    });
+
+    expect((result?.payload as { input: { prompt: string } }).input.prompt).toBe(
+      "Replace the teenage boy in the video with SpongeBob SquarePants.",
+    );
+  });
 });
