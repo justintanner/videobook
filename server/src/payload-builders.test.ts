@@ -451,6 +451,37 @@ describe("translateToolPayload", () => {
     });
   });
 
+  it("strips @slugs from the exact vc-4oab repro prompt", () => {
+    // Observed in production: video-edit step submitted prompt
+    // 'scene @vid-full-notats replace attress with @img-nbp-scene-reference-1-5'
+    // and the provider payload carried that exact string, leaking local asset
+    // IDs to HappyHorse. Both the preview and the runtime path now rewrite.
+    const result = translateToolPayload("generate_happyhorse_videoedit_video", {
+      prompt: "scene @vid-full-notats replace attress with @img-nbp-scene-reference-1-5",
+      video_slug: "vid-full-notats",
+      image_slugs: ["img-nbp-scene-reference-1-5"],
+    });
+
+    const prompt = (result?.payload as { input: { prompt: string } }).input.prompt;
+    expect(prompt).not.toMatch(/@vid-/);
+    expect(prompt).not.toMatch(/@img-/);
+    expect(prompt).toBe("scene the source video replace attress with reference image 1");
+  });
+
+  it("leaves non-asset @text untouched in HappyHorse video-edit prompts", () => {
+    // Stray @tokens that aren't in video_slug/image_slugs stay literal — only
+    // confirmed asset slugs are rewritten.
+    const result = translateToolPayload("generate_happyhorse_videoedit_video", {
+      prompt: "@notify support about @vid-clip and @img-char",
+      video_slug: "vid-clip",
+      image_slugs: ["img-char"],
+    });
+
+    expect((result?.payload as { input: { prompt: string } }).input.prompt).toBe(
+      "@notify support about the source video and reference image 1",
+    );
+  });
+
   it("passes HappyHorse video-edit prompts that already read naturally", () => {
     const result = translateToolPayload("generate_happyhorse_videoedit_video", {
       prompt: "Replace the teenage boy in the video with SpongeBob SquarePants.",
