@@ -4,9 +4,9 @@ import { effectiveToolName, filterValuesForMode, inferModeKey } from '@/componen
 import type { ModelOption } from '@/components/gen/types'
 import { createGenerationRequestId } from '@/lib/generation-lifecycle'
 import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle'
-import { rewriteCharacterMentions, stripOrphanedReferenceMarkers } from '@/components/ui/richPromptTokens'
 import { resolveGoogleFlowCharacterRefs } from '@/hooks/useGoogleFlowEntities'
 import { appendRunAsset } from './model'
+import { transformNotebookSubmitArgs } from './transform-submit-args'
 import type { NotebookPlanDefinition, NotebookPlanStep } from './types'
 
 interface UseNotebookRunOptions {
@@ -77,19 +77,15 @@ export async function submitNotebookGeneration(
       : values)
   }
   const toolName = effectiveToolName(option, modeKey)
-  
-  if (args.charMentions && option.schema.properties.character_refs) {
-    const rawPrompt = typeof submitValues.prompt === 'string' ? submitValues.prompt : ''
-    const rewritten = rewriteCharacterMentions(rawPrompt, args.charMentions)
-    const charCount = Array.isArray(submitValues.character_refs) ? (submitValues.character_refs as unknown[]).length : 0
-    const imgCount = Array.isArray(submitValues.image_slugs) ? (submitValues.image_slugs as unknown[]).length : 0
-    const voiceCount = Array.isArray(submitValues.voice_refs) ? (submitValues.voice_refs as unknown[]).length : 0
-    submitValues.prompt = stripOrphanedReferenceMarkers(rewritten, {
-      character: charCount,
-      referenceImage: imgCount,
-      referenceAudio: voiceCount,
-    })
-  }
+
+  // Apply the synchronous submit-time transforms via the same helper the
+  // sidebar preview uses — so preview == wire by construction. Async transforms
+  // (pending-character creation, character_ref resolution) still run below.
+  Object.assign(submitValues, transformNotebookSubmitArgs({
+    option,
+    values: submitValues,
+    charMentions: args.charMentions,
+  }))
   
   if (Array.isArray(submitValues._pending_character_slugs) && submitValues._pending_character_slugs.length > 0) {
     const pendingSlugs = submitValues._pending_character_slugs as string[]

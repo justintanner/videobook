@@ -36,6 +36,7 @@ import {
 import type { JsonRecord, NotebookPlanDefinition, NotebookPlanStep } from './types'
 import { useGenPreview } from './useGenPreview'
 import { useTranslatePayload } from './useTranslatePayload'
+import { transformNotebookSubmitArgs } from './transform-submit-args'
 
 interface NotebookSidebarProps {
   projectSlug: string
@@ -466,10 +467,14 @@ function GenerationSidebar({
       mergedValues,
       showClipComposite ? clipBounds : null,
     )
-    return option.modes && modeKey
+    const filtered = option.modes && modeKey
       ? filterValuesForMode(option.modes, modeKey, withClip)
       : withClip
-  }, [option, modeKey, mergedValues, showClipComposite, clipBounds])
+    // Apply the same synchronous prompt transforms submitNotebookGeneration
+    // applies, so the /tool-call + /provider-payload preview matches the wire
+    // payload byte-for-byte (character-mention rewrite + orphan-marker strip).
+    return transformNotebookSubmitArgs({ option, values: filtered, charMentions })
+  }, [option, modeKey, mergedValues, showClipComposite, clipBounds, charMentions])
   const toolPayload = useMemo(() => {
     if (!option || !submitValues) return null
     return {
