@@ -1,16 +1,14 @@
 import type { VideocityFs, AssetManifestFile } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
 import { extname } from "node:path";
+import { modelSlug } from "@apicity/cost";
 import { Omnihuman15RequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import { findAudioFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
-// modelSlug("kie", "omnihuman-1-5") would throw — @apicity/cost has no slug
-// registered for OmniHuman yet, so asset/job names use this literal until the
-// cost table catches up (docs/apicity-gaps.md §25).
-const SLUG = "omnihuman";
+const SLUG = modelSlug("kie", "omnihuman-1-5");
 const omnihuman = Omnihuman15RequestSchema.shape.input.shape;
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);

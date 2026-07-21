@@ -12,11 +12,11 @@ const base = FalNanoBananaProTextToImageRequestSchema.shape;
 const schema = {
   project_slug: z.string().describe("Project slug"),
   prompt: apicityStringField(base.prompt, "Text prompt for image generation", { required: true }),
-  num_images: z.number().int().min(1).max(4).optional().describe("Number of images to generate (1-4)"),
+  num_images: apicityField(base.num_images, "Number of images to generate (1-4)"),
   aspect_ratio: apicityField(base.aspect_ratio, "Aspect ratio"),
   resolution: apicityField(base.resolution, "Output resolution (1K/2K/4K)"),
   output_format: apicityField(base.output_format, "Output image format"),
-  seed: z.number().int().optional().describe("Seed for deterministic output"),
+  seed: apicityField(base.seed, "Seed for deterministic output"),
   enable_web_search: apicityField(base.enable_web_search, "Enable web search grounding"),
 } satisfies ZodRawShape;
 

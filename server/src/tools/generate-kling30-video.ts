@@ -48,7 +48,7 @@ const generateKling30VideoSchema = {
   image_slugs: apicityStringArrayField(klingVideo.image_urls, "0-2 reference image @slugs (e.g., @img-sunset)"),
   mode: apicityField(klingVideo.mode, "Resolution mode: std (standard) / pro (professional) / 4K", { required: true }),
   duration: apicityField(klingVideo.duration, "Video duration: 3s-15s", { required: true }),
-  sound: apicityField(klingVideo.sound, "Generate audio for the video", { required: true }),
+  sound: apicityField(klingVideo.sound, "Generate audio for the video (optional; Kie defaults contextually under multi-shot)"),
   aspect_ratio: apicityField(klingVideo.aspect_ratio, "Video aspect ratio"),
   multi_shots: apicityField(klingVideo.multi_shots, "Enable multi-shot mode", { required: true }),
   multi_prompt: z.array(z.object({

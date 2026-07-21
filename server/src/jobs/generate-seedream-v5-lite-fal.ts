@@ -10,6 +10,7 @@ type Payload = {
   projectSlug: string;
   prompt: string;
   image_size?: string;
+  auto_4K?: boolean;
   num_images?: number;
   max_images?: number;
 };
@@ -22,6 +23,7 @@ export function registerGenerateSeedreamV5LiteFalJob(fs: VideocityFs): void {
       const input: Record<string, unknown> = {
         prompt: p.prompt,
         ...(p.image_size !== undefined ? { image_size: p.image_size } : {}),
+        ...(p.auto_4K !== undefined ? { auto_4K: p.auto_4K } : {}),
         ...(p.num_images !== undefined ? { num_images: p.num_images } : {}),
         ...(p.max_images !== undefined ? { max_images: p.max_images } : {}),
       };

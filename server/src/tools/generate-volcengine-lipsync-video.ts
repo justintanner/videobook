@@ -1,15 +1,13 @@
 import type { VideocityFs } from "videocity-engine";
 import { z, type ZodRawShape } from "zod";
+import { modelSlug } from "@apicity/cost";
 import { VolcengineVideoToVideoLipSyncRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import { findAudioFile, findVideoFile } from "videocity-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 
-// modelSlug("kie", "volcengine/video-to-video-lip-sync") would throw —
-// @apicity/cost@0.7.3 has no slug registered for the Volcengine model, so
-// asset/job names use this literal until the cost table catches up (§25).
-const SLUG = "volcengine-lipsync";
+const SLUG = modelSlug("kie", "volcengine/video-to-video-lip-sync");
 const volcengineLipSync = VolcengineVideoToVideoLipSyncRequestSchema.shape.input.shape;
 
 type RefInput = { assetId: string; filename: string };

@@ -16,7 +16,7 @@ const schema = {
   aspect_ratio: apicityField(base.aspect_ratio, "Aspect ratio"),
   output_format: apicityField(base.output_format, "Output image format"),
   safety_tolerance: apicityField(base.safety_tolerance, "Safety tolerance 1-6"),
-  seed: z.number().int().optional().describe("Seed for deterministic output"),
+  seed: apicityField(base.seed, "Seed for deterministic output"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof schema>;

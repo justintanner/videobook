@@ -1034,6 +1034,54 @@ function sourceSlug(step: NotebookPlanStep): string | null {
   return output ? slugWithPrefix(output) : null
 }
 
+export type SceneReplaceRole = 'scene' | 'replace'
+
+/** True when the bare slug has a hyphen/boundary token matching the role. */
+export function slugHasRole(slug: string, role: SceneReplaceRole): boolean {
+  const bare = normalizedSlug(slug).toLowerCase()
+  const tokens = bare.split(/[^a-z0-9]+/).filter(Boolean)
+  return tokens.includes(role)
+}
+
+/**
+ * Build a default prompt when connected media slugs include scene and/or
+ * replace roles, e.g. `scene @img-scene replace actor @img-replace`.
+ */
+export function buildSceneReplaceDefaultPrompt(slugs: string[]): string | null {
+  let sceneSlug: string | null = null
+  let replaceSlug: string | null = null
+  for (const slug of slugs) {
+    if (!sceneSlug && slugHasRole(slug, 'scene')) sceneSlug = slugWithPrefix(slug)
+    if (!replaceSlug && slugHasRole(slug, 'replace')) replaceSlug = slugWithPrefix(slug)
+    if (sceneSlug && replaceSlug) break
+  }
+  if (!sceneSlug && !replaceSlug) return null
+  const parts: string[] = []
+  if (sceneSlug) parts.push(`scene ${sceneSlug}`)
+  if (replaceSlug) parts.push(`replace actor ${replaceSlug}`)
+  return parts.join(' ')
+}
+
+/** Ordered media slugs from connected non-prompt inputs (image/video/audio). */
+export function connectedMediaSlugs(
+  definition: NotebookPlanDefinition,
+  step: NotebookPlanStep,
+): string[] {
+  const steps = new Map(definition.sequence.map((candidate) => [candidate.id, candidate]))
+  const slugs: string[] = []
+  for (const inputId of stepInputs(step)) {
+    const input = steps.get(inputId)
+    if (!input || input.type === 'prompt') continue
+    const slug = sourceSlug(input)
+    if (!slug) continue
+    const kind = assetSlugKind(slug)
+    if (kind === 'image' || kind === 'video' || kind === 'audio') {
+      slugs.push(slugWithPrefix(slug))
+    }
+  }
+  return slugs
+}
+
 export function resolveEffectiveValues(
   definition: NotebookPlanDefinition,
   step: NotebookPlanStep,
@@ -1066,6 +1114,7 @@ export function resolveEffectiveValues(
   }
   const routedStringSources = new Set<string>()
   const usedFallbackSlots = new Set<string>()
+  const mediaSlugs: string[] = []
 
   for (const inputId of stepInputs(step)) {
     const input = steps.get(inputId)
@@ -1088,6 +1137,9 @@ export function resolveEffectiveValues(
     if (!kind) {
       warnings.push(`${input.name} does not provide a usable media reference.`)
       continue
+    }
+    if (kind === 'image' || kind === 'video' || kind === 'audio') {
+      mediaSlugs.push(slugWithPrefix(slug))
     }
     let route: { param: string, action: 'set' | 'append' } = { param: '', action: 'append' }
     const explicitParam = typeof effectiveRoutes[inputId] === 'string' ? effectiveRoutes[inputId] : null
@@ -1187,7 +1239,15 @@ export function resolveEffectiveValues(
   }
 
   const promptFromInputs = hasPromptInput ? prompts.join('\n\n') : null
-  if (promptFromInputs !== null) values.prompt = promptFromInputs
+  if (promptFromInputs !== null) {
+    values.prompt = promptFromInputs
+  } else {
+    const existing = typeof values.prompt === 'string' ? values.prompt.trim() : ''
+    if (!existing) {
+      const suggested = buildSceneReplaceDefaultPrompt(mediaSlugs)
+      if (suggested) values.prompt = suggested
+    }
+  }
   return { values, warnings, promptFromInputs, suggestedModeKey }
 }
 
@@ -1227,7 +1287,9 @@ export function stepInvalidReason(
   const hasPromptInput = stepInputs(step).some((inputId) => (
     definition.sequence.find((candidate) => candidate.id === inputId)?.type === 'prompt'
   ))
-  return prompt.trim() || hasPromptInput ? null : 'Connect a prompt or write one.'
+  if (prompt.trim() || hasPromptInput) return null
+  if (buildSceneReplaceDefaultPrompt(connectedMediaSlugs(definition, step))) return null
+  return 'Connect a prompt or write one.'
 }
 
 export function graphLayoutBounds(definition: NotebookPlanDefinition): GraphLayoutBounds {

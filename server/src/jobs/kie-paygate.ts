@@ -14,11 +14,6 @@ import { normalizeKieCostPayload, type KieCostHints } from "../cost-adapters.js"
 export const KIE_PAYGATE_DOT_PATH = "api.v1.jobs.createTask";
 export const VEO_PAYGATE_DOT_PATH = "api.v1.veo.generate";
 
-const COST_TABLE_PENDING_MODELS = new Set<string>([
-  "volcengine/video-to-video-lip-sync",
-  "omnihuman-1-5",
-]);
-
 type SubmitKieTaskArgs = {
   request: MediaGenerationRequest;
   assetId: string;
@@ -71,7 +66,7 @@ export function mintKieOtp(
 ): string {
   const payload = request as unknown as Record<string, unknown>;
   const estimate = computeEstimate({ provider: "kie", payload: normalizeKieCostPayload(payload, costHints) });
-  if (estimate.warnings.length > 0 && !hasPendingCostTableEntry(payload)) {
+  if (estimate.warnings.length > 0) {
     throw new Error(`KIE cost estimate is not bounded: ${estimate.warnings.join("; ")}`);
   }
 
@@ -84,19 +79,6 @@ export function mintKieOtp(
     request: payload,
     ttl: ttlSeconds,
   });
-}
-
-function modelOf(payload: Record<string, unknown>): string {
-  const model = payload.model;
-  return typeof model === "string" ? model : "";
-}
-
-function hasPendingCostTableEntry(payload: Record<string, unknown>): boolean {
-  if (COST_TABLE_PENDING_MODELS.has(modelOf(payload))) return true;
-  if (modelOf(payload) !== "gemini-omni-video") return false;
-  const input = payload.input;
-  if (!input || typeof input !== "object" || Array.isArray(input)) return false;
-  return Array.isArray((input as Record<string, unknown>).video_list);
 }
 
 function createKieProvider(apiKey: string) {

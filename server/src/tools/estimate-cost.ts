@@ -106,6 +106,25 @@ async function enrichHappyHorseVideoEditInput(
   return { ...input, duration };
 }
 
+async function enrichSourceDuration(
+  fs: VideocityFs,
+  input: Record<string, unknown>,
+  slugField: string,
+  expectedPrefix: "vid-" | "aud-",
+): Promise<Record<string, unknown>> {
+  if (typeof input.duration === "number") return input;
+  const projectSlug = typeof input.project_slug === "string" ? input.project_slug : null;
+  const raw = typeof input[slugField] === "string" ? input[slugField] as string : null;
+  if (!projectSlug || !raw) return input;
+  const assetId = raw.replace(/^@/, "");
+  if (!assetId.startsWith(expectedPrefix)) return input;
+  const meta = await fs.readMetadata<{ duration?: unknown }>(assetId, "original", projectSlug);
+  if (!meta.ok) return input;
+  const duration = meta.value.duration;
+  if (typeof duration !== "number" || duration <= 0) return input;
+  return { ...input, duration };
+}
+
 async function enrichInput(
   fs: VideocityFs,
   toolName: string,
@@ -120,6 +139,12 @@ async function enrichInput(
   if (toolName === "generate_happyhorse_videoedit_video") {
     return enrichHappyHorseVideoEditInput(fs, input);
   }
+  if (toolName === "generate_omnihuman_video") {
+    return enrichSourceDuration(fs, input, "audio_slug", "aud-");
+  }
+  if (toolName === "generate_volcengine_lipsync_video") {
+    return enrichSourceDuration(fs, input, "video_slug", "vid-");
+  }
   return input;
 }
 
@@ -128,7 +153,9 @@ async function estimateOne(
   toolName: string,
   input: Record<string, unknown>,
 ): Promise<CostEstimate> {
-  // Google Flow: local credits→USD table (apicity has no google provider).
+  // Google Flow: local Gemini API list USD (+ plan credits metadata).
+  // @apicity/cost@0.8.0 has googleflow credit×Pro rates; we keep API list USD
+  // (docs/apicity-gaps.md §15, product choice A).
   const flow = estimateGoogleFlowCost(toolName, input);
   if (flow) return flow;
 

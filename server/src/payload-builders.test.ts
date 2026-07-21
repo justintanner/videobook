@@ -219,7 +219,29 @@ describe("translateToolPayload", () => {
         resolution: "720p",
         duration: 12,
         generate_audio: true,
+        // Schema defaults still fill omitted optional toggles (web_search).
+        web_search: false,
         nsfw_checker: false,
+      },
+    });
+    expect(Seedance2MiniRequestSchema.safeParse(result?.payload).success).toBe(true);
+  });
+
+  // vc-3vn2: omitting resolution with reference_video_urls used to mint an
+  // unbounded cost key (variant 'video' instead of '720p|video').
+  it("defaults Seedance 2 Mini resolution/duration so cost can key video rates", () => {
+    const result = translateToolPayload("generate_seedance2_mini_video", {
+      prompt: "scene continuity",
+      video_slugs: ["https://example.test/scene.mp4"],
+    });
+
+    expect(result?.payload).toMatchObject({
+      model: "bytedance/seedance-2-mini",
+      input: {
+        prompt: "scene continuity",
+        reference_video_urls: ["https://example.test/scene.mp4"],
+        resolution: "720p",
+        duration: 15,
       },
     });
     expect(Seedance2MiniRequestSchema.safeParse(result?.payload).success).toBe(true);

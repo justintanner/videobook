@@ -357,7 +357,9 @@ describe("getVideoToolSchema", () => {
   it("does not invent Kling 3.0 defaults when Apicity has none", () => {
     const schema = getVideoToolSchema("generate_kling30_video");
     expect(schema!.defaults).toEqual({});
-    expect(schema!.required).toEqual(expect.arrayContaining(["prompt", "mode", "duration", "sound", "multi_shots"]));
+    // sound is optional in @apicity/kie@0.8.0 so multi-shot can promote default true
+    expect(schema!.required).toEqual(expect.arrayContaining(["prompt", "mode", "duration", "multi_shots"]));
+    expect(schema!.required).not.toContain("sound");
   });
 
   it("gemini_omni: prompt+duration required, Apicity-derived enums and resolution default", () => {

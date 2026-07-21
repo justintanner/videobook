@@ -90,6 +90,7 @@ import {
   Qwen2ImageEditRequestSchema,
   Seedance2FastInputSchema,
   Seedance2InputSchema,
+  Seedance2MiniInputSchema,
   SeedreamImageToImageRequestSchema,
   SeedreamTextToImageRequestSchema,
   VolcengineVideoToVideoLipSyncRequestSchema,
@@ -122,7 +123,7 @@ type Kling30Args = {
   prompt?: string;
   mode: KlingMode;
   duration: KlingDuration;
-  sound: boolean;
+  sound?: boolean;
   aspect_ratio?: KlingAspectRatio;
   multi_shots: boolean;
   multi_prompt?: MultiShotPrompt[];
@@ -138,7 +139,8 @@ function buildKling30VideoPayload(
     input: {
       ...(args.prompt ? { prompt: args.prompt } : {}),
       ...(imageUrls.length > 0 ? { image_urls: imageUrls } : {}),
-      sound: args.sound,
+      // Omit sound when unset so Kie can promote multi-shot default true.
+      ...(args.sound !== undefined ? { sound: args.sound } : {}),
       duration: args.duration,
       ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio as KlingAspectRatio } : {}),
       mode: args.mode,
@@ -520,6 +522,18 @@ function buildSeedance2MiniVideoPayload(
   args: Seedance2MiniVideoArgs,
   opts: Seedance2MiniVideoOpts,
 ): Seedance2MiniRequest {
+  // Always surface schema defaults for rate selectors. @apicity/cost keys
+  // bytedance/seedance-2-mini by resolution|videoInput; omitting resolution
+  // with reference_video_urls yields unbounded "variant 'video'" (vc-3vn2).
+  const mini = Seedance2MiniInputSchema.shape;
+  const resolution = valueOrZodDefault(args.resolution, mini.resolution);
+  const duration = args.duration !== undefined
+    ? parseInt(args.duration, 10)
+    : valueOrZodDefault<number>(undefined, mini.duration);
+  const aspect_ratio = valueOrZodDefault(args.aspect_ratio, mini.aspect_ratio);
+  const generate_audio = valueOrZodDefault(args.generate_audio, mini.generate_audio);
+  const web_search = valueOrZodDefault(args.web_search, mini.web_search);
+  const nsfw_checker = valueOrZodDefault(args.nsfw_checker, mini.nsfw_checker);
   return {
     model: "bytedance/seedance-2-mini",
     input: {
@@ -527,12 +541,12 @@ function buildSeedance2MiniVideoPayload(
       ...(opts.referenceImageUrls && opts.referenceImageUrls.length > 0 ? { reference_image_urls: opts.referenceImageUrls } : {}),
       ...(opts.referenceVideoUrls && opts.referenceVideoUrls.length > 0 ? { reference_video_urls: opts.referenceVideoUrls } : {}),
       ...(opts.referenceAudioUrls && opts.referenceAudioUrls.length > 0 ? { reference_audio_urls: opts.referenceAudioUrls } : {}),
-      ...(args.aspect_ratio !== undefined ? { aspect_ratio: args.aspect_ratio } : {}),
-      ...(args.resolution !== undefined ? { resolution: args.resolution } : {}),
-      ...(args.duration !== undefined ? { duration: parseInt(args.duration, 10) } : {}),
-      ...(args.generate_audio !== undefined ? { generate_audio: args.generate_audio } : {}),
-      ...(args.web_search !== undefined ? { web_search: args.web_search } : {}),
-      ...(args.nsfw_checker !== undefined ? { nsfw_checker: args.nsfw_checker } : {}),
+      ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
+      ...(resolution !== undefined ? { resolution } : {}),
+      ...(duration !== undefined ? { duration } : {}),
+      ...(generate_audio !== undefined ? { generate_audio } : {}),
+      ...(web_search !== undefined ? { web_search } : {}),
+      ...(nsfw_checker !== undefined ? { nsfw_checker } : {}),
     },
   };
 }

@@ -160,7 +160,7 @@ describe("estimate_cost tool", () => {
     expect(payload.estimate.usd).toBeCloseTo(0.012, 6);
   });
 
-  it("does not quote Kie rates for an xAI provider selection", async () => {
+  it("quotes xAI media rates when _provider selects xai", async () => {
     const result = await client.callTool({
       name: "estimate_cost",
       arguments: {
@@ -171,8 +171,8 @@ describe("estimate_cost tool", () => {
       },
     });
     const payload = parse(result);
-    expect(payload.estimate.usd).toBe(0);
-    expect(payload.estimate.warnings.join(" ")).toContain("no cost adapter registered");
+    expect(payload.estimate.warnings).toEqual([]);
+    expect(payload.estimate.usd).toBeCloseTo(0.02, 6);
   });
 
   it("uses Gemini Omni's requested text-to-video duration tier", async () => {
@@ -190,7 +190,7 @@ describe("estimate_cost tool", () => {
     expect(payload.estimate.usd).toBeCloseTo(0.4725, 6);
   });
 
-  it("reports the upstream Gemini Omni video-to-video selector gap", async () => {
+  it("prices Gemini Omni video-to-video via the fixed v2v selector", async () => {
     const result = await client.callTool({
       name: "estimate_cost",
       arguments: {
@@ -201,8 +201,23 @@ describe("estimate_cost tool", () => {
       },
     });
     const payload = parse(result);
-    expect(payload.estimate.usd).toBe(0);
-    expect(payload.estimate.warnings.join(" ")).toContain("no rate for variant 'v2v|6'");
+    expect(payload.estimate.warnings).toEqual([]);
+    expect(payload.estimate.usd).toBeCloseTo(1.26, 6);
+  });
+
+  it("prices fal nano-banana-2 image generation", async () => {
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "generate_nano_banana_2_fal",
+          input: { prompt: "a cat", resolution: "1K", num_images: 1 },
+        }],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.estimate.warnings).toEqual([]);
+    expect(payload.estimate.usd).toBeCloseTo(0.08, 6);
   });
 
   it("uses the motion video's actual duration for kling-3.0/motion-control", async () => {

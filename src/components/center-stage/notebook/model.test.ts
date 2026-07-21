@@ -28,6 +28,9 @@ import {
   resolveEffectiveValues,
   sanitizeValuesForOption,
   setInputRoute,
+  slugHasRole,
+  buildSceneReplaceDefaultPrompt,
+  connectedMediaSlugs,
   snapDefinitionToTracks,
   stepInputReadiness,
   stepInvalidReason,
@@ -420,6 +423,145 @@ describe('notebook model', () => {
     expect(stepInputReadiness(graph, target, [])).toEqual({ ready: false, reasons: ['Asset is not ready.'] })
     expect(stepInvalidReason(graph, target)).toBeNull()
     expect(stepInvalidReason(graph, { ...target, properties: { ...target.properties, values: {} } })).toBeNull()
+  })
+
+  describe('scene/replace default prompt', () => {
+    it('slugHasRole matches hyphen tokens and ignores substrings', () => {
+      expect(slugHasRole('@img-scene', 'scene')).toBe(true)
+      expect(slugHasRole('img-nbp-scene-reference-1', 'scene')).toBe(true)
+      expect(slugHasRole('@img-replace', 'replace')).toBe(true)
+      expect(slugHasRole('@img-hero', 'scene')).toBe(false)
+      expect(slugHasRole('@img-scenery', 'scene')).toBe(false)
+      expect(slugHasRole('@img-replacement-pack', 'replace')).toBe(false)
+    })
+
+    it('buildSceneReplaceDefaultPrompt composes scene and replace parts', () => {
+      expect(buildSceneReplaceDefaultPrompt(['@img-scene', '@img-replace'])).toBe(
+        'scene @img-scene replace actor @img-replace',
+      )
+      expect(buildSceneReplaceDefaultPrompt(['@img-scene'])).toBe('scene @img-scene')
+      expect(buildSceneReplaceDefaultPrompt(['@img-replace'])).toBe('replace actor @img-replace')
+      expect(buildSceneReplaceDefaultPrompt(['@img-hero', '@img-bg'])).toBeNull()
+      expect(buildSceneReplaceDefaultPrompt([])).toBeNull()
+    })
+
+    it('fills an empty GEN IMAGE prompt from scene/replace assets', () => {
+      const graph: NotebookPlanDefinition = {
+        properties: {},
+        sequence: [
+          {
+            id: 'scene', componentType: 'task', type: 'asset', name: 'Scene',
+            properties: { slug: '@img-scene' },
+          },
+          {
+            id: 'replace', componentType: 'task', type: 'asset', name: 'Replace',
+            properties: { slug: '@img-replace' },
+          },
+          {
+            id: 'target', componentType: 'task', type: 'image', name: 'Target',
+            properties: { values: {}, inputs: ['scene', 'replace'] },
+          },
+        ],
+      }
+      const target = graph.sequence[2]
+      const resolved = resolveEffectiveValues(graph, target, imageOption)
+      expect(resolved.values.prompt).toBe('scene @img-scene replace actor @img-replace')
+      expect(resolved.values.image_slugs).toEqual(['@img-scene', '@img-replace'])
+      expect(resolved.promptFromInputs).toBeNull()
+      expect(connectedMediaSlugs(graph, target)).toEqual(['@img-scene', '@img-replace'])
+      expect(stepInvalidReason(graph, target)).toBeNull()
+    })
+
+    it('does not overwrite a user prompt or a connected prompt node', () => {
+      const withUserPrompt: NotebookPlanDefinition = {
+        properties: {},
+        sequence: [
+          {
+            id: 'scene', componentType: 'task', type: 'asset', name: 'Scene',
+            properties: { slug: '@img-scene' },
+          },
+          {
+            id: 'replace', componentType: 'task', type: 'asset', name: 'Replace',
+            properties: { slug: '@img-replace' },
+          },
+          {
+            id: 'target', componentType: 'task', type: 'image', name: 'Target',
+            properties: {
+              values: { prompt: 'custom swap' },
+              inputs: ['scene', 'replace'],
+            },
+          },
+        ],
+      }
+      const userTarget = withUserPrompt.sequence[2]
+      expect(resolveEffectiveValues(withUserPrompt, userTarget, imageOption).values.prompt).toBe('custom swap')
+
+      const withPromptNode: NotebookPlanDefinition = {
+        properties: {},
+        sequence: [
+          {
+            id: 'prompt', componentType: 'task', type: 'prompt', name: 'Prompt',
+            properties: { text: 'Linked prompt' },
+          },
+          {
+            id: 'scene', componentType: 'task', type: 'asset', name: 'Scene',
+            properties: { slug: '@img-scene' },
+          },
+          {
+            id: 'target', componentType: 'task', type: 'image', name: 'Target',
+            properties: { values: {}, inputs: ['prompt', 'scene'] },
+          },
+        ],
+      }
+      const linkedTarget = withPromptNode.sequence[2]
+      const linked = resolveEffectiveValues(withPromptNode, linkedTarget, imageOption)
+      expect(linked.values.prompt).toBe('Linked prompt')
+      expect(linked.promptFromInputs).toBe('Linked prompt')
+    })
+
+    it('leaves empty prompts alone when media slugs have no scene/replace roles', () => {
+      const graph: NotebookPlanDefinition = {
+        properties: {},
+        sequence: [
+          {
+            id: 'asset', componentType: 'task', type: 'asset', name: 'Asset',
+            properties: { slug: '@img-hero' },
+          },
+          {
+            id: 'target', componentType: 'task', type: 'image', name: 'Target',
+            properties: { values: {}, inputs: ['asset'] },
+          },
+        ],
+      }
+      const target = graph.sequence[1]
+      const resolved = resolveEffectiveValues(graph, target, imageOption)
+      expect(resolved.values.prompt).toBeUndefined()
+      expect(stepInvalidReason(graph, target)).toBe('Connect a prompt or write one.')
+    })
+
+    it('fills scene/replace default for video steps with mixed media', () => {
+      const graph: NotebookPlanDefinition = {
+        properties: {},
+        sequence: [
+          {
+            id: 'scene', componentType: 'task', type: 'asset', name: 'Scene',
+            properties: { slug: '@vid-scene' },
+          },
+          {
+            id: 'replace', componentType: 'task', type: 'asset', name: 'Replace',
+            properties: { slug: '@img-replace' },
+          },
+          {
+            id: 'target', componentType: 'task', type: 'video', name: 'Target',
+            properties: { values: {}, inputs: ['scene', 'replace'] },
+          },
+        ],
+      }
+      const target = graph.sequence[2]
+      const resolved = resolveEffectiveValues(graph, target, imageOption)
+      expect(resolved.values.prompt).toBe('scene @vid-scene replace actor @img-replace')
+      expect(stepInvalidReason(graph, target)).toBeNull()
+    })
   })
 
   it('routes an unpinned image input through the selected first-frame mode', () => {

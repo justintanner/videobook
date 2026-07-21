@@ -22,11 +22,9 @@ export const DEFAULT_GOOGLE_FLOW_CAPTCHA_RETRY = 8;
 const CAPTCHA_SUBMIT_RETRY_DELAY_MS = 15_000;
 const CAPTCHA_SUBMIT_MAX_ATTEMPTS = 2;
 
-// @apicity/googleflow@0.7.1 percent-encodes path IDs (encodeURIComponent on
-// jobId / mediaGenerationId / email / ref), but useapi.net IDs carry ':' and
-// '@' that must reach the server RAW — an encoded jobid returns 400 "Invalid
-// job ID format". This fetch hook undoes the over-encoding on the pathname so
-// jobs.retrieve polling works. Upstream bug; see docs/apicity-gaps.md §16.
+// @apicity/googleflow@0.8.0 restores `:` and `@` via encodePathSegment.
+// Keep this defensive decode for older package builds and any residual
+// over-encoding; it is a no-op when the path is already raw.
 export function googleFlowFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   if (typeof input === "string") {
     try {

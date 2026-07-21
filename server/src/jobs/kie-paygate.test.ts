@@ -137,9 +137,8 @@ describe("kie paygate", () => {
   });
 
   it("mints a bounded OTP for HappyHorse 1.1 requests now priced by @apicity/cost", () => {
-    // @apicity/cost@0.6.1 prices happyhorse-1-1/* directly (no longer a
-    // COST_TABLE_PENDING_MODELS shim), so computeEstimate returns a bounded
-    // estimate with no warnings and mintKieOtp admits the request.
+    // @apicity/cost prices happyhorse-1-1/* directly; mintKieOtp admits
+    // the request with a bounded estimate.
     process.env.APICITY_PAYGATE_SECRET = "test-secret";
 
     const requests = [
@@ -156,9 +155,8 @@ describe("kie paygate", () => {
   });
 
   it("mints a bounded OTP for a Seedance 2 Mini request now priced by @apicity/cost", () => {
-    // @apicity/cost@0.6.1 prices bytedance/seedance-2-mini directly (no longer a
-    // COST_TABLE_PENDING_MODELS shim), so computeEstimate returns a bounded
-    // estimate with no warnings and mintKieOtp admits the request.
+    // @apicity/cost prices bytedance/seedance-2-mini directly; mintKieOtp
+    // admits the request with a bounded estimate.
     process.env.APICITY_PAYGATE_SECRET = "test-secret";
 
     const request = {
@@ -173,6 +171,36 @@ describe("kie paygate", () => {
     const otp = mintKieOtp(request, 60);
     const parsed = parseOtp(otp);
 
+    expect(parsed.payload.requestHash).toBe(canonicalHash(request));
+  });
+
+  // vc-3vn2: missing resolution + reference_video_urls → variant 'video' (unbounded).
+  it("rejects Seedance 2 Mini with reference video but no resolution as unbounded", () => {
+    const request = {
+      model: "bytedance/seedance-2-mini" as const,
+      input: {
+        prompt: "scene continuity",
+        reference_video_urls: ["https://kie.example/scene.mp4"],
+        duration: 15,
+      },
+    };
+    expect(() => mintKieOtp(request, 60)).toThrow(/cost estimate is not bounded.*variant 'video'/);
+  });
+
+  it("mints a bounded OTP for Seedance 2 Mini with video refs when resolution is set", () => {
+    process.env.APICITY_PAYGATE_SECRET = "test-secret";
+
+    const request = {
+      model: "bytedance/seedance-2-mini" as const,
+      input: {
+        prompt: "scene continuity",
+        reference_video_urls: ["https://kie.example/scene.mp4"],
+        resolution: "720p" as const,
+        duration: 15,
+      },
+    };
+    const otp = mintKieOtp(request, 60);
+    const parsed = parseOtp(otp);
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 
@@ -210,16 +238,36 @@ describe("kie paygate", () => {
         mode: "lite" as const,
       },
     },
-  ])("admits $model while its Kie cost entry is pending", (request) => {
+  ])("rejects $model without a duration cost hint as unbounded", (request) => {
+    expect(() => mintKieOtp(request, 60)).toThrow(/cost estimate is not bounded/);
+  });
+
+  it.each([
+    {
+      model: "omnihuman-1-5" as const,
+      input: {
+        image_url: "https://kie.example/portrait.png",
+        audio_url: "https://kie.example/voice.mp3",
+      },
+    },
+    {
+      model: "volcengine/video-to-video-lip-sync" as const,
+      input: {
+        video_url: "https://kie.example/source.mp4",
+        audio_url: "https://kie.example/voice.mp3",
+        mode: "lite" as const,
+      },
+    },
+  ])("mints a bounded OTP for $model with an out-of-band duration hint", (request) => {
     process.env.APICITY_PAYGATE_SECRET = "test-secret";
 
-    const otp = mintKieOtp(request, 60);
+    const otp = mintKieOtp(request, 60, KIE_PAYGATE_DOT_PATH, { duration: 8 });
     const parsed = parseOtp(otp);
 
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
   });
 
-  it("admits Gemini Omni video-to-video while its upstream cost selector is unresolved", () => {
+  it("mints a bounded OTP for Gemini Omni video-to-video after the v2v selector fix", () => {
     process.env.APICITY_PAYGATE_SECRET = "test-secret";
 
     const request = {

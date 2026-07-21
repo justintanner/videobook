@@ -1,11 +1,9 @@
 import type { CostEstimate } from "@apicity/cost";
 
-// Local Google Flow cost estimates — @apicity/cost has no google provider
-// (docs/apicity-gaps.md §15).
-//
-// Badge USD = official Gemini Developer API list rates (720p), NOT
-// credits × subscription $/credit. Flow plan credits are secondary
-// (breakdown + tooltip only).
+// Local Google Flow cost estimates — @apicity/cost@0.8.0 has googleflow
+// credit×Pro rates, but Videocity badges use official Gemini Developer API
+// list rates (720p), not credits × subscription $/credit (docs/apicity-gaps.md
+// §15, product choice A). Flow plan credits remain secondary metadata.
 //
 // API rates: https://ai.google.dev/gemini-api/docs/pricing
 // Flow credits: https://support.google.com/flow/answer/16526234

@@ -225,12 +225,14 @@ const elevenLabsTts: CostAdapter = (input) => ({
   },
 });
 
+// @apicity/cost@0.8.0 coerces string durations and prices V2V as `v2v|N`.
+// Pass duration through as-is (string or number); only default when absent.
 const kieGeminiOmniVideo: CostAdapter = (input) => ({
   provider: "kie",
   payload: {
     model: "gemini-omni-video",
     input: {
-      duration: num(input.duration) ?? 4,
+      duration: input.duration ?? 4,
       resolution: str(input.resolution) || GEMINI_OMNI_RESOLUTION,
       ...(str(input.video_slug) ? { video_list: [{ url: "stub", start: 0, ends: 4 }] } : {}),
     },
@@ -239,49 +241,34 @@ const kieGeminiOmniVideo: CostAdapter = (input) => ({
 
 // Per-request cost hints that the paygate should see but the wire payload
 // must not carry. Used for kie models whose input schema has no duration field
-// even though they bill per second of the source/motion video (today:
-// happyhorse/video-edit and kling-3.0/motion-control). The job handler resolves
-// the source asset's measured duration and passes it here; mintKieOtp feeds it
-// only to computeEstimate, never to the OTP-hashed request or the wire body.
+// even though they bill per second of source/motion/driving media:
+// happyhorse/video-edit, kling-3.0/motion-control, omnihuman-1-5,
+// volcengine/video-to-video-lip-sync. Job handlers resolve measured duration
+// and pass it here; mintKieOtp feeds it only to computeEstimate.
 export type KieCostHints = { duration?: number };
 
 const HINTED_PER_SECOND_MODELS = new Set<string>([
   "happyhorse/video-edit",
   "kling-3.0/motion-control",
+  "omnihuman-1-5",
+  "volcengine/video-to-video-lip-sync",
 ]);
 
 export function normalizeKieCostPayload(
   payload: Record<string, unknown>,
   hints: KieCostHints = {},
 ): Record<string, unknown> {
-  if (payload.model === "gemini-omni-video") {
-    const input = payload.input;
-    if (!input || typeof input !== "object" || Array.isArray(input)) return payload;
-    const normalizedDuration = num((input as Record<string, unknown>).duration);
-    if (normalizedDuration === undefined) return payload;
-    return {
-      ...payload,
-      input: { ...(input as Record<string, unknown>), duration: normalizedDuration },
-    };
-  }
-
   // For per-second models whose kie input schema carries no duration field,
   // surface the out-of-band hint so computeEstimate can derive a per-second
-  // rate. The hint is never serialized into the wire payload.
+  // rate. Prefer top-level `duration` (package seconds picker reads
+  // input.duration ?? p.duration). The hint is never serialized into the wire.
   if (
     typeof payload.model === "string"
     && HINTED_PER_SECOND_MODELS.has(payload.model)
     && typeof hints.duration === "number"
     && hints.duration > 0
   ) {
-    const input = payload.input;
-    if (input && typeof input === "object" && !Array.isArray(input)) {
-      return {
-        ...payload,
-        input: { ...(input as Record<string, unknown>), duration: hints.duration },
-      };
-    }
-    return { ...payload, input: { duration: hints.duration } };
+    return { ...payload, duration: hints.duration };
   }
 
   return payload;
@@ -290,12 +277,11 @@ export function normalizeKieCostPayload(
 // Map MCP tool_name -> EstimateRequest builder. Tools not listed here return
 // null from getCostAdapter() and surface in the UI as "—" (no rate available),
 // unless a local estimator handles them (see estimateGoogleFlowCost).
-// Fal-backed tools have no entry: @apicity/cost EstimateRequest excludes fal
-// and its local pricing table has no Fal rates (docs/apicity-gaps.md §26).
-// Google Flow tools (generate_veo31_*, generate_google_omni_video,
-// generate_nano_banana_pro_google) have no ADAPTERS entry because
-// @apicity/cost has no google provider — priced instead by the local
-// credits→USD table in google-flow-cost.ts (docs/apicity-gaps.md §15).
+// Fal image tools that appear in @apicity/cost@0.8.0 have adapters; Fal video
+// and unlisted edit endpoints remain unpriced (docs/apicity-gaps.md §26).
+// Google Flow tools keep the local Gemini API list-rate table in
+// google-flow-cost.ts — package googleflow rates are credit×Pro, not API USD
+// (docs/apicity-gaps.md §15, product choice A).
 const KIE_ADAPTERS: Record<string, CostAdapter> = {
   // --- KIE per-second video ---
   generate_seedance2_video: kieSeedance("bytedance/seedance-2", SEEDANCE2_DURATION),
@@ -364,21 +350,121 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
   // --- KIE Grok Imagine images (flat per-call) ---
   generate_grok_imagine_text_image: kieGrokImagineTextImage,
   generate_grok_imagine_image: kieGrokImagineImageEdit,
+
+  // --- KIE OmniHuman / Volcengine (per-second; duration from source media) ---
+  // Schema has no duration field; estimate_cost + job handlers inject it via
+  // source metadata / KieCostHints (docs/apicity-gaps.md §30).
+  generate_omnihuman_video: (input) => ({
+    provider: "kie",
+    payload: {
+      model: "omnihuman-1-5",
+      duration: num(input.duration) ?? 5,
+      input: {},
+    },
+  }),
+  generate_volcengine_lipsync_video: (input) => ({
+    provider: "kie",
+    payload: {
+      model: "volcengine/video-to-video-lip-sync",
+      duration: num(input.duration) ?? 5,
+      input: {},
+    },
+  }),
+};
+
+// xAI media rates use docs.x.ai model keys (not Kie grok-imagine/* slugs).
+// Video units read top-level `duration` only.
+const xaiGrokImagineImage: CostAdapter = (input) => ({
+  provider: "xai",
+  payload: {
+    model: "grok-imagine-image",
+    n: num(input.n) ?? 1,
+  },
+});
+
+const xaiGrokImagineVideo: CostAdapter = (input) => ({
+  provider: "xai",
+  payload: {
+    model: "grok-imagine-video",
+    duration: num(input.duration) ?? num(input.seconds) ?? 6,
+  },
+});
+
+const XAI_ADAPTERS: Record<string, CostAdapter> = {
+  generate_grok_imagine_text_image: xaiGrokImagineImage,
+  generate_grok_imagine_image: xaiGrokImagineImage,
+  generate_grok_imagine_video: xaiGrokImagineVideo,
+  generate_grok_imagine_t2v_video: xaiGrokImagineVideo,
+  generate_grok_imagine_ref_video: xaiGrokImagineVideo,
+  extend_grok_imagine_video: xaiGrokImagineVideo,
+};
+
+// Fal bills by endpoint id. Only image endpoints priced in @apicity/cost@0.8.0.
+const falImage = (endpoint: string): CostAdapter => (input) => ({
+  provider: "fal",
+  endpoint,
+  payload: {
+    ...(num(input.num_images) !== undefined ? { num_images: num(input.num_images) } : {}),
+    ...(str(input.resolution) ? { resolution: str(input.resolution) } : {}),
+    ...(str(input.image_size) ? { image_size: str(input.image_size) } : {}),
+  },
+});
+
+const FAL_ADAPTERS: Record<string, CostAdapter> = {
+  generate_nano_banana_fal: falImage("fal-ai/nano-banana"),
+  generate_nano_banana_edit_fal: falImage("fal-ai/nano-banana/edit"),
+  generate_nano_banana_2_fal: falImage("fal-ai/nano-banana-2"),
+  generate_nano_banana_pro_fal: falImage("fal-ai/nano-banana-pro"),
+  generate_seedream_v5_lite_fal: falImage("fal-ai/bytedance/seedream/v5/lite/text-to-image"),
+};
+
+// Alibaba media rates landed in cost@0.8.0 for the models below.
+const alibabaImage = (model: string): CostAdapter => () => ({
+  provider: "alibaba",
+  payload: { model, input: {} },
+});
+
+const alibabaVideo = (model: string, defaultDuration: number): CostAdapter => (input) => ({
+  provider: "alibaba",
+  payload: {
+    model,
+    input: { duration: num(input.duration) ?? num(input.seconds) ?? defaultDuration },
+  },
+});
+
+const ALIBABA_ADAPTERS: Record<string, CostAdapter> = {
+  generate_alibaba_qwen_image: alibabaImage("qwen-image-2.0"),
+  generate_alibaba_qwen_image_edit: alibabaImage("qwen-image-edit"),
+  generate_alibaba_image_pro: alibabaImage("wan2.7-image-pro"),
+  generate_alibaba_video: alibabaVideo("wan2.7-i2v", 5),
 };
 
 const ADAPTERS: Record<string, CostAdapter> = {
   rewrite_prompt: openaiText("gpt-5.2", 1000),
   generate_elevenlabs_t2a: elevenLabsTts,
   ...KIE_ADAPTERS,
+  ...FAL_ADAPTERS,
+  ...ALIBABA_ADAPTERS,
 };
 
 export function getCostAdapter(toolName: string): CostAdapter | null {
-  const adapter = ADAPTERS[toolName];
-  if (!adapter) return null;
-  if (!Object.hasOwn(KIE_ADAPTERS, toolName)) return adapter;
-  return (input) => {
-    const provider = str(input._provider);
-    if (provider && provider !== "kie") return null;
-    return adapter(input);
-  };
+  const providerHintTools = new Set([
+    ...Object.keys(KIE_ADAPTERS),
+    ...Object.keys(XAI_ADAPTERS),
+  ]);
+
+  if (providerHintTools.has(toolName)) {
+    return (input) => {
+      const provider = str(input._provider);
+      if (provider.startsWith("xai")) {
+        const xai = XAI_ADAPTERS[toolName];
+        return xai ? xai(input) : null;
+      }
+      if (provider && provider !== "kie") return null;
+      const kie = KIE_ADAPTERS[toolName];
+      return kie ? kie(input) : null;
+    };
+  }
+
+  return ADAPTERS[toolName] ?? null;
 }

@@ -47,6 +47,17 @@ export function registerGenerateOmnihumanVideoJob(fs: VideocityFs): void {
       { prompt, output_resolution, pe_fast_mode, seed },
       { imageUrl, audioUrl },
     );
+
+    // omnihuman-1-5 bills per second of driving audio; schema has no duration.
+    // Pass measured audio length as a cost-only hint (see KieCostHints).
+    const audioMeta = await fs.readMetadata<{ duration?: number }>(
+      audioInput.assetId, "original", projectSlug,
+    );
+    const durationHint =
+      audioMeta.ok && typeof audioMeta.value?.duration === "number" && audioMeta.value.duration > 0
+        ? audioMeta.value.duration
+        : 5;
+
     const taskId = await submitKieTask(fs, ctx, {
       request,
       taskType: OMNIHUMAN_TASK_TYPE,
@@ -60,6 +71,7 @@ export function registerGenerateOmnihumanVideoJob(fs: VideocityFs): void {
         sourceAudioIds,
         ...(prompt !== undefined ? { prompt } : {}),
       },
+      costHints: { duration: durationHint },
     });
 
     return { success: true, taskId };

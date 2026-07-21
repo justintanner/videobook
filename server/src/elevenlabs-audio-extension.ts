@@ -1,4 +1,5 @@
 import type { ElevenLabsSpeechToTextResponse } from "@apicity/elevenlabs";
+import { ElevenLabsSoundGenerationRequestSchema } from "@apicity/elevenlabs/zod";
 
 export const ELEVENLABS_SCRIBE_MODEL = "scribe_v2";
 export const ELEVENLABS_SOUND_EFFECT_MODEL = "eleven_text_to_sound_v2";
@@ -6,7 +7,9 @@ export const ELEVENLABS_SOUND_EFFECT_OUTPUT_FORMAT = "mp3_44100_128";
 export const AUDIO_CROSSFADE_MS = 500;
 export const MIN_AUDIO_CONTINUATION_MS = 500;
 export const MAX_AUDIO_CONTINUATION_MS = 29_500;
-export const MAX_SOUND_GENERATION_PROMPT_CHARS = 450;
+// Derived from @apicity/elevenlabs@0.8.0 Sound Generation `.max(450)`.
+export const MAX_SOUND_GENERATION_PROMPT_CHARS =
+  ElevenLabsSoundGenerationRequestSchema.shape.text.maxLength ?? 450;
 export const MAX_CONTINUATION_DIRECTION_CHARS = 250;
 
 const MAX_SOURCE_CONTEXT_CHARS = 100;

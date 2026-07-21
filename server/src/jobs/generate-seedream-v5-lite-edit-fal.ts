@@ -14,6 +14,7 @@ type Payload = {
   imageInputs: ImageInput[];
   sourceImageIds: string[];
   image_size?: string;
+  auto_4K?: boolean;
   num_images?: number;
   max_images?: number;
 };
@@ -33,6 +34,7 @@ export function registerGenerateSeedreamV5LiteEditFalJob(fs: VideocityFs): void 
         prompt: p.prompt,
         image_urls,
         ...(p.image_size !== undefined ? { image_size: p.image_size } : {}),
+        ...(p.auto_4K !== undefined ? { auto_4K: p.auto_4K } : {}),
         ...(p.num_images !== undefined ? { num_images: p.num_images } : {}),
         ...(p.max_images !== undefined ? { max_images: p.max_images } : {}),
       };

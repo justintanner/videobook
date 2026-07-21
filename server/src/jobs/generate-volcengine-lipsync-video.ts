@@ -57,6 +57,16 @@ export function registerGenerateVolcengineLipsyncVideoJob(fs: VideocityFs): void
       { mode, separate_vocal, open_scenedet, align_audio, align_audio_reverse, templ_start_seconds },
       { videoUrl, audioUrl },
     );
+
+    // volcengine lip-sync bills per second of source video; schema has no duration.
+    const videoMeta = await fs.readMetadata<{ duration?: number }>(
+      videoInput.assetId, "original", projectSlug,
+    );
+    const durationHint =
+      videoMeta.ok && typeof videoMeta.value?.duration === "number" && videoMeta.value.duration > 0
+        ? videoMeta.value.duration
+        : 5;
+
     const taskId = await submitKieTask(fs, ctx, {
       request,
       taskType: VOLCENGINE_LIPSYNC_TASK_TYPE,
@@ -69,6 +79,7 @@ export function registerGenerateVolcengineLipsyncVideoJob(fs: VideocityFs): void
         sourceVideoIds,
         sourceAudioIds,
       },
+      costHints: { duration: durationHint },
     });
 
     return { success: true, taskId };
