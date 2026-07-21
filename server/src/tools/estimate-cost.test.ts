@@ -297,6 +297,90 @@ describe("estimate_cost tool", () => {
     expect(payload.estimate.breakdown.units).toBe(ACTUAL_DURATION);
   });
 
+  it("uses the source video's actual duration for happyhorse/video-edit", async () => {
+    // Regression: happyhorse/video-edit bills per second of the source video —
+    // there is no user-typed duration. The previous estimate always charged
+    // the 5s default, so a 30s source showed the price for 5s at /generate.
+    // Server now resolves the duration from `original` metadata, mirroring the
+    // cost hint the job handler forwards to the paygate.
+    const fs = createFsForTest(tempDir);
+    const projectResult = await fs.createProject("est-hh-proj");
+    expect(projectResult.ok).toBe(true);
+
+    const assetResult = await fs.createAsset("vid", "long-source", "est-hh-proj");
+    expect(assetResult.ok).toBe(true);
+    if (!assetResult.ok) return;
+    const sourceAssetId = assetResult.value.assetId;
+
+    const ACTUAL_DURATION = 30;
+    const writeMeta = await fs.writeMetadata(
+      sourceAssetId,
+      "original",
+      { duration: ACTUAL_DURATION, width: 1920, height: 1080 },
+      "est-hh-proj",
+    );
+    expect(writeMeta.ok).toBe(true);
+
+    const fiveSecond = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "generate_happyhorse_videoedit_video",
+          input: { resolution: "1080p", video_slug: sourceAssetId },
+        }],
+      },
+    });
+    const fiveSecondPayload = parse(fiveSecond);
+    expect(fiveSecondPayload.estimate.breakdown.units).toBe(5);
+
+    const enriched = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "generate_happyhorse_videoedit_video",
+          input: {
+            resolution: "1080p",
+            video_slug: `@${sourceAssetId}`,
+            project_slug: "est-hh-proj",
+          },
+        }],
+      },
+    });
+    const enrichedPayload = parse(enriched);
+    expect(enrichedPayload.estimate.breakdown.units).toBe(ACTUAL_DURATION);
+    expect(enrichedPayload.estimate.usd).toBeCloseTo(
+      fiveSecondPayload.estimate.usd * (ACTUAL_DURATION / 5),
+      4,
+    );
+  });
+
+  it("falls back to the 5s happyhorse/video-edit default when source has no duration metadata", async () => {
+    const fs = createFsForTest(tempDir);
+    const projectResult = await fs.createProject("est-hh-fallback");
+    expect(projectResult.ok).toBe(true);
+
+    const assetResult = await fs.createAsset("vid", "legacy-source", "est-hh-fallback");
+    expect(assetResult.ok).toBe(true);
+    if (!assetResult.ok) return;
+
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [{
+          tool_name: "generate_happyhorse_videoedit_video",
+          input: {
+            resolution: "1080p",
+            video_slug: assetResult.value.assetId,
+            project_slug: "est-hh-fallback",
+          },
+        }],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.estimate.breakdown.units).toBe(5);
+    expect(payload.estimate.warnings).toEqual([]);
+  });
+
   it("uses the source video's stored resolution for Grok extension pricing", async () => {
     const fs = createFsForTest(tempDir);
     const projectResult = await fs.createProject("grok-extend-estimate");

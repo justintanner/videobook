@@ -102,8 +102,8 @@ describe("kie paygate", () => {
 
   it("rejects a happyhorse/video-edit request with no duration hint as unbounded", () => {
     // happyhorse/video-edit prices per second but its kie input schema carries
-    // no duration field (output length = source video). Without a top-level
-    // duration hint the units derivation fails and the estimate is unbounded.
+    // no duration field (output length = source video). Without an out-of-band
+    // cost hint the units derivation fails and the estimate is unbounded.
     const request = {
       model: "happyhorse/video-edit" as const,
       input: {
@@ -115,22 +115,25 @@ describe("kie paygate", () => {
     expect(() => mintKieOtp(request, 60)).toThrow(/cost estimate is not bounded/);
   });
 
-  it("mints a bounded OTP for a happyhorse/video-edit request with a top-level duration hint", async () => {
+  it("mints a bounded OTP for a happyhorse/video-edit request with an out-of-band duration hint", async () => {
     process.env.APICITY_PAYGATE_SECRET = "test-secret";
 
+    // The wire payload carries only documented fields — no top-level duration.
     const request = {
       model: "happyhorse/video-edit" as const,
-      duration: 9.97,
       input: {
         prompt: "swap the characters",
         video_url: "https://kie.example/source.mp4",
         resolution: "1080p" as const,
       },
     };
-    const otp = mintKieOtp(request, 60);
+    // The duration hint flows only to computeEstimate; the OTP-hashed request
+    // is the documented payload verbatim, so the wire request hash matches.
+    const otp = mintKieOtp(request, 60, KIE_PAYGATE_DOT_PATH, { duration: 9.97 });
     const parsed = parseOtp(otp);
 
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
+    expect(parsed.payload.requestHash).not.toBe(canonicalHash({ ...request, duration: 9.97 }));
   });
 
   it("mints a bounded OTP for HappyHorse 1.1 requests now priced by @apicity/cost", () => {
@@ -236,8 +239,8 @@ describe("kie paygate", () => {
 
   it("rejects a kling-3.0/motion-control request with no duration hint as unbounded", () => {
     // kling-3.0/motion-control prices per second but its kie input
-    // schema carries no duration field (output length = motion video). Without a
-    // top-level duration hint the units derivation fails and the estimate is
+    // schema carries no duration field (output length = motion video). Without
+    // an out-of-band cost hint the units derivation fails and the estimate is
     // unbounded.
     const request = {
       model: "kling-3.0/motion-control" as const,
@@ -250,21 +253,21 @@ describe("kie paygate", () => {
     expect(() => mintKieOtp(request, 60)).toThrow(/cost estimate is not bounded/);
   });
 
-  it("mints a bounded OTP for a kling-3.0/motion-control request with a top-level duration hint", async () => {
+  it("mints a bounded OTP for a kling-3.0/motion-control request with an out-of-band duration hint", async () => {
     process.env.APICITY_PAYGATE_SECRET = "test-secret";
 
     const request = {
       model: "kling-3.0/motion-control" as const,
-      duration: 6.4,
       input: {
         input_urls: ["https://kie.example/character.png"],
         video_urls: ["https://kie.example/motion.mp4"],
         mode: "720p" as const,
       },
     };
-    const otp = mintKieOtp(request, 60);
+    const otp = mintKieOtp(request, 60, KIE_PAYGATE_DOT_PATH, { duration: 6.4 });
     const parsed = parseOtp(otp);
 
     expect(parsed.payload.requestHash).toBe(canonicalHash(request));
+    expect(parsed.payload.requestHash).not.toBe(canonicalHash({ ...request, duration: 6.4 }));
   });
 });

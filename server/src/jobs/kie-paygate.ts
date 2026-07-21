@@ -9,7 +9,7 @@ import type { JobHandlerContext } from "../queue.js";
 import { QUEUED_TASK_ID } from "videocity-engine";
 import type { PendingTask, TaskType, VideocityFs } from "videocity-engine";
 import { requireApiKey } from "../api-key.js";
-import { normalizeKieCostPayload } from "../cost-adapters.js";
+import { normalizeKieCostPayload, type KieCostHints } from "../cost-adapters.js";
 
 export const KIE_PAYGATE_DOT_PATH = "api.v1.jobs.createTask";
 export const VEO_PAYGATE_DOT_PATH = "api.v1.veo.generate";
@@ -26,6 +26,10 @@ type SubmitKieTaskArgs = {
   projectSlug: string;
   taskType: TaskType;
   meta: Record<string, unknown>;
+  // Out-of-band cost hints (see KieCostHints). Persisted alongside the
+  // generation-payload so submitQueuedKieTask can re-bound the OTP after a
+  // local-queue→submit transition without polluting the wire payload.
+  costHints?: KieCostHints;
 };
 
 function defaultSecretPath(): string {
@@ -63,13 +67,16 @@ export function mintKieOtp(
   request: MediaGenerationRequest,
   ttlSeconds = 10 * 60,
   dotPath: string = KIE_PAYGATE_DOT_PATH,
+  costHints: KieCostHints = {},
 ): string {
   const payload = request as unknown as Record<string, unknown>;
-  const estimate = computeEstimate({ provider: "kie", payload: normalizeKieCostPayload(payload) });
+  const estimate = computeEstimate({ provider: "kie", payload: normalizeKieCostPayload(payload, costHints) });
   if (estimate.warnings.length > 0 && !hasPendingCostTableEntry(payload)) {
     throw new Error(`KIE cost estimate is not bounded: ${estimate.warnings.join("; ")}`);
   }
 
+  // The OTP hashes the wire payload verbatim — costHints never enter the hash,
+  // so the request that hits Kie carries only its documented schema fields.
   return mintOtp(ensurePaygateSecret(), {
     provider: "kie",
     method: "POST",
@@ -107,8 +114,11 @@ export async function submitKieTask(
 ): Promise<string> {
   const apiKey = requireApiKey("KIE_API_KEY");
   await fs.writeMetadata(args.assetId, "generation-payload", args.request, args.projectSlug);
+  if (args.costHints) {
+    await fs.writeMetadata(args.assetId, "generation-cost-hints", args.costHints, args.projectSlug);
+  }
   const provider = createKieProvider(apiKey);
-  const taskId = await submitMediaJob(provider, args.request, { otp: mintKieOtp(args.request) });
+  const taskId = await submitMediaJob(provider, args.request, { otp: mintKieOtp(args.request, 10 * 60, KIE_PAYGATE_DOT_PATH, args.costHints) });
 
   const pendingResult = await fs.pendingTasks.write(args.projectSlug, {
     taskId,
@@ -137,9 +147,15 @@ export async function submitQueuedKieTask(
   const payloadResult = await fs.readMetadata<MediaGenerationRequest>(task.assetId, "generation-payload", projectSlug);
   if (!payloadResult.ok || payloadResult.value === null) throw new Error(`No prepared KIE payload found for ${task.assetId}`);
 
+  // Reload persisted cost hints (if any) so the OTP minted on resubmission
+  // sees the same duration the original handler resolved, without leaking it
+  // into the wire payload.
+  const hintsResult = await fs.readMetadata<KieCostHints>(task.assetId, "generation-cost-hints", projectSlug);
+  const costHints = hintsResult.ok && hintsResult.value ? hintsResult.value : {};
+
   const apiKey = requireApiKey("KIE_API_KEY");
   const provider = createKieProvider(apiKey);
-  const taskId = await submitMediaJob(provider, payloadResult.value, { otp: mintKieOtp(payloadResult.value) });
+  const taskId = await submitMediaJob(provider, payloadResult.value, { otp: mintKieOtp(payloadResult.value, 10 * 60, KIE_PAYGATE_DOT_PATH, costHints) });
   const meta = { ...task.meta };
   delete meta.kiePaygate;
   const writeResult = await fs.pendingTasks.write(projectSlug, {
@@ -178,7 +194,7 @@ export async function submitVeoTask(
   const provider = createKieProvider(apiKey);
 
   const result = await provider.veo.post.api.v1.veo.generate(args.request, {
-    otp: mintKieOtp(args.request as unknown as MediaGenerationRequest, 10 * 60, VEO_PAYGATE_DOT_PATH),
+    otp: mintKieOtp(args.request as unknown as MediaGenerationRequest, 10 * 60, VEO_PAYGATE_DOT_PATH, {}),
   });
   if (!result.data?.taskId) {
     throw new KieError(

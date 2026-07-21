@@ -237,16 +237,54 @@ const kieGeminiOmniVideo: CostAdapter = (input) => ({
   },
 });
 
-export function normalizeKieCostPayload(payload: Record<string, unknown>): Record<string, unknown> {
-  if (payload.model !== "gemini-omni-video") return payload;
-  const input = payload.input;
-  if (!input || typeof input !== "object" || Array.isArray(input)) return payload;
-  const normalizedDuration = num((input as Record<string, unknown>).duration);
-  if (normalizedDuration === undefined) return payload;
-  return {
-    ...payload,
-    input: { ...(input as Record<string, unknown>), duration: normalizedDuration },
-  };
+// Per-request cost hints that the paygate should see but the wire payload
+// must not carry. Used for kie models whose input schema has no duration field
+// even though they bill per second of the source/motion video (today:
+// happyhorse/video-edit and kling-3.0/motion-control). The job handler resolves
+// the source asset's measured duration and passes it here; mintKieOtp feeds it
+// only to computeEstimate, never to the OTP-hashed request or the wire body.
+export type KieCostHints = { duration?: number };
+
+const HINTED_PER_SECOND_MODELS = new Set<string>([
+  "happyhorse/video-edit",
+  "kling-3.0/motion-control",
+]);
+
+export function normalizeKieCostPayload(
+  payload: Record<string, unknown>,
+  hints: KieCostHints = {},
+): Record<string, unknown> {
+  if (payload.model === "gemini-omni-video") {
+    const input = payload.input;
+    if (!input || typeof input !== "object" || Array.isArray(input)) return payload;
+    const normalizedDuration = num((input as Record<string, unknown>).duration);
+    if (normalizedDuration === undefined) return payload;
+    return {
+      ...payload,
+      input: { ...(input as Record<string, unknown>), duration: normalizedDuration },
+    };
+  }
+
+  // For per-second models whose kie input schema carries no duration field,
+  // surface the out-of-band hint so computeEstimate can derive a per-second
+  // rate. The hint is never serialized into the wire payload.
+  if (
+    typeof payload.model === "string"
+    && HINTED_PER_SECOND_MODELS.has(payload.model)
+    && typeof hints.duration === "number"
+    && hints.duration > 0
+  ) {
+    const input = payload.input;
+    if (input && typeof input === "object" && !Array.isArray(input)) {
+      return {
+        ...payload,
+        input: { ...(input as Record<string, unknown>), duration: hints.duration },
+      };
+    }
+    return { ...payload, input: { duration: hints.duration } };
+  }
+
+  return payload;
 }
 
 // Map MCP tool_name -> EstimateRequest builder. Tools not listed here return

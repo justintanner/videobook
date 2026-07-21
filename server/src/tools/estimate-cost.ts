@@ -81,6 +81,31 @@ async function enrichGrokExtendInput(
     : input;
 }
 
+// happyhorse/video-edit has no user-typed duration — the output matches the
+// source video. Source the duration from the selected video asset's `original`
+// metadata so the displayed cost matches what the paygate will bound against
+// (the job handler resolves the same value and passes it as a cost hint).
+async function enrichHappyHorseVideoEditInput(
+  fs: VideocityFs,
+  input: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  if (typeof input.duration === "number") return input;
+
+  const projectSlug = typeof input.project_slug === "string" ? input.project_slug : null;
+  const videoSlug = typeof input.video_slug === "string" ? input.video_slug : null;
+  if (!projectSlug || !videoSlug) return input;
+
+  const assetId = videoSlug.replace(/^@/, "");
+  if (!assetId.startsWith("vid-")) return input;
+
+  const meta = await fs.readMetadata<{ duration?: unknown }>(assetId, "original", projectSlug);
+  if (!meta.ok) return input;
+  const duration = meta.value.duration;
+  if (typeof duration !== "number" || duration <= 0) return input;
+
+  return { ...input, duration };
+}
+
 async function enrichInput(
   fs: VideocityFs,
   toolName: string,
@@ -91,6 +116,9 @@ async function enrichInput(
   }
   if (toolName === "extend_grok_imagine_video") {
     return enrichGrokExtendInput(fs, input);
+  }
+  if (toolName === "generate_happyhorse_videoedit_video") {
+    return enrichHappyHorseVideoEditInput(fs, input);
   }
   return input;
 }
