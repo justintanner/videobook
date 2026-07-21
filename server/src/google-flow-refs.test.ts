@@ -8,6 +8,9 @@ import {
   totalImageReferenceSlots,
   rewriteImageSlugMentions,
   replaceHappyHorseAssetMentions,
+  rewriteImageSlugMentionsToBrackets,
+  rewriteSeedanceAssetMentions,
+  replaceNaturalAssetMentions,
 } from "./google-flow-refs.js";
 
 describe("totalOmniReferenceSlots", () => {
@@ -160,5 +163,65 @@ describe("replaceHappyHorseAssetMentions", () => {
       null,
       ["img-char"],
     )).toBe("the woman in a red qipao in reference image 1 waves");
+  });
+});
+
+describe("rewriteImageSlugMentionsToBrackets", () => {
+  it("rewrites confirmed @img-* to [Image N] for HappyHorse 1.1", () => {
+    expect(rewriteImageSlugMentionsToBrackets(
+      "the woman in a red qipao in @img-char waves",
+      ["img-char", "img-other"],
+    )).toBe("the woman in a red qipao in [Image 1] waves");
+  });
+
+  it("numbers by image_slugs order", () => {
+    expect(rewriteImageSlugMentionsToBrackets(
+      "@img-b then @img-a",
+      ["@img-a", "@img-b"],
+    )).toBe("[Image 2] then [Image 1]");
+  });
+
+  it("leaves unconfirmed @tokens alone", () => {
+    expect(rewriteImageSlugMentionsToBrackets("@notify @img-x", ["img-y"]))
+      .toBe("@notify @img-x");
+  });
+});
+
+describe("rewriteSeedanceAssetMentions", () => {
+  it("rewrites image/video/audio slugs to @ImageN/@VideoN/@AudioN", () => {
+    expect(rewriteSeedanceAssetMentions(
+      "put @img-hero into @vid-clip with @aud-score",
+      {
+        imageSlugs: ["img-hero"],
+        videoSlugs: ["vid-clip"],
+        audioSlugs: ["aud-score"],
+      },
+    )).toBe("put @Image1 into @Video1 with @Audio1");
+  });
+
+  it("numbers by array position", () => {
+    expect(rewriteSeedanceAssetMentions(
+      "@img-b then @img-a",
+      { imageSlugs: ["@img-a", "@img-b"] },
+    )).toBe("@Image2 then @Image1");
+  });
+});
+
+describe("replaceNaturalAssetMentions", () => {
+  it("rewrites multi-ref videos and images", () => {
+    expect(replaceNaturalAssetMentions(
+      "blend @vid-a with @vid-b using @img-style",
+      {
+        videoSlugs: ["vid-a", "vid-b"],
+        imageSlugs: ["img-style"],
+      },
+    )).toBe("blend reference video 1 with reference video 2 using reference image 1");
+  });
+
+  it("uses 'the source video' for a single video slug list", () => {
+    expect(replaceNaturalAssetMentions(
+      "edit @vid-clip",
+      { videoSlugs: ["vid-clip"] },
+    )).toBe("edit the source video");
   });
 });

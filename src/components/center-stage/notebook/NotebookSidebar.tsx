@@ -36,6 +36,7 @@ import {
 import type { JsonRecord, NotebookPlanDefinition, NotebookPlanStep } from './types'
 import { useGenPreview } from './useGenPreview'
 import { useTranslatePayload } from './useTranslatePayload'
+import { inspectProviderPayloadSlugs } from './provider-payload-hints'
 import { transformNotebookSubmitArgs } from './transform-submit-args'
 
 interface NotebookSidebarProps {
@@ -492,6 +493,10 @@ function GenerationSidebar({
     toolPayload?.args ?? null,
     showPayload && mcpState === 'ready',
   )
+  const providerSlugHints = useMemo(
+    () => (providerPayload.result ? inspectProviderPayloadSlugs(providerPayload.result.payload) : null),
+    [providerPayload.result],
+  )
 
   return (
     <aside className={`vc-notebook-sidebar vc-notebook-sidebar-${category}`}>
@@ -545,8 +550,15 @@ function GenerationSidebar({
             ) : providerPayload.result ? (
               <>
                 <span className="vc-notebook-hint">{providerPayload.result.provider_path}</span>
-                {/@(vid|img)-[\w-]/.test(JSON.stringify(providerPayload.result.payload)) ? (
-                  <span className="vc-notebook-hint">URL fields show local asset slugs; uploads resolve them at submit.</span>
+                {providerSlugHints && providerSlugHints.promptSlugs.length > 0 ? (
+                  <span className="vc-notebook-hint vc-notebook-hint-warn">
+                    Prompt still has local asset slugs ({providerSlugHints.promptSlugs.join(', ')}) — wire form should use provider markers or natural refs.
+                  </span>
+                ) : null}
+                {providerSlugHints && providerSlugHints.urlSlugs.length > 0 ? (
+                  <span className="vc-notebook-hint">
+                    URL fields show local asset slugs as placeholders; uploads replace them with https URLs at submit. The prompt above is the wire text.
+                  </span>
                 ) : null}
                 <pre className="vc-notebook-payload-json">
                   <JsonNode data={providerPayload.result.payload} />

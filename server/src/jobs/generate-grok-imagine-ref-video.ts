@@ -4,6 +4,7 @@ import { uploadAssetFile } from "../upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildXaiGrokImagineRefVideoPayload } from "../payload-builders.js";
+import { replaceNaturalAssetMentions } from "../google-flow-refs.js";
 import { callXaiPaid, createXaiPaygatedProvider, XAI_VIDEO_GENERATIONS_DOT_PATH } from "./xai-paygate.js";
 
 type RefImageInput = {
@@ -39,8 +40,11 @@ export function registerGenerateGrokImagineRefVideoJob(fs: VideocityFs): void {
 
     const provider = createXaiPaygatedProvider(apiKey, 120_000);
 
+    const normalizedPrompt = replaceNaturalAssetMentions(prompt, {
+      imageSlugs: refImages.map((r) => r.assetId),
+    });
     const request = buildXaiGrokImagineRefVideoPayload(
-      { prompt, duration, resolution, aspect_ratio: aspectRatio },
+      { prompt: normalizedPrompt, duration, resolution, aspect_ratio: aspectRatio },
       imageUrls,
     );
 

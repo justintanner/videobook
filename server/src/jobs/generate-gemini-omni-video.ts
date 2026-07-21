@@ -5,6 +5,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildGeminiOmniVideoPayload } from "../payload-builders.js";
+import { replaceNaturalAssetMentions } from "../google-flow-refs.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -46,8 +47,20 @@ export function registerGenerateGeminiOmniVideoJob(fs: VideocityFs): void {
       ? await uploadAssetToKie(fs, videoInput.assetId, videoInput.filename, projectSlug)
       : undefined;
 
+    const normalizedPrompt = replaceNaturalAssetMentions(prompt, {
+      imageSlugs: imageInputs.map((i) => i.assetId),
+      sourceVideoSlug: videoInput?.assetId ?? null,
+    });
     const request = buildGeminiOmniVideoPayload(
-      { prompt, duration, aspect_ratio, resolution, seed, video_clip_start, video_clip_ends },
+      {
+        prompt: normalizedPrompt,
+        duration,
+        aspect_ratio,
+        resolution,
+        seed,
+        video_clip_start,
+        video_clip_ends,
+      },
       {
         ...(imageUrls.length > 0 ? { imageUrls } : {}),
         ...(videoUrl !== undefined ? { videoUrl } : {}),

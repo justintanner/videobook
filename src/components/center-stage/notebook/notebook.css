@@ -658,6 +658,10 @@
   line-height: 1.5;
 }
 
+.vc-notebook-hint-warn {
+  color: rgb(251 191 36 / 0.9);
+}
+
 .vc-notebook-asset-preview {
   width: 100%;
   max-height: 12rem;

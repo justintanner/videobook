@@ -5,6 +5,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildSeedance2MiniVideoPayload } from "../payload-builders.js";
+import { rewriteSeedanceAssetMentions } from "../google-flow-refs.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -54,8 +55,24 @@ export function registerGenerateSeedance2MiniVideoJob(fs: VideocityFs): void {
     const referenceVideoUrls = await uploadAll(fs, videoInputs, projectSlug);
     const referenceAudioUrls = await uploadAll(fs, audioInputs, projectSlug);
 
+    const normalizedPrompt = prompt === undefined
+      ? undefined
+      : rewriteSeedanceAssetMentions(prompt, {
+        imageSlugs: imageInputs.map((i) => i.assetId),
+        videoSlugs: videoInputs.map((i) => i.assetId),
+        audioSlugs: audioInputs.map((i) => i.assetId),
+      });
+
     const request = buildSeedance2MiniVideoPayload(
-      { prompt, aspect_ratio, resolution, duration, generate_audio, web_search, nsfw_checker },
+      {
+        ...(normalizedPrompt !== undefined ? { prompt: normalizedPrompt } : {}),
+        aspect_ratio,
+        resolution,
+        duration,
+        generate_audio,
+        web_search,
+        nsfw_checker,
+      },
       {
         ...(referenceImageUrls.length > 0 ? { referenceImageUrls } : {}),
         ...(referenceVideoUrls.length > 0 ? { referenceVideoUrls } : {}),

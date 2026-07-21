@@ -4,6 +4,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildSeedance2VideoPayload } from "../payload-builders.js";
+import { rewriteSeedanceAssetMentions, stripSlugMentions } from "../google-flow-refs.js";
 import type { Seedance2FastRequest, Seedance2Request } from "@apicity/kie";
 
 type Seedance2Model = Seedance2Request["model"] | Seedance2FastRequest["model"];
@@ -68,9 +69,23 @@ export function registerSeedance2Job(fs: VideocityFs, jobType: string): void {
     const referenceVideoUrls = await uploadAll(fs, videoInputs, projectSlug);
     const referenceAudioUrls = await uploadAll(fs, audioInputs, projectSlug);
 
+    // Seedance r2v markers are @ImageN/@VideoN/@AudioN. First/last frames ride
+    // body fields only — strip confirmed frame @slugs after rewriting refs.
+    const normalizedPrompt = stripSlugMentions(
+      rewriteSeedanceAssetMentions(prompt, {
+        imageSlugs: imageInputs.map((i) => i.assetId),
+        videoSlugs: videoInputs.map((i) => i.assetId),
+        audioSlugs: audioInputs.map((i) => i.assetId),
+      }),
+      [
+        ...(firstFrame ? [firstFrame.assetId] : []),
+        ...(lastFrame ? [lastFrame.assetId] : []),
+      ],
+    );
+
     const request = buildSeedance2VideoPayload(
       {
-        prompt,
+        prompt: normalizedPrompt,
         model: apiModel,
         aspect_ratio,
         resolution,

@@ -5,6 +5,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildWan27VideoEditPayload } from "../payload-builders.js";
+import { replaceHappyHorseAssetMentions } from "../google-flow-refs.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -52,8 +53,28 @@ export function registerGenerateWan27VideoeditVideoJob(fs: VideocityFs): void {
     const videoUrl = await uploadSingle(fs, videoInput, projectSlug);
     const referenceImageUrl = imageInput ? await uploadSingle(fs, imageInput, projectSlug) : undefined;
 
+    // Free-form edit prompt — rewrite confirmed @vid-*/@img-* to natural refs.
+    const normalizedPrompt = prompt === undefined
+      ? undefined
+      : replaceHappyHorseAssetMentions(
+        prompt,
+        videoInput.assetId,
+        imageInput ? [imageInput.assetId] : [],
+      );
+
     const request = buildWan27VideoEditPayload(
-      { prompt, negative_prompt, resolution, aspect_ratio, duration, audio_setting, prompt_extend, watermark, nsfw_checker, seed },
+      {
+        prompt: normalizedPrompt,
+        negative_prompt,
+        resolution,
+        aspect_ratio,
+        duration,
+        audio_setting,
+        prompt_extend,
+        watermark,
+        nsfw_checker,
+        seed,
+      },
       { videoUrl, referenceImageUrl },
     );
     const taskId = await submitKieTask(fs, ctx, {

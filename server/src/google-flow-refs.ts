@@ -77,18 +77,17 @@ export function stripSlugMentions(prompt: string, slugs: readonly string[]): str
 }
 
 /** Replace "@<slug>" mentions with natural-language noun phrases for Kie
- *  happyhorse/video-edit. The 1.0 video-edit endpoint has NO inline marker
- *  syntax (the "[Image N]" form belongs to the 1.1 t2v/i2v/ref endpoints only)
- *  — the prompt is a free-form edit instruction, and the reference_image[]
- *  field carries the actual assets. To keep references unambiguous without
- *  leaking local asset IDs or implying a marker syntax the model doesn't
- *  understand, rewrite @<video-slug> to "the source video" and each
- *  @<image-slug> to "reference image N" preserving its 1-based position in
- *  imageSlugs. Mentions of slugs that aren't in the lists are left untouched. */
+ *  happyhorse/video-edit and other free-form prompt models with no inline
+ *  marker syntax (the "[Image N]" form belongs to happyhorse 1.1 t2v/i2v/ref
+ *  only). The prompt is a free-form instruction; media rides separate URL
+ *  fields. Rewrite confirmed @<video-slug> → "the source video", each
+ *  @<image-slug> → "reference image N" (1-based in imageSlugs), and each
+ *  @<audio-slug> → "reference audio N". Unlisted mentions stay literal. */
 export function replaceHappyHorseAssetMentions(
   prompt: string,
   videoSlug: string | null,
   imageSlugs: readonly string[],
+  audioSlugs: readonly string[] = [],
 ): string {
   let out = prompt;
   if (videoSlug) {
@@ -103,5 +102,88 @@ export function replaceHappyHorseAssetMentions(
       `reference image ${index + 1}`,
     );
   }
+  for (const { slug, index } of slugMentionEntries(audioSlugs)) {
+    out = out.replace(
+      new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"),
+      `reference audio ${index + 1}`,
+    );
+  }
+  return out;
+}
+
+/** HappyHorse 1.1 reference-to-video: rewrite confirmed @<image-slug> mentions
+ *  to positional `[Image N]` markers matching the reference_image[] order. */
+export function rewriteImageSlugMentionsToBrackets(
+  prompt: string,
+  imageSlugs: readonly string[],
+): string {
+  let out = prompt;
+  for (const { slug, index } of slugMentionEntries(imageSlugs)) {
+    out = out.replace(
+      new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"),
+      `[Image ${index + 1}]`,
+    );
+  }
+  return out;
+}
+
+export type SeedanceMentionSlugs = {
+  imageSlugs?: readonly string[];
+  videoSlugs?: readonly string[];
+  audioSlugs?: readonly string[];
+};
+
+/** Seedance r2v: rewrite confirmed asset @slugs to `@ImageN` / `@VideoN` /
+ *  `@AudioN` (1-based, matching upload order in each modality array). */
+export function rewriteSeedanceAssetMentions(
+  prompt: string,
+  refs: SeedanceMentionSlugs,
+): string {
+  let out = prompt;
+  for (const { slug, index } of slugMentionEntries(refs.imageSlugs ?? [])) {
+    out = out.replace(
+      new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"),
+      `@Image${index + 1}`,
+    );
+  }
+  for (const { slug, index } of slugMentionEntries(refs.videoSlugs ?? [])) {
+    out = out.replace(
+      new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"),
+      `@Video${index + 1}`,
+    );
+  }
+  for (const { slug, index } of slugMentionEntries(refs.audioSlugs ?? [])) {
+    out = out.replace(
+      new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"),
+      `@Audio${index + 1}`,
+    );
+  }
+  return out;
+}
+
+/** Free-form multi-ref natural rewrite when the provider has no inline marker
+ *  syntax: videos → "reference video N" (or "the source video" for a single
+ *  source clip), images → "reference image N", audio → "reference audio N". */
+export function replaceNaturalAssetMentions(
+  prompt: string,
+  refs: {
+    sourceVideoSlug?: string | null;
+    imageSlugs?: readonly string[];
+    videoSlugs?: readonly string[];
+    audioSlugs?: readonly string[];
+  },
+): string {
+  let out = prompt;
+  if (refs.sourceVideoSlug) {
+    out = replaceHappyHorseAssetMentions(out, refs.sourceVideoSlug, [], []);
+  }
+  const multiVideos = refs.videoSlugs ?? [];
+  for (const { slug, index } of slugMentionEntries(multiVideos)) {
+    out = out.replace(
+      new RegExp(`@${escapeRe(slug)}(?![\\w-])`, "g"),
+      multiVideos.length === 1 ? "the source video" : `reference video ${index + 1}`,
+    );
+  }
+  out = replaceHappyHorseAssetMentions(out, null, refs.imageSlugs ?? [], refs.audioSlugs ?? []);
   return out;
 }

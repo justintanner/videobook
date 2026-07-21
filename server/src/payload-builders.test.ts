@@ -493,4 +493,72 @@ describe("translateToolPayload", () => {
       "Replace the teenage boy in the video with SpongeBob SquarePants.",
     );
   });
+
+  it("rewrites HappyHorse ref prompts to [Image N] markers", () => {
+    const result = translateToolPayload("generate_happyhorse_ref_video", {
+      prompt: "the woman in @img-char waves at the camera",
+      image_slugs: ["img-char", "img-bg"],
+    });
+
+    expect((result?.payload as { input: { prompt: string } }).input.prompt).toBe(
+      "the woman in [Image 1] waves at the camera",
+    );
+  });
+
+  it("rewrites Seedance @slug mentions to @ImageN/@VideoN/@AudioN", () => {
+    const result = translateToolPayload("generate_seedance2_video", {
+      prompt: "animate @img-hero like @vid-motion with @aud-score",
+      image_slugs: ["img-hero"],
+      video_slugs: ["vid-motion"],
+      audio_slugs: ["aud-score"],
+    });
+
+    expect((result?.payload as { input: { prompt: string } }).input.prompt).toBe(
+      "animate @Image1 like @Video1 with @Audio1",
+    );
+  });
+
+  it("rewrites the Seedance 2 Mini sidebar repro prompt (vc-gb9g)", () => {
+    // GEN VIDEO /provider-payload showed:
+    //   prompt: "scene @vid-full-notats replace attress with @img-actress"
+    // Wire form must use Seedance markers so the user can visually verify the
+    // outbound text; URL fields may still show local slugs as placeholders.
+    const result = translateToolPayload("generate_seedance2_mini_video", {
+      prompt: "scene @vid-full-notats replace attress with @img-actress",
+      image_slugs: ["@img-actress"],
+      video_slugs: ["@vid-full-notats"],
+      aspect_ratio: "16:9",
+      resolution: "720p",
+      duration: "15",
+      generate_audio: true,
+      web_search: false,
+    });
+
+    const input = (result?.payload as {
+      model: string;
+      input: {
+        prompt: string;
+        reference_image_urls: string[];
+        reference_video_urls: string[];
+      };
+    }).input;
+    expect(result?.payload).toMatchObject({ model: "bytedance/seedance-2-mini" });
+    expect(input.prompt).toBe("scene @Video1 replace attress with @Image1");
+    expect(input.prompt).not.toMatch(/@vid-/);
+    expect(input.prompt).not.toMatch(/@img-/);
+    expect(input.reference_image_urls).toEqual(["@img-actress"]);
+    expect(input.reference_video_urls).toEqual(["@vid-full-notats"]);
+  });
+
+  it("rewrites free-form wan video-edit @slugs to natural language", () => {
+    const result = translateToolPayload("generate_wan27_videoedit_video", {
+      prompt: "make @vid-clip match @img-style",
+      video_slug: "vid-clip",
+      image_slug: "img-style",
+    });
+
+    expect((result?.payload as { input: { prompt: string } }).input.prompt).toBe(
+      "make the source video match reference image 1",
+    );
+  });
 });

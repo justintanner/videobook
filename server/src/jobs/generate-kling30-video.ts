@@ -5,6 +5,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildKling30VideoPayload } from "../payload-builders.js";
+import { replaceNaturalAssetMentions } from "../google-flow-refs.js";
 
 type ImageInput = { assetId: string; filename: string };
 type ElementInput = {
@@ -70,8 +71,13 @@ export function registerGenerateKling30VideoJob(fs: VideocityFs): void {
       elements.push(element);
     }
 
+    const normalizedPrompt = prompt === undefined
+      ? undefined
+      : replaceNaturalAssetMentions(prompt, {
+        imageSlugs: imageInputs.map((i) => i.assetId),
+      });
     const request = buildKling30VideoPayload(
-      { prompt, mode, duration, sound, aspect_ratio, multi_shots, multi_prompt },
+      { prompt: normalizedPrompt, mode, duration, sound, aspect_ratio, multi_shots, multi_prompt },
       imageUrls,
       elements,
     );

@@ -5,6 +5,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildHappyHorseI2vPayload } from "../payload-builders.js";
+import { stripSlugMentions } from "../google-flow-refs.js";
 
 type RefInput = { assetId: string; filename: string };
 
@@ -32,7 +33,14 @@ export function registerGenerateHappyhorseI2vVideoJob(fs: VideocityFs): void {
 
     const imageUrl = await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename, projectSlug);
 
-    const request = buildHappyHorseI2vPayload({ prompt, resolution, duration }, imageUrl);
+    // First frame rides image_urls; strip confirmed @img-* from free-form prompt.
+    const normalizedPrompt = prompt === undefined
+      ? undefined
+      : stripSlugMentions(prompt, [firstFrame.assetId]);
+    const request = buildHappyHorseI2vPayload(
+      { prompt: normalizedPrompt, resolution, duration },
+      imageUrl,
+    );
     const taskId = await submitKieTask(fs, ctx, {
       request,
       taskType: "happyhorse_i2v_video",

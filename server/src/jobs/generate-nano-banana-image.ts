@@ -4,6 +4,7 @@ import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildNanoBananaImagePayload } from "../payload-builders.js";
+import { replaceNaturalAssetMentions } from "../google-flow-refs.js";
 import type { ImageInput } from "../tools/_image-inputs.js";
 import type { NanoBananaProRequest } from "@apicity/kie";
 
@@ -38,8 +39,13 @@ export function registerGenerateNanoBananaImageJob(fs: VideocityFs): void {
       );
     }
 
+    const normalizedPrompt = replaceNaturalAssetMentions(prompt, {
+      imageSlugs: imageInputs
+        .map((input) => ("assetId" in input ? input.assetId : null))
+        .filter((id): id is string => id !== null),
+    });
     const request = buildNanoBananaImagePayload(
-      { prompt, aspect_ratio: aspectRatio, resolution, output_format: outputFormat },
+      { prompt: normalizedPrompt, aspect_ratio: aspectRatio, resolution, output_format: outputFormat },
       uploadedUrls,
     );
     const taskId = await submitKieTask(fs, ctx, {
