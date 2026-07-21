@@ -3,7 +3,7 @@ import { z, type ZodRawShape } from "zod";
 import { Qwen2ImageEditRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { zodErrorToToolResult } from "./_shared.js";
+import { slugAsPlaceholderUrl, zodErrorToToolResult } from "./_shared.js";
 import { resolveImageSlugs } from "./_image-inputs.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
@@ -54,15 +54,15 @@ export function generateQwen2ImageEditDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      // Apicity Qwen2ImageEditRequestSchema enforces image_url (a single string)
-      // and prompt .min(1). The slug stands in for the URL here — a non-empty
-      // string satisfying the inner `z.string()` constraint. The actual URL is
-      // resolved post-upload in the job handler.
+      // Apicity Qwen2ImageEditRequestSchema enforces image_url as z.string().url()
+      // and prompt .min(1). Local @img-* slugs are not URLs; use a placeholder so
+      // pre-upload validation still checks prompt/options. The job handler uploads
+      // the asset and substitutes a real CDN URL before calling Kie.
       const apicityCheck = Qwen2ImageEditRequestSchema.safeParse({
         model: "qwen2/image-edit",
         input: {
           prompt,
-          image_url: rawSlugs[0].replace(/^@/, ""),
+          image_url: slugAsPlaceholderUrl(rawSlugs[0]),
           ...(image_size !== undefined ? { image_size } : {}),
           ...(output_format !== undefined ? { output_format } : {}),
           ...(seed !== undefined ? { seed } : {}),

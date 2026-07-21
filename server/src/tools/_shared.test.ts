@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { requireAtLeastOne, toolError, zodErrorToToolResult } from "./_shared.js";
+import { Qwen2ImageEditRequestSchema } from "@apicity/kie/zod";
+import { requireAtLeastOne, slugAsPlaceholderUrl, toolError, zodErrorToToolResult } from "./_shared.js";
 
 describe("toolError", () => {
   it("wraps a message in the MCP isError envelope", () => {
@@ -54,5 +55,26 @@ describe("zodErrorToToolResult", () => {
       issues: [{ path: ["input", "image_url"], message: "Required" }],
     });
     expect(result.content[0].text).toBe("image_url: Required");
+  });
+});
+
+describe("slugAsPlaceholderUrl", () => {
+  it("produces a URL that satisfies apicity image_url .url() checks", () => {
+    // vc-zcxs: bare @img slugs fail Qwen2ImageEditRequestSchema image_url: Invalid URL
+    const slug = "@img-nbp-scene-reference-2-3";
+    const placeholder = slugAsPlaceholderUrl(slug);
+    expect(placeholder).toBe("https://placeholder.local/img-nbp-scene-reference-2-3");
+
+    const withSlug = Qwen2ImageEditRequestSchema.safeParse({
+      model: "qwen2/image-edit",
+      input: { prompt: "exactly the same remove game", image_url: slug.replace(/^@/, "") },
+    });
+    expect(withSlug.success).toBe(false);
+
+    const withPlaceholder = Qwen2ImageEditRequestSchema.safeParse({
+      model: "qwen2/image-edit",
+      input: { prompt: "exactly the same remove game", image_url: placeholder },
+    });
+    expect(withPlaceholder.success).toBe(true);
   });
 });

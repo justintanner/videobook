@@ -12,6 +12,15 @@ type ZodLikeError = {
   }>;
 };
 
+// Stand-in https URL for pre-upload apicity safeParse. Asset fields are typed
+// as z.string().url() on the wire, but tools pass local @img-*/@vid-*/@aud-*
+// slugs until the job uploads and substitutes real CDN URLs. Use this only
+// for schema validation — never as the outbound provider payload.
+export function slugAsPlaceholderUrl(slug: string): string {
+  const bare = slug.replace(/^@/, "").trim();
+  return `https://placeholder.local/${bare || "asset"}`;
+}
+
 // Convert a ZodError from an @apicity provider safeParse into an MCP tool
 // `isError` result. Strips the leading `input.` path segment so the surfaced
 // message reads as "image_url: ..." rather than "input.image_url: ..." —
