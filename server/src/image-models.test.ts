@@ -450,7 +450,7 @@ describe("google flow image provider", () => {
         "google",
       );
       expect(noRefs.selected_provider).toBe("google");
-      expect(noRefs.tool_name).toBe("generate_nano_banana_pro_google");
+      expect(noRefs.tool_name).toBe("generate_google_flow_nano_banana_pro_image");
       expect(Object.keys(noRefs.schema!.properties)).toEqual(["prompt", "image_slugs", "character_refs", "aspect_ratio", "seed"]);
       expect(noRefs.prefilled_values).not.toHaveProperty("resolution");
       expect(noRefs.prefilled_values).not.toHaveProperty("output_format");
@@ -459,7 +459,7 @@ describe("google flow image provider", () => {
       const withRefs = buildImageModelOption("nano_banana", models.nano_banana, { prompt: "x" }, [
         { tag: "@img-ref", asset_id: "img-ref", asset_type: "image", file_path: "/p/ref.png", asset_dir: "/p" },
       ], undefined, "google");
-      expect(withRefs.tool_name).toBe("generate_nano_banana_pro_google");
+      expect(withRefs.tool_name).toBe("generate_google_flow_nano_banana_pro_image");
     } finally {
       if (originalGoogle === undefined) delete process.env.GOOGLE_FLOW_API_KEY;
       else process.env.GOOGLE_FLOW_API_KEY = originalGoogle;
@@ -471,6 +471,6 @@ describe("google flow image provider", () => {
   it("kie selection keeps the base nano banana tool", () => {
     const models = getImageModels();
     const option = buildImageModelOption("nano_banana", models.nano_banana, { prompt: "x" }, [], undefined, "kie");
-    expect(option.tool_name).toBe("generate_nano_banana_image");
+    expect(option.tool_name).toBe("generate_kie_nano_banana_pro_text_to_image");
   });
 });

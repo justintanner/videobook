@@ -1,32 +1,13 @@
 import type { VideocityFs } from "videocity-engine";
 import type { ToolDef } from "./tool-def.js";
+import {
+  VIDEO_EDITING_COMMANDS,
+  expandCommandAliases,
+  type Command,
+} from "./video-editing-command-contract.js";
 
-interface CommandParam {
-  name: string;
-  type: "string" | "number" | "boolean" | "string[]";
-  required: boolean;
-  description: string;
-}
-
-interface Command {
-  command: string;
-  description: string;
-  example?: string;
-  category: "action" | "project" | "context_menu" | "viewer";
-  icon: string;
-  size: "sm" | "default" | "lg";
-  variant: "default" | "violet" | "fuchsia" | "blue" | "zinc" | "amber" | "emerald" | "pink";
-  chevron: "right" | "down";
-  params: CommandParam[];
-  mcpTool?: { tool: string; adapter?: string; autoInject?: string[]; injectParams?: Record<string, string | number | boolean> };
-  uiAction?: string;
-  onMount?: string[];
-  canonical?: string;
-  aliases?: string[];
-  deprecated?: boolean;
-}
-
-const HARDCODED_COMMANDS: Command[] = [
+const CANONICAL_COMMANDS: Command[] = [
+  ...VIDEO_EDITING_COMMANDS,
   {
     command: "/post",
     description: "Post a video or image asset to X (Twitter), now or scheduled",
@@ -69,41 +50,6 @@ const HARDCODED_COMMANDS: Command[] = [
     uiAction: "open_gf_characters",
   },
 
-  {
-    command: "/trim",
-    description: "Trim video clip",
-    example: "/trim @hero-intro 0:05 0:12",
-    category: "action",
-    icon: "Scissors",
-    size: "lg",
-    variant: "default",
-    chevron: "right",
-    params: [
-      { name: "asset_id", type: "string", required: true, description: "Asset to trim" },
-      { name: "start", type: "string", required: false, description: "Start timestamp" },
-      { name: "end", type: "string", required: false, description: "End timestamp" },
-    ],
-    mcpTool: { tool: "trim_video", adapter: "trim_video", autoInject: ["project_slug"] },
-    canonical: "/trim-video",
-    aliases: ["/trim"],
-  },
-  {
-    command: "/trim-video",
-    description: "Trim video clip",
-    example: "/trim-video @hero-intro 0:05 0:12",
-    category: "action",
-    icon: "Scissors",
-    size: "lg",
-    variant: "default",
-    chevron: "right",
-    params: [
-      { name: "asset_id", type: "string", required: true, description: "Asset to trim" },
-      { name: "start", type: "string", required: false, description: "Start timestamp" },
-      { name: "end", type: "string", required: false, description: "End timestamp" },
-    ],
-    mcpTool: { tool: "trim_video", adapter: "trim_video", autoInject: ["project_slug"] },
-    canonical: "/trim-video",
-  },
   {
     command: "/crop",
     description: "Crop video or image to a 16:9, 9:16, or 1:1 region (visually place the box, then re-render)",
@@ -149,36 +95,6 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "pad_video", autoInject: ["project_slug"] },
   },
   {
-    command: "/overlay",
-    description: "Place an on-screen graphic overlay on a video (visually position and size the badge)",
-    example: "/overlay @vid-yt-clip @img-logo",
-    category: "context_menu",
-    icon: "Tv",
-    size: "default",
-    variant: "default",
-    chevron: "right",
-    params: [
-      { name: "asset_id", type: "string", required: true, description: "Video asset to overlay" },
-      { name: "image", type: "string", required: false, description: "Image asset (img-) to use as the overlay" },
-    ],
-    uiAction: "open_osg",
-  },
-  {
-    command: "/osg",
-    description: "Place an on-screen graphic overlay on a video (legacy alias for /overlay)",
-    example: "/osg @vid-yt-clip @img-logo",
-    category: "context_menu",
-    icon: "Tv",
-    size: "default",
-    variant: "default",
-    chevron: "right",
-    params: [
-      { name: "asset_id", type: "string", required: true, description: "Video asset to overlay" },
-      { name: "image", type: "string", required: false, description: "Image asset (img-) to use as the overlay" },
-    ],
-    uiAction: "open_osg",
-  },
-  {
     command: "/keywords",
     description: "Animate transcript keywords in face-safe open space, or omit words for automatic selection",
     example: "/keywords @vid-interview Multicultural Revolution Success",
@@ -191,99 +107,7 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Video asset with a timed transcript" },
       { name: "inputs", type: "string[]", required: false, description: "Exact transcript words, or: on [max] [linger] | off" },
     ],
-    mcpTool: { tool: "animate_keywords", autoInject: ["project_slug"] },
-  },
-  {
-    command: "/trim-audio",
-    description: "Trim audio clip",
-    example: "/trim-audio @voiceover-main 0:00 0:30",
-    category: "action",
-    icon: "Scissors",
-    size: "default",
-    variant: "emerald",
-    chevron: "right",
-    params: [
-      { name: "asset_id", type: "string", required: true, description: "Asset to trim" },
-      { name: "start", type: "string", required: false, description: "Start timestamp" },
-      { name: "end", type: "string", required: false, description: "End timestamp" },
-    ],
-    mcpTool: { tool: "trim_audio", adapter: "trim_audio", autoInject: ["project_slug"] },
-    canonical: "/trim-audio",
-  },
-  {
-    command: "/apply-cuts",
-    description: "Apply trim cuts to a video clip in place",
-    example: "/apply-cuts @vid-clip 0-5 10-15",
-    category: "action",
-    icon: "Scissors",
-    size: "default",
-    variant: "violet",
-    chevron: "right",
-    params: [
-      { name: "asset_id", type: "string", required: true, description: "Video asset ID" },
-      { name: "cuts", type: "string[]", required: true, description: "Cut ranges, e.g. 0-5 10-15" },
-    ],
-    mcpTool: { tool: "apply_cuts", adapter: "apply_cuts", autoInject: ["project_slug"] },
-    canonical: "/apply-cuts",
-  },
-  {
-    command: "/extract-frame",
-    description: "Extract a frame at a specific timestamp from a video as an image asset",
-    example: "/extract-frame @vid-clip 2.5",
-    category: "context_menu",
-    icon: "Image",
-    size: "default",
-    variant: "default",
-    chevron: "right",
-    params: [
-      { name: "asset_id", type: "string", required: true, description: "Video asset to extract from" },
-      { name: "timestamp", type: "number", required: true, description: "Timestamp in seconds" },
-    ],
-    mcpTool: { tool: "extract_frame", autoInject: ["project_slug"] },
-  },
-  {
-    command: "/transcript",
-    description: "Read transcript of a video or audio asset",
-    example: "/transcript @vid-interview",
-    category: "action",
-    icon: "FileText",
-    size: "default",
-    variant: "violet",
-    chevron: "right",
-    params: [
-      { name: "asset_id", type: "string", required: true, description: "Asset ID to read transcript for" },
-    ],
-    mcpTool: { tool: "read_transcript", autoInject: ["project_slug"] },
-  },
-  {
-    command: "/translate-subs",
-    description: "Translate video subtitles to target language",
-    example: "/translate-subs @vid-clip es",
-    category: "action",
-    icon: "Languages",
-    size: "default",
-    variant: "violet",
-    chevron: "right",
-    params: [
-      { name: "asset_id", type: "string", required: true, description: "Video asset ID" },
-      { name: "target_language", type: "string", required: true, description: "Target language code (e.g. es, fr, de)" },
-    ],
-    mcpTool: { tool: "translate_subtitles", adapter: "translate_subtitles", autoInject: ["project_slug"] },
-    canonical: "/translate-subs",
-  },
-  {
-    command: "/final",
-    description: "Finalize and export",
-    example: "/final portrait",
-    category: "action",
-    icon: "Clapperboard",
-    size: "default",
-    variant: "default",
-    chevron: "right",
-    params: [
-      { name: "orientation", type: "string", required: false, description: "landscape, portrait, or square (default: active tab)" },
-    ],
-    mcpTool: { tool: "render_timeline", autoInject: ["project_slug"] },
+    mcpTool: { tool: "animate_keywords", adapter: "keywords", autoInject: ["project_slug"] },
   },
   {
     command: "/download",
@@ -478,7 +302,7 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "type", type: "string", required: true, description: "Short effect type such as whoosh, impact, or ding" },
       { name: "description", type: "string", required: true, description: "Description of the sound effect to generate" },
     ],
-    mcpTool: { tool: "apply_sfx", autoInject: ["project_slug"] },
+    mcpTool: { tool: "apply_sfx", adapter: "apply_sfx", autoInject: ["project_slug"] },
   },
   {
     command: "/notebook",
@@ -534,6 +358,7 @@ const HARDCODED_COMMANDS: Command[] = [
     ],
     uiAction: "open_watermark",
     onMount: ["viewer"],
+    exposure: "composite",
   },
   {
     command: "/qart",
@@ -579,6 +404,7 @@ const HARDCODED_COMMANDS: Command[] = [
     ],
     mcpTool: {
       tool: "create_qr_outro",
+      adapter: "qr_outro",
       autoInject: ["project_slug"],
       injectParams: { duration_seconds: 10, include_audio: true },
     },
@@ -926,36 +752,6 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "smooth_scene_concat", autoInject: ["project_slug"] },
   },
   {
-    command: "/split-chunks",
-    description: "Split a video into N targeted chunks plus a leftover with the rest. Original preserved.",
-    example: "/split-chunks @vid-source 10 15",
-    category: "context_menu",
-    icon: "Scissors",
-    size: "default",
-    variant: "violet",
-    chevron: "right",
-    params: [
-      { name: "asset_id", type: "string", required: true, description: "Video asset to split" },
-      { name: "target_secs", type: "string[]", required: false, description: "Ordered chunk lengths, e.g. '10' or '10 15' (default 7). Each accepts '10' or '10s'." },
-    ],
-    mcpTool: { tool: "split_video_by_durations", autoInject: ["project_slug"] },
-  },
-  {
-    command: "/even-split",
-    description: "Legacy alias for /split-chunks. Split a video into targeted chunks.",
-    example: "/even-split @vid-source 10 15",
-    category: "context_menu",
-    icon: "Scissors",
-    size: "default",
-    variant: "violet",
-    chevron: "right",
-    params: [
-      { name: "asset_id", type: "string", required: true, description: "Video asset to split" },
-      { name: "target_secs", type: "string[]", required: false, description: "Ordered chunk lengths, e.g. '10' or '10 15' (default 7). Each accepts '10' or '10s'." },
-    ],
-    mcpTool: { tool: "split_video_by_durations", autoInject: ["project_slug"] },
-  },
-  {
     command: "/assign",
     description: "Assign asset to timeline slot",
     example: "/assign @vid-clip @s02",
@@ -1028,39 +824,6 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "rewrite_prompt", autoInject: ["project_slug"] },
   },
   {
-    command: "/render-video",
-    description: "Render video asset",
-    example: "/render-video @hero-intro portrait",
-    category: "action",
-    icon: "Film",
-    size: "lg",
-    variant: "violet",
-    chevron: "right",
-    params: [
-      { name: "asset_id", type: "string", required: true, description: "Video asset to render" },
-      { name: "orientation", type: "string", required: false, description: "landscape, portrait, or square (default: all)" },
-    ],
-    mcpTool: { tool: "render_video", autoInject: ["project_slug"] },
-    canonical: "/render-video",
-  },
-  {
-    command: "/render",
-    description: "Render video asset (alias for /render-video)",
-    example: "/render @hero-intro portrait",
-    category: "action",
-    icon: "Film",
-    size: "lg",
-    variant: "violet",
-    chevron: "right",
-    params: [
-      { name: "asset_id", type: "string", required: true, description: "Video asset to render" },
-      { name: "orientation", type: "string", required: false, description: "landscape, portrait, or square (default: all)" },
-    ],
-    mcpTool: { tool: "render_video", autoInject: ["project_slug"] },
-    canonical: "/render-video",
-    aliases: ["/render"],
-  },
-  {
     command: "/clean-audio",
     description: "Clean a video's audio in place with ElevenLabs while preserving vocals and key sound effects",
     example: "/clean-audio @vid-interview true",
@@ -1117,38 +880,6 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "value", type: "string", required: false, description: "Value for the field" },
     ],
     uiAction: "settings_subs",
-    onMount: ["viewer"],
-  },
-  {
-    command: "/audio-settings",
-    description: "Audio viewer settings (volume/fades)",
-    example: "/audio-settings volume 80",
-    category: "viewer",
-    icon: "volume-2",
-    size: "sm",
-    variant: "default",
-    chevron: "right",
-    params: [
-      { name: "field", type: "string", required: true, description: "volume|audioVolume|fade-in|fadeIn|audioFadeIn|fade-out|fadeOut|audioFadeOut" },
-      { name: "value", type: "string", required: false, description: "Numeric value" },
-    ],
-    uiAction: "settings_audio",
-    onMount: ["viewer"],
-  },
-  {
-    command: "/audio",
-    description: "Audio viewer settings (legacy alias for /audio-settings)",
-    example: "/audio volume 80",
-    category: "viewer",
-    icon: "volume-2",
-    size: "sm",
-    variant: "default",
-    chevron: "right",
-    params: [
-      { name: "field", type: "string", required: true, description: "volume|audioVolume|fade-in|fadeIn|audioFadeIn|fade-out|fadeOut|audioFadeOut" },
-      { name: "value", type: "string", required: false, description: "Numeric value" },
-    ],
-    uiAction: "settings_audio",
     onMount: ["viewer"],
   },
   {
@@ -1504,7 +1235,7 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Video asset to retime" },
       { name: "speed", type: "string", required: true, description: "Speed multiplier (2) or target duration (8.32s)" },
     ],
-    mcpTool: { tool: "change_video_speed", autoInject: ["project_slug"] },
+    mcpTool: { tool: "change_video_speed", adapter: "change_speed", autoInject: ["project_slug"] },
   },
   {
     command: "/timewarp",
@@ -1520,7 +1251,7 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "range", type: "string", required: true, description: "Selected range as start-end" },
       { name: "factor", type: "string", required: true, description: "Duration multiplier from 0.25x to 4x" },
     ],
-    mcpTool: { tool: "timewarp_video", autoInject: ["project_slug"] },
+    mcpTool: { tool: "timewarp_video", adapter: "timewarp", autoInject: ["project_slug"] },
   },
   {
     command: "/sync-audio",
@@ -1535,7 +1266,7 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Video asset to synchronize" },
       { name: "mappings", type: "string", required: true, description: "Semicolon-separated video-time=audio-cue-or-time anchors" },
     ],
-    mcpTool: { tool: "sync_video_to_audio", autoInject: ["project_slug"] },
+    mcpTool: { tool: "sync_video_to_audio", adapter: "sync_audio", autoInject: ["project_slug"] },
   },
   {
     command: "/split",
@@ -1689,10 +1420,8 @@ export function commandsDef(fs: VideocityFs): ToolDef {
     description: "List all available UI commands with scope metadata",
     schema: {},
     handler: async () => {
-      const commands: Command[] = [...HARDCODED_COMMANDS];
-
-      // Dynamic project commands — skip slugs that collide with hardcoded names
-      const reserved = new Set(commands.map((c) => c.command));
+      const commands: Command[] = [...CANONICAL_COMMANDS];
+      const reserved = new Set(commands.flatMap((command) => [command.command, ...(command.aliases ?? [])]));
       const projects = await fs.listProjects();
       for (const p of projects) {
         if (reserved.has(`/${p.slug}`)) continue;
@@ -1710,7 +1439,7 @@ export function commandsDef(fs: VideocityFs): ToolDef {
       }
 
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(commands) }],
+        content: [{ type: "text" as const, text: JSON.stringify(expandCommandAliases(commands)) }],
       };
     },
   };

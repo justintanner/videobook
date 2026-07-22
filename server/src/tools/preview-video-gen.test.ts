@@ -126,7 +126,7 @@ describe("preview_video tool", () => {
 
     expect(parsed.selected_model).toBe("gemini_omni");
     expect(parsed.selected_provider).toBe("google");
-    expect(parsed.tool_name).toBe("generate_google_omni_video");
+    expect(parsed.tool_name).toBe("generate_google_flow_omni_flash_video");
     expect(parsed.schema.properties.first_frame_slug).toBeDefined();
     expect(parsed.schema.properties.resolution).toBeUndefined();
     expect(parsed.schema.required).not.toContain("duration");

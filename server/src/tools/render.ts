@@ -49,7 +49,7 @@ export function renderVideoDef(fs: VideocityFs): ToolDef {
       orientation: z
         .enum(["landscape", "portrait", "square"])
         .optional()
-        .describe("Render orientation (default: from timeline config, or landscape)"),
+        .describe("Render one orientation; omit to render all three orientations"),
       subtitles_enabled: z
         .boolean()
         .optional()

@@ -25,6 +25,12 @@ const generateWan27ImageProSchema = {
   aspect_ratio: apicityField(wan27ImageInput.aspect_ratio, "Output aspect ratio (default 16:9)"),
   resolution: apicityField(wan27ImageInput.resolution, "Output resolution (default 2K)"),
   seed: apicityField(wan27ImageInput.seed, "Random seed (0-2147483647)"),
+  n: apicityField(wan27ImageInput.n, "Number of images to generate (1-4)"),
+  enable_sequential: apicityField(wan27ImageInput.enable_sequential, "Enable sequential generation mode"),
+  thinking_mode: apicityField(wan27ImageInput.thinking_mode, "Enable thinking mode for better quality"),
+  color_palette: apicityField(wan27ImageInput.color_palette, "Target color palette"),
+  bbox_list: apicityField(wan27ImageInput.bbox_list, "Bounding boxes for region control"),
+  watermark: apicityField(wan27ImageInput.watermark, "Add watermark to generated image"),
   nsfw_checker: apicityField(wan27ImageInput.nsfw_checker, "Content safety filter (default false)"),
 
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),

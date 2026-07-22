@@ -60,6 +60,7 @@ import {
   type SlotConstraints,
 } from "./zod-slots.js";
 import { totalOmniReferenceSlots } from "./google-flow-refs.js";
+import { getCanonicalName, getActionSpec, isGenerationAction } from "./generation-registry.js";
 
 // ---------------------------------------------------------------------------
 // Provider routes
@@ -95,7 +96,7 @@ type VideoModelInfo = {
 const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   kling30: {
     label: "Kling 3.0",
-    tool_name: "generate_kling30_video",
+    tool_name: "generate_kie_kling_3_0_video",
     description: "Kling 3.0 text/image-to-video with duration, sound, and aspect ratio control",
     params: [
       "prompt", "mode", "image_slugs",
@@ -112,7 +113,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   kling30_motion_control: {
     label: "Kling 3.0 Motion Control",
-    tool_name: "generate_kling30_motion_control_video",
+    tool_name: "generate_kie_kling_3_0_motion_control",
     description: "Apply motion from reference videos to character images using Kling 3.0 motion-control",
     params: [
       "prompt", "character_image_slugs", "motion_video_slugs",
@@ -125,7 +126,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   seedance2: {
     label: "Seedance 2",
-    tool_name: "generate_seedance2_video",
+    tool_name: "generate_kie_seedance_2_0_video",
     description: "ByteDance Seedance 2 — text/image-to-video with optional first/last frame and reference images, videos, and/or audio (up to 1080p)",
     params: [
       "prompt",
@@ -138,10 +139,11 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
+    falToolNames: { noRefs: "generate_fal_seedance_2_0_text_to_video", withRefs: "generate_fal_seedance_2_0_image_to_video" },
   },
   seedance2_fast: {
     label: "Seedance 2 Fast",
-    tool_name: "generate_seedance2_fast_video",
+    tool_name: "generate_kie_seedance_2_0_fast_video",
     description: "ByteDance Seedance 2 Fast — text/image-to-video with optional first/last frame and reference images, videos, and/or audio (up to 720p)",
     params: [
       "prompt",
@@ -154,10 +156,11 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
+    falToolNames: { noRefs: "generate_fal_seedance_2_0_fast_text_to_video", withRefs: "generate_fal_seedance_2_0_fast_image_to_video" },
   },
   seedance2_mini: {
     label: "Seedance 2 Mini",
-    tool_name: "generate_seedance2_mini_video",
+    tool_name: "generate_kie_seedance_2_0_mini_video",
     description: "ByteDance Seedance 2 Mini — text-to-video with optional reference images, videos, and/or audio (no first/last frame; up to 720p)",
     params: [
       "prompt",
@@ -172,7 +175,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   gemini_omni: {
     label: "Gemini Omni Video",
-    tool_name: "generate_gemini_omni_video",
+    tool_name: "generate_kie_gemini_omni_video",
     description: "Google Gemini Omni — multimodal text/image/clip-to-video. A prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes",
     params: [
       "prompt",
@@ -183,11 +186,11 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
-    googleToolName: "generate_google_omni_video",
+    googleToolName: "generate_google_flow_omni_flash_video",
   },
   veo3: {
     label: "Veo 3",
-    tool_name: "generate_veo3_video",
+    tool_name: "generate_kie_veo_3_0_video",
     description: "Google Veo 3 — text-to-video or image-to-video from reference images (kie veo namespace)",
     params: ["prompt", "image_slugs", "aspect_ratio", "seed"],
     defaults: {},
@@ -197,7 +200,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   veo3_fast: {
     label: "Veo 3 Fast",
-    tool_name: "generate_veo3_fast_video",
+    tool_name: "generate_kie_veo_3_0_fast_video",
     description: "Google Veo 3 Fast — text-to-video or image-to-video from reference images (kie veo namespace)",
     params: ["prompt", "image_slugs", "aspect_ratio", "seed"],
     defaults: {},
@@ -207,7 +210,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   veo31: {
     label: "Veo 3.1",
-    tool_name: "generate_veo31_video",
+    tool_name: "generate_kie_veo_3_1_video",
     description: "Google Veo 3.1 quality tier — text-to-video or image-to-video from start/end frames, 8s output (Google Flow)",
     params: ["prompt", "first_frame_slug", "last_frame_slug", "aspect_ratio", "seed"],
     defaults: {},
@@ -217,7 +220,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   veo31_fast: {
     label: "Veo 3.1 Fast",
-    tool_name: "generate_veo31_fast_video",
+    tool_name: "generate_kie_veo_3_1_fast_video",
     description: "Google Veo 3.1 Fast — text-to-video, start/end-frame image-to-video, or reference images (Google Flow)",
     params: ["prompt", "first_frame_slug", "last_frame_slug", "image_slugs", "aspect_ratio", "duration", "seed"],
     defaults: {},
@@ -227,7 +230,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   veo31_lite: {
     label: "Veo 3.1 Lite",
-    tool_name: "generate_veo31_lite_video",
+    tool_name: "generate_kie_veo_3_1_lite_video",
     description: "Google Veo 3.1 Lite — cheapest Veo 3.1 tier: text-to-video, start/end frames, or reference images (Google Flow)",
     params: ["prompt", "first_frame_slug", "last_frame_slug", "image_slugs", "aspect_ratio", "duration", "seed"],
     defaults: {},
@@ -237,7 +240,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   veo31_lite_low_priority: {
     label: "Veo 3.1 Lite LP",
-    tool_name: "generate_veo31_lite_low_priority_video",
+    tool_name: "generate_kie_veo_3_1_lite_low_priority_video",
     description: "Google Veo 3.1 Lite Lower Priority — Ultra $199 only, 0 credits, lower queue priority (Google Flow)",
     params: ["prompt", "first_frame_slug", "last_frame_slug", "image_slugs", "aspect_ratio", "duration", "seed"],
     defaults: {},
@@ -247,7 +250,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   kling30_turbo: {
     label: "Kling 3.0 Turbo",
-    tool_name: "generate_kling30_turbo_video",
+    tool_name: "generate_kie_kling_3_0_turbo_video",
     description: "Kling Video v3 Turbo tier via KIE (text- or image-to-video)",
     params: ["prompt", "image_slugs", "duration", "resolution", "aspect_ratio"],
     defaults: { duration: "5", resolution: "720p" },
@@ -257,7 +260,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   wan27_t2v: {
     label: "Wan 2.7 Text to Video",
-    tool_name: "generate_wan27_t2v_video",
+    tool_name: "generate_kie_wan_2_7_text_to_video",
     description: "Wan 2.7 text-to-video with optional custom audio (kie)",
     params: [
       "prompt", "negative_prompt", "audio_slug",
@@ -267,10 +270,11 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
+    falToolNames: { noRefs: "generate_fal_wan_2_7_text_to_video", withRefs: "generate_fal_wan_2_7_image_to_video" },
   },
   wan27_i2v: {
     label: "Wan 2.7 Image to Video",
-    tool_name: "generate_wan27_i2v_video",
+    tool_name: "generate_kie_wan_2_7_image_to_video",
     description: "Wan 2.7 image-to-video with first/last frame, clip continuation, and driving audio",
     params: [
       "prompt", "negative_prompt",
@@ -282,10 +286,11 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
+    falToolNames: { noRefs: "generate_fal_wan_2_7_text_to_video", withRefs: "generate_fal_wan_2_7_image_to_video" },
   },
   wan27_videoedit: {
     label: "Wan 2.7 Video Edit",
-    tool_name: "generate_wan27_videoedit_video",
+    tool_name: "generate_kie_wan_2_7_edit_video",
     description: "Wan 2.7 video editing with optional reference image for character, clothing, or style guidance",
     params: [
       "prompt", "negative_prompt",
@@ -296,10 +301,11 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
+    falToolNames: { withRefs: "generate_fal_wan_2_7_edit_video" },
   },
   wan27_r2v: {
     label: "Wan 2.7 Reference",
-    tool_name: "generate_wan27_r2v_video",
+    tool_name: "generate_kie_wan_2_7_reference_to_video",
     description: "Wan 2.7 reference-to-video guided by reference images, videos, voice, and optional first frame",
     params: [
       "prompt", "negative_prompt",
@@ -311,10 +317,11 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
+    falToolNames: { withRefs: "generate_fal_wan_2_7_reference_to_video" },
   },
   wan27_extend: {
     label: "Wan 2.7 Extend",
-    tool_name: "extend_wan27_video",
+    tool_name: "extend_kie_wan_2_7_video",
     description: "Extend an existing video using Wan 2.7 Image to Video with clip continuation",
     params: [
       "video_slug", "prompt", "negative_prompt",
@@ -327,17 +334,18 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   grok_imagine: {
     label: "Grok Imagine 1.5 — Kie",
-    tool_name: "generate_grok_imagine_video",
+    tool_name: "generate_kie_grok_imagine_image_to_video",
     description: "Kie Grok Imagine Video 1.5 image-to-video",
     params: ["prompt", "image_slugs", "mode", "duration", "resolution", "aspect_ratio", "nsfw_checker"],
     defaults: {},
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
+    falToolNames: { noRefs: "generate_fal_grok_imagine_video_image_to_video", withRefs: "generate_fal_grok_imagine_video_image_to_video" },
   },
   grok_imagine_t2v: {
     label: "Grok Imagine — Text",
-    tool_name: "generate_grok_imagine_t2v_video",
+    tool_name: "generate_kie_grok_imagine_text_to_video",
     description: "Grok Imagine text-to-video (no reference images, kie)",
     params: ["prompt", "mode", "duration", "resolution", "aspect_ratio", "nsfw_checker"],
     defaults: {},
@@ -347,27 +355,29 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   grok_imagine_ref: {
     label: "Grok Imagine Reference",
-    tool_name: "generate_grok_imagine_ref_video",
+    tool_name: "generate_kie_grok_imagine_reference_to_video",
     description: "Video generation guided by reference images (0-7 optional)",
     params: ["prompt", "image_slugs", "duration", "resolution", "aspect_ratio"],
     defaults: {},
     providers: [
       { key: "xai", label: "xAI", provider_path: "xai.post.v1.videos.generations(request, { otp })", envKey: "XAI_API_KEY" },
     ],
+    falToolNames: { withRefs: "generate_fal_grok_imagine_video_reference_to_video" },
   },
   grok_imagine_extend: {
     label: "Grok Imagine Extend",
-    tool_name: "extend_grok_imagine_video",
+    tool_name: "extend_kie_grok_imagine_video",
     description: "Extend an existing video into a longer video using Grok Imagine",
-    params: ["video_slug", "prompt", "extend_at", "extend_times"],
+    params: ["video_slug", "prompt", "extend_at", "extend_times", "duration"],
     defaults: {},
     providers: [
       { key: "kie", label: "Kie", provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", envKey: "KIE_API_KEY" },
     ],
+    falToolNames: { withRefs: "extend_fal_grok_imagine_video" },
   },
   happyhorse_t2v: {
     label: "HappyHorse 1.1 — Text",
-    tool_name: "generate_happyhorse_t2v_video",
+    tool_name: "generate_kie_happyhorse_1_1_text_to_video",
     description: "HappyHorse 1.1 text-to-video (kie)",
     params: ["prompt", "resolution", "aspect_ratio", "duration"],
     defaults: {},
@@ -377,7 +387,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   happyhorse_i2v: {
     label: "HappyHorse 1.1 — First Frame",
-    tool_name: "generate_happyhorse_i2v_video",
+    tool_name: "generate_kie_happyhorse_1_1_image_to_video",
     description: "HappyHorse 1.1 image-to-video from a single first-frame image (kie)",
     params: ["prompt", "first_frame_slug", "resolution", "duration"],
     defaults: {},
@@ -387,7 +397,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   happyhorse_ref: {
     label: "HappyHorse 1.1 — Reference",
-    tool_name: "generate_happyhorse_ref_video",
+    tool_name: "generate_kie_happyhorse_1_1_reference_to_video",
     description: "HappyHorse 1.1 reference-to-video for multi-character scenes (1-9 reference images)",
     params: ["prompt", "image_slugs", "resolution", "aspect_ratio", "duration"],
     defaults: {},
@@ -397,7 +407,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   happyhorse_videoedit: {
     label: "HappyHorse — Video Edit",
-    tool_name: "generate_happyhorse_videoedit_video",
+    tool_name: "generate_kie_happyhorse_1_1_edit_video",
     description: "HappyHorse video editing with optional reference images for character/style guidance (kie)",
     params: ["prompt", "video_slug", "image_slugs", "resolution", "audio_setting", "seed"],
     defaults: {},
@@ -407,7 +417,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   volcengine_lipsync: {
     label: "Volcengine Lip-Sync",
-    tool_name: "generate_volcengine_lipsync_video",
+    tool_name: "generate_kie_volcengine_video_to_video_lip_sync",
     description: "Volcengine video-to-video lip-sync — drive a source video's lips from a separate audio track (kie)",
     params: [
       "video_slug", "audio_slug", "mode",
@@ -420,7 +430,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   omnihuman: {
     label: "OmniHuman 1.5",
-    tool_name: "generate_omnihuman_video",
+    tool_name: "generate_kie_omnihuman_1_5_video",
     description: "ByteDance OmniHuman 1.5 — animate a portrait image with a driving audio track into a talking/singing avatar video (kie)",
     params: ["image_slug", "audio_slug", "prompt", "output_resolution", "pe_fast_mode", "seed"],
     defaults: {},
@@ -430,7 +440,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   alibaba_video: {
     label: "Alibaba Video Synthesis",
-    tool_name: "generate_alibaba_video",
+    tool_name: "generate_alibaba_wan_2_1_text_to_video",
     description: "Alibaba Cloud video synthesis with first/last frame, reference video, driving audio, and resolution control",
     params: [
       "prompt", "negative_prompt", "model",
@@ -439,125 +449,125 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
     ],
     defaults: {},
     providers: [
-      { key: "alibaba", label: "Alibaba", provider_path: "alibaba.post.api.v1.services.aigc.videoGeneration.videoSynthesis()", envKey: "DASHSCOPE_API_KEY" },
+      { key: "alibaba", label: "Alibaba", provider_path: "alibaba.post.api.v1.services.aigc.video-generation.video-synthesis.synthesis(request, { otp })", envKey: "DASHSCOPE_API_KEY" },
     ],
   },
   seedance2_fast_t2v: {
     label: "Seedance 2.0 Fast — Text",
-    tool_name: "generate_seedance2_fast_t2v_video",
+    tool_name: "generate_fal_seedance_2_0_fast_text_to_video",
     description: "ByteDance Seedance 2.0 Fast text-to-video via fal.ai",
     params: ["prompt", "resolution", "duration", "aspect_ratio", "generate_audio", "seed"],
     defaults: {},
     providers: [],
-    falToolNames: { noRefs: "generate_seedance2_fast_t2v_fal" },
+    falToolNames: { noRefs: "generate_fal_seedance_2_0_fast_text_to_video" },
   },
   seedance2_fast_i2v: {
     label: "Seedance 2.0 Fast — First Frame",
-    tool_name: "generate_seedance2_fast_i2v_video",
+    tool_name: "generate_fal_seedance_2_0_fast_image_to_video",
     description: "ByteDance Seedance 2.0 Fast image-to-video via fal.ai",
     params: ["prompt", "first_frame_slug", "end_frame_slug", "resolution", "duration", "aspect_ratio", "generate_audio", "seed"],
     defaults: {},
     providers: [],
-    falToolNames: { withRefs: "generate_seedance2_fast_i2v_fal" },
+    falToolNames: { withRefs: "generate_fal_seedance_2_0_fast_image_to_video" },
   },
   wan27_t2v_fal: {
     label: "Wan v2.7 — Text (fal)",
-    tool_name: "generate_wan27_t2v_fal_video",
+    tool_name: "generate_fal_wan_2_7_text_to_video",
     description: "Alibaba Wan v2.7 text-to-video via fal.ai",
     params: ["prompt", "aspect_ratio", "resolution", "duration", "negative_prompt", "enable_prompt_expansion", "enable_safety_checker", "seed"],
     defaults: {},
     providers: [],
-    falToolNames: { noRefs: "generate_wan27_t2v_fal" },
+    falToolNames: { noRefs: "generate_fal_wan_2_7_text_to_video" },
   },
   wan27_i2v_fal: {
     label: "Wan v2.7 — First Frame (fal)",
-    tool_name: "generate_wan27_i2v_fal_video",
+    tool_name: "generate_fal_wan_2_7_image_to_video",
     description: "Alibaba Wan v2.7 image-to-video via fal.ai",
     params: ["prompt", "first_frame_slug", "end_frame_slug", "resolution", "duration", "negative_prompt", "enable_prompt_expansion", "enable_safety_checker", "seed"],
     defaults: {},
     providers: [],
-    falToolNames: { withRefs: "generate_wan27_i2v_fal" },
+    falToolNames: { withRefs: "generate_fal_wan_2_7_image_to_video" },
   },
   kling30_standard: {
     label: "Kling 3.0 Standard",
-    tool_name: "generate_kling30_standard_video",
+    tool_name: "generate_fal_kling_video_v3_standard_text_to_video",
     description: "Kling Video v3 Standard tier via fal.ai (text- or image-to-video)",
     params: ["prompt", "first_frame_slug", "end_frame_slug", "duration", "aspect_ratio", "generate_audio", "shot_type", "negative_prompt", "cfg_scale"],
     defaults: {},
     providers: [],
-    falToolNames: { noRefs: "generate_kling_v3_standard_t2v_fal", withRefs: "generate_kling_v3_standard_i2v_fal" },
+    falToolNames: { noRefs: "generate_fal_kling_video_v3_standard_text_to_video", withRefs: "generate_fal_kling_video_v3_standard_image_to_video" },
   },
   kling30_pro_fal: {
     label: "Kling 3.0 Pro",
-    tool_name: "generate_kling30_pro_video",
+    tool_name: "generate_fal_kling_video_v3_pro_text_to_video",
     description: "Kling Video v3 Pro tier via fal.ai (text- or image-to-video)",
     params: ["prompt", "first_frame_slug", "end_frame_slug", "duration", "aspect_ratio", "generate_audio", "shot_type", "negative_prompt", "cfg_scale"],
     defaults: {},
     providers: [],
-    falToolNames: { noRefs: "generate_kling_v3_pro_t2v_fal", withRefs: "generate_kling_v3_pro_i2v_fal" },
+    falToolNames: { noRefs: "generate_fal_kling_video_v3_pro_text_to_video", withRefs: "generate_fal_kling_video_v3_pro_image_to_video" },
   },
   wan27_r2v_fal: {
     label: "Wan v2.7 — Reference (fal)",
-    tool_name: "generate_wan27_r2v_fal_video",
-    description: "Alibaba Wan v2.7 reference-to-video via fal.ai, guided by reference images and/or videos",
-    params: ["prompt", "image_slugs", "video_slugs", "aspect_ratio", "resolution", "duration", "multi_shots", "negative_prompt", "enable_safety_checker", "seed"],
+    tool_name: "generate_fal_wan_2_7_reference_to_video",
+    description: "Alibaba Wan v2.7 reference-to-video via fal.ai",
+    params: ["prompt", "image_slugs", "aspect_ratio", "resolution", "duration", "negative_prompt", "enable_prompt_expansion", "enable_safety_checker", "seed"],
     defaults: {},
     providers: [],
-    falToolNames: { noRefs: "generate_wan27_r2v_fal", withRefs: "generate_wan27_r2v_fal" },
+    falToolNames: { noRefs: "generate_fal_wan_2_7_reference_to_video", withRefs: "generate_fal_wan_2_7_reference_to_video" },
   },
   wan27_videoedit_fal: {
     label: "Wan v2.7 — Video Edit (fal)",
-    tool_name: "generate_wan27_videoedit_fal_video",
-    description: "Alibaba Wan v2.7 video editing via fal.ai with optional reference image for character/style guidance",
-    params: ["prompt", "video_slug", "image_slug", "aspect_ratio", "resolution", "duration", "audio_setting", "negative_prompt", "enable_safety_checker", "seed"],
+    tool_name: "generate_fal_wan_2_7_edit_video",
+    description: "Alibaba Wan v2.7 video-edit via fal.ai",
+    params: ["prompt", "video_slug", "image_slugs", "aspect_ratio", "resolution", "duration", "audio_setting", "enable_safety_checker", "seed"],
     defaults: {},
     providers: [],
-    falToolNames: { noRefs: "generate_wan27_videoedit_fal", withRefs: "generate_wan27_videoedit_fal" },
+    falToolNames: { noRefs: "generate_fal_wan_2_7_edit_video", withRefs: "generate_fal_wan_2_7_edit_video" },
   },
   seedance2_r2v_fal: {
     label: "Seedance 2.0 — Reference (fal)",
-    tool_name: "generate_seedance2_r2v_fal_video",
-    description: "ByteDance Seedance 2.0 reference-to-video via fal.ai, guided by reference images, videos, and/or audio",
+    tool_name: "generate_fal_seedance_2_0_reference_to_video",
+    description: "ByteDance Seedance 2.0 reference-to-video via fal.ai",
     params: ["prompt", "image_slugs", "video_slugs", "audio_slugs", "resolution", "duration", "aspect_ratio", "generate_audio", "seed"],
     defaults: {},
     providers: [],
-    falToolNames: { noRefs: "generate_seedance2_r2v_fal", withRefs: "generate_seedance2_r2v_fal" },
+    falToolNames: { noRefs: "generate_fal_seedance_2_0_reference_to_video", withRefs: "generate_fal_seedance_2_0_reference_to_video" },
   },
   seedance2_fast_r2v_fal: {
     label: "Seedance 2.0 Fast — Reference (fal)",
-    tool_name: "generate_seedance2_fast_r2v_fal_video",
-    description: "ByteDance Seedance 2.0 Fast reference-to-video via fal.ai, guided by reference images, videos, and/or audio",
+    tool_name: "generate_fal_seedance_2_0_fast_reference_to_video",
+    description: "ByteDance Seedance 2.0 Fast reference-to-video via fal.ai",
     params: ["prompt", "image_slugs", "video_slugs", "audio_slugs", "resolution", "duration", "aspect_ratio", "generate_audio", "seed"],
     defaults: {},
     providers: [],
-    falToolNames: { noRefs: "generate_seedance2_fast_r2v_fal", withRefs: "generate_seedance2_fast_r2v_fal" },
+    falToolNames: { noRefs: "generate_fal_seedance_2_0_fast_reference_to_video", withRefs: "generate_fal_seedance_2_0_fast_reference_to_video" },
   },
   grok_imagine_r2v_fal: {
     label: "Grok Imagine — Reference (fal)",
-    tool_name: "generate_grok_imagine_r2v_fal_video",
-    description: "xAI Grok Imagine reference-to-video via fal.ai, guided by 1-7 reference images",
+    tool_name: "generate_fal_grok_imagine_video_reference_to_video",
+    description: "xAI Grok Imagine reference-to-video via fal.ai",
     params: ["prompt", "image_slugs", "duration", "aspect_ratio", "resolution"],
     defaults: {},
     providers: [],
-    falToolNames: { noRefs: "generate_grok_imagine_video_r2v_fal", withRefs: "generate_grok_imagine_video_r2v_fal" },
+    falToolNames: { noRefs: "generate_fal_grok_imagine_video_reference_to_video", withRefs: "generate_fal_grok_imagine_video_reference_to_video" },
   },
   grok_imagine_extend_fal: {
     label: "Grok Imagine — Extend (fal)",
-    tool_name: "generate_grok_imagine_extend_fal_video",
+    tool_name: "extend_fal_grok_imagine_video",
     description: "xAI Grok Imagine extend-video via fal.ai, continues an existing video",
     params: ["prompt", "video_slug", "duration"],
     defaults: {},
     providers: [],
-    falToolNames: { noRefs: "generate_grok_imagine_video_extend_fal", withRefs: "generate_grok_imagine_video_extend_fal" },
+    falToolNames: { noRefs: "extend_fal_grok_imagine_video", withRefs: "extend_fal_grok_imagine_video" },
   },
   grok_imagine_edit_fal: {
     label: "Grok Imagine — Video Edit (fal)",
-    tool_name: "generate_grok_imagine_edit_fal_video",
+    tool_name: "generate_fal_grok_imagine_video_edit_video",
     description: "xAI Grok Imagine edit-video via fal.ai, re-renders a source video",
     params: ["prompt", "video_slug", "resolution"],
     defaults: {},
     providers: [],
-    falToolNames: { noRefs: "generate_grok_imagine_video_edit_fal", withRefs: "generate_grok_imagine_video_edit_fal" },
+    falToolNames: { noRefs: "generate_fal_grok_imagine_video_edit_video", withRefs: "generate_fal_grok_imagine_video_edit_video" },
   },
 };
 
@@ -570,13 +580,21 @@ const DEFAULT_VIDEO_MODEL_KEY = "gemini_omni";
 // google tool name as a first-class entry while routing/selection still keys
 // off the single base model.
 const GOOGLE_VIDEO_ALIASES: Record<string, string> = {
-  generate_google_omni_video: "generate_gemini_omni_video",
+  generate_google_flow_omni_flash_video: "generate_kie_gemini_omni_video",
+  generate_google_omni_video: "generate_kie_gemini_omni_video",
 };
 
 // Google Omni ("Omni Flash") drops the Kie-only `resolution` and adds an I2V
 // `first_frame_slug` (mapped to the provider's startImage) ahead of the
 // reference images. R2V reference images cap at 7 (5 alongside a clip).
 const GOOGLE_VIDEO_PARAMS: Record<string, readonly string[]> = {
+  generate_google_flow_omni_flash_video: [
+    "prompt",
+    "first_frame_slug",
+    "image_slugs", "video_slug", "video_clip_start", "video_clip_ends",
+    "voice_refs", "character_refs",
+    "duration", "aspect_ratio", "seed",
+  ],
   generate_google_omni_video: [
     "prompt",
     "first_frame_slug",
@@ -705,6 +723,46 @@ const SEEDANCE2_MINI_MODES: ModelModes = {
 };
 
 const VIDEO_TOOL_MODES: Record<string, ModelModes> = {
+  generate_google_flow_omni_flash_video: {
+    shared_params: ["prompt", "aspect_ratio", "seed", "voice_refs", "duration"],
+    default_mode: "t2v",
+    modes: [
+      {
+        key: "t2v",
+        label: "text",
+        description: "Prompt-only generation",
+        params: [],
+      },
+      {
+        key: "i2v",
+        label: "first-frame",
+        description: "Animate a start image (no references, characters, or clip)",
+        params: ["first_frame_slug"],
+        required: ["first_frame_slug"],
+        asset_slots: [{ param: "first_frame_slug", kind: "image", label: "First Frame" }],
+      },
+      {
+        key: "r2v",
+        label: "refs",
+        description: "Guide with reference images and characters (7-slot shared budget; a character costs 2 slots)",
+        params: ["image_slugs", "character_refs"],
+        asset_slots: [{ param: "image_slugs", kind: "image", label: "References", min: 0, max: 7 }],
+      },
+      {
+        key: "edit",
+        label: "video-edit",
+        description: "Re-render or extend a source clip window (output length = the clip window)",
+        params: ["video_slug", "video_clip_start", "video_clip_ends", "image_slugs", "character_refs"],
+        hidden_shared_params: ["duration"],
+        required: ["video_slug"],
+        asset_slots: [
+          { param: "video_slug", kind: "video", label: "Source Clip" },
+          { param: "image_slugs", kind: "image", label: "References", min: 0, max: 5 },
+        ],
+        param_overrides: { voice_refs: { maxItems: 3, description: "Up to 3 voice refs alongside a clip" } },
+      },
+    ],
+  },
   generate_google_omni_video: {
     shared_params: ["prompt", "aspect_ratio", "seed", "voice_refs", "duration"],
     default_mode: "t2v",
@@ -745,8 +803,11 @@ const VIDEO_TOOL_MODES: Record<string, ModelModes> = {
       },
     ],
   },
+  generate_kie_seedance_2_0_video: SEEDANCE2_FULL_MODES,
   generate_seedance2_video: SEEDANCE2_FULL_MODES,
+  generate_kie_seedance_2_0_fast_video: SEEDANCE2_FULL_MODES,
   generate_seedance2_fast_video: SEEDANCE2_FULL_MODES,
+  generate_kie_seedance_2_0_mini_video: SEEDANCE2_MINI_MODES,
   generate_seedance2_mini_video: SEEDANCE2_MINI_MODES,
 };
 
@@ -759,10 +820,15 @@ const VIDEO_TOOL_MODES: Record<string, ModelModes> = {
 type ZodLike = { _def?: unknown; unwrap?: () => unknown };
 
 const IMAGE_FIELD_SCHEMAS: Record<string, ZodLike> = {
+  generate_kie_kling_3_0_video: KlingVideoRequestSchema.shape.input.shape.image_urls,
   generate_kling30_video: KlingVideoRequestSchema.shape.input.shape.image_urls,
+  generate_kie_seedance_2_0_video: Seedance2InputSchema.shape.reference_image_urls,
   generate_seedance2_video: Seedance2InputSchema.shape.reference_image_urls,
+  generate_kie_seedance_2_0_fast_video: Seedance2FastInputSchema.shape.reference_image_urls,
   generate_seedance2_fast_video: Seedance2FastInputSchema.shape.reference_image_urls,
+  generate_kie_seedance_2_0_mini_video: Seedance2MiniInputSchema.shape.reference_image_urls,
   generate_seedance2_mini_video: Seedance2MiniInputSchema.shape.reference_image_urls,
+  generate_kie_gemini_omni_video: GeminiOmniVideoRequestSchema.shape.input.shape.image_urls,
   generate_gemini_omni_video: GeminiOmniVideoRequestSchema.shape.input.shape.image_urls,
   generate_grok_imagine_video: GrokImageToVideoRequestSchema.shape.input.shape.image_urls,
   generate_veo3_video: VeoGenerateRequestSchema.shape.imageUrls,
@@ -778,9 +844,13 @@ const IMAGE_SLOT_OVERRIDES: Record<string, SlotConstraints> = {
   generate_grok_imagine_ref_video: { min: 0, max: 7 },
   // Google Flow veo 3.1 reference slots are positional referenceImage_1..3
   // keys with no array field in @apicity/googleflow to read (gaps doc §14).
+  generate_google_flow_omni_flash_video: { min: 0, max: 7 },
   generate_google_omni_video: { min: 0, max: 7 },
+  generate_google_flow_veo_3_1_fast_video: { min: 0, max: 3 },
   generate_veo31_fast_video: { min: 0, max: 3 },
+  generate_google_flow_veo_3_1_lite_video: { min: 0, max: 3 },
   generate_veo31_lite_video: { min: 0, max: 3 },
+  generate_kie_veo_3_1_lite_low_priority_video: { min: 0, max: 3 },
   generate_veo31_lite_low_priority_video: { min: 0, max: 3 },
 };
 
@@ -1021,6 +1091,18 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     enable_safety_checker: FalWanV2p7ImageToVideoRequestSchema.shape.enable_safety_checker,
     seed: FalWanV2p7ImageToVideoRequestSchema.shape.seed,
   },
+  generate_fal_wan_2_7_reference_to_video: {
+    prompt: FalWanV2p7ReferenceToVideoRequestSchema.shape.prompt,
+    negative_prompt: FalWanV2p7ReferenceToVideoRequestSchema.shape.negative_prompt,
+    image_slugs: FalWanV2p7ReferenceToVideoRequestSchema.shape.reference_image_urls,
+    video_slugs: FalWanV2p7ReferenceToVideoRequestSchema.shape.reference_video_urls,
+    aspect_ratio: FalWanV2p7ReferenceToVideoRequestSchema.shape.aspect_ratio,
+    resolution: FalWanV2p7ReferenceToVideoRequestSchema.shape.resolution,
+    duration: FalWanV2p7ReferenceToVideoRequestSchema.shape.duration,
+    multi_shots: FalWanV2p7ReferenceToVideoRequestSchema.shape.multi_shots,
+    enable_safety_checker: FalWanV2p7ReferenceToVideoRequestSchema.shape.enable_safety_checker,
+    seed: FalWanV2p7ReferenceToVideoRequestSchema.shape.seed,
+  },
   generate_wan27_r2v_fal_video: {
     prompt: FalWanV2p7ReferenceToVideoRequestSchema.shape.prompt,
     negative_prompt: FalWanV2p7ReferenceToVideoRequestSchema.shape.negative_prompt,
@@ -1032,6 +1114,18 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     multi_shots: FalWanV2p7ReferenceToVideoRequestSchema.shape.multi_shots,
     enable_safety_checker: FalWanV2p7ReferenceToVideoRequestSchema.shape.enable_safety_checker,
     seed: FalWanV2p7ReferenceToVideoRequestSchema.shape.seed,
+  },
+  generate_fal_wan_2_7_edit_video: {
+    prompt: FalWanV2p7EditVideoRequestSchema.shape.prompt,
+    negative_prompt: FalWanV2p7EditVideoRequestSchema.shape.negative_prompt,
+    video_slug: FalWanV2p7EditVideoRequestSchema.shape.video_url,
+    image_slug: FalWanV2p7EditVideoRequestSchema.shape.reference_image_url,
+    aspect_ratio: FalWanV2p7EditVideoRequestSchema.shape.aspect_ratio,
+    resolution: FalWanV2p7EditVideoRequestSchema.shape.resolution,
+    duration: FalWanV2p7EditVideoRequestSchema.shape.duration,
+    audio_setting: FalWanV2p7EditVideoRequestSchema.shape.audio_setting,
+    enable_safety_checker: FalWanV2p7EditVideoRequestSchema.shape.enable_safety_checker,
+    seed: FalWanV2p7EditVideoRequestSchema.shape.seed,
   },
   generate_wan27_videoedit_fal_video: {
     prompt: FalWanV2p7EditVideoRequestSchema.shape.prompt,
@@ -1045,12 +1139,24 @@ const VIDEO_PARAM_ZOD_SCHEMAS: Record<string, Record<string, ZodLike>> = {
     enable_safety_checker: FalWanV2p7EditVideoRequestSchema.shape.enable_safety_checker,
     seed: FalWanV2p7EditVideoRequestSchema.shape.seed,
   },
+  generate_fal_grok_imagine_video_reference_to_video: {
+    prompt: FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.prompt,
+    image_slugs: FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.reference_image_urls,
+    duration: FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.duration,
+    aspect_ratio: FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.aspect_ratio,
+    resolution: FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.resolution,
+  },
   generate_grok_imagine_r2v_fal_video: {
     prompt: FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.prompt,
     image_slugs: FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.reference_image_urls,
     duration: FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.duration,
     aspect_ratio: FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.aspect_ratio,
     resolution: FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape.resolution,
+  },
+  extend_fal_grok_imagine_video: {
+    prompt: FalXaiGrokImagineVideoExtendVideoRequestSchema.shape.prompt,
+    video_slug: FalXaiGrokImagineVideoExtendVideoRequestSchema.shape.video_url,
+    duration: FalXaiGrokImagineVideoExtendVideoRequestSchema.shape.duration,
   },
   generate_grok_imagine_extend_fal_video: {
     prompt: FalXaiGrokImagineVideoExtendVideoRequestSchema.shape.prompt,
@@ -1088,7 +1194,9 @@ type ParamSchema = {
 
 const SEEDANCE2_TOOL_NAMES = [
   "generate_seedance2_video",
+  "generate_kie_seedance_2_0_video",
   "generate_seedance2_fast_video",
+  "generate_kie_seedance_2_0_fast_video",
 ];
 
 // grok image-to-video rejects "spicy" though the Apicity mode enum includes it.
@@ -1227,7 +1335,12 @@ function applyApicityConstraints(prop: ParamSchema, schema: ZodLike): void {
   }
   const enumOpts = zodEnumOptionsOrNull(schema);
   if (enumOpts) {
-    prop.enum = [...enumOpts];
+    if (enumOpts.every((x) => typeof x === "number" && Number.isInteger(x))) {
+      prop.type = "integer";
+      prop.enum = enumOpts;
+    } else {
+      prop.enum = [...enumOpts];
+    }
   } else {
     const finiteNumbers = zodFiniteNumberOptions(schema);
     const range = zodNumberRange(schema);
@@ -1245,16 +1358,14 @@ function applyApicityConstraints(prop: ParamSchema, schema: ZodLike): void {
       } else {
         prop.enum = finiteNumbers.map(String);
       }
-    } else {
-      if (range && (range.min !== undefined || range.max !== undefined)) {
-        if (prop.type === "integer" || prop.type === "number") {
-          prop.type = range.int ? "integer" : "number";
-          if (range.min !== undefined) prop.minimum = range.min;
-          if (range.max !== undefined) prop.maximum = range.max;
-          prop.enum = undefined;
-        } else if (range.int && range.min !== undefined && range.max !== undefined) {
-          prop.enum = rangeToStringEnum(range.min, range.max);
-        }
+    } else if (range && (range.min !== undefined || range.max !== undefined)) {
+      if (isNumericParam) {
+        prop.type = range.int ? "integer" : "number";
+        if (range.min !== undefined) prop.minimum = range.min;
+        if (range.max !== undefined) prop.maximum = range.max;
+        prop.enum = undefined;
+      } else if (range.int && range.min !== undefined && range.max !== undefined) {
+        prop.enum = rangeToStringEnum(range.min, range.max);
       }
     }
   }
@@ -1264,18 +1375,30 @@ function applyApicityConstraints(prop: ParamSchema, schema: ZodLike): void {
   if (maxLength !== undefined) prop.maxLength = maxLength;
 }
 
-function getVideoToolSchema(toolName: string): ToolSchema | null {
-  const baseName = GOOGLE_VIDEO_ALIASES[toolName] ?? toolName;
-  const isAlias = toolName !== baseName;
-  const model = Object.values(VIDEO_MODELS).find((m) => m.tool_name === baseName);
+function getVideoToolSchema(rawToolName: string): ToolSchema | null {
+  const toolName = rawToolName;
+  const canonical = getCanonicalName(rawToolName);
+  const isGoogleAlias = toolName === "generate_google_omni_video" || toolName === "generate_google_flow_omni_flash_video" || canonical === "generate_google_flow_omni_flash_video";
+  const baseName = GOOGLE_VIDEO_ALIASES[rawToolName] ?? GOOGLE_VIDEO_ALIASES[canonical] ?? rawToolName;
+  const model = Object.values(VIDEO_MODELS).find(
+    (m) => m.tool_name === baseName
+      || m.tool_name === canonical
+      || getCanonicalName(m.tool_name) === canonical
+      || (m.falToolNames && Object.values(m.falToolNames).some((n) => n === baseName || n === canonical || getCanonicalName(n!) === canonical)),
+  );
   if (!model) return null;
 
   const properties: Record<string, ParamSchema> = {};
   const required = new Set<string>();
   const defaults: Record<string, unknown> = {};
-  const zodSchemas = isAlias ? {} : VIDEO_PARAM_ZOD_SCHEMAS[baseName] ?? {};
+  const spec = getActionSpec(rawToolName);
+  const zodSchemas = VIDEO_PARAM_ZOD_SCHEMAS[baseName]
+    ?? VIDEO_PARAM_ZOD_SCHEMAS[rawToolName]
+    ?? VIDEO_PARAM_ZOD_SCHEMAS[canonical]
+    ?? (spec ? VIDEO_PARAM_ZOD_SCHEMAS[spec.old_name] : undefined)
+    ?? {};
 
-  const paramList = isAlias ? (GOOGLE_VIDEO_PARAMS[toolName] ?? model.params) : model.params;
+  const paramList = isGoogleAlias ? (GOOGLE_VIDEO_PARAMS.generate_google_flow_omni_flash_video ?? model.params) : model.params;
   for (const param of paramList) {
     const base = PARAM_SCHEMAS[param];
     if (!base) continue;
@@ -1283,7 +1406,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     const prop = { ...base };
 
     // Tool-specific enum/description overrides
-    if (toolName === "generate_kling30_video") {
+    if (toolName === "generate_kling30_video" || canonical === "generate_kie_kling_3_0_video") {
       if (param === "prompt") prop.description = "Video description";
       if (param === "mode") prop.description = "Resolution mode: std (standard) / pro (professional) / 4K";
       if (param === "duration") prop.description = "Video duration: 3s-15s";
@@ -1291,7 +1414,7 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "sound") prop.description = "Generate audio for the video";
       if (param === "image_slugs") prop.description = "Reference image assets for start/end frames (0-2 slugs like @img-sunset)";
     }
-    if (toolName === "generate_kling30_motion_control_video") {
+    if (toolName === "generate_kling30_motion_control_video" || canonical === "generate_kie_kling_3_0_motion_control") {
       if (param === "prompt") prop.description = "Optional motion description";
       if (param === "character_image_slugs") prop.description = "Character image @slugs (input_urls)";
       if (param === "motion_video_slugs") prop.description = "Motion reference video @slugs (video_urls)";
@@ -1303,29 +1426,11 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "prompt") { prop.description = "Video description (3-20000 characters)"; prop.minLength = 3; prop.maxLength = 20000; }
       if (param === "aspect_ratio") prop.description = "Frame dimensions (adaptive auto-fits to content)";
       if (param === "duration") prop.description = "Video duration: 4-15 seconds";
-      if (param === "resolution") {
-        const isFast = toolName === "generate_seedance2_fast_video";
-        prop.description = isFast
-          ? "Output resolution: 480p / 720p"
-          : "Output resolution: 480p / 720p / 1080p";
-      }
-      if (param === "first_frame_slug") prop.description = "Optional first frame image asset (e.g., @img-start)";
-      if (param === "last_frame_slug") prop.description = "Optional last frame image asset (e.g., @img-end)";
-      if (param === "image_slugs") prop.description = "Reference image assets (0-9, e.g., @img-style)";
-      if (param === "video_slugs") prop.description = "Reference video assets (0-3, total ≤15s, e.g., @vid-motion)";
-      if (param === "audio_slugs") prop.description = "Reference audio assets (0-3, total ≤15s, e.g., @aud-music)";
-      if (param === "nsfw_checker") prop.description = "Content safety filter (default false)";
-    }
-    if (toolName === "generate_seedance2_mini_video") {
-      if (param === "prompt") { prop.description = "Video description (optional, max 20000 characters)"; prop.maxLength = 20000; }
-      if (param === "aspect_ratio") prop.description = "Frame dimensions (adaptive auto-fits to content)";
-      if (param === "resolution") prop.description = "Output resolution: 480p / 720p";
-      if (param === "duration") prop.description = "Video duration: 4-15 seconds (default 15)";
-      if (param === "image_slugs") prop.description = "Reference image assets (e.g., @img-style)";
+      if (param === "image_slugs") prop.description = "Reference image assets (0-9, total ≤15s, e.g., @img-sunset)";
       if (param === "video_slugs") prop.description = "Reference video assets (0-3, total ≤15s, e.g., @vid-motion)";
       if (param === "audio_slugs") prop.description = "Reference audio assets (0-3, total ≤15s, e.g., @aud-music)";
     }
-    if (baseName === "generate_gemini_omni_video") {
+    if (baseName === "generate_gemini_omni_video" || baseName === "generate_kie_gemini_omni_video") {
       // Enum/range/default for prompt, duration, aspect_ratio, resolution, seed
       // auto-derive from VIDEO_PARAM_ZOD_SCHEMAS; only descriptions are set here.
       if (param === "prompt") { prop.description = "Multimodal video generation prompt (max 20000 characters)"; prop.maxLength = 20000; }
@@ -1333,38 +1438,38 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
       if (param === "image_slugs") { prop.description = "Reference image assets (0-7, each ≤20MB, e.g., @img-style)"; prop.maxItems = 7; }
       if (param === "video_slug") prop.description = "Reference video clip asset (one clip, e.g., @vid-motion)";
       if (param === "video_clip_start") {
-        prop.description = isAlias
+        prop.description = isGoogleAlias
           ? "Reference clip start time in seconds on a 10s timeline (requires video_slug)"
           : "Reference clip start time in seconds (requires video_slug)";
-        if (isAlias) prop.maximum = 10;
+        if (isGoogleAlias) prop.maximum = 10;
       }
       if (param === "video_clip_ends") {
-        prop.description = isAlias
+        prop.description = isGoogleAlias
           ? "Reference clip end time in seconds on a 10s timeline; must be > start (requires video_slug)"
           : "Reference clip end time in seconds; must be > start and < start+10s (requires video_slug)";
-        if (isAlias) prop.maximum = 10;
+        if (isGoogleAlias) prop.maximum = 10;
       }
       if (param === "duration") prop.description = "Output duration: 4 / 6 / 8 / 10 seconds (ignored when a reference video clip is supplied)";
       if (param === "aspect_ratio") prop.description = "Output aspect ratio: 16:9 / 9:16";
-      if (!isAlias && param === "resolution") prop.description = "Output resolution: 720p / 1080p / 4k (default 720p)";
+      if (!isGoogleAlias && param === "resolution") prop.description = "Output resolution: 720p / 1080p / 4k (default 720p)";
       if (param === "seed") prop.description = "Random seed (0-2147483647)";
-      if (isAlias && param === "duration") {
-        prop.enum = GOOGLE_OMNI_DURATIONS;
+      if (isGoogleAlias && param === "duration") {
+        prop.enum = [...GOOGLE_OMNI_DURATIONS];
         prop.default = "8";
         defaults[param] = "8";
         prop.description = "Output duration: 4 / 6 / 8 / 10 seconds (default 8; omitted for reference-video V2V)";
       }
-      if (isAlias && param === "aspect_ratio") {
-        prop.enum = GOOGLE_OMNI_ASPECT_RATIOS;
+      if (isGoogleAlias && param === "aspect_ratio") {
+        prop.enum = [...GOOGLE_OMNI_ASPECT_RATIOS];
       }
-      if (isAlias && param === "seed") {
+      if (isGoogleAlias && param === "seed") {
         prop.minimum = 0;
       }
-      if (isAlias && param === "voice_refs") {
+      if (isGoogleAlias && param === "voice_refs") {
         prop.maxItems = 5;
         prop.description = "Google Flow voice refs (0-5; 0-3 with a reference clip), sent as referenceAudio_1..5";
       }
-      if (isAlias && param === "character_refs") {
+      if (isGoogleAlias && param === "character_refs") {
         prop.maxItems = 3;
         prop.description = "Google Flow character refs (0-3); each costs 2 of the 7 reference slots shared with image_slugs (5 with a reference clip)";
       }
@@ -1599,14 +1704,26 @@ function getVideoToolSchema(toolName: string): ToolSchema | null {
     if (
       param === "prompt"
       && toolName !== "generate_grok_imagine_video"
+      && canonical !== "generate_fal_grok_imagine_video"
       && toolName !== "generate_wan27_videoedit_video"
+      && canonical !== "generate_kie_wan_2_7_edit_video"
       && toolName !== "generate_kling30_motion_control_video"
+      && canonical !== "generate_kie_kling_3_0_motion_control"
       && toolName !== "generate_omnihuman_video"
+      && canonical !== "generate_kie_omnihuman_1_5_video"
     ) required.add(param);
-    if (toolName === "generate_grok_imagine_video" && param === "image_slugs") required.add(param);
-    if (param === "image_slug" && toolName === "generate_omnihuman_video") required.add(param);
-    if (param === "model" && toolName === "generate_alibaba_video") required.add(param);
-    if (param === "video_slug" && (toolName === "extend_grok_imagine_video" || toolName === "extend_wan27_video" || toolName === "generate_wan27_videoedit_video" || toolName === "generate_wan27_videoedit_fal_video" || toolName === "generate_grok_imagine_extend_fal_video" || toolName === "generate_grok_imagine_edit_fal_video" || toolName === "generate_volcengine_lipsync_video")) required.add(param);
+    if ((toolName === "generate_grok_imagine_video" || canonical === "generate_fal_grok_imagine_video") && param === "image_slugs") required.add(param);
+    if (param === "image_slug" && (toolName === "generate_omnihuman_video" || canonical === "generate_kie_omnihuman_1_5_video")) required.add(param);
+    if (param === "model" && (toolName === "generate_alibaba_video" || canonical === "generate_alibaba_wan_2_1_text_to_video")) required.add(param);
+    if (param === "video_slug" && (
+      toolName === "extend_grok_imagine_video" || canonical === "extend_fal_grok_imagine_video" || canonical === "extend_kie_grok_imagine_video" ||
+      toolName === "extend_wan27_video" || canonical === "extend_kie_wan_2_7_video" ||
+      toolName === "generate_wan27_videoedit_video" || canonical === "generate_kie_wan_2_7_edit_video" ||
+      toolName === "generate_wan27_videoedit_fal_video" || canonical === "generate_fal_wan_2_7_edit_video" ||
+      toolName === "generate_grok_imagine_extend_fal_video" || canonical === "extend_fal_grok_imagine_video" ||
+      toolName === "generate_grok_imagine_edit_fal_video" || canonical === "generate_fal_grok_imagine_edit_video" ||
+      toolName === "generate_volcengine_lipsync_video" || canonical === "generate_kie_volcengine_lipsync_video"
+    )) required.add(param);
     if (param === "audio_slug" && (toolName === "generate_volcengine_lipsync_video" || toolName === "generate_omnihuman_video")) required.add(param);
     if (
       toolName === "generate_kling30_motion_control_video"
@@ -1654,14 +1771,15 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
   }
 
   // Tool-specific validation
+  const canonical = getCanonicalName(toolName);
   const imageSlugs = params.image_slugs as string[] | undefined;
   const totalImages = imageSlugs?.length ?? 0;
 
-  if (toolName === "generate_grok_imagine_video" && totalImages > 7) {
+  if ((toolName === "generate_grok_imagine_video" || canonical === "generate_fal_grok_imagine_video") && totalImages > 7) {
     warnings.push(`Grok Imagine 1.5 supports up to 7 reference images (got ${totalImages})`);
   }
 
-  if (toolName === "generate_grok_imagine_ref_video") {
+  if (toolName === "generate_grok_imagine_ref_video" || canonical === "generate_kie_grok_imagine_reference_to_video") {
     if (totalImages > 7) {
       warnings.push(`xAI reference-to-video supports up to 7 reference images (got ${totalImages})`);
     }
@@ -1671,19 +1789,19 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
-  if (toolName === "generate_kling30_video") {
+  if (toolName === "generate_kling30_video" || canonical === "generate_kie_kling_3_0_video") {
     const multiPrompt = params.multi_prompt as unknown[] | undefined;
     if (multiPrompt && totalImages > 1) warnings.push(`Kling 3.0 multi-shot mode allows max 1 reference image (got ${totalImages})`);
   }
 
-  if (toolName === "generate_seedance2_fast_video") {
+  if (toolName === "generate_seedance2_fast_video" || canonical === "generate_kie_seedance_2_0_fast_video") {
     const resolution = params.resolution as string | undefined;
     if (resolution === "1080p") {
       warnings.push("Seedance 2 Fast caps at 720p — use generate_seedance2_video for 1080p");
     }
   }
 
-  if (toolName === "generate_gemini_omni_video") {
+  if (toolName === "generate_gemini_omni_video" || canonical === "generate_kie_gemini_omni_video") {
     if (totalImages > 7) {
       warnings.push(`Gemini Omni supports up to 7 reference images (got ${totalImages})`);
     }
@@ -1702,7 +1820,7 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
-  if (toolName === "generate_google_omni_video") {
+  if (toolName === "generate_google_omni_video" || toolName === "generate_google_flow_omni_flash_video") {
     if (totalImages > 7) {
       warnings.push(`Google Omni supports up to 7 reference images (got ${totalImages})`);
     }
@@ -1780,7 +1898,10 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
-  if (toolName === "generate_seedance2_video" || toolName === "generate_seedance2_fast_video") {
+  if (
+    toolName === "generate_seedance2_video" || canonical === "generate_kie_seedance_2_0_video" ||
+    toolName === "generate_seedance2_fast_video" || canonical === "generate_kie_seedance_2_0_fast_video"
+  ) {
     const audioSlugs = params.audio_slugs as string[] | undefined;
     const firstFrame = params.first_frame_slug as string | undefined;
     const lastFrame = params.last_frame_slug as string | undefined;
@@ -1791,7 +1912,7 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
-  if (toolName === "generate_wan27_i2v_video") {
+  if (toolName === "generate_wan27_i2v_video" || canonical === "generate_kie_wan_2_7_image_to_video") {
     const firstFrame = params.first_frame_slug as string | undefined;
     const lastFrame = params.last_frame_slug as string | undefined;
     const firstClip = params.first_clip_slug as string | undefined;
@@ -1803,21 +1924,21 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
-  if (toolName === "generate_wan27_videoedit_video") {
+  if (toolName === "generate_wan27_videoedit_video" || canonical === "generate_kie_wan_2_7_edit_video") {
     const videoSlug = params.video_slug as string | undefined;
     if (!videoSlug) {
       warnings.push("Wan 2.7 Video Edit requires video_slug");
     }
   }
 
-  if (toolName === "extend_wan27_video") {
+  if (toolName === "extend_wan27_video" || canonical === "extend_kie_wan_2_7_video") {
     const videoSlug = params.video_slug as string | undefined;
     if (!videoSlug) {
       warnings.push("Wan 2.7 Extend requires video_slug");
     }
   }
 
-  if (toolName === "generate_alibaba_video") {
+  if (toolName === "generate_alibaba_video" || canonical === "generate_alibaba_wan_2_1_text_to_video") {
     const firstFrame = params.first_frame_slug as string | undefined;
     const lastFrame = params.last_frame_slug as string | undefined;
     const firstClip = params.first_clip_slug as string | undefined;
@@ -1931,13 +2052,13 @@ type ActionLogEntry = {
   date: string;
 };
 
+
+
 function actionNameToToolName(action: string): string | null {
   if (!action.startsWith("tool-")) return null;
-  const toolName = action.slice(5).replace(/-/g, "_");
-  const direct = Object.values(VIDEO_MODELS).find((m) => m.tool_name === toolName);
-  if (direct) return direct.tool_name;
-  const google = Object.values(VIDEO_MODELS).find((m) => m.googleToolName === toolName);
-  return google?.tool_name ?? null;
+  const rawName = action.slice(5).replace(/-/g, "_");
+  if (isGenerationAction(rawName)) return rawName;
+  return null;
 }
 
 const NON_PARAM_KEYS = new Set(["project_slug"]);
@@ -1963,19 +2084,41 @@ function resolveFalVideoToolName(info: VideoModelInfo, imageSlugCount: number): 
   return names.withRefs ?? names.noRefs ?? null;
 }
 
+class SettingsMap extends Map<string, Record<string, unknown>> {
+  override get(key: string): Record<string, unknown> | undefined {
+    const direct = super.get(key);
+    if (direct !== undefined) return direct;
+    const canonical = getCanonicalName(key);
+    if (canonical !== key) {
+      const canonicalMatch = super.get(canonical);
+      if (canonicalMatch !== undefined) return canonicalMatch;
+    }
+    const spec = getActionSpec(key);
+    if (spec?.old_name) {
+      const oldMatch = super.get(spec.old_name);
+      if (oldMatch !== undefined) return oldMatch;
+    }
+    for (const [k, v] of this.entries()) {
+      if (getCanonicalName(k) === canonical) return v;
+    }
+    return undefined;
+  }
+}
+
 function extractLastSettingsPerModel(
   log: ActionLogEntry[],
 ): Map<string, Record<string, unknown>> {
-  const result = new Map<string, Record<string, unknown>>();
+  const result = new SettingsMap();
   for (const entry of log) {
-    const toolName = actionNameToToolName(entry.action);
-    if (!toolName || result.has(toolName)) continue;
+    const rawName = actionNameToToolName(entry.action);
+    if (!rawName) continue;
+    if (result.has(rawName)) continue;
     if (typeof entry.payload === "string") continue;
     const params: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(entry.payload)) {
       if (!NON_PARAM_KEYS.has(k)) params[k] = v;
     }
-    result.set(toolName, params);
+    result.set(rawName, params);
   }
   return result;
 }
@@ -1986,11 +2129,16 @@ function extractLastSettingsPerModel(
  */
 function extractLastUsedModel(log: ActionLogEntry[]): string | null {
   for (const entry of log) {
-    const toolName = actionNameToToolName(entry.action);
-    if (!toolName) continue;
+    const rawToolName = actionNameToToolName(entry.action);
+    if (!rawToolName) continue;
     if (typeof entry.payload === "string") continue;
+    const canonicalEntryName = getCanonicalName(rawToolName);
     for (const [key, info] of Object.entries(VIDEO_MODELS)) {
-      if (info.tool_name === toolName) return key;
+      if (
+        info.tool_name === rawToolName ||
+        getCanonicalName(info.tool_name) === canonicalEntryName ||
+        (info.googleToolName && getCanonicalName(info.googleToolName) === canonicalEntryName)
+      ) return key;
     }
   }
   return null;
@@ -2020,10 +2168,9 @@ function filterInvalidSlugs(
   validTags: Set<string>,
 ): void {
   for (const [k, v] of Object.entries(params)) {
-    if (k.endsWith("_slug") && typeof v === "string" && v.startsWith("@") && !validTags.has(v)) {
-      params[k] = "";
-    }
-    if (k.endsWith("_slugs") && Array.isArray(v)) {
+    if (typeof v === "string" && v.startsWith("@") && !validTags.has(v)) {
+      delete params[k];
+    } else if (Array.isArray(v)) {
       params[k] = v.filter(
         (s) => typeof s === "string" && (!s.startsWith("@") || validTags.has(s)),
       );
@@ -2045,9 +2192,16 @@ function buildModelOption(
   let historical: Record<string, unknown> | undefined;
   if (historyEntries) {
     const settingsMap = extractLastSettingsPerModel(historyEntries);
-    historical = settingsMap.get(toolName);
-    if (historical) {
-      historicalProvider = historical._provider as string | undefined;
+    for (const [key, params] of settingsMap.entries()) {
+      if (
+        key === toolName ||
+        getCanonicalName(key) === getCanonicalName(toolName) ||
+        (modelInfo.googleToolName && getCanonicalName(key) === getCanonicalName(modelInfo.googleToolName))
+      ) {
+        historical = params;
+        historicalProvider = params._provider as string | undefined;
+        break;
+      }
     }
   }
 
@@ -2092,8 +2246,10 @@ function buildModelOption(
     .map((a) => a.tag);
   params.image_slugs = imageTags.length > 0 ? imageTags : [];
 
+  const canonicalToolName = getCanonicalName(toolName);
+
   // Ensure Kling 3.0 element/multi-shot defaults
-  if (toolName === "generate_kling30_video") {
+  if (toolName === "generate_kling30_video" || canonicalToolName === "generate_kie_kling_3_0_video") {
     for (let slot = 1; slot <= 3; slot++) {
       params[`element${slot}_slugs`] ??= [];
       params[`element${slot}_name`] ??= "";
@@ -2109,8 +2265,11 @@ function buildModelOption(
   // in the prompt) leaves it unset and mode inference stays on t2v.
   if (
     toolName === "extend_grok_imagine_video"
+    || canonicalToolName === "extend_fal_grok_imagine_video"
     || toolName === "extend_wan27_video"
+    || canonicalToolName === "extend_kie_wan_2_7_video"
     || toolName === "generate_gemini_omni_video"
+    || canonicalToolName === "generate_kie_gemini_omni_video"
   ) {
     const videoAssets = resolvedAssets.filter((a) => a.asset_type === "video");
     if (videoAssets.length > 0) {
@@ -2119,7 +2278,7 @@ function buildModelOption(
   }
 
   // For Alibaba video, prefill first_frame_slug from image assets
-  if (toolName === "generate_alibaba_video") {
+  if (toolName === "generate_alibaba_video" || canonicalToolName === "generate_alibaba_wan_2_1_text_to_video") {
     const imageAssets = resolvedAssets.filter((a) => a.asset_type === "image" && a.file_path);
     if (imageAssets.length > 0) {
       params.first_frame_slug ??= imageAssets[0].tag;
@@ -2128,7 +2287,7 @@ function buildModelOption(
 
   // For OmniHuman, prefill the portrait from image assets and the driving
   // track from audio assets so the panel is immediately runnable.
-  if (toolName === "generate_omnihuman_video") {
+  if (toolName === "generate_omnihuman_video" || canonicalToolName === "generate_kie_omnihuman_1_5_video") {
     const imageAssets = resolvedAssets.filter((a) => a.asset_type === "image" && a.file_path);
     if (imageAssets.length > 0) {
       params.image_slug ??= imageAssets[0].tag;
@@ -2154,10 +2313,11 @@ function buildModelOption(
     for (const [k, v] of Object.entries(params)) {
       const prop = schema.properties[k];
       if (!prop) continue;
-      if (prop.type === "string" && prop.enum && typeof v === "number") {
+      const isIntegerProp = prop.type === "integer" || prop.type === "number" || (modelKey === "grok_imagine" && k === "duration");
+      if (prop.type === "string" && typeof v === "number" && !(modelKey === "grok_imagine" && k === "duration")) {
         params[k] = String(v);
-      } else if ((prop.type === "integer" || prop.type === "number") && typeof v === "string") {
-        const n = prop.type === "integer" ? parseInt(v, 10) : Number(v);
+      } else if (isIntegerProp && typeof v === "string") {
+        const n = parseInt(v, 10);
         if (!Number.isNaN(n)) params[k] = n;
       }
     }
@@ -2176,7 +2336,7 @@ function buildModelOption(
     validation,
     image_slots: validation.image_slots,
     multi_prompt_slots: validation.multi_prompt_slots,
-    modes: VIDEO_TOOL_MODES[effectiveToolName] ?? null,
+    modes: VIDEO_TOOL_MODES[effectiveToolName] ?? VIDEO_TOOL_MODES[toolName] ?? VIDEO_TOOL_MODES[getCanonicalName(effectiveToolName)] ?? null,
     providers: providerList.map((p) => ({ key: p.key, label: p.label })),
     selected_provider: selectedProvider,
   };

@@ -20,6 +20,7 @@ const generateQwen2ImageEditSchema = {
   image_slugs: apicityStringArrayField(qwen2ImageEditInputSchema.image_url, "Exactly 1 @img-* slug for the reference image to edit", { required: true }),
   image_size: apicityField(qwen2ImageEditInputSchema.image_size, "Output aspect ratio (default 16:9)"),
   output_format: apicityField(qwen2ImageEditInputSchema.output_format, "Output image format (default png)"),
+  nsfw_checker: apicityField(qwen2ImageEditInputSchema.nsfw_checker, "Enable NSFW content safety filter"),
   seed: apicityField(qwen2ImageEditInputSchema.seed, "Random seed"),
 
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),

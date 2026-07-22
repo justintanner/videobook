@@ -919,22 +919,22 @@ describe("slash commands e2e", () => {
   // 11. Command dispatch wiring
   // -----------------------------------------------------------------------
   describe("command dispatch wiring", () => {
-    it("/trim maps to trim_video with trim_video adapter", () => {
+    it("/trim maps to trim_video with trim adapter", () => {
       const cmd = findCommand("/trim");
       expect(cmd.mcpTool?.tool).toBe("trim_video");
-      expect(cmd.mcpTool?.adapter).toBe("trim_video");
+      expect(cmd.mcpTool?.adapter).toBe("trim");
     });
 
-    it("/trim-video maps to trim_video with trim_video adapter", () => {
+    it("/trim-video maps to trim_video with trim adapter", () => {
       const cmd = findCommand("/trim-video");
       expect(cmd.mcpTool?.tool).toBe("trim_video");
-      expect(cmd.mcpTool?.adapter).toBe("trim_video");
+      expect(cmd.mcpTool?.adapter).toBe("trim");
     });
 
-    it("/trim-audio maps to trim_audio with trim_audio adapter", () => {
+    it("/trim-audio maps to trim_audio with trim adapter", () => {
       const cmd = findCommand("/trim-audio");
       expect(cmd.mcpTool?.tool).toBe("trim_audio");
-      expect(cmd.mcpTool?.adapter).toBe("trim_audio");
+      expect(cmd.mcpTool?.adapter).toBe("trim");
     });
 
     it("/apply-cuts maps to apply_cuts with apply_cuts adapter", () => {

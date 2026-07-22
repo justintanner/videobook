@@ -447,24 +447,27 @@ const ADAPTERS: Record<string, CostAdapter> = {
   ...ALIBABA_ADAPTERS,
 };
 
-export function getCostAdapter(toolName: string): CostAdapter | null {
+import { getCanonicalName } from "./generation-registry.js";
+
+export function getCostAdapter(rawToolName: string): CostAdapter | null {
+  const toolName = getCanonicalName(rawToolName);
   const providerHintTools = new Set([
     ...Object.keys(KIE_ADAPTERS),
     ...Object.keys(XAI_ADAPTERS),
   ]);
 
-  if (providerHintTools.has(toolName)) {
+  if (providerHintTools.has(rawToolName) || providerHintTools.has(toolName)) {
     return (input) => {
       const provider = str(input._provider);
       if (provider.startsWith("xai")) {
-        const xai = XAI_ADAPTERS[toolName];
+        const xai = XAI_ADAPTERS[rawToolName] ?? XAI_ADAPTERS[toolName];
         return xai ? xai(input) : null;
       }
       if (provider && provider !== "kie") return null;
-      const kie = KIE_ADAPTERS[toolName];
+      const kie = KIE_ADAPTERS[rawToolName] ?? KIE_ADAPTERS[toolName];
       return kie ? kie(input) : null;
     };
   }
 
-  return ADAPTERS[toolName] ?? null;
+  return ADAPTERS[rawToolName] ?? ADAPTERS[toolName] ?? null;
 }

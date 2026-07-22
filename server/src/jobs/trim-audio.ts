@@ -1,14 +1,14 @@
 import type { VideocityFs } from "videocity-engine";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { join, basename, extname } from "node:path";
-import { rm } from "node:fs/promises";
-import { registerJobHandler, queue } from "../queue.js";
+import { basename, extname } from "node:path";
+import { registerJobHandler } from "../queue.js";
 import { FFMPEG, FFPROBE } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
 
 const execFileAsync = promisify(execFile);
 const LOCK_DURATION_MS = 300_000;
+const DURATION_EPSILON_SECONDS = 0.05;
 
 async function probeAudioDuration(filePath: string): Promise<number> {
   const { stdout } = await execFileAsync(FFPROBE, [
@@ -22,60 +22,137 @@ async function probeAudioDuration(filePath: string): Promise<number> {
     streams?: Array<{ codec_type?: string; duration?: string }>;
     format?: { duration?: string };
   };
-  const audioStream = data.streams?.find((s) => s.codec_type === "audio");
+  const audioStream = data.streams?.find((stream) => stream.codec_type === "audio");
+  if (!audioStream) throw new Error("Audio file has no usable audio stream");
   const formatDuration = Number(data.format?.duration ?? 0);
-  const streamDuration = audioStream ? Number(audioStream.duration ?? formatDuration) : formatDuration;
-  return Number.isFinite(streamDuration) && streamDuration > 0 ? streamDuration : formatDuration;
+  const streamDuration = Number(audioStream.duration ?? formatDuration);
+  const duration = Number.isFinite(streamDuration) && streamDuration > 0
+    ? streamDuration
+    : formatDuration;
+  if (!Number.isFinite(duration) || duration <= 0) {
+    throw new Error(`Audio file has invalid duration (${duration})`);
+  }
+  return duration;
 }
 
-function buildTrimAudioArgs(
-  inputPath: string,
-  outputPath: string,
+function audioCodecArgs(inputPath: string): string[] {
+  const ext = extname(inputPath).toLowerCase();
+  if (ext === ".mp3") return ["-c:a", "libmp3lame", "-q:a", "2"];
+  if (ext === ".ogg") return ["-c:a", "libvorbis", "-q:a", "4"];
+  if (ext === ".flac") return ["-c:a", "flac"];
+  if (ext === ".wav") return ["-c:a", "pcm_s16le"];
+  return ["-c:a", "aac", "-b:a", "192k"];
+}
+
+function expectedOutputDuration(
+  sourceDuration: number,
   mode: "keep" | "cut",
   trimStart?: number,
   trimEnd?: number,
   cutStart?: number,
   cutEnd?: number,
+): number {
+  if (mode === "keep") {
+    const start = trimStart ?? 0;
+    const end = trimEnd ?? sourceDuration;
+    if (start >= sourceDuration - DURATION_EPSILON_SECONDS) {
+      throw new Error(`trim_start ${start} must be before audio duration ${sourceDuration.toFixed(3)}`);
+    }
+    if (end > sourceDuration + DURATION_EPSILON_SECONDS) {
+      throw new Error(`trim_end ${end} exceeds audio duration ${sourceDuration.toFixed(3)}`);
+    }
+    return Math.min(end, sourceDuration) - start;
+  }
+
+  const start = cutStart ?? 0;
+  const end = cutEnd ?? sourceDuration;
+  if (start >= sourceDuration - DURATION_EPSILON_SECONDS) {
+    throw new Error(`cut_start ${start} must be before audio duration ${sourceDuration.toFixed(3)}`);
+  }
+  if (end > sourceDuration + DURATION_EPSILON_SECONDS) {
+    throw new Error(`cut_end ${end} exceeds audio duration ${sourceDuration.toFixed(3)}`);
+  }
+  return sourceDuration - (Math.min(end, sourceDuration) - start);
+}
+
+function buildKeepArgs(
+  inputPath: string,
+  outputPath: string,
+  start: number,
+  duration: number,
 ): string[] {
-  const ext = extname(inputPath).toLowerCase();
-  const codecArgs = ext === ".mp3"
-    ? ["-c:a", "libmp3lame", "-q:a", "2"]
-    : ext === ".ogg"
-    ? ["-c:a", "libvorbis", "-q:a", "4"]
-    : ext === ".flac"
-    ? ["-c:a", "flac"]
-    : ext === ".wav"
-    ? ["-c:a", "pcm_s16le"]
-    : ["-c:a", "aac", "-b:a", "192k"];
+  const args: string[] = [];
+  if (start > 0) args.push("-ss", String(start));
+  args.push(
+    "-i", inputPath,
+    "-map", "0:a:0",
+    "-vn",
+    "-t", String(duration),
+    ...audioCodecArgs(inputPath),
+    "-y", outputPath,
+  );
+  return args;
+}
+
+function buildTrimAudioArgs(
+  inputPath: string,
+  outputPath: string,
+  sourceDuration: number,
+  mode: "keep" | "cut",
+  trimStart?: number,
+  trimEnd?: number,
+  cutStart?: number,
+  cutEnd?: number,
+): { args: string[]; expectedDuration: number } {
+  const expectedDuration = expectedOutputDuration(
+    sourceDuration,
+    mode,
+    trimStart,
+    trimEnd,
+    cutStart,
+    cutEnd,
+  );
+  if (expectedDuration <= DURATION_EPSILON_SECONDS) {
+    throw new Error("Trim would produce an empty audio file");
+  }
 
   if (mode === "keep") {
-    const args: string[] = [];
-    if (trimStart !== undefined && trimStart > 0) {
-      args.push("-ss", String(trimStart));
-    }
-    args.push("-i", inputPath);
-    if (trimStart !== undefined && trimStart > 0 && trimEnd !== undefined) {
-      const duration = Math.max(0, trimEnd - trimStart);
-      args.push("-t", String(duration));
-    } else if (trimEnd !== undefined) {
-      args.push("-to", String(trimEnd));
-    }
-    args.push(...codecArgs, "-y", outputPath);
-    return args;
-  } else {
-    const cStart = cutStart ?? 0;
-    if (cStart <= 0) {
-      return buildTrimAudioArgs(inputPath, outputPath, "keep", cutEnd, undefined);
-    }
-    const filter = `[0:a]atrim=0:${cStart}[a1];[0:a]atrim=start=${cutEnd}[a2];[a1][a2]concat=n=2:v=0:a=1[a]`;
-    return [
+    return {
+      args: buildKeepArgs(inputPath, outputPath, trimStart ?? 0, expectedDuration),
+      expectedDuration,
+    };
+  }
+
+  const start = cutStart ?? 0;
+  const end = Math.min(cutEnd ?? sourceDuration, sourceDuration);
+  if (start <= DURATION_EPSILON_SECONDS) {
+    return {
+      args: buildKeepArgs(inputPath, outputPath, end, expectedDuration),
+      expectedDuration,
+    };
+  }
+  if (end >= sourceDuration - DURATION_EPSILON_SECONDS) {
+    return {
+      args: buildKeepArgs(inputPath, outputPath, 0, expectedDuration),
+      expectedDuration,
+    };
+  }
+
+  const filter = [
+    `[0:a]atrim=0:${start},asetpts=PTS-STARTPTS[a1]`,
+    `[0:a]atrim=start=${end},asetpts=PTS-STARTPTS[a2]`,
+    "[a1][a2]concat=n=2:v=0:a=1[a]",
+  ].join(";");
+  return {
+    args: [
       "-i", inputPath,
       "-filter_complex", filter,
       "-map", "[a]",
-      ...codecArgs,
+      ...audioCodecArgs(inputPath),
       "-y", outputPath,
-    ];
-  }
+    ],
+    expectedDuration,
+  };
 }
 
 async function runTrimAudio(
@@ -87,13 +164,61 @@ async function runTrimAudio(
   cutStart?: number,
   cutEnd?: number,
 ): Promise<void> {
-  const args = buildTrimAudioArgs(inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd);
+  const sourceDuration = await probeAudioDuration(inputPath);
+  const { args, expectedDuration } = buildTrimAudioArgs(
+    inputPath,
+    outputPath,
+    sourceDuration,
+    mode,
+    trimStart,
+    trimEnd,
+    cutStart,
+    cutEnd,
+  );
   await execFileAsync(FFMPEG, args);
 
-  const duration = await probeAudioDuration(outputPath);
-  if (!Number.isFinite(duration) || duration <= 0) {
-    throw new Error(`Trimmed audio output is invalid or has 0 duration (duration=${duration})`);
+  const outputDuration = await probeAudioDuration(outputPath);
+  const tolerance = Math.max(0.35, expectedDuration * 0.05);
+  if (Math.abs(outputDuration - expectedDuration) > tolerance) {
+    throw new Error(
+      `Trimmed audio duration ${outputDuration.toFixed(3)} did not match expected ${expectedDuration.toFixed(3)}`,
+    );
   }
+}
+
+async function replaceOriginalAudio(
+  fs: VideocityFs,
+  projectSlug: string,
+  assetId: string,
+  inputFilename: string,
+  outputFilename: string,
+  onReplaced: () => Promise<void>,
+): Promise<void> {
+  const originalResult = await fs.readFile(assetId, inputFilename, projectSlug);
+  if (!originalResult.ok) throw new Error(originalResult.error.message);
+  const outputResult = await fs.readFile(assetId, outputFilename, projectSlug);
+  if (!outputResult.ok) throw new Error(outputResult.error.message);
+
+  let writeError: string;
+  try {
+    const writeResult = await fs.writeFile(assetId, inputFilename, outputResult.value, projectSlug);
+    if (!writeResult.ok) throw new Error(writeResult.error.message);
+    await onReplaced();
+    return;
+  } catch (error) {
+    writeError = error instanceof Error ? error.message : String(error);
+  }
+
+  try {
+    const rollbackResult = await fs.writeFile(assetId, inputFilename, originalResult.value, projectSlug);
+    if (!rollbackResult.ok) {
+      throw new Error(rollbackResult.error.message);
+    }
+  } catch (error) {
+    const rollbackError = error instanceof Error ? error.message : String(error);
+    throw new Error(`${writeError}; rollback failed: ${rollbackError}`);
+  }
+  throw new Error(writeError);
 }
 
 export type TrimAudioPayload = {
@@ -108,7 +233,6 @@ export type TrimAudioPayload = {
   assetId: string;
   assetDir: string;
   projectSlug: string;
-  isVideo?: boolean;
   commitParams: Record<string, unknown>;
 };
 
@@ -116,11 +240,13 @@ export function registerTrimAudioJob(fs: VideocityFs): void {
   registerJobHandler("trim_audio", async (payload, ctx) => {
     const {
       inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd,
-      assetId, assetDir, projectSlug, isVideo = false, commitParams,
+      assetId, assetDir, projectSlug, commitParams,
     } = payload as TrimAudioPayload;
+    const inputFilename = basename(inputPath);
+    const outputFilename = basename(outputPath);
 
     try {
-      const result = await withLockedLocalLease(
+      await withLockedLocalLease(
         fs,
         projectSlug,
         assetId,
@@ -130,35 +256,28 @@ export function registerTrimAudioJob(fs: VideocityFs): void {
         { durationMs: LOCK_DURATION_MS, data: { state: "trimming-audio", ...commitParams } },
         async () => {
           await runTrimAudio(inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd);
-
-          const inputFilename = basename(inputPath);
-          const outputFilename = basename(outputPath);
-
-          await fs.deleteFile(assetId, inputFilename, projectSlug);
-          await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
-
-          const mediaPath = join(assetDir, inputFilename);
-          return { mediaPath };
+          await replaceOriginalAudio(
+            fs,
+            projectSlug,
+            assetId,
+            inputFilename,
+            outputFilename,
+            async () => {
+              const provenanceResult = await fs.writeMetadata(assetId, "original", {
+                origin: "trim_audio",
+                source_asset_id: assetId,
+                ...commitParams,
+                trimmed_at: new Date().toISOString(),
+              }, projectSlug);
+              if (!provenanceResult.ok) throw new Error(provenanceResult.error.message);
+            },
+          );
         },
         { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
       );
-
-      if (isVideo) {
-        await queue.enqueue(`process-video-${assetId}-${Date.now()}`, {
-          type: "process_video",
-          videoPath: result.mediaPath,
-          assetId,
-          assetDir,
-          projectSlug,
-          provenance: { origin: "trim_audio", ...commitParams, trimmed_at: new Date().toISOString() },
-          force: true,
-          skipDownstreamJobs: true,
-        } as unknown as Record<string, unknown>);
-      }
-
       return { success: true };
     } finally {
-      await rm(outputPath, { force: true }).catch(() => {});
+      await fs.deleteFile(assetId, outputFilename, projectSlug).catch(() => {});
     }
   });
 }

@@ -39,7 +39,7 @@ interface TokenSegment {
 
 function extractTokens(text: string, commands: CommandDescriptor[], assetSlugs: string[]): ConfirmedToken[] {
   const tokens: ConfirmedToken[] = [];
-  const commandSet = new Set(commands.map((s) => s.command));
+  const commandSet = new Set(commands.flatMap((command) => [command.command, ...(command.aliases ?? [])]));
 
   // Match /command tokens (at start or after whitespace)
   for (const m of text.matchAll(/(^|\s)(\/[\w-]+)/g)) {

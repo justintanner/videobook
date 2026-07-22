@@ -2,7 +2,7 @@ import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
-import { findVideoFile, findAudioFile } from "videocity-engine";
+import { findAudioFile } from "videocity-engine";
 import type { ToolDef } from "./tool-def.js";
 
 type ValidatedParams =
@@ -54,9 +54,9 @@ function validateTrimParams(
 export function trimAudioDef(fs: VideocityFs): ToolDef {
   return {
     name: "trim_audio",
-    description: "Trim an audio or video clip audio: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Operates in-place with git versioning.",
+    description: "Trim an aud-* asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for vid-* assets so picture and sound remain synchronized. Operates in-place with git versioning.",
     schema: {
-      asset_id: z.string().describe("Asset ID (e.g. aud-my-audio or vid-my-video)"),
+      asset_id: z.string().describe("Audio asset ID (aud-* prefix)"),
       project_slug: z.string().describe("Project slug"),
       trim_start: z.number().optional().describe("Start of range to keep (seconds)"),
       trim_end: z.number().optional().describe("End of range to keep (seconds)"),
@@ -76,7 +76,15 @@ export function trimAudioDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const assetId = asset_id.replace(/^@/, "");
+      if (!assetId.startsWith("aud-")) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "trim_audio requires an aud-* asset. Use trim_video for vid-* assets." }],
+        };
+      }
+
+      const manifestResult = await fs.getManifest(assetId, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -86,30 +94,28 @@ export function trimAudioDef(fs: VideocityFs): ToolDef {
 
       const manifest = manifestResult.value;
       const files = manifest.files || [];
-      const mediaFile = findAudioFile(files, asset_id) || findVideoFile(files);
+      const mediaFile = findAudioFile(files, assetId);
       if (!mediaFile) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: `No audio or video file found in asset ${asset_id}` }],
+          content: [{ type: "text" as const, text: `No audio file found in asset ${assetId}` }],
         };
       }
 
       const assetDir = manifest.path;
       const mediaPath = join(assetDir, mediaFile.name);
       const ext = extname(mediaFile.name);
-      const tempPath = join(assetDir, `original_trimmed${ext}`);
-      const jobId = `trim-audio-${asset_id}-${Date.now()}`;
-      const isVideo = asset_id.startsWith("vid-");
+      const jobId = `trim-audio-${assetId}-${Date.now()}`;
+      const tempPath = join(assetDir, `${jobId}${ext}`);
 
       const jobPayload: Record<string, unknown> = {
         type: "trim_audio",
         inputPath: mediaPath,
         outputPath: tempPath,
         mode: validated.mode,
-        assetId: asset_id,
+        assetId,
         assetDir,
         projectSlug: project_slug,
-        isVideo,
         commitParams: { trim_start, trim_end, cut_start, cut_end, mode: validated.mode },
       };
       if (validated.mode === "keep") {
@@ -132,7 +138,7 @@ export function trimAudioDef(fs: VideocityFs): ToolDef {
       return {
         content: [{
           type: "text" as const,
-          text: JSON.stringify({ asset_id, job_id: jobId, status: "completed" }),
+          text: JSON.stringify({ asset_id: assetId, job_id: jobId, status: "completed" }),
         }],
       };
     },

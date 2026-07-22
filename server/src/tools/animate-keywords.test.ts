@@ -250,6 +250,7 @@ describe("animate_keywords tool", () => {
 
     expect(command?.mcpTool).toEqual({
       tool: "animate_keywords",
+      adapter: "keywords",
       autoInject: ["project_slug"],
     });
   });

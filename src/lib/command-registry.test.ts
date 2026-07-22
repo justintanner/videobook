@@ -630,6 +630,11 @@ describe("selectCommandForInput", () => {
     ]);
     expect(selectCommandForInput([assetCmd, promptCmd], "/rewrite", "make it cinematic")).toBe(promptCmd);
   });
+
+  it("resolves an alias from canonical command metadata", () => {
+    const command = { ...makeCmd("/trim-video", []), aliases: ["/trim"] };
+    expect(selectCommandForInput([command], "/trim", "@vid-clip 0 5")).toBe(command);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -691,6 +696,13 @@ describe("filterCommandsByMountKeys", () => {
     const result = filterCommandsByMountKeys(cmds, new Set());
     expect(result).toHaveLength(1);
   });
+
+  it("excludes deprecated aliases from command surfaces", () => {
+    const alias = { ...makeCmd("/trim"), deprecated: true };
+    expect(filterCommandsByMountKeys([makeCmd("/trim-video"), alias], new Set())).toEqual([
+      expect.objectContaining({ command: "/trim-video" }),
+    ]);
+  });
 });
 
 describe("adaptCommandArgs", () => {
@@ -721,7 +733,7 @@ describe("adaptCommandArgs", () => {
   });
 
   it("adapts trim_video args with start and end timestamps", () => {
-    const res = adaptCommandArgs("trim_video", "trim_video", {
+    const res = adaptCommandArgs("trim", "trim_video", {
       asset_id: "@hero-intro",
       start: "0:05",
       end: "0:12",
@@ -737,9 +749,11 @@ describe("adaptCommandArgs", () => {
     const res = adaptCommandArgs("apply_cuts", "apply_cuts", {
       asset_id: "@vid-clip",
       cuts: ["0-5", "0:10-0:15"],
+      project_slug: "test-proj",
     });
     expect(res).toEqual({
       asset_id: "vid-clip",
+      project_slug: "test-proj",
       cuts: [
         { cut_start: 0, cut_end: 5 },
         { cut_start: 10, cut_end: 15 },
@@ -823,4 +837,3 @@ describe("normalizeTranslateSubtitlesCommandArgs", () => {
     ).toThrow();
   });
 });
-

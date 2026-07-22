@@ -599,7 +599,7 @@ describe("applyVideoToolConstraints", () => {
 describe("buildVideoRoutingPrompt", () => {
   it("defaults video generation to Google Flow Gemini Omni Video", () => {
     expect(DEFAULT_VIDEO_MODEL_KEY).toBe("gemini_omni");
-    expect(VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name).toBe("generate_gemini_omni_video");
+    expect(VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name).toBe("generate_kie_gemini_omni_video");
   });
 
   it("returns a non-empty string", () => {
@@ -618,7 +618,7 @@ describe("buildVideoRoutingPrompt", () => {
   it("includes routing preferences", () => {
     const prompt = buildVideoRoutingPrompt();
     expect(prompt).toContain("ROUTING PREFERENCES");
-    expect(prompt).toContain("PREFER generate_gemini_omni_video");
+    expect(prompt).toContain("PREFER generate_kie_gemini_omni_video");
   });
 
   it("includes JSON response format instruction", () => {
@@ -803,7 +803,7 @@ describe("VIDEO_TOOL_MODES contract", () => {
     const option = buildModelOption("kling30", VIDEO_MODELS.kling30, { prompt: "test" }, []);
     expect(option.key).toBe("kling30");
     expect(option.label).toBe("Kling 3.0");
-    expect(option.tool_name).toBe("generate_kling30_video");
+    expect(option.tool_name).toBe("generate_kie_kling_3_0_video");
     expect(option.schema).not.toBeNull();
     expect(option.validation).toBeDefined();
     expect(typeof option.validation.valid).toBe("boolean");
@@ -869,7 +869,7 @@ describe("google flow video models", () => {
     expect(schema!.properties.duration.enum).toEqual(["4", "6", "8"]);
     const validation = validateVideoParams("generate_veo31_lite_low_priority_video", { prompt: "a sunset" });
     expect(validation.valid).toBe(true);
-    expect(VIDEO_MODELS.veo31_lite_low_priority.tool_name).toBe("generate_veo31_lite_low_priority_video");
+    expect(VIDEO_MODELS.veo31_lite_low_priority.tool_name).toBe("generate_kie_veo_3_1_lite_low_priority_video");
   });
 
   it("veo31 models route through the google provider only", () => {
@@ -890,7 +890,7 @@ describe("google flow video models", () => {
       const option = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, { prompt: "x" }, [], undefined, "google");
       expect(option.providers.map((p) => p.key)).toEqual(expect.arrayContaining(["kie", "google"]));
       expect(option.selected_provider).toBe("google");
-      expect(option.tool_name).toBe("generate_google_omni_video");
+      expect(option.tool_name).toBe("generate_google_flow_omni_flash_video");
       expect(option.schema!.properties.first_frame_slug).toBeDefined();
       expect(option.schema!.properties.resolution).toBeUndefined();
       expect(option.schema!.properties.duration.enum).toEqual(["4", "6", "8", "10"]);
@@ -994,7 +994,7 @@ describe("google flow video models", () => {
       date: "2026-07-07T00:00:00Z",
     }];
 
-    expect(extractLastSettingsPerModel(history).get("generate_gemini_omni_video")).toMatchObject({
+    expect(extractLastSettingsPerModel(history).get("generate_google_flow_omni_flash_video")).toMatchObject({
       _provider: "google",
       first_frame_slug: "@img-start",
     });
@@ -1002,13 +1002,13 @@ describe("google flow video models", () => {
 
     const option = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, [], history);
     expect(option.selected_provider).toBe("google");
-    expect(option.tool_name).toBe("generate_google_omni_video");
+    expect(option.tool_name).toBe("generate_google_flow_omni_flash_video");
     expect(option.prefilled_values.first_frame_slug).toBe("@img-start");
   });
 
   it("gemini_omni keeps the kie tool when kie is selected", () => {
     const option = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, { prompt: "x" }, [], undefined, "kie");
-    expect(option.tool_name).toBe("generate_gemini_omni_video");
+    expect(option.tool_name).toBe("generate_kie_gemini_omni_video");
   });
 
   it("surfaces the PROMINENT_PEOPLE advisory when omni+google carries character_refs", () => {
@@ -1019,7 +1019,7 @@ describe("google flow video models", () => {
       date: "2026-07-08T00:00:00Z",
     }];
     const option = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, [], history, "google");
-    expect(option.tool_name).toBe("generate_google_omni_video");
+    expect(option.tool_name).toBe("generate_google_flow_omni_flash_video");
     expect(option.validation.warnings.some((w) => w.includes("PROMINENT_PEOPLE safety filter"))).toBe(true);
   });
 });

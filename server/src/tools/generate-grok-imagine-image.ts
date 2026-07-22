@@ -6,7 +6,7 @@ import { join, extname } from "node:path";
 import { queue } from "../queue.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
+import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -28,6 +28,7 @@ const generateGrokImagineImageSchema = {
   image_slugs: apicityStringArrayField(GrokImageToImageRequestSchema.shape.input.shape.image_urls, "Exactly one image slug (e.g., ['@img-sunset']). Used as fallback when asset_id is not provided."),
   project_slug: z.string().describe("Project slug"),
   prompt: apicityStringField(GrokImageToImageRequestSchema.shape.input.shape.prompt, "Optional prompt to guide image transformation"),
+  nsfw_checker: apicityField(GrokImageToImageRequestSchema.shape.input.shape.nsfw_checker, "Enable NSFW content safety filter"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;
 

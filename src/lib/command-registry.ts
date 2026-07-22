@@ -52,9 +52,10 @@ export interface ServerCommand {
   variant: 'default' | 'violet' | 'fuchsia' | 'blue' | 'zinc' | 'amber' | 'emerald' | 'pink';
   chevron: 'right' | 'down';
   params: CommandParam[];
-  mcpTool?: { tool: string; adapter?: string; autoInject?: string[]; injectParams?: Record<string, string | number | boolean> };
+  mcpTool?: { tool: string; adapter?: CommandAdapterName; autoInject?: string[]; injectParams?: Record<string, string | number | boolean> };
   uiAction?: string;
   onMount?: string[];
+  exposure?: 'direct' | 'ui' | 'composite';
   canonical?: string;
   aliases?: string[];
   deprecated?: boolean;
@@ -87,6 +88,7 @@ export function filterCommandsByMountKeys(
   activeKeys: ReadonlySet<string>,
 ): ServerCommand[] {
   return commands.filter((cmd) => {
+    if (cmd.deprecated) return false;
     if (!cmd.onMount || cmd.onMount.length === 0) return true;
     return cmd.onMount.every((key) => activeKeys.has(key));
   });
@@ -492,16 +494,7 @@ export function normalizeTranslateSubtitlesCommandArgs(
 
 export type CommandAdapterFn = (args: Readonly<Record<string, unknown>>) => CommandToolArgs;
 
-export const COMMAND_ADAPTERS: Record<string, CommandAdapterFn> = {
-  create_qr_outro: (args) => {
-    const inputs = args.inputs;
-    if (!Array.isArray(inputs) || !inputs.every((input) => typeof input === 'string')) {
-      throw new Error('/outroqr inputs are required');
-    }
-    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
-    delete result.inputs;
-    return { ...result, ...normalizeQrOutroCommandArgs(inputs as string[]) };
-  },
+export const COMMAND_ADAPTERS = {
   qr_outro: (args) => {
     const inputs = args.inputs;
     if (!Array.isArray(inputs) || !inputs.every((input) => typeof input === 'string')) {
@@ -511,30 +504,11 @@ export const COMMAND_ADAPTERS: Record<string, CommandAdapterFn> = {
     delete result.inputs;
     return { ...result, ...normalizeQrOutroCommandArgs(inputs as string[]) };
   },
-  animate_keywords: (args) => {
-    const normalized = normalizeKeywordCommandArgs(args);
-    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
-    delete result.inputs;
-    return { ...result, ...normalized };
-  },
   keywords: (args) => {
     const normalized = normalizeKeywordCommandArgs(args);
     const result: CommandToolArgs = { ...(args as CommandToolArgs) };
     delete result.inputs;
     return { ...result, ...normalized };
-  },
-  change_video_speed: (args) => {
-    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
-    if ('speed' in result) {
-      const val = result.speed;
-      delete result.speed;
-      if (typeof val === 'string' && val.endsWith('s')) {
-        result.target_duration_seconds = parseFloat(val);
-      } else if (val !== undefined) {
-        result.speed = parseFloat(String(val));
-      }
-    }
-    return result;
   },
   change_speed: (args) => {
     const result: CommandToolArgs = { ...(args as CommandToolArgs) };
@@ -549,24 +523,11 @@ export const COMMAND_ADAPTERS: Record<string, CommandAdapterFn> = {
     }
     return result;
   },
-  timewarp_video: (args) => {
-    const normalized = normalizeTimewarpCommandArgs(args);
-    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
-    delete result.range;
-    delete result.factor;
-    return { ...result, ...normalized };
-  },
   timewarp: (args) => {
     const normalized = normalizeTimewarpCommandArgs(args);
     const result: CommandToolArgs = { ...(args as CommandToolArgs) };
     delete result.range;
     delete result.factor;
-    return { ...result, ...normalized };
-  },
-  sync_video_to_audio: (args) => {
-    const normalized = normalizeSyncAudioCommandArgs(args);
-    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
-    delete result.mappings;
     return { ...result, ...normalized };
   },
   sync_audio: (args) => {
@@ -583,20 +544,6 @@ export const COMMAND_ADAPTERS: Record<string, CommandAdapterFn> = {
     delete result.description;
     return { ...result, ...normalized };
   },
-  trim_video: (args) => {
-    const normalized = normalizeTrimCommandArgs(args);
-    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
-    delete result.start;
-    delete result.end;
-    return { ...result, ...(normalized as CommandToolArgs) };
-  },
-  trim_audio: (args) => {
-    const normalized = normalizeTrimCommandArgs(args);
-    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
-    delete result.start;
-    delete result.end;
-    return { ...result, ...(normalized as CommandToolArgs) };
-  },
   trim: (args) => {
     const normalized = normalizeTrimCommandArgs(args);
     const result: CommandToolArgs = { ...(args as CommandToolArgs) };
@@ -605,7 +552,10 @@ export const COMMAND_ADAPTERS: Record<string, CommandAdapterFn> = {
     return { ...result, ...(normalized as CommandToolArgs) };
   },
   apply_cuts: (args) => {
-    return normalizeApplyCutsCommandArgs(args);
+    const normalized = normalizeApplyCutsCommandArgs(args);
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    delete result.cuts;
+    return { ...result, ...normalized };
   },
   translate_subtitles: (args) => {
     const normalized = normalizeTranslateSubtitlesCommandArgs(args);
@@ -613,25 +563,19 @@ export const COMMAND_ADAPTERS: Record<string, CommandAdapterFn> = {
     delete result.target_language;
     return { ...result, ...(normalized as CommandToolArgs) };
   },
-};
+} satisfies Record<string, CommandAdapterFn>;
+
+export type CommandAdapterName = keyof typeof COMMAND_ADAPTERS;
 
 export function adaptCommandArgs(
   adapterName: string | undefined,
-  toolName: string,
+  _toolName: string,
   args: Readonly<Record<string, unknown>>,
 ): CommandToolArgs {
-  if (adapterName) {
-    const adapterFn = COMMAND_ADAPTERS[adapterName];
-    if (!adapterFn) {
-      throw new Error(`Unknown command adapter: ${adapterName}`);
-    }
-    return adapterFn(args);
-  }
-  const adapterFn = COMMAND_ADAPTERS[toolName];
-  if (adapterFn) {
-    return adapterFn(args);
-  }
-  return args as CommandToolArgs;
+  if (!adapterName) return args as CommandToolArgs;
+  const adapterFn = COMMAND_ADAPTERS[adapterName as CommandAdapterName];
+  if (!adapterFn) throw new Error(`Unknown command adapter: ${adapterName}`);
+  return adapterFn(args);
 }
 
 function parseNumberToken(token: string): string | number {
@@ -695,7 +639,10 @@ export function parseCommandArgs(rest: string, params: CommandParam[]): Record<s
 }
 
 export function selectCommandForInput(commands: ServerCommand[], commandStr: string, rest: string): ServerCommand | undefined {
-  const matches = commands.filter((c) => c.command === commandStr);
+  const exactMatches = commands.filter((command) => command.command === commandStr);
+  const matches = exactMatches.length > 0
+    ? exactMatches
+    : commands.filter((command) => command.aliases?.includes(commandStr));
   if (matches.length <= 1) return matches[0];
 
   const firstToken = rest.split(/\s+/).find(Boolean) ?? '';

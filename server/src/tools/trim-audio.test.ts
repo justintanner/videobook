@@ -98,7 +98,7 @@ describe("trim_audio tool", () => {
     expect(result.isError).toBe(true);
   });
 
-  it("returns error when asset has no audio or video file", async () => {
+  it("returns error when asset has no audio file", async () => {
     const fs = createFs({ projectsDir: tempDir });
     const asset = await fs.createAsset("aud", "empty", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
@@ -115,7 +115,27 @@ describe("trim_audio tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("No audio or video file found");
+    expect(content[0].text).toContain("No audio file found");
+  });
+
+  it("rejects vid-* assets and directs callers to trim_video", async () => {
+    const fs = createFs({ projectsDir: tempDir });
+    const asset = await fs.createAsset("vid", "video-clip", "test-proj");
+    if (!asset.ok) throw new Error("Failed to create asset");
+
+    const result = await client.callTool({
+      name: "trim_audio",
+      arguments: {
+        asset_id: asset.value.assetId,
+        project_slug: "test-proj",
+        trim_start: 0.5,
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    const content = result.content as TextContent;
+    expect(content[0].text).toContain("requires an aud-* asset");
+    expect(content[0].text).toContain("trim_video");
   });
 
   it("trims real aud-* MP3 in keep mode", async () => {
@@ -151,6 +171,21 @@ describe("trim_audio tool", () => {
     const duration = await probeAudioDuration(trimmedPath);
     expect(duration).toBeGreaterThan(1.3);
     expect(duration).toBeLessThan(1.7);
+    const provenance = await fs.readMetadata<Record<string, unknown>>(
+      asset.value.assetId,
+      "original",
+      "test-proj",
+    );
+    expect(provenance.ok).toBe(true);
+    if (provenance.ok) {
+      expect(provenance.value).toMatchObject({
+        origin: "trim_audio",
+        source_asset_id: asset.value.assetId,
+        mode: "keep",
+        trim_start: 0.5,
+        trim_end: 2,
+      });
+    }
   });
 
   it("trims real aud-* MP3 in cut mode", async () => {
@@ -183,5 +218,32 @@ describe("trim_audio tool", () => {
     const duration = await probeAudioDuration(trimmedPath);
     expect(duration).toBeGreaterThan(1.8);
     expect(duration).toBeLessThan(2.3);
+  });
+
+  it("leaves the original intact when the requested range exceeds duration", async () => {
+    const fs = createFs({ projectsDir: tempDir });
+    const asset = await fs.createAsset("aud", "rollback-clip", "test-proj");
+    if (!asset.ok) throw new Error("Failed to create asset");
+
+    const genPath = join(tempDir, "temp-sine.mp3");
+    await generateTestMp3(genPath, 2.0);
+    const originalData = await readFile(genPath);
+    await fs.writeFile(asset.value.assetId, "original.mp3", originalData, "test-proj");
+
+    const result = await client.callTool({
+      name: "trim_audio",
+      arguments: {
+        asset_id: asset.value.assetId,
+        project_slug: "test-proj",
+        trim_start: 0.5,
+        trim_end: 8,
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    const restored = await fs.readFile(asset.value.assetId, "original.mp3", "test-proj");
+    expect(restored.ok).toBe(true);
+    if (!restored.ok) return;
+    expect(restored.value.equals(originalData)).toBe(true);
   });
 });

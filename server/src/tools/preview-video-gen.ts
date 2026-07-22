@@ -17,10 +17,13 @@ import {
 import type { ActionLogEntry } from "../video-models.js";
 import type { ToolDef } from "./tool-def.js";
 
-function findSelectedModel(toolName: string): string | null {
+import { getCanonicalName } from "../generation-registry.js";
+
+function findSelectedModel(rawToolName: string): string | null {
+  const canonical = getCanonicalName(rawToolName);
   for (const [key, info] of Object.entries(VIDEO_MODELS)) {
-    if (info.tool_name === toolName) return key;
-    if (info.googleToolName === toolName) return key;
+    if (info.tool_name === rawToolName || info.tool_name === canonical || getCanonicalName(info.tool_name) === canonical) return key;
+    if (info.googleToolName === rawToolName || info.googleToolName === canonical || (info.googleToolName && getCanonicalName(info.googleToolName) === canonical)) return key;
   }
   return null;
 }

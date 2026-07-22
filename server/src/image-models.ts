@@ -100,11 +100,13 @@ type ImageModelConfig = {
   googleToolNames?: { noRefs?: string; withRefs?: string };
 };
 
+import { getCanonicalName, getActionSpec, isGenerationAction } from "./generation-registry.js";
+
 const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
   {
     key: "nano_banana",
     kieModelId: "nano-banana-pro",
-    tool_name: "generate_nano_banana_image",
+    tool_name: "generate_kie_nano_banana_pro_text_to_image",
     label: "Nano Banana Pro",
     description: "Text-to-image with optional reference images, aspect ratio, resolution, and format control",
     imageFieldSchema: NanoBananaProRequestSchema.shape.input.shape.image_input,
@@ -114,25 +116,25 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
       resolution: NanoBananaProRequestSchema.shape.input.shape.resolution,
       output_format: NanoBananaProRequestSchema.shape.input.shape.output_format,
     },
-    falToolNames: { noRefs: "generate_nano_banana_pro_fal", withRefs: "generate_nano_banana_pro_edit_fal" },
-    googleToolNames: { noRefs: "generate_nano_banana_pro_google", withRefs: "generate_nano_banana_pro_google" },
+    falToolNames: { noRefs: "generate_fal_nano_banana_pro_text_to_image", withRefs: "generate_fal_nano_banana_pro_edit_image" },
+    googleToolNames: { noRefs: "generate_google_flow_nano_banana_pro_image", withRefs: "generate_google_flow_nano_banana_pro_image" },
   },
   {
     key: "grok_imagine_image",
     kieModelId: "grok-imagine/image-to-image",
     xaiEndpoint: "edits",
-    tool_name: "generate_grok_imagine_image",
+    tool_name: "generate_kie_grok_imagine_image_to_image",
     label: "Grok Imagine Edit",
     description: "Image-to-image transformation (requires exactly 1 reference image)",
     imageFieldSchema: GrokImageToImageRequestSchema.shape.input.shape.image_urls,
     kieImageField: "image_urls",
     defaultSchemas: { nsfw_checker: GrokImageToImageRequestSchema.shape.input.shape.nsfw_checker },
-    falToolNames: { withRefs: "generate_grok_imagine_image_edit_fal" },
+    falToolNames: { withRefs: "generate_fal_grok_imagine_edit_image" },
   },
   {
     key: "gpt_image",
     kieModelId: "gpt-image-2-image-to-image",
-    tool_name: "generate_gpt_image",
+    tool_name: "generate_kie_gpt_image_2_image_to_image",
     label: "GPT Image 2.0 Edit",
     description: "Image editing with 1-16 reference images, aspect ratio, resolution (1K/2K/4K), and NSFW filter",
     imageFieldSchema: GptImage2ImageToImageRequestSchema.shape.input.shape.input_urls,
@@ -146,7 +148,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
   {
     key: "gpt_image_text",
     kieModelId: "gpt-image-2-text-to-image",
-    tool_name: "generate_gpt_image_text",
+    tool_name: "generate_kie_gpt_image_2_text_to_image",
     label: "GPT Image 2.0",
     description: "Text-to-image generation (no reference images needed), with optional aspect ratio and resolution (1K/2K/4K)",
     imageFieldSchema: null,
@@ -160,7 +162,7 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
     key: "grok_imagine_text",
     kieModelId: "grok-imagine/text-to-image",
     xaiEndpoint: "generations",
-    tool_name: "generate_grok_imagine_text_image",
+    tool_name: "generate_kie_grok_imagine_text_to_image",
     label: "Grok Imagine",
     description: "Text-to-image generation (no reference images needed), with optional aspect ratio",
     imageFieldSchema: null,
@@ -168,12 +170,12 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
       aspect_ratio: GrokTextToImageRequestSchema.shape.input.shape.aspect_ratio,
       nsfw_checker: GrokTextToImageRequestSchema.shape.input.shape.nsfw_checker,
     },
-    falToolNames: { noRefs: "generate_grok_imagine_image_fal" },
+    falToolNames: { noRefs: "generate_fal_grok_imagine_text_to_image" },
   },
   {
     key: "qwen2_image_edit",
     kieModelId: "qwen2/image-edit",
-    tool_name: "generate_qwen2_image_edit",
+    tool_name: "generate_kie_qwen_2_0_edit_image",
     label: "Qwen2 Image Edit",
     description: "Prompt-driven image edit using Qwen2 (requires exactly 1 reference image)",
     imageFieldSchema: Qwen2ImageEditRequestSchema.shape.input.shape.image_url,
@@ -183,12 +185,12 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
       output_format: Qwen2ImageEditRequestSchema.shape.input.shape.output_format,
       nsfw_checker: Qwen2ImageEditRequestSchema.shape.input.shape.nsfw_checker,
     },
-    falToolNames: { withRefs: "generate_qwen_image_edit_fal" },
+    falToolNames: { withRefs: "generate_fal_qwen_2_0_edit_image" },
   },
   {
     key: "seedream_text",
     kieModelId: "seedream/5-lite-text-to-image",
-    tool_name: "generate_seedream_text_image",
+    tool_name: "generate_kie_seedream_v5_lite_text_to_image",
     label: "Seedream 5 Lite",
     description: "Text-to-image generation with ByteDance Seedream 5 Lite (basic=2K, high=4K), with aspect ratio and content-safety control",
     imageFieldSchema: null,
@@ -197,12 +199,12 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
       quality: SeedreamTextToImageRequestSchema.shape.input.shape.quality,
       nsfw_checker: SeedreamTextToImageRequestSchema.shape.input.shape.nsfw_checker,
     },
-    falToolNames: { noRefs: "generate_seedream_v5_lite_fal" },
+    falToolNames: { noRefs: "generate_fal_seedream_v5_lite_text_to_image" },
   },
   {
     key: "seedream_image",
     kieModelId: "seedream/5-lite-image-to-image",
-    tool_name: "generate_seedream_image",
+    tool_name: "generate_kie_seedream_v5_lite_image_to_image",
     label: "Seedream 5 Lite Edit",
     description: "Image-to-image edit with ByteDance Seedream 5 Lite (1-14 reference images), aspect ratio, and quality/safety control",
     imageFieldSchema: SeedreamImageToImageRequestSchema.shape.input.shape.image_urls,
@@ -212,12 +214,12 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
       quality: SeedreamImageToImageRequestSchema.shape.input.shape.quality,
       nsfw_checker: SeedreamImageToImageRequestSchema.shape.input.shape.nsfw_checker,
     },
-    falToolNames: { withRefs: "generate_seedream_v5_lite_edit_fal" },
+    falToolNames: { withRefs: "generate_fal_seedream_v5_lite_edit_image" },
   },
   {
     key: "wan27_image",
     kieModelId: "wan/2-7-image",
-    tool_name: "generate_wan27_image",
+    tool_name: "generate_kie_wan_2_7_text_to_image",
     label: "Wan 2.7 Image",
     description: "Text-to-image or image editing with optional reference images, aspect ratio, resolution, and thinking mode",
     imageFieldSchema: Wan27ImageInputSchema.shape.input_urls,
@@ -227,12 +229,12 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
       resolution: Wan27ImageRequestSchema.shape.input.shape.resolution,
       nsfw_checker: Wan27ImageRequestSchema.shape.input.shape.nsfw_checker,
     },
-    falToolNames: { noRefs: "generate_wan27_fal", withRefs: "generate_wan27_edit_fal" },
+    falToolNames: { noRefs: "generate_fal_wan_2_7_text_to_image", withRefs: "generate_fal_wan_2_7_edit_image" },
   },
   {
     key: "wan27_image_pro",
     kieModelId: "wan/2-7-image-pro",
-    tool_name: "generate_wan27_image_pro",
+    tool_name: "generate_kie_wan_2_7_pro_text_to_image",
     label: "Wan 2.7 Image Pro",
     description: "Pro text-to-image or image editing with optional reference images, aspect ratio, resolution, and thinking mode",
     imageFieldSchema: Wan27ImageInputSchema.shape.input_urls,
@@ -242,32 +244,32 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
       resolution: Wan27ImageProRequestSchema.shape.input.shape.resolution,
       nsfw_checker: Wan27ImageProRequestSchema.shape.input.shape.nsfw_checker,
     },
-    falToolNames: { noRefs: "generate_wan27_pro_fal", withRefs: "generate_wan27_pro_edit_fal" },
+    falToolNames: { noRefs: "generate_fal_wan_2_7_pro_text_to_image", withRefs: "generate_fal_wan_2_7_pro_edit_image" },
   },
   {
     key: "alibaba_image",
-    tool_name: "generate_alibaba_image",
+    tool_name: "generate_alibaba_wan_2_1_text_to_image",
     label: "Alibaba Wan 2.7 Image",
     description: "Alibaba Cloud image generation using Wan 2.7 with optional reference images, size, thinking mode, and color palette control",
     imageFieldSchema: AlibabaImageReferenceSlotsSchema,
   },
   {
     key: "alibaba_image_pro",
-    tool_name: "generate_alibaba_image_pro",
+    tool_name: "generate_alibaba_wan_2_1_pro_text_to_image",
     label: "Alibaba Wan 2.7 Image Pro",
     description: "Alibaba Cloud pro image generation using Wan 2.7 Pro with optional reference images, size, thinking mode, and color palette control",
     imageFieldSchema: AlibabaImageReferenceSlotsSchema,
   },
   {
     key: "alibaba_qwen_image",
-    tool_name: "generate_alibaba_qwen_image",
+    tool_name: "generate_alibaba_qwen_2_0_text_to_image",
     label: "Alibaba Qwen Image",
     description: "Alibaba Cloud Qwen text-to-image (qwen-image-2.0 family) with 0-3 optional reference images, via the synchronous multimodal endpoint",
     imageFieldSchema: AlibabaQwenImageGenerationImageSlotsSchema,
   },
   {
     key: "alibaba_qwen_image_edit",
-    tool_name: "generate_alibaba_qwen_image_edit",
+    tool_name: "generate_alibaba_qwen_2_0_edit_image",
     label: "Alibaba Qwen Image Edit",
     description: "Alibaba Cloud Qwen image editing (qwen-image-edit family) with 1-3 required reference images, via the synchronous multimodal endpoint",
     imageFieldSchema: AlibabaQwenImageEditImageSlotsSchema,
@@ -278,17 +280,20 @@ function getImageSlotsForConfig(config: ImageModelConfig): SlotConstraints | nul
   return readSlotConstraints(config.imageFieldSchema);
 }
 
-function getImageSlotsForToolName(toolName: string): SlotConstraints | null {
-  if (toolName === "generate_nano_banana_pro_google") return GOOGLE_NBP_IMAGE_SLOTS;
-  const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName);
+function getImageSlotsForToolName(rawToolName: string): SlotConstraints | null {
+  const toolName = getCanonicalName(rawToolName);
+  if (toolName === "generate_google_flow_nano_banana_pro_image" || rawToolName === "generate_nano_banana_pro_google") return GOOGLE_NBP_IMAGE_SLOTS;
+  const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName || getCanonicalName(c.tool_name) === toolName);
   return config ? getImageSlotsForConfig(config) : null;
 }
 
-function getImageToolLabel(toolName: string, config: ImageModelConfig | undefined): string {
+function getImageToolLabel(rawToolName: string, config: ImageModelConfig | undefined): string {
   if (config) return config.label;
-  if (toolName === "generate_nano_banana_pro_google") return "Nano Banana Pro";
+  const toolName = getCanonicalName(rawToolName);
+  if (toolName === "generate_google_flow_nano_banana_pro_image" || rawToolName === "generate_nano_banana_pro_google") return "Nano Banana Pro";
   return toolName;
 }
+
 
 function getImageDefaultsForConfig(config: ImageModelConfig): Record<string, unknown> {
   const defaults: Record<string, unknown> = {};
@@ -408,16 +413,19 @@ function imageSlotsDescription(slots: SlotConstraints | null): string {
 // Schema builder (reads from Kie schemas — no switch statement)
 // ---------------------------------------------------------------------------
 
-function getImageToolSchema(toolName: string): ToolSchema | null {
-  if (toolName === "generate_nano_banana_pro_google") {
+function getImageToolSchema(rawToolName: string): ToolSchema | null {
+  const toolName = getCanonicalName(rawToolName);
+
+  if (toolName === "generate_google_flow_nano_banana_pro_image" || rawToolName === "generate_nano_banana_pro_google") {
     return {
       type: "object",
       properties: {
-        prompt: { type: "string", description: "Image description" },
+        prompt: { type: "string", description: "Natural language generation prompt" },
         image_slugs: {
           type: "array",
           items: { type: "string" },
-          description: imageSlotsDescription(GOOGLE_NBP_IMAGE_SLOTS),
+          maxItems: GOOGLE_IMAGE_MAX_REFERENCE_SLOTS,
+          description: `Optional reference image asset slugs (up to ${GOOGLE_IMAGE_MAX_REFERENCE_SLOTS})`,
         },
         character_refs: {
           type: "array",
@@ -437,7 +445,9 @@ function getImageToolSchema(toolName: string): ToolSchema | null {
     };
   }
 
-  const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName);
+  const config = IMAGE_MODEL_CONFIGS.find(
+    (c) => c.tool_name === toolName || c.key === rawToolName || getCanonicalName(c.tool_name) === toolName,
+  );
   if (!config) return null;
   const defaults = getImageDefaultsForConfig(config);
 
@@ -720,23 +730,57 @@ type ActionLogEntry = {
 
 function imageActionNameToToolName(action: string): string | null {
   if (!action.startsWith("tool-")) return null;
-  const toolName = action.slice(5).replace(/-/g, "_");
+  const rawName = action.slice(5).replace(/-/g, "_");
+  if (!isGenerationAction(rawName)) return null;
+  const canonicalName = getCanonicalName(rawName);
+  const spec = getActionSpec(canonicalName);
+  if (!spec || spec.media_type !== "image") return null;
   const config = IMAGE_MODEL_CONFIGS.find((c) =>
-    c.tool_name === toolName ||
-    c.falToolNames?.noRefs === toolName ||
-    c.falToolNames?.withRefs === toolName ||
-    c.googleToolNames?.noRefs === toolName ||
-    c.googleToolNames?.withRefs === toolName
+    c.tool_name === canonicalName ||
+    c.tool_name === rawName ||
+    c.falToolNames?.noRefs === rawName ||
+    c.falToolNames?.withRefs === rawName ||
+    c.googleToolNames?.noRefs === rawName ||
+    c.googleToolNames?.withRefs === rawName
   );
-  return config?.tool_name ?? null;
+  return config?.tool_name ?? canonicalName;
 }
 
 const NON_PARAM_KEYS = new Set(["project_slug"]);
 
+class SettingsMap extends Map<string, Record<string, unknown>> {
+  override get(key: string): Record<string, unknown> | undefined {
+    const direct = super.get(key);
+    if (direct !== undefined) return direct;
+    const canonical = getCanonicalName(key);
+    const fromCanonical = super.get(canonical);
+    if (fromCanonical !== undefined) return fromCanonical;
+    const spec = getActionSpec(key);
+    if (spec) {
+      if (spec.old_name) {
+        const fromOld = super.get(spec.old_name);
+        if (fromOld !== undefined) return fromOld;
+      }
+      for (const alias of spec.aliases) {
+        const fromAlias = super.get(alias);
+        if (fromAlias !== undefined) return fromAlias;
+      }
+    }
+    for (const [k, v] of this.entries()) {
+      if (getCanonicalName(k) === canonical) return v;
+    }
+    return undefined;
+  }
+
+  override has(key: string): boolean {
+    return this.get(key) !== undefined;
+  }
+}
+
 function extractLastImageSettingsPerModel(
   log: ActionLogEntry[],
 ): Map<string, Record<string, unknown>> {
-  const result = new Map<string, Record<string, unknown>>();
+  const result = new SettingsMap();
   for (const entry of log) {
     const toolName = imageActionNameToToolName(entry.action);
     if (!toolName || result.has(toolName)) continue;
@@ -755,7 +799,10 @@ function extractLastUsedImageModel(log: ActionLogEntry[]): string | null {
     const toolName = imageActionNameToToolName(entry.action);
     if (!toolName) continue;
     if (typeof entry.payload === "string") continue;
-    const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName);
+    const canonical = getCanonicalName(toolName);
+    const config = IMAGE_MODEL_CONFIGS.find(
+      (c) => c.tool_name === toolName || c.tool_name === canonical || getCanonicalName(c.tool_name) === canonical
+    );
     if (config) return config.key;
   }
   return null;
