@@ -38,11 +38,11 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   };
 }
 
-export function renderDef(fs: VideocityFs): ToolDef {
+export function renderVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "render",
+    name: "render_video",
     description:
-      "Render a vid- asset. Output: landscape.mp4, portrait.mp4, or square.mp4.",
+      "Render a vid- asset into landscape.mp4, portrait.mp4, or square.mp4. Renders all 3 orientations when orientation is omitted.",
     schema: {
       asset_id: z.string().describe("Asset ID (vid- prefix)"),
       project_slug: z.string().describe("Project slug"),
@@ -466,5 +466,14 @@ export function renderDef(fs: VideocityFs): ToolDef {
         }],
       };
     },
+  };
+}
+
+export function renderDef(fs: VideocityFs): ToolDef {
+  const base = renderVideoDef(fs);
+  return {
+    ...base,
+    name: "render",
+    description: "Legacy alias for render_video. Render a vid- asset.",
   };
 }

@@ -78,9 +78,9 @@ async function buildCardPng(url: string, handle: string): Promise<Buffer> {
     .toBuffer();
 }
 
-export function createWatermarkDef(fs: VideocityFs): ToolDef {
+export function createWatermarkCardDef(fs: VideocityFs): ToolDef {
   return {
-    name: "create_watermark",
+    name: "create_watermark_card",
     description:
       "Generate a black-and-white QR + 'X: <handle>' watermark card and store it as an img- asset. Apply it via the on-screen graphic (OSG) settings during render.",
     schema: {
@@ -175,5 +175,14 @@ export function createWatermarkDef(fs: VideocityFs): ToolDef {
         }],
       };
     },
+  };
+}
+
+export function createWatermarkDef(fs: VideocityFs): ToolDef {
+  const base = createWatermarkCardDef(fs);
+  return {
+    ...base,
+    name: "create_watermark",
+    description: "Legacy alias for create_watermark_card. Generate a QR watermark card asset.",
   };
 }

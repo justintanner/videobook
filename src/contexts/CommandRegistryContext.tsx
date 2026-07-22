@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { ServerCommand, CommandArgValue, CommandToolArgs } from '@/lib/command-registry';
-import { filterCommandsByMountKeys, normalizeApplySfxCommandArgs, normalizeKeywordCommandArgs, normalizeQrOutroCommandArgs, normalizeSyncAudioCommandArgs, normalizeTimewarpCommandArgs, parseCommandArgs, selectCommandForInput } from '@/lib/command-registry';
+import { adaptCommandArgs, filterCommandsByMountKeys, parseCommandArgs, selectCommandForInput } from '@/lib/command-registry';
 import { useMountKeys } from '@/contexts/MountKeyContext';
 import type { UiActionMap } from '@/lib/ui-actions';
 import { executeUiAction } from '@/lib/ui-actions';
@@ -86,53 +86,14 @@ export function CommandRegistryProvider({
 
           // mcpTool dispatch
           if (cmd.mcpTool) {
-            const toolArgs: CommandToolArgs = { ...args };
+            let toolArgs: CommandToolArgs = { ...args };
             if (cmd.mcpTool.autoInject?.includes('project_slug') && projectSlug) {
               toolArgs.project_slug = projectSlug;
             }
             if (cmd.mcpTool.injectParams) {
               Object.assign(toolArgs, cmd.mcpTool.injectParams);
             }
-            if (cmd.mcpTool.tool === 'create_qr_outro') {
-              const inputs = toolArgs.inputs;
-              if (!Array.isArray(inputs) || !inputs.every((input) => typeof input === 'string')) {
-                throw new Error('/outroqr inputs are required');
-              }
-              delete toolArgs.inputs;
-              Object.assign(toolArgs, normalizeQrOutroCommandArgs(inputs));
-            }
-            if (cmd.mcpTool.tool === 'animate_keywords') {
-              const normalized = normalizeKeywordCommandArgs(toolArgs)
-              delete toolArgs.inputs
-              Object.assign(toolArgs, normalized)
-            }
-            if (cmd.mcpTool.tool === 'change_video_speed' && 'speed' in toolArgs) {
-              const val = toolArgs.speed;
-              delete toolArgs.speed;
-              if (typeof val === 'string' && val.endsWith('s')) {
-                toolArgs.target_duration_seconds = parseFloat(val);
-              } else if (val !== undefined) {
-                toolArgs.speed = parseFloat(String(val));
-              }
-            }
-            if (cmd.mcpTool.tool === 'timewarp_video') {
-              const normalized = normalizeTimewarpCommandArgs(toolArgs);
-              delete toolArgs.range;
-              delete toolArgs.factor;
-              Object.assign(toolArgs, normalized);
-            }
-            if (cmd.mcpTool.tool === 'sync_video_to_audio') {
-              const normalized = normalizeSyncAudioCommandArgs(toolArgs);
-              delete toolArgs.mappings;
-              Object.assign(toolArgs, normalized);
-            }
-            if (cmd.mcpTool.tool === 'apply_sfx') {
-              const normalized = normalizeApplySfxCommandArgs(toolArgs);
-              delete toolArgs.timestamp;
-              delete toolArgs.type;
-              delete toolArgs.description;
-              Object.assign(toolArgs, normalized);
-            }
+            toolArgs = adaptCommandArgs(cmd.mcpTool.adapter, cmd.mcpTool.tool, toolArgs);
             const result = await callTool(cmd.mcpTool.tool, toolArgs);
             if (!result.isError) onAfterDispatch?.(cmd.mcpTool.tool, toolArgs);
             return !result.isError;

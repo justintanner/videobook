@@ -42,7 +42,7 @@ export interface ServerCommand {
   variant: 'default' | 'violet' | 'fuchsia' | 'blue' | 'zinc' | 'amber' | 'emerald' | 'pink';
   chevron: 'right' | 'down';
   params: CommandParam[];
-  mcpTool?: { tool: string; autoInject?: string[]; injectParams?: Record<string, string | number | boolean> };
+  mcpTool?: { tool: string; adapter?: string; autoInject?: string[]; injectParams?: Record<string, string | number | boolean> };
   uiAction?: string;
   onMount?: string[];
 }
@@ -323,6 +323,114 @@ export function normalizeSyncAudioCommandArgs(
   }
 
   return { asset_id: assetId, anchors };
+}
+
+export type CommandAdapterFn = (args: Readonly<Record<string, unknown>>) => CommandToolArgs;
+
+export const COMMAND_ADAPTERS: Record<string, CommandAdapterFn> = {
+  create_qr_outro: (args) => {
+    const inputs = args.inputs;
+    if (!Array.isArray(inputs) || !inputs.every((input) => typeof input === 'string')) {
+      throw new Error('/outroqr inputs are required');
+    }
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    delete result.inputs;
+    return { ...result, ...normalizeQrOutroCommandArgs(inputs as string[]) };
+  },
+  qr_outro: (args) => {
+    const inputs = args.inputs;
+    if (!Array.isArray(inputs) || !inputs.every((input) => typeof input === 'string')) {
+      throw new Error('/outroqr inputs are required');
+    }
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    delete result.inputs;
+    return { ...result, ...normalizeQrOutroCommandArgs(inputs as string[]) };
+  },
+  animate_keywords: (args) => {
+    const normalized = normalizeKeywordCommandArgs(args);
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    delete result.inputs;
+    return { ...result, ...normalized };
+  },
+  keywords: (args) => {
+    const normalized = normalizeKeywordCommandArgs(args);
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    delete result.inputs;
+    return { ...result, ...normalized };
+  },
+  change_video_speed: (args) => {
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    if ('speed' in result) {
+      const val = result.speed;
+      delete result.speed;
+      if (typeof val === 'string' && val.endsWith('s')) {
+        result.target_duration_seconds = parseFloat(val);
+      } else if (val !== undefined) {
+        result.speed = parseFloat(String(val));
+      }
+    }
+    return result;
+  },
+  change_speed: (args) => {
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    if ('speed' in result) {
+      const val = result.speed;
+      delete result.speed;
+      if (typeof val === 'string' && val.endsWith('s')) {
+        result.target_duration_seconds = parseFloat(val);
+      } else if (val !== undefined) {
+        result.speed = parseFloat(String(val));
+      }
+    }
+    return result;
+  },
+  timewarp_video: (args) => {
+    const normalized = normalizeTimewarpCommandArgs(args);
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    delete result.range;
+    delete result.factor;
+    return { ...result, ...normalized };
+  },
+  timewarp: (args) => {
+    const normalized = normalizeTimewarpCommandArgs(args);
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    delete result.range;
+    delete result.factor;
+    return { ...result, ...normalized };
+  },
+  sync_video_to_audio: (args) => {
+    const normalized = normalizeSyncAudioCommandArgs(args);
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    delete result.mappings;
+    return { ...result, ...normalized };
+  },
+  sync_audio: (args) => {
+    const normalized = normalizeSyncAudioCommandArgs(args);
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    delete result.mappings;
+    return { ...result, ...normalized };
+  },
+  apply_sfx: (args) => {
+    const normalized = normalizeApplySfxCommandArgs(args);
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    delete result.timestamp;
+    delete result.type;
+    delete result.description;
+    return { ...result, ...normalized };
+  },
+};
+
+export function adaptCommandArgs(
+  adapterName: string | undefined,
+  toolName: string,
+  args: Readonly<Record<string, unknown>>,
+): CommandToolArgs {
+  const adapterKey = adapterName || toolName;
+  const adapterFn = COMMAND_ADAPTERS[adapterKey];
+  if (adapterFn) {
+    return adapterFn(args);
+  }
+  return args as CommandToolArgs;
 }
 
 function parseNumberToken(token: string): string | number {

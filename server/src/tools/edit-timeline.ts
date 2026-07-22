@@ -29,9 +29,9 @@ type TimelineConfig = {
   currentOrientation?: ViewerSize;
 };
 
-export function editTimelineDef(fs: VideocityFs): ToolDef {
+export function setTimelineDef(fs: VideocityFs): ToolDef {
   return {
-    name: "edit_timeline",
+    name: "set_timeline",
     description: "Set the timeline for a project (replaces all slots and render orientation; unspecified optional fields like audio are preserved)",
     schema: {
       project_slug: z.string().describe("Project slug"),
@@ -93,5 +93,14 @@ export function editTimelineDef(fs: VideocityFs): ToolDef {
         content: [{ type: "text" as const, text: result.error.message }],
       };
     },
+  };
+}
+
+export function editTimelineDef(fs: VideocityFs): ToolDef {
+  const base = setTimelineDef(fs);
+  return {
+    ...base,
+    name: "edit_timeline",
+    description: "Legacy alias for set_timeline. Set the timeline for a project.",
   };
 }

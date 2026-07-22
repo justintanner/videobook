@@ -41,9 +41,9 @@ async function readTranscriptInfo(
   return info;
 }
 
-export function renderSettingsDef(fs: VideocityFs): ToolDef {
+export function getRenderSettingsDef(fs: VideocityFs): ToolDef {
   return {
-    name: "render_settings",
+    name: "get_render_settings",
     description: "Fetch stored render settings for a single asset across all orientations, plus transcript language info (detected source language and cached subtitle translations)",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-running-dog)"),
@@ -59,5 +59,14 @@ export function renderSettingsDef(fs: VideocityFs): ToolDef {
         content: [{ type: "text" as const, text: JSON.stringify({ settings, transcript }) }],
       };
     },
+  };
+}
+
+export function renderSettingsDef(fs: VideocityFs): ToolDef {
+  const base = getRenderSettingsDef(fs);
+  return {
+    ...base,
+    name: "render_settings",
+    description: "Legacy alias for get_render_settings. Fetch stored render settings for a single asset.",
   };
 }

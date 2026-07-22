@@ -52,7 +52,15 @@ describe("slash_commands tool", () => {
 
     const commandNames = commands.map((c) => c.command);
     expect(commandNames).toContain("/trim");
+    expect(commandNames).toContain("/trim-video");
     expect(commandNames).toContain("/trim-audio");
+    expect(commandNames).toContain("/split-chunks");
+    expect(commandNames).toContain("/overlay");
+    expect(commandNames).toContain("/apply-cuts");
+    expect(commandNames).toContain("/extract-frame");
+    expect(commandNames).toContain("/transcript");
+    expect(commandNames).toContain("/translate-subs");
+    expect(commandNames).toContain("/audio-settings");
     expect(commandNames).toContain("/final");
     expect(commandNames).toContain("/download");
     expect(commandNames).toContain("/upload");
@@ -364,18 +372,11 @@ describe("slash_commands tool", () => {
       (result.content as TextContent)[0].text,
     );
 
-    // Commands that fall through to chat (no mcpTool or uiAction)
+    // All known editing slash commands now have explicit mcpTool or uiAction
     const chatFallbackCommands = commands.filter(
       (c) => !c.mcpTool && !c.uiAction,
     );
-    // These should be known fallback commands
-    const expectedFallbacks = ["/trim", "/trim-audio"];
-    for (const cmd of chatFallbackCommands) {
-      expect(
-        expectedFallbacks.includes(cmd.command),
-        `Command ${cmd.command} has neither mcpTool nor uiAction — is this intentional?`,
-      ).toBe(true);
-    }
+    expect(chatFallbackCommands).toHaveLength(0);
   });
 
   it("viewer commands have onMount=['viewer']", async () => {

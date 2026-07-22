@@ -16,11 +16,11 @@ const OSG_POSITIONS = [
  * metadata. We merge into every orientation's metadata so the badge + render
  * stay consistent regardless of which orientation is rendered.
  */
-export function setOsgDef(fs: VideocityFs): ToolDef {
+export function setVideoOverlayDef(fs: VideocityFs): ToolDef {
   return {
-    name: "set_osg",
+    name: "set_video_overlay",
     description:
-      "Set or clear the on-screen-graphic (OSG) overlay on a video asset. Persists to the asset's render metadata for all orientations without rendering. Pass osg_asset_id=null to clear.",
+      "Set or clear the on-screen graphic overlay on a video asset. Persists to the asset's render metadata for all orientations without rendering. Pass osg_asset_id=null to clear.",
     schema: {
       asset_id: z.string().describe("Video asset ID (e.g. vid-my-clip)"),
       project_slug: z.string().describe("Project slug"),
@@ -136,5 +136,14 @@ export function setOsgDef(fs: VideocityFs): ToolDef {
         ],
       };
     },
+  };
+}
+
+export function setOsgDef(fs: VideocityFs): ToolDef {
+  const base = setVideoOverlayDef(fs);
+  return {
+    ...base,
+    name: "set_osg",
+    description: "Legacy alias for set_video_overlay. Set or clear on-screen graphic overlay.",
   };
 }

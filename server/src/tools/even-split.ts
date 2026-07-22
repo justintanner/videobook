@@ -121,9 +121,9 @@ function deriveChunkName(originalAssetId: string, index: number): string {
   return `${tail}-${index}`;
 }
 
-export function evenSplitDef(fs: VideocityFs): ToolDef {
+export function splitVideoByDurationsDef(fs: VideocityFs): ToolDef {
   return {
-    name: "even_split",
+    name: "split_video_by_durations",
     description:
       "Split a video into N targeted chunks plus a leftover chunk with the rest. Pass target_secs as a list (e.g. [10] or [10, 15]); each target produces an exact-length chunk, and the trailing leftover holds whatever's left. If the leftover would be sub-half-second, the last target is backed off by 1s. Source is preserved. When `destination` is provided, chunks are written as files inside an existing asset (one filename per target, no leftover) instead of minting fresh vid-* assets.",
     schema: {
@@ -339,5 +339,14 @@ export function evenSplitDef(fs: VideocityFs): ToolDef {
         }],
       };
     },
+  };
+}
+
+export function evenSplitDef(fs: VideocityFs): ToolDef {
+  const base = splitVideoByDurationsDef(fs);
+  return {
+    ...base,
+    name: "even_split",
+    description: "Legacy alias for split_video_by_durations. Split a video into targeted chunks.",
   };
 }

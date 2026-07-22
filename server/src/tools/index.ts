@@ -47,13 +47,14 @@ import { readFileAtCommitDef } from "./read-file-at-commit.js";
 import { readAssetMetadataDef } from "./read-asset-metadata.js";
 import { rewindProjectDef } from "./rewind-project.js";
 import { trimVideoDef } from "./trim-video.js";
+import { trimAudioDef } from "./trim-audio.js";
 import { splitVideoDef } from "./split-video.js";
-import { evenSplitDef } from "./even-split.js";
+import { evenSplitDef, splitVideoByDurationsDef } from "./even-split.js";
 import { padVideoDef } from "./pad-video.js";
 import { cropVideoDef } from "./crop-video.js";
 import { cropImageDef } from "./crop-image.js";
 import { invertImageDef } from "./invert-image.js";
-import { setOsgDef } from "./set-osg.js";
+import { setOsgDef, setVideoOverlayDef } from "./set-osg.js";
 import { animateKeywordsDef } from "./animate-keywords.js";
 import { downloadVideoDef } from "./download-video.js";
 import { archiveClipDef } from "./archive-clip.js";
@@ -115,7 +116,7 @@ import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
 import { generateQwen2ImageEditDef } from "./generate-qwen2-image-edit.js";
 import { generateSeedreamTextImageDef } from "./generate-seedream-text-image.js";
 import { generateSeedreamImageDef } from "./generate-seedream-image.js";
-import { renderDef } from "./render.js";
+import { renderDef, renderVideoDef } from "./render.js";
 import { syncDef } from "./sync.js";
 import { listAssetsDef } from "./list-assets.js";
 import { sleepDef } from "./sleep.js";
@@ -134,7 +135,7 @@ import { generateAlibabaVideoDef } from "./generate-alibaba-video.js";
 import { concatImagesDef } from "./concat-images.js";
 import { chatDef } from "./chat.js";
 import { getTimelineDef } from "./get-timeline.js";
-import { editTimelineDef } from "./edit-timeline.js";
+import { editTimelineDef, setTimelineDef } from "./edit-timeline.js";
 import { renderTimelineDef } from "./render-timeline.js";
 import { showFolderDef } from "./show-folder.js";
 import { copyFileToClipboardDef } from "./copy-file-to-clipboard.js";
@@ -156,7 +157,7 @@ import { removeTimelineAudioDef } from "./remove-timeline-audio.js";
 import { moveTimelineAudioDef } from "./move-timeline-audio.js";
 import { updateTimelineAudioDef } from "./update-timeline-audio.js";
 import { commandsDef } from "./commands.js";
-import { renderSettingsDef } from "./render-settings.js";
+import { renderSettingsDef, getRenderSettingsDef } from "./render-settings.js";
 import { translatePayloadDef } from "./translate-payload.js";
 import { updateScriptDef } from "./update-script.js";
 import { generateSeedance2I2vFalDef } from "./generate-seedance2-i2v-fal.js";
@@ -210,7 +211,7 @@ import { generateElevenlabsT2aDef } from "./generate-elevenlabs-t2a.js";
 import { estimateCostDef } from "./estimate-cost.js";
 import { postDef } from "./post.js";
 import { xConnectStartDef, xConnectStatusDef } from "./connect-x.js";
-import { createWatermarkDef } from "./create-watermark.js";
+import { createWatermarkDef, createWatermarkCardDef } from "./create-watermark.js";
 import { createQrOutroDef } from "./create-qr-outro.js";
 import { createQartDef } from "./create-qart.js";
 import { createQrbtfDef } from "./create-qrbtf.js";
@@ -269,12 +270,15 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     readAssetMetadataDef(fs),
     rewindProjectDef(fs),
     trimVideoDef(fs),
+    trimAudioDef(fs),
     splitVideoDef(fs),
+    splitVideoByDurationsDef(fs),
     evenSplitDef(fs),
     padVideoDef(fs),
     cropVideoDef(fs),
     cropImageDef(fs),
     invertImageDef(fs),
+    setVideoOverlayDef(fs),
     setOsgDef(fs),
     animateKeywordsDef(fs),
     downloadVideoDef(fs),
@@ -336,6 +340,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     generateQwen2ImageEditDef(fs),
     generateSeedreamTextImageDef(fs),
     generateSeedreamImageDef(fs),
+    renderVideoDef(fs),
     renderDef(fs),
     syncDef(fs),
     listAssetsDef(fs),
@@ -355,6 +360,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     concatImagesDef(fs),
     chatDef(fs),
     getTimelineDef(fs),
+    setTimelineDef(fs),
     editTimelineDef(fs),
     renderTimelineDef(fs),
     showFolderDef(fs),
@@ -379,6 +385,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     moveTimelineAudioDef(fs),
     updateTimelineAudioDef(fs),
     commandsDef(fs),
+    getRenderSettingsDef(fs),
     renderSettingsDef(fs),
     translatePayloadDef(),
     updateScriptDef(fs),
@@ -433,6 +440,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     postDef(),
     xConnectStartDef(),
     xConnectStatusDef(),
+    createWatermarkCardDef(fs),
     createWatermarkDef(fs),
     createQrOutroDef(fs),
     createQartDef(fs),

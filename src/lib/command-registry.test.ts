@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  adaptCommandArgs,
   parseCommandArgs,
   filterCommandsByMountKeys,
   normalizeApplySfxCommandArgs,
@@ -688,3 +689,26 @@ describe("filterCommandsByMountKeys", () => {
     expect(result).toHaveLength(1);
   });
 });
+
+describe("adaptCommandArgs", () => {
+  it("adapts qr_outro args", () => {
+    const res = adaptCommandArgs("qr_outro", "create_qr_outro", { inputs: ["img-qr1", "16:9"] });
+    expect(res).toEqual({ qr_image_slugs: ["img-qr1"], aspect_ratio: "16:9" });
+  });
+
+  it("adapts keywords args", () => {
+    const res = adaptCommandArgs("keywords", "animate_keywords", { asset_id: "vid-clip", inputs: ["off"] });
+    expect(res).toEqual({ asset_id: "vid-clip", enabled: false });
+  });
+
+  it("adapts change_speed args", () => {
+    const res = adaptCommandArgs("change_speed", "change_video_speed", { asset_id: "vid-clip", speed: "8s" });
+    expect(res).toEqual({ asset_id: "vid-clip", target_duration_seconds: 8 });
+  });
+
+  it("falls back to identity for unknown adapters", () => {
+    const res = adaptCommandArgs(undefined, "unknown_tool", { asset_id: "vid-clip" });
+    expect(res).toEqual({ asset_id: "vid-clip" });
+  });
+});
+
