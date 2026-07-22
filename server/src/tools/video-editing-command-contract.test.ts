@@ -17,7 +17,7 @@ import {
   COMMAND_ADAPTER_NAMES,
   VIDEO_EDITING_COMMANDS,
   VIDEO_EDITING_TOOL_CONTRACTS,
-  expandCommandAliases,
+  canonicalizeCommands,
 } from "./video-editing-command-contract.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -96,18 +96,16 @@ describe("video editing command contract", () => {
     }
   });
 
-  it("generates unique deprecated aliases and hides them from picker surfaces", () => {
-    const expanded = expandCommandAliases(VIDEO_EDITING_COMMANDS);
-    expect(new Set(expanded.map((command) => command.command)).size).toBe(expanded.length);
+  it("returns canonical commands with accepted aliases as metadata", () => {
+    const canonicalized = canonicalizeCommands(VIDEO_EDITING_COMMANDS);
+    expect(new Set(canonicalized.map((command) => command.command)).size).toBe(canonicalized.length);
+    expect(canonicalized).toHaveLength(VIDEO_EDITING_COMMANDS.length);
     for (const command of VIDEO_EDITING_COMMANDS) {
-      const canonical = expanded.find((candidate) => candidate.command === command.command);
+      const canonical = canonicalized.find((candidate) => candidate.command === command.command);
       expect(canonical?.canonical).toBe(command.command);
       expect(canonical?.deprecated).toBe(false);
-      for (const alias of command.aliases ?? []) {
-        const legacy = expanded.find((candidate) => candidate.command === alias);
-        expect(legacy?.canonical).toBe(command.command);
-        expect(legacy?.deprecated).toBe(true);
-      }
+      expect(canonical?.aliases).toEqual(command.aliases ?? []);
+      expect(canonicalized.some((candidate) => command.aliases?.includes(candidate.command))).toBe(false);
     }
     const pickerCommands = filterCommandsByMountKeys(commands, new Set(["viewer"]));
     expect(pickerCommands.some((command) => command.deprecated)).toBe(false);

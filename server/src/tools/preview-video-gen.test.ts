@@ -34,7 +34,7 @@ describe("preview_video tool", () => {
   it("returns error when OPENAI_API_KEY is not set", async () => {
     delete process.env.OPENAI_API_KEY;
     const result = await client.callTool({
-      name: "preview_video",
+      name: "prepare_video_generation",
       arguments: { prompt: "a sunset video", project_slug: "test-proj" },
     });
     expect(result.isError).toBe(true);
@@ -45,7 +45,7 @@ describe("preview_video tool", () => {
   it("resolves @tags before checking API key — prompt with no @tags returns API key error", async () => {
     delete process.env.OPENAI_API_KEY;
     const result = await client.callTool({
-      name: "preview_video",
+      name: "prepare_video_generation",
       arguments: { prompt: "generate a sunset video", project_slug: "test-proj" },
     });
     expect(result.isError).toBe(true);
@@ -61,7 +61,7 @@ describe("preview_video tool", () => {
     });
 
     const result = await client.callTool({
-      name: "preview_video",
+      name: "prepare_video_generation",
       arguments: { prompt: "animate @img-sunset into a video", project_slug: "test-proj", selected_model: "kling30" },
     });
 
@@ -80,7 +80,7 @@ describe("preview_video tool", () => {
 
   it("returns preview with empty resolved_assets when prompt has no @tags and model selection skips routing", async () => {
     const result = await client.callTool({
-      name: "preview_video",
+      name: "prepare_video_generation",
       arguments: { prompt: "create an epic sunrise video", project_slug: "test-proj", selected_model: "kling30" },
     });
 
@@ -96,7 +96,7 @@ describe("preview_video tool", () => {
 
   it("includes unresolved @tag warnings in the preview", async () => {
     const result = await client.callTool({
-      name: "preview_video",
+      name: "prepare_video_generation",
       arguments: { prompt: "animate @img-nonexistent", project_slug: "test-proj", selected_model: "kling30" },
     });
 
@@ -111,7 +111,7 @@ describe("preview_video tool", () => {
     process.env.GOOGLE_FLOW_API_KEY = "test-google-key";
 
     const result = await client.callTool({
-      name: "preview_video",
+      name: "prepare_video_generation",
       arguments: {
         prompt: "generate with omni",
         project_slug: "test-proj",

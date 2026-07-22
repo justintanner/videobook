@@ -48,7 +48,7 @@ type Args = SchemaArgs<typeof generateGrokImagineRefVideoSchema>;
 
 export function generateGrokImagineRefVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_grok_imagine_ref_video",
+    name: "generate_xai_grok_imagine_video",
     description:
       "Generate a video using xAI Grok Imagine with optional reference images (0-7). Creates a new vid- asset and enqueues a background job.",
     schema: generateGrokImagineRefVideoSchema,
@@ -99,7 +99,7 @@ export function generateGrokImagineRefVideoDef(fs: VideocityFs): ToolDef {
         refImages.push({ assetId, filename: imageFile.name });
       }
 
-      const assetName = `${modelSlug("kie", "grok-imagine/image-to-video")}-${slugify(prompt) || String(Date.now())}`;
+      const assetName = `${modelSlug("xai", "grok-imagine-video")}-${slugify(prompt) || String(Date.now())}`;
       const assetResult = await fs.createAsset("vid", assetName, project_slug);
       if (!assetResult.ok) {
         return {
@@ -110,7 +110,7 @@ export function generateGrokImagineRefVideoDef(fs: VideocityFs): ToolDef {
 
       const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
 
-      const jobId = `${modelSlug("kie", "grok-imagine/image-to-video")}-r2v-${vidAssetId}-${Date.now()}`;
+      const jobId = `${modelSlug("xai", "grok-imagine-video")}-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
         type: "generate_grok_imagine_ref_video",

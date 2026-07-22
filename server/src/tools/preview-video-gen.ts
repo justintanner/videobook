@@ -1,5 +1,5 @@
 /**
- * preview_video MCP tool — routes a natural language prompt to the best
+ * prepare_video_generation MCP tool — routes a natural language prompt to the best
  * video generation tool and returns a rich preview JSON for the frontend to
  * render a dynamic parameter form.
  */
@@ -30,7 +30,7 @@ function findSelectedModel(rawToolName: string): string | null {
 
 export function previewVideoGenDef(fs: VideocityFs): ToolDef {
   return {
-    name: "preview_video",
+    name: "prepare_video_generation",
     description:
       "Route a natural language prompt to the best video generation tool and return a preview with schema, prefilled parameters, validation, and model options for all available video models.",
     schema: {

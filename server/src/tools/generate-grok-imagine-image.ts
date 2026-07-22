@@ -36,7 +36,7 @@ type Args = SchemaArgs<typeof generateGrokImagineImageSchema>;
 
 export function generateGrokImagineImageDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_grok_imagine_image",
+    name: "generate_kie_grok_imagine_image_to_image",
     description: "Generate an image from an image asset using Grok Imagine image-to-image. Creates a new img- asset and enqueues a background job. Requires at least one of asset_id or image_slugs.",
     schema: generateGrokImagineImageSchema,
     handler: async (args) => {
@@ -48,7 +48,7 @@ export function generateGrokImagineImageDef(fs: VideocityFs): ToolDef {
         return toolError(`${requiredKey} environment variable is not set`);
       }
 
-      const missingInput = requireAtLeastOne("generate_grok_imagine_image", [
+      const missingInput = requireAtLeastOne("generate_kie_grok_imagine_image_to_image", [
         { name: "asset_id", value: rawAssetId },
         { name: "image_slugs", value: image_slugs },
       ]);

@@ -53,7 +53,7 @@ export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
     console.log("[sync] calling sync for", projectSlug);
     try {
       const toolResult = await withTimeout(
-        callToolRef.current("sync", { project_slug: projectSlug }),
+        callToolRef.current("reconcile_project_work", { project_slug: projectSlug }),
         SYNC_TIMEOUT_MS,
         'Sync request',
       );

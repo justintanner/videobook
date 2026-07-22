@@ -40,7 +40,7 @@ describe("switch_project tool", () => {
 
     // Verify the default project is now alpha
     const defaultResult = await client.callTool({
-      name: "get_default_project",
+      name: "ensure_default_project",
       arguments: {},
     });
     const defaultContent = defaultResult.content as Array<{ type: string; text: string }>;

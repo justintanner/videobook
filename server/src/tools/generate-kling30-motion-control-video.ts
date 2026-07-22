@@ -45,7 +45,7 @@ type Args = SchemaArgs<typeof generateKling30MotionControlVideoSchema>;
 
 export function generateKling30MotionControlVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_kling30_motion_control_video",
+    name: "generate_kie_kling_3_0_motion_control",
     description: "Apply motion from reference videos to character images using Kling 3.0 motion-control. Creates a new vid- asset and enqueues a background job.",
     schema: generateKling30MotionControlVideoSchema,
     handler: async (args) => {

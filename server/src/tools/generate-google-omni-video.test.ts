@@ -53,7 +53,7 @@ describe("generate_google_omni_video tool", () => {
     await fs.writeFile(videoAsset.value.assetId, "original.mp4", Buffer.from("fake mp4"), "test-proj");
 
     const result = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "char swap",
@@ -84,7 +84,7 @@ describe("generate_google_omni_video tool", () => {
     await fs.writeFile(videoAsset.value.assetId, "original.mp4", Buffer.from("fake mp4"), "test-proj");
 
     const result = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: `fade to @${imageAsset.value.assetId} inside @${videoAsset.value.assetId} while @character_1 waves`,
@@ -113,7 +113,7 @@ describe("generate_google_omni_video tool", () => {
     await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
 
     const result = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "animate this frame",
@@ -137,7 +137,7 @@ describe("generate_google_omni_video tool", () => {
     await fs.writeFile(videoAsset.value.assetId, "original.mp4", Buffer.from("fake mp4"), "test-proj");
 
     const result = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "edit this",
@@ -153,7 +153,7 @@ describe("generate_google_omni_video tool", () => {
 
   it("rejects a reference clip window over 10 seconds", async () => {
     const result = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "edit this",
@@ -169,7 +169,7 @@ describe("generate_google_omni_video tool", () => {
 
   it("rejects first-frame mode combined with reference images or video", async () => {
     const refsResult = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "animate this",
@@ -181,7 +181,7 @@ describe("generate_google_omni_video tool", () => {
     expect((refsResult.content as TextContent)[0].text).toContain("first_frame_slug cannot be combined with image_slugs");
 
     const videoResult = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "animate this",
@@ -195,7 +195,7 @@ describe("generate_google_omni_video tool", () => {
 
   it("rejects more than 5 reference images alongside a clip", async () => {
     const result = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "edit this",
@@ -212,7 +212,7 @@ describe("generate_google_omni_video tool", () => {
 
   it("enqueues with voice and character refs echoed back", async () => {
     const result = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "cast the scene",
@@ -240,7 +240,7 @@ describe("generate_google_omni_video tool", () => {
 
   it("rejects more than 5 voice refs at the schema layer", async () => {
     const result = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "x",
@@ -253,7 +253,7 @@ describe("generate_google_omni_video tool", () => {
 
   it("rejects more than 3 voice refs alongside a reference clip", async () => {
     const result = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "x",
@@ -267,7 +267,7 @@ describe("generate_google_omni_video tool", () => {
 
   it("rejects character refs combined with a first frame", async () => {
     const result = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "x",
@@ -281,7 +281,7 @@ describe("generate_google_omni_video tool", () => {
 
   it("rejects an image + character reference budget over 7", async () => {
     const result = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "x",
@@ -295,7 +295,7 @@ describe("generate_google_omni_video tool", () => {
 
   it("rejects a fourth character with a readable slot-cost error", async () => {
     const result = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "x",
@@ -309,7 +309,7 @@ describe("generate_google_omni_video tool", () => {
 
   it("rejects duplicate characters using canonical IDs", async () => {
     const result = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "x",
@@ -330,7 +330,7 @@ describe("generate_google_omni_video tool", () => {
       imageAssets.push(a.value.assetId);
     }
     const result = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "x",
@@ -352,7 +352,7 @@ describe("generate_google_omni_video tool", () => {
       imageAssets.push(a.value.assetId);
     }
     const result = await client.callTool({
-      name: "generate_google_omni_video",
+      name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "x",

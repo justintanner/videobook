@@ -1,0 +1,230 @@
+- generic [ref=e12]:
+  - generic [ref=e14]:
+    - generic [ref=e15]:
+      - generic [ref=e16]:
+        - generic [ref=e17]: VIDEOCITY
+        - button "⌄ projects /explain 7 assets" [ref=e20] [cursor=pointer]:
+          - generic [ref=e21]: ⌄
+          - generic [ref=e23]:
+            - generic [ref=e24]: projects
+            - generic [ref=e25]: /explain
+          - generic "7 assets" [ref=e26]
+        - button "› /notebook scratch" [ref=e31] [cursor=pointer]:
+          - generic [ref=e32]: ›
+          - generic [ref=e35]: /notebook scratch
+      - generic [ref=e41]:
+        - button "› /activity" [ref=e42] [cursor=pointer]:
+          - generic [ref=e43]: ›
+          - generic [ref=e46]: /activity
+        - button "Archive" [ref=e53]
+        - button "Settings" [ref=e59]
+    - generic [ref=e63]:
+      - complementary [ref=e64]:
+        - generic [ref=e65]:
+          - heading "Assets" [level=2] [ref=e66]
+          - generic [ref=e69]:
+            - button [ref=e70]
+            - button [ref=e73]
+        - generic [ref=e77]:
+          - generic [ref=e79] [cursor=pointer]:
+            - img "Vancat Universe" [ref=e81]
+            - generic [ref=e82]: 1024x1024
+            - generic:
+              - generic "@img-vancat-universe"
+          - generic [ref=e85] [cursor=pointer]:
+            - img "Nbp Position Nbp Eyes" [ref=e87]
+            - generic [ref=e88]: 1024x1024
+            - generic:
+              - generic "@img-nbp-position-nbp-eyes"
+          - generic [ref=e91] [cursor=pointer]:
+            - img "Nbp Eyes Look Like" [ref=e93]
+            - generic [ref=e94]: 4096x4096
+            - generic:
+              - generic "@img-nbp-eyes-look-like"
+          - generic [ref=e97] [cursor=pointer]:
+            - img "Vancatprofile" [ref=e99]
+            - generic [ref=e100]: 1080x1080
+            - generic:
+              - generic "@img-vancatprofile"
+          - generic [ref=e103] [cursor=pointer]:
+            - img "Vancat" [ref=e105]
+            - generic [ref=e106]: 686x667
+            - generic:
+              - generic "@img-vancat"
+          - generic [ref=e109] [cursor=pointer]:
+            - paragraph [ref=e115]: "# Notebook 9 steps ## 1. Asset — asset - **Asset:** @img-vancat ## 2. Asset — asset - **Asset:** @img-vancatprofile ## 3. Image — image - **Model:** nano_banana - **Inputs:** @img-vancat - **Refs:** — - **Produces:** @img-nbp-eyes-look-like, @img-nbp-position-nbp-eyes, @img-nbp-position-reference-1 > same position as @img-vancat one eye blue one green, each eye looks like universe high def, no watermark background is a nebula, sublte ## 4. Asset — asset - **Asset:** @img-nbp-eyes-look-like ## 5. Video — video - **Model:** grok_imagine - **Inputs:** @img-nbp-eyes-look-like - **Refs:** — - **Produces:** @vid-grok-nbp-eyes-look > fix frame cat says in turkish 'I am the famous \"Van Cat\" obey my commands' ## 6. Asset — asset - **Asset:** @img-vancat-universe ## 7. Asset — asset - **Asset:** @img-nbp-position-nbp-eyes ## 8. Video — video - **Model:** gemini_omni - **Inputs:** — - **Refs:** — - **Produces:** — ## 9. Image — image - **Model:** nano_banana - **Inputs:** — - **Refs:** — - **Produces:** @img-nbp-character-1-space, @img-nbp-character-1-space-2 > @vancat in space in a nebula, frame in the style of stanley kubrick"
+            - generic:
+              - generic "@nb-scratch"
+          - button "/upload" [ref=e116] [cursor=pointer]
+      - generic [ref=e121]:
+        - generic [ref=e427]:
+          - generic [ref=e428]:
+            - generic [ref=e429]:
+              - button "/square 1080x1080" [ref=e430]
+              - generic: "@vid-tcat"
+              - generic [ref=e434]:
+                - button "/crop" [ref=e435]
+                - button "/osg" [ref=e439]
+                - button "/settings" [ref=e443]
+                - button "Close" [ref=e447]
+            - button "› /render square" [ref=e459] [cursor=pointer]:
+              - generic [ref=e460]: ›
+              - generic [ref=e463]: /render square
+          - generic [ref=e468]:
+            - generic [ref=e469]:
+              - generic [ref=e470]:
+                - button "/settings" [ref=e471]
+                - button "/files" [ref=e474]
+                - button "/history" [ref=e476]
+              - generic: "@vid-tcat"
+              - generic [ref=e478]:
+                - button "Back" [ref=e479]
+                - button "Close" [ref=e483]
+            - generic [ref=e488]:
+              - generic [ref=e489]:
+                - generic [ref=e490]:
+                  - button "/landscape" [ref=e491]
+                  - button "/portrait" [ref=e492]
+                  - button "/square" [ref=e493]
+                - generic [ref=e494]:
+                  - generic [ref=e495]:
+                    - generic [ref=e496]: /subs
+                    - generic [ref=e501]:
+                      - generic [ref=e502]:
+                        - generic [ref=e503]: Enabled
+                        - generic [ref=e504]:
+                          - button "ON" [ref=e505]
+                          - button "OFF" [ref=e506]
+                      - generic [ref=e507]:
+                        - button "IMPACT" [ref=e508]
+                        - button "HIGHLIGHT" [ref=e509]
+                      - generic [ref=e510]:
+                        - generic [ref=e511]: Position
+                        - generic [ref=e512]:
+                          - button "TOP" [ref=e513]
+                          - button "MID" [ref=e514]
+                          - button "BTM" [ref=e515]
+                      - generic [ref=e516]:
+                        - generic [ref=e517]: Size
+                        - generic [ref=e518]:
+                          - button "S" [ref=e519]
+                          - button "M" [ref=e520]
+                          - button "L" [ref=e521]
+                      - generic [ref=e522]:
+                        - generic [ref=e523]: Language
+                        - button "ORIGINAL (TR)" [disabled]
+                      - generic [ref=e524]:
+                        - generic [ref=e525]: Text
+                        - generic [ref=e526]:
+                          - textbox [ref=e528] [cursor=pointer]: "#ffffff"
+                          - generic [ref=e529]: "#FFFFFF"
+                      - generic [ref=e530]:
+                        - generic [ref=e531]: Highlight
+                        - generic [ref=e532]:
+                          - textbox [ref=e534] [cursor=pointer]: "#991b1b"
+                          - generic [ref=e535]: "#991B1B"
+                      - generic [ref=e536]:
+                        - generic [ref=e537]: Stroke
+                        - generic [ref=e538]:
+                          - button [ref=e539]
+                          - generic [ref=e541]:
+                            - generic [ref=e542]: "6"
+                            - generic [ref=e543]: px
+                          - button [ref=e544]
+                      - generic [ref=e546]:
+                        - generic [ref=e547]: Str Color
+                        - generic [ref=e548]:
+                          - textbox [ref=e550] [cursor=pointer]: "#000000"
+                          - generic [ref=e551]: "#000000"
+                      - generic [ref=e552]:
+                        - generic [ref=e553]: Shadow
+                        - generic [ref=e554]:
+                          - button [ref=e555]
+                          - generic [ref=e557]:
+                            - generic [ref=e558]: "6"
+                            - generic [ref=e559]: px
+                          - button [ref=e560]
+                      - generic [ref=e562]:
+                        - generic [ref=e563]: Opacity
+                        - generic [ref=e564]:
+                          - button [ref=e565]
+                          - generic [ref=e567]:
+                            - generic [ref=e568]: "60"
+                            - generic [ref=e569]: "%"
+                          - button [ref=e570]
+                  - generic [ref=e572]:
+                    - generic [ref=e573]:
+                      - generic [ref=e574]: /audio
+                      - generic [ref=e581]:
+                        - generic [ref=e582]:
+                          - generic [ref=e583]: Volume
+                          - generic [ref=e584]:
+                            - button [ref=e585]
+                            - generic [ref=e587]:
+                              - generic [ref=e588]: "100"
+                              - generic [ref=e589]: "%"
+                            - button [ref=e590]
+                        - generic [ref=e592]:
+                          - generic [ref=e593]: Fade In
+                          - generic [ref=e594]:
+                            - button [ref=e595]
+                            - generic [ref=e597]:
+                              - generic [ref=e598]: "0"
+                              - generic [ref=e599]: ms
+                            - button [ref=e600]
+                        - generic [ref=e602]:
+                          - generic [ref=e603]: Fade Out
+                          - generic [ref=e604]:
+                            - button [ref=e605]
+                            - generic [ref=e607]:
+                              - generic [ref=e608]: "0"
+                              - generic [ref=e609]: ms
+                            - button [ref=e610]
+                    - generic [ref=e612]:
+                      - generic [ref=e613]: /bg
+                      - generic [ref=e621]:
+                        - button "BLUR" [ref=e622]
+                        - button "BLACK" [ref=e623]
+              - button "› /render" [ref=e625] [cursor=pointer]:
+                - generic [ref=e626]: ›
+                - generic [ref=e629]: /render
+        - generic [ref=e331]:
+          - generic [ref=e332]: ›
+          - textbox "make a viral video of a dog on a skateboard" [active] [ref=e334]
+          - button "Send message" [disabled] [ref=e335]
+      - complementary [ref=e341]:
+        - generic [ref=e342]:
+          - heading "Clips" [level=2] [ref=e343]
+          - generic [ref=e346]:
+            - button [ref=e347]
+            - button [ref=e350]
+        - generic [ref=e354]:
+          - generic [ref=e357] [cursor=pointer]:
+            - img "Tcat" [ref=e359]
+            - generic [ref=e360]: 6.04s
+            - generic:
+              - generic "@vid-tcat"
+          - button "/upload" [ref=e362] [cursor=pointer]
+    - generic [ref=e368]:
+      - generic [ref=e369] [cursor=pointer]:
+        - generic [ref=e370]: empty
+        - generic [ref=e373]: "@s01"
+        - button [ref=e375]
+      - generic [ref=e380] [cursor=pointer]:
+        - generic [ref=e381]: empty
+        - generic [ref=e384]: "@s02"
+        - button [ref=e386]
+      - generic [ref=e391] [cursor=pointer]:
+        - generic [ref=e392]: empty
+        - generic [ref=e395]: "@s03"
+        - button [ref=e397]
+      - generic [ref=e402] [cursor=pointer]:
+        - generic [ref=e403]: empty
+        - generic [ref=e406]: "@s04"
+        - button [ref=e408]
+      - generic [ref=e413] [cursor=pointer]:
+        - generic [ref=e414]: empty
+        - generic [ref=e417]: "@s05"
+        - button [ref=e419]
+  - region "Notifications (F8)":
+    - list

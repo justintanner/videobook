@@ -25,7 +25,7 @@ describe("edit_timeline tool", () => {
 
   it("sets timeline with slots and returns path", async () => {
     const result = await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: {
         project_slug: "test-proj",
         slots: [{ slug: "vid-intro" }, { slug: "vid-outro", volume: 0.5 }],
@@ -40,7 +40,7 @@ describe("edit_timeline tool", () => {
 
   it("sets timeline with slots and render orientation", async () => {
     const result = await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: {
         project_slug: "test-proj",
         slots: [{ slug: "vid-hero" }],
@@ -58,7 +58,7 @@ describe("edit_timeline tool", () => {
       { id: "aud-1", slug: "aud-music", startFrame: 0, durationFrames: 120, volume: 0.8 },
     ];
     const first = await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: {
         project_slug: "test-proj",
         slots: [{ slug: "vid-intro" }],
@@ -71,7 +71,7 @@ describe("edit_timeline tool", () => {
 
     // Orientation-style update: slots + render only, no audio/currentOrientation.
     const second = await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: {
         project_slug: "test-proj",
         slots: [{ slug: "vid-intro" }],
@@ -94,7 +94,7 @@ describe("edit_timeline tool", () => {
 
   it("clears audio when an explicit empty array is sent", async () => {
     await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: {
         project_slug: "test-proj",
         slots: [{ slug: "vid-intro" }],
@@ -102,7 +102,7 @@ describe("edit_timeline tool", () => {
       },
     });
     const cleared = await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: {
         project_slug: "test-proj",
         slots: [{ slug: "vid-intro" }],
@@ -123,7 +123,7 @@ describe("edit_timeline tool", () => {
 
   it("returns error for nonexistent project", async () => {
     const result = await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: {
         project_slug: "no-such-project",
         slots: [{ slug: "vid-intro" }],

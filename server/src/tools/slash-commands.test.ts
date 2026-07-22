@@ -21,6 +21,7 @@ interface Command {
   };
   uiAction?: string;
   onMount?: string[];
+  aliases?: string[];
 }
 
 describe("slash_commands tool", () => {
@@ -53,7 +54,7 @@ describe("slash_commands tool", () => {
     const commands: Command[] = JSON.parse(content[0].text);
 
     const commandNames = commands.map((c) => c.command);
-    expect(commandNames).toContain("/trim");
+    expect(commandNames).not.toContain("/trim");
     expect(commandNames).toContain("/trim-video");
     expect(commandNames).toContain("/trim-audio");
     expect(commandNames).toContain("/split-chunks");
@@ -81,7 +82,8 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/remove-slot");
     expect(commandNames).toContain("/rewrite");
     expect(commandNames).toContain("/rewrite-script");
-    expect(commandNames).toContain("/render");
+    expect(commandNames).not.toContain("/render");
+    expect(commandNames).toContain("/render-video");
     expect(commandNames).toContain("/clean-audio");
     expect(commandNames).toContain("/vocals");
     expect(commandNames).toContain("/original");
@@ -221,7 +223,7 @@ describe("slash_commands tool", () => {
     expect(sceneConcat.params[2]).toMatchObject({ type: "number", required: false });
 
     const extendAudio = commands.find((c) => c.command === "/extend-audio")!;
-    expect(extendAudio.mcpTool?.tool).toBe("extend_audio");
+    expect(extendAudio.mcpTool?.tool).toBe("extend_audio_asset");
     expect(extendAudio.mcpTool?.autoInject).toContain("project_slug");
     expect(extendAudio.params.map((p) => p.name)).toEqual([
       "asset_id",
@@ -257,6 +259,11 @@ describe("slash_commands tool", () => {
     expect(archive.category).toBe("context_menu");
     expect(archive.mcpTool?.tool).toBe("archive_clip");
     expect(archive.mcpTool?.autoInject).toContain("project_slug");
+
+    expect(commands.find((c) => c.command === "/trim-video")?.aliases).toContain("/trim");
+    expect(commands.find((c) => c.command === "/render-video")?.aliases).toContain("/render");
+    expect(commands.find((c) => c.command === "/activity")?.aliases).toContain("/status");
+    expect(commands.find((c) => c.command === "/copy-media")?.aliases).toContain("/copy-video");
   });
 
   it("does not return duplicate command names", async () => {

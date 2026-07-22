@@ -22,7 +22,7 @@ export function describeImageDef(fs: VideocityFs): ToolDef {
   return {
     name: "describe_image",
     description:
-      "Analyze an image asset with vision and create a new script-* asset containing a reproduction-ready prompt (index.md). Returns immediately after enqueueing; sync reports status=\"generating\" until the markdown is written.",
+      "Analyze an image asset with vision and create a new script-* asset containing a reproduction-ready prompt (index.md). Returns immediately after enqueueing; reconcile_project_work reports status=\"generating\" until the markdown is written.",
     schema: {
       asset_id: z.string().describe("Image asset ID (img-*)"),
       project_slug: z.string().describe("Project slug"),

@@ -29,7 +29,7 @@ type Args = SchemaArgs<typeof schema>;
 
 export function generateWan27VideoeditFalDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_wan27_videoedit_fal",
+    name: "generate_fal_wan_2_7_edit_video",
     description: "Edit a video via fal.ai using Alibaba Wan v2.7 Edit-Video, optionally guided by a reference image. Creates a new vid- asset and enqueues a background job.",
     schema,
     handler: async (args) => {

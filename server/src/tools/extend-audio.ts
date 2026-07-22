@@ -21,7 +21,7 @@ function defaultExtendedName(assetId: string, targetDurationSeconds: number): st
 
 export function extendAudioDef(fs: VideocityFs): ToolDef {
   return {
-    name: "extend_audio",
+    name: "extend_audio_asset",
     description: "Extend an existing aud-* asset to a requested total duration with a smooth ElevenLabs continuation. Uses Scribe to understand the source, generates a matching continuation, preserves the source at the beginning, and creates a new aud-* asset.",
     schema: {
       asset_id: z.string().describe("Source aud-* asset ID"),

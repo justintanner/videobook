@@ -49,7 +49,7 @@ type Args = SchemaArgs<typeof generateHappyhorseRefVideoSchema>;
 
 export function generateHappyhorseRefVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_happyhorse_ref_video",
+    name: "generate_kie_happyhorse_1_1_reference_to_video",
     description: "Generate a multi-character video using HappyHorse reference-to-video (1-9 reference images, order defines character1/character2/...). Creates a new vid- asset and enqueues a background job.",
     schema: generateHappyhorseRefVideoSchema,
     handler: async (args) => {

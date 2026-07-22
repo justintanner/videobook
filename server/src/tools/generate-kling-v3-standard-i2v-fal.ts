@@ -25,7 +25,7 @@ type Args = SchemaArgs<typeof schema>;
 
 export function generateKlingV3StandardI2vFalDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_kling_v3_standard_i2v_fal",
+    name: "generate_fal_kling_video_v3_standard_image_to_video",
     description: "Generate a video via fal.ai using Kling Video v3 Standard from a first-frame image (optional end frame). Creates a new vid- asset and enqueues a background job.",
     schema,
     handler: async (args) => {

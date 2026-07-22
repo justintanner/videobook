@@ -51,7 +51,7 @@ type Args = SchemaArgs<typeof schema>;
 
 export function generateWan27R2vFalDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_wan27_r2v_fal",
+    name: "generate_fal_wan_2_7_reference_to_video",
     description: "Generate a video via fal.ai using Alibaba Wan v2.7 Reference-to-Video guided by reference images and/or videos. Creates a new vid- asset and enqueues a background job. Requires at least one of image_slugs or video_slugs.",
     schema,
     handler: async (args) => {
@@ -66,7 +66,7 @@ export function generateWan27R2vFalDef(fs: VideocityFs): ToolDef {
         return toolError("FAL_API_KEY environment variable is not set");
       }
 
-      const missingInput = requireAtLeastOne("generate_wan27_r2v_fal", [
+      const missingInput = requireAtLeastOne("generate_fal_wan_2_7_reference_to_video", [
         { name: "image_slugs", value: image_slugs },
         { name: "video_slugs", value: video_slugs },
       ]);

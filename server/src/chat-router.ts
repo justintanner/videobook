@@ -196,15 +196,15 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     category: "action",
   },
   {
-    name: "clear_failed_tasks",
-    actualTool: "clear_failed_tasks",
-    description: "Delete all assets with failed generations in the current project",
+    name: "clean_failed_assets",
+    actualTool: "clean_failed_assets",
+    description: "Delete failed generation husks and clear stale errors from assets that already contain media",
     params: [],
     category: "action",
   },
   {
-    name: "create_watermark",
-    actualTool: "create_watermark",
+    name: "create_watermark_card",
+    actualTool: "create_watermark_card",
     description:
       "Generate a real scannable QR-code watermark card (img-* asset) for a URL; use for 'QR code', 'watermark', or 'end card' requests — not generate_image",
     params: ["url", "handle", "save_default"],
@@ -237,14 +237,14 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
   // --- Generation tools ---
   {
     name: "generate_video",
-    actualTool: "preview_video",
+    actualTool: "prepare_video_generation",
     description: "Generate a video from a text prompt or image references",
     params: ["prompt"],
     category: "generation",
   },
   {
     name: "generate_image",
-    actualTool: "generate_nano_banana_image",
+    actualTool: "generate_kie_nano_banana_pro_text_to_image",
     description: "Generate an image from a text prompt, optionally with reference images",
     params: ["prompt", "image_slugs", "aspect_ratio"],
     category: "generation",
@@ -257,8 +257,8 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     category: "generation",
   },
   {
-    name: "generate_elevenlabs_t2a",
-    actualTool: "generate_elevenlabs_t2a",
+    name: "generate_elevenlabs_text_to_audio",
+    actualTool: "generate_elevenlabs_text_to_audio",
     description: "Generate speech audio from text using an ElevenLabs voice ID",
     params: ["voice_id", "text"],
     category: "generation",
@@ -306,10 +306,10 @@ Parameter guidelines:
 - For sync_video_to_audio: anchors is an ordered array. Each anchor has video_seconds plus exactly one target: audio_seconds for an explicit audio time or audio_cue for transcript words. Convert nested timestamp values to seconds and preserve audio_cue text exactly. The original audio stays fixed; only the picture is retimed
 - For generate_video: put the generation description in "prompt"
 - For generate_image: put the image description in "prompt"; use image_slugs ONLY for @img-* reference images (include @ prefix). Never put @vid-* or @aud-* in image_slugs — if the user wants an image inspired by a video, describe that in the text prompt instead
-- For create_watermark (QR code / watermark card): use this tool for real scannable QR codes — never generate_image. Pass url from the referenced asset's source_url/webpage_url when the user says "from the url in @vid-…" or similar; optional handle is an X handle without @
-- For create_qart (artistic / picture QR): use when turning an @img-* into scan-safe color and monochrome QR mosaics; pass image_slug and value (URL/text). Prefer over create_watermark when the user wants a photo integrated into the QR modules
+- For create_watermark_card (QR code / watermark card): use this tool for real scannable QR codes — never generate_image. Pass url from the referenced asset's source_url/webpage_url when the user says "from the url in @vid-…" or similar; optional handle is an X handle without @
+- For create_qart (artistic / picture QR): use when turning an @img-* into scan-safe color and monochrome QR mosaics; pass image_slug and value (URL/text). Prefer over create_watermark_card when the user wants a photo integrated into the QR modules
 - For create_qrbtf (parametric / styled QR): use when the user wants a stylized QR code (normal, line, dsj, bubble, or func styles) from the qrbtf library; pass value (URL/text) and optional style. No source image needed — the QR is generated parametrically with a black background by default
-- For create_qr_outro: use when the user asks for an animated QR outro video from one to four QR images. Pass every referenced QR image in order through qr_image_slugs (array of img- IDs), plus sound_effect_slug only for an explicit aud-* override and aspect_ratio ("16:9", "9:16", or "1:1"). Without an audio override, the bundled impact sound is used. This creates a vid-* asset, it is NOT generate_video or create_watermark.
+- For create_qr_outro: use when the user asks for an animated QR outro video from one to four QR images. Pass every referenced QR image in order through qr_image_slugs (array of img- IDs), plus sound_effect_slug only for an explicit aud-* override and aspect_ratio ("16:9", "9:16", or "1:1"). Without an audio override, the bundled impact sound is used. This creates a vid-* asset, it is NOT generate_video or create_watermark_card.
 - For concat_images: use image_slugs for the referenced @img-* assets; one slug leaves the second two-slot cell empty, and null explicitly leaves a slot empty. Use aspect_ratio 16:9 or 9:16; layout is automatic unless overridden
 - Timeline audio positions (start_frame, duration_frames) are in frames at 30 fps — convert seconds to frames (e.g., "at 5 seconds" → start_frame: 150)
 - Do NOT include project_slug in params — it is injected automatically

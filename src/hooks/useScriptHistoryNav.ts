@@ -81,7 +81,7 @@ export function useScriptHistoryNav({ callTool, assetId, projectSlug }: Args): U
       return;
     }
     setHistory({ assetId, commits: list, idx: targetIdx });
-    await callToolRef.current("sync", { project_slug: projectSlug });
+    await callToolRef.current("reconcile_project_work", { project_slug: projectSlug });
   }, [assetId, projectSlug]);
 
   const prev = useCallback(async () => {

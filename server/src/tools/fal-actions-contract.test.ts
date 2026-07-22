@@ -16,13 +16,14 @@ describe("fal generation actions contract", () => {
       expect(action.canonical_name).not.toMatch(/_r2v_/);
       expect(action.canonical_name).not.toMatch(/_fal$/);
 
-      // Verify alias resolves to canonical
-      expect(getCanonicalName(action.old_name)).toBe(action.canonical_name);
-      expect(getActionSpec(action.old_name)?.apicity_identifier).toBe(action.apicity_identifier);
+      for (const legacyName of action.legacy_names) {
+        expect(getCanonicalName(legacyName)).toBe(action.canonical_name);
+        expect(getActionSpec(legacyName)?.apicity_identifier).toBe(action.apicity_identifier);
+      }
     }
   });
 
-  it("verifies registered tool defs contain both canonical names and legacy aliases for all Fal actions", () => {
+  it("registers canonical Fal tools without exposing historical aliases", () => {
     const fs = createFs({ projectsDir: "/tmp/test-fal-projects" });
     const tools = getAllToolDefs(fs);
     const registeredNames = new Set(tools.map((t) => t.name));
@@ -30,7 +31,9 @@ describe("fal generation actions contract", () => {
     const falActions = GENERATION_ACTIONS.filter((a) => a.provider === "fal");
     for (const action of falActions) {
       expect(registeredNames.has(action.canonical_name)).toBe(true);
-      expect(registeredNames.has(action.old_name)).toBe(true);
+      for (const legacyName of action.legacy_names) {
+        expect(registeredNames.has(legacyName)).toBe(false);
+      }
     }
   });
 });

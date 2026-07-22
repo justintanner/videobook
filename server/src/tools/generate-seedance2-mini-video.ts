@@ -47,7 +47,7 @@ type Args = SchemaArgs<typeof generateSeedance2MiniVideoSchema>;
 
 export function generateSeedance2MiniVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_seedance2_mini_video",
+    name: "generate_kie_seedance_2_0_mini_video",
     description: "Generate a video using ByteDance Seedance 2 Mini (KIE). Supports a text prompt and/or reference images, videos, and audio (no first/last frame; up to 720p). Creates a new vid- asset and enqueues a background job.",
     schema: generateSeedance2MiniVideoSchema,
     handler: async (args) => {

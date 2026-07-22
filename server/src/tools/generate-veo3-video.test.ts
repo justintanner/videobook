@@ -45,7 +45,7 @@ describe("generate_veo3_video / generate_veo3_fast_video tools", () => {
   it("returns error when KIE_API_KEY is not set", async () => {
     delete process.env.KIE_API_KEY;
     const result = await client.callTool({
-      name: "generate_veo3_video",
+      name: "generate_kie_veo_3_0_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "a beautiful sunset",
@@ -57,7 +57,7 @@ describe("generate_veo3_video / generate_veo3_fast_video tools", () => {
 
   it("enqueues veo3 job (text-to-video)", async () => {
     const result = await client.callTool({
-      name: "generate_veo3_video",
+      name: "generate_kie_veo_3_0_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "a beautiful sunset",
@@ -81,7 +81,7 @@ describe("generate_veo3_video / generate_veo3_fast_video tools", () => {
     await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
 
     const result = await client.callTool({
-      name: "generate_veo3_fast_video",
+      name: "generate_kie_veo_3_0_fast_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "a fast car",

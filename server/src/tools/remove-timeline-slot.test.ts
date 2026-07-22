@@ -30,7 +30,7 @@ describe("remove_timeline_slot tool", () => {
       { id: "aud-1", slug: "aud-music", startFrame: 10, durationFrames: 120, volume: 80 },
     ];
     await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: {
         project_slug: "test-proj",
         slots: [
@@ -65,7 +65,7 @@ describe("remove_timeline_slot tool", () => {
 
   it("removes an internal empty and trims every trailing empty", async () => {
     await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: {
         project_slug: "test-proj",
         slots: [
@@ -92,7 +92,7 @@ describe("remove_timeline_slot tool", () => {
 
   it("removing the last filled slot also removes newly trailing gaps", async () => {
     await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: {
         project_slug: "test-proj",
         slots: [
@@ -118,7 +118,7 @@ describe("remove_timeline_slot tool", () => {
 
   it("removing the only stored slot leaves an empty timeline", async () => {
     await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: {
         project_slug: "test-proj",
         slots: [{ slug: "vid-a" }],
@@ -147,7 +147,7 @@ describe("remove_timeline_slot tool", () => {
 
   it("rejects virtual slots and timelines that do not exist", async () => {
     await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: {
         project_slug: "test-proj",
         slots: [{ slug: "vid-a" }],

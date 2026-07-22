@@ -45,7 +45,7 @@ describe("generate_grok_imagine_image tool", () => {
 
   it("returns error when KIE_API_KEY is not set", async () => {
     const result = await client.callTool({
-      name: "generate_grok_imagine_image",
+      name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
         asset_id: "img-test",
         project_slug: "test-proj",
@@ -61,7 +61,7 @@ describe("generate_grok_imagine_image tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
-      name: "generate_grok_imagine_image",
+      name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
         asset_id: "vid-something",
         project_slug: "test-proj",
@@ -77,7 +77,7 @@ describe("generate_grok_imagine_image tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
-      name: "generate_grok_imagine_image",
+      name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
         asset_id: "img-does-not-exist",
         project_slug: "test-proj",
@@ -97,7 +97,7 @@ describe("generate_grok_imagine_image tool", () => {
     await fs.writeFile(asset.value.assetId, "notes.txt", "hello", "test-proj");
 
     const result = await client.callTool({
-      name: "generate_grok_imagine_image",
+      name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
         asset_id: asset.value.assetId,
         project_slug: "test-proj",
@@ -122,7 +122,7 @@ describe("generate_grok_imagine_image tool", () => {
     await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
 
     const result = await client.callTool({
-      name: "generate_grok_imagine_image",
+      name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
         asset_id: asset.value.assetId,
         project_slug: "test-proj",

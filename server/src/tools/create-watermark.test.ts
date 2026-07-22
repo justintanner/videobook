@@ -49,7 +49,7 @@ describe("create_watermark tool", () => {
 
   it("creates a ready img- asset holding the QR card", async () => {
     const result = await client!.callTool({
-      name: "create_watermark",
+      name: "create_watermark_card",
       arguments: { project_slug: PROJECT, handle: "@someone" },
     });
 
@@ -85,7 +85,7 @@ describe("create_watermark tool", () => {
 
   it("defaults the handle and derives the X URL", async () => {
     const result = await client!.callTool({
-      name: "create_watermark",
+      name: "create_watermark_card",
       arguments: { project_slug: PROJECT },
     });
 
@@ -97,11 +97,11 @@ describe("create_watermark tool", () => {
 
   it("remembers used handles and the saved default", async () => {
     await client!.callTool({
-      name: "create_watermark",
+      name: "create_watermark_card",
       arguments: { project_slug: PROJECT, handle: "alice", save_default: true },
     });
     await client!.callTool({
-      name: "create_watermark",
+      name: "create_watermark_card",
       arguments: { project_slug: PROJECT, handle: "@bob" },
     });
 

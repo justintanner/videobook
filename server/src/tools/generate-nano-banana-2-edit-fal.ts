@@ -28,7 +28,7 @@ type Args = SchemaArgs<typeof schema>;
 
 export function generateNanoBanana2EditFalDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_nano_banana_2_edit_fal",
+    name: "generate_fal_nano_banana_2_edit_image",
     description: "Edit images via fal.ai using Google Nano Banana 2 with one or more @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {

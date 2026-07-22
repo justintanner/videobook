@@ -49,7 +49,7 @@ type Args = SchemaArgs<typeof generateAlibabaQwenImageSchema>;
 
 export function generateAlibabaQwenImageDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_alibaba_qwen_image",
+    name: "generate_alibaba_qwen_2_0_text_to_image",
     description: "Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.",
     schema: generateAlibabaQwenImageSchema,
     handler: async (args) => {

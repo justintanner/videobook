@@ -61,12 +61,3 @@ export function getRenderSettingsDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-
-export function renderSettingsDef(fs: VideocityFs): ToolDef {
-  const base = getRenderSettingsDef(fs);
-  return {
-    ...base,
-    name: "render_settings",
-    description: "Legacy alias for get_render_settings. Fetch stored render settings for a single asset.",
-  };
-}

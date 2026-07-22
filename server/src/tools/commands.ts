@@ -2,7 +2,7 @@ import type { VideocityFs } from "videocity-engine";
 import type { ToolDef } from "./tool-def.js";
 import {
   VIDEO_EDITING_COMMANDS,
-  expandCommandAliases,
+  canonicalizeCommands,
   type Command,
 } from "./video-editing-command-contract.js";
 
@@ -151,18 +151,6 @@ const CANONICAL_COMMANDS: Command[] = [
     uiAction: "open_inbox",
   },
   {
-    command: "/status",
-    description: "View project activity log",
-    example: "/status",
-    category: "action",
-    icon: "History",
-    size: "default",
-    variant: "zinc",
-    chevron: "down",
-    params: [],
-    uiAction: "open_status",
-  },
-  {
     command: "/activity",
     description: "View project activity log",
     example: "/activity",
@@ -173,6 +161,7 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "down",
     params: [],
     uiAction: "open_status",
+    aliases: ["/status"],
   },
   {
     command: "/copy",
@@ -435,7 +424,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Grok-Imagine video asset to upscale" },
     ],
-    mcpTool: { tool: "upscale_grok_imagine_video", autoInject: ["project_slug"] },
+    mcpTool: { tool: "upscale_kie_grok_imagine_video", autoInject: ["project_slug"] },
   },
   {
     command: "/rewrite-script",
@@ -470,9 +459,9 @@ const CANONICAL_COMMANDS: Command[] = [
     mcpTool: { tool: "rewrite_script", autoInject: ["project_slug"], injectParams: { variant: "tldr" } },
   },
   {
-    command: "/copy-video",
-    description: "Copy video file to clipboard",
-    example: "/copy-video @hero-intro",
+    command: "/copy-media",
+    description: "Copy an asset's primary media file to the clipboard",
+    example: "/copy-media @hero-intro",
     category: "context_menu",
     icon: "ClipboardCopy",
     size: "default",
@@ -482,6 +471,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Asset to copy to clipboard" },
     ],
     mcpTool: { tool: "copy_file_to_clipboard", autoInject: ["project_slug"] },
+    aliases: ["/copy-video"],
   },
   {
     command: "/export",
@@ -656,7 +646,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "target_duration_seconds", type: "number", required: true, description: "Requested total duration in seconds" },
       { name: "continuation_prompt", type: "string", required: false, description: "Optional free-text direction for the continuation, e.g. add outro music" },
     ],
-    mcpTool: { tool: "extend_audio", autoInject: ["project_slug"] },
+    mcpTool: { tool: "extend_audio_asset", autoInject: ["project_slug"] },
   },
   {
     command: "/remove-sound",
@@ -1352,7 +1342,7 @@ const CANONICAL_COMMANDS: Command[] = [
     variant: "zinc",
     chevron: "right",
     params: [],
-    mcpTool: { tool: "clear_failed_tasks", autoInject: ["project_slug"] },
+    mcpTool: { tool: "clean_failed_assets", autoInject: ["project_slug"] },
   },
   // ── Character / voice commands ──
 
@@ -1382,7 +1372,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "voice_id", type: "string", required: true, description: "ElevenLabs voice ID" },
       { name: "text", type: "string", required: true, description: "Text to synthesize" },
     ],
-    mcpTool: { tool: "generate_elevenlabs_t2a", autoInject: ["project_slug"] },
+    mcpTool: { tool: "generate_elevenlabs_text_to_audio", autoInject: ["project_slug"] },
   },
   // ── X connect command ──
   {
@@ -1414,6 +1404,10 @@ const CANONICAL_COMMANDS: Command[] = [
   },
 ];
 
+export function getCanonicalCommands(): Command[] {
+  return canonicalizeCommands(CANONICAL_COMMANDS);
+}
+
 export function commandsDef(fs: VideocityFs): ToolDef {
   return {
     name: "slash_commands",
@@ -1439,7 +1433,7 @@ export function commandsDef(fs: VideocityFs): ToolDef {
       }
 
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(expandCommandAliases(commands)) }],
+        content: [{ type: "text" as const, text: JSON.stringify(canonicalizeCommands(commands)) }],
       };
     },
   };

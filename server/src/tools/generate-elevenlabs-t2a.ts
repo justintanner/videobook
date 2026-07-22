@@ -23,7 +23,7 @@ function slugify(text: string): string {
 
 export function generateElevenlabsT2aDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_elevenlabs_t2a",
+    name: "generate_elevenlabs_text_to_audio",
     description: "Generate an aud-* text-to-audio asset using an ElevenLabs voice.",
     schema: {
       project_slug: z.string().describe("Project slug"),

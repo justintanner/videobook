@@ -71,7 +71,7 @@ type Args = SchemaArgs<typeof generateGoogleOmniVideoSchema>;
 
 export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_google_omni_video",
+    name: "generate_google_flow_omni_flash_video",
     description: "Generate a video using Google Gemini Omni via Google Flow. Multimodal: a text prompt plus optional first frame, reference images (0-7), or one reference video clip with in/out timecodes. Creates a new vid- asset and enqueues a background job.",
     schema: generateGoogleOmniVideoSchema,
     handler: async (args) => {

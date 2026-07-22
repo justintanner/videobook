@@ -136,7 +136,7 @@ export function useCanvasCostEstimates(options: {
       void (async () => {
         try {
           const result = await callToolRef.current(
-            tuple.category === 'image' ? 'preview_image' : 'preview_video',
+            tuple.category === 'image' ? 'prepare_image_generation' : 'prepare_video_generation',
             {
               prompt: '',
               project_slug: projectSlug,

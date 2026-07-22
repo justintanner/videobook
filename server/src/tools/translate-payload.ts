@@ -1,5 +1,5 @@
 /**
- * translate_payload MCP tool — dry-run translation of gen tool args into the
+ * build_generation_provider_payload MCP tool — dry-run translation of generation tool args into the
  * exact @apicity provider request body, for the notebook payload preview.
  * Asset slugs stand in for the upload URLs the job handlers resolve at run
  * time.
@@ -10,11 +10,11 @@ import { translateToolPayload } from "../payload-builders.js";
 
 export function translatePayloadDef(): ToolDef {
   return {
-    name: "translate_payload",
+    name: "build_generation_provider_payload",
     description:
       "Translate gen tool args to the @apicity provider payload. Returns the exact request body that would be sent, with asset slugs in place of upload URLs.",
     schema: {
-      tool_name: z.string().describe("MCP tool name (e.g. 'generate_nano_banana_pro_google')"),
+      tool_name: z.string().describe("MCP tool name (e.g. 'generate_google_nano_banana_pro_text_to_image')"),
       args_json: z.string().describe("Tool arguments as a JSON string"),
     },
     handler: async (rawArgs) => {

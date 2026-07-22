@@ -22,7 +22,7 @@ describe("getRoutableTool", () => {
   it("returns correct tool info for generate_video", () => {
     const tool = getRoutableTool("generate_video");
     expect(tool).toBeDefined();
-    expect(tool!.actualTool).toBe("preview_video");
+    expect(tool!.actualTool).toBe("prepare_video_generation");
     expect(tool!.category).toBe("generation");
   });
 
@@ -50,7 +50,7 @@ describe("getRoutableTool", () => {
   it("returns correct tool info for generate_image", () => {
     const tool = getRoutableTool("generate_image");
     expect(tool).toBeDefined();
-    expect(tool!.actualTool).toBe("generate_nano_banana_image");
+    expect(tool!.actualTool).toBe("generate_kie_nano_banana_pro_text_to_image");
     expect(tool!.category).toBe("generation");
     expect(tool!.params).toContain("prompt");
     expect(tool!.params).toContain("image_slugs");
@@ -98,7 +98,7 @@ describe("buildChatRoutingPrompt", () => {
     expect(prompt).toContain("download_video");
     expect(prompt).toContain("generate_video");
     expect(prompt).toContain("generate_image");
-    expect(prompt).toContain("create_watermark");
+    expect(prompt).toContain("create_watermark_card");
     expect(prompt).toContain("concat_images");
     expect(prompt).toContain("create_qr_outro");
     expect(prompt).toContain("timewarp_video");
@@ -106,9 +106,9 @@ describe("buildChatRoutingPrompt", () => {
     expect(prompt).toContain("Available tools:");
   });
 
-  it("guides QR requests to create_watermark not generate_image", () => {
+  it("guides QR requests to create_watermark_card not generate_image", () => {
     const prompt = buildChatRoutingPrompt("test");
-    expect(prompt).toContain("create_watermark");
+    expect(prompt).toContain("create_watermark_card");
     expect(prompt).toMatch(/real scannable QR/i);
     expect(prompt).toContain("source_url");
   });
@@ -175,10 +175,10 @@ describe("ROUTABLE_TOOLS", () => {
     expect(tool!.params).toEqual(["target_asset_id", "image_asset_id", "orientation"]);
   });
 
-  it("includes create_watermark for QR/watermark routing", () => {
-    const tool = getRoutableTool("create_watermark");
+  it("includes create_watermark_card for QR/watermark routing", () => {
+    const tool = getRoutableTool("create_watermark_card");
     expect(tool).toBeDefined();
-    expect(tool!.actualTool).toBe("create_watermark");
+    expect(tool!.actualTool).toBe("create_watermark_card");
     expect(tool!.category).toBe("action");
     expect(tool!.params).toContain("url");
     expect(tool!.params).toContain("handle");
@@ -196,7 +196,7 @@ describe("ROUTABLE_TOOLS", () => {
   });
 
   it("every tool has non-empty params array (except tools that take no routing params)", () => {
-    const noParamTools = new Set(["render_timeline", "list_elevenlabs_voices", "clear_failed_tasks"]);
+    const noParamTools = new Set(["render_timeline", "list_elevenlabs_voices", "clean_failed_assets"]);
     for (const tool of ROUTABLE_TOOLS) {
       if (noParamTools.has(tool.name)) continue;
       expect(tool.params.length).toBeGreaterThan(0);

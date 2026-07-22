@@ -21,7 +21,7 @@ type Args = SchemaArgs<typeof schema>;
 
 export function generateGrokImagineVideoEditFalDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_grok_imagine_video_edit_fal",
+    name: "generate_fal_grok_imagine_video_edit_video",
     description: "Edit a video via fal.ai using xAI Grok Imagine Video edit-video. Creates a new vid- asset and enqueues a background job.",
     schema,
     handler: async (args) => {

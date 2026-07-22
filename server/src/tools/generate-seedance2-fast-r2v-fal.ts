@@ -70,7 +70,7 @@ type Args = SchemaArgs<typeof schema>;
 
 export function generateSeedance2FastR2vFalDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_seedance2_fast_r2v_fal",
+    name: "generate_fal_seedance_2_0_fast_reference_to_video",
     description: "Generate a video via fal.ai using ByteDance Seedance 2.0 Fast Reference-to-Video, guided by reference images, videos, and/or audio. Creates a new vid- asset and enqueues a background job. Requires at least one of image_slugs, video_slugs, or audio_slugs (audio alone is not allowed — pair it with an image or video).",
     schema,
     handler: async (args) => {
@@ -84,7 +84,7 @@ export function generateSeedance2FastR2vFalDef(fs: VideocityFs): ToolDef {
         return toolError("FAL_API_KEY environment variable is not set");
       }
 
-      const missingInput = requireAtLeastOne("generate_seedance2_fast_r2v_fal", [
+      const missingInput = requireAtLeastOne("generate_fal_seedance_2_0_fast_reference_to_video", [
         { name: "image_slugs", value: image_slugs },
         { name: "video_slugs", value: video_slugs },
         { name: "audio_slugs", value: audio_slugs },

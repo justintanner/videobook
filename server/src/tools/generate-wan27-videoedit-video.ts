@@ -79,7 +79,7 @@ type Args = SchemaArgs<typeof generateWan27VideoeditVideoSchema>;
 
 export function generateWan27VideoeditVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_wan27_videoedit_video",
+    name: "generate_kie_wan_2_7_edit_video",
     description: "Edit a video using Wan 2.7 Video Edit with optional reference image for character, clothing, or style guidance. Creates a new vid- asset and enqueues a background job.",
     schema: generateWan27VideoeditVideoSchema,
     handler: async (args) => {

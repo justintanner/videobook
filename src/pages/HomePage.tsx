@@ -973,7 +973,7 @@ export function HomePage() {
     if (state !== 'ready' || !projectSlug) return;
     const { targetId, handle, position, scale, saveDefault } = value;
 
-    const created = await callTool('create_watermark', {
+    const created = await callTool('create_watermark_card', {
       project_slug: projectSlug,
       handle,
       save_default: saveDefault,
@@ -989,7 +989,7 @@ export function HomePage() {
     if (!osgAssetId) return;
 
     // Persist as the watermark OSG: a 2s end-card tail, clearing any prior window.
-    const osgResult = await callTool('set_osg', {
+    const osgResult = await callTool('set_video_overlay', {
       asset_id: targetId,
       project_slug: projectSlug,
       osg_asset_id: osgAssetId,
@@ -1043,7 +1043,7 @@ export function HomePage() {
       args.osg_start_seconds = value.startSeconds;
       args.osg_end_seconds = value.endSeconds;
     }
-    const result = await callTool('set_osg', args);
+    const result = await callTool('set_video_overlay', args);
     if (result.isError) return;
     if (assetId === activeSelection?.id) {
       const nextSettings: RenderSettings = value

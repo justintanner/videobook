@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { createOpenAi, textPart, imageUrlPart, firstContent } from "@apicity/openai";
 import type { OpenAiContentPart, OpenAiMessage } from "@apicity/openai";
 import { resolveAllAssets, expandSlotRefs } from "videocity-engine";
+import { getCanonicalName } from "../generation-registry.js";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -292,7 +293,7 @@ export function validateSceneRewrite(
   sceneIndex: number,
 ): void {
   const tool = toolParams.tool as string | undefined;
-  if (tool !== "generate_kling30_video") {
+  if (tool === undefined || getCanonicalName(tool) !== "generate_kie_kling_3_0_video") {
     throw new Error(`Scene rewrite requires a Kling 3.0 asset, got tool: ${tool}`);
   }
   const multiPrompt = toolParams.multi_prompt as SceneDef[] | undefined;

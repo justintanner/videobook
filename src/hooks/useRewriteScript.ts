@@ -71,7 +71,7 @@ export function useRewriteScript(callTool: UseMcpResult["callTool"]): UseRewrite
         description: assetId,
         duration: 2000,
       });
-      await callToolRef.current("sync", { project_slug: projectSlug });
+      await callToolRef.current("reconcile_project_work", { project_slug: projectSlug });
       return true;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);

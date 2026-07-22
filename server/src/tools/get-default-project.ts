@@ -3,8 +3,8 @@ import type { ToolDef } from "./tool-def.js";
 
 export function getDefaultProjectDef(fs: VideocityFs): ToolDef {
   return {
-    name: "get_default_project",
-    description: "Get the default videocity project",
+    name: "ensure_default_project",
+    description: "Return the default Videocity project, creating it when none exists",
     schema: {},
     handler: async () => {
       const result = await fs.getProject();

@@ -26,7 +26,7 @@ export function rewriteScriptDef(fs: VideocityFs): ToolDef {
       "Optional platform preset (\"ig\" | \"tiktok\" | \"youtube\") tunes authentic-capture cues for that feed. " +
       "Optional custom_prompt applies a transformation instruction (e.g. \"replace the pig with a man in a blue suit\"). " +
       "Previous versions are preserved in git history via videocity-engine. " +
-      "Returns immediately; sync reports status=\"generating\" until the new markdown is written.",
+      "Returns immediately; reconcile_project_work reports status=\"generating\" until the new markdown is written.",
     schema: {
       asset_id: z.string().describe("Script asset ID (script-*)"),
       variant: z.enum(["full", "tldr"]).describe("Rewrite style"),

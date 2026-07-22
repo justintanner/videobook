@@ -249,13 +249,11 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "trim_audio", exposure: "direct", command: "/trim-audio", purpose: "Keep or remove a time range from audio" },
   { tool: "split_video", exposure: "ui", command: "/split", purpose: "Frame-accurate interactive video split" },
   { tool: "split_video_by_durations", exposure: "direct", command: "/split-chunks", purpose: "Split video into target-duration chunks" },
-  { tool: "even_split", exposure: "internal", replacement: "split_video_by_durations", purpose: "Legacy split tool alias" },
   { tool: "pad_video", exposure: "direct", command: "/pad", purpose: "Append black frames and silence" },
   { tool: "crop_video", exposure: "ui", command: "/crop", purpose: "Interactive video crop" },
   { tool: "crop_image", exposure: "ui", command: "/crop", purpose: "Interactive image crop" },
   { tool: "invert_image", exposure: "direct", command: "/invert", purpose: "Invert image colors" },
   { tool: "set_video_overlay", exposure: "ui", command: "/overlay", purpose: "Configure an on-screen graphic" },
-  { tool: "set_osg", exposure: "internal", replacement: "set_video_overlay", purpose: "Legacy overlay tool alias" },
   { tool: "animate_keywords", exposure: "direct", command: "/keywords", purpose: "Configure transcript-timed keyword graphics" },
   { tool: "detect_scenes", exposure: "direct", command: "/detect-scenes", purpose: "Detect visual scene boundaries" },
   { tool: "suggest_cuts", exposure: "direct", command: "/suggest-cuts", purpose: "Suggest removable video ranges" },
@@ -268,7 +266,7 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "extract_last_frame", exposure: "direct", command: "/extract-last-frame", purpose: "Extract the last video frame" },
   { tool: "extract_frame", exposure: "direct", command: "/extract-frame", purpose: "Extract a frame at a timestamp" },
   { tool: "extract_audio", exposure: "direct", command: "/extract-audio", purpose: "Extract a video soundtrack" },
-  { tool: "extend_audio", exposure: "direct", command: "/extend-audio", purpose: "Extend an audio asset" },
+  { tool: "extend_audio_asset", exposure: "direct", command: "/extend-audio", purpose: "Extend an audio asset" },
   { tool: "remove_sound", exposure: "direct", command: "/remove-sound", purpose: "Remove a described sound" },
   { tool: "audio_boost", exposure: "direct", command: "/audio-boost", purpose: "Increase audio volume" },
   { tool: "audio_mix", exposure: "direct", command: "/audio-mix", purpose: "Mix an audio layer into an asset" },
@@ -285,11 +283,9 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "clean_video_audio", exposure: "direct", command: "/clean-audio", purpose: "Clean a video soundtrack" },
   { tool: "isolate_vocals", exposure: "direct", command: "/vocals", purpose: "Isolate vocals" },
   { tool: "render_video", exposure: "direct", command: "/render-video", purpose: "Render a video asset" },
-  { tool: "render", exposure: "internal", replacement: "render_video", purpose: "Legacy video render alias" },
   { tool: "render_timeline", exposure: "direct", command: "/final", purpose: "Render the project timeline" },
   { tool: "get_timeline", exposure: "internal", purpose: "Read raw timeline state" },
   { tool: "set_timeline", exposure: "internal", purpose: "Replace raw timeline state" },
-  { tool: "edit_timeline", exposure: "internal", replacement: "set_timeline", purpose: "Legacy timeline replacement alias" },
   { tool: "assign_slot", exposure: "direct", command: "/assign", purpose: "Assign an asset to a timeline slot" },
   { tool: "unassign_slot", exposure: "direct", command: "/unassign", purpose: "Clear a timeline slot" },
   { tool: "insert_timeline_slot", exposure: "direct", command: "/insert-slot", purpose: "Insert a timeline slot" },
@@ -299,9 +295,7 @@ export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "remove_timeline_audio", exposure: "ui", command: "/audio-remove", purpose: "Remove timeline audio" },
   { tool: "update_timeline_audio", exposure: "ui", command: "/audio-set", purpose: "Update timeline audio settings" },
   { tool: "get_render_settings", exposure: "ui", command: "/settings", purpose: "Read render settings" },
-  { tool: "render_settings", exposure: "internal", replacement: "get_render_settings", purpose: "Legacy render settings alias" },
   { tool: "create_watermark_card", exposure: "composite", command: "/watermark", purpose: "Create and apply a watermark card" },
-  { tool: "create_watermark", exposure: "internal", replacement: "create_watermark_card", purpose: "Legacy watermark creation alias" },
 ];
 
 function inferredExposure(command: Command): Exclude<CommandExposure, "internal"> {
@@ -310,9 +304,9 @@ function inferredExposure(command: Command): Exclude<CommandExposure, "internal"
   return "ui";
 }
 
-export function expandCommandAliases(commands: readonly Command[]): Command[] {
+export function canonicalizeCommands(commands: readonly Command[]): Command[] {
   const names = new Set<string>();
-  const expanded: Command[] = [];
+  const canonicalCommands: Command[] = [];
   for (const command of commands) {
     const aliases = command.aliases ?? [];
     const canonical: Command = {
@@ -327,16 +321,7 @@ export function expandCommandAliases(commands: readonly Command[]): Command[] {
       if (names.has(name)) throw new Error(`Duplicate slash command name or alias: ${name}`);
       names.add(name);
     }
-    expanded.push(canonical);
-    for (const alias of aliases) {
-      expanded.push({
-        ...canonical,
-        command: alias,
-        description: `Deprecated alias for ${canonical.command}. ${canonical.description}`,
-        aliases: [],
-        deprecated: true,
-      });
-    }
+    canonicalCommands.push(canonical);
   }
-  return expanded;
+  return canonicalCommands;
 }

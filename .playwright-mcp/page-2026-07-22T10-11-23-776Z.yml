@@ -1,0 +1,11 @@
+- generic [active]:
+  - generic:
+    - generic [ref=e2]:
+      - heading "VIDEOCITY" [level=1] [ref=e3]
+      - generic [ref=e5]:
+        - generic [ref=e7]: MCP failed
+        - generic [ref=e8]:
+          - generic [ref=e9]: "Failed to connect via HTTP: Not connected"
+          - button "Retry" [ref=e10]
+    - region "Notifications (F8)":
+      - list

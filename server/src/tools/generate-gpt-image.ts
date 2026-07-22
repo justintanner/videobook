@@ -33,7 +33,7 @@ type Args = SchemaArgs<typeof generateGptImageSchema>;
 
 export function generateGptImageDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_gpt_image",
+    name: "generate_kie_gpt_image_2_image_to_image",
     description: "Generate an image using GPT Image 2.0 editing with 1-16 reference images. Creates a new img- asset and enqueues a background job.",
     schema: generateGptImageSchema,
     handler: async (args) => {

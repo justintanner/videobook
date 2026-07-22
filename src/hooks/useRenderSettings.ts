@@ -16,7 +16,7 @@ export function useRenderSettings(callTool: UseMcpResult["callTool"]) {
     projectSlug: string,
   ): Promise<RenderSettingsResponse | null> => {
     try {
-      const result = await callToolRef.current("render_settings", {
+      const result = await callToolRef.current("get_render_settings", {
         asset_id: assetId,
         project_slug: projectSlug,
       });

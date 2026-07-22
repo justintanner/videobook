@@ -35,7 +35,7 @@ type Args = SchemaArgs<typeof generateHappyhorseT2vVideoSchema>;
 
 export function generateHappyhorseT2vVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_happyhorse_t2v_video",
+    name: "generate_kie_happyhorse_1_1_text_to_video",
     description: "Generate a video from a prompt using HappyHorse text-to-video. Creates a new vid- asset and enqueues a background job.",
     schema: generateHappyhorseT2vVideoSchema,
     handler: async (args) => {

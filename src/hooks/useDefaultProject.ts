@@ -42,7 +42,7 @@ export function useDefaultProject(
 
     const resolve = async () => {
       try {
-        const result = await callTool('get_default_project', {});
+        const result = await callTool('ensure_default_project', {});
         if (!active) return;
         if (result.isError) {
           const content = result.content as Array<{ type: string; text: string }>;

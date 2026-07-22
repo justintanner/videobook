@@ -29,7 +29,7 @@ type Args = SchemaArgs<typeof schema>;
 
 export function generateWan27ProEditFalDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_wan27_pro_edit_fal",
+    name: "generate_fal_wan_2_7_pro_edit_image",
     description: "Edit images via fal.ai using Wan 2.7 Pro edit (higher quality image-to-image) with 1-4 @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {

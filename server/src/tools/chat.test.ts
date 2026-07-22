@@ -188,43 +188,43 @@ describe("sanitizeGenerateImageParams", () => {
 describe("parseChatDecision / repairChatRoutingJson", () => {
   it("parses clean routing JSON", () => {
     const decision = parseChatDecision(
-      '{"tool":"create_watermark","params":{"url":"https://www.youtube.com/watch?v=b-3853ow72Q"},"message":"Creating QR."}',
+      '{"tool":"create_watermark_card","params":{"url":"https://www.youtube.com/watch?v=b-3853ow72Q"},"message":"Creating QR."}',
     );
-    expect(decision.tool).toBe("create_watermark");
+    expect(decision.tool).toBe("create_watermark_card");
     expect(decision.params.url).toBe("https://www.youtube.com/watch?v=b-3853ow72Q");
     expect(decision.message).toBe("Creating QR.");
   });
 
   it("repairs unquoted URLs and trailing commas", () => {
     const raw =
-      '{"tool":"create_watermark","params":{"url":https://www.youtube.com/watch?v=b-3853ow72Q,},"message":"Creating QR.",}';
+      '{"tool":"create_watermark_card","params":{"url":https://www.youtube.com/watch?v=b-3853ow72Q,},"message":"Creating QR.",}';
     expect(() => JSON.parse(raw)).toThrow();
     const repaired = repairChatRoutingJson(raw);
     const decision = parseChatDecision(raw);
     expect(repaired).toContain('"https://www.youtube.com/watch?v=b-3853ow72Q"');
-    expect(decision.tool).toBe("create_watermark");
+    expect(decision.tool).toBe("create_watermark_card");
     expect(decision.params.url).toBe("https://www.youtube.com/watch?v=b-3853ow72Q");
   });
 
   it("closes truncated routing JSON missing outer brace and message (live Kie failure)", () => {
     // Exact shape from live multiculty/@vid-og failure (position 106).
     const raw = `{
-  "tool": "create_watermark",
+  "tool": "create_watermark_card",
   "params": {
     "url": "https://www.youtube.com/watch?v=b-3853ow72Q"
   }`;
     expect(() => JSON.parse(raw)).toThrow();
     const decision = parseChatDecision(raw);
-    expect(decision.tool).toBe("create_watermark");
+    expect(decision.tool).toBe("create_watermark_card");
     expect(decision.params.url).toBe("https://www.youtube.com/watch?v=b-3853ow72Q");
     expect(decision.message).toBe("");
   });
 
   it("closes truncated string values mid-message", () => {
     const raw =
-      '{"tool":"create_watermark","params":{"url":"https://x.com/a"},"message":"Creat';
+      '{"tool":"create_watermark_card","params":{"url":"https://x.com/a"},"message":"Creat';
     const decision = parseChatDecision(raw);
-    expect(decision.tool).toBe("create_watermark");
+    expect(decision.tool).toBe("create_watermark_card");
     expect(decision.params.url).toBe("https://x.com/a");
     expect(decision.message).toBe("Creat");
   });

@@ -174,7 +174,7 @@ export function repairChatRoutingJson(text: string): string {
     (_m, prefix: string, slug: string) => `${prefix}${JSON.stringify(slug)}`,
   );
   // Close truncated objects (missing final } / message field) — the live
-  // failure mode for create_watermark routing under Kie load.
+  // failure mode for create_watermark_card routing under Kie load.
   out = closeTruncatedJson(out);
   return out;
 }
@@ -384,9 +384,9 @@ Determine which tool to use and what parameters to pass.`;
         Object.assign(params, sanitizeGenerateImageParams(params));
       }
 
-      // create_watermark needs a URL; if the model omitted it, take source_url
+      // create_watermark_card needs a URL; if the model omitted it, take source_url
       // from a referenced asset (e.g. "QR from the url in @vid-og").
-      if (decision.tool === "create_watermark" && (params.url === undefined || params.url === "")) {
+      if (decision.tool === "create_watermark_card" && (params.url === undefined || params.url === "")) {
         const fromAsset = assetContext.find((a) => typeof a.source_url === "string");
         if (fromAsset) params.url = fromAsset.source_url;
       }
@@ -421,9 +421,9 @@ Determine which tool to use and what parameters to pass.`;
         return handlerResult;
       }
 
-      // Action tools: return the LLM's brief message. create_watermark is an
+      // Action tools: return the LLM's brief message. create_watermark_card is an
       // exception — surface the created asset_id JSON so the client can use it.
-      if (handlerResult.isError || decision.tool === "create_watermark") {
+      if (handlerResult.isError || decision.tool === "create_watermark_card") {
         return handlerResult;
       }
       return { content: [{ type: "text" as const, text: decision.message ?? "Done." }] };

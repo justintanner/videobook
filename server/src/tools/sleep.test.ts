@@ -28,7 +28,7 @@ describe("sleep tool", () => {
 
   it("returns not_found for nonexistent asset", async () => {
     const result = await client.callTool({
-      name: "sleep",
+      name: "wait_for_asset_ready",
       arguments: {
         asset_id: "vid-does-not-exist",
         project_slug: "test-proj",
@@ -50,7 +50,7 @@ describe("sleep tool", () => {
     if (!created.ok) throw new Error(created.error.message);
 
     const result = await client.callTool({
-      name: "sleep",
+      name: "wait_for_asset_ready",
       arguments: {
         asset_id: created.value.assetId,
         project_slug: "test-proj",

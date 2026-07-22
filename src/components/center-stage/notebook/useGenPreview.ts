@@ -25,7 +25,7 @@ interface PreviewState {
 }
 
 function previewToolName(category: 'image' | 'video'): string {
-  return category === 'image' ? 'preview_image' : 'preview_video'
+  return category === 'image' ? 'prepare_image_generation' : 'prepare_video_generation'
 }
 
 function responseText(result: Awaited<ReturnType<UseMcpResult['callTool']>>): string {

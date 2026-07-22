@@ -33,7 +33,7 @@ type Args = SchemaArgs<typeof generateNanoBananaProGoogleSchema>;
 
 export function generateNanoBananaProGoogleDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_nano_banana_pro_google",
+    name: "generate_google_flow_nano_banana_pro_image",
     description: "Generate an image using Google Nano Banana Pro via Google Flow. Text-to-image or image-to-image from up to 10 reference images. Creates a new img- asset and enqueues a background job.",
     schema: generateNanoBananaProGoogleSchema,
     handler: async (args) => {

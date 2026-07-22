@@ -30,7 +30,7 @@ describe("insert_timeline_slot tool", () => {
       { id: "aud-1", slug: "aud-music", startFrame: 10, durationFrames: 120, volume: 80 },
     ];
     await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: {
         project_slug: "test-proj",
         slots: [
@@ -62,7 +62,7 @@ describe("insert_timeline_slot tool", () => {
 
   it("inserts an empty slot after the selected slot", async () => {
     await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: {
         project_slug: "test-proj",
         slots: [{ slug: "vid-a" }, { slug: "vid-b" }, { slug: "vid-c" }],
@@ -86,7 +86,7 @@ describe("insert_timeline_slot tool", () => {
 
   it("pads through a displayed virtual slot before inserting", async () => {
     await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: { project_slug: "test-proj", slots: [{ slug: "vid-a" }] },
     });
 

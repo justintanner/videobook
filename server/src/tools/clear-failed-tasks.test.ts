@@ -74,7 +74,7 @@ describe("clear_failed_tasks tool", () => {
     await failPendingTaskAndLog(fs, "test-proj", failedTwo, fakeTaskTwo, { message: "kaboom" });
 
     const res = await client.callTool({
-      name: "clear_failed_tasks",
+      name: "clean_failed_assets",
       arguments: { project_slug: "test-proj" },
     });
     expect(res.isError).toBeFalsy();
@@ -117,7 +117,7 @@ describe("clear_failed_tasks tool", () => {
     await failPendingTaskAndLog(fs, "test-proj", husk, "task-husk", { message: "boom" });
 
     const res = await client.callTool({
-      name: "clear_failed_tasks",
+      name: "clean_failed_assets",
       arguments: { project_slug: "test-proj" },
     });
     expect(res.isError).toBeFalsy();
@@ -142,7 +142,7 @@ describe("clear_failed_tasks tool", () => {
     await createImageAsset(fs, "test-proj", "only good");
 
     const res = await client.callTool({
-      name: "clear_failed_tasks",
+      name: "clean_failed_assets",
       arguments: { project_slug: "test-proj" },
     });
     expect(res.isError).toBeFalsy();

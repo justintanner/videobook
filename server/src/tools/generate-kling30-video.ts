@@ -71,7 +71,7 @@ type Args = SchemaArgs<typeof generateKling30VideoSchema>;
 
 export function generateKling30VideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_kling30_video",
+    name: "generate_kie_kling_3_0_video",
     description: "Generate a video using Kling 3.0 with optional reference images, character elements, and multi-shot mode. Creates a new vid- asset and enqueues a background job.",
     schema: generateKling30VideoSchema,
     handler: async (args) => {

@@ -130,6 +130,7 @@ export function buildSeedance2Schema(apiModel: Seedance2Model) {
 
 type Seedance2ToolFactoryOpts = {
   toolName: string;
+  jobType: string;
   description: string;
   apiModel: Seedance2Model;
 };
@@ -262,7 +263,7 @@ export function buildSeedance2ToolDef(
       const jobId = `${modelSlug("kie", opts.apiModel)}-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {
-        type: opts.toolName,
+        type: opts.jobType,
         vidAssetId,
         vidAssetDir,
         projectSlug: project_slug,

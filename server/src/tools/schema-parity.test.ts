@@ -57,18 +57,18 @@ describe("schema parity between pickers and tool definitions", () => {
     }
   });
 
-  it("keeps picker schemas equivalent across canonical names and aliases", () => {
+  it("keeps picker schemas resolvable through historical names", () => {
     for (const action of GENERATION_ACTIONS) {
       if (action.media_type === "video") {
         const canonical = getVideoToolSchema(action.canonical_name);
-        for (const alias of action.aliases) {
-          expect(getVideoToolSchema(alias), alias).toEqual(canonical);
+        for (const legacyName of action.legacy_names) {
+          expect(getVideoToolSchema(legacyName), legacyName).toEqual(canonical);
         }
       }
       if (action.media_type === "image") {
         const canonical = getImageToolSchema(action.canonical_name);
-        for (const alias of action.aliases) {
-          expect(getImageToolSchema(alias), alias).toEqual(canonical);
+        for (const legacyName of action.legacy_names) {
+          expect(getImageToolSchema(legacyName), legacyName).toEqual(canonical);
         }
       }
     }

@@ -26,7 +26,7 @@ type Args = SchemaArgs<typeof schema>;
 
 export function generateSeedance2FastI2vFalDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_seedance2_fast_i2v_fal",
+    name: "generate_fal_seedance_2_0_fast_image_to_video",
     description: "Generate a video via fal.ai using ByteDance Seedance 2.0 Fast from a first-frame image (optional end frame). Creates a new vid- asset and enqueues a background job.",
     schema,
     handler: async (args) => {

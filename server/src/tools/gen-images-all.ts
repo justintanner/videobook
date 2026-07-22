@@ -6,7 +6,8 @@ import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { slugify } from "./_fal-shared.js";
 
 type ModelSpec = {
-  toolType: string;
+  canonicalName: string;
+  jobType: string;
   taskType: PendingTask["taskType"];
   slugPrefix: string;
   jobPrefix: string;
@@ -14,25 +15,29 @@ type ModelSpec = {
 
 const MODELS: readonly ModelSpec[] = [
   {
-    toolType: "generate_nano_banana_pro_fal",
+    canonicalName: "generate_fal_nano_banana_pro_text_to_image",
+    jobType: "generate_nano_banana_pro_fal",
     taskType: "fal_nano_banana_pro",
     slugPrefix: "nano-banana",
     jobPrefix: "fal-nano-banana-pro",
   },
   {
-    toolType: "generate_wan27_pro_fal",
+    canonicalName: "generate_fal_wan_2_7_pro_text_to_image",
+    jobType: "generate_wan27_pro_fal",
     taskType: "fal_wan27_pro",
     slugPrefix: "wan27pro",
     jobPrefix: "fal-wan27-pro",
   },
   {
-    toolType: "generate_seedream_v5_lite_fal",
+    canonicalName: "generate_fal_seedream_v5_lite_text_to_image",
+    jobType: "generate_seedream_v5_lite_fal",
     taskType: "fal_seedream_v5_lite",
     slugPrefix: "seedream",
     jobPrefix: "fal-seedream-v5-lite",
   },
   {
-    toolType: "generate_grok_imagine_image_fal",
+    canonicalName: "generate_fal_grok_imagine_text_to_image",
+    jobType: "generate_grok_imagine_image_fal",
     taskType: "fal_grok_imagine_image",
     slugPrefix: "grok",
     jobPrefix: "fal-grok-imagine-image",
@@ -65,25 +70,25 @@ async function enqueueModel(
     projectSlug,
   );
   if (!assetResult.ok) {
-    return { model: spec.toolType, error: assetResult.error.message };
+    return { model: spec.canonicalName, error: assetResult.error.message };
   }
   const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
 
   const jobId = `${spec.jobPrefix}-${imgAssetId}-${Date.now()}`;
   await queue.enqueue(jobId, {
-    type: spec.toolType,
+    type: spec.jobType,
     imgAssetId,
     imgAssetDir,
     projectSlug,
     prompt,
   } as unknown as Record<string, unknown>);
 
-  return { model: spec.toolType, img_asset_id: imgAssetId, job_id: jobId };
+  return { model: spec.canonicalName, img_asset_id: imgAssetId, job_id: jobId };
 }
 
 export function genImagesAllDef(fs: VideocityFs): ToolDef {
   return {
-    name: "gen_images_all_models",
+    name: "generate_image_model_comparison",
     description:
       "Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Wan 2.7 Pro, Seedream v5 Lite, Grok Imagine). Creates one img-* asset per model and enqueues background jobs.",
     schema,

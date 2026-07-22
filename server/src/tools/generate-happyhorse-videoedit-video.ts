@@ -45,7 +45,7 @@ type Args = SchemaArgs<typeof generateHappyhorseVideoeditVideoSchema>;
 
 export function generateHappyhorseVideoeditVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_happyhorse_videoedit_video",
+    name: "generate_kie_happyhorse_1_1_edit_video",
     description: "Edit a source video using HappyHorse video-edit with optional reference images for character/style. Creates a new vid- asset and enqueues a background job.",
     schema: generateHappyhorseVideoeditVideoSchema,
     handler: async (args) => {

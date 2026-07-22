@@ -1514,8 +1514,7 @@ function translateToolPayload(
   const imageSlugs = (args.image_slugs as string[] | undefined) ?? [];
 
   switch (toolName) {
-    case "generate_kie_kling_3_0_video":
-    case "generate_kling30_video": {
+    case "generate_kie_kling_3_0_video": {
       const elements = extractKlingElements(args);
       const rawPrompt = args.prompt as string | undefined;
       const prompt = rawPrompt === undefined
@@ -1528,8 +1527,7 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_kling_3_0_motion_control":
-    case "generate_kling30_motion_control_video": {
+    case "generate_kie_kling_3_0_motion_control": {
       const characterImageUrls = (args.character_image_slugs as string[] | undefined) ?? [];
       const motionVideoUrls = (args.motion_video_slugs as string[] | undefined) ?? [];
       const rawPrompt = args.prompt as string | undefined;
@@ -1546,8 +1544,7 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_kling_3_0_turbo_video":
-    case "generate_kling30_turbo_video": {
+    case "generate_kie_kling_3_0_turbo_video": {
       const rawPrompt = (args.prompt as string | undefined) ?? "";
       const prompt = replaceNaturalAssetMentions(rawPrompt, { imageSlugs });
       const payload = buildKlingV3TurboVideoPayload(
@@ -1556,8 +1553,7 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_grok_imagine_image_to_video":
-    case "generate_grok_imagine_video": {
+    case "generate_kie_grok_imagine_image_to_video": {
       if (isXaiProvider(provider)) {
         // xAI has no @imageN marker syntax — rewrite confirmed @img-* to natural refs.
         const rawPrompt = (args.prompt as string | undefined) ?? "";
@@ -1576,14 +1572,11 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_grok_imagine_text_to_video":
-    case "generate_grok_imagine_t2v_video": {
+    case "generate_kie_grok_imagine_text_to_video": {
       const payload = buildGrokImagineT2vVideoPayload(args as GrokImagineT2vArgs);
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_grok_imagine_image_to_image":
-    case "generate_kie_grok_imagine_image":
-    case "generate_grok_imagine_image": {
+    case "generate_kie_grok_imagine_image_to_image": {
       if (isXaiProvider(provider)) {
         const rawPrompt = (args.prompt as string | undefined) ?? "";
         const prompt = replaceNaturalAssetMentions(rawPrompt, { imageSlugs });
@@ -1597,10 +1590,8 @@ function translateToolPayload(
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_kie_seedance_2_0_video":
-    case "generate_seedance2_video":
-    case "generate_kie_seedance_2_0_fast_video":
-    case "generate_seedance2_fast_video": {
-      const isFast = toolName === "generate_seedance2_fast_video" || toolName === "generate_kie_seedance_2_0_fast_video" || rawToolName === "generate_seedance2_fast_video";
+    case "generate_kie_seedance_2_0_fast_video": {
+      const isFast = toolName === "generate_kie_seedance_2_0_fast_video";
       const apiModel: Seedance2Model = isFast
         ? "bytedance/seedance-2-fast"
         : "bytedance/seedance-2";
@@ -1634,8 +1625,7 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_seedance_2_0_mini_video":
-    case "generate_seedance2_mini_video": {
+    case "generate_kie_seedance_2_0_mini_video": {
       const referenceImageUrls = imageSlugs.length > 0 ? imageSlugs : undefined;
       const referenceVideoUrls = (args.video_slugs as string[] | undefined) ?? undefined;
       const referenceAudioUrls = (args.audio_slugs as string[] | undefined) ?? undefined;
@@ -1657,8 +1647,7 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_gemini_omni_video":
-    case "generate_gemini_omni_video": {
+    case "generate_kie_gemini_omni_video": {
       const videoSlug = args.video_slug as string | undefined;
       const rawPrompt = (args.prompt as string | undefined) ?? "";
       const prompt = replaceNaturalAssetMentions(rawPrompt, {
@@ -1675,18 +1664,14 @@ function translateToolPayload(
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
     case "generate_google_flow_veo_3_1_quality_video":
-    case "generate_veo31_video":
     case "generate_google_flow_veo_3_1_fast_video":
-    case "generate_veo31_fast_video":
     case "generate_google_flow_veo_3_1_lite_video":
-    case "generate_veo31_lite_video":
-    case "generate_google_flow_veo_3_1_lite_low_priority_video":
-    case "generate_veo31_lite_low_priority_video": {
-      const model: GoogleVeo31Model = (toolName === "generate_veo31_video" || toolName === "generate_google_flow_veo_3_1_quality_video" || rawToolName === "generate_veo31_video")
+    case "generate_google_flow_veo_3_1_lite_low_priority_video": {
+      const model: GoogleVeo31Model = toolName === "generate_google_flow_veo_3_1_quality_video"
         ? "veo-3.1-quality"
-        : (toolName === "generate_veo31_fast_video" || toolName === "generate_google_flow_veo_3_1_fast_video" || rawToolName === "generate_veo31_fast_video")
+        : toolName === "generate_google_flow_veo_3_1_fast_video"
           ? "veo-3.1-fast"
-          : (toolName === "generate_veo31_lite_low_priority_video" || toolName === "generate_google_flow_veo_3_1_lite_low_priority_video" || rawToolName === "generate_veo31_lite_low_priority_video")
+          : toolName === "generate_google_flow_veo_3_1_lite_low_priority_video"
             ? "veo-3.1-lite-low-priority"
             : "veo-3.1-lite";
       const startImage = args.first_frame_slug as string | undefined;
@@ -1707,8 +1692,7 @@ function translateToolPayload(
       });
       return { provider_path: "googleflow.v1.videos({ async: true })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_google_flow_omni_flash_video":
-    case "generate_google_omni_video": {
+    case "generate_google_flow_omni_flash_video": {
       const startImage = args.first_frame_slug as string | undefined;
       const videoSlug = args.video_slug as string | undefined;
       const voiceRefs = ((args.voice_refs as string[] | undefined) ?? []).filter((s) => s.trim() !== "");
@@ -1729,8 +1713,7 @@ function translateToolPayload(
       });
       return { provider_path: "googleflow.v1.videos({ async: true })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_google_flow_nano_banana_pro_image":
-    case "generate_nano_banana_pro_google": {
+    case "generate_google_flow_nano_banana_pro_image": {
       const characterRefs = ((args.character_refs as string[] | undefined) ?? []).filter((s) => s.trim() !== "");
       // Images use @reference_N markers (not @referenceImage_N), matching
       // tools/generate-nano-banana-pro-google.ts.
@@ -1738,8 +1721,7 @@ function translateToolPayload(
       const payload = buildGoogleNbpImagePayload({ ...(args as GoogleNbpImageArgs), prompt }, imageSlugs, characterRefs);
       return { provider_path: "googleflow.v1.images()", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_grok_imagine_text_to_image":
-    case "generate_grok_imagine_text_image": {
+    case "generate_kie_grok_imagine_text_to_image": {
       if (isXaiProvider(provider)) {
         const payload: XaiImageGenerateRequest = {
           prompt: (args as GrokImagineTextArgs).prompt ?? "",
@@ -1752,8 +1734,7 @@ function translateToolPayload(
       const payload = buildGrokImagineTextPayload(args as GrokImagineTextArgs);
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_xai_grok_imagine_reference_to_video":
-    case "generate_grok_imagine_ref_video": {
+    case "generate_xai_grok_imagine_video": {
       const rawPrompt = (args.prompt as string | undefined) ?? "";
       const prompt = replaceNaturalAssetMentions(rawPrompt, { imageSlugs });
       const payload = buildXaiGrokImagineRefVideoPayload(
@@ -1762,8 +1743,7 @@ function translateToolPayload(
       );
       return { provider_path: "xai.post.v1.videos.generations(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_nano_banana_2_image":
-    case "generate_nano_banana_image": {
+    case "generate_kie_nano_banana_pro_text_to_image": {
       const rawPrompt = (args.prompt as string | undefined) ?? "";
       const prompt = replaceNaturalAssetMentions(rawPrompt, { imageSlugs });
       const payload = buildNanoBananaImagePayload(
@@ -1772,13 +1752,11 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_seedream_v5_lite_text_to_image":
-    case "generate_seedream_text_image": {
+    case "generate_kie_seedream_v5_lite_text_to_image": {
       const payload = buildSeedreamTextImagePayload(args as SeedreamImageArgs);
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_seedream_v5_lite_image_to_image":
-    case "generate_seedream_image": {
+    case "generate_kie_seedream_v5_lite_image_to_image": {
       const rawPrompt = (args.prompt as string | undefined) ?? "";
       const prompt = replaceNaturalAssetMentions(rawPrompt, { imageSlugs });
       const payload = buildSeedreamImageEditPayload(
@@ -1787,8 +1765,7 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_qwen_2_edit_image":
-    case "generate_qwen2_image_edit": {
+    case "generate_kie_qwen_2_0_edit_image": {
       // qwen2/image-edit is single-image: use the first reference slug.
       const rawPrompt = (args.prompt as string | undefined) ?? "";
       const prompt = replaceNaturalAssetMentions(rawPrompt, { imageSlugs });
@@ -1798,8 +1775,7 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_gpt_image_image":
-    case "generate_gpt_image": {
+    case "generate_kie_gpt_image_2_image_to_image": {
       const rawPrompt = (args.prompt as string | undefined) ?? "";
       const prompt = replaceNaturalAssetMentions(rawPrompt, { imageSlugs });
       const payload = buildGptImagePayload(
@@ -1808,13 +1784,11 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_gpt_image_text_to_image":
-    case "generate_gpt_image_text": {
+    case "generate_kie_gpt_image_2_text_to_image": {
       const payload = buildGptImageTextPayload(args as GptImageTextArgs);
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_wan_2_7_text_to_image":
-    case "generate_wan27_image": {
+    case "generate_kie_wan_2_7_text_to_image": {
       const rawPrompt = (args.prompt as string | undefined) ?? "";
       const prompt = replaceNaturalAssetMentions(rawPrompt, { imageSlugs });
       const payload = buildWan27ImagePayload(
@@ -1823,8 +1797,7 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_wan_2_7_pro_text_to_image":
-    case "generate_wan27_image_pro": {
+    case "generate_kie_wan_2_7_pro_text_to_image": {
       const rawPrompt = (args.prompt as string | undefined) ?? "";
       const prompt = replaceNaturalAssetMentions(rawPrompt, { imageSlugs });
       const payload = buildWan27ImageProPayload(
@@ -1833,8 +1806,7 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_wan_2_7_text_to_video":
-    case "generate_wan27_t2v_video": {
+    case "generate_kie_wan_2_7_text_to_video": {
       const audioUrl = (args.audio_url as string | undefined) ?? (args.driving_audio_slug as string | undefined) ?? undefined;
       const rawPrompt = (args.prompt as string | undefined) ?? "";
       const prompt = replaceNaturalAssetMentions(rawPrompt, {
@@ -1846,8 +1818,7 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_wan_2_7_image_to_video":
-    case "generate_wan27_i2v_video": {
+    case "generate_kie_wan_2_7_image_to_video": {
       const firstFrameSlug = (args.first_frame_slug as string | undefined) ?? undefined;
       const lastFrameSlug = (args.last_frame_slug as string | undefined) ?? undefined;
       const firstClipSlug = (args.first_clip_slug as string | undefined) ?? undefined;
@@ -1872,8 +1843,7 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_wan_2_7_edit_video":
-    case "generate_wan27_videoedit_video": {
+    case "generate_kie_wan_2_7_edit_video": {
       const videoSlug = (args.video_slug as string) ?? "";
       const imageSlug = (args.image_slug as string | undefined) ?? undefined;
       const rawPrompt = args.prompt as string | undefined;
@@ -1892,8 +1862,7 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "extend_kie_grok_imagine_video":
-    case "extend_grok_imagine_video": {
+    case "extend_kie_grok_imagine_video": {
       const payload: GrokVideoExtendRequest = {
         model: "grok-imagine/extend",
         input: {
@@ -1905,8 +1874,7 @@ function translateToolPayload(
       };
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_volcengine_video_to_video_lip_sync":
-    case "generate_volcengine_lipsync_video": {
+    case "generate_kie_volcengine_video_to_video_lip_sync": {
       const videoSlug = (args.video_slug as string) ?? "";
       const audioSlug = (args.audio_slug as string) ?? "";
       const payload = buildVolcengineLipSyncPayload(args as VolcengineLipSyncArgs, {
@@ -1915,8 +1883,7 @@ function translateToolPayload(
       });
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_omnihuman_1_5_video":
-    case "generate_omnihuman_video": {
+    case "generate_kie_omnihuman_1_5_video": {
       const imageSlug = (args.image_slug as string) ?? "";
       const audioSlug = (args.audio_slug as string) ?? "";
       const payload = buildOmnihumanPayload(args as OmnihumanArgs, {
@@ -1925,8 +1892,7 @@ function translateToolPayload(
       });
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_wan_2_7_reference_to_video":
-    case "generate_wan27_r2v_video": {
+    case "generate_kie_wan_2_7_reference_to_video": {
       const referenceImageUrls = imageSlugs;
       const referenceVideoUrls = (args.video_slugs as string[] | undefined) ?? [];
       const firstFrameUrl = (args.first_frame_slug as string | undefined) ?? undefined;
@@ -1939,21 +1905,18 @@ function translateToolPayload(
       });
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "extend_kie_wan_2_7_video":
-    case "extend_wan27_video": {
+    case "extend_kie_wan_2_7_video": {
       const firstClipSlug = (args.video_slug as string) ?? "";
       const payload = buildWan27FramesVideoPayload(args as Wan27FramesVideoArgs, {
         firstClipUrl: firstClipSlug,
       });
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_happyhorse_1_1_text_to_video":
-    case "generate_happyhorse_t2v_video": {
+    case "generate_kie_happyhorse_1_1_text_to_video": {
       const payload = buildHappyHorseT2vPayload(args as HappyHorseT2vArgs);
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_happyhorse_1_1_image_to_video":
-    case "generate_happyhorse_i2v_video": {
+    case "generate_kie_happyhorse_1_1_image_to_video": {
       const imageUrl = (args.first_frame_slug as string | undefined) ?? "";
       // i2v has no inline marker — first frame rides image_urls; strip confirmed @slug.
       const rawPrompt = args.prompt as string | undefined;
@@ -1966,8 +1929,7 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_happyhorse_1_1_reference_to_video":
-    case "generate_happyhorse_ref_video": {
+    case "generate_kie_happyhorse_1_1_reference_to_video": {
       const referenceImages = (args.image_slugs as string[] | undefined) ?? [];
       // 1.1 reference-to-video uses "[Image N]" markers matching reference_image[].
       const rawPrompt = (args.prompt as string | undefined) ?? "";
@@ -1978,8 +1940,7 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_happyhorse_1_1_edit_video":
-    case "generate_happyhorse_videoedit_video": {
+    case "generate_kie_happyhorse_1_1_edit_video": {
       const videoSlug = (args.video_slug as string | undefined) ?? "";
       const referenceImages = (args.image_slugs as string[] | undefined) ?? [];
       // Kie's happyhorse/video-edit (1.0) prompt is a free-form edit
@@ -1999,7 +1960,7 @@ function translateToolPayload(
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
 
-    case "generate_alibaba_image": {
+    case "generate_alibaba_wan_2_7_text_to_image": {
       const imageUrls = imageSlugs;
       const payload = buildAlibabaImagePayload(
         { prompt: args.prompt as string, model: (args.model as AlibabaImageModel) ?? "wan2.7-image", size: args.size as string | undefined, n: args.n as number | undefined, watermark: args.watermark as boolean | undefined, thinking_mode: args.thinking_mode as boolean | undefined, seed: args.seed as number | undefined },
@@ -2007,7 +1968,7 @@ function translateToolPayload(
       );
       return { provider_path: "alibaba.post.api.v1.services.aigc.imageGeneration.generation()", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_alibaba_image_pro": {
+    case "generate_alibaba_wan_2_7_pro_text_to_image": {
       const imageUrls = imageSlugs;
       const payload = buildAlibabaImagePayload(
         { prompt: args.prompt as string, model: "wan2.7-image-pro", size: args.size as string | undefined, n: args.n as number | undefined, watermark: args.watermark as boolean | undefined, thinking_mode: args.thinking_mode as boolean | undefined, seed: args.seed as number | undefined },
@@ -2015,7 +1976,7 @@ function translateToolPayload(
       );
       return { provider_path: "alibaba.post.api.v1.services.aigc.imageGeneration.generation()", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_alibaba_video": {
+    case "generate_alibaba_wan_2_7_video": {
       const firstFrameUrl = (args.first_frame_slug as string | undefined) ?? undefined;
       const lastFrameUrl = (args.last_frame_slug as string | undefined) ?? undefined;
       const firstClipUrl = (args.first_clip_slug as string | undefined) ?? undefined;

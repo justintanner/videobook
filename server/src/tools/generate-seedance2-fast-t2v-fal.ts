@@ -23,7 +23,7 @@ type Args = SchemaArgs<typeof schema>;
 
 export function generateSeedance2FastT2vFalDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_seedance2_fast_t2v_fal",
+    name: "generate_fal_seedance_2_0_fast_text_to_video",
     description: "Generate a video via fal.ai using ByteDance Seedance 2.0 Fast from a text prompt only. Creates a new vid- asset and enqueues a background job.",
     schema,
     handler: async (args) => {

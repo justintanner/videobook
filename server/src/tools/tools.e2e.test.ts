@@ -382,7 +382,7 @@ describe("MCP tools e2e", () => {
 
   it("gets default project", async () => {
     const result = await client.callTool({
-      name: "get_default_project",
+      name: "ensure_default_project",
       arguments: {},
     });
     expect(result.isError).toBeFalsy();
@@ -411,7 +411,7 @@ describe("MCP tools e2e", () => {
       { slug: "vid-outro", volume: 100, audioFadeOut: 200 },
     ];
     const result = await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: { project_slug: PROJECT, slots },
     });
     expect(result.isError).toBeFalsy();
@@ -449,7 +449,7 @@ describe("MCP tools e2e", () => {
 
   it("sync completes without error", async () => {
     const result = await client.callTool({
-      name: "sync",
+      name: "reconcile_project_work",
       arguments: { project_slug: PROJECT },
     });
     expect(result.isError).toBeFalsy();
@@ -472,7 +472,7 @@ describe("MCP tools e2e", () => {
 
   it("sleep returns ready for processed asset", async () => {
     const result = await client.callTool({
-      name: "sleep",
+      name: "wait_for_asset_ready",
       arguments: {
         asset_id: vidAssetId,
         project_slug: PROJECT,
@@ -630,7 +630,7 @@ describe("MCP tools e2e", () => {
 
   it("enqueues render for landscape without subtitles", async () => {
     const result = await client.callTool({
-      name: "render",
+      name: "render_video",
       arguments: {
         asset_id: vidAssetId,
         project_slug: PROJECT,
@@ -678,7 +678,7 @@ describe("MCP tools e2e", () => {
   it("api_status returns error without KIMI_CODING_API_KEY", async () => {
     if (hasKimiKey) return; // skip check when key is set
     const result = await client.callTool({
-      name: "api_status",
+      name: "check_kimi_coding_api",
       arguments: {},
     });
     expect(result.isError).toBe(true);
@@ -704,7 +704,7 @@ describe("MCP tools e2e", () => {
   it("generate_nano_banana_image returns error without KIE_API_KEY", async () => {
     if (hasKieKey) return;
     const result = await client.callTool({
-      name: "generate_nano_banana_image",
+      name: "generate_kie_nano_banana_pro_text_to_image",
       arguments: {
         prompt: "a sunset over the ocean",
         project_slug: PROJECT,
@@ -717,7 +717,7 @@ describe("MCP tools e2e", () => {
   it("generate_grok_imagine_video returns error without KIE_API_KEY", async () => {
     if (hasKieKey) return;
     const result = await client.callTool({
-      name: "generate_grok_imagine_video",
+      name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
         asset_id: renamedAssetId,
         project_slug: PROJECT,
@@ -730,7 +730,7 @@ describe("MCP tools e2e", () => {
   it("generate_grok_imagine_image returns error without KIE_API_KEY", async () => {
     if (hasKieKey) return;
     const result = await client.callTool({
-      name: "generate_grok_imagine_image",
+      name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
         asset_id: renamedAssetId,
         project_slug: PROJECT,
@@ -743,7 +743,7 @@ describe("MCP tools e2e", () => {
   it("generate_gpt_image returns error without KIE_API_KEY", async () => {
     if (hasKieKey) return;
     const result = await client.callTool({
-      name: "generate_gpt_image",
+      name: "generate_kie_gpt_image_2_image_to_image",
       arguments: {
         prompt: "a sunset",
         project_slug: PROJECT,
@@ -759,7 +759,7 @@ describe("MCP tools e2e", () => {
   it("preview_video returns error without OPENAI_API_KEY", async () => {
     if (hasOpenAiKey) return;
     const result = await client.callTool({
-      name: "preview_video",
+      name: "prepare_video_generation",
       arguments: {
         prompt: "generate a sunset video",
         project_slug: PROJECT,
@@ -771,7 +771,7 @@ describe("MCP tools e2e", () => {
 
   it("preview_image returns model options without OPENAI_API_KEY", async () => {
     const result = await client.callTool({
-      name: "preview_image",
+      name: "prepare_image_generation",
       arguments: {
         prompt: "generate a sunset image",
         project_slug: PROJECT,

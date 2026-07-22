@@ -59,7 +59,7 @@ type Args = SchemaArgs<typeof schema>;
 
 export function generateQwenImageEditFalDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_qwen_image_edit_fal",
+    name: "generate_fal_qwen_2_0_edit_image",
     description: "Edit an image via fal.ai using Alibaba Qwen Image edit with one @img-* reference input. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {

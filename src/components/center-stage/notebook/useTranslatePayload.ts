@@ -41,7 +41,7 @@ export function useTranslatePayload(
     const [name, payloadArgs] = JSON.parse(requestKey) as [string, Record<string, unknown>]
     void (async () => {
       try {
-        const result = await callToolRef.current('translate_payload', {
+        const result = await callToolRef.current('build_generation_provider_payload', {
           tool_name: name,
           args_json: JSON.stringify(payloadArgs),
         })

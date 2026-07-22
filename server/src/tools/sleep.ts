@@ -9,9 +9,9 @@ function delay(ms: number): Promise<void> {
 
 export function sleepDef(fs: VideocityFs): ToolDef {
   return {
-    name: "sleep",
+    name: "wait_for_asset_ready",
     description:
-      "Block until an asset's async work (KIE task polling, completion jobs, file writes) is fully done. Calls sync repeatedly under the hood. Useful for e2e tests that need to wait for generation pipelines to complete.",
+      "Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.",
     schema: {
       asset_id: z.string().describe("Asset ID to wait on"),
       project_slug: z.string().describe("Project slug"),

@@ -44,7 +44,7 @@ describe("render tool", () => {
     const assetId = await createVideoAsset();
 
     const result = await client.callTool({
-      name: "render",
+      name: "render_video",
       arguments: { asset_id: assetId, project_slug: projectSlug },
     });
 
@@ -65,7 +65,7 @@ describe("render tool", () => {
     const assetId = await createVideoAsset();
 
     const result = await client.callTool({
-      name: "render",
+      name: "render_video",
       arguments: {
         asset_id: assetId,
         project_slug: projectSlug,
@@ -106,7 +106,7 @@ describe("render tool", () => {
     expect(blocked).toBeNull();
 
     const result = await client.callTool({
-      name: "render",
+      name: "render_video",
       arguments: { asset_id: assetId, project_slug: projectSlug, orientation: "landscape", subtitles_enabled: false },
     });
 

@@ -43,7 +43,7 @@ describe("generate_nano_banana_2_lite_fal / generate_nano_banana_2_lite_edit_fal
   it("returns error when FAL_API_KEY is not set", async () => {
     delete process.env.FAL_API_KEY;
     const result = await client.callTool({
-      name: "generate_nano_banana_2_lite_fal",
+      name: "generate_fal_nano_banana_2_lite_text_to_image",
       arguments: {
         prompt: "a beautiful sunset",
         project_slug: "test-proj",
@@ -56,7 +56,7 @@ describe("generate_nano_banana_2_lite_fal / generate_nano_banana_2_lite_edit_fal
 
   it("enqueues generate_nano_banana_2_lite_fal job (text-to-image)", async () => {
     const result = await client.callTool({
-      name: "generate_nano_banana_2_lite_fal",
+      name: "generate_fal_nano_banana_2_lite_text_to_image",
       arguments: {
         prompt: "a beautiful sunset",
         project_slug: "test-proj",
@@ -78,7 +78,7 @@ describe("generate_nano_banana_2_lite_fal / generate_nano_banana_2_lite_edit_fal
     await fs.writeFile(asset.value.assetId, "original.png", await makePng(), "test-proj");
 
     const result = await client.callTool({
-      name: "generate_nano_banana_2_lite_edit_fal",
+      name: "generate_fal_nano_banana_2_lite_edit_image",
       arguments: {
         prompt: "add a sunset",
         project_slug: "test-proj",

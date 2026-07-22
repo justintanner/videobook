@@ -1,5 +1,5 @@
 import type { CostEstimate } from "@apicity/cost";
-import { getActionSpec } from "./generation-registry.js";
+import { getCanonicalName } from "./generation-registry.js";
 
 // Local Google Flow cost estimates — @apicity/cost@0.8.0 has googleflow
 // credit×Pro rates, but Videocity badges use official Gemini Developer API
@@ -115,7 +115,7 @@ type ToolPricing = {
 };
 
 const TOOL_PRICING: Record<string, ToolPricing> = {
-  generate_google_omni_video: {
+  generate_google_flow_omni_flash_video: {
     credits: (input) => omniCredits(input),
     usd: (input) => {
       const seconds = videoDurationSeconds(input, OMNI_DEFAULT_DURATION);
@@ -129,7 +129,7 @@ const TOOL_PRICING: Record<string, ToolPricing> = {
       };
     },
   },
-  generate_veo31_video: {
+  generate_google_flow_veo_3_1_quality_video: {
     credits: () => 100,
     usd: (input) => {
       const seconds = videoDurationSeconds(input, DEFAULT_VIDEO_DURATION);
@@ -143,7 +143,7 @@ const TOOL_PRICING: Record<string, ToolPricing> = {
       };
     },
   },
-  generate_veo31_fast_video: {
+  generate_google_flow_veo_3_1_fast_video: {
     credits: (_input, tier) => veoFastCredits(tier),
     usd: (input) => {
       const seconds = videoDurationSeconds(input, DEFAULT_VIDEO_DURATION);
@@ -157,7 +157,7 @@ const TOOL_PRICING: Record<string, ToolPricing> = {
       };
     },
   },
-  generate_veo31_lite_video: {
+  generate_google_flow_veo_3_1_lite_video: {
     credits: (_input, tier) => veoLiteCredits(tier),
     usd: (input) => {
       const seconds = videoDurationSeconds(input, DEFAULT_VIDEO_DURATION);
@@ -171,7 +171,7 @@ const TOOL_PRICING: Record<string, ToolPricing> = {
       };
     },
   },
-  generate_veo31_lite_low_priority_video: {
+  generate_google_flow_veo_3_1_lite_low_priority_video: {
     credits: () => 0,
     usd: () => ({
       usd: 0,
@@ -181,7 +181,7 @@ const TOOL_PRICING: Record<string, ToolPricing> = {
       rateNote: "Flow free lower-priority queue (no Gemini API list price)",
     }),
   },
-  generate_nano_banana_pro_google: {
+  generate_google_flow_nano_banana_pro_image: {
     credits: () => 0,
     usd: () => ({
       usd: API_NANO_BANANA_PRO_USD,
@@ -194,7 +194,7 @@ const TOOL_PRICING: Record<string, ToolPricing> = {
 };
 
 export function isGoogleFlowCostTool(toolName: string): boolean {
-  const pricingName = getActionSpec(toolName)?.old_name ?? toolName;
+  const pricingName = getCanonicalName(toolName);
   return Object.prototype.hasOwnProperty.call(TOOL_PRICING, pricingName);
 }
 
@@ -214,7 +214,7 @@ export function estimateGoogleFlowCost(
   input: Record<string, unknown>,
   options: GoogleFlowCostOptions = {},
 ): CostEstimate | null {
-  const pricingName = getActionSpec(toolName)?.old_name ?? toolName;
+  const pricingName = getCanonicalName(toolName);
   const pricing = TOOL_PRICING[pricingName];
   if (!pricing) return null;
 

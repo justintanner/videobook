@@ -58,7 +58,7 @@ describe("generate_kling30_video tool", () => {
 
   it("returns error when KIE_API_KEY is not set", async () => {
     const result = await client.callTool({
-      name: "generate_kling30_video",
+      name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
         project_slug: "test-proj",
@@ -75,7 +75,7 @@ describe("generate_kling30_video tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
-      name: "generate_kling30_video",
+      name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
         project_slug: "test-proj",
@@ -102,7 +102,7 @@ describe("generate_kling30_video tool", () => {
     await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
 
     const result = await client.callTool({
-      name: "generate_kling30_video",
+      name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
         project_slug: "test-proj",
@@ -122,7 +122,7 @@ describe("generate_kling30_video tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
-      name: "generate_kling30_video",
+      name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
         project_slug: "test-proj",
@@ -140,7 +140,7 @@ describe("generate_kling30_video tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
-      name: "generate_kling30_video",
+      name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
         project_slug: "test-proj",
@@ -162,7 +162,7 @@ describe("generate_kling30_video tool", () => {
     await fs.writeFile(asset.value.assetId, "notes.txt", "hello", "test-proj");
 
     const result = await client.callTool({
-      name: "generate_kling30_video",
+      name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
         project_slug: "test-proj",
@@ -187,7 +187,7 @@ describe("generate_kling30_video tool", () => {
     await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
 
     const result = await client.callTool({
-      name: "generate_kling30_video",
+      name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
         project_slug: "test-proj",
@@ -208,7 +208,7 @@ describe("generate_kling30_video tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
-      name: "generate_kling30_video",
+      name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
         project_slug: "test-proj",
@@ -226,7 +226,7 @@ describe("generate_kling30_video tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
-      name: "generate_kling30_video",
+      name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
         project_slug: "test-proj",
@@ -247,7 +247,7 @@ describe("generate_kling30_video tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const result = await client.callTool({
-      name: "generate_kling30_video",
+      name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
         project_slug: "test-proj",

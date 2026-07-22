@@ -22,7 +22,7 @@ function hasMediaFile(files: AssetManifestFile[], assetId: string): boolean {
 
 export function clearFailedTasksDef(fs: VideocityFs): ToolDef {
   return {
-    name: "clear_failed_tasks",
+    name: "clean_failed_assets",
     description:
       "Clean up assets with a persisted generation error: delete unmaterialized generation husks (returned as 'cleared'), but keep assets that already hold media and only clear their error row (returned as 'error_cleared').",
     schema: {

@@ -1,28 +1,28 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+import { createFs } from "videocity-engine";
 import {
   GENERATION_ACTIONS,
-  getCanonicalName,
   getActionSpec,
+  getCanonicalName,
   isGenerationAction,
-  registerGenerationTool,
 } from "./generation-registry.js";
-import type { ToolDef } from "./tools/tool-def.js";
-import { z } from "zod";
+import { getAllToolDefs } from "./tools/index.js";
 
 describe("generation-registry", () => {
   it("has 92 audited generation action specifications", () => {
-    expect(GENERATION_ACTIONS.length).toBe(92);
+    expect(GENERATION_ACTIONS).toHaveLength(92);
   });
 
-  it("resolves legacy names and aliases to canonical names", () => {
+  it("resolves historical names to canonical names", () => {
     expect(getCanonicalName("generate_grok_imagine_video")).toBe("generate_kie_grok_imagine_image_to_video");
-    expect(getCanonicalName("generate_kie_grok_imagine_image_to_video")).toBe("generate_kie_grok_imagine_image_to_video");
+    expect(getCanonicalName("generate_grok_imagine_ref_video")).toBe("generate_xai_grok_imagine_video");
+    expect(getCanonicalName("generate_xai_grok_imagine_reference_to_video")).toBe("generate_xai_grok_imagine_video");
     expect(getCanonicalName("preview_video")).toBe("prepare_video_generation");
     expect(getCanonicalName("sync")).toBe("reconcile_project_work");
     expect(getCanonicalName("unknown_tool")).toBe("unknown_tool");
   });
 
-  it("returns action spec for canonical or alias names", () => {
+  it("returns action metadata for canonical and historical names", () => {
     const spec = getActionSpec("generate_wan27_i2v_video");
     expect(spec).toBeDefined();
     expect(spec?.canonical_name).toBe("generate_kie_wan_2_7_image_to_video");
@@ -30,35 +30,35 @@ describe("generation-registry", () => {
     expect(spec?.job_task_discriminator).toBe("wan27_video_gen");
   });
 
-  it("identifies generation actions correctly", () => {
+  it("identifies generation actions", () => {
     expect(isGenerationAction("generate_grok_imagine_video")).toBe(true);
     expect(isGenerationAction("prepare_video_generation")).toBe(true);
     expect(isGenerationAction("trim_video")).toBe(false);
   });
 
-  it("keeps provider identity in every provider-backed canonical name", () => {
+  it("keeps provider identity in provider-backed canonical names", () => {
     for (const spec of GENERATION_ACTIONS) {
       if (spec.provider === "workflow") continue;
       expect(spec.canonical_name).toMatch(new RegExp(`^(generate|extend|upscale)_${spec.provider}_`));
     }
-    expect(getCanonicalName("generate_grok_imagine_ref_video")).toBe("generate_xai_grok_imagine_reference_to_video");
     expect(getCanonicalName("generate_veo31_video")).toBe("generate_google_flow_veo_3_1_quality_video");
   });
 
-  it("registers canonical tool and compatibility aliases without duplicating handlers", () => {
-    const dummyToolDef: ToolDef = {
-      name: "generate_grok_imagine_video",
-      description: "Generate video with Grok",
-      schema: { prompt: z.string() },
-      handler: async () => ({ content: [{ type: "text", text: "ok" }] }),
-    };
+  it("exposes each canonical tool exactly once and no historical aliases", () => {
+    const fs = createFs({ projectsDir: "/tmp/test-generation-registry" });
+    const names = getAllToolDefs(fs).map((tool) => tool.name);
+    const registered = new Set(names);
+    const canonical = new Set(GENERATION_ACTIONS.map((action) => action.canonical_name));
 
-    const registered = registerGenerationTool(dummyToolDef);
-    expect(registered.length).toBe(2);
-    expect(registered[0].name).toBe("generate_kie_grok_imagine_image_to_video");
-    expect(registered[1].name).toBe("generate_grok_imagine_video");
-    expect(registered[1].description).toContain("[DEPRECATED ALIAS");
-    expect(registered[0].handler).toBe(dummyToolDef.handler);
-    expect(registered[1].handler).toBe(dummyToolDef.handler);
+    expect(names).toHaveLength(211);
+    expect(registered.size).toBe(names.length);
+    for (const action of GENERATION_ACTIONS) {
+      expect(registered.has(action.canonical_name), action.canonical_name).toBe(true);
+      for (const legacyName of action.legacy_names) {
+        if (!canonical.has(legacyName)) {
+          expect(registered.has(legacyName), legacyName).toBe(false);
+        }
+      }
+    }
   });
 });

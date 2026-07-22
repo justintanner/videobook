@@ -33,7 +33,7 @@ describe("preview_image tool", () => {
     });
 
     const result = await client.callTool({
-      name: "preview_image",
+      name: "prepare_image_generation",
       arguments: { prompt: "edit @img-sunset to be colorful", project_slug: "test-proj" },
     });
 
@@ -54,7 +54,7 @@ describe("preview_image tool", () => {
 
   it("returns preview with empty resolved_assets when prompt has no @tags", async () => {
     const result = await client.callTool({
-      name: "preview_image",
+      name: "prepare_image_generation",
       arguments: { prompt: "a sunset landscape", project_slug: "test-proj" },
     });
 
@@ -70,7 +70,7 @@ describe("preview_image tool", () => {
 
   it("includes unresolved @tag warnings in the preview", async () => {
     const result = await client.callTool({
-      name: "preview_image",
+      name: "prepare_image_generation",
       arguments: { prompt: "transform @img-nonexistent", project_slug: "test-proj" },
     });
 

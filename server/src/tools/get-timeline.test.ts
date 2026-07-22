@@ -40,7 +40,7 @@ describe("get_timeline tool", () => {
       { slug: "vid-outro", audioFadeOut: 500 },
     ];
     await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: { project_slug: "test-proj", slots, render: "portrait" },
     });
 
@@ -59,7 +59,7 @@ describe("get_timeline tool", () => {
   it("round-trips: edit then get returns matching data", async () => {
     const slots = [{ slug: "vid-a" }, { slug: "vid-b", volume: 1.0, audioFadeIn: 200 }];
     await client.callTool({
-      name: "edit_timeline",
+      name: "set_timeline",
       arguments: { project_slug: "test-proj", slots, render: "square" },
     });
 

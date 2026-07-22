@@ -18,7 +18,7 @@ type GenerationPayloadResponse = {
 
 export function generationPayloadDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generation_payload",
+    name: "inspect_generation_request",
     description: "Read the persisted Kie request payload, task meta, and failure info for a single asset. Used by the /inbox hover inspector to show what was sent to the provider.",
     schema: {
       project_slug: z.string().describe("Project slug"),

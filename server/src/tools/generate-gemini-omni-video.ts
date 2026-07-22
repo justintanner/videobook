@@ -30,7 +30,7 @@ type Args = SchemaArgs<typeof generateGeminiOmniVideoSchema>;
 
 export function generateGeminiOmniVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_gemini_omni_video",
+    name: "generate_kie_gemini_omni_video",
     description: "Generate a video using Google Gemini Omni (KIE). Multimodal: a text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes. Creates a new vid- asset and enqueues a background job.",
     schema: generateGeminiOmniVideoSchema,
     handler: async (args) => {

@@ -66,7 +66,7 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
 
       const updatedConfig = { ...current, render: orient };
 
-      const editResult = await callToolRef.current("edit_timeline", {
+      const editResult = await callToolRef.current("set_timeline", {
         project_slug: projectSlug,
         slots: updatedConfig.slots,
         render: orient,
@@ -89,7 +89,7 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
       const content = getResult.content as Array<{ type: string; text: string }>;
       const current: TimelineConfig = JSON.parse(content[0].text);
       const updated = { ...current, currentOrientation: orient };
-      const editResult = await callToolRef.current("edit_timeline", {
+      const editResult = await callToolRef.current("set_timeline", {
         project_slug: projectSlug,
         slots: updated.slots,
         render: updated.render,

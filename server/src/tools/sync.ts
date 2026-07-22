@@ -1057,7 +1057,7 @@ export async function performSync(fs: VideocityFs, project_slug: string): Promis
 
 export function syncDef(fs: VideocityFs): ToolDef {
   return {
-    name: "sync",
+    name: "reconcile_project_work",
     description: "Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.",
     schema: {
       project_slug: z.string().describe("Project slug"),

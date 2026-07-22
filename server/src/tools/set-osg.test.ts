@@ -43,7 +43,7 @@ describe("set_osg tool", () => {
     const assetId = await createVideoAsset();
 
     const result = await client.callTool({
-      name: "set_osg",
+      name: "set_video_overlay",
       arguments: {
         asset_id: assetId,
         project_slug: projectSlug,
@@ -76,7 +76,7 @@ describe("set_osg tool", () => {
     await fs.writeMetadata(assetId, "landscape.render", { subtitlesEnabled: false, textColor: "#ABCDEF" }, projectSlug);
 
     await client.callTool({
-      name: "set_osg",
+      name: "set_video_overlay",
       arguments: {
         asset_id: assetId,
         project_slug: projectSlug,
@@ -104,7 +104,7 @@ describe("set_osg tool", () => {
     }
 
     const result = await client.callTool({
-      name: "set_osg",
+      name: "set_video_overlay",
       arguments: {
         asset_id: assetId,
         project_slug: projectSlug,
@@ -130,7 +130,7 @@ describe("set_osg tool", () => {
   it("clears the visibility window when the osg is removed", async () => {
     const assetId = await createVideoAsset();
     await client.callTool({
-      name: "set_osg",
+      name: "set_video_overlay",
       arguments: {
         asset_id: assetId,
         project_slug: projectSlug,
@@ -143,7 +143,7 @@ describe("set_osg tool", () => {
     });
 
     await client.callTool({
-      name: "set_osg",
+      name: "set_video_overlay",
       arguments: {
         asset_id: assetId,
         project_slug: projectSlug,
@@ -164,7 +164,7 @@ describe("set_osg tool", () => {
   it("clears the osg when osg_asset_id is null", async () => {
     const assetId = await createVideoAsset();
     await client.callTool({
-      name: "set_osg",
+      name: "set_video_overlay",
       arguments: {
         asset_id: assetId,
         project_slug: projectSlug,
@@ -175,7 +175,7 @@ describe("set_osg tool", () => {
     });
 
     const cleared = await client.callTool({
-      name: "set_osg",
+      name: "set_video_overlay",
       arguments: {
         asset_id: assetId,
         project_slug: projectSlug,

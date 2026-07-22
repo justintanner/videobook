@@ -62,7 +62,7 @@ type Args = SchemaArgs<typeof generateOmnihumanVideoSchema>;
 
 export function generateOmnihumanVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_omnihuman_video",
+    name: "generate_kie_omnihuman_1_5_video",
     description: "Animate a portrait image with a driving audio track into a talking/singing avatar video using ByteDance OmniHuman 1.5 (kie). Creates a new vid- asset and enqueues a background job.",
     schema: generateOmnihumanVideoSchema,
     handler: async (args) => {

@@ -86,7 +86,7 @@ type Args = SchemaArgs<typeof generateWan27R2vVideoSchema>;
 
 export function generateWan27R2vVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_wan27_r2v_video",
+    name: "generate_kie_wan_2_7_reference_to_video",
     description: "Generate a video using Wan 2.7 Reference guided by reference images (0-5), videos (0-5), voice timbre, and optional first frame. Creates a new vid- asset and enqueues a background job.",
     schema: generateWan27R2vVideoSchema,
     handler: async (args) => {

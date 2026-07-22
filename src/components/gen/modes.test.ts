@@ -162,8 +162,8 @@ describe('modeBudgetWarnings', () => {
 
 describe('effectiveToolName', () => {
   it('falls back to the option tool name when the mode has none', () => {
-    expect(effectiveToolName({ tool_name: 'generate_google_omni_video', modes: OMNI }, 'edit'))
-      .toBe('generate_google_omni_video');
+    expect(effectiveToolName({ tool_name: 'generate_google_flow_omni_flash_video', modes: OMNI }, 'edit'))
+      .toBe('generate_google_flow_omni_flash_video');
   });
   it('uses a per-mode tool_name when present', () => {
     const modes: ModelModes = {
@@ -177,8 +177,8 @@ describe('effectiveToolName', () => {
     expect(effectiveToolName({ tool_name: 'base_video', modes }, 'a')).toBe('base_video');
   });
   it('returns the option tool name when there are no modes', () => {
-    expect(effectiveToolName({ tool_name: 'generate_kling30_video', modes: null }, null))
-      .toBe('generate_kling30_video');
+    expect(effectiveToolName({ tool_name: 'generate_kie_kling_3_0_video', modes: null }, null))
+      .toBe('generate_kie_kling_3_0_video');
   });
 });
 

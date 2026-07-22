@@ -26,15 +26,20 @@ describe("support generation actions contract", () => {
     }
   });
 
-  it("verifies registered tool defs contain both canonical names and legacy aliases for support actions", () => {
+  it("registers canonical support actions without exposing historical aliases", () => {
     const fs = createFs({ projectsDir: "/tmp/test-support-projects" });
     const tools = getAllToolDefs(fs);
     const registeredNames = new Set(tools.map((t) => t.name));
 
     const supportActions = GENERATION_ACTIONS.filter((a) => a.provider === "workflow");
+    const canonicalNames = new Set(GENERATION_ACTIONS.map((a) => a.canonical_name));
     for (const action of supportActions) {
       expect(registeredNames.has(action.canonical_name)).toBe(true);
-      expect(registeredNames.has(action.old_name)).toBe(true);
+      for (const legacyName of action.legacy_names) {
+        if (!canonicalNames.has(legacyName)) {
+          expect(registeredNames.has(legacyName)).toBe(false);
+        }
+      }
     }
   });
 });

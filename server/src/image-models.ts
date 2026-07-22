@@ -248,14 +248,14 @@ const IMAGE_MODEL_CONFIGS: ImageModelConfig[] = [
   },
   {
     key: "alibaba_image",
-    tool_name: "generate_alibaba_wan_2_1_text_to_image",
+    tool_name: "generate_alibaba_wan_2_7_text_to_image",
     label: "Alibaba Wan 2.7 Image",
     description: "Alibaba Cloud image generation using Wan 2.7 with optional reference images, size, thinking mode, and color palette control",
     imageFieldSchema: AlibabaImageReferenceSlotsSchema,
   },
   {
     key: "alibaba_image_pro",
-    tool_name: "generate_alibaba_wan_2_1_pro_text_to_image",
+    tool_name: "generate_alibaba_wan_2_7_pro_text_to_image",
     label: "Alibaba Wan 2.7 Image Pro",
     description: "Alibaba Cloud pro image generation using Wan 2.7 Pro with optional reference images, size, thinking mode, and color palette control",
     imageFieldSchema: AlibabaImageReferenceSlotsSchema,
@@ -282,7 +282,7 @@ function getImageSlotsForConfig(config: ImageModelConfig): SlotConstraints | nul
 
 function getImageSlotsForToolName(rawToolName: string): SlotConstraints | null {
   const toolName = getCanonicalName(rawToolName);
-  if (toolName === "generate_google_flow_nano_banana_pro_image" || rawToolName === "generate_nano_banana_pro_google") return GOOGLE_NBP_IMAGE_SLOTS;
+  if (toolName === "generate_google_flow_nano_banana_pro_image" || rawToolName === "generate_google_flow_nano_banana_pro_image") return GOOGLE_NBP_IMAGE_SLOTS;
   const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName || getCanonicalName(c.tool_name) === toolName);
   return config ? getImageSlotsForConfig(config) : null;
 }
@@ -290,7 +290,7 @@ function getImageSlotsForToolName(rawToolName: string): SlotConstraints | null {
 function getImageToolLabel(rawToolName: string, config: ImageModelConfig | undefined): string {
   if (config) return config.label;
   const toolName = getCanonicalName(rawToolName);
-  if (toolName === "generate_google_flow_nano_banana_pro_image" || rawToolName === "generate_nano_banana_pro_google") return "Nano Banana Pro";
+  if (toolName === "generate_google_flow_nano_banana_pro_image" || rawToolName === "generate_google_flow_nano_banana_pro_image") return "Nano Banana Pro";
   return toolName;
 }
 
@@ -416,7 +416,7 @@ function imageSlotsDescription(slots: SlotConstraints | null): string {
 function getImageToolSchema(rawToolName: string): ToolSchema | null {
   const toolName = getCanonicalName(rawToolName);
 
-  if (toolName === "generate_google_flow_nano_banana_pro_image" || rawToolName === "generate_nano_banana_pro_google") {
+  if (toolName === "generate_google_flow_nano_banana_pro_image" || rawToolName === "generate_google_flow_nano_banana_pro_image") {
     return {
       type: "object",
       properties: {
@@ -502,7 +502,7 @@ function getImageToolSchema(rawToolName: string): ToolSchema | null {
     return { type: "object", properties, required: ["prompt"], defaults };
   }
 
-  // Alibaba Qwen image models — custom schema (sync multimodal endpoint)
+  // Alibaba Qwen image models — custom schema (reconcile_project_work multimodal endpoint)
   if (config.key === "alibaba_qwen_image" || config.key === "alibaba_qwen_image_edit") {
     const isEdit = config.key === "alibaba_qwen_image_edit";
     const modelEnum = isEdit ? [...QWEN_EDIT_MODEL_VALUES] : [...QWEN_GENERATION_MODEL_VALUES];
@@ -756,17 +756,6 @@ class SettingsMap extends Map<string, Record<string, unknown>> {
     const canonical = getCanonicalName(key);
     const fromCanonical = super.get(canonical);
     if (fromCanonical !== undefined) return fromCanonical;
-    const spec = getActionSpec(key);
-    if (spec) {
-      if (spec.old_name) {
-        const fromOld = super.get(spec.old_name);
-        if (fromOld !== undefined) return fromOld;
-      }
-      for (const alias of spec.aliases) {
-        const fromAlias = super.get(alias);
-        if (fromAlias !== undefined) return fromAlias;
-      }
-    }
     for (const [k, v] of this.entries()) {
       if (getCanonicalName(k) === canonical) return v;
     }

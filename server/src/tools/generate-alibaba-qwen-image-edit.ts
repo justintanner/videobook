@@ -49,7 +49,7 @@ type Args = SchemaArgs<typeof generateAlibabaQwenImageEditSchema>;
 
 export function generateAlibabaQwenImageEditDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_alibaba_qwen_image_edit",
+    name: "generate_alibaba_qwen_2_0_edit_image",
     description: "Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.",
     schema: generateAlibabaQwenImageEditSchema,
     handler: async (args) => {

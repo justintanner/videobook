@@ -63,7 +63,7 @@ type Args = SchemaArgs<typeof extendWan27VideoSchema>;
 
 export function extendWan27VideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "extend_wan27_video",
+    name: "extend_kie_wan_2_7_video",
     description: "Extend an existing video asset using Wan 2.7 Image to Video by providing the source video as first_clip. Creates a new vid- asset and enqueues a background job.",
     schema: extendWan27VideoSchema,
     handler: async (args) => {

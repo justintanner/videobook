@@ -40,7 +40,7 @@ describe("api_status tool", () => {
     delete process.env.KIMI_CODING_API_KEY;
 
     const result = await client.callTool({
-      name: "api_status",
+      name: "check_kimi_coding_api",
       arguments: {},
     });
 
@@ -53,7 +53,7 @@ describe("api_status tool", () => {
     process.env.KIMI_CODING_API_KEY = "test-key-placeholder";
 
     const result = await client.callTool({
-      name: "api_status",
+      name: "check_kimi_coding_api",
       arguments: {},
     });
 

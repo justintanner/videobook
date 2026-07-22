@@ -14,7 +14,7 @@ import { createTestClient } from "../test-client.js";
 import { createFs } from "videocity-engine";
 import { registerJobHandler } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { parseCommandArgs, filterCommandsByMountKeys, normalizeApplySfxCommandArgs, normalizeSyncAudioCommandArgs, normalizeTimewarpCommandArgs } from "../../../src/lib/command-registry.js";
+import { parseCommandArgs, filterCommandsByMountKeys, normalizeApplySfxCommandArgs, normalizeSyncAudioCommandArgs, normalizeTimewarpCommandArgs, selectCommandForInput } from "../../../src/lib/command-registry.js";
 import type { ServerCommand } from "../../../src/lib/command-registry.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -61,15 +61,14 @@ describe("slash commands e2e", () => {
   // -----------------------------------------------------------------------
   // Helper: simulate frontend dispatch for a slash command string
   // -----------------------------------------------------------------------
-  function findCommand(name: string): ServerCommand {
-    const matches = commands.filter((c) => c.command === name);
-    const cmd = matches.find((c) => c.category === "action") ?? matches[0];
+  function findCommand(name: string, rest = ""): ServerCommand {
+    const cmd = selectCommandForInput(commands, name, rest);
     if (!cmd) throw new Error(`Command ${name} not found`);
     return cmd;
   }
 
   function simulateParse(commandStr: string, rest: string): Record<string, unknown> {
-    const cmd = findCommand(commandStr);
+    const cmd = findCommand(commandStr, rest);
     return parseCommandArgs(rest, cmd.params);
   }
 
@@ -690,7 +689,7 @@ describe("slash commands e2e", () => {
 
     it("errors for non-vid asset prefix", async () => {
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: { asset_id: "img-something", project_slug: "test-proj" },
       });
       expect(result.isError).toBe(true);
@@ -699,7 +698,7 @@ describe("slash commands e2e", () => {
 
     it("errors for nonexistent vid asset", async () => {
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: { asset_id: "vid-nonexistent", project_slug: "test-proj" },
       });
       expect(result.isError).toBe(true);
@@ -707,7 +706,7 @@ describe("slash commands e2e", () => {
 
     it("errors for invalid text_color hex", async () => {
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: "vid-test",
           project_slug: "test-proj",
@@ -720,7 +719,7 @@ describe("slash commands e2e", () => {
 
     it("errors for audio_volume out of range", async () => {
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: "vid-test",
           project_slug: "test-proj",
@@ -733,7 +732,7 @@ describe("slash commands e2e", () => {
 
     it("errors for negative audio_fade_in", async () => {
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: "vid-test",
           project_slug: "test-proj",
@@ -752,7 +751,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -772,7 +771,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -1006,7 +1005,7 @@ describe("slash commands e2e", () => {
         target_duration_seconds: 15,
       });
       const cmd = findCommand("/extend-audio");
-      expect(cmd.mcpTool?.tool).toBe("extend_audio");
+      expect(cmd.mcpTool?.tool).toBe("extend_audio_asset");
       expect(cmd.mcpTool?.autoInject).toContain("project_slug");
     });
 
@@ -1655,7 +1654,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -1668,7 +1667,7 @@ describe("slash commands e2e", () => {
 
     it("rejects shorthand hex '#FFF'", async () => {
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: "vid-test",
           project_slug: "test-proj",
@@ -1681,7 +1680,7 @@ describe("slash commands e2e", () => {
 
     it("rejects hex without # prefix", async () => {
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: "vid-test",
           project_slug: "test-proj",
@@ -1694,7 +1693,7 @@ describe("slash commands e2e", () => {
 
     it("rejects invalid highlight_color hex", async () => {
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: "vid-test",
           project_slug: "test-proj",
@@ -1712,7 +1711,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -1729,7 +1728,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -1742,7 +1741,7 @@ describe("slash commands e2e", () => {
 
     it("rejects negative audio_fade_out", async () => {
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: "vid-test",
           project_slug: "test-proj",
@@ -1755,7 +1754,7 @@ describe("slash commands e2e", () => {
 
     it("rejects audio_volume=-1", async () => {
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: "vid-test",
           project_slug: "test-proj",
@@ -1768,7 +1767,7 @@ describe("slash commands e2e", () => {
 
     it("errors for img- prefix asset_id", async () => {
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: "img-photo",
           project_slug: "test-proj",
@@ -1780,7 +1779,7 @@ describe("slash commands e2e", () => {
 
     it("errors for aud- prefix asset_id", async () => {
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: "aud-track",
           project_slug: "test-proj",
@@ -1803,7 +1802,7 @@ describe("slash commands e2e", () => {
       }, "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -1822,7 +1821,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -1840,7 +1839,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -1858,7 +1857,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -1878,7 +1877,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -2473,7 +2472,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(img.value.assetId, "logo.png", Buffer.from("fake-png"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: vid.value.assetId,
           project_slug: "test-proj",
@@ -2498,7 +2497,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(img.value.assetId, "notes.txt", "no image here", "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: vid.value.assetId,
           project_slug: "test-proj",
@@ -2521,7 +2520,7 @@ describe("slash commands e2e", () => {
 
       for (const pos of ["top-left", "top-right", "bottom-left", "bottom-right"] as const) {
         const result = await client.callTool({
-          name: "render",
+          name: "render_video",
           arguments: {
             asset_id: vid.value.assetId,
             project_slug: "test-proj",
@@ -2546,7 +2545,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -2566,7 +2565,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -2584,7 +2583,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -2604,7 +2603,7 @@ describe("slash commands e2e", () => {
 
       for (const position of ["top", "middle", "bottom"] as const) {
         const result = await client.callTool({
-          name: "render",
+          name: "render_video",
           arguments: {
             asset_id: asset.value.assetId,
             project_slug: "test-proj",
@@ -2624,7 +2623,7 @@ describe("slash commands e2e", () => {
 
       for (const font_size of ["small", "medium", "large"] as const) {
         const result = await client.callTool({
-          name: "render",
+          name: "render_video",
           arguments: {
             asset_id: asset.value.assetId,
             project_slug: "test-proj",
@@ -3006,7 +3005,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "original.mov", Buffer.from("fake-mov"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -3022,7 +3021,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "original.webm", Buffer.from("fake-webm"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -3038,7 +3037,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "notes.txt", "just text", "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -3056,7 +3055,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -3072,7 +3071,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -3084,7 +3083,7 @@ describe("slash commands e2e", () => {
 
     it("rejects audio_volume=101", async () => {
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: "vid-test",
           project_slug: "test-proj",
@@ -3102,7 +3101,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -3599,7 +3598,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "clip.avi", Buffer.from("fake-avi"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -3615,7 +3614,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "movie.mkv", Buffer.from("fake-mkv"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -3631,7 +3630,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -3649,7 +3648,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -3674,7 +3673,7 @@ describe("slash commands e2e", () => {
       }, "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -3692,7 +3691,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: asset.value.assetId,
           project_slug: "test-proj",
@@ -3715,7 +3714,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(img.value.assetId, "logo.webp", Buffer.from("fake-webp"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: vid.value.assetId,
           project_slug: "test-proj",
@@ -3737,7 +3736,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(img.value.assetId, "icon.svg", Buffer.from("<svg></svg>"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: vid.value.assetId,
           project_slug: "test-proj",
@@ -3759,7 +3758,7 @@ describe("slash commands e2e", () => {
       await fs.writeFile(img.value.assetId, "badge.gif", Buffer.from("GIF89a"), "test-proj");
 
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: vid.value.assetId,
           project_slug: "test-proj",
@@ -3771,7 +3770,7 @@ describe("slash commands e2e", () => {
 
     it("errors for nonexistent project", async () => {
       const result = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: "vid-test",
           project_slug: "no-such-project",
@@ -4134,7 +4133,7 @@ describe("slash commands e2e", () => {
 
       // Render the assigned asset
       const renderResult = await client.callTool({
-        name: "render",
+        name: "render_video",
         arguments: {
           asset_id: renamedId,
           project_slug: "test-proj",

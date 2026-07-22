@@ -341,12 +341,3 @@ export function splitVideoByDurationsDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-
-export function evenSplitDef(fs: VideocityFs): ToolDef {
-  const base = splitVideoByDurationsDef(fs);
-  return {
-    ...base,
-    name: "even_split",
-    description: "Legacy alias for split_video_by_durations. Split a video into targeted chunks.",
-  };
-}

@@ -23,7 +23,7 @@ type Args = SchemaArgs<typeof generateKling30TurboVideoSchema>;
 
 export function generateKling30TurboVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_kling30_turbo_video",
+    name: "generate_kie_kling_3_0_turbo_video",
     description: "Generate a video using Kling 3.0 Turbo tier via KIE (text-to-video or image-to-video). Creates a new vid- asset and enqueues a background job.",
     schema: generateKling30TurboVideoSchema,
     handler: async (args) => {

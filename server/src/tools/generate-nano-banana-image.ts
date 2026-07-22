@@ -34,7 +34,7 @@ type Args = SchemaArgs<typeof generateNanoBananaImageSchema>;
 
 export function generateNanoBananaImageDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_nano_banana_image",
+    name: "generate_kie_nano_banana_pro_text_to_image",
     description: "Generate an image using the nano-banana-pro model. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional.",
     schema: generateNanoBananaImageSchema,
     handler: async (args) => {

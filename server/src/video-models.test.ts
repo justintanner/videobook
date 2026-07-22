@@ -35,7 +35,7 @@ describe("extractLastSettingsPerModel", () => {
       },
     ];
     const result = extractLastSettingsPerModel(log);
-    expect(result.get("generate_kling30_video")).toEqual({
+    expect(result.get("generate_kie_kling_3_0_video")).toEqual({
       prompt: "sunset",
       mode: "pro",
       duration: "10",
@@ -58,7 +58,7 @@ describe("extractLastSettingsPerModel", () => {
       },
     ];
     const result = extractLastSettingsPerModel(log);
-    expect(result.get("generate_kling30_video")).toEqual({
+    expect(result.get("generate_kie_kling_3_0_video")).toEqual({
       prompt: "newest prompt",
       mode: "std",
     });
@@ -81,8 +81,8 @@ describe("extractLastSettingsPerModel", () => {
     ];
     const result = extractLastSettingsPerModel(log);
     expect(result.size).toBe(2);
-    expect(result.get("generate_kling30_video")).toEqual({ prompt: "kling prompt", duration: "8" });
-    expect(result.get("generate_seedance2_video")).toEqual({ prompt: "seedance prompt", resolution: "720p" });
+    expect(result.get("generate_kie_kling_3_0_video")).toEqual({ prompt: "kling prompt", duration: "8" });
+    expect(result.get("generate_kie_seedance_2_0_video")).toEqual({ prompt: "seedance prompt", resolution: "720p" });
   });
 
   it("ignores non-video-gen action entries", () => {
@@ -132,10 +132,10 @@ describe("extractLastSettingsPerModel", () => {
     }));
     const result = extractLastSettingsPerModel(log);
     expect(result.size).toBe(4);
-    expect(result.has("generate_kling30_video")).toBe(true);
-    expect(result.has("generate_seedance2_video")).toBe(true);
-    expect(result.has("generate_seedance2_fast_video")).toBe(true);
-    expect(result.has("generate_grok_imagine_video")).toBe(true);
+    expect(result.has("generate_kie_kling_3_0_video")).toBe(true);
+    expect(result.has("generate_kie_seedance_2_0_video")).toBe(true);
+    expect(result.has("generate_kie_seedance_2_0_fast_video")).toBe(true);
+    expect(result.has("generate_kie_grok_imagine_image_to_video")).toBe(true);
   });
 });
 
@@ -287,7 +287,7 @@ describe("getVideoToolSchema", () => {
   });
 
   it("kling30: prompt required, correct mode/duration/aspect_ratio enums", () => {
-    const schema = getVideoToolSchema("generate_kling30_video");
+    const schema = getVideoToolSchema("generate_kie_kling_3_0_video");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
     expect(schema!.properties.mode.enum).toEqual(["std", "pro", "4K"]);
@@ -297,7 +297,7 @@ describe("getVideoToolSchema", () => {
   });
 
   it("seedance2 (full): duration default comes from Apicity, full resolution range, all input slots exposed", () => {
-    const schema = getVideoToolSchema("generate_seedance2_video");
+    const schema = getVideoToolSchema("generate_kie_seedance_2_0_video");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
     expect(schema!.required).not.toContain("aspect_ratio");
@@ -322,7 +322,7 @@ describe("getVideoToolSchema", () => {
   });
 
   it("seedance2 fast: same input shape but resolution capped at 720p", () => {
-    const schema = getVideoToolSchema("generate_seedance2_fast_video");
+    const schema = getVideoToolSchema("generate_kie_seedance_2_0_fast_video");
     expect(schema).not.toBeNull();
     expect(schema!.properties.resolution.enum).toEqual(["480p", "720p"]);
     expect(schema!.properties.first_frame_slug).toBeDefined();
@@ -331,7 +331,7 @@ describe("getVideoToolSchema", () => {
   });
 
   it("grok_imagine: uses Kie Grok Imagine Video 1.5 defaults", () => {
-    const schema = getVideoToolSchema("generate_grok_imagine_video");
+    const schema = getVideoToolSchema("generate_kie_grok_imagine_image_to_video");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("image_slugs");
     expect(schema!.required).not.toContain("prompt");
@@ -355,7 +355,7 @@ describe("getVideoToolSchema", () => {
   });
 
   it("does not invent Kling 3.0 defaults when Apicity has none", () => {
-    const schema = getVideoToolSchema("generate_kling30_video");
+    const schema = getVideoToolSchema("generate_kie_kling_3_0_video");
     expect(schema!.defaults).toEqual({});
     // sound is optional in @apicity/kie@0.8.0 so multi-shot can promote default true
     expect(schema!.required).toEqual(expect.arrayContaining(["prompt", "mode", "duration", "multi_shots"]));
@@ -363,7 +363,7 @@ describe("getVideoToolSchema", () => {
   });
 
   it("gemini_omni: prompt+duration required, Apicity-derived enums and resolution default", () => {
-    const schema = getVideoToolSchema("generate_gemini_omni_video");
+    const schema = getVideoToolSchema("generate_kie_gemini_omni_video");
     expect(schema).not.toBeNull();
     expect(schema!.required).toEqual(expect.arrayContaining(["prompt", "duration"]));
     expect(schema!.required).not.toContain("video_slug");
@@ -441,7 +441,7 @@ describe("validateVideoParams", () => {
   });
 
   it("valid kling30 params pass", () => {
-    const result = validateVideoParams("generate_kling30_video", {
+    const result = validateVideoParams("generate_kie_kling_3_0_video", {
       prompt: "a sunset",
       mode: "std",
       duration: "8",
@@ -454,7 +454,7 @@ describe("validateVideoParams", () => {
   });
 
   it("kling30: missing prompt is flagged", () => {
-    const result = validateVideoParams("generate_kling30_video", {
+    const result = validateVideoParams("generate_kie_kling_3_0_video", {
       mode: "std",
     });
     expect(result.valid).toBe(false);
@@ -462,7 +462,7 @@ describe("validateVideoParams", () => {
   });
 
   it("kling30: warns on invalid enum value", () => {
-    const result = validateVideoParams("generate_kling30_video", {
+    const result = validateVideoParams("generate_kie_kling_3_0_video", {
       prompt: "test",
       mode: "ultra",
     });
@@ -470,7 +470,7 @@ describe("validateVideoParams", () => {
   });
 
   it("kling30: warns when multi-shot with >1 image", () => {
-    const result = validateVideoParams("generate_kling30_video", {
+    const result = validateVideoParams("generate_kie_kling_3_0_video", {
       prompt: "test",
       image_slugs: ["@img-a", "@img-b"],
       multi_prompt: [{ prompt: "s1", duration: 5 }],
@@ -479,7 +479,7 @@ describe("validateVideoParams", () => {
   });
 
   it("seedance2 (full): text-only with aspect_ratio + duration is valid", () => {
-    const result = validateVideoParams("generate_seedance2_video", {
+    const result = validateVideoParams("generate_kie_seedance_2_0_video", {
       prompt: "test",
       aspect_ratio: "16:9",
       duration: "8",
@@ -489,7 +489,7 @@ describe("validateVideoParams", () => {
   });
 
   it("seedance2 fast: 1080p resolution produces warning", () => {
-    const result = validateVideoParams("generate_seedance2_fast_video", {
+    const result = validateVideoParams("generate_kie_seedance_2_0_fast_video", {
       prompt: "test",
       aspect_ratio: "16:9",
       duration: "8",
@@ -499,7 +499,7 @@ describe("validateVideoParams", () => {
   });
 
   it("seedance2 (full): 1080p resolution is accepted without warning", () => {
-    const result = validateVideoParams("generate_seedance2_video", {
+    const result = validateVideoParams("generate_kie_seedance_2_0_video", {
       prompt: "test",
       first_frame_slug: "@img-a",
       aspect_ratio: "16:9",
@@ -510,12 +510,12 @@ describe("validateVideoParams", () => {
   });
 
   it("derives image_slots from Apicity Zod", () => {
-    const klingResult = validateVideoParams("generate_kling30_video", { prompt: "test" });
+    const klingResult = validateVideoParams("generate_kie_kling_3_0_video", { prompt: "test" });
     expect(klingResult.image_slots).toEqual({ min: 0, max: null });
 
-    const grokResult = validateVideoParams("generate_grok_imagine_video", { image_slugs: ["@img-a"] });
+    const grokResult = validateVideoParams("generate_kie_grok_imagine_image_to_video", { image_slugs: ["@img-a"] });
     expect(grokResult.image_slots).toEqual({ min: 1, max: 7 });
-    const tooManyGrokImages = validateVideoParams("generate_grok_imagine_video", { image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e", "@img-f", "@img-g", "@img-h"] });
+    const tooManyGrokImages = validateVideoParams("generate_kie_grok_imagine_image_to_video", { image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e", "@img-f", "@img-g", "@img-h"] });
     expect(tooManyGrokImages.warnings).toContain("Grok Imagine 1.5 supports up to 7 reference images (got 8)");
   });
 
@@ -542,34 +542,34 @@ describe("validateVideoParams", () => {
   });
 
   it("multi_prompt_slots: 5 for kling30, null for others", () => {
-    const klingResult = validateVideoParams("generate_kling30_video", { prompt: "test" });
+    const klingResult = validateVideoParams("generate_kie_kling_3_0_video", { prompt: "test" });
     expect(klingResult.multi_prompt_slots).toBe(5);
 
-    const grokResult = validateVideoParams("generate_grok_imagine_video", { prompt: "test" });
+    const grokResult = validateVideoParams("generate_kie_grok_imagine_image_to_video", { prompt: "test" });
     expect(grokResult.multi_prompt_slots).toBeNull();
   });
 
   it("gemini_omni: valid prompt + duration with no references passes", () => {
-    const result = validateVideoParams("generate_gemini_omni_video", { prompt: "a sunset", duration: "6" });
+    const result = validateVideoParams("generate_kie_gemini_omni_video", { prompt: "a sunset", duration: "6" });
     expect(result.valid).toBe(true);
     expect(result.warnings).toHaveLength(0);
   });
 
   it("gemini_omni: missing prompt/duration is flagged", () => {
-    const result = validateVideoParams("generate_gemini_omni_video", {});
+    const result = validateVideoParams("generate_kie_gemini_omni_video", {});
     expect(result.valid).toBe(false);
     expect(result.missing_required).toEqual(expect.arrayContaining(["prompt", "duration"]));
   });
 
   it("gemini_omni: warns when a reference clip has bad timing", () => {
-    const result = validateVideoParams("generate_gemini_omni_video", {
+    const result = validateVideoParams("generate_kie_gemini_omni_video", {
       prompt: "a sunset", duration: "6", video_slug: "@vid-motion", video_clip_start: 2, video_clip_ends: 2,
     });
     expect(result.warnings.some((w) => w.includes("video_clip_ends"))).toBe(true);
   });
 
   it("gemini_omni: warns when clip timecodes are set without a video_slug", () => {
-    const result = validateVideoParams("generate_gemini_omni_video", {
+    const result = validateVideoParams("generate_kie_gemini_omni_video", {
       prompt: "a sunset", duration: "6", video_clip_start: 1, video_clip_ends: 5,
     });
     expect(result.warnings.some((w) => w.includes("require a video_slug"))).toBe(true);
@@ -582,12 +582,12 @@ describe("validateVideoParams", () => {
 
 describe("applyVideoToolConstraints", () => {
   it("is a no-op for tools without cross-field rewriting", () => {
-    const schema = getVideoToolSchema("generate_kling30_video")!;
+    const schema = getVideoToolSchema("generate_kie_kling_3_0_video")!;
     const params: Record<string, unknown> = {
       prompt: "test",
       mode: "std",
     };
-    applyVideoToolConstraints("generate_kling30_video", schema, params);
+    applyVideoToolConstraints("generate_kie_kling_3_0_video", schema, params);
     expect(params.mode).toBe("std");
   });
 });
@@ -632,16 +632,16 @@ describe("buildVideoRoutingPrompt", () => {
 
 describe("IMAGE_FIELD_SCHEMAS", () => {
   it("maps tools with image-array inputs to their Apicity Zod schemas", () => {
-    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kling30_video");
-    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_seedance2_video");
-    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_seedance2_fast_video");
-    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_grok_imagine_video");
-    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_wan27_r2v_video");
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_kling_3_0_video");
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_seedance_2_0_video");
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_seedance_2_0_fast_video");
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_grok_imagine_image_to_video");
+    expect(IMAGE_FIELD_SCHEMAS).toHaveProperty("generate_kie_wan_2_7_reference_to_video");
   });
 
   it("omits tools that take no image-array field (extend, text-to-video)", () => {
-    expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("extend_grok_imagine_video");
-    expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("generate_wan27_i2v_video");
+    expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("extend_kie_grok_imagine_video");
+    expect(IMAGE_FIELD_SCHEMAS).not.toHaveProperty("generate_kie_wan_2_7_image_to_video");
   });
 });
 
@@ -881,7 +881,7 @@ describe("google flow video models", () => {
   });
 
   it("grok reference routes through the xai provider", () => {
-    expect(VIDEO_MODELS.grok_imagine_ref.tool_name).toBe("generate_xai_grok_imagine_reference_to_video");
+    expect(VIDEO_MODELS.grok_imagine_ref.tool_name).toBe("generate_xai_grok_imagine_video");
     expect(VIDEO_MODELS.grok_imagine_ref.providers.map((provider) => provider.key)).toEqual(["xai"]);
   });
 
@@ -909,7 +909,7 @@ describe("google flow video models", () => {
   });
 
   it("google omni schema is provider-specific", () => {
-    const schema = getVideoToolSchema("generate_google_omni_video");
+    const schema = getVideoToolSchema("generate_google_flow_omni_flash_video");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
     expect(schema!.required).not.toContain("duration");
@@ -929,62 +929,62 @@ describe("google flow video models", () => {
   });
 
   it("the kie gemini_omni sibling schema does not expose voice/character refs", () => {
-    const schema = getVideoToolSchema("generate_gemini_omni_video");
+    const schema = getVideoToolSchema("generate_kie_gemini_omni_video");
     expect(schema).not.toBeNull();
     expect(schema!.properties.voice_refs).toBeUndefined();
     expect(schema!.properties.character_refs).toBeUndefined();
   });
 
   it("google omni validates I2V/R2V/V2V mode constraints", () => {
-    const valid = validateVideoParams("generate_google_omni_video", { prompt: "x", video_slug: "@vid-a" });
+    const valid = validateVideoParams("generate_google_flow_omni_flash_video", { prompt: "x", video_slug: "@vid-a" });
     expect(valid.valid).toBe(true);
     expect(valid.warnings).toHaveLength(0);
 
-    const firstWithRefs = validateVideoParams("generate_google_omni_video", {
+    const firstWithRefs = validateVideoParams("generate_google_flow_omni_flash_video", {
       prompt: "x", first_frame_slug: "@img-start", image_slugs: ["@img-a"],
     });
     expect(firstWithRefs.warnings.some((w) => w.includes("first_frame_slug cannot be combined with image_slugs"))).toBe(true);
 
-    const firstWithVideo = validateVideoParams("generate_google_omni_video", {
+    const firstWithVideo = validateVideoParams("generate_google_flow_omni_flash_video", {
       prompt: "x", first_frame_slug: "@img-start", video_slug: "@vid-a",
     });
     expect(firstWithVideo.warnings.some((w) => w.includes("first_frame_slug cannot be combined with video_slug"))).toBe(true);
 
-    const tooManyV2vRefs = validateVideoParams("generate_google_omni_video", {
+    const tooManyV2vRefs = validateVideoParams("generate_google_flow_omni_flash_video", {
       prompt: "x",
       video_slug: "@vid-a",
       image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d", "@img-e", "@img-f"],
     });
     expect(tooManyV2vRefs.warnings.some((w) => w.includes("up to 5 reference images"))).toBe(true);
 
-    const badClip = validateVideoParams("generate_google_omni_video", {
+    const badClip = validateVideoParams("generate_google_flow_omni_flash_video", {
       prompt: "x", video_slug: "@vid-a", video_clip_start: 2, video_clip_ends: 12,
     });
     expect(badClip.warnings.some((w) => w.includes("<= 10s"))).toBe(true);
   });
 
   it("google omni validates voice_refs / character_refs budgets", () => {
-    const tooManyVoices = validateVideoParams("generate_google_omni_video", {
+    const tooManyVoices = validateVideoParams("generate_google_flow_omni_flash_video", {
       prompt: "x", voice_refs: ["v1", "v2", "v3", "v4", "v5", "v6"],
     });
     expect(tooManyVoices.warnings.some((w) => w.includes("up to 5 voice refs"))).toBe(true);
 
-    const voicesWithClip = validateVideoParams("generate_google_omni_video", {
+    const voicesWithClip = validateVideoParams("generate_google_flow_omni_flash_video", {
       prompt: "x", video_slug: "@vid-a", voice_refs: ["v1", "v2", "v3", "v4"],
     });
     expect(voicesWithClip.warnings.some((w) => w.includes("up to 3 voice refs alongside the clip"))).toBe(true);
 
-    const tooManyChars = validateVideoParams("generate_google_omni_video", {
+    const tooManyChars = validateVideoParams("generate_google_flow_omni_flash_video", {
       prompt: "x", character_refs: ["c1", "c2", "c3", "c4"],
     });
     expect(tooManyChars.warnings.some((w) => w.includes("up to 3 character refs"))).toBe(true);
 
-    const firstWithChars = validateVideoParams("generate_google_omni_video", {
+    const firstWithChars = validateVideoParams("generate_google_flow_omni_flash_video", {
       prompt: "x", first_frame_slug: "@img-start", character_refs: ["c1"],
     });
     expect(firstWithChars.warnings.some((w) => w.includes("first_frame_slug cannot be combined with character_refs"))).toBe(true);
 
-    const budgetBust = validateVideoParams("generate_google_omni_video", {
+    const budgetBust = validateVideoParams("generate_google_flow_omni_flash_video", {
       prompt: "x", image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d"], character_refs: ["c1", "c2", "c3", "c4"],
     });
     expect(budgetBust.warnings.some((w) => w.includes("reference budget exceeded"))).toBe(true);

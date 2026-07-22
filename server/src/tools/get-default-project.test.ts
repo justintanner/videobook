@@ -21,7 +21,7 @@ describe("get_default_project tool", () => {
   it("auto-creates a project when none exist", async () => {
     client = await createTestClient(tempDir);
     const result = await client.callTool({
-      name: "get_default_project",
+      name: "ensure_default_project",
       arguments: {},
     });
     expect(result.isError).toBeFalsy();
@@ -38,7 +38,7 @@ describe("get_default_project tool", () => {
       arguments: { project_slug: "my-proj" },
     });
     const result = await client.callTool({
-      name: "get_default_project",
+      name: "ensure_default_project",
       arguments: {},
     });
     expect(result.isError).toBeFalsy();

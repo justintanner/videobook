@@ -163,7 +163,7 @@ describe("trim video in place and re-render e2e", () => {
 
   it("renders the trimmed video", async () => {
     const result = await client.callTool({
-      name: "render",
+      name: "render_video",
       arguments: {
         asset_id: assetId,
         project_slug: PROJECT,

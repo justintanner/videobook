@@ -22,7 +22,7 @@ type Args = SchemaArgs<typeof schema>;
 
 export function generateGrokImagineVideoR2vFalDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_grok_imagine_video_r2v_fal",
+    name: "generate_fal_grok_imagine_video_reference_to_video",
     description: "Generate a video via fal.ai using xAI Grok Imagine Video reference-to-video guided by 1-7 reference images. Creates a new vid- asset and enqueues a background job.",
     schema,
     handler: async (args) => {

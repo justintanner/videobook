@@ -45,7 +45,7 @@ describe("generate_qwen2_image_edit tool", () => {
 
   it("returns error when KIE_API_KEY is not set", async () => {
     const result = await client.callTool({
-      name: "generate_qwen2_image_edit",
+      name: "generate_kie_qwen_2_0_edit_image",
       arguments: {
         prompt: "exactly the same remove game",
         project_slug: "test-proj",
@@ -63,7 +63,7 @@ describe("generate_qwen2_image_edit tool", () => {
 
     // Empty array fails MCP schema (.min(1) from apicity single-url slot) before handler.
     const empty = await client.callTool({
-      name: "generate_qwen2_image_edit",
+      name: "generate_kie_qwen_2_0_edit_image",
       arguments: {
         prompt: "edit me",
         project_slug: "test-proj",
@@ -76,7 +76,7 @@ describe("generate_qwen2_image_edit tool", () => {
     // Two images pass schema array max (from single string slot mapped as array)
     // but the handler enforces exactly one reference for qwen2/image-edit.
     const two = await client.callTool({
-      name: "generate_qwen2_image_edit",
+      name: "generate_kie_qwen_2_0_edit_image",
       arguments: {
         prompt: "edit me",
         project_slug: "test-proj",
@@ -102,7 +102,7 @@ describe("generate_qwen2_image_edit tool", () => {
     await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
 
     const result = await client.callTool({
-      name: "generate_qwen2_image_edit",
+      name: "generate_kie_qwen_2_0_edit_image",
       arguments: {
         prompt: "exactly the same remove game",
         project_slug: "test-proj",

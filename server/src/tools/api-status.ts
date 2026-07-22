@@ -4,8 +4,8 @@ import type { ToolDef } from "./tool-def.js";
 
 export function apiStatusDef(): ToolDef {
   return {
-    name: "api_status",
-    description: "Check if the KimiCoding API is reachable and the API key is valid",
+    name: "check_kimi_coding_api",
+    description: "Check whether the Kimi Coding API is reachable and its configured API key is valid",
     schema: {},
     handler: async () => {
       const apiKey = process.env.KIMI_CODING_API_KEY;
@@ -42,4 +42,3 @@ export function apiStatusDef(): ToolDef {
     },
   };
 }
-

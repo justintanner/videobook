@@ -44,7 +44,7 @@ describe("generate_nano_banana_pro_google tool", () => {
 
   it("enqueues a text-to-image job", async () => {
     const result = await client.callTool({
-      name: "generate_nano_banana_pro_google",
+      name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
         project_slug: "test-proj",
         prompt: "a clean product photo",
@@ -67,7 +67,7 @@ describe("generate_nano_banana_pro_google tool", () => {
     await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
 
     const result = await client.callTool({
-      name: "generate_nano_banana_pro_google",
+      name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
         project_slug: "test-proj",
         prompt: "same style, new scene",
@@ -84,7 +84,7 @@ describe("generate_nano_banana_pro_google tool", () => {
 
   it("rejects aspect_ratio 'auto' without reference images", async () => {
     const result = await client.callTool({
-      name: "generate_nano_banana_pro_google",
+      name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
         project_slug: "test-proj",
         prompt: "a sunset",
@@ -97,7 +97,7 @@ describe("generate_nano_banana_pro_google tool", () => {
 
   it("rejects duplicate characters in character_refs", async () => {
     const result = await client.callTool({
-      name: "generate_nano_banana_pro_google",
+      name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
         project_slug: "test-proj",
         prompt: "@character_1 eating an apple",
@@ -111,7 +111,7 @@ describe("generate_nano_banana_pro_google tool", () => {
 
   it("enqueues successfully with valid character_refs", async () => {
     const result = await client.callTool({
-      name: "generate_nano_banana_pro_google",
+      name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
         project_slug: "test-proj",
         prompt: "@character_1 and @character_2",
@@ -132,7 +132,7 @@ describe("generate_nano_banana_pro_google tool", () => {
     await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
 
     const result = await client.callTool({
-      name: "generate_nano_banana_pro_google",
+      name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
         project_slug: "test-proj",
         prompt: "too many refs",

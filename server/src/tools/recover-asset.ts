@@ -12,7 +12,7 @@ export function recoverAssetDef(fs: VideocityFs): ToolDef {
     description:
       "Recover a single asset stuck in the failed/error state by clearing its persisted generation error. " +
       "Non-destructive: the asset and its media files are kept intact — only the error record is removed, " +
-      "returning the card to its normal ready state. Use this instead of clear_failed_tasks (which deletes assets).",
+      "returning the card to its normal ready state. Use this instead of clean_failed_assets when the asset must be preserved.",
     schema: {
       asset_id: z.string().describe("Asset ID to recover (vid-*, img-*, etc., or @-prefixed)"),
       project_slug: z.string().describe("Project slug"),

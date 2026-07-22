@@ -32,7 +32,7 @@ import {
 // ---------------------------------------------------------------------------
 // Google Flow characters (POST/GET/DELETE /google-flow/characters). A character
 // bundles 1-2 reference images (plus optional personality notes and a voice)
-// into a ref that feeds character_1..N on generate_google_omni_video
+// into a ref that feeds character_1..N on generate_google_flow_omni_flash_video
 // (character_refs). Each character costs a flat 2 of omni's 7 reference slots
 // shared with image_slugs, regardless of its image count (google-flow-refs.ts).
 // GET/DELETE-by-ref paths ride the googleFlowFetch raw
@@ -276,7 +276,7 @@ export function createGoogleFlowCharacterDef(fs: VideocityFs): ToolDef {
   return {
     name: "create_google_flow_character",
     description:
-      "Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref for the character_refs parameter of generate_google_omni_video (character_1..7). Consumes plan credits.",
+      "Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref for the character_refs parameter of generate_google_flow_omni_flash_video (character_1..7). Consumes plan credits.",
     schema: createGoogleFlowCharacterSchema,
     handler: async (args): Promise<ToolResult> => {
       const a = args as SchemaArgs<typeof createGoogleFlowCharacterSchema>;
@@ -326,7 +326,7 @@ export function createGoogleFlowCharacterDef(fs: VideocityFs): ToolDef {
         return jsonResult({
           ...result,
           source_images: resolved.map((r) => r.assetId),
-          usage: "Pass character_ref in character_refs of generate_google_omni_video (character_1..7)",
+          usage: "Pass character_ref in character_refs of generate_google_flow_omni_flash_video (character_1..7)",
         });
       } catch (err) {
         return toolError(err instanceof Error ? err.message : String(err));
@@ -445,11 +445,11 @@ function readCharacterVoiceRef(raw: Record<string, unknown>): string | null {
   return null;
 }
 
-export type RenamedGoogleFlowCharacter = {
+export type ReplacedGoogleFlowCharacter = {
   character_ref: string;
   old_ref: string;
   display_name: string;
-  status: "renamed" | "replaced" | "partial-success";
+  status: "replaced" | "partial-success";
   warning?: string;
 };
 
@@ -465,9 +465,8 @@ export async function replaceGoogleFlowCharacter(
     voice?: string;
     clearPersonalityNotes?: boolean;
     clearVoice?: boolean;
-    statusLabel?: "replaced" | "renamed";
   }
-): Promise<RenamedGoogleFlowCharacter> {
+): Promise<ReplacedGoogleFlowCharacter> {
   const detail = await getGoogleFlowCharacter(provider, ref);
   const raw = (detail.raw ?? {}) as Record<string, unknown>;
 
@@ -549,17 +548,9 @@ export async function replaceGoogleFlowCharacter(
     character_ref: created.character_ref,
     old_ref: ref,
     display_name: created.display_name,
-    status: created.status === "partial-success" ? "partial-success" : (opts.statusLabel ?? "replaced"),
+    status: created.status === "partial-success" ? "partial-success" : "replaced",
     ...(warning !== undefined ? { warning } : {}),
   };
-}
-
-export async function renameGoogleFlowCharacter(
-  provider: GoogleFlowProvider,
-  ref: string,
-  displayName: string,
-): Promise<RenamedGoogleFlowCharacter> {
-  return replaceGoogleFlowCharacter(provider, undefined, undefined, ref, { displayName, statusLabel: "renamed" });
 }
 
 const replaceGoogleFlowCharacterSchema = {
@@ -605,34 +596,3 @@ export function replaceGoogleFlowCharacterDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-
-const renameGoogleFlowCharacterSchema = {
-  ref: z.string().min(1).describe("Character ref to rename (from create_google_flow_character / list_google_flow_characters)"),
-  display_name: apicityField(
-    GoogleFlowCharactersCreateRequestSchema.shape.displayName,
-    "New display name (1-200 chars)",
-    { required: true },
-  ),
-} satisfies ZodRawShape;
-
-export function renameGoogleFlowCharacterDef(): ToolDef {
-  return {
-    name: "rename_google_flow_character",
-    description:
-      "Rename a Google Flow character. useapi.net has no update endpoint, so this recreates the character with the same reference images (no re-upload) under the new name and deletes the old one — the ref changes. Returns { character_ref, old_ref }: replace old_ref with character_ref anywhere it is stored (e.g. character_refs). May consume plan credits like create.",
-    schema: renameGoogleFlowCharacterSchema,
-    handler: async (args): Promise<ToolResult> => {
-      const a = args as SchemaArgs<typeof renameGoogleFlowCharacterSchema>;
-      if (!process.env.GOOGLE_FLOW_API_KEY) {
-        return toolError("GOOGLE_FLOW_API_KEY environment variable is not set");
-      }
-      try {
-        const provider = createGoogleFlowProvider();
-        return jsonResult(await renameGoogleFlowCharacter(provider, a.ref, a.display_name as string));
-      } catch (err) {
-        return toolError(err instanceof Error ? err.message : String(err));
-      }
-    },
-  };
-}
-

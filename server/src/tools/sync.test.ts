@@ -28,7 +28,7 @@ describe("sync tool", () => {
 
   it("sync on empty project returns empty arrays", async () => {
     const result = await client.callTool({
-      name: "sync",
+      name: "reconcile_project_work",
       arguments: { project_slug: "test-proj" },
     });
     expect(result.isError).toBeFalsy();
@@ -50,7 +50,7 @@ describe("sync tool", () => {
     });
 
     const result = await client.callTool({
-      name: "sync",
+      name: "reconcile_project_work",
       arguments: { project_slug: "test-proj" },
     });
     expect(result.isError).toBeFalsy();

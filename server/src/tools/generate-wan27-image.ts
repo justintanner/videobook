@@ -48,7 +48,7 @@ type Args = SchemaArgs<typeof generateWan27ImageSchema>;
 
 export function generateWan27ImageDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_wan27_image",
+    name: "generate_kie_wan_2_7_text_to_image",
     description: "Generate an image using Wan 2.7 Image. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).",
     schema: generateWan27ImageSchema,
     handler: async (args) => {

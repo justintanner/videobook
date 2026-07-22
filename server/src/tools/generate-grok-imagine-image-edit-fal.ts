@@ -22,7 +22,7 @@ type Args = SchemaArgs<typeof schema>;
 
 export function generateGrokImagineImageEditFalDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_grok_imagine_image_edit_fal",
+    name: "generate_fal_grok_imagine_edit_image",
     description: "Edit images via fal.ai using xAI Grok Imagine Image edit with 1-3 @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {

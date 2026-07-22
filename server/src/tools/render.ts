@@ -468,12 +468,3 @@ export function renderVideoDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-
-export function renderDef(fs: VideocityFs): ToolDef {
-  const base = renderVideoDef(fs);
-  return {
-    ...base,
-    name: "render",
-    description: "Legacy alias for render_video. Render a vid- asset.",
-  };
-}

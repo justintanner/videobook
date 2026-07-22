@@ -153,28 +153,28 @@ function makeVeo31VideoTool(
 }
 
 export const generateVeo31VideoDef = makeVeo31VideoTool(
-  "generate_veo31_video",
+  "generate_google_flow_veo_3_1_quality_video",
   "veo-3.1-quality",
   false,
   "Generate a video using Google Veo 3.1 quality tier (Google Flow). Text-to-video or image-to-video from start/end frames; 8s output. Creates a new vid- asset and enqueues a background job.",
 );
 
 export const generateVeo31FastVideoDef = makeVeo31VideoTool(
-  "generate_veo31_fast_video",
+  "generate_google_flow_veo_3_1_fast_video",
   "veo-3.1-fast",
   true,
   "Generate a video using Google Veo 3.1 Fast (Google Flow). Text-to-video, image-to-video from start/end frames, or reference-to-video from up to 3 reference images. Creates a new vid- asset and enqueues a background job.",
 );
 
 export const generateVeo31LiteVideoDef = makeVeo31VideoTool(
-  "generate_veo31_lite_video",
+  "generate_google_flow_veo_3_1_lite_video",
   "veo-3.1-lite",
   true,
   "Generate a video using Google Veo 3.1 Lite (Google Flow). Cheapest Veo 3.1 tier: text-to-video, start/end frames, or up to 3 reference images. Creates a new vid- asset and enqueues a background job.",
 );
 
 export const generateVeo31LiteLowPriorityVideoDef = makeVeo31VideoTool(
-  "generate_veo31_lite_low_priority_video",
+  "generate_google_flow_veo_3_1_lite_low_priority_video",
   "veo-3.1-lite-low-priority",
   true,
   "Generate a video using Google Veo 3.1 Lite Lower Priority (Google Flow, Ultra $199 only, 0 credits). Same modes as Lite (T2V / start-end I2V / up to 3 refs) with lower queue priority. Creates a new vid- asset and enqueues a background job.",

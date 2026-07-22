@@ -14,7 +14,6 @@ import {
   createGoogleFlowCharacterDef,
   listGoogleFlowCharactersDef,
   deleteGoogleFlowCharacterDef,
-  renameGoogleFlowCharacterDef,
   getGoogleFlowCharacterDef,
   replaceGoogleFlowCharacterDef,
 } from "./google-flow-characters.js";
@@ -49,12 +48,12 @@ import { rewindProjectDef } from "./rewind-project.js";
 import { trimVideoDef } from "./trim-video.js";
 import { trimAudioDef } from "./trim-audio.js";
 import { splitVideoDef } from "./split-video.js";
-import { evenSplitDef, splitVideoByDurationsDef } from "./even-split.js";
+import { splitVideoByDurationsDef } from "./even-split.js";
 import { padVideoDef } from "./pad-video.js";
 import { cropVideoDef } from "./crop-video.js";
 import { cropImageDef } from "./crop-image.js";
 import { invertImageDef } from "./invert-image.js";
-import { setOsgDef, setVideoOverlayDef } from "./set-osg.js";
+import { setVideoOverlayDef } from "./set-osg.js";
 import { animateKeywordsDef } from "./animate-keywords.js";
 import { downloadVideoDef } from "./download-video.js";
 import { archiveClipDef } from "./archive-clip.js";
@@ -116,7 +115,7 @@ import { generateNanoBananaImageDef } from "./generate-nano-banana-image.js";
 import { generateQwen2ImageEditDef } from "./generate-qwen2-image-edit.js";
 import { generateSeedreamTextImageDef } from "./generate-seedream-text-image.js";
 import { generateSeedreamImageDef } from "./generate-seedream-image.js";
-import { renderDef, renderVideoDef } from "./render.js";
+import { renderVideoDef } from "./render.js";
 import { syncDef } from "./sync.js";
 import { listAssetsDef } from "./list-assets.js";
 import { sleepDef } from "./sleep.js";
@@ -135,12 +134,11 @@ import { generateAlibabaVideoDef } from "./generate-alibaba-video.js";
 import { concatImagesDef } from "./concat-images.js";
 import { chatDef } from "./chat.js";
 import { getTimelineDef } from "./get-timeline.js";
-import { editTimelineDef, setTimelineDef } from "./edit-timeline.js";
+import { setTimelineDef } from "./edit-timeline.js";
 import { renderTimelineDef } from "./render-timeline.js";
 import { showFolderDef } from "./show-folder.js";
 import { copyFileToClipboardDef } from "./copy-file-to-clipboard.js";
 import { exportToDownloadsDef } from "./export-to-downloads.js";
-import { slugsDef } from "./slugs.js";
 import { pushChatHistoryDef, listChatHistoryDef } from "./chat-history.js";
 import { recordPromptDef, listPromptHistoryDef } from "./prompt-history.js";
 import { rewritePromptDef } from "./rewrite-prompt.js";
@@ -157,7 +155,7 @@ import { removeTimelineAudioDef } from "./remove-timeline-audio.js";
 import { moveTimelineAudioDef } from "./move-timeline-audio.js";
 import { updateTimelineAudioDef } from "./update-timeline-audio.js";
 import { commandsDef } from "./commands.js";
-import { renderSettingsDef, getRenderSettingsDef } from "./render-settings.js";
+import { getRenderSettingsDef } from "./render-settings.js";
 import { translatePayloadDef } from "./translate-payload.js";
 import { updateScriptDef } from "./update-script.js";
 import { generateSeedance2I2vFalDef } from "./generate-seedance2-i2v-fal.js";
@@ -211,7 +209,7 @@ import { generateElevenlabsT2aDef } from "./generate-elevenlabs-t2a.js";
 import { estimateCostDef } from "./estimate-cost.js";
 import { postDef } from "./post.js";
 import { xConnectStartDef, xConnectStatusDef } from "./connect-x.js";
-import { createWatermarkDef, createWatermarkCardDef } from "./create-watermark.js";
+import { createWatermarkCardDef } from "./create-watermark.js";
 import { createQrOutroDef } from "./create-qr-outro.js";
 import { createQartDef } from "./create-qart.js";
 import { createQrbtfDef } from "./create-qrbtf.js";
@@ -224,13 +222,11 @@ export function getVideoEditingToolDefs(fs: VideocityFs): ToolDef[] {
     trimAudioDef(fs),
     splitVideoDef(fs),
     splitVideoByDurationsDef(fs),
-    evenSplitDef(fs),
     padVideoDef(fs),
     cropVideoDef(fs),
     cropImageDef(fs),
     invertImageDef(fs),
     setVideoOverlayDef(fs),
-    setOsgDef(fs),
     animateKeywordsDef(fs),
     detectScenesDef(fs),
     suggestCutsDef(fs),
@@ -258,10 +254,8 @@ export function getVideoEditingToolDefs(fs: VideocityFs): ToolDef[] {
     isolateVocalsDef(fs),
     cleanVideoAudioDef(fs),
     renderVideoDef(fs),
-    renderDef(fs),
     getTimelineDef(fs),
     setTimelineDef(fs),
-    editTimelineDef(fs),
     renderTimelineDef(fs),
     assignSlotDef(fs),
     clearSlotDef(fs),
@@ -272,9 +266,7 @@ export function getVideoEditingToolDefs(fs: VideocityFs): ToolDef[] {
     moveTimelineAudioDef(fs),
     updateTimelineAudioDef(fs),
     getRenderSettingsDef(fs),
-    renderSettingsDef(fs),
     createWatermarkCardDef(fs),
-    createWatermarkDef(fs),
   ];
 }
 
@@ -284,8 +276,6 @@ export function registerAllTools(server: McpServer, fs: VideocityFs): void {
     server.tool(def.name, def.description, def.schema, def.handler);
   }
 }
-
-import { registerGenerationTool } from "../generation-registry.js";
 
 export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
   const rawDefs: ToolDef[] = [
@@ -301,7 +291,6 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     replaceGoogleFlowCharacterDef(fs),
     listGoogleFlowCharactersDef(),
     deleteGoogleFlowCharacterDef(),
-    renameGoogleFlowCharacterDef(),
     estimateCostDef(fs),
     createProjectDef(fs),
     createCharacterDef(fs),
@@ -394,7 +383,6 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     showFolderDef(fs),
     copyFileToClipboardDef(fs),
     exportToDownloadsDef(fs),
-    slugsDef(fs),
     pushChatHistoryDef(fs),
     listChatHistoryDef(fs),
     recordPromptDef(fs),
@@ -456,5 +444,5 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     getWatermarkConfigDef(),
   ];
 
-  return rawDefs.flatMap((def) => registerGenerationTool(def));
+  return rawDefs;
 }

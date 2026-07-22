@@ -49,7 +49,7 @@ describe("generate_veo31_video tools", () => {
     await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
 
     const result = await client.callTool({
-      name: "generate_veo31_fast_video",
+      name: "generate_google_flow_veo_3_1_fast_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "a slow push through fog",
@@ -68,7 +68,7 @@ describe("generate_veo31_video tools", () => {
 
   it("rejects last_frame_slug without first_frame_slug", async () => {
     const result = await client.callTool({
-      name: "generate_veo31_video",
+      name: "generate_google_flow_veo_3_1_quality_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "a sunset",
@@ -81,7 +81,7 @@ describe("generate_veo31_video tools", () => {
 
   it("enqueues a lite-low-priority job", async () => {
     const result = await client.callTool({
-      name: "generate_veo31_lite_low_priority_video",
+      name: "generate_google_flow_veo_3_1_lite_low_priority_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "a fog bank rolling over hills",
@@ -97,7 +97,7 @@ describe("generate_veo31_video tools", () => {
 
   it("rejects reference images combined with a start frame", async () => {
     const result = await client.callTool({
-      name: "generate_veo31_lite_video",
+      name: "generate_google_flow_veo_3_1_lite_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "a sunset",

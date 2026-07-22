@@ -24,10 +24,10 @@ import { useEstimateCost, type EstimateCall } from '@/hooks/useEstimateCost';
 import { CostBadge } from '@/components/cost/CostBadge';
 
 const GEN_IMAGES_FAN_OUT_TOOLS: readonly string[] = [
-  'generate_nano_banana_pro_fal',
-  'generate_wan27_pro_fal',
-  'generate_seedream_v5_lite_fal',
-  'generate_grok_imagine_image_fal',
+  'generate_fal_nano_banana_pro_text_to_image',
+  'generate_fal_wan_2_7_pro_text_to_image',
+  'generate_fal_seedream_v5_lite_text_to_image',
+  'generate_fal_grok_imagine_text_to_image',
 ];
 import { useScriptHistoryNav } from '@/hooks/useScriptHistoryNav';
 import { useAssetOriginalMeta } from '@/hooks/useAssetOriginalMeta';
@@ -229,7 +229,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
         toast({ title: 'Save failed', description: msg, duration: 4000 });
         return null;
       }
-      await callTool('sync', { project_slug: projectSlug });
+      await callTool('reconcile_project_work', { project_slug: projectSlug });
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       setJustSaved(true);
       savedTimerRef.current = setTimeout(() => setJustSaved(false), 1500);
@@ -295,7 +295,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
     if (isDirty) await saveNow(draft, { showUndoToast: false });
     setGenInFlight(true);
     try {
-      const result = await callTool('gen_images_all_models', {
+      const result = await callTool('generate_image_model_comparison', {
         prompt,
         project_slug: projectSlug,
         source_script_id: item.id,
@@ -306,7 +306,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
         return;
       }
       toast({ title: 'Image jobs queued', description: '5 models', duration: 2000 });
-      await callTool('sync', { project_slug: projectSlug });
+      await callTool('reconcile_project_work', { project_slug: projectSlug });
     } finally {
       setGenInFlight(false);
     }

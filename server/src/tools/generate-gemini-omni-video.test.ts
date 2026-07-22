@@ -53,7 +53,7 @@ describe("generate_gemini_omni_video tool", () => {
     await fs.writeFile(videoAsset.value.assetId, "original.mp4", Buffer.from("fake mp4"), "test-proj");
 
     const result = await client.callTool({
-      name: "generate_gemini_omni_video",
+      name: "generate_kie_gemini_omni_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "char swap",

@@ -284,41 +284,41 @@ export function normalizeKieCostPayload(
 // (docs/apicity-gaps.md §15, product choice A).
 const KIE_ADAPTERS: Record<string, CostAdapter> = {
   // --- KIE per-second video ---
-  generate_seedance2_video: kieSeedance("bytedance/seedance-2", SEEDANCE2_DURATION),
-  generate_seedance2_fast_video: kieSeedance("bytedance/seedance-2-fast", SEEDANCE2_FAST_DURATION),
+  generate_kie_seedance_2_0_video: kieSeedance("bytedance/seedance-2", SEEDANCE2_DURATION),
+  generate_kie_seedance_2_0_fast_video: kieSeedance("bytedance/seedance-2-fast", SEEDANCE2_FAST_DURATION),
   // Mini prices per-second by resolution (480p / 720p — the only tiers the tool
   // exposes); no first/last-frame split, so kieResolutionVideo is the right
   // shape. @apicity/cost@0.6.1 added this rate (was "—" under 0.6.0). See
   // docs/apicity-gaps.md §10.
-  generate_seedance2_mini_video: kieResolutionVideo("bytedance/seedance-2-mini", SEEDANCE2_MINI_RESOLUTION, SEEDANCE2_MINI_DURATION),
-  generate_gemini_omni_video: kieGeminiOmniVideo,
-  generate_kling30_video: kieKling30Video,
-  generate_kling30_motion_control_video: kieKling30MotionControl,
-  generate_kling30_turbo_video: (args: Record<string, unknown>) => {
+  generate_kie_seedance_2_0_mini_video: kieResolutionVideo("bytedance/seedance-2-mini", SEEDANCE2_MINI_RESOLUTION, SEEDANCE2_MINI_DURATION),
+  generate_kie_gemini_omni_video: kieGeminiOmniVideo,
+  generate_kie_kling_3_0_video: kieKling30Video,
+  generate_kie_kling_3_0_motion_control: kieKling30MotionControl,
+  generate_kie_kling_3_0_turbo_video: (args: Record<string, unknown>) => {
     const imageSlugs = (args.image_slugs as string[] | undefined) ?? [];
     const model = imageSlugs.length > 0 ? "kling/v3-turbo-image-to-video" : "kling/v3-turbo-text-to-video";
     return kieResolutionVideo(model, KLING_TURBO_RESOLUTION, Number(KLING_TURBO_DURATION))(args);
   },
 
   // --- KIE Veo 3 / Veo 3 Fast (flat per-second, priced in cost@0.7.0) ---
-  generate_veo3_video: kieFlatVideo("veo3"),
-  generate_veo3_fast_video: kieFlatVideo("veo3_fast"),
+  generate_kie_veo_3_0_video: kieFlatVideo("veo3"),
+  generate_kie_veo_3_0_fast_video: kieFlatVideo("veo3_fast"),
 
   // --- KIE Wan 2.7 video (flat $0.10/s across all four endpoints) ---
-  generate_wan27_t2v_video: kieFlatVideo("wan/2-7-text-to-video"),
-  generate_wan27_i2v_video: kieFlatVideo("wan/2-7-image-to-video"),
-  generate_wan27_r2v_video: kieFlatVideo("wan/2-7-r2v"),
+  generate_kie_wan_2_7_text_to_video: kieFlatVideo("wan/2-7-text-to-video"),
+  generate_kie_wan_2_7_image_to_video: kieFlatVideo("wan/2-7-image-to-video"),
+  generate_kie_wan_2_7_reference_to_video: kieFlatVideo("wan/2-7-r2v"),
   // videoedit upstream has no duration field (output matches source). Tool
   // default is "0" which would zero out the estimate, so default to 5s.
-  generate_wan27_videoedit_video: kieFlatVideo("wan/2-7-videoedit"),
+  generate_kie_wan_2_7_edit_video: kieFlatVideo("wan/2-7-videoedit"),
   // extend reuses the i2v rate ($0.10/s). Tool exposes duration; default 5s.
-  extend_wan27_video: kieFlatVideo("wan/2-7-image-to-video"),
+  extend_kie_wan_2_7_video: kieFlatVideo("wan/2-7-image-to-video"),
 
   // --- KIE Grok Imagine video (resolution-tiered, $0.008/$0.015 per sec) ---
-  generate_grok_imagine_video: kieResolutionVideo("grok-imagine/image-to-video", GROK_I2V_RESOLUTION, GROK_I2V_DURATION),
-  generate_grok_imagine_t2v_video: kieResolutionVideo("grok-imagine/text-to-video", "480p", 6),
-  extend_grok_imagine_video: kieGrokImagineExtend,
-  upscale_grok_imagine_video: kieGrokImagineUpscale,
+  generate_kie_grok_imagine_image_to_video: kieResolutionVideo("grok-imagine/image-to-video", GROK_I2V_RESOLUTION, GROK_I2V_DURATION),
+  generate_kie_grok_imagine_text_to_video: kieResolutionVideo("grok-imagine/text-to-video", "480p", 6),
+  extend_kie_grok_imagine_video: kieGrokImagineExtend,
+  upscale_kie_grok_imagine_video: kieGrokImagineUpscale,
 
   // --- KIE HappyHorse video (resolution-tiered, per-second) ---
   // t2v/i2v/ref generate against happyhorse-1-1/* (see payload-builders.ts), and
@@ -326,35 +326,35 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
   // from 1.0 ($0.165/$0.22 per sec vs $0.155/$0.265), so we key off the actual
   // 1.1 slugs here rather than borrowing 1.0. videoedit stays on the 1.0
   // happyhorse/video-edit slug (no 1.1 video-edit endpoint exists).
-  generate_happyhorse_t2v_video: kieResolutionVideo("happyhorse-1-1/text-to-video", HAPPYHORSE_T2V_RESOLUTION, HAPPYHORSE_T2V_DURATION),
-  generate_happyhorse_i2v_video: kieResolutionVideo("happyhorse-1-1/image-to-video", HAPPYHORSE_I2V_RESOLUTION, HAPPYHORSE_I2V_DURATION),
-  generate_happyhorse_ref_video: kieResolutionVideo("happyhorse-1-1/reference-to-video", HAPPYHORSE_R2V_RESOLUTION, HAPPYHORSE_R2V_DURATION),
-  generate_happyhorse_videoedit_video: kieResolutionVideo("happyhorse/video-edit", "1080p"),
+  generate_kie_happyhorse_1_1_text_to_video: kieResolutionVideo("happyhorse-1-1/text-to-video", HAPPYHORSE_T2V_RESOLUTION, HAPPYHORSE_T2V_DURATION),
+  generate_kie_happyhorse_1_1_image_to_video: kieResolutionVideo("happyhorse-1-1/image-to-video", HAPPYHORSE_I2V_RESOLUTION, HAPPYHORSE_I2V_DURATION),
+  generate_kie_happyhorse_1_1_reference_to_video: kieResolutionVideo("happyhorse-1-1/reference-to-video", HAPPYHORSE_R2V_RESOLUTION, HAPPYHORSE_R2V_DURATION),
+  generate_kie_happyhorse_1_1_edit_video: kieResolutionVideo("happyhorse/video-edit", "1080p"),
 
   // --- KIE GPT Image 2 (per-image, tiered by resolution) ---
-  generate_gpt_image: kieTieredImage("gpt-image-2-image-to-image", GPT_IMAGE_I2I_RESOLUTION),
-  generate_gpt_image_text: kieTieredImage("gpt-image-2-text-to-image", GPT_IMAGE_T2I_RESOLUTION),
+  generate_kie_gpt_image_2_image_to_image: kieTieredImage("gpt-image-2-image-to-image", GPT_IMAGE_I2I_RESOLUTION),
+  generate_kie_gpt_image_2_text_to_image: kieTieredImage("gpt-image-2-text-to-image", GPT_IMAGE_T2I_RESOLUTION),
 
   // --- KIE Nano Banana Pro (per-image, tiered by resolution) ---
-  generate_nano_banana_image: kieTieredImage("nano-banana-pro", NANO_BANANA_PRO_RESOLUTION),
+  generate_kie_nano_banana_pro_text_to_image: kieTieredImage("nano-banana-pro", NANO_BANANA_PRO_RESOLUTION),
 
   // --- KIE Wan 2.7 image (per-image, tiered by resolution) ---
-  generate_wan27_image: kieTieredImage("wan/2-7-image", WAN27_IMAGE_RESOLUTION),
-  generate_wan27_image_pro: kieTieredImage("wan/2-7-image-pro", WAN27_IMAGE_PRO_RESOLUTION),
+  generate_kie_wan_2_7_text_to_image: kieTieredImage("wan/2-7-image", WAN27_IMAGE_RESOLUTION),
+  generate_kie_wan_2_7_pro_text_to_image: kieTieredImage("wan/2-7-image-pro", WAN27_IMAGE_PRO_RESOLUTION),
 
   // --- KIE flat per-image (qwen2 $0.028, seedream/5-lite $0.0275) ---
-  generate_qwen2_image_edit: kieFlatImage("qwen2/image-edit"),
-  generate_seedream_text_image: kieFlatImage("seedream/5-lite-text-to-image"),
-  generate_seedream_image: kieFlatImage("seedream/5-lite-image-to-image"),
+  generate_kie_qwen_2_0_edit_image: kieFlatImage("qwen2/image-edit"),
+  generate_kie_seedream_v5_lite_text_to_image: kieFlatImage("seedream/5-lite-text-to-image"),
+  generate_kie_seedream_v5_lite_image_to_image: kieFlatImage("seedream/5-lite-image-to-image"),
 
   // --- KIE Grok Imagine images (flat per-call) ---
-  generate_grok_imagine_text_image: kieGrokImagineTextImage,
-  generate_grok_imagine_image: kieGrokImagineImageEdit,
+  generate_kie_grok_imagine_text_to_image: kieGrokImagineTextImage,
+  generate_kie_grok_imagine_image_to_image: kieGrokImagineImageEdit,
 
   // --- KIE OmniHuman / Volcengine (per-second; duration from source media) ---
   // Schema has no duration field; estimate_cost + job handlers inject it via
   // source metadata / KieCostHints (docs/apicity-gaps.md §30).
-  generate_omnihuman_video: (input) => ({
+  generate_kie_omnihuman_1_5_video: (input) => ({
     provider: "kie",
     payload: {
       model: "omnihuman-1-5",
@@ -362,7 +362,7 @@ const KIE_ADAPTERS: Record<string, CostAdapter> = {
       input: {},
     },
   }),
-  generate_volcengine_lipsync_video: (input) => ({
+  generate_kie_volcengine_video_to_video_lip_sync: (input) => ({
     provider: "kie",
     payload: {
       model: "volcengine/video-to-video-lip-sync",
@@ -391,12 +391,12 @@ const xaiGrokImagineVideo: CostAdapter = (input) => ({
 });
 
 const XAI_ADAPTERS: Record<string, CostAdapter> = {
-  generate_grok_imagine_text_image: xaiGrokImagineImage,
-  generate_grok_imagine_image: xaiGrokImagineImage,
-  generate_grok_imagine_video: xaiGrokImagineVideo,
-  generate_grok_imagine_t2v_video: xaiGrokImagineVideo,
-  generate_grok_imagine_ref_video: xaiGrokImagineVideo,
-  extend_grok_imagine_video: xaiGrokImagineVideo,
+  generate_kie_grok_imagine_text_to_image: xaiGrokImagineImage,
+  generate_kie_grok_imagine_image_to_image: xaiGrokImagineImage,
+  generate_kie_grok_imagine_image_to_video: xaiGrokImagineVideo,
+  generate_kie_grok_imagine_text_to_video: xaiGrokImagineVideo,
+  generate_xai_grok_imagine_video: xaiGrokImagineVideo,
+  extend_kie_grok_imagine_video: xaiGrokImagineVideo,
 };
 
 // Fal bills by endpoint id. Only image endpoints priced in @apicity/cost@0.8.0.
@@ -411,11 +411,11 @@ const falImage = (endpoint: string): CostAdapter => (input) => ({
 });
 
 const FAL_ADAPTERS: Record<string, CostAdapter> = {
-  generate_nano_banana_fal: falImage("fal-ai/nano-banana"),
-  generate_nano_banana_edit_fal: falImage("fal-ai/nano-banana/edit"),
-  generate_nano_banana_2_fal: falImage("fal-ai/nano-banana-2"),
-  generate_nano_banana_pro_fal: falImage("fal-ai/nano-banana-pro"),
-  generate_seedream_v5_lite_fal: falImage("fal-ai/bytedance/seedream/v5/lite/text-to-image"),
+  generate_fal_nano_banana_text_to_image: falImage("fal-ai/nano-banana"),
+  generate_fal_nano_banana_edit_image: falImage("fal-ai/nano-banana/edit"),
+  generate_fal_nano_banana_2_text_to_image: falImage("fal-ai/nano-banana-2"),
+  generate_fal_nano_banana_pro_text_to_image: falImage("fal-ai/nano-banana-pro"),
+  generate_fal_seedream_v5_lite_text_to_image: falImage("fal-ai/bytedance/seedream/v5/lite/text-to-image"),
 };
 
 // Alibaba media rates landed in cost@0.8.0 for the models below.
@@ -433,25 +433,25 @@ const alibabaVideo = (model: string, defaultDuration: number): CostAdapter => (i
 });
 
 const ALIBABA_ADAPTERS: Record<string, CostAdapter> = {
-  generate_alibaba_qwen_image: alibabaImage("qwen-image-2.0"),
-  generate_alibaba_qwen_image_edit: alibabaImage("qwen-image-edit"),
-  generate_alibaba_image_pro: alibabaImage("wan2.7-image-pro"),
-  generate_alibaba_video: alibabaVideo("wan2.7-i2v", 5),
+  generate_alibaba_qwen_2_0_text_to_image: alibabaImage("qwen-image-2.0"),
+  generate_alibaba_qwen_2_0_edit_image: alibabaImage("qwen-image-edit"),
+  generate_alibaba_wan_2_7_pro_text_to_image: alibabaImage("wan2.7-image-pro"),
+  generate_alibaba_wan_2_7_video: alibabaVideo("wan2.7-i2v", 5),
 };
 
 const ADAPTERS: Record<string, CostAdapter> = {
   rewrite_prompt: openaiText("gpt-5.2", 1000),
-  generate_elevenlabs_t2a: elevenLabsTts,
+  generate_elevenlabs_text_to_audio: elevenLabsTts,
   ...KIE_ADAPTERS,
   ...FAL_ADAPTERS,
   ...ALIBABA_ADAPTERS,
 };
 
-import { getActionSpec } from "./generation-registry.js";
+import { getActionSpec, getCanonicalName } from "./generation-registry.js";
 
 export function getCostAdapter(rawToolName: string): CostAdapter | null {
   const spec = getActionSpec(rawToolName);
-  const toolName = spec?.old_name ?? rawToolName;
+  const toolName = getCanonicalName(rawToolName);
   const providerHintTools = new Set([
     ...Object.keys(KIE_ADAPTERS),
     ...Object.keys(XAI_ADAPTERS),

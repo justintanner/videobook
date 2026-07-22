@@ -22,7 +22,7 @@ type Args = SchemaArgs<typeof schema>;
 
 export function generateSeedreamV5LiteFalDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_seedream_v5_lite_fal",
+    name: "generate_fal_seedream_v5_lite_text_to_image",
     description: "Generate an image via fal.ai using ByteDance Seedream V5 Lite from a text prompt. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {

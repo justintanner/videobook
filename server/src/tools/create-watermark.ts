@@ -177,12 +177,3 @@ export function createWatermarkCardDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-
-export function createWatermarkDef(fs: VideocityFs): ToolDef {
-  const base = createWatermarkCardDef(fs);
-  return {
-    ...base,
-    name: "create_watermark",
-    description: "Legacy alias for create_watermark_card. Generate a QR watermark card asset.",
-  };
-}

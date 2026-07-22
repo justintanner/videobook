@@ -34,7 +34,7 @@ type Args = SchemaArgs<typeof generateSeedreamImageSchema>;
 
 export function generateSeedreamImageDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_seedream_image",
+    name: "generate_kie_seedream_v5_lite_image_to_image",
     description: "Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
     schema: generateSeedreamImageSchema,
     handler: async (args) => {

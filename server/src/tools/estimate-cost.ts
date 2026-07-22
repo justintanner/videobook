@@ -5,7 +5,7 @@ import type { ToolDef, ToolResult } from "./tool-def.js";
 import { getCostProvider } from "../cost.js";
 import { getCostAdapter } from "../cost-adapters.js";
 import { estimateGoogleFlowCost } from "../google-flow-cost.js";
-import { getActionSpec } from "../generation-registry.js";
+import { getCanonicalName } from "../generation-registry.js";
 
 const callItem = z.object({
   tool_name: z.string().describe("Name of the generation tool whose cost to estimate"),
@@ -131,20 +131,20 @@ async function enrichInput(
   rawToolName: string,
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const toolName = getActionSpec(rawToolName)?.old_name ?? rawToolName;
-  if (toolName === "generate_kling30_motion_control_video") {
+  const toolName = getCanonicalName(rawToolName);
+  if (toolName === "generate_kie_kling_3_0_motion_control") {
     return enrichMotionControlInput(fs, input);
   }
-  if (toolName === "extend_grok_imagine_video") {
+  if (toolName === "extend_kie_grok_imagine_video") {
     return enrichGrokExtendInput(fs, input);
   }
-  if (toolName === "generate_happyhorse_videoedit_video") {
+  if (toolName === "generate_kie_happyhorse_1_1_edit_video") {
     return enrichHappyHorseVideoEditInput(fs, input);
   }
-  if (toolName === "generate_omnihuman_video") {
+  if (toolName === "generate_kie_omnihuman_1_5_video") {
     return enrichSourceDuration(fs, input, "audio_slug", "aud-");
   }
-  if (toolName === "generate_volcengine_lipsync_video") {
+  if (toolName === "generate_kie_volcengine_video_to_video_lip_sync") {
     return enrichSourceDuration(fs, input, "video_slug", "vid-");
   }
   return input;

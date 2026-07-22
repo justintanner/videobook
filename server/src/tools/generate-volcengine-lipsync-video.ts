@@ -51,7 +51,7 @@ type Args = SchemaArgs<typeof generateVolcengineLipsyncVideoSchema>;
 
 export function generateVolcengineLipsyncVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_volcengine_lipsync_video",
+    name: "generate_kie_volcengine_video_to_video_lip_sync",
     description: "Lip-sync a source video to driving audio using Volcengine video-to-video lip-sync (kie). Creates a new vid- asset and enqueues a background job.",
     schema: generateVolcengineLipsyncVideoSchema,
     handler: async (args) => {

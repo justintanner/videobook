@@ -60,7 +60,7 @@ export function useRenderAsset(callTool: UseMcpResult["callTool"]): UseRenderAss
         args.shadow_opacity = settings.shadowOpacity;
       }
 
-      const result = await callToolRef.current("render", args);
+      const result = await callToolRef.current("render_video", args);
       if (result.isError) {
         const content = result.content as Array<{ type: string; text: string }> | undefined;
         return { ok: false, error: content?.[0]?.text ?? "render failed" };

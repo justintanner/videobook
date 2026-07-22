@@ -95,12 +95,3 @@ export function setTimelineDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-
-export function editTimelineDef(fs: VideocityFs): ToolDef {
-  const base = setTimelineDef(fs);
-  return {
-    ...base,
-    name: "edit_timeline",
-    description: "Legacy alias for set_timeline. Set the timeline for a project.",
-  };
-}

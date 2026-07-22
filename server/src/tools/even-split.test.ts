@@ -265,7 +265,7 @@ describe("even_split tool (integration)", () => {
     const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
 
     const result = await client.callTool({
-      name: "even_split",
+      name: "split_video_by_durations",
       arguments: {
         asset_id: uploaded.assetId,
         project_slug: "even-split-proj",
@@ -283,7 +283,7 @@ describe("even_split tool (integration)", () => {
     const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
 
     const result = await client.callTool({
-      name: "even_split",
+      name: "split_video_by_durations",
       arguments: {
         asset_id: uploaded.assetId,
         project_slug: "even-split-proj",
@@ -327,7 +327,7 @@ describe("even_split tool (integration)", () => {
     const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
 
     const result = await client.callTool({
-      name: "even_split",
+      name: "split_video_by_durations",
       arguments: {
         asset_id: uploaded.assetId,
         project_slug: "even-split-proj",
@@ -361,7 +361,7 @@ describe("even_split tool (integration)", () => {
     const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
 
     const result = await client.callTool({
-      name: "even_split",
+      name: "split_video_by_durations",
       arguments: {
         asset_id: uploaded.assetId,
         project_slug: "even-split-proj",
@@ -380,7 +380,7 @@ describe("even_split tool (integration)", () => {
     const uploaded = await uploadVideo(client, "even-split-proj", videoPath);
 
     const result = await client.callTool({
-      name: "even_split",
+      name: "split_video_by_durations",
       arguments: {
         asset_id: uploaded.assetId,
         project_slug: "even-split-proj",
@@ -418,7 +418,7 @@ describe("even_split tool (integration)", () => {
 
   it("returns error for nonexistent asset", async () => {
     const result = await client.callTool({
-      name: "even_split",
+      name: "split_video_by_durations",
       arguments: {
         asset_id: "vid-does-not-exist",
         project_slug: "even-split-proj",
@@ -437,7 +437,7 @@ describe("even_split tool (integration)", () => {
     const uploaded = JSON.parse((uploadResult.content as TextContent)[0].text);
 
     const result = await client.callTool({
-      name: "even_split",
+      name: "split_video_by_durations",
       arguments: {
         asset_id: uploaded.assetId,
         project_slug: "even-split-proj",
@@ -461,7 +461,7 @@ describe("even_split tool (integration)", () => {
       const dest = await uploadVideo(client, "even-split-proj", destVideoPath);
 
       const result = await client.callTool({
-        name: "even_split",
+        name: "split_video_by_durations",
         arguments: {
           asset_id: source.assetId,
           project_slug: "even-split-proj",
@@ -505,7 +505,7 @@ describe("even_split tool (integration)", () => {
       const dest = await uploadVideo(client, "even-split-proj", destVideoPath);
 
       const result = await client.callTool({
-        name: "even_split",
+        name: "split_video_by_durations",
         arguments: {
           asset_id: source.assetId,
           project_slug: "even-split-proj",
@@ -528,7 +528,7 @@ describe("even_split tool (integration)", () => {
 
       // dest already has `original.mp4`; pick that as a collision filename.
       const result = await client.callTool({
-        name: "even_split",
+        name: "split_video_by_durations",
         arguments: {
           asset_id: source.assetId,
           project_slug: "even-split-proj",
@@ -547,7 +547,7 @@ describe("even_split tool (integration)", () => {
       const source = await uploadVideo(client, "even-split-proj", videoPath);
 
       const result = await client.callTool({
-        name: "even_split",
+        name: "split_video_by_durations",
         arguments: {
           asset_id: source.assetId,
           project_slug: "even-split-proj",

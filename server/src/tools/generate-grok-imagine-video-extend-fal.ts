@@ -21,7 +21,7 @@ type Args = SchemaArgs<typeof schema>;
 
 export function generateGrokImagineVideoExtendFalDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_grok_imagine_video_extend_fal",
+    name: "extend_fal_grok_imagine_video",
     description: "Extend a video via fal.ai using xAI Grok Imagine Video extend-video. Creates a new vid- asset and enqueues a background job.",
     schema,
     handler: async (args) => {

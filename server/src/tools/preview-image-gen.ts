@@ -1,5 +1,5 @@
 /**
- * preview_image MCP tool — returns a rich preview JSON for the frontend to
+ * prepare_image_generation MCP tool — returns a rich preview JSON for the frontend to
  * render a dynamic parameter form for image generation.
  *
  * Always defaults to nano_banana (richest settings). The user can switch
@@ -18,7 +18,7 @@ import type { ToolDef } from "./tool-def.js";
 
 export function previewImageGenDef(fs: VideocityFs): ToolDef {
   return {
-    name: "preview_image",
+    name: "prepare_image_generation",
     description:
       "Return a preview with schema, prefilled parameters, validation, and model options for all available image models.",
     schema: {
@@ -123,4 +123,3 @@ export function previewImageGenDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

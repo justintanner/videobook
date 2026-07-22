@@ -138,12 +138,3 @@ export function setVideoOverlayDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-
-export function setOsgDef(fs: VideocityFs): ToolDef {
-  const base = setVideoOverlayDef(fs);
-  return {
-    ...base,
-    name: "set_osg",
-    description: "Legacy alias for set_video_overlay. Set or clear on-screen graphic overlay.",
-  };
-}

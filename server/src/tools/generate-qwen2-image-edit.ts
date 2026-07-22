@@ -30,7 +30,7 @@ type Args = SchemaArgs<typeof generateQwen2ImageEditSchema>;
 
 export function generateQwen2ImageEditDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_qwen2_image_edit",
+    name: "generate_kie_qwen_2_0_edit_image",
     description: "Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new img- asset and enqueues a background job.",
     schema: generateQwen2ImageEditSchema,
     handler: async (args) => {

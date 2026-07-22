@@ -87,14 +87,14 @@ function makeVeo3VideoTool(
 }
 
 export const generateVeo3VideoDef = makeVeo3VideoTool(
-  "generate_veo3_video",
+  "generate_kie_veo_3_0_video",
   "veo3",
   "Veo 3",
   "Generate a video using Google Veo 3 (KIE). Text-to-video or image-to-video from reference images. Creates a new vid- asset and enqueues a background job.",
 );
 
 export const generateVeo3FastVideoDef = makeVeo3VideoTool(
-  "generate_veo3_fast_video",
+  "generate_kie_veo_3_0_fast_video",
   "veo3_fast",
   "Veo 3 Fast",
   "Generate a video using Google Veo 3 Fast (KIE). Text-to-video or image-to-video from reference images. Faster and cheaper than Veo 3. Creates a new vid- asset and enqueues a background job.",

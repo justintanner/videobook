@@ -1,0 +1,329 @@
+# Command Reference
+
+Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
+
+## MCP endpoints (211)
+
+- `add_timeline_audio` — Add an overlay audio clip to the timeline at a given frame offset
+- `analyze_jokes` — Analyze a clip's ElevenLabs transcript and identify the jokes in the bit, classified by type (pun, self-deprecating, observational, etc.). Each joke includes the verbatim text, start/end timestamps, and a one-line note on why it works. Runs in the background and persists to .analyze-jokes.json. Requires an ElevenLabs transcript — run /transcribe first if missing.
+- `animate_keywords` — Configure transcript-timed keyword graphics for a video. Extracts exact word-time frames and waits for vision-guided placement that avoids faces, subtitles, and existing text or graphics. Pass keywords for exact transcript words, or omit them for automatic selection. Renders cinematic white serif over-the-shoulder titles. Use enabled=false to turn them off.
+- `apply_cuts` — Splice out one or more time ranges from a video asset in-place. Operates via ffmpeg concat-splice; re-runs process_video downstream so frames, transcripts, and analyses are regenerated. Pair with /suggest-cuts to source ranges, or hand-pick them.
+- `apply_sfx` — Generate sound effects via ElevenLabs text-to-sound-effects and mix them onto a video asset's audio track in-place. Each entry yields one discrete SFX cue at `duration_seconds`, mixed at the given timestamp. Re-runs process_video downstream. Pair with /suggest-sfx to source entries.
+- `archive_clip` — Archive a full URL or existing video/audio asset to the global clip archive (B2 if configured, otherwise a local archive folder next to the projects directory), dedupe by media SHA-256, and transcribe long clips in chunks.
+- `asset_history` — Get git commit history for a specific asset
+- `asset_manifest` — List all files in an asset directory
+- `assign_slot` — Assign an asset to a timeline slot (e.g. slot 's02' = index 1)
+- `audio_boost` — Boost audio volume of a video or audio asset using a linear multiplier (1.0–4.0). Operates in-place with git versioning.
+- `audio_mix` — Mix audio from a vid-* or aud-* layer asset into a vid-* or aud-* target asset in-place. The layer starts at 0 seconds at the requested 0-100 volume. The target duration is preserved, and video targets retain their original video stream with git versioning.
+- `build_generation_provider_payload` (historical names, not exposed: `translate_payload`) — Translate gen tool args to the @apicity provider payload. Returns the exact request body that would be sent, with asset slugs in place of upload URLs.
+- `change_video_speed` — Change video playback speed (speed up or slow down). Operates in-place with git versioning.
+- `chat` — Natural language interface — routes free-form prompts to the appropriate tool. Supports @asset tags (e.g., @vid-foo, @img-bar).
+- `check_kimi_coding_api` — Check whether the Kimi Coding API is reachable and its configured API key is valid
+- `clean_failed_assets` (historical names, not exposed: `clear_failed_tasks`) — Clean up assets with a persisted generation error: delete unmaterialized generation husks (returned as 'cleared'), but keep assets that already hold media and only clear their error row (returned as 'error_cleared').
+- `clean_video_audio` — Clean a vid-* asset's audio in place with ElevenLabs Voice Isolator. Preserves dialogue as the main track, keeps a quiet denoised source bed for important sound effects, suppresses odd start/end sounds with fades, and can add subtle instrumental ElevenLabs music. The video stream is copied unchanged and process_video refreshes derived audio artifacts.
+- `concat_images` — Concatenate 1-9 image assets into a new img-* asset. One or two inputs use a fixed two-slot sheet, with landscape images side-by-side and portrait images stacked. A missing slot stays as background, and each source image is fit into its cell without stretching.
+- `copy_file_to_clipboard` — Copy an asset's original media file to the macOS pasteboard as a file reference
+- `create_character` — Create a new character folder (char-*), optionally seeded from existing image assets
+- `create_google_flow_character` — Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref for the character_refs parameter of generate_google_flow_omni_flash_video (character_1..7). Consumes plan credits.
+- `create_google_flow_voice` — Create a reusable Google Flow custom voice from a system preset. Synthesizes a short TTS clip (takes a few seconds and consumes plan credits) and returns a voice ref for the voice_refs parameter of generate_google_flow_omni_flash_video.
+- `create_project` — Create a new videocity project directory with git versioning
+- `create_qart` — Create scan-safe color and monochrome QR mosaics from an img-* source image. The image is sampled per QR module with protected QR structures and white quiet zones.
+- `create_qr_outro` — Build a standalone animated outro from 1-4 QR image assets with configurable duration and optional impact audio.
+- `create_qrbtf` — Generate parametric QR codes in artistic styles (normal, line, dsj, bubble, func) from the qrbtf library. Renders SVG and rasterizes to image assets. Black background with bright modules by default.
+- `create_watermark_card` — Generate a black-and-white QR + 'X: <handle>' watermark card and store it as an img- asset. Apply it via the on-screen graphic (OSG) settings during render.
+- `crop_image` — Crop an image asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source image (0..1). Replaces original in place with canonical dims (1920x1080 / 1080x1920 / 1080x1080) and regenerates derived crops with git versioning.
+- `crop_video` — Crop a video asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source frame (0..1). Re-renders in place to canonical dims (1920x1080 / 1080x1920 / 1080x1080) with git versioning.
+- `delete_asset` — Delete an asset directory
+- `delete_google_flow_character` — Delete a Google Flow character by its ref.
+- `delete_google_flow_voice` — Delete a Google Flow custom voice by its ref.
+- `delete_project` — Delete a videocity project directory. Validates slugs, checks for active asset locks, and updates the default project if needed.
+- `describe_image` — Analyze an image asset with vision and create a new script-* asset containing a reproduction-ready prompt (index.md). Returns immediately after enqueueing; reconcile_project_work reports status="generating" until the markdown is written.
+- `detect_scenes` — Run ffmpeg scdet over a video asset and return a candidate timeline of natural visual breaks. Each candidate is { t, score, kind } where kind="shot" is a camera/cut change (scdet score ≥ 10) and kind="settle" is a motion-settle moment inside a steady shot (the falling edge of a sustained high-motion run, e.g. "the man finished standing up"). Runs in the background and persists to .detect-scenes.json and is useful as a standalone read-only diagnostic.
+- `doctor` — Diagnose the health of every asset in a project (all asset types: video, image, audio, script, final, character, plan). Reports assets stuck in the error state and assets wedged in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore that one asset to its last usable state before the current error — clears a stale error or lease when the media is intact, otherwise restores the asset from git history. A bare fix:true scan never bulk-fixes; it just reports.
+- `download_video` — Download a full video from a URL (YouTube, Twitter/X, etc.) into a videocity project as original.mp4. Supports requested range metadata and auto-exports 16:9 and 9:16 versions.
+- `duplicate_asset` — Duplicate an asset within the same project
+- `ensure_default_project` — Return the default Videocity project, creating it when none exists
+- `estimate_cost` — Estimate the USD cost of a generation tool call before invoking it. Accepts one or more {tool_name, input} pairs and returns a single CostEstimate summed across all calls. Token-based providers (openai/anthropic/xai) use a chars/4 heuristic and price via a bundled local rate table. Tools without a registered cost adapter return a $0 estimate with a warning.
+- `export_asset_to_project` — Export an asset from one project to a different project
+- `export_to_downloads` — Copy an asset's original media file to the user's Downloads folder
+- `extend_audio_asset` (historical names, not exposed: `extend_audio`) — Extend an existing aud-* asset to a requested total duration with a smooth ElevenLabs continuation. Uses Scribe to understand the source, generates a matching continuation, preserves the source at the beginning, and creates a new aud-* asset.
+- `extend_fal_grok_imagine_video` (historical names, not exposed: `generate_grok_imagine_video_extend_fal`, `generate_grok_imagine_extend_fal_video`) — Extend a video via fal.ai using xAI Grok Imagine Video extend-video. Creates a new vid- asset and enqueues a background job.
+- `extend_kie_grok_imagine_video` (historical names, not exposed: `extend_grok_imagine_video`) — Extend an existing video asset using Kie's grok-imagine/extend. Creates a new vid- asset and enqueues a background job. Requires at least one of asset_id or video_slug.
+- `extend_kie_wan_2_7_video` (historical names, not exposed: `extend_wan27_video`) — Extend an existing video asset using Wan 2.7 Image to Video by providing the source video as first_clip. Creates a new vid- asset and enqueues a background job.
+- `extract_audio` — Extract the audio track from a video asset as MP3. By default creates a new aud-* asset with original.mp3; pass `destination` to instead write the mp3 as a sibling file inside an existing asset (e.g. plan/s1.mp3). Pass `range` to clip a specific time window (e.g. one scene's audio from a longer source).
+- `extract_first_frame` — Extract the first frame of a video asset as a new image asset (JPEG). Uses 0.1s offset to avoid black frames.
+- `extract_frame` — Extract a frame at a specific timestamp from a video asset as a new image asset (JPEG).
+- `extract_last_frame` — Extract the last frame of a video asset as a new image asset (JPEG). Uses duration-0.1s to avoid fade-out.
+- `generate_alibaba_qwen_2_0_edit_image` (historical names, not exposed: `generate_alibaba_qwen_image_edit`) — Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.
+- `generate_alibaba_qwen_2_0_text_to_image` (historical names, not exposed: `generate_alibaba_qwen_image`) — Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.
+- `generate_alibaba_wan_2_7_pro_text_to_image` (historical names, not exposed: `generate_alibaba_image_pro`, `generate_alibaba_wan_2_1_pro_text_to_image`) — Generate a pro image using Alibaba Cloud Wan 2.7 Image Pro. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).
+- `generate_alibaba_wan_2_7_text_to_image` (historical names, not exposed: `generate_alibaba_image`, `generate_alibaba_wan_2_1_text_to_image`) — Generate an image using Alibaba Cloud Wan 2.7 Image. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).
+- `generate_alibaba_wan_2_7_video` (historical names, not exposed: `generate_alibaba_video`, `generate_alibaba_wan_2_1_text_to_video`) — Generate a video using Alibaba Cloud DashScope Video Synthesis. Requires at least one media input (first/last frame, reference video, driving audio, or clip continuation). Creates a new vid- asset and enqueues a background job.
+- `generate_elevenlabs_text_to_audio` (historical names, not exposed: `generate_elevenlabs_t2a`) — Generate an aud-* text-to-audio asset using an ElevenLabs voice.
+- `generate_fal_grok_imagine_edit_image` (historical names, not exposed: `generate_grok_imagine_image_edit_fal`) — Edit images via fal.ai using xAI Grok Imagine Image edit with 1-3 @img-* reference inputs. Creates a new img- asset and enqueues a background job.
+- `generate_fal_grok_imagine_text_to_image` (historical names, not exposed: `generate_grok_imagine_image_fal`) — Generate an image via fal.ai using xAI Grok Imagine Image from a text prompt. Creates a new img- asset and enqueues a background job.
+- `generate_fal_grok_imagine_video_edit_video` (historical names, not exposed: `generate_grok_imagine_video_edit_fal`) — Edit a video via fal.ai using xAI Grok Imagine Video edit-video. Creates a new vid- asset and enqueues a background job.
+- `generate_fal_grok_imagine_video_image_to_video` (historical names, not exposed: `generate_grok_imagine_video_i2v_fal`) — Generate a video via fal.ai using xAI Grok Imagine Video image-to-video. Requires a first-frame image. Creates a new vid- asset and enqueues a background job.
+- `generate_fal_grok_imagine_video_reference_to_video` (historical names, not exposed: `generate_grok_imagine_video_r2v_fal`, `generate_grok_imagine_r2v_fal_video`) — Generate a video via fal.ai using xAI Grok Imagine Video reference-to-video guided by 1-7 reference images. Creates a new vid- asset and enqueues a background job.
+- `generate_fal_kling_video_v3_pro_image_to_video` (historical names, not exposed: `generate_kling_v3_pro_i2v_fal`) — Generate a video via fal.ai using Kling Video v3 Pro image-to-video. Requires a first-frame image; optional end frame for transition control. Creates a new vid- asset and enqueues a background job.
+- `generate_fal_kling_video_v3_pro_text_to_video` (historical names, not exposed: `generate_kling_v3_pro_t2v_fal`) — Generate a video via fal.ai using Kling Video v3 Pro from a text prompt. Creates a new vid- asset and enqueues a background job.
+- `generate_fal_kling_video_v3_standard_image_to_video` (historical names, not exposed: `generate_kling_v3_standard_i2v_fal`) — Generate a video via fal.ai using Kling Video v3 Standard from a first-frame image (optional end frame). Creates a new vid- asset and enqueues a background job.
+- `generate_fal_kling_video_v3_standard_text_to_video` (historical names, not exposed: `generate_kling_v3_standard_t2v_fal`) — Generate a video via fal.ai using Kling Video v3 Standard from a text prompt. Creates a new vid- asset and enqueues a background job.
+- `generate_fal_nano_banana_2_edit_image` (historical names, not exposed: `generate_nano_banana_2_edit_fal`) — Edit images via fal.ai using Google Nano Banana 2 with one or more @img-* reference inputs. Creates a new img- asset and enqueues a background job.
+- `generate_fal_nano_banana_2_lite_edit_image` (historical names, not exposed: `generate_nano_banana_2_lite_edit_fal`) — Edit images via fal.ai using Google Nano Banana 2 Lite with one or more @img-* reference inputs. Creates a new img- asset and enqueues a background job.
+- `generate_fal_nano_banana_2_lite_text_to_image` (historical names, not exposed: `generate_nano_banana_2_lite_fal`) — Generate an image via fal.ai using Google Nano Banana 2 Lite from a text prompt. Creates a new img- asset and enqueues a background job.
+- `generate_fal_nano_banana_2_text_to_image` (historical names, not exposed: `generate_nano_banana_2_fal`) — Generate an image via fal.ai using Google Nano Banana 2 from a text prompt. Creates a new img- asset and enqueues a background job.
+- `generate_fal_nano_banana_edit_image` (historical names, not exposed: `generate_nano_banana_edit_fal`) — Edit images via fal.ai using Google Nano Banana (v1) with one or more @img-* reference inputs. Creates a new img- asset and enqueues a background job.
+- `generate_fal_nano_banana_pro_edit_image` (historical names, not exposed: `generate_nano_banana_pro_edit_fal`) — Edit or compose images via fal.ai using Google Nano Banana Pro with one or more @img-* reference inputs. Creates a new img- asset and enqueues a background job.
+- `generate_fal_nano_banana_pro_text_to_image` (historical names, not exposed: `generate_nano_banana_pro_fal`) — Generate an image via fal.ai using Google Nano Banana Pro from a text prompt. Creates a new img- asset and enqueues a background job.
+- `generate_fal_nano_banana_text_to_image` (historical names, not exposed: `generate_nano_banana_fal`) — Generate an image via fal.ai using Google Nano Banana (v1) from a text prompt. Creates a new img- asset and enqueues a background job.
+- `generate_fal_qwen_2_0_edit_image` (historical names, not exposed: `generate_qwen_image_edit_fal`) — Edit an image via fal.ai using Alibaba Qwen Image edit with one @img-* reference input. Creates a new img- asset and enqueues a background job.
+- `generate_fal_qwen_2_0_text_to_image` (historical names, not exposed: `generate_qwen_image_fal`) — Generate an image via fal.ai using Alibaba Qwen Image from a text prompt. Creates a new img- asset and enqueues a background job.
+- `generate_fal_seedance_2_0_fast_image_to_video` (historical names, not exposed: `generate_seedance2_fast_i2v_fal`) — Generate a video via fal.ai using ByteDance Seedance 2.0 Fast from a first-frame image (optional end frame). Creates a new vid- asset and enqueues a background job.
+- `generate_fal_seedance_2_0_fast_reference_to_video` (historical names, not exposed: `generate_seedance2_fast_r2v_fal`) — Generate a video via fal.ai using ByteDance Seedance 2.0 Fast Reference-to-Video, guided by reference images, videos, and/or audio. Creates a new vid- asset and enqueues a background job. Requires at least one of image_slugs, video_slugs, or audio_slugs (audio alone is not allowed — pair it with an image or video).
+- `generate_fal_seedance_2_0_fast_text_to_video` (historical names, not exposed: `generate_seedance2_fast_t2v_fal`) — Generate a video via fal.ai using ByteDance Seedance 2.0 Fast from a text prompt only. Creates a new vid- asset and enqueues a background job.
+- `generate_fal_seedance_2_0_image_to_video` (historical names, not exposed: `generate_seedance2_i2v_fal`) — Generate a video via fal.ai using ByteDance Seedance 2.0 from a first-frame image (optional end frame). Creates a new vid- asset and enqueues a background job.
+- `generate_fal_seedance_2_0_reference_to_video` (historical names, not exposed: `generate_seedance2_r2v_fal`) — Generate a video via fal.ai using ByteDance Seedance 2.0 Reference-to-Video, guided by reference images, videos, and/or audio. Creates a new vid- asset and enqueues a background job. Requires at least one of image_slugs, video_slugs, or audio_slugs (audio alone is not allowed — pair it with an image or video).
+- `generate_fal_seedance_2_0_text_to_video` (historical names, not exposed: `generate_seedance2_t2v_fal`) — Generate a video via fal.ai using ByteDance Seedance 2.0 from a text prompt only. Creates a new vid- asset and enqueues a background job.
+- `generate_fal_seedream_v5_lite_edit_image` (historical names, not exposed: `generate_seedream_v5_lite_edit_fal`) — Edit or compose images via fal.ai using ByteDance Seedream V5 Lite with one or more @img-* reference inputs. Creates a new img- asset and enqueues a background job.
+- `generate_fal_seedream_v5_lite_text_to_image` (historical names, not exposed: `generate_seedream_v5_lite_fal`) — Generate an image via fal.ai using ByteDance Seedream V5 Lite from a text prompt. Creates a new img- asset and enqueues a background job.
+- `generate_fal_wan_2_7_edit_image` (historical names, not exposed: `generate_wan27_edit_fal`) — Edit images via fal.ai using Wan 2.7 edit (image-to-image) with 1-4 @img-* reference inputs. Creates a new img- asset and enqueues a background job.
+- `generate_fal_wan_2_7_edit_video` (historical names, not exposed: `generate_wan27_videoedit_fal`, `generate_wan27_videoedit_fal_video`) — Edit a video via fal.ai using Alibaba Wan v2.7 Edit-Video, optionally guided by a reference image. Creates a new vid- asset and enqueues a background job.
+- `generate_fal_wan_2_7_image_to_video` (historical names, not exposed: `generate_wan27_i2v_fal`) — Generate a video via fal.ai using Alibaba Wan v2.7 from a first-frame image (optional end frame). Creates a new vid- asset and enqueues a background job.
+- `generate_fal_wan_2_7_pro_edit_image` (historical names, not exposed: `generate_wan27_pro_edit_fal`) — Edit images via fal.ai using Wan 2.7 Pro edit (higher quality image-to-image) with 1-4 @img-* reference inputs. Creates a new img- asset and enqueues a background job.
+- `generate_fal_wan_2_7_pro_text_to_image` (historical names, not exposed: `generate_wan27_pro_fal`) — Generate an image via fal.ai using Wan 2.7 Pro text-to-image (higher quality variant). Creates a new img- asset and enqueues a background job.
+- `generate_fal_wan_2_7_reference_to_video` (historical names, not exposed: `generate_wan27_r2v_fal`, `generate_wan27_r2v_fal_video`) — Generate a video via fal.ai using Alibaba Wan v2.7 Reference-to-Video guided by reference images and/or videos. Creates a new vid- asset and enqueues a background job. Requires at least one of image_slugs or video_slugs.
+- `generate_fal_wan_2_7_text_to_image` (historical names, not exposed: `generate_wan27_fal`) — Generate an image via fal.ai using Wan 2.7 text-to-image. Creates a new img- asset and enqueues a background job.
+- `generate_fal_wan_2_7_text_to_video` (historical names, not exposed: `generate_wan27_t2v_fal`) — Generate a video via fal.ai using Alibaba Wan v2.7 from a text prompt only. Creates a new vid- asset and enqueues a background job.
+- `generate_google_flow_nano_banana_pro_image` (historical names, not exposed: `generate_nano_banana_pro_google`) — Generate an image using Google Nano Banana Pro via Google Flow. Text-to-image or image-to-image from up to 10 reference images. Creates a new img- asset and enqueues a background job.
+- `generate_google_flow_omni_flash_video` (historical names, not exposed: `generate_google_omni_video`) — Generate a video using Google Gemini Omni via Google Flow. Multimodal: a text prompt plus optional first frame, reference images (0-7), or one reference video clip with in/out timecodes. Creates a new vid- asset and enqueues a background job.
+- `generate_google_flow_veo_3_1_fast_video` (historical names, not exposed: `generate_veo31_fast_video`) — Generate a video using Google Veo 3.1 Fast (Google Flow). Text-to-video, image-to-video from start/end frames, or reference-to-video from up to 3 reference images. Creates a new vid- asset and enqueues a background job.
+- `generate_google_flow_veo_3_1_lite_low_priority_video` (historical names, not exposed: `generate_veo31_lite_low_priority_video`) — Generate a video using Google Veo 3.1 Lite Lower Priority (Google Flow, Ultra $199 only, 0 credits). Same modes as Lite (T2V / start-end I2V / up to 3 refs) with lower queue priority. Creates a new vid- asset and enqueues a background job.
+- `generate_google_flow_veo_3_1_lite_video` (historical names, not exposed: `generate_veo31_lite_video`) — Generate a video using Google Veo 3.1 Lite (Google Flow). Cheapest Veo 3.1 tier: text-to-video, start/end frames, or up to 3 reference images. Creates a new vid- asset and enqueues a background job.
+- `generate_google_flow_veo_3_1_quality_video` (historical names, not exposed: `generate_veo31_video`) — Generate a video using Google Veo 3.1 quality tier (Google Flow). Text-to-video or image-to-video from start/end frames; 8s output. Creates a new vid- asset and enqueues a background job.
+- `generate_image_model_comparison` (historical names, not exposed: `gen_images_all_models`) — Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Wan 2.7 Pro, Seedream v5 Lite, Grok Imagine). Creates one img-* asset per model and enqueues background jobs.
+- `generate_kie_gemini_omni_video` (historical names, not exposed: `generate_gemini_omni_video`) — Generate a video using Google Gemini Omni (KIE). Multimodal: a text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes. Creates a new vid- asset and enqueues a background job.
+- `generate_kie_gpt_image_2_image_to_image` (historical names, not exposed: `generate_gpt_image`) — Generate an image using GPT Image 2.0 editing with 1-16 reference images. Creates a new img- asset and enqueues a background job.
+- `generate_kie_gpt_image_2_text_to_image` (historical names, not exposed: `generate_gpt_image_text`) — Generate an image using GPT Image 2.0 text-to-image. Creates a new img- asset and enqueues a background job.
+- `generate_kie_grok_imagine_image_to_image` (historical names, not exposed: `generate_grok_imagine_image`) — Generate an image from an image asset using Grok Imagine image-to-image. Creates a new img- asset and enqueues a background job. Requires at least one of asset_id or image_slugs.
+- `generate_kie_grok_imagine_image_to_video` (historical names, not exposed: `generate_grok_imagine_video`) — Generate a video from image asset(s) using Kie Grok Imagine Video 1.5. Creates a new vid- asset and enqueues a background job. Requires at least one of image_slugs or asset_id.
+- `generate_kie_grok_imagine_text_to_image` (historical names, not exposed: `generate_grok_imagine_text_image`) — Generate an image from a text prompt using Grok Imagine. Creates a new img- asset and enqueues a background job. No reference images needed.
+- `generate_kie_grok_imagine_text_to_video` (historical names, not exposed: `generate_grok_imagine_t2v_video`) — Generate a video from a text prompt using Grok Imagine text-to-video (no images). Creates a new vid- asset and enqueues a background job.
+- `generate_kie_happyhorse_1_1_edit_video` (historical names, not exposed: `generate_happyhorse_videoedit_video`) — Edit a source video using HappyHorse video-edit with optional reference images for character/style. Creates a new vid- asset and enqueues a background job.
+- `generate_kie_happyhorse_1_1_image_to_video` (historical names, not exposed: `generate_happyhorse_i2v_video`) — Generate a video from a single first-frame image using HappyHorse image-to-video. Creates a new vid- asset and enqueues a background job.
+- `generate_kie_happyhorse_1_1_reference_to_video` (historical names, not exposed: `generate_happyhorse_ref_video`) — Generate a multi-character video using HappyHorse reference-to-video (1-9 reference images, order defines character1/character2/...). Creates a new vid- asset and enqueues a background job.
+- `generate_kie_happyhorse_1_1_text_to_video` (historical names, not exposed: `generate_happyhorse_t2v_video`) — Generate a video from a prompt using HappyHorse text-to-video. Creates a new vid- asset and enqueues a background job.
+- `generate_kie_kling_3_0_motion_control` (historical names, not exposed: `generate_kling30_motion_control_video`) — Apply motion from reference videos to character images using Kling 3.0 motion-control. Creates a new vid- asset and enqueues a background job.
+- `generate_kie_kling_3_0_turbo_video` (historical names, not exposed: `generate_kling30_turbo_video`) — Generate a video using Kling 3.0 Turbo tier via KIE (text-to-video or image-to-video). Creates a new vid- asset and enqueues a background job.
+- `generate_kie_kling_3_0_video` (historical names, not exposed: `generate_kling30_video`) — Generate a video using Kling 3.0 with optional reference images, character elements, and multi-shot mode. Creates a new vid- asset and enqueues a background job.
+- `generate_kie_nano_banana_pro_text_to_image` (historical names, not exposed: `generate_nano_banana_image`) — Generate an image using the nano-banana-pro model. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional.
+- `generate_kie_omnihuman_1_5_video` (historical names, not exposed: `generate_omnihuman_video`) — Animate a portrait image with a driving audio track into a talking/singing avatar video using ByteDance OmniHuman 1.5 (kie). Creates a new vid- asset and enqueues a background job.
+- `generate_kie_qwen_2_0_edit_image` (historical names, not exposed: `generate_qwen2_image_edit`) — Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new img- asset and enqueues a background job.
+- `generate_kie_seedance_2_0_fast_video` (historical names, not exposed: `generate_seedance2_fast_video`) — Generate a video using ByteDance Seedance 2 Fast (KIE). Supports text-only, first/last frame, and reference images/videos/audio. Up to 720p. Creates a new vid- asset and enqueues a background job.
+- `generate_kie_seedance_2_0_mini_video` (historical names, not exposed: `generate_seedance2_mini_video`) — Generate a video using ByteDance Seedance 2 Mini (KIE). Supports a text prompt and/or reference images, videos, and audio (no first/last frame; up to 720p). Creates a new vid- asset and enqueues a background job.
+- `generate_kie_seedance_2_0_video` (historical names, not exposed: `generate_seedance2_video`) — Generate a video using ByteDance Seedance 2 (KIE). Supports text-only, first/last frame, and reference images/videos/audio. Up to 1080p. Creates a new vid- asset and enqueues a background job.
+- `generate_kie_seedream_v5_lite_image_to_image` (historical names, not exposed: `generate_seedream_image`) — Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 @img-* reference inputs. Creates a new img- asset and enqueues a background job.
+- `generate_kie_seedream_v5_lite_text_to_image` (historical names, not exposed: `generate_seedream_text_image`) — Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new img- asset and enqueues a background job.
+- `generate_kie_veo_3_0_fast_video` (historical names, not exposed: `generate_veo3_fast_video`) — Generate a video using Google Veo 3 Fast (KIE). Text-to-video or image-to-video from reference images. Faster and cheaper than Veo 3. Creates a new vid- asset and enqueues a background job.
+- `generate_kie_veo_3_0_video` (historical names, not exposed: `generate_veo3_video`) — Generate a video using Google Veo 3 (KIE). Text-to-video or image-to-video from reference images. Creates a new vid- asset and enqueues a background job.
+- `generate_kie_volcengine_video_to_video_lip_sync` (historical names, not exposed: `generate_volcengine_lipsync_video`) — Lip-sync a source video to driving audio using Volcengine video-to-video lip-sync (kie). Creates a new vid- asset and enqueues a background job.
+- `generate_kie_wan_2_7_edit_video` (historical names, not exposed: `generate_wan27_videoedit_video`) — Edit a video using Wan 2.7 Video Edit with optional reference image for character, clothing, or style guidance. Creates a new vid- asset and enqueues a background job.
+- `generate_kie_wan_2_7_image_to_video` (historical names, not exposed: `generate_wan27_i2v_video`) — Generate a video using Wan 2.7 Image to Video with first/last frame image control, clip continuation, or driving audio. Creates a new vid- asset and enqueues a background job.
+- `generate_kie_wan_2_7_pro_text_to_image` (historical names, not exposed: `generate_wan27_image_pro`) — Generate an image using Wan 2.7 Image Pro. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).
+- `generate_kie_wan_2_7_reference_to_video` (historical names, not exposed: `generate_wan27_r2v_video`) — Generate a video using Wan 2.7 Reference guided by reference images (0-5), videos (0-5), voice timbre, and optional first frame. Creates a new vid- asset and enqueues a background job.
+- `generate_kie_wan_2_7_text_to_image` (historical names, not exposed: `generate_wan27_image`) — Generate an image using Wan 2.7 Image. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).
+- `generate_kie_wan_2_7_text_to_video` (historical names, not exposed: `generate_wan27_t2v_video`) — Generate a video from a prompt using Wan 2.7 Text to Video. Supports optional custom audio. Creates a new vid- asset and enqueues a background job.
+- `generate_xai_grok_imagine_video` (historical names, not exposed: `generate_grok_imagine_ref_video`, `generate_xai_grok_imagine_reference_to_video`) — Generate a video using xAI Grok Imagine with optional reference images (0-7). Creates a new vid- asset and enqueues a background job.
+- `get_google_flow_character` — Retrieve normalized details for a single Google Flow character by ref.
+- `get_render_settings` — Fetch stored render settings for a single asset across all orientations, plus transcript language info (detected source language and cached subtitle translations)
+- `get_timeline` — Get the timeline config for a project: { slots, render } where render is the orientation to produce
+- `get_watermark_config` — Read the saved watermark X-handle preferences: { savedHandle, recent, authenticatedHandle }. Used to pre-fill the /watermark dialog.
+- `inject_first_frame` — Replace exactly the first frame of a vid-* or final video with an img-* asset in place. Preserves runtime and stream-copies the original audio unchanged. For final, orientation defaults to the active timeline orientation.
+- `insert_timeline_slot` — Insert an empty timeline slot before or after a slot identifier
+- `inspect_generation_request` (historical names, not exposed: `generation_payload`) — Read the persisted Kie request payload, task meta, and failure info for a single asset. Used by the /inbox hover inspector to show what was sent to the provider.
+- `invert_image` — In-place inverts an img-* asset and regenerates crops.
+- `isolate_vocals` — Isolate vocals from a video or audio asset using ElevenLabs audio-isolation via KIE. Writes audio_vocals.mp3 (for video assets) or mix.mp3 + .mix.json (for audio assets).
+- `list_assets` — List all assets for a project with their media and thumbnail URLs.
+- `list_chat_history` — List recent chat input history entries.
+- `list_elevenlabs_voices` — List available ElevenLabs voice IDs with custom voices first and generic voices after them
+- `list_google_flow_characters` — List Google Flow characters for an account (display names + optional signed thumbnail previews).
+- `list_google_flow_voices` — List Google Flow voices (custom 'user' voices and/or the 'system' presets) for an account.
+- `list_projects` — List all videocity projects
+- `list_prompt_history` — List recent prompts for a given surface in the current project, newest-first.
+- `mark_asset_seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.
+- `move_timeline_audio` — Move a timeline audio clip to a new start frame
+- `pad_video` — Append black video frames at the end to make a whole-second video tail. Retains original audio and makes the appended tail silent.
+- `post` — Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.
+- `prepare_image_generation` (historical names, not exposed: `preview_image`) — Return a preview with schema, prefilled parameters, validation, and model options for all available image models.
+- `prepare_video_generation` (historical names, not exposed: `preview_video`) — Route a natural language prompt to the best video generation tool and return a preview with schema, prefilled parameters, validation, and model options for all available video models.
+- `project_activity` — Get project-changing activity and rewind snapshots for a project
+- `project_history` — Get git commit history for a project
+- `provider_key_status` — List all managed environment keys with their source (1password = injected via op run, read-only; env = from .env, editable), masked values, and live credit/token lookups for supported providers. Never exposes secret values.
+- `push_chat_history` — Append a message to the chat input history log.
+- `read_asset_metadata` — Read an asset's metadata sidecar at HEAD (e.g. `.original.json` → name="original"). Returns the parsed JSON or an error if the file is missing/invalid.
+- `read_file_at_commit` — Read a file's contents from a specific git commit for a given asset. Non-destructive — used to preview an old version of a script/prompt without restoring it. Pairs with restore_asset_version to commit the preview back to HEAD.
+- `read_notebook` — Read a Notebook sidecar (nb-*/.notebook.json).
+- `read_transcript` — Read the transcript for a video or audio asset. Prefers timed ElevenLabs word-level cues (elevenlabs.json), falling back to plain text (.analysis.gpt4otrans.json). Returns kind='timed' with per-word start/end cues, kind='plain' with full text, kind='silence' if a transcript exists but contains no dialog, or kind='missing' if no transcript file exists.
+- `reconcile_project_work` (historical names, not exposed: `sync`) — Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.
+- `record_prompt` — Append a user-typed prompt to the per-surface, per-project history (metadata.sqlite). Surfaces: chat, image_rewrite, video_rewrite, script_rewrite, post, image_generate, video_generate.
+- `recover_asset` — Recover a single asset stuck in the failed/error state by clearing its persisted generation error. Non-destructive: the asset and its media files are kept intact — only the error record is removed, returning the card to its normal ready state. Use this instead of clean_failed_assets when the asset must be preserved.
+- `remove_sound` — Remove a described sound (e.g. a horse neigh) from a vid-* or aud-* asset in place. ElevenLabs Scribe tags audio events with timestamps, events matching the description are silenced with short fades, and video streams are preserved untouched with git versioning.
+- `remove_timeline_audio` — Remove an overlay audio clip from the timeline by its id
+- `remove_timeline_slot` — Remove a stored timeline slot, shift later slots left, and discard redundant trailing empty slots
+- `rename_all` — Bulk-rename vid-*/img-* assets with an explicit dry run. Dry run proposes descriptive names via GPT-5.5 over stored analysis/transcript/prompt context; re-run dry_run with edited `renames` to revalidate; set dry_run=false to apply via fs.renameAsset and update timeline/OSG/plan references.
+- `rename_asset` — Rename an asset with a new name
+- `rename_project` — Atomically rename a project directory. Validates slugs, checks for active asset locks, and updates the default project if needed.
+- `render_timeline` — Concatenate rendered video clips in timeline order into a single final output. Requires every slot to already have its per-orientation render — if any are missing, returns status 'missing_renders' listing the slugs that need /render first. Writes the concat output to the 'final' singleton asset. Orientation precedence: explicit arg → timeline.currentOrientation (active tab) → timeline.render → landscape.
+- `render_video` — Render a vid- asset into landscape.mp4, portrait.mp4, or square.mp4. Renders all 3 orientations when orientation is omitted.
+- `reorder_character_images` — Reorder images in a character folder by renaming them sequentially (source-01, source-02, etc).
+- `replace_google_flow_character` — Replace a Google Flow character with updated fields. Returns { character_ref, old_ref, status, warning }. Recreate happens first, then best-effort delete.
+- `replace_video_audio` — Replace the audio track of a video asset in-place with audio from an aud-* asset, or a specific file inside another asset via the `<assetId>/<filename>` form (e.g. `plan/s1.mp3`). Operates on the vid- asset's original.mp4 with git versioning. Existing per-orientation renders are now stale — re-run /render before /final.
+- `restore_archive_clips` — Restore selected archived video/audio clips into the current videocity project as new assets.
+- `restore_asset_version` — Restore an asset to a previous git commit version
+- `retry_generation` — Retry a failed generation by replaying its original request payload. Reads the persisted generation-request metadata for the asset, clears its error record, and re-enqueues the same job. Use this on a failed asset card to re-run the exact inputs without re-resolving references.
+- `reverse_video` — Reverse video playback (play backwards). Toggle operation — reversing twice restores original. Max 300s due to memory buffering.
+- `rewind_project` — Rewind a project to a previous git commit (creates detached HEAD)
+- `rewrite_prompt` — Rewrite a generation prompt using model-specific best practices. Supports standard mode (rewrite any prompt) and scene mode (rewrite a specific scene in a Kling 3.0 multi-shot asset).
+- `rewrite_script` — Rewrite a generated script asset in-place as a text-to-text transformation of its existing markdown (the source image is NOT re-read). Variants: "full" (full reproduction prompt + breakdown) or "tldr" (1–2 sentence summary). Optional platform preset ("ig" | "tiktok" | "youtube") tunes authentic-capture cues for that feed. Optional custom_prompt applies a transformation instruction (e.g. "replace the pig with a man in a blue suit"). Previous versions are preserved in git history via videocity-engine. Returns immediately; reconcile_project_work reports status="generating" until the new markdown is written.
+- `search_archive` — Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.
+- `set_character_metadata` — Write free-form metadata to a character's .character.json sidecar. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).
+- `set_env_secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.
+- `set_timeline` — Set the timeline for a project (replaces all slots and render orientation; unspecified optional fields like audio are preserved)
+- `set_video_overlay` — Set or clear the on-screen graphic overlay on a video asset. Persists to the asset's render metadata for all orientations without rendering. Pass osg_asset_id=null to clear.
+- `show_folder` — Reveal an asset's folder in Finder
+- `slash_commands` — List all available UI commands with scope metadata
+- `smooth_scene_concat` — Smoothly concatenate two video scenes into a new vid-* asset. When their boundary audio overlaps, automatically aligns the shared waveform to avoid duplicated speech and dissolves the picture across that overlap. Otherwise uses a short crossfade.
+- `splice_video` — Splice two videos with an explicit overlap window. An overlap of 0 concatenates both complete videos; a positive overlap searches that many seconds at the end of the first video for the frame that best matches the first frame of the second. Creates a new vid- asset.
+- `split_video` — Split a video asset into two new assets at chunk_a_end / chunk_b_start. Setting chunk_b_start < chunk_a_end produces an overlap window; equal values produce a clean split. The original asset is preserved.
+- `split_video_by_durations` — Split a video into N targeted chunks plus a leftover chunk with the rest. Pass target_secs as a list (e.g. [10] or [10, 15]); each target produces an exact-length chunk, and the trailing leftover holds whatever's left. If the leftover would be sub-half-second, the last target is backed off by 1s. Source is preserved. When `destination` is provided, chunks are written as files inside an existing asset (one filename per target, no leftover) instead of minting fresh vid-* assets.
+- `suggest_cuts` — Analyze a video asset (frames + transcript + metadata) and return structured trim suggestions: dead air, filler words, awkward sections. Runs in the background and persists to .suggest-cuts.json. Requires a transcript — run /transcribe first if missing. Use /apply-cuts to splice the result.
+- `suggest_sfx` — Analyze a video asset (frames + transcript + metadata) and return structured SFX suggestions: timestamps, slug types, and descriptions. Runs in the background and persists to .suggest-sfx.json. Requires a transcript — run /transcribe first if missing. Use /apply-sfx to mix the result.
+- `switch_project` — Switch the active (default) project to the given slug.
+- `sync_video_to_audio` — Smoothly retime a video's picture through multiple anchors while preserving its original audio unchanged.
+- `timewarp_video` — Retime one video range and compensate the remaining picture to preserve the original duration and audio.
+- `transcribe` — Transcribe audio from a video or audio asset using ElevenLabs speech-to-text. Writes elevenlabs.json into the asset directory.
+- `translate_subtitles` — Translate an asset's transcribed subtitles into another language. Writes elevenlabs.<lang>.json next to elevenlabs.json; renders with subtitle_language set to that language use it. Cached per language — re-runs only after re-transcription.
+- `trim_audio` — Trim an aud-* asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for vid-* assets so picture and sound remain synchronized. Operates in-place with git versioning.
+- `trim_video` — Trim a video asset: keep a time range (trim_start/trim_end) or cut out a middle section (cut_start/cut_end). Operates in-place with git versioning.
+- `unassign_slot` — Clear an asset from a timeline slot (e.g. slot 's02' = index 1)
+- `update_script` — Update a script asset's markdown content (original.md).
+- `update_timeline_audio` — Update an overlay audio clip's volume / fade-in / fade-out by id
+- `upload_file` — Upload a media or markdown file into a videocity project as an asset
+- `upscale_kie_grok_imagine_video` (historical names, not exposed: `upscale_grok_imagine_video`) — Upscale an existing Grok-Imagine video asset using Kie's grok-imagine/upscale. Source must have been generated by grok-imagine. Creates a new vid- asset and enqueues a background job.
+- `verify_x_mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using xAI live X search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.
+- `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
+- `write_notebook` — Write a Notebook sidecar (nb-*/.notebook.json). Creates a new notebook if notebook_id is omitted. Returns the notebook_id.
+- `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns an authorize_url the client should open. After the user approves in the browser, the server captures the callback, exchanges the code, and persists refreshable tokens to ~/.videocity/x-tokens.json.
+- `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at? } so the client can poll while the user authorizes in the browser.
+
+## Slash commands (108 static commands)
+
+- `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
+- `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
+- `/apply-cuts` — Apply trim cuts to a video clip in place; MCP: `apply_cuts`
+- `/apply-sfx` — Generate an ElevenLabs sound effect and mix it into a video in place; MCP: `apply_sfx`
+- `/archive` — Archive a full video or audio asset to the global clip archive and transcribe it; MCP: `archive_clip`
+- `/archive-browse` — Open the clip archive browser, optionally with an initial search; UI: `open_archive`
+- `/archive-restore` — Restore archived clips into the current project by archive ID; MCP: `restore_archive_clips`
+- `/assign` — Assign asset to timeline slot; MCP: `assign_slot`
+- `/audio-add` — Add an audio asset to the timeline audio lane (times in seconds); UI: `timeline_audio_add`
+- `/audio-boost` — Boost audio volume of a video or audio asset (linear multiplier, 1.0–4.0). In-place with git versioning.; MCP: `audio_boost`
+- `/audio-mix` — Mix a video or audio asset onto another at a lower volume, editing the target in-place.; MCP: `audio_mix`
+- `/audio-move` — Move a timeline audio clip to a new start position (seconds); UI: `timeline_audio_move`
+- `/audio-remove` — Remove an audio clip from the timeline audio lane; UI: `timeline_audio_remove`
+- `/audio-set` — Update a timeline audio clip: volume (0-100), fade-in or fade-out (ms); UI: `timeline_audio_update`
+- `/audio-settings` (aliases: `/audio`) — Audio viewer settings for volume and fades; UI: `settings_audio`
+- `/bg` — Background mode; UI: `settings_bg`
+- `/character` — Create a character folder; MCP: `create_character`
+- `/clean-audio` — Clean a video's audio in place with ElevenLabs while preserving vocals and key sound effects; MCP: `clean_video_audio`
+- `/clear-failed` — Clean up failed work: delete failed-generation husks and clear error badges from assets that already have media; MCP: `clean_failed_assets`
+- `/close` — Close the active viewer, panel, or browser and return to the idle screen; UI: `close_viewer`
+- `/collapse` — Collapse the asset/clip sidebars; UI: `sidebar_collapse`
+- `/concat` — Compose one or two image assets into a 16:9 two-slot sheet; omit the second image to leave an empty cell; MCP: `concat_images`
+- `/connect-x` — Connect your X (Twitter) account via browser OAuth; UI: `x_connect`
+- `/copy` — Copy asset name; UI: `copy_clipboard`
+- `/copy-media` (aliases: `/copy-video`) — Copy an asset's primary media file to the clipboard; MCP: `copy_file_to_clipboard`
+- `/crop` — Crop video or image to a 16:9, 9:16, or 1:1 region (visually place the box, then re-render); UI: `open_crop`
+- `/delete` — Delete an asset; MCP: `delete_asset`
+- `/describe` — Describe image into a reproduction-ready prompt; MCP: `describe_image`
+- `/detect-scenes` — Run ffmpeg scdet over a video asset and report natural visual break candidates (camera cuts + motion-settle points).; MCP: `detect_scenes`
+- `/doctor` — Diagnose project health across all asset types (broken + stuck assets). Add an asset and 'fix' to restore that asset to its last usable state.; MCP: `doctor`
+- `/download` — Download video from URL; MCP: `download_video`
+- `/duplicate` — Duplicate an asset; MCP: `duplicate_asset`
+- `/expand` — Expand the asset/clip sidebars; UI: `sidebar_expand`
+- `/export` — Export asset to Downloads folder; MCP: `export_to_downloads`
+- `/export-to` — Export an asset into a different project; MCP: `export_asset_to_project`
+- `/extend-audio` — Extend an aud-* asset to a longer total duration with a matching ElevenLabs continuation, creating a new aud-* asset; MCP: `extend_audio_asset`
+- `/extract-audio` — Extract audio track from video as audio asset (MP3); MCP: `extract_audio`
+- `/extract-first-frame` — Extract first frame from video as image asset; MCP: `extract_first_frame`
+- `/extract-frame` — Extract a frame at a specific timestamp from a video as an image asset; MCP: `extract_frame`
+- `/extract-last-frame` — Extract last frame from video as image asset; MCP: `extract_last_frame`
+- `/files` — Focus file by position; UI: `viewer_focus_file`
+- `/final` — Finalize and export the project timeline; MCP: `render_timeline`
+- `/folder` — Show asset folder; MCP: `show_folder`
+- `/gf-characters` — Manage Google Flow characters; UI: `open_gf_characters`
+- `/grok-upscale` — Upscale a Grok-Imagine video via Kie; MCP: `upscale_kie_grok_imagine_video`
+- `/history` — View asset version history; UI: `show_history`
+- `/inbox` — View generations inbox; UI: `open_inbox`
+- `/info` — Show asset metadata; UI: `viewer_toggle_info`
+- `/inject-first-frame` — Replace frame zero of a video or final output with an image while preserving audio and timing; MCP: `inject_first_frame`
+- `/insert-slot` — Insert an empty timeline slot before or after another slot; MCP: `insert_timeline_slot`
+- `/invert` — In-place inverts an image asset (negates colors); MCP: `invert_image`
+- `/keys` — Open the provider API keys / settings screen; UI: `open_provider_keys`
+- `/keywords` — Animate transcript keywords in face-safe open space, or omit words for automatic selection; MCP: `animate_keywords`
+- `/landscape` — Show landscape crop (1920x1080); UI: `viewer_set_landscape`
+- `/notebook` — Open a project Notebook — a workflow of prompt, image, and video steps. Opens the existing notebook when present; creates 'scratch' by default.; UI: `open_notebook`
+- `/open` — Open asset in viewer; UI: `open_asset`
+- `/original` — Show original uncropped image; UI: `viewer_set_original`
+- `/outroqr` — Generate a 10-second animated QR outro with bundled impact sound; MCP: `create_qr_outro`
+- `/overlay` (aliases: `/osg`) — Place an on-screen graphic overlay on a video; UI: `open_osg`
+- `/pad` — Add a whole-second video tail with black frames and silence; MCP: `pad_video`
+- `/play` — Open the timeline player at a slot (default: first filled slot); UI: `open_slot_player`
+- `/portrait` — Show portrait crop (1080x1920); UI: `viewer_set_portrait`
+- `/post` — Post a video or image asset to X (Twitter), now or scheduled; UI: `open_post_composer`
+- `/project-delete` — Delete a project (asks for confirmation; defaults to the current project); UI: `delete_project`
+- `/project-new` — Create a new project and switch to it; UI: `create_project`
+- `/project-rename` — Rename the current project; UI: `rename_project`
+- `/projects` — Open the project selector dropdown; UI: `open_projects`
+- `/qart` — Create scan-safe color and monochrome QR mosaics from an img-* source; MCP: `create_qart`
+- `/qrbtf` — Generate a parametric QR code in an artistic style (normal, line, dsj, bubble, func); MCP: `create_qrbtf`
+- `/recover` — Recover an asset stuck in the failed state (clears the error, keeps the media); MCP: `recover_asset`
+- `/remove-slot` — Remove a timeline slot, shift later slots left, and clean up trailing empty slots; MCP: `remove_timeline_slot`
+- `/remove-sound` — Remove a described sound from a vid-* or aud-* asset in place by silencing its Scribe-tagged audio events; MCP: `remove_sound`
+- `/rename` — Rename an asset; MCP: `rename_asset`
+- `/rename-all` — Bulk-rename vid-*/img-* assets with an explicit dry run: GPT-5.5 proposes descriptive names from each asset's stored context, you edit them in a side-by-side preview, then confirm to apply (updates timeline slots, OSG metadata, and plan/.plan.json references).; UI: `open_rename_all`
+- `/render-video` (aliases: `/render`) — Render a video asset; MCP: `render_video`
+- `/replace-audio` — Replace the audio track of a video asset with an aud- asset's audio; MCP: `replace_video_audio`
+- `/reverse` — Reverse video playback (play backwards); MCP: `reverse_video`
+- `/rewind` — Rewind the project to a previous commit (no hash opens the activity log to pick one); UI: `rewind_activity`
+- `/rewrite` — Optimize a prompt; MCP: `rewrite_prompt`
+- `/rewrite-script` — Rewrite a script asset in place with the full describe model; MCP: `rewrite_script`
+- `/say` — Generate speech audio from text using an ElevenLabs voice ID; MCP: `generate_elevenlabs_text_to_audio`
+- `/scene-concat` — Smoothly join two video scenes, automatically aligning shared boundary audio; MCP: `smooth_scene_concat`
+- `/settings` — Show render settings; UI: `viewer_show_settings`
+- `/settings-landscape` — Settings for landscape orientation; UI: `settings_landscape`
+- `/settings-portrait` — Settings for portrait orientation; UI: `settings_portrait`
+- `/settings-square` — Settings for square orientation; UI: `settings_square`
+- `/skeleton` — Extract a pose skeleton image from an image asset; UI: `extract_skeleton`
+- `/sort` — Set sidebar sort order (no value toggles); UI: `sidebar_sort`
+- `/speed` — Change video playback speed (0.25-4.0x) or exact duration (e.g. 8.32s); MCP: `change_video_speed`
+- `/splice` — Splice two videos with an overlap window; use 0 to concatenate both complete clips; MCP: `splice_video`
+- `/split` — Open frame-accurate split editor; creates two video assets. Original preserved.; UI: `open_split`
+- `/split-chunks` (aliases: `/even-split`) — Split a video into targeted chunks plus a leftover while preserving the source; MCP: `split_video_by_durations`
+- `/subs` — Subtitle settings; UI: `settings_subs`
+- `/suggest-cuts` — Suggest trim cuts for a video (dead air, fillers, awkward sections); MCP: `suggest_cuts`
+- `/suggest-sfx` — Suggest sound-effect placements for a video; MCP: `suggest_sfx`
+- `/sync-audio` — Smoothly retime video action to match fixed original-audio cues at multiple anchors; MCP: `sync_video_to_audio`
+- `/timewarp` — Retime one scene while compensating the rest of the picture and preserving the original audio and duration; MCP: `timewarp_video`
+- `/tldr` — Rewrite a script asset in place as a 1–2 sentence TLDR; MCP: `rewrite_script`
+- `/transcribe` — Transcribe audio using ElevenLabs; MCP: `transcribe`
+- `/transcript` — Read transcript of a video or audio asset; MCP: `read_transcript`
+- `/translate-subs` — Translate video subtitles to a target language; MCP: `translate_subtitles`
+- `/trim-audio` — Trim audio clip; MCP: `trim_audio`
+- `/trim-video` (aliases: `/trim`) — Trim video clip; MCP: `trim_video`
+- `/unassign` — Clear asset from timeline slot; MCP: `unassign_slot`
+- `/upload` — Upload a file; UI: `open_upload`
+- `/vocals` — Isolate vocals from audio; MCP: `isolate_vocals`
+- `/voices` — List available ElevenLabs voices; UI: `show_voices`
+- `/watermark` — Open the watermark dialog to add a QR + 'X: <handle>' end-card to a video (shows over the last 2 seconds at render); UI: `open_watermark`
+- `/<project-slug>` — Switch to that project; generated dynamically for each project whose slug does not conflict with a command or alias.

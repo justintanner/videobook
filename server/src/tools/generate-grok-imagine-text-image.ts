@@ -30,7 +30,7 @@ type Args = SchemaArgs<typeof generateGrokImagineTextImageSchema>;
 
 export function generateGrokImagineTextImageDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_grok_imagine_text_image",
+    name: "generate_kie_grok_imagine_text_to_image",
     description:
       "Generate an image from a text prompt using Grok Imagine. Creates a new img- asset and enqueues a background job. No reference images needed.",
     schema: generateGrokImagineTextImageSchema,

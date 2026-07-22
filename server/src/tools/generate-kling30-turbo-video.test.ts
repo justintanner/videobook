@@ -43,7 +43,7 @@ describe("generate_kling30_turbo_video tool", () => {
   it("returns error when KIE_API_KEY is not set", async () => {
     delete process.env.KIE_API_KEY;
     const result = await client.callTool({
-      name: "generate_kling30_turbo_video",
+      name: "generate_kie_kling_3_0_turbo_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "a futuristic city",
@@ -55,7 +55,7 @@ describe("generate_kling30_turbo_video tool", () => {
 
   it("enqueues kling30_turbo job (text-to-video)", async () => {
     const result = await client.callTool({
-      name: "generate_kling30_turbo_video",
+      name: "generate_kie_kling_3_0_turbo_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "a futuristic city",
@@ -80,7 +80,7 @@ describe("generate_kling30_turbo_video tool", () => {
     await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
 
     const result = await client.callTool({
-      name: "generate_kling30_turbo_video",
+      name: "generate_kie_kling_3_0_turbo_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "animate this image",

@@ -117,7 +117,7 @@ const omniOption: ModelOption = {
   ...imageOption,
   key: 'gemini_omni',
   label: 'Gemini Omni Video',
-  tool_name: 'generate_google_omni_video',
+  tool_name: 'generate_google_flow_omni_flash_video',
   modes: {
     shared_params: ['prompt', 'duration', 'aspect_ratio'],
     default_mode: 't2v',

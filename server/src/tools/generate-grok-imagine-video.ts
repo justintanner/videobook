@@ -47,7 +47,7 @@ type Args = SchemaArgs<typeof generateGrokImagineVideoSchema>;
 
 export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_grok_imagine_video",
+    name: "generate_kie_grok_imagine_image_to_video",
     description: "Generate a video from image asset(s) using Kie Grok Imagine Video 1.5. Creates a new vid- asset and enqueues a background job. Requires at least one of image_slugs or asset_id.",
     schema: generateGrokImagineVideoSchema,
     handler: async (args) => {
@@ -59,7 +59,7 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
         return toolError(`${requiredKey} environment variable is not set`);
       }
 
-      const missingInput = requireAtLeastOne("generate_grok_imagine_video", [
+      const missingInput = requireAtLeastOne("generate_kie_grok_imagine_image_to_video", [
         { name: "image_slugs", value: image_slugs },
         { name: "asset_id", value: rawAssetId },
       ]);

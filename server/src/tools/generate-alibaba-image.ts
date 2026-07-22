@@ -45,7 +45,7 @@ type Args = SchemaArgs<typeof generateAlibabaImageSchema>;
 
 export function generateAlibabaImageDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_alibaba_image",
+    name: "generate_alibaba_wan_2_7_text_to_image",
     description: "Generate an image using Alibaba Cloud Wan 2.7 Image. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).",
     schema: generateAlibabaImageSchema,
     handler: async (args) => {

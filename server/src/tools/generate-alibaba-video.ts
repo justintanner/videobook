@@ -112,7 +112,7 @@ type Args = SchemaArgs<typeof generateAlibabaVideoSchema>;
 
 export function generateAlibabaVideoDef(fs: VideocityFs): ToolDef {
   return {
-    name: "generate_alibaba_video",
+    name: "generate_alibaba_wan_2_7_video",
     description: "Generate a video using Alibaba Cloud DashScope Video Synthesis. Requires at least one media input (first/last frame, reference video, driving audio, or clip continuation). Creates a new vid- asset and enqueues a background job.",
     schema: generateAlibabaVideoSchema,
     handler: async (args) => {
@@ -127,7 +127,7 @@ export function generateAlibabaVideoDef(fs: VideocityFs): ToolDef {
         return toolError("DASHSCOPE_API_KEY environment variable is not set");
       }
 
-      const missingInput = requireAtLeastOne("generate_alibaba_video", [
+      const missingInput = requireAtLeastOne("generate_alibaba_wan_2_7_video", [
         { name: "first_frame_slug", value: first_frame_slug },
         { name: "last_frame_slug", value: last_frame_slug },
         { name: "first_clip_slug", value: first_clip_slug },
