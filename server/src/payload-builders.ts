@@ -1674,19 +1674,19 @@ function translateToolPayload(
       );
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_veo_3_1_video":
+    case "generate_google_flow_veo_3_1_quality_video":
     case "generate_veo31_video":
-    case "generate_kie_veo_3_1_fast_video":
+    case "generate_google_flow_veo_3_1_fast_video":
     case "generate_veo31_fast_video":
-    case "generate_kie_veo_3_1_lite_video":
+    case "generate_google_flow_veo_3_1_lite_video":
     case "generate_veo31_lite_video":
-    case "generate_kie_veo_3_1_lite_low_priority_video":
+    case "generate_google_flow_veo_3_1_lite_low_priority_video":
     case "generate_veo31_lite_low_priority_video": {
-      const model: GoogleVeo31Model = (toolName === "generate_veo31_video" || toolName === "generate_kie_veo_3_1_video" || rawToolName === "generate_veo31_video")
+      const model: GoogleVeo31Model = (toolName === "generate_veo31_video" || toolName === "generate_google_flow_veo_3_1_quality_video" || rawToolName === "generate_veo31_video")
         ? "veo-3.1-quality"
-        : (toolName === "generate_veo31_fast_video" || toolName === "generate_kie_veo_3_1_fast_video" || rawToolName === "generate_veo31_fast_video")
+        : (toolName === "generate_veo31_fast_video" || toolName === "generate_google_flow_veo_3_1_fast_video" || rawToolName === "generate_veo31_fast_video")
           ? "veo-3.1-fast"
-          : (toolName === "generate_veo31_lite_low_priority_video" || toolName === "generate_kie_veo_3_1_lite_low_priority_video" || rawToolName === "generate_veo31_lite_low_priority_video")
+          : (toolName === "generate_veo31_lite_low_priority_video" || toolName === "generate_google_flow_veo_3_1_lite_low_priority_video" || rawToolName === "generate_veo31_lite_low_priority_video")
             ? "veo-3.1-lite-low-priority"
             : "veo-3.1-lite";
       const startImage = args.first_frame_slug as string | undefined;
@@ -1752,7 +1752,7 @@ function translateToolPayload(
       const payload = buildGrokImagineTextPayload(args as GrokImagineTextArgs);
       return { provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })", payload: payload as unknown as Record<string, unknown> };
     }
-    case "generate_kie_grok_imagine_reference_to_video":
+    case "generate_xai_grok_imagine_reference_to_video":
     case "generate_grok_imagine_ref_video": {
       const rawPrompt = (args.prompt as string | undefined) ?? "";
       const prompt = replaceNaturalAssetMentions(rawPrompt, { imageSlugs });

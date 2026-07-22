@@ -420,6 +420,27 @@ describe("getImageModels", () => {
     expect(models.nano_banana.providers.some((p) => p.key === "xai")).toBe(false);
     expect(models.gpt_image.providers.some((p) => p.key === "xai")).toBe(false);
   });
+
+  it("routes Alibaba Qwen image models through multimodal generation", () => {
+    const models = getImageModels();
+    for (const key of ["alibaba_qwen_image", "alibaba_qwen_image_edit"]) {
+      const provider = models[key].providers.find((candidate) => candidate.key === "alibaba");
+      expect(provider?.provider_path).toContain("multimodalGeneration");
+    }
+  });
+
+  it("builds the canonical Alibaba picker schemas", () => {
+    const models = getImageModels();
+    expect(getImageToolSchema(models.alibaba_image.tool_name)?.required).toContain("prompt");
+    expect(getImageToolSchema(models.alibaba_image_pro.tool_name)?.properties.thinking_mode).toBeDefined();
+
+    const generate = getImageToolSchema(models.alibaba_qwen_image.tool_name);
+    expect(generate?.required).toEqual(["prompt", "model"]);
+
+    const edit = getImageToolSchema(models.alibaba_qwen_image_edit.tool_name);
+    expect(edit?.required).toEqual(["prompt", "image_slugs", "model"]);
+    expect(edit?.properties.model.enum).toContain("qwen-image-edit");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -472,5 +493,13 @@ describe("google flow image provider", () => {
     const models = getImageModels();
     const option = buildImageModelOption("nano_banana", models.nano_banana, { prompt: "x" }, [], undefined, "kie");
     expect(option.tool_name).toBe("generate_kie_nano_banana_pro_text_to_image");
+  });
+
+  it("validates Google Flow character references under the canonical name", () => {
+    const result = validateImageParams("generate_google_flow_nano_banana_pro_image", {
+      prompt: "x",
+      character_refs: ["character-a", "character-a"],
+    });
+    expect(result.warnings.some((warning) => warning.includes("Duplicate character"))).toBe(true);
   });
 });

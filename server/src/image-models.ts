@@ -485,7 +485,7 @@ function getImageToolSchema(rawToolName: string): ToolSchema | null {
   }
 
   // Alibaba image models — custom schema
-  if (config.tool_name === "generate_alibaba_image" || config.tool_name === "generate_alibaba_image_pro") {
+  if (config.key === "alibaba_image" || config.key === "alibaba_image_pro") {
     const properties: Record<string, ParamSchema> = {
       prompt: zodFieldToParam(AlibabaImageTextContentSchema.shape.text, "Text prompt for image generation (max 5000 chars)"),
       image_slugs: {
@@ -503,8 +503,8 @@ function getImageToolSchema(rawToolName: string): ToolSchema | null {
   }
 
   // Alibaba Qwen image models — custom schema (sync multimodal endpoint)
-  if (config.tool_name === "generate_alibaba_qwen_image" || config.tool_name === "generate_alibaba_qwen_image_edit") {
-    const isEdit = config.tool_name === "generate_alibaba_qwen_image_edit";
+  if (config.key === "alibaba_qwen_image" || config.key === "alibaba_qwen_image_edit") {
+    const isEdit = config.key === "alibaba_qwen_image_edit";
     const modelEnum = isEdit ? [...QWEN_EDIT_MODEL_VALUES] : [...QWEN_GENERATION_MODEL_VALUES];
     const properties: Record<string, ParamSchema> = {
       prompt: { type: "string", description: isEdit ? "Edit instruction text" : "Text prompt for image generation" },
@@ -563,7 +563,7 @@ function buildProvidersForConfig(config: ImageModelConfig): ProviderRoute[] {
     });
   }
 
-  if (config.tool_name === "generate_alibaba_qwen_image" || config.tool_name === "generate_alibaba_qwen_image_edit") {
+  if (config.key === "alibaba_qwen_image" || config.key === "alibaba_qwen_image_edit") {
     providers.push({
       key: "alibaba",
       label: "Alibaba",
@@ -658,8 +658,9 @@ type ValidationResult = {
   image_slots: SlotConstraints | null;
 };
 
-function validateImageParams(toolName: string, params: Record<string, unknown>): ValidationResult {
-  const schema = getImageToolSchema(toolName);
+function validateImageParams(rawToolName: string, params: Record<string, unknown>): ValidationResult {
+  const toolName = getCanonicalName(rawToolName);
+  const schema = getImageToolSchema(rawToolName);
   const config = IMAGE_MODEL_CONFIGS.find((c) => c.tool_name === toolName);
   if (!schema) return { valid: false, missing_required: [], warnings: ["Unknown tool"], image_slots: null };
 
@@ -682,8 +683,8 @@ function validateImageParams(toolName: string, params: Record<string, unknown>):
     }
   }
 
-  const imageSlots = getImageSlotsForToolName(toolName);
-  const label = getImageToolLabel(toolName, config);
+  const imageSlots = getImageSlotsForToolName(rawToolName);
+  const label = getImageToolLabel(rawToolName, config);
   const imageSlugs = params.image_slugs as string[] | undefined;
   const totalImages = imageSlugs?.length ?? 0;
 
@@ -695,7 +696,7 @@ function validateImageParams(toolName: string, params: Record<string, unknown>):
     warnings.push(`${label} supports ${range} images (got ${totalImages})`);
   }
 
-  if (toolName === "generate_nano_banana_pro_google") {
+  if (toolName === "generate_google_flow_nano_banana_pro_image") {
     const rawCharRefs = (params.character_refs as string[] | undefined) ?? [];
     const seenChars = new Set<string>();
     const charRefs: string[] = [];

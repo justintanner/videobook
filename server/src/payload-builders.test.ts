@@ -248,7 +248,7 @@ describe("translateToolPayload", () => {
   });
 
   it("builds Veo 3.1 lite-low-priority payload with model literal", () => {
-    const result = translateToolPayload("generate_veo31_lite_low_priority_video", {
+    const result = translateToolPayload("generate_google_flow_veo_3_1_lite_low_priority_video", {
       prompt: "slow clouds",
       duration: "4",
       aspect_ratio: "16:9",

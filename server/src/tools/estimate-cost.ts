@@ -5,6 +5,7 @@ import type { ToolDef, ToolResult } from "./tool-def.js";
 import { getCostProvider } from "../cost.js";
 import { getCostAdapter } from "../cost-adapters.js";
 import { estimateGoogleFlowCost } from "../google-flow-cost.js";
+import { getActionSpec } from "../generation-registry.js";
 
 const callItem = z.object({
   tool_name: z.string().describe("Name of the generation tool whose cost to estimate"),
@@ -127,9 +128,10 @@ async function enrichSourceDuration(
 
 async function enrichInput(
   fs: VideocityFs,
-  toolName: string,
+  rawToolName: string,
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  const toolName = getActionSpec(rawToolName)?.old_name ?? rawToolName;
   if (toolName === "generate_kling30_motion_control_video") {
     return enrichMotionControlInput(fs, input);
   }

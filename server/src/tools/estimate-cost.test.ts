@@ -507,4 +507,25 @@ describe("estimate_cost tool", () => {
       else process.env.GOOGLE_FLOW_PLAN_TIER = prev;
     }
   });
+
+  it("prices canonical generation names across providers", async () => {
+    const result = await client.callTool({
+      name: "estimate_cost",
+      arguments: {
+        calls: [
+          { tool_name: "generate_kie_seedance_2_0_video", input: { duration: 5 } },
+          { tool_name: "generate_fal_nano_banana_text_to_image", input: { num_images: 1 } },
+          { tool_name: "generate_alibaba_qwen_2_0_text_to_image", input: {} },
+          { tool_name: "generate_xai_grok_imagine_reference_to_video", input: { duration: 6 } },
+          { tool_name: "generate_google_flow_veo_3_1_fast_video", input: { duration: 8 } },
+        ],
+      },
+    });
+    const payload = parse(result);
+    expect(payload.per_call).toHaveLength(5);
+    for (const call of payload.per_call) {
+      expect(call.estimate.warnings.join(" "), call.tool_name).not.toContain("no cost adapter");
+      expect(call.estimate.usd, call.tool_name).toBeGreaterThan(0);
+    }
+  });
 });

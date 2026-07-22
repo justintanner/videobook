@@ -210,7 +210,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   veo31: {
     label: "Veo 3.1",
-    tool_name: "generate_kie_veo_3_1_video",
+    tool_name: "generate_google_flow_veo_3_1_quality_video",
     description: "Google Veo 3.1 quality tier — text-to-video or image-to-video from start/end frames, 8s output (Google Flow)",
     params: ["prompt", "first_frame_slug", "last_frame_slug", "aspect_ratio", "seed"],
     defaults: {},
@@ -220,7 +220,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   veo31_fast: {
     label: "Veo 3.1 Fast",
-    tool_name: "generate_kie_veo_3_1_fast_video",
+    tool_name: "generate_google_flow_veo_3_1_fast_video",
     description: "Google Veo 3.1 Fast — text-to-video, start/end-frame image-to-video, or reference images (Google Flow)",
     params: ["prompt", "first_frame_slug", "last_frame_slug", "image_slugs", "aspect_ratio", "duration", "seed"],
     defaults: {},
@@ -230,7 +230,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   veo31_lite: {
     label: "Veo 3.1 Lite",
-    tool_name: "generate_kie_veo_3_1_lite_video",
+    tool_name: "generate_google_flow_veo_3_1_lite_video",
     description: "Google Veo 3.1 Lite — cheapest Veo 3.1 tier: text-to-video, start/end frames, or reference images (Google Flow)",
     params: ["prompt", "first_frame_slug", "last_frame_slug", "image_slugs", "aspect_ratio", "duration", "seed"],
     defaults: {},
@@ -240,7 +240,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   veo31_lite_low_priority: {
     label: "Veo 3.1 Lite LP",
-    tool_name: "generate_kie_veo_3_1_lite_low_priority_video",
+    tool_name: "generate_google_flow_veo_3_1_lite_low_priority_video",
     description: "Google Veo 3.1 Lite Lower Priority — Ultra $199 only, 0 credits, lower queue priority (Google Flow)",
     params: ["prompt", "first_frame_slug", "last_frame_slug", "image_slugs", "aspect_ratio", "duration", "seed"],
     defaults: {},
@@ -355,7 +355,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
   grok_imagine_ref: {
     label: "Grok Imagine Reference",
-    tool_name: "generate_kie_grok_imagine_reference_to_video",
+    tool_name: "generate_xai_grok_imagine_reference_to_video",
     description: "Video generation guided by reference images (0-7 optional)",
     params: ["prompt", "image_slugs", "duration", "resolution", "aspect_ratio"],
     defaults: {},
@@ -834,6 +834,7 @@ const IMAGE_FIELD_SCHEMAS: Record<string, ZodLike> = {
   generate_veo3_video: VeoGenerateRequestSchema.shape.imageUrls,
   generate_veo3_fast_video: VeoGenerateRequestSchema.shape.imageUrls,
   generate_kling30_turbo_video: KlingV3TurboImageToVideoRequestSchema.shape.input.shape.image_urls,
+  generate_xai_grok_imagine_reference_to_video: XaiVideoGenerateRequestSchema.shape.reference_images,
   generate_grok_imagine_ref_video: XaiVideoGenerateRequestSchema.shape.reference_images,
   generate_wan27_r2v_video: Wan27RefToVideoRequestSchema.shape.input.shape.reference_image,
   generate_happyhorse_ref_video: HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.reference_image,
@@ -841,6 +842,7 @@ const IMAGE_FIELD_SCHEMAS: Record<string, ZodLike> = {
 
 const IMAGE_SLOT_OVERRIDES: Record<string, SlotConstraints> = {
   generate_grok_imagine_video: { min: 1, max: 7 },
+  generate_xai_grok_imagine_reference_to_video: { min: 0, max: 7 },
   generate_grok_imagine_ref_video: { min: 0, max: 7 },
   // Google Flow veo 3.1 reference slots are positional referenceImage_1..3
   // keys with no array field in @apicity/googleflow to read (gaps doc §14).
@@ -850,7 +852,7 @@ const IMAGE_SLOT_OVERRIDES: Record<string, SlotConstraints> = {
   generate_veo31_fast_video: { min: 0, max: 3 },
   generate_google_flow_veo_3_1_lite_video: { min: 0, max: 3 },
   generate_veo31_lite_video: { min: 0, max: 3 },
-  generate_kie_veo_3_1_lite_low_priority_video: { min: 0, max: 3 },
+  generate_google_flow_veo_3_1_lite_low_priority_video: { min: 0, max: 3 },
   generate_veo31_lite_low_priority_video: { min: 0, max: 3 },
 };
 
@@ -1375,11 +1377,31 @@ function applyApicityConstraints(prop: ParamSchema, schema: ZodLike): void {
   if (maxLength !== undefined) prop.maxLength = maxLength;
 }
 
-function getVideoToolSchema(rawToolName: string): ToolSchema | null {
-  const toolName = rawToolName;
+const VIDEO_SCHEMA_TOOL_NAMES: Record<string, string> = {
+  generate_fal_seedance_2_0_reference_to_video: "generate_seedance2_r2v_fal_video",
+  generate_fal_seedance_2_0_fast_reference_to_video: "generate_seedance2_fast_r2v_fal_video",
+  generate_fal_wan_2_7_text_to_video: "generate_wan27_t2v_fal_video",
+  generate_fal_wan_2_7_image_to_video: "generate_wan27_i2v_fal_video",
+  generate_fal_wan_2_7_reference_to_video: "generate_wan27_r2v_fal_video",
+  generate_fal_wan_2_7_edit_video: "generate_wan27_videoedit_fal_video",
+  generate_fal_grok_imagine_video_reference_to_video: "generate_grok_imagine_r2v_fal_video",
+  extend_fal_grok_imagine_video: "generate_grok_imagine_extend_fal_video",
+  generate_fal_grok_imagine_video_edit_video: "generate_grok_imagine_edit_fal_video",
+};
+
+function resolveVideoSchemaToolName(rawToolName: string): string {
   const canonical = getCanonicalName(rawToolName);
+  const schemaToolName = VIDEO_SCHEMA_TOOL_NAMES[canonical];
+  if (schemaToolName) return schemaToolName;
+  return rawToolName === canonical ? (getActionSpec(rawToolName)?.old_name ?? rawToolName) : rawToolName;
+}
+
+function getVideoToolSchema(rawToolName: string): ToolSchema | null {
+  const canonical = getCanonicalName(rawToolName);
+  const spec = getActionSpec(rawToolName);
+  const toolName = resolveVideoSchemaToolName(rawToolName);
   const isGoogleAlias = toolName === "generate_google_omni_video" || toolName === "generate_google_flow_omni_flash_video" || canonical === "generate_google_flow_omni_flash_video";
-  const baseName = GOOGLE_VIDEO_ALIASES[rawToolName] ?? GOOGLE_VIDEO_ALIASES[canonical] ?? rawToolName;
+  const baseName = GOOGLE_VIDEO_ALIASES[rawToolName] ?? GOOGLE_VIDEO_ALIASES[canonical] ?? GOOGLE_VIDEO_ALIASES[toolName] ?? toolName;
   const model = Object.values(VIDEO_MODELS).find(
     (m) => m.tool_name === baseName
       || m.tool_name === canonical
@@ -1391,7 +1413,6 @@ function getVideoToolSchema(rawToolName: string): ToolSchema | null {
   const properties: Record<string, ParamSchema> = {};
   const required = new Set<string>();
   const defaults: Record<string, unknown> = {};
-  const spec = getActionSpec(rawToolName);
   const zodSchemas = VIDEO_PARAM_ZOD_SCHEMAS[baseName]
     ?? VIDEO_PARAM_ZOD_SCHEMAS[rawToolName]
     ?? VIDEO_PARAM_ZOD_SCHEMAS[canonical]
@@ -1746,9 +1767,11 @@ type ValidationResult = {
   multi_prompt_slots: number | null;
 };
 
-function validateVideoParams(toolName: string, params: Record<string, unknown>): ValidationResult {
-  const schema = getVideoToolSchema(toolName);
+function validateVideoParams(rawToolName: string, params: Record<string, unknown>): ValidationResult {
+  const schema = getVideoToolSchema(rawToolName);
   if (!schema) return { valid: false, missing_required: [], warnings: ["Unknown tool"], image_slots: null, multi_prompt_slots: null };
+  const canonical = getCanonicalName(rawToolName);
+  const toolName = resolveVideoSchemaToolName(rawToolName);
 
   const missing: string[] = [];
   const warnings: string[] = [];
@@ -1771,7 +1794,6 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
   }
 
   // Tool-specific validation
-  const canonical = getCanonicalName(toolName);
   const imageSlugs = params.image_slugs as string[] | undefined;
   const totalImages = imageSlugs?.length ?? 0;
 
@@ -1779,7 +1801,7 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
     warnings.push(`Grok Imagine 1.5 supports up to 7 reference images (got ${totalImages})`);
   }
 
-  if (toolName === "generate_grok_imagine_ref_video" || canonical === "generate_kie_grok_imagine_reference_to_video") {
+  if (toolName === "generate_grok_imagine_ref_video" || canonical === "generate_xai_grok_imagine_reference_to_video") {
     if (totalImages > 7) {
       warnings.push(`xAI reference-to-video supports up to 7 reference images (got ${totalImages})`);
     }
@@ -1961,11 +1983,12 @@ function validateVideoParams(toolName: string, params: Record<string, unknown>):
 // ---------------------------------------------------------------------------
 
 function applyVideoToolConstraints(
-  toolName: string,
+  rawToolName: string,
   schema: ToolSchema,
   params: Record<string, unknown>,
 ): void {
   void schema;
+  const toolName = resolveVideoSchemaToolName(rawToolName);
   if (toolName === "generate_grok_imagine_video") {
     if (params.mode === "spicy") params.mode = "normal";
     if (params.aspect_ratio === "auto") params.aspect_ratio = "16:9";
@@ -2000,36 +2023,36 @@ Given a user query (possibly with @asset references), determine:
 
 ROUTING PREFERENCES:
 - PREFER ${VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name} as the DEFAULT for ALL video generation requests
-- Use generate_seedance2_video when user mentions "seedance" or "bytedance" and wants 1080p, or just defaults to the higher-quality variant. Accepts any input combination: text-only, first/last frame, reference images/videos/audio
-- Use generate_seedance2_fast_video when user mentions "seedance fast" or 480p/720p is acceptable (faster/cheaper). Same input flexibility as the full variant
-- Use generate_seedance2_mini_video when user mentions "seedance mini". Text prompt plus optional reference images/videos/audio; no first/last frame; 480p/720p
-- generate_gemini_omni_video is Google Gemini Omni — the DEFAULT model; use it when no other model is clearly indicated. Multimodal text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes
-- Use generate_veo31_fast_video when user mentions "veo" or "veo 3.1"; pick generate_veo31_video for "veo quality", generate_veo31_lite_video for "veo lite", and generate_veo31_lite_low_priority_video for "veo lite low priority" / "veo lp" (Google Flow). Text-to-video, first/last frame image-to-video, or reference images (fast/lite/lite-lp only)
-- Use generate_wan27_i2v_video ONLY when user mentions "wan" with first/last frame or clip continuation
-- Use generate_wan27_videoedit_video ONLY when user mentions "wan" with video editing or modifying an existing video
-- Use generate_wan27_r2v_video ONLY when user mentions "wan" with reference images, reference videos, or voice
-- Use extend_wan27_video ONLY when user explicitly wants to extend an existing Wan 2.7 video
-- Use extend_grok_imagine_video ONLY when user explicitly wants to extend an existing video with Grok Imagine
-- Use generate_alibaba_video ONLY when user explicitly mentions "alibaba", "dashscope", or "qwen" for video generation
-- Use generate_volcengine_lipsync_video ONLY when user explicitly mentions "volcengine" or wants to lip-sync / dub an existing video to a separate audio track
-- Use generate_omnihuman_video ONLY when user explicitly mentions "omnihuman" or wants to animate a portrait/photo with a voice or audio track (talking/singing avatar from a still image)
+- Use generate_kie_seedance_2_0_video when user mentions "seedance" or "bytedance" and wants 1080p, or just defaults to the higher-quality variant. Accepts any input combination: text-only, first/last frame, reference images/videos/audio
+- Use generate_kie_seedance_2_0_fast_video when user mentions "seedance fast" or 480p/720p is acceptable (faster/cheaper). Same input flexibility as the full variant
+- Use generate_kie_seedance_2_0_mini_video when user mentions "seedance mini". Text prompt plus optional reference images/videos/audio; no first/last frame; 480p/720p
+- generate_kie_gemini_omni_video is Google Gemini Omni — the DEFAULT model; use it when no other model is clearly indicated. Multimodal text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes
+- Use generate_google_flow_veo_3_1_fast_video when user mentions "veo" or "veo 3.1"; pick generate_google_flow_veo_3_1_quality_video for "veo quality", generate_google_flow_veo_3_1_lite_video for "veo lite", and generate_google_flow_veo_3_1_lite_low_priority_video for "veo lite low priority" / "veo lp". Text-to-video, first/last frame image-to-video, or reference images (fast/lite/lite-lp only)
+- Use generate_kie_wan_2_7_image_to_video ONLY when user mentions "wan" with first/last frame or clip continuation
+- Use generate_kie_wan_2_7_edit_video ONLY when user mentions "wan" with video editing or modifying an existing video
+- Use generate_kie_wan_2_7_reference_to_video ONLY when user mentions "wan" with reference images, reference videos, or voice
+- Use extend_kie_wan_2_7_video ONLY when user explicitly wants to extend an existing Wan 2.7 video
+- Use extend_kie_grok_imagine_video ONLY when user explicitly wants to extend an existing video with Grok Imagine
+- Use generate_alibaba_wan_2_1_text_to_video ONLY when user explicitly mentions "alibaba", "dashscope", or "qwen" for video generation
+- Use generate_kie_volcengine_video_to_video_lip_sync ONLY when user explicitly mentions "volcengine" or wants to lip-sync / dub an existing video to a separate audio track
+- Use generate_kie_omnihuman_1_5_video ONLY when user explicitly mentions "omnihuman" or wants to animate a portrait/photo with a voice or audio track (talking/singing avatar from a still image)
 
 KEY CONSTRAINTS:
-- For generate_kling30_video: mode "std"/"pro", duration "3"-"15", aspect_ratio "16:9"/"9:16"/"1:1", sound boolean
-- For generate_seedance2_video and generate_seedance2_fast_video: duration "4"-"15", aspect_ratio includes "adaptive"; full variant accepts "480p"/"720p"/"1080p", fast variant accepts "480p"/"720p" only. Inputs are all optional and free to mix: first_frame_slug, last_frame_slug, image_slugs (0-9), video_slugs (0-3, total ≤15s), audio_slugs (0-3, total ≤15s). Pure text prompt is fine too
-- For generate_seedance2_mini_video: duration "4"-"15" (default 15), aspect_ratio includes "adaptive", resolution "480p"/"720p". No first/last frame; mix prompt with image_slugs, video_slugs (0-3, total ≤15s), audio_slugs (0-3, total ≤15s). Prompt is optional when references are supplied
-- For generate_gemini_omni_video: REQUIRES prompt and duration "4"/"6"/"8"/"10"; aspect_ratio "16:9"/"9:16"; resolution "720p"/"1080p"/"4k" (default 720p); seed integer. Optional image_slugs (0-7) and one video_slug with video_clip_start/video_clip_ends (ends > start and < start+10s)
-- For generate_veo31_video: 8s output only; optional first_frame_slug/last_frame_slug (last requires first); aspect_ratio "16:9"/"9:16"/"1:1"/"4:3"/"3:4"; NO reference images
-- For generate_veo31_fast_video, generate_veo31_lite_video, and generate_veo31_lite_low_priority_video: duration "4"/"6"/"8" (default "8"); image_slugs (0-3) OR first_frame_slug/last_frame_slug, not both; aspect_ratio "16:9"/"9:16"/"1:1"/"4:3"/"3:4"
-- For generate_grok_imagine_video: REQUIRES at least one image, mode "fun"/"normal", duration 6-30 (integer seconds), aspect_ratio "2:3"/"3:2"/"1:1"/"16:9"/"9:16"
-- For extend_grok_imagine_video: REQUIRES video_slug, prompt, extend_at, and extend_times "6"/"10"
-- For generate_wan27_i2v_video: REQUIRES at least one of first_frame_slug / last_frame_slug / first_clip_slug, duration "2"-"15", resolution "720p"/"1080p"
-- For generate_wan27_videoedit_video: REQUIRES video_slug (source video must be ≤10s), optional image_slug for reference, duration "0" (full source) or "2"-"10", resolution "720p"/"1080p", audio_setting "auto"/"origin"
-- For generate_wan27_r2v_video: max 5 combined image_slugs + video_slugs, duration "2"-"10", resolution "720p"/"1080p"
-- For extend_wan27_video: REQUIRES video_slug and prompt, duration "2"-"15", resolution "720p"/"1080p"
-- For generate_alibaba_video: REQUIRES at least one media input (first_frame_slug / last_frame_slug / first_clip_slug / driving_audio_slug / video_slug), resolution "720P"/"1080P", duration 0 (full source) or 2-10 (integer seconds), audio_setting "auto"/"origin"
-- For generate_volcengine_lipsync_video: REQUIRES video_slug (source video) and audio_slug (driving audio); mode "lite"/"basic"
-- For generate_omnihuman_video: REQUIRES image_slug (portrait) and audio_slug (driving audio ≤60s); output_resolution "720"/"1080", pe_fast_mode boolean, optional prompt
+- For generate_kie_kling_3_0_video: mode "std"/"pro", duration "3"-"15", aspect_ratio "16:9"/"9:16"/"1:1", sound boolean
+- For generate_kie_seedance_2_0_video and generate_kie_seedance_2_0_fast_video: duration "4"-"15", aspect_ratio includes "adaptive"; full variant accepts "480p"/"720p"/"1080p", fast variant accepts "480p"/"720p" only. Inputs are all optional and free to mix: first_frame_slug, last_frame_slug, image_slugs (0-9), video_slugs (0-3, total ≤15s), audio_slugs (0-3, total ≤15s). Pure text prompt is fine too
+- For generate_kie_seedance_2_0_mini_video: duration "4"-"15" (default 15), aspect_ratio includes "adaptive", resolution "480p"/"720p". No first/last frame; mix prompt with image_slugs, video_slugs (0-3, total ≤15s), audio_slugs (0-3, total ≤15s). Prompt is optional when references are supplied
+- For generate_kie_gemini_omni_video: REQUIRES prompt and duration "4"/"6"/"8"/"10"; aspect_ratio "16:9"/"9:16"; resolution "720p"/"1080p"/"4k" (default 720p); seed integer. Optional image_slugs (0-7) and one video_slug with video_clip_start/video_clip_ends (ends > start and < start+10s)
+- For generate_google_flow_veo_3_1_quality_video: 8s output only; optional first_frame_slug/last_frame_slug (last requires first); aspect_ratio "16:9"/"9:16"/"1:1"/"4:3"/"3:4"; NO reference images
+- For generate_google_flow_veo_3_1_fast_video, generate_google_flow_veo_3_1_lite_video, and generate_google_flow_veo_3_1_lite_low_priority_video: duration "4"/"6"/"8" (default "8"); image_slugs (0-3) OR first_frame_slug/last_frame_slug, not both; aspect_ratio "16:9"/"9:16"/"1:1"/"4:3"/"3:4"
+- For generate_kie_grok_imagine_image_to_video: REQUIRES at least one image, mode "fun"/"normal", duration 6-30 (integer seconds), aspect_ratio "2:3"/"3:2"/"1:1"/"16:9"/"9:16"
+- For extend_kie_grok_imagine_video: REQUIRES video_slug, prompt, extend_at, and extend_times "6"/"10"
+- For generate_kie_wan_2_7_image_to_video: REQUIRES at least one of first_frame_slug / last_frame_slug / first_clip_slug, duration "2"-"15", resolution "720p"/"1080p"
+- For generate_kie_wan_2_7_edit_video: REQUIRES video_slug (source video must be ≤10s), optional image_slug for reference, duration "0" (full source) or "2"-"10", resolution "720p"/"1080p", audio_setting "auto"/"origin"
+- For generate_kie_wan_2_7_reference_to_video: max 5 combined image_slugs + video_slugs, duration "2"-"10", resolution "720p"/"1080p"
+- For extend_kie_wan_2_7_video: REQUIRES video_slug and prompt, duration "2"-"15", resolution "720p"/"1080p"
+- For generate_alibaba_wan_2_1_text_to_video: REQUIRES at least one media input (first_frame_slug / last_frame_slug / first_clip_slug / driving_audio_slug / video_slug), resolution "720P"/"1080P", duration 0 (full source) or 2-10 (integer seconds), audio_setting "auto"/"origin"
+- For generate_kie_volcengine_video_to_video_lip_sync: REQUIRES video_slug (source video) and audio_slug (driving audio); mode "lite"/"basic"
+- For generate_kie_omnihuman_1_5_video: REQUIRES image_slug (portrait) and audio_slug (driving audio ≤60s); output_resolution "720"/"1080", pe_fast_mode boolean, optional prompt
 
 PROMPT FIELD: Do NOT include "prompt" in params. Only return tool selection and non-prompt parameters.
 DO NOT include project_slug in params.

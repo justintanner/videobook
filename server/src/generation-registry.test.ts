@@ -36,6 +36,15 @@ describe("generation-registry", () => {
     expect(isGenerationAction("trim_video")).toBe(false);
   });
 
+  it("keeps provider identity in every provider-backed canonical name", () => {
+    for (const spec of GENERATION_ACTIONS) {
+      if (spec.provider === "workflow") continue;
+      expect(spec.canonical_name).toMatch(new RegExp(`^(generate|extend|upscale)_${spec.provider}_`));
+    }
+    expect(getCanonicalName("generate_grok_imagine_ref_video")).toBe("generate_xai_grok_imagine_reference_to_video");
+    expect(getCanonicalName("generate_veo31_video")).toBe("generate_google_flow_veo_3_1_quality_video");
+  });
+
   it("registers canonical tool and compatibility aliases without duplicating handlers", () => {
     const dummyToolDef: ToolDef = {
       name: "generate_grok_imagine_video",

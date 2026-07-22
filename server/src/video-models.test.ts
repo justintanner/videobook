@@ -609,10 +609,9 @@ describe("buildVideoRoutingPrompt", () => {
 
   it("mentions all video tool names", () => {
     const prompt = buildVideoRoutingPrompt();
-    expect(prompt).toContain("generate_kling30_video");
-    expect(prompt).toContain("generate_seedance2_video");
-    expect(prompt).toContain("generate_seedance2_fast_video");
-    expect(prompt).toContain("generate_grok_imagine_video");
+    for (const model of Object.values(VIDEO_MODELS)) {
+      expect(prompt).toContain(model.tool_name);
+    }
   });
 
   it("includes routing preferences", () => {
@@ -816,7 +815,7 @@ describe("VIDEO_TOOL_MODES contract", () => {
 
 describe("google flow video models", () => {
   it("veo31 fast: hand-typed enums, duration default 8, ref slots capped at 3", () => {
-    const schema = getVideoToolSchema("generate_veo31_fast_video");
+    const schema = getVideoToolSchema("generate_google_flow_veo_3_1_fast_video");
     expect(schema).not.toBeNull();
     expect(schema!.required).toContain("prompt");
     expect(schema!.properties.aspect_ratio.enum).toEqual(["16:9", "9:16", "1:1", "4:3", "3:4"]);
@@ -824,52 +823,52 @@ describe("google flow video models", () => {
     expect(schema!.defaults).toEqual({ duration: "8" });
     expect(schema!.properties.image_slugs.maxItems).toBe(3);
 
-    const validation = validateVideoParams("generate_veo31_fast_video", { prompt: "a sunset" });
+    const validation = validateVideoParams("generate_google_flow_veo_3_1_fast_video", { prompt: "a sunset" });
     expect(validation.image_slots).toEqual({ min: 0, max: 3 });
   });
 
   it("veo31 quality: no image_slugs or duration params, image_slots null", () => {
-    const schema = getVideoToolSchema("generate_veo31_video");
+    const schema = getVideoToolSchema("generate_google_flow_veo_3_1_quality_video");
     expect(schema).not.toBeNull();
     expect(schema!.properties.image_slugs).toBeUndefined();
     expect(schema!.properties.duration).toBeUndefined();
     expect(schema!.properties.first_frame_slug).toBeDefined();
     expect(schema!.properties.last_frame_slug).toBeDefined();
 
-    const validation = validateVideoParams("generate_veo31_video", { prompt: "a sunset" });
+    const validation = validateVideoParams("generate_google_flow_veo_3_1_quality_video", { prompt: "a sunset" });
     expect(validation.valid).toBe(true);
     expect(validation.image_slots).toBeNull();
   });
 
   it("veo31: warns on last frame without first frame and refs with start frame", () => {
-    const lastOnly = validateVideoParams("generate_veo31_fast_video", { prompt: "x", last_frame_slug: "@img-end" });
+    const lastOnly = validateVideoParams("generate_google_flow_veo_3_1_fast_video", { prompt: "x", last_frame_slug: "@img-end" });
     expect(lastOnly.warnings.some((w) => w.includes("requires first_frame_slug"))).toBe(true);
 
-    const refsWithFrame = validateVideoParams("generate_veo31_fast_video", {
+    const refsWithFrame = validateVideoParams("generate_google_flow_veo_3_1_fast_video", {
       prompt: "x", first_frame_slug: "@img-start", image_slugs: ["@img-a"],
     });
     expect(refsWithFrame.warnings.some((w) => w.includes("pick one mode"))).toBe(true);
 
-    const tooManyRefs = validateVideoParams("generate_veo31_lite_video", {
+    const tooManyRefs = validateVideoParams("generate_google_flow_veo_3_1_lite_video", {
       prompt: "x", image_slugs: ["@img-a", "@img-b", "@img-c", "@img-d"],
     });
     expect(tooManyRefs.warnings.some((w) => w.includes("up to 3 reference images"))).toBe(true);
 
     // The quality tier does not expose image_slugs, so auto-populated context
     // images must not raise a ref warning.
-    const qualityRefs = validateVideoParams("generate_veo31_video", { prompt: "x", image_slugs: ["@img-a"] });
+    const qualityRefs = validateVideoParams("generate_google_flow_veo_3_1_quality_video", { prompt: "x", image_slugs: ["@img-a"] });
     expect(qualityRefs.warnings.some((w) => w.includes("reference images"))).toBe(false);
   });
 
   it("veo31 lite-low-priority: same ref slots as lite, distinct tool", () => {
-    const schema = getVideoToolSchema("generate_veo31_lite_low_priority_video");
+    const schema = getVideoToolSchema("generate_google_flow_veo_3_1_lite_low_priority_video");
     expect(schema).toBeDefined();
     expect(schema!.properties.image_slugs).toBeDefined();
     expect(schema!.properties.image_slugs.maxItems).toBe(3);
     expect(schema!.properties.duration.enum).toEqual(["4", "6", "8"]);
-    const validation = validateVideoParams("generate_veo31_lite_low_priority_video", { prompt: "a sunset" });
+    const validation = validateVideoParams("generate_google_flow_veo_3_1_lite_low_priority_video", { prompt: "a sunset" });
     expect(validation.valid).toBe(true);
-    expect(VIDEO_MODELS.veo31_lite_low_priority.tool_name).toBe("generate_kie_veo_3_1_lite_low_priority_video");
+    expect(VIDEO_MODELS.veo31_lite_low_priority.tool_name).toBe("generate_google_flow_veo_3_1_lite_low_priority_video");
   });
 
   it("veo31 models route through the google provider only", () => {
@@ -879,6 +878,11 @@ describe("google flow video models", () => {
       expect(info.providers[0].key).toBe("google");
       expect(info.providers[0].envKey).toBe("GOOGLE_FLOW_API_KEY");
     }
+  });
+
+  it("grok reference routes through the xai provider", () => {
+    expect(VIDEO_MODELS.grok_imagine_ref.tool_name).toBe("generate_xai_grok_imagine_reference_to_video");
+    expect(VIDEO_MODELS.grok_imagine_ref.providers.map((provider) => provider.key)).toEqual(["xai"]);
   });
 
   it("gemini_omni exposes google as a second provider and swaps the tool name", () => {

@@ -1,4 +1,5 @@
 import type { CostEstimate } from "@apicity/cost";
+import { getActionSpec } from "./generation-registry.js";
 
 // Local Google Flow cost estimates — @apicity/cost@0.8.0 has googleflow
 // credit×Pro rates, but Videocity badges use official Gemini Developer API
@@ -193,7 +194,8 @@ const TOOL_PRICING: Record<string, ToolPricing> = {
 };
 
 export function isGoogleFlowCostTool(toolName: string): boolean {
-  return Object.prototype.hasOwnProperty.call(TOOL_PRICING, toolName);
+  const pricingName = getActionSpec(toolName)?.old_name ?? toolName;
+  return Object.prototype.hasOwnProperty.call(TOOL_PRICING, pricingName);
 }
 
 /** Extended breakdown: API units for USD + Flow credits secondary. */
@@ -212,7 +214,8 @@ export function estimateGoogleFlowCost(
   input: Record<string, unknown>,
   options: GoogleFlowCostOptions = {},
 ): CostEstimate | null {
-  const pricing = TOOL_PRICING[toolName];
+  const pricingName = getActionSpec(toolName)?.old_name ?? toolName;
+  const pricing = TOOL_PRICING[pricingName];
   if (!pricing) return null;
 
   const tier = options.tier ?? resolveGoogleFlowPlanTier();

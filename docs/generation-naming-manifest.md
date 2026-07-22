@@ -18,7 +18,7 @@ Canonical Action Name Syntax: `<verb>_<provider>_<model>_<operation>`
 | Old MCP Action Name | Canonical Action Name | Provider | Exact Apicity 0.8 Identifier | Media | Operation | Picker Visibility | Aliases |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `generate_grok_imagine_video` | `generate_kie_grok_imagine_image_to_video` | kie | `GrokImageToVideoRequestSchema` | video | image_to_video | visible | `generate_grok_imagine_video` |
-| `generate_grok_imagine_ref_video` | `generate_kie_grok_imagine_reference_to_video` | kie | `GrokImageToVideoRequestSchema` | video | reference_to_video | hidden_fal_variant | `generate_grok_imagine_ref_video` |
+| `generate_grok_imagine_ref_video` | `generate_xai_grok_imagine_reference_to_video` | xai | `XaiVideoGenerateRequestSchema` | video | reference_to_video | visible | `generate_grok_imagine_ref_video` |
 | `generate_grok_imagine_t2v_video` | `generate_kie_grok_imagine_text_to_video` | kie | `GrokTextToVideoRequestSchema` | video | text_to_video | hidden_fal_variant | `generate_grok_imagine_t2v_video` |
 | `extend_grok_imagine_video` | `extend_kie_grok_imagine_video` | kie | `GrokVideoExtendRequestSchema` | video | extend_video | hidden_fal_variant | `extend_grok_imagine_video` |
 | `upscale_grok_imagine_video` | `upscale_kie_grok_imagine_video` | kie | `GrokVideoUpscaleRequestSchema` | video | upscale_video | hidden_fal_variant | `upscale_grok_imagine_video` |
@@ -42,10 +42,10 @@ Canonical Action Name Syntax: `<verb>_<provider>_<model>_<operation>`
 | `generate_omnihuman_video` | `generate_kie_omnihuman_1_5_video` | kie | `Omnihuman15RequestSchema` | video | image_to_video | visible | `generate_omnihuman_video` |
 | `generate_veo3_video` | `generate_kie_veo_3_0_video` | kie | `VeoGenerateRequestSchema` | video | text_to_video | visible | `generate_veo3_video` |
 | `generate_veo3_fast_video` | `generate_kie_veo_3_0_fast_video` | kie | `VeoGenerateRequestSchema` | video | text_to_video | visible | `generate_veo3_fast_video` |
-| `generate_veo31_video` | `generate_kie_veo_3_1_video` | kie | `VeoGenerateRequestSchema` | video | text_to_video | visible | `generate_veo31_video` |
-| `generate_veo31_fast_video` | `generate_kie_veo_3_1_fast_video` | kie | `VeoGenerateRequestSchema` | video | text_to_video | visible | `generate_veo31_fast_video` |
-| `generate_veo31_lite_video` | `generate_kie_veo_3_1_lite_video` | kie | `VeoGenerateRequestSchema` | video | text_to_video | visible | `generate_veo31_lite_video` |
-| `generate_veo31_lite_low_priority_video` | `generate_kie_veo_3_1_lite_low_priority_video` | kie | `VeoGenerateRequestSchema` | video | text_to_video | visible | `generate_veo31_lite_low_priority_video` |
+| `generate_veo31_video` | `generate_google_flow_veo_3_1_quality_video` | google_flow | `googleflow/video/veo-3.1-quality` | video | text_to_video | visible | `generate_veo31_video` |
+| `generate_veo31_fast_video` | `generate_google_flow_veo_3_1_fast_video` | google_flow | `googleflow/video/veo-3.1-fast` | video | text_to_video | visible | `generate_veo31_fast_video` |
+| `generate_veo31_lite_video` | `generate_google_flow_veo_3_1_lite_video` | google_flow | `googleflow/video/veo-3.1-lite` | video | text_to_video | visible | `generate_veo31_lite_video` |
+| `generate_veo31_lite_low_priority_video` | `generate_google_flow_veo_3_1_lite_low_priority_video` | google_flow | `googleflow/video/veo-3.1-lite-low-priority` | video | text_to_video | visible | `generate_veo31_lite_low_priority_video` |
 | `generate_grok_imagine_image` | `generate_kie_grok_imagine_image_to_image` | kie | `GrokImageToImageRequestSchema` | image | image_to_image | visible | `generate_grok_imagine_image` |
 | `generate_grok_imagine_text_image` | `generate_kie_grok_imagine_text_to_image` | kie | `GrokTextToImageRequestSchema` | image | text_to_image | hidden_fal_variant | `generate_grok_imagine_text_image` |
 | `generate_gpt_image` | `generate_kie_gpt_image_2_image_to_image` | kie | `GptImage2ImageToImageRequestSchema` | image | image_to_image | visible | `generate_gpt_image` |
@@ -111,8 +111,8 @@ Canonical Action Name Syntax: `<verb>_<provider>_<model>_<operation>`
 | `clear_failed_tasks` | `clean_failed_assets` | workflow | `internal/clear-failed-tasks` | workflow | clean_assets | workflow_tool | `clear_failed_tasks` |
 
 ## Special Case Decisions
-- **`generate_grok_imagine_video` -> `generate_kie_grok_imagine_image_to_video`**: Split by provider: canonical Kie name defaults _provider='kie'; xAI calls use generate_xai_grok_imagine_image_to_video. Legacy name remains alias.
-- **`generate_grok_imagine_ref_video` -> `generate_kie_grok_imagine_reference_to_video`**: Kie reference-to-video action. Legacy abbreviation 'ref' replaced with 'reference_to_video'.
+- **`generate_grok_imagine_video` -> `generate_kie_grok_imagine_image_to_video`**: Kie image-to-video action. The distinct xAI reference endpoint uses generate_xai_grok_imagine_reference_to_video.
+- **`generate_grok_imagine_ref_video` -> `generate_xai_grok_imagine_reference_to_video`**: xAI reference-to-video action. Legacy abbreviation 'ref' replaced with 'reference_to_video'.
 - **`generate_grok_imagine_t2v_video` -> `generate_kie_grok_imagine_text_to_video`**: Kie text-to-video action. Abbreviation 't2v' and suffix 'video' removed.
 - **`extend_grok_imagine_video` -> `extend_kie_grok_imagine_video`**: Kie video extension action. Provider 'kie' made explicit.
 - **`upscale_grok_imagine_video` -> `upscale_kie_grok_imagine_video`**: Kie video upscale action. Provider 'kie' made explicit.
@@ -136,10 +136,10 @@ Canonical Action Name Syntax: `<verb>_<provider>_<model>_<operation>`
 - **`generate_omnihuman_video` -> `generate_kie_omnihuman_1_5_video`**: Kie Omnihuman 1.5 video generation action.
 - **`generate_veo3_video` -> `generate_kie_veo_3_0_video`**: Kie Veo 3.0 video action.
 - **`generate_veo3_fast_video` -> `generate_kie_veo_3_0_fast_video`**: Kie Veo 3.0 Fast video action.
-- **`generate_veo31_video` -> `generate_kie_veo_3_1_video`**: Kie Veo 3.1 video action.
-- **`generate_veo31_fast_video` -> `generate_kie_veo_3_1_fast_video`**: Kie Veo 3.1 Fast video action.
-- **`generate_veo31_lite_video` -> `generate_kie_veo_3_1_lite_video`**: Kie Veo 3.1 Lite video action.
-- **`generate_veo31_lite_low_priority_video` -> `generate_kie_veo_3_1_lite_low_priority_video`**: Kie Veo 3.1 Lite Low Priority video action.
+- **`generate_veo31_video` -> `generate_google_flow_veo_3_1_quality_video`**: Google Flow Veo 3.1 Quality video action.
+- **`generate_veo31_fast_video` -> `generate_google_flow_veo_3_1_fast_video`**: Google Flow Veo 3.1 Fast video action.
+- **`generate_veo31_lite_video` -> `generate_google_flow_veo_3_1_lite_video`**: Google Flow Veo 3.1 Lite video action.
+- **`generate_veo31_lite_low_priority_video` -> `generate_google_flow_veo_3_1_lite_low_priority_video`**: Google Flow Veo 3.1 Lite Low Priority video action.
 - **`generate_grok_imagine_image` -> `generate_kie_grok_imagine_image_to_image`**: Kie Grok Imagine image-to-image. Default _provider='kie'.
 - **`generate_grok_imagine_text_image` -> `generate_kie_grok_imagine_text_to_image`**: Kie Grok Imagine text-to-image.
 - **`generate_gpt_image` -> `generate_kie_gpt_image_2_image_to_image`**: Kie GPT Image 2 image-to-image action.

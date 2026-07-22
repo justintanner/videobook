@@ -4,6 +4,7 @@ import { getImageModels, getImageToolSchema } from "../image-models.js";
 import { getAllToolDefs } from "./index.js";
 import { createFs } from "videocity-engine";
 import { getCanonicalName } from "../generation-registry.js";
+import { GENERATION_ACTIONS } from "../generation-registry.js";
 
 describe("schema parity between pickers and tool definitions", () => {
   const fs = createFs({ projectsDir: "/tmp/test-parity" });
@@ -55,5 +56,21 @@ describe("schema parity between pickers and tool definitions", () => {
       }
     }
   });
-});
 
+  it("keeps picker schemas equivalent across canonical names and aliases", () => {
+    for (const action of GENERATION_ACTIONS) {
+      if (action.media_type === "video") {
+        const canonical = getVideoToolSchema(action.canonical_name);
+        for (const alias of action.aliases) {
+          expect(getVideoToolSchema(alias), alias).toEqual(canonical);
+        }
+      }
+      if (action.media_type === "image") {
+        const canonical = getImageToolSchema(action.canonical_name);
+        for (const alias of action.aliases) {
+          expect(getImageToolSchema(alias), alias).toEqual(canonical);
+        }
+      }
+    }
+  });
+});
