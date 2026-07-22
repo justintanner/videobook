@@ -408,6 +408,12 @@
     -webkit-backface-visibility: hidden;
     transform: rotateY(180deg);
   }
+  .flip-card-inner:not(.flipped) .flip-card-back {
+    pointer-events: none;
+  }
+  .flip-card-inner.flipped .flip-card-face {
+    pointer-events: none;
+  }
 
   /* Activity log — video-game HUD */
   .activity-cursor-blink {

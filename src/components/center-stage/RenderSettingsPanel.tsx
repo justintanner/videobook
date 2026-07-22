@@ -1,15 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { Zap, Type, Volume2, ImageIcon, Plus, Minus, ChevronDown, Check } from 'lucide-react';
 import { CommandButton } from '@/components/commands';
 import type { ExecuteButtonState } from '@/components/commands/types';
 import type { Orientation } from '@/hooks/useTimeline';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from '@/components/ui/dropdown-menu';
 import { SUBTITLE_LANGUAGES } from './render-settings-types';
 import { sectionTheme, type SectionTheme as DomainSectionTheme } from '@/theme/domains';
 
@@ -281,11 +276,35 @@ function ColorSwatch({ value, onChange, disabled, theme }: { value: string; onCh
   );
 }
 
-// ── Subtitle language picker ──
+// ── Subtitle language picker (body-portaled; avoids Radix + flip-card bugs) ──
 
 function languageLabel(language: string, sourceLabel: string | null): string {
   if (language !== 'original') return language.toUpperCase();
   return sourceLabel ? `ORIGINAL (${sourceLabel})` : 'ORIGINAL';
+}
+
+const LANG_MENU_GAP = 4;
+const LANG_MENU_MAX_H = 288; // max-h-72
+// Menus / popovers — above drawers (100); below toasts (140). See index.css.
+const LANG_MENU_Z = 130;
+
+type LangMenuPos = { top: number; left: number; minWidth: number; maxHeight: number; placeAbove: boolean };
+
+function measureLangMenu(trigger: HTMLElement): LangMenuPos {
+  const r = trigger.getBoundingClientRect();
+  const spaceAbove = r.top - LANG_MENU_GAP;
+  const spaceBelow = window.innerHeight - r.bottom - LANG_MENU_GAP;
+  const placeAbove = spaceBelow < 120 && spaceAbove > spaceBelow;
+  const maxHeight = Math.max(80, Math.min(LANG_MENU_MAX_H, placeAbove ? spaceAbove : spaceBelow));
+  const minWidth = Math.max(r.width, 140);
+  const left = Math.min(
+    Math.max(LANG_MENU_GAP, r.right - minWidth),
+    window.innerWidth - minWidth - LANG_MENU_GAP,
+  );
+  const top = placeAbove
+    ? Math.max(LANG_MENU_GAP, r.top - LANG_MENU_GAP - maxHeight)
+    : r.bottom + LANG_MENU_GAP;
+  return { top, left, minWidth, maxHeight, placeAbove };
 }
 
 function LanguagePicker({ value, sourceLabel, cached, onChange, disabled, theme }: {
@@ -297,39 +316,120 @@ function LanguagePicker({ value, sourceLabel, cached, onChange, disabled, theme 
   theme: SectionTheme;
 }) {
   const options = ['original', ...SUBTITLE_LANGUAGES];
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          disabled={disabled}
-          className={cn(
-            'h-8 px-3 rounded font-mono font-bold text-xs tracking-wider transition-all duration-150 border flex items-center gap-1.5',
-            theme.controlBg, theme.controlBorder, theme.activeText, theme.controlHover,
-            disabled && 'opacity-30 pointer-events-none',
-          )}
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<LangMenuPos | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const el = triggerRef.current;
+      if (!el) return;
+      setPos(measureLangMenu(el));
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (triggerRef.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const pick = (language: string) => {
+    onChange?.(language);
+    setOpen(false);
+  };
+
+  const menu = open && pos
+    ? createPortal(
+        <div
+          ref={menuRef}
+          role="listbox"
+          aria-label="Subtitle language"
+          className="rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md overflow-y-auto"
+          style={{
+            position: 'fixed',
+            top: pos.top,
+            left: pos.left,
+            minWidth: pos.minWidth,
+            maxHeight: pos.maxHeight,
+            zIndex: LANG_MENU_Z,
+          }}
         >
-          {languageLabel(value, sourceLabel)}
- <ChevronDown className="size-3" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
-        {options.map((language) => {
-          const active = language === value;
-          const isCached = language !== 'original' && cached.includes(language);
-          return (
-            <DropdownMenuItem key={language} onClick={() => onChange?.(language)} className="py-2">
-              <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none mr-1">
- {active ? <Check className="size-3 inline text-primary" /> : '›'}
-              </span>
-              <span className={cn('font-mono font-bold text-xs tracking-wider leading-none flex-1', !active && 'text-muted-foreground/60')}>
-                {languageLabel(language, sourceLabel)}
-              </span>
- {isCached && <span className="ml-2 size-1.5 rounded-full bg-cyan-400/70" />}
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          {options.map((language) => {
+            const active = language === value;
+            const isCached = language !== 'original' && cached.includes(language);
+            return (
+              <button
+                key={language}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => pick(language)}
+                className={cn(
+                  'w-full flex items-center gap-2 rounded-sm px-2 py-2 text-left outline-none transition-colors',
+                  'hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground',
+                )}
+              >
+                <span className="font-mono text-muted-foreground/50 text-sm leading-none select-none">
+                  {active ? <Check className="size-3 inline text-primary" /> : '›'}
+                </span>
+                <span className={cn(
+                  'font-mono font-bold text-xs tracking-wider leading-none flex-1',
+                  !active && 'text-muted-foreground/60',
+                )}>
+                  {languageLabel(language, sourceLabel)}
+                </span>
+                {isCached && <span className="ml-2 size-1.5 rounded-full bg-cyan-400/70" />}
+              </button>
+            );
+          })}
+        </div>,
+        document.body,
+      )
+    : null;
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => { if (!disabled) setOpen((v) => !v); }}
+        className={cn(
+          'h-8 px-3 rounded font-mono font-bold text-xs tracking-wider transition-all duration-150 border flex items-center gap-1.5',
+          theme.controlBg, theme.controlBorder, theme.activeText, theme.controlHover,
+          disabled && 'opacity-30 pointer-events-none',
+        )}
+      >
+        {languageLabel(value, sourceLabel)}
+        <ChevronDown className={cn('size-3 transition-transform', open && 'rotate-180')} />
+      </button>
+      {menu}
+    </>
   );
 }
 
