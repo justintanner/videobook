@@ -8,6 +8,9 @@ import {
   normalizeQrOutroCommandArgs,
   normalizeSyncAudioCommandArgs,
   normalizeTimewarpCommandArgs,
+  normalizeTrimCommandArgs,
+  normalizeApplyCutsCommandArgs,
+  normalizeTranslateSubtitlesCommandArgs,
   selectCommandForInput,
 } from "./command-registry.js";
 import type { CommandParam, ServerCommand } from "./command-registry.js";
@@ -706,9 +709,118 @@ describe("adaptCommandArgs", () => {
     expect(res).toEqual({ asset_id: "vid-clip", target_duration_seconds: 8 });
   });
 
-  it("falls back to identity for unknown adapters", () => {
+  it("falls back to identity when no explicit adapter or tool adapter exists", () => {
     const res = adaptCommandArgs(undefined, "unknown_tool", { asset_id: "vid-clip" });
     expect(res).toEqual({ asset_id: "vid-clip" });
+  });
+
+  it("throws for unknown explicit adapter", () => {
+    expect(() => adaptCommandArgs("nonexistent_adapter", "trim_video", { asset_id: "vid-clip" })).toThrow(
+      "Unknown command adapter: nonexistent_adapter",
+    );
+  });
+
+  it("adapts trim_video args with start and end timestamps", () => {
+    const res = adaptCommandArgs("trim_video", "trim_video", {
+      asset_id: "@hero-intro",
+      start: "0:05",
+      end: "0:12",
+    });
+    expect(res).toEqual({
+      asset_id: "hero-intro",
+      trim_start: 5,
+      trim_end: 12,
+    });
+  });
+
+  it("adapts apply_cuts args with dash ranges", () => {
+    const res = adaptCommandArgs("apply_cuts", "apply_cuts", {
+      asset_id: "@vid-clip",
+      cuts: ["0-5", "0:10-0:15"],
+    });
+    expect(res).toEqual({
+      asset_id: "vid-clip",
+      cuts: [
+        { cut_start: 0, cut_end: 5 },
+        { cut_start: 10, cut_end: 15 },
+      ],
+    });
+  });
+
+  it("adapts translate_subtitles args from target_language", () => {
+    const res = adaptCommandArgs("translate_subtitles", "translate_subtitles", {
+      asset_id: "@vid-clip",
+      target_language: "es",
+    });
+    expect(res).toEqual({
+      asset_id: "vid-clip",
+      language: "es",
+    });
+  });
+});
+
+describe("normalizeTrimCommandArgs", () => {
+  it("normalizes timestamp strings to numeric start and end", () => {
+    expect(
+      normalizeTrimCommandArgs({ asset_id: "@vid-1", start: "0:05", end: "0:12" }),
+    ).toEqual({
+      asset_id: "vid-1",
+      trim_start: 5,
+      trim_end: 12,
+    });
+  });
+
+  it("handles numbers directly", () => {
+    expect(
+      normalizeTrimCommandArgs({ asset_id: "vid-1", trim_start: 5, trim_end: 12 }),
+    ).toEqual({
+      asset_id: "vid-1",
+      trim_start: 5,
+      trim_end: 12,
+    });
+  });
+
+  it("throws when trim_start >= trim_end", () => {
+    expect(() =>
+      normalizeTrimCommandArgs({ asset_id: "vid-1", start: "10", end: "5" }),
+    ).toThrow();
+  });
+});
+
+describe("normalizeApplyCutsCommandArgs", () => {
+  it("parses string cut ranges", () => {
+    expect(
+      normalizeApplyCutsCommandArgs({ asset_id: "@vid-1", cuts: ["0-5", "10-15"] }),
+    ).toEqual({
+      asset_id: "vid-1",
+      cuts: [
+        { cut_start: 0, cut_end: 5 },
+        { cut_start: 10, cut_end: 15 },
+      ],
+    });
+  });
+
+  it("throws on invalid range format", () => {
+    expect(() =>
+      normalizeApplyCutsCommandArgs({ asset_id: "vid-1", cuts: ["invalid"] }),
+    ).toThrow();
+  });
+});
+
+describe("normalizeTranslateSubtitlesCommandArgs", () => {
+  it("renames target_language to language and normalizes ISO code", () => {
+    expect(
+      normalizeTranslateSubtitlesCommandArgs({ asset_id: "@vid-1", target_language: "ES" }),
+    ).toEqual({
+      asset_id: "vid-1",
+      language: "es",
+    });
+  });
+
+  it("throws on non-2-letter language code", () => {
+    expect(() =>
+      normalizeTranslateSubtitlesCommandArgs({ asset_id: "vid-1", target_language: "spanish" }),
+    ).toThrow();
   });
 });
 

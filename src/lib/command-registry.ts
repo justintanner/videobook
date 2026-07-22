@@ -29,7 +29,17 @@ export interface ApplySfxCommandArgs {
   sfx: ApplySfxCommandEntry[];
 }
 
-export type CommandToolArgValue = CommandArgValue | SyncAudioAnchor[] | ApplySfxCommandEntry[];
+export interface ApplyCutEntry {
+  cut_start: number;
+  cut_end: number;
+}
+
+export type CommandToolArgValue =
+  | CommandArgValue
+  | SyncAudioAnchor[]
+  | ApplySfxCommandEntry[]
+  | ApplyCutEntry[]
+  | undefined;
 export type CommandToolArgs = Record<string, CommandToolArgValue>;
 
 export interface ServerCommand {
@@ -45,6 +55,9 @@ export interface ServerCommand {
   mcpTool?: { tool: string; adapter?: string; autoInject?: string[]; injectParams?: Record<string, string | number | boolean> };
   uiAction?: string;
   onMount?: string[];
+  canonical?: string;
+  aliases?: string[];
+  deprecated?: boolean;
 }
 
 export type CommandDescriptor = ServerCommand;
@@ -325,6 +338,158 @@ export function normalizeSyncAudioCommandArgs(
   return { asset_id: assetId, anchors };
 }
 
+export function normalizeTrimCommandArgs(
+  args: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  const assetValue = args.asset_id;
+  if (typeof assetValue !== 'string' || !assetValue.trim()) {
+    throw new Error('Trim command requires an asset ID');
+  }
+  const assetId = stripAt(assetValue.trim());
+
+  let trimStart: number | undefined;
+  let trimEnd: number | undefined;
+  let cutStart: number | undefined;
+  let cutEnd: number | undefined;
+
+  const startVal = args.trim_start !== undefined ? args.trim_start : args.start;
+  if (startVal !== undefined && startVal !== null && startVal !== '') {
+    if (typeof startVal === 'number') {
+      trimStart = startVal;
+    } else if (typeof startVal === 'string') {
+      trimStart = parseCommandTimestamp(startVal, '/trim');
+    }
+  }
+
+  const endVal = args.trim_end !== undefined ? args.trim_end : args.end;
+  if (endVal !== undefined && endVal !== null && endVal !== '') {
+    if (typeof endVal === 'number') {
+      trimEnd = endVal;
+    } else if (typeof endVal === 'string') {
+      trimEnd = parseCommandTimestamp(endVal, '/trim');
+    }
+  }
+
+  if (args.cut_start !== undefined && args.cut_start !== null && args.cut_start !== '') {
+    if (typeof args.cut_start === 'number') {
+      cutStart = args.cut_start;
+    } else if (typeof args.cut_start === 'string') {
+      cutStart = parseCommandTimestamp(args.cut_start, '/trim');
+    }
+  }
+
+  if (args.cut_end !== undefined && args.cut_end !== null && args.cut_end !== '') {
+    if (typeof args.cut_end === 'number') {
+      cutEnd = args.cut_end;
+    } else if (typeof args.cut_end === 'string') {
+      cutEnd = parseCommandTimestamp(args.cut_end, '/trim');
+    }
+  }
+
+  if (trimStart !== undefined && (!Number.isFinite(trimStart) || trimStart < 0)) {
+    throw new Error('trim_start must be >= 0');
+  }
+  if (trimEnd !== undefined && (!Number.isFinite(trimEnd) || trimEnd < 0)) {
+    throw new Error('trim_end must be >= 0');
+  }
+  if (trimStart !== undefined && trimEnd !== undefined && trimStart >= trimEnd) {
+    throw new Error('trim_start must be less than trim_end');
+  }
+
+  if (cutStart !== undefined && (!Number.isFinite(cutStart) || cutStart < 0)) {
+    throw new Error('cut_start must be >= 0');
+  }
+  if (cutEnd !== undefined && (!Number.isFinite(cutEnd) || cutEnd < 0)) {
+    throw new Error('cut_end must be >= 0');
+  }
+  if (cutStart !== undefined && cutEnd !== undefined && cutStart >= cutEnd) {
+    throw new Error('cut_start must be less than cut_end');
+  }
+
+  return {
+    asset_id: assetId,
+    ...(trimStart !== undefined && { trim_start: trimStart }),
+    ...(trimEnd !== undefined && { trim_end: trimEnd }),
+    ...(cutStart !== undefined && { cut_start: cutStart }),
+    ...(cutEnd !== undefined && { cut_end: cutEnd }),
+  };
+}
+
+export function normalizeApplyCutsCommandArgs(
+  args: Readonly<Record<string, unknown>>,
+): { asset_id: string; cuts: Array<{ cut_start: number; cut_end: number }> } {
+  const assetValue = args.asset_id;
+  if (typeof assetValue !== 'string' || !assetValue.trim()) {
+    throw new Error('/apply-cuts requires a video asset');
+  }
+  const assetId = stripAt(assetValue.trim());
+
+  const cutsRaw = args.cuts;
+  if (!cutsRaw) throw new Error('/apply-cuts requires at least one cut range');
+
+  const cutsArray: unknown[] = Array.isArray(cutsRaw) ? cutsRaw : [cutsRaw];
+  if (cutsArray.length === 0) throw new Error('/apply-cuts requires at least one cut range');
+
+  const cuts: Array<{ cut_start: number; cut_end: number }> = [];
+
+  for (const raw of cutsArray) {
+    if (typeof raw === 'object' && raw !== null && 'cut_start' in raw && 'cut_end' in raw) {
+      const cStart = Number((raw as Record<string, unknown>).cut_start);
+      const cEnd = Number((raw as Record<string, unknown>).cut_end);
+      if (!Number.isFinite(cStart) || !Number.isFinite(cEnd) || cStart >= cEnd || cStart < 0) {
+        throw new Error(`Invalid cut range object: ${JSON.stringify(raw)}`);
+      }
+      cuts.push({ cut_start: cStart, cut_end: cEnd });
+      continue;
+    }
+
+    if (typeof raw !== 'string') {
+      throw new Error(`/apply-cuts range must be string or object, got: ${typeof raw}`);
+    }
+
+    const token = raw.trim();
+    const dashIdx = token.indexOf('-');
+    if (dashIdx <= 0 || dashIdx === token.length - 1) {
+      throw new Error(`Invalid /apply-cuts range format: ${token}. Expected <start>-<end>`);
+    }
+
+    const startStr = token.slice(0, dashIdx);
+    const endStr = token.slice(dashIdx + 1);
+
+    const cStart = parseCommandTimestamp(startStr, '/apply-cuts');
+    const cEnd = parseCommandTimestamp(endStr, '/apply-cuts');
+
+    if (cStart >= cEnd) {
+      throw new Error(`/apply-cuts start (${startStr}) must be before end (${endStr})`);
+    }
+
+    cuts.push({ cut_start: cStart, cut_end: cEnd });
+  }
+
+  return { asset_id: assetId, cuts };
+}
+
+export function normalizeTranslateSubtitlesCommandArgs(
+  args: Readonly<Record<string, unknown>>,
+): { asset_id: string; language: string } {
+  const assetValue = args.asset_id;
+  if (typeof assetValue !== 'string' || !assetValue.trim()) {
+    throw new Error('/translate-subs requires an asset ID');
+  }
+  const assetId = stripAt(assetValue.trim());
+
+  const langVal = args.language !== undefined ? args.language : args.target_language;
+  if (typeof langVal !== 'string' || !langVal.trim()) {
+    throw new Error('/translate-subs requires a target language code');
+  }
+  const language = langVal.trim().toLowerCase();
+  if (!/^[a-z]{2}$/.test(language)) {
+    throw new Error('/translate-subs target language must be a two-letter ISO code (e.g. es, fr, de)');
+  }
+
+  return { asset_id: assetId, language };
+}
+
 export type CommandAdapterFn = (args: Readonly<Record<string, unknown>>) => CommandToolArgs;
 
 export const COMMAND_ADAPTERS: Record<string, CommandAdapterFn> = {
@@ -418,6 +583,36 @@ export const COMMAND_ADAPTERS: Record<string, CommandAdapterFn> = {
     delete result.description;
     return { ...result, ...normalized };
   },
+  trim_video: (args) => {
+    const normalized = normalizeTrimCommandArgs(args);
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    delete result.start;
+    delete result.end;
+    return { ...result, ...(normalized as CommandToolArgs) };
+  },
+  trim_audio: (args) => {
+    const normalized = normalizeTrimCommandArgs(args);
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    delete result.start;
+    delete result.end;
+    return { ...result, ...(normalized as CommandToolArgs) };
+  },
+  trim: (args) => {
+    const normalized = normalizeTrimCommandArgs(args);
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    delete result.start;
+    delete result.end;
+    return { ...result, ...(normalized as CommandToolArgs) };
+  },
+  apply_cuts: (args) => {
+    return normalizeApplyCutsCommandArgs(args);
+  },
+  translate_subtitles: (args) => {
+    const normalized = normalizeTranslateSubtitlesCommandArgs(args);
+    const result: CommandToolArgs = { ...(args as CommandToolArgs) };
+    delete result.target_language;
+    return { ...result, ...(normalized as CommandToolArgs) };
+  },
 };
 
 export function adaptCommandArgs(
@@ -425,8 +620,14 @@ export function adaptCommandArgs(
   toolName: string,
   args: Readonly<Record<string, unknown>>,
 ): CommandToolArgs {
-  const adapterKey = adapterName || toolName;
-  const adapterFn = COMMAND_ADAPTERS[adapterKey];
+  if (adapterName) {
+    const adapterFn = COMMAND_ADAPTERS[adapterName];
+    if (!adapterFn) {
+      throw new Error(`Unknown command adapter: ${adapterName}`);
+    }
+    return adapterFn(args);
+  }
+  const adapterFn = COMMAND_ADAPTERS[toolName];
   if (adapterFn) {
     return adapterFn(args);
   }

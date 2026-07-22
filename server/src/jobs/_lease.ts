@@ -1,29 +1,5 @@
-import type { AssetMeta, VideocityFs } from "videocity-engine";
+import type { AssetMeta, VideocityFs, AssetWorkKind } from "videocity-engine";
 import type { JobHandlerContext } from "../queue.js";
-
-type AssetWorkKind =
-  | "render"
-  | "generate"
-  | "transcribe"
-  | "isolate"
-  | "download"
-  | "archive"
-  | "trim"
-  | "crop"
-  | "splice"
-  | "reverse"
-  | "change_speed"
-  | "replace_audio"
-  | "process"
-  | "analyze"
-  | "delete"
-  | "upload"
-  | "describe"
-  | "rewrite_script"
-  | "extract"
-  | "apply_cuts"
-  | "apply_sfx"
-  | "final";
 
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const HEARTBEAT_EXTEND_MS = 60_000;

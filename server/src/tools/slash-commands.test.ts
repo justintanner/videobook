@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
+import { COMMAND_ADAPTERS } from "@/lib/command-registry";
+
 type TextContent = Array<{ type: string; text: string }>;
 
 interface Command {
@@ -352,6 +354,39 @@ describe("slash_commands tool", () => {
         expect(
           registeredToolNames.has(cmd.mcpTool.tool),
           `Command ${cmd.command} references MCP tool "${cmd.mcpTool.tool}" which is not registered`,
+        ).toBe(true);
+        if (cmd.mcpTool.adapter) {
+          expect(
+            cmd.mcpTool.adapter in COMMAND_ADAPTERS,
+            `Command ${cmd.command} specifies adapter "${cmd.mcpTool.adapter}" which is not in COMMAND_ADAPTERS`,
+          ).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("canonical fields reference valid slash commands", async () => {
+    await client.callTool({
+      name: "create_project",
+      arguments: { project_slug: "test-proj" },
+    });
+
+    const result = await client.callTool({
+      name: "slash_commands",
+      arguments: {},
+    });
+
+    const commands: Command[] = JSON.parse(
+      (result.content as TextContent)[0].text,
+    );
+    const registeredNames = new Set(commands.map((c) => c.command));
+
+    for (const cmd of commands) {
+      if (cmd.canonical) {
+        expect(cmd.canonical.startsWith("/")).toBe(true);
+        expect(
+          registeredNames.has(cmd.canonical),
+          `Command ${cmd.command} references canonical command "${cmd.canonical}" which is not registered`,
         ).toBe(true);
       }
     }

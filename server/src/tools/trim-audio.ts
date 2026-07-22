@@ -1,6 +1,6 @@
 import type { VideocityFs } from "videocity-engine";
 import { z } from "zod";
-import { join } from "node:path";
+import { join, extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "videocity-engine";
 import type { ToolDef } from "./tool-def.js";
@@ -96,17 +96,20 @@ export function trimAudioDef(fs: VideocityFs): ToolDef {
 
       const assetDir = manifest.path;
       const mediaPath = join(assetDir, mediaFile.name);
-      const tempPath = join(assetDir, "original_trimmed.mp4");
+      const ext = extname(mediaFile.name);
+      const tempPath = join(assetDir, `original_trimmed${ext}`);
       const jobId = `trim-audio-${asset_id}-${Date.now()}`;
+      const isVideo = asset_id.startsWith("vid-");
 
       const jobPayload: Record<string, unknown> = {
-        type: "trim_video",
+        type: "trim_audio",
         inputPath: mediaPath,
         outputPath: tempPath,
         mode: validated.mode,
         assetId: asset_id,
         assetDir,
         projectSlug: project_slug,
+        isVideo,
         commitParams: { trim_start, trim_end, cut_start, cut_end, mode: validated.mode },
       };
       if (validated.mode === "keep") {

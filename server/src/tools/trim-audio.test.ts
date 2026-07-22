@@ -1,13 +1,46 @@
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import { createFs } from "videocity-engine";
+import { FFMPEG, FFPROBE } from "../ffmpeg.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
+const execFileAsync = promisify(execFile);
 type TextContent = Array<{ type: string; text: string }>;
+
+async function probeAudioDuration(filePath: string): Promise<number> {
+  const { stdout } = await execFileAsync(FFPROBE, [
+    "-v", "error",
+    "-print_format", "json",
+    "-show_format",
+    "-show_streams",
+    filePath,
+  ]);
+  const data = JSON.parse(stdout) as {
+    streams?: Array<{ codec_type?: string; duration?: string }>;
+    format?: { duration?: string };
+  };
+  const formatDuration = Number(data.format?.duration ?? 0);
+  const audioStream = data.streams?.find((s) => s.codec_type === "audio");
+  const streamDuration = audioStream ? Number(audioStream.duration ?? formatDuration) : formatDuration;
+  return Number.isFinite(streamDuration) && streamDuration > 0 ? streamDuration : formatDuration;
+}
+
+async function generateTestMp3(outputPath: string, durationSeconds: number): Promise<void> {
+  await execFileAsync(FFMPEG, [
+    "-y",
+    "-f", "lavfi",
+    "-i", `sine=frequency=440:duration=${durationSeconds}`,
+    "-c:a", "libmp3lame",
+    "-q:a", "2",
+    outputPath,
+  ]);
+}
 
 describe("trim_audio tool", () => {
   let client: Client;
@@ -83,5 +116,72 @@ describe("trim_audio tool", () => {
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
     expect(content[0].text).toContain("No audio or video file found");
+  });
+
+  it("trims real aud-* MP3 in keep mode", async () => {
+    const fs = createFs({ projectsDir: tempDir });
+    const asset = await fs.createAsset("aud", "music-clip", "test-proj");
+    if (!asset.ok) throw new Error("Failed to create asset");
+
+    const genPath = join(tempDir, "temp-sine.mp3");
+    await generateTestMp3(genPath, 3.0);
+    const audioData = await readFile(genPath);
+    await fs.writeFile(asset.value.assetId, "original.mp3", audioData, "test-proj");
+
+    const result = await client.callTool({
+      name: "trim_audio",
+      arguments: {
+        asset_id: asset.value.assetId,
+        project_slug: "test-proj",
+        trim_start: 0.5,
+        trim_end: 2.0,
+      },
+    });
+
+    if (result.isError) {
+      console.log("TOOL ERROR TEXT:", (result.content as TextContent)[0].text);
+    }
+    expect(result.isError).toBeFalsy();
+
+    const manifestResult = await fs.getManifest(asset.value.assetId, "test-proj");
+    expect(manifestResult.ok).toBe(true);
+    if (!manifestResult.ok) return;
+
+    const trimmedPath = join(manifestResult.value.path, "original.mp3");
+    const duration = await probeAudioDuration(trimmedPath);
+    expect(duration).toBeGreaterThan(1.3);
+    expect(duration).toBeLessThan(1.7);
+  });
+
+  it("trims real aud-* MP3 in cut mode", async () => {
+    const fs = createFs({ projectsDir: tempDir });
+    const asset = await fs.createAsset("aud", "podcast-clip", "test-proj");
+    if (!asset.ok) throw new Error("Failed to create asset");
+
+    const genPath = join(tempDir, "temp-sine.mp3");
+    await generateTestMp3(genPath, 3.0);
+    const audioData = await readFile(genPath);
+    await fs.writeFile(asset.value.assetId, "original.mp3", audioData, "test-proj");
+
+    const result = await client.callTool({
+      name: "trim_audio",
+      arguments: {
+        asset_id: asset.value.assetId,
+        project_slug: "test-proj",
+        cut_start: 1.0,
+        cut_end: 2.0,
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+
+    const manifestResult = await fs.getManifest(asset.value.assetId, "test-proj");
+    expect(manifestResult.ok).toBe(true);
+    if (!manifestResult.ok) return;
+
+    const trimmedPath = join(manifestResult.value.path, "original.mp3");
+    const duration = await probeAudioDuration(trimmedPath);
+    expect(duration).toBeGreaterThan(1.8);
+    expect(duration).toBeLessThan(2.3);
   });
 });

@@ -18,9 +18,12 @@ interface Command {
   variant: "default" | "violet" | "fuchsia" | "blue" | "zinc" | "amber" | "emerald" | "pink";
   chevron: "right" | "down";
   params: CommandParam[];
-  mcpTool?: { tool: string; autoInject?: string[]; injectParams?: Record<string, string | number | boolean> };
+  mcpTool?: { tool: string; adapter?: string; autoInject?: string[]; injectParams?: Record<string, string | number | boolean> };
   uiAction?: string;
   onMount?: string[];
+  canonical?: string;
+  aliases?: string[];
+  deprecated?: boolean;
 }
 
 const HARDCODED_COMMANDS: Command[] = [
@@ -80,7 +83,9 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "start", type: "string", required: false, description: "Start timestamp" },
       { name: "end", type: "string", required: false, description: "End timestamp" },
     ],
-    mcpTool: { tool: "trim_video", autoInject: ["project_slug"] },
+    mcpTool: { tool: "trim_video", adapter: "trim_video", autoInject: ["project_slug"] },
+    canonical: "/trim-video",
+    aliases: ["/trim"],
   },
   {
     command: "/trim-video",
@@ -96,7 +101,8 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "start", type: "string", required: false, description: "Start timestamp" },
       { name: "end", type: "string", required: false, description: "End timestamp" },
     ],
-    mcpTool: { tool: "trim_video", autoInject: ["project_slug"] },
+    mcpTool: { tool: "trim_video", adapter: "trim_video", autoInject: ["project_slug"] },
+    canonical: "/trim-video",
   },
   {
     command: "/crop",
@@ -201,7 +207,8 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "start", type: "string", required: false, description: "Start timestamp" },
       { name: "end", type: "string", required: false, description: "End timestamp" },
     ],
-    mcpTool: { tool: "trim_audio", autoInject: ["project_slug"] },
+    mcpTool: { tool: "trim_audio", adapter: "trim_audio", autoInject: ["project_slug"] },
+    canonical: "/trim-audio",
   },
   {
     command: "/apply-cuts",
@@ -216,7 +223,8 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Video asset ID" },
       { name: "cuts", type: "string[]", required: true, description: "Cut ranges, e.g. 0-5 10-15" },
     ],
-    mcpTool: { tool: "apply_cuts", autoInject: ["project_slug"] },
+    mcpTool: { tool: "apply_cuts", adapter: "apply_cuts", autoInject: ["project_slug"] },
+    canonical: "/apply-cuts",
   },
   {
     command: "/extract-frame",
@@ -260,7 +268,8 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Video asset ID" },
       { name: "target_language", type: "string", required: true, description: "Target language code (e.g. es, fr, de)" },
     ],
-    mcpTool: { tool: "translate_subtitles", autoInject: ["project_slug"] },
+    mcpTool: { tool: "translate_subtitles", adapter: "translate_subtitles", autoInject: ["project_slug"] },
+    canonical: "/translate-subs",
   },
   {
     command: "/final",
@@ -1019,8 +1028,24 @@ const HARDCODED_COMMANDS: Command[] = [
     mcpTool: { tool: "rewrite_prompt", autoInject: ["project_slug"] },
   },
   {
-    command: "/render",
+    command: "/render-video",
     description: "Render video asset",
+    example: "/render-video @hero-intro portrait",
+    category: "action",
+    icon: "Film",
+    size: "lg",
+    variant: "violet",
+    chevron: "right",
+    params: [
+      { name: "asset_id", type: "string", required: true, description: "Video asset to render" },
+      { name: "orientation", type: "string", required: false, description: "landscape, portrait, or square (default: all)" },
+    ],
+    mcpTool: { tool: "render_video", autoInject: ["project_slug"] },
+    canonical: "/render-video",
+  },
+  {
+    command: "/render",
+    description: "Render video asset (alias for /render-video)",
     example: "/render @hero-intro portrait",
     category: "action",
     icon: "Film",
@@ -1031,7 +1056,9 @@ const HARDCODED_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Video asset to render" },
       { name: "orientation", type: "string", required: false, description: "landscape, portrait, or square (default: all)" },
     ],
-    mcpTool: { tool: "render", autoInject: ["project_slug"] },
+    mcpTool: { tool: "render_video", autoInject: ["project_slug"] },
+    canonical: "/render-video",
+    aliases: ["/render"],
   },
   {
     command: "/clean-audio",
