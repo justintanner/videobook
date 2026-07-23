@@ -93,6 +93,19 @@ describe("slash_commands tool", () => {
     expect(commandNames).toContain("/settings");
     expect(commandNames).toContain("/files");
     expect(commandNames).toContain("/notebook");
+    expect(commandNames).toContain("/notebooks");
+    expect(commandNames).toContain("/save");
+    expect(commandNames).toContain("/run");
+    expect(commandNames).toContain("/prompt-new");
+    expect(commandNames).toContain("/character-new");
+    expect(commandNames).toContain("/scene-new");
+    expect(commandNames).toContain("/entities");
+    expect(commandNames).toContain("/jobs");
+    expect(commandNames).toContain("/revisions");
+    expect(commandNames).toContain("/storage");
+    expect(commandNames).toContain("/sync");
+    expect(commandNames).toContain("/providers");
+    expect(commandNames).toContain("/diagnostics");
     expect(commandNames).not.toContain("/plan");
     expect(commandNames).toContain("/projects");
     expect(commandNames).toContain("/project-new");
@@ -254,6 +267,21 @@ describe("slash_commands tool", () => {
       { name: "name", type: "string", required: false, description: "Notebook name. Omit to open the current/default notebook, or create 'scratch' if none exist." },
     ]);
     expect(notebook.category).toBe("action");
+
+    const save = commands.find((c) => c.command === "/save")!;
+    expect(save.uiAction).toBe("save_notebook");
+    expect(save.onMount).toEqual(["notebook"]);
+
+    const run = commands.find((c) => c.command === "/run")!;
+    expect(run.uiAction).toBe("run_notebook");
+    expect(run.onMount).toEqual(["notebook"]);
+
+    expect(commands.find((c) => c.command === "/prompt-new")?.mcpTool?.tool)
+      .toBe("create_prompt");
+    expect(commands.find((c) => c.command === "/character-new")?.mcpTool?.tool)
+      .toBe("create_character_entity");
+    expect(commands.find((c) => c.command === "/scene-new")?.mcpTool?.tool)
+      .toBe("create_scene");
 
     const archive = commands.find((c) => c.command === "/archive")!;
     expect(archive.category).toBe("context_menu");

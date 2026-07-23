@@ -1,0 +1,423 @@
+import { useMemo, useRef, useState } from 'react'
+import { Check, ChevronUp, Loader2, Send, X } from 'lucide-react'
+import type { UseMcpResult } from 'use-mcp/react'
+import type { ServerCommand } from '@/lib/command-registry'
+import { RichPromptField } from '@/components/ui/RichPromptField'
+import { applyReadlineEdit } from '@/videobook/readline'
+
+export interface ComposerOutcome {
+  ok: boolean
+  message: string
+}
+
+export interface PromptSession {
+  id: string
+  kind: string
+  title: string
+  value: string
+  assetSlugs: string[]
+  onChange: (value: string) => void
+  onCommit: () => Promise<ComposerOutcome>
+  onCollapse: () => Promise<ComposerOutcome>
+}
+
+interface CommandComposerProps {
+  commands: ServerCommand[]
+  assetSlugs: string[]
+  projectSlug: string
+  callTool: UseMcpResult['callTool']
+  disabled: boolean
+  connectionLabel: string
+  promptSession: PromptSession | null
+  onEnsureCatalog: () => Promise<void>
+  onExecute: (input: string) => Promise<ComposerOutcome>
+}
+
+interface Suggestion {
+  value: string
+  label: string
+  description: string
+  type: 'command' | 'asset'
+}
+
+interface PromptHistoryEntry {
+  prompt: string
+}
+
+function resultText(result: unknown): string | null {
+  if (typeof result !== 'object' || result === null || !('content' in result)) {
+    return null
+  }
+  const content = result.content
+  if (!Array.isArray(content)) return null
+  const item = content.find((candidate) => (
+    typeof candidate === 'object'
+    && candidate !== null
+    && 'type' in candidate
+    && candidate.type === 'text'
+    && 'text' in candidate
+    && typeof candidate.text === 'string'
+  ))
+  return item && 'text' in item ? item.text as string : null
+}
+
+function historyPayload(value: unknown): string[] {
+  const text = resultText(value)
+  if (!text) return []
+  try {
+    const parsed = JSON.parse(text) as { entries?: PromptHistoryEntry[] }
+    return (parsed.entries ?? []).map((entry) => entry.prompt).reverse()
+  } catch {
+    return []
+  }
+}
+
+export function CommandComposer({
+  commands,
+  assetSlugs,
+  projectSlug,
+  callTool,
+  disabled,
+  connectionLabel,
+  promptSession,
+  onEnsureCatalog,
+  onExecute,
+}: CommandComposerProps) {
+  const [input, setInput] = useState('')
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [dismissed, setDismissed] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [outcome, setOutcome] = useState<ComposerOutcome | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const killBufferRef = useRef('')
+  const historyRef = useRef<string[]>([])
+  const historyCursorRef = useRef(-1)
+  const historyDraftRef = useRef('')
+  const loadedHistoryProjectRef = useRef('')
+  const successTimerRef = useRef(0)
+
+  const suggestions = useMemo<Suggestion[]>(() => {
+    if (dismissed) return []
+    const commandMatch = input.match(/^\/([\w-]*)$/)
+    if (commandMatch) {
+      const filter = commandMatch[1].toLowerCase()
+      return commands
+        .filter((command) => command.command.slice(1).toLowerCase().includes(filter))
+        .slice(0, 12)
+        .map((command) => ({
+          value: `${command.command} `,
+          label: command.command,
+          description: command.description,
+          type: 'command',
+        }))
+    }
+    const assetMatch = input.match(/@([\w-]*)$/)
+    if (!assetMatch) return []
+    const filter = assetMatch[1].toLowerCase()
+    return assetSlugs
+      .filter((slug) => slug.toLowerCase().includes(filter))
+      .slice(0, 12)
+      .map((slug) => ({
+        value: `@${slug}`,
+        label: `@${slug}`,
+        description: 'project asset',
+        type: 'asset',
+      }))
+  }, [assetSlugs, commands, dismissed, input])
+
+  const showOutcome = (next: ComposerOutcome) => {
+    window.clearTimeout(successTimerRef.current)
+    setOutcome(next)
+    if (next.ok) {
+      successTimerRef.current = window.setTimeout(() => setOutcome(null), 3200)
+    }
+  }
+
+  const ensureHistory = async () => {
+    if (!projectSlug || loadedHistoryProjectRef.current === projectSlug) return
+    loadedHistoryProjectRef.current = projectSlug
+    historyRef.current = []
+    historyCursorRef.current = -1
+    try {
+      const result = await callTool('list_prompt_history', {
+        project_slug: projectSlug,
+        surface: 'chat',
+        limit: 100,
+      })
+      historyRef.current = historyPayload(result)
+    } catch {
+      loadedHistoryProjectRef.current = ''
+    }
+  }
+
+  const focusAndLoad = () => {
+    void onEnsureCatalog()
+    void ensureHistory()
+  }
+
+  const recordHistory = (message: string) => {
+    historyRef.current = [...historyRef.current, message]
+    historyCursorRef.current = -1
+    if (!projectSlug) return
+    void callTool('record_prompt', {
+      project_slug: projectSlug,
+      surface: 'chat',
+      prompt: message,
+    }).catch(() => undefined)
+  }
+
+  const execute = async () => {
+    const message = input.trim()
+    if (!message || sending || disabled) return
+    recordHistory(message)
+    setInput('')
+    setDismissed(false)
+    setSending(true)
+    try {
+      showOutcome(await onExecute(message))
+    } finally {
+      setSending(false)
+      requestAnimationFrame(() => inputRef.current?.focus())
+    }
+  }
+
+  const acceptSuggestion = (suggestion: Suggestion) => {
+    if (suggestion.type === 'command') {
+      setInput(suggestion.value)
+    } else {
+      setInput((current) => current.replace(/@[\w-]*$/, suggestion.value) + ' ')
+    }
+    setDismissed(true)
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  const navigateHistory = (direction: -1 | 1) => {
+    const values = historyRef.current
+    if (values.length === 0) return
+    if (historyCursorRef.current === -1) {
+      if (direction === 1) return
+      historyDraftRef.current = input
+      historyCursorRef.current = values.length - 1
+    } else {
+      historyCursorRef.current += direction
+      if (historyCursorRef.current < 0) historyCursorRef.current = 0
+      if (historyCursorRef.current >= values.length) {
+        historyCursorRef.current = -1
+        setInput(historyDraftRef.current)
+        return
+      }
+    }
+    setInput(values[historyCursorRef.current] ?? '')
+  }
+
+  const applyInputReadline = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    const target = event.currentTarget
+    const edit = applyReadlineEdit({
+      value: input,
+      selectionStart: target.selectionStart ?? input.length,
+      selectionEnd: target.selectionEnd ?? input.length,
+      key: event.key,
+      ctrlKey: event.ctrlKey,
+      altKey: event.altKey,
+      yankText: killBufferRef.current,
+      multiline: false,
+    })
+    if (!edit) return false
+    event.preventDefault()
+    setInput(edit.value)
+    if (edit.killedText !== undefined) killBufferRef.current = edit.killedText
+    requestAnimationFrame(() => target.setSelectionRange(
+      edit.selectionStart,
+      edit.selectionEnd,
+    ))
+    return true
+  }
+
+  const applyPromptReadline = (
+    event: React.KeyboardEvent<HTMLTextAreaElement>,
+  ) => {
+    if (!promptSession) return false
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault()
+      void promptSession.onCommit().then(showOutcome)
+      requestAnimationFrame(() => inputRef.current?.focus())
+      return true
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      void promptSession.onCollapse().then(showOutcome)
+      requestAnimationFrame(() => inputRef.current?.focus())
+      return true
+    }
+    const target = event.currentTarget
+    const edit = applyReadlineEdit({
+      value: promptSession.value,
+      selectionStart: target.selectionStart,
+      selectionEnd: target.selectionEnd,
+      key: event.key,
+      ctrlKey: event.ctrlKey,
+      altKey: event.altKey,
+      yankText: killBufferRef.current,
+      multiline: true,
+    })
+    if (!edit) return false
+    event.preventDefault()
+    promptSession.onChange(edit.value)
+    if (edit.killedText !== undefined) killBufferRef.current = edit.killedText
+    requestAnimationFrame(() => target.setSelectionRange(
+      edit.selectionStart,
+      edit.selectionEnd,
+    ))
+    return true
+  }
+
+  return (
+    <section className={`command-composer ${promptSession ? 'command-composer-expanded' : ''}`}>
+      {promptSession && (
+        <div className="prompt-drawer">
+          <header>
+            <span>
+              {promptSession.kind === 'prompt'
+                ? 'prompt cell'
+                : `${promptSession.kind} prompt`}
+            </span>
+            <strong>{promptSession.title}</strong>
+            <button
+              type="button"
+              onClick={() => void promptSession.onCollapse().then(showOutcome)}
+              aria-label="Commit and collapse prompt editor"
+            >
+              <ChevronUp size={15} />
+            </button>
+          </header>
+          <RichPromptField
+            value={promptSession.value}
+            onChange={promptSession.onChange}
+            resolveRef={() => null}
+            assetSlugs={promptSession.assetSlugs}
+            rows={7}
+            autoFocus
+            placeholder="Describe the desired result or reference reusable context…"
+            onKeyDownExtra={applyPromptReadline}
+            fieldClassName="w-full px-4 py-3 font-mono text-[13px] leading-6"
+            surfaceClassName="prompt-drawer-field"
+            textClassName="text-[#b9dfcb]"
+            caretClassName="caret-[#72e7aa]"
+          />
+        </div>
+      )}
+
+      {outcome && (
+        <div
+          className={`command-result ${outcome.ok ? 'command-result-ok' : 'command-result-error'}`}
+          role="status"
+          aria-live="polite"
+        >
+          {outcome.ok ? <Check size={13} /> : <X size={13} />}
+          <span>{outcome.message}</span>
+          {!outcome.ok && (
+            <button type="button" onClick={() => setOutcome(null)} aria-label="Dismiss error">
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="command-line-shell">
+        {suggestions.length > 0 && (
+          <div className="command-suggestions">
+            {suggestions.map((suggestion, index) => (
+              <button
+                type="button"
+                key={suggestion.label}
+                className={index === selectedIndex ? 'active' : ''}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => acceptSuggestion(suggestion)}
+              >
+                <strong>{suggestion.label}</strong>
+                <span>{suggestion.description}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <span className="command-chevron">›</span>
+        <input
+          ref={inputRef}
+          value={input}
+          disabled={disabled || sending}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          placeholder={disabled ? connectionLabel : 'Type a message or /command…'}
+          aria-label="Videobook command input"
+          onFocus={focusAndLoad}
+          onChange={(event) => {
+            setInput(event.target.value)
+            setDismissed(false)
+            setSelectedIndex(0)
+            historyCursorRef.current = -1
+          }}
+          onKeyDown={(event) => {
+            if (suggestions.length > 0) {
+              if (event.key === 'ArrowDown') {
+                event.preventDefault()
+                setSelectedIndex((index) => (index + 1) % suggestions.length)
+                return
+              }
+              if (event.key === 'ArrowUp') {
+                event.preventDefault()
+                setSelectedIndex((index) => (
+                  index - 1 + suggestions.length
+                ) % suggestions.length)
+                return
+              }
+              if (event.key === 'Tab') {
+                event.preventDefault()
+                acceptSuggestion(suggestions[selectedIndex]!)
+                return
+              }
+              if (event.key === 'Enter') {
+                const exact = suggestions[selectedIndex]?.label === input.trim()
+                if (!exact) {
+                  event.preventDefault()
+                  acceptSuggestion(suggestions[selectedIndex]!)
+                  return
+                }
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                setDismissed(true)
+                return
+              }
+            }
+            if (event.ctrlKey && event.key.toLowerCase() === 'p') {
+              event.preventDefault()
+              navigateHistory(-1)
+              return
+            }
+            if (event.ctrlKey && event.key.toLowerCase() === 'n') {
+              event.preventDefault()
+              navigateHistory(1)
+              return
+            }
+            if (applyInputReadline(event)) return
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              void execute()
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="command-send"
+          disabled={disabled || sending || !input.trim()}
+          onClick={() => void execute()}
+          aria-label="Send command"
+        >
+          {sending ? <Loader2 size={16} className="spin" /> : <Send size={16} />}
+        </button>
+      </div>
+    </section>
+  )
+}

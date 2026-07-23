@@ -241,7 +241,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns an authorize_url the client should open. After the user approves in the browser, the server captures the callback, exchanges the code, and persists refreshable tokens to ~/.videocity/x-tokens.json.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at? } so the client can poll while the user authorizes in the browser.
 
-## Slash commands (108 static commands)
+## Slash commands (121 static commands)
 
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
@@ -260,6 +260,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/audio-settings` (aliases: `/audio`) — Audio viewer settings for volume and fades; UI: `settings_audio`
 - `/bg` — Background mode; UI: `settings_bg`
 - `/character` — Create a character folder; MCP: `create_character`
+- `/character-new` — Create a reusable Videobook character entity; MCP: `create_character_entity`
 - `/clean-audio` — Clean a video's audio in place with ElevenLabs while preserving vocals and key sound effects; MCP: `clean_video_audio`
 - `/clear-failed` — Clean up failed work: delete failed-generation husks and clear error badges from assets that already have media; MCP: `clean_failed_assets`
 - `/close` — Close the active viewer, panel, or browser and return to the idle screen; UI: `close_viewer`
@@ -272,9 +273,11 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/delete` — Delete an asset; MCP: `delete_asset`
 - `/describe` — Describe image into a reproduction-ready prompt; MCP: `describe_image`
 - `/detect-scenes` — Run ffmpeg scdet over a video asset and report natural visual break candidates (camera cuts + motion-settle points).; MCP: `detect_scenes`
+- `/diagnostics` — Open MCP, catalog, CAS, and publication diagnostics; UI: `open_diagnostics`
 - `/doctor` — Diagnose project health across all asset types (broken + stuck assets). Add an asset and 'fix' to restore that asset to its last usable state.; MCP: `doctor`
 - `/download` — Download video from URL; MCP: `download_video`
 - `/duplicate` — Duplicate an asset; MCP: `duplicate_asset`
+- `/entities` — Open the reusable entity library; UI: `open_entities`
 - `/expand` — Expand the asset/clip sidebars; UI: `sidebar_expand`
 - `/export` — Export asset to Downloads folder; MCP: `export_to_downloads`
 - `/export-to` — Export an asset into a different project; MCP: `export_asset_to_project`
@@ -294,10 +297,12 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/inject-first-frame` — Replace frame zero of a video or final output with an image while preserving audio and timing; MCP: `inject_first_frame`
 - `/insert-slot` — Insert an empty timeline slot before or after another slot; MCP: `insert_timeline_slot`
 - `/invert` — In-place inverts an image asset (negates colors); MCP: `invert_image`
+- `/jobs` — Open persistent jobs for the current project; UI: `open_jobs`
 - `/keys` — Open the provider API keys / settings screen; UI: `open_provider_keys`
 - `/keywords` — Animate transcript keywords in face-safe open space, or omit words for automatic selection; MCP: `animate_keywords`
 - `/landscape` — Show landscape crop (1920x1080); UI: `viewer_set_landscape`
 - `/notebook` — Open a project Notebook — a workflow of prompt, image, and video steps. Opens the existing notebook when present; creates 'scratch' by default.; UI: `open_notebook`
+- `/notebooks` — List first-class notebooks in the current project; MCP: `list_notebooks`
 - `/open` — Open asset in viewer; UI: `open_asset`
 - `/original` — Show original uncropped image; UI: `viewer_set_original`
 - `/outroqr` — Generate a 10-second animated QR outro with bundled impact sound; MCP: `create_qr_outro`
@@ -310,6 +315,8 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/project-new` — Create a new project and switch to it; UI: `create_project`
 - `/project-rename` — Rename the current project; UI: `rename_project`
 - `/projects` — Open the project selector dropdown; UI: `open_projects`
+- `/prompt-new` — Create a reusable prompt entity; MCP: `create_prompt`
+- `/providers` — Open provider credentials and routing settings; UI: `open_provider_keys`
 - `/qart` — Create scan-safe color and monochrome QR mosaics from an img-* source; MCP: `create_qart`
 - `/qrbtf` — Generate a parametric QR code in an artistic style (normal, line, dsj, bubble, func); MCP: `create_qrbtf`
 - `/recover` — Recover an asset stuck in the failed state (clears the error, keeps the media); MCP: `recover_asset`
@@ -320,11 +327,15 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/render-video` (aliases: `/render`) — Render a video asset; MCP: `render_video`
 - `/replace-audio` — Replace the audio track of a video asset with an aud- asset's audio; MCP: `replace_video_audio`
 - `/reverse` — Reverse video playback (play backwards); MCP: `reverse_video`
+- `/revisions` — Open forward-only project revision history; UI: `open_revisions`
 - `/rewind` — Rewind the project to a previous commit (no hash opens the activity log to pick one); UI: `rewind_activity`
 - `/rewrite` — Optimize a prompt; MCP: `rewrite_prompt`
 - `/rewrite-script` — Rewrite a script asset in place with the full describe model; MCP: `rewrite_script`
+- `/run` — Save and run the active notebook; UI: `run_notebook`
+- `/save` — Save the active notebook as a new revision; UI: `save_notebook`
 - `/say` — Generate speech audio from text using an ElevenLabs voice ID; MCP: `generate_elevenlabs_text_to_audio`
 - `/scene-concat` — Smoothly join two video scenes, automatically aligning shared boundary audio; MCP: `smooth_scene_concat`
+- `/scene-new` — Create a reusable scene entity; MCP: `create_scene`
 - `/settings` — Show render settings; UI: `viewer_show_settings`
 - `/settings-landscape` — Settings for landscape orientation; UI: `settings_landscape`
 - `/settings-portrait` — Settings for portrait orientation; UI: `settings_portrait`
@@ -335,9 +346,11 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/splice` — Splice two videos with an overlap window; use 0 to concatenate both complete clips; MCP: `splice_video`
 - `/split` — Open frame-accurate split editor; creates two video assets. Original preserved.; UI: `open_split`
 - `/split-chunks` (aliases: `/even-split`) — Split a video into targeted chunks plus a leftover while preserving the source; MCP: `split_video_by_durations`
+- `/storage` — Open DoltLite and content-store diagnostics; UI: `open_diagnostics`
 - `/subs` — Subtitle settings; UI: `settings_subs`
 - `/suggest-cuts` — Suggest trim cuts for a video (dead air, fillers, awkward sections); MCP: `suggest_cuts`
 - `/suggest-sfx` — Suggest sound-effect placements for a video; MCP: `suggest_sfx`
+- `/sync` — Publish pending content-addressed objects; MCP: `storage_sync`
 - `/sync-audio` — Smoothly retime video action to match fixed original-audio cues at multiple anchors; MCP: `sync_video_to_audio`
 - `/timewarp` — Retime one scene while compensating the rest of the picture and preserving the original audio and duration; MCP: `timewarp_video`
 - `/tldr` — Rewrite a script asset in place as a 1–2 sentence TLDR; MCP: `rewrite_script`

@@ -84,6 +84,24 @@ describe("getRoutableTool", () => {
   it("returns undefined for empty string", () => {
     expect(getRoutableTool("")).toBeUndefined();
   });
+
+  it("routes safe Videobook notebook and entity operations", () => {
+    expect(getRoutableTool("create_notebook")?.actualTool).toBe("create_notebook");
+    expect(getRoutableTool("run_notebook")?.params).toEqual(["notebook_id"]);
+    expect(getRoutableTool("create_prompt")?.actualTool).toBe("create_prompt");
+    expect(getRoutableTool("create_character_entity")?.actualTool)
+      .toBe("create_character_entity");
+    expect(getRoutableTool("create_scene")?.actualTool).toBe("create_scene");
+    expect(getRoutableTool("revision_history")?.actualTool)
+      .toBe("revision_history");
+  });
+
+  it("does not route destructive Videobook operations from free text", () => {
+    expect(getRoutableTool("delete_notebook")).toBeUndefined();
+    expect(getRoutableTool("delete_prompt")).toBeUndefined();
+    expect(getRoutableTool("storage_sync")).toBeUndefined();
+    expect(getRoutableTool("rewind_project")).toBeUndefined();
+  });
 });
 
 describe("buildChatRoutingPrompt", () => {
@@ -165,7 +183,7 @@ describe("TIMESTAMP_PARAMS", () => {
 
 describe("ROUTABLE_TOOLS", () => {
   it("has the expected number of entries", () => {
-    expect(ROUTABLE_TOOLS.length).toBe(35);
+    expect(ROUTABLE_TOOLS.length).toBe(50);
   });
 
   it("includes inject_first_frame for image-to-video routing", () => {
@@ -196,7 +214,17 @@ describe("ROUTABLE_TOOLS", () => {
   });
 
   it("every tool has non-empty params array (except tools that take no routing params)", () => {
-    const noParamTools = new Set(["render_timeline", "list_elevenlabs_voices", "clean_failed_assets"]);
+    const noParamTools = new Set([
+      "render_timeline",
+      "list_elevenlabs_voices",
+      "clean_failed_assets",
+      "list_notebooks",
+      "list_prompts",
+      "list_characters",
+      "list_scenes",
+      "list_jobs",
+      "storage_status",
+    ]);
     for (const tool of ROUTABLE_TOOLS) {
       if (noParamTools.has(tool.name)) continue;
       expect(tool.params.length).toBeGreaterThan(0);
