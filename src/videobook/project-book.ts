@@ -54,7 +54,7 @@ export interface BookCellData extends Record<string, unknown> {
   width?: number
   height?: number
   trail: BookTrailItem[]
-  historyExpanded: boolean
+  source: BookAction
 }
 
 interface ActionCard {
@@ -278,7 +278,6 @@ function assetMap(assets: BookAsset[]): Map<string, BookAsset> {
 export function projectBookNodes(
   book: ProjectBook,
   assets: BookAsset[],
-  historyExpanded: boolean,
 ): Array<Node<BookCellData>> {
   const cards = actionCards(book.actions)
   const layouts = latestLayouts(book.actions)
@@ -316,7 +315,7 @@ export function projectBookNodes(
         ...(typeof asset?.width === 'number' ? { width: asset.width } : {}),
         ...(typeof asset?.height === 'number' ? { height: asset.height } : {}),
         trail: relatedTrail(card.action, card.artifactId, book.actions),
-        historyExpanded,
+        source: card.action,
       },
     }
   })

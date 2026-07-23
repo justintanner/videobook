@@ -41,6 +41,25 @@ function action(
 }
 
 describe('project book canvas projection', () => {
+  it('keeps history and source on card faces while locked scrolling stays vertical', () => {
+    const app = readFileSync(
+      new URL('../App.tsx', import.meta.url),
+      'utf8',
+    )
+    const css = readFileSync(
+      new URL('../index.css', import.meta.url),
+      'utf8',
+    )
+
+    expect(app).toContain('View history for')
+    expect(app).toContain('View source for')
+    expect(app).toContain('panOnScroll={!flowInteractive}')
+    expect(app).toContain('panOnScrollMode={PanOnScrollMode.Vertical}')
+    expect(app).not.toContain('History trails')
+    expect(css).toContain('.cell-node-turn-flipped')
+    expect(css).toContain('transform: rotateY(180deg)')
+  })
+
   it('bounds portrait media to the preview viewport', () => {
     const css = readFileSync(
       new URL('../index.css', import.meta.url),
@@ -110,7 +129,7 @@ describe('project book canvas projection', () => {
       }],
     })
 
-    const nodes = projectBookNodes(book, assets, true)
+    const nodes = projectBookNodes(book, assets)
     expect(nodes.map((node) => node.id)).toEqual([
       'prompt-action',
       'image-action',
@@ -121,7 +140,7 @@ describe('project book canvas projection', () => {
       mediaUrl: '/files/studio/img-cat/original.png',
       width: 1024,
       height: 1792,
-      historyExpanded: true,
+      source: image,
     })
     expect(notebookGridSlot(imageNode!.position)).toEqual({
       stage: 2,

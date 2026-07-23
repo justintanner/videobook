@@ -5,6 +5,7 @@ import {
   notebookGrid,
   notebookGridMetrics,
   notebookGridPosition,
+  notebookGridStageViewport,
   notebookGridSlot,
   normalizeNotebookGridNodes,
   normalizeNotebookGridPositions,
@@ -113,7 +114,25 @@ describe('notebook grid', () => {
     })
     expect(notebookGridMetrics([], { stage: 4, column: 6 })).toMatchObject({
       stageCount: 5,
-      columnCount: 8,
+      columnCount: 7,
     })
+  })
+
+  it('fits stage columns to the viewport width while keeping the book top aligned', () => {
+    const positions = [
+      notebookGridPosition({ stage: 0, column: 0 }),
+      notebookGridPosition({ stage: 6, column: 3 }),
+    ]
+    const metrics = notebookGridMetrics(positions)
+    const viewport = notebookGridStageViewport(positions, metrics.width + 48)
+
+    expect(viewport).toEqual({
+      x: 24,
+      y: 18,
+      zoom: 1,
+    })
+    expect(notebookGridStageViewport(positions, metrics.width / 2).zoom).toBeCloseTo(
+      (metrics.width / 2 - 48) / metrics.width,
+    )
   })
 })

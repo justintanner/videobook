@@ -1,9 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import {
   Background,
   Controls,
   Handle,
   MiniMap,
+  PanOnScrollMode,
   Panel,
   Position,
   ReactFlow,
@@ -19,6 +28,7 @@ import {
   Activity,
   BookOpen,
   Boxes,
+  Braces,
   ChevronDown,
   Check,
   CircleDot,
@@ -31,6 +41,7 @@ import {
   MessageSquareText,
   Plus,
   RefreshCw,
+  RotateCcw,
   Settings,
   Sparkles,
   Trash2,
@@ -58,6 +69,7 @@ import { NotebookStageBoard } from '@/components/videobook/NotebookStageBoard'
 import {
   nextNotebookGridSlot,
   notebookGridSlot,
+  notebookGridStageViewport,
   resolveNotebookGridMove,
   snapNotebookGridMove,
   type NotebookGridSlot,
@@ -116,13 +128,33 @@ const palette = [
 
 const cellDragType = 'application/x-videobook-cell'
 
+type CellFace = 'action' | 'history' | 'source'
+
+interface CellFaceController {
+  faces: Record<string, CellFace>
+  setFace: (id: string, face: CellFace) => void
+}
+
+const CellFaceContext = createContext<CellFaceController>({
+  faces: {},
+  setFace: () => undefined,
+})
+
 function cellKindFromDrag(value: string): BookCellKind | null {
   return palette.some((item) => item.kind === value)
     ? value as BookCellKind
     : null
 }
 
+function trailDate(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.valueOf()) ? value : date.toLocaleString()
+}
+
 function CellNode({ data, selected }: NodeProps<Node<BookCellData>>) {
+  const faceController = useContext(CellFaceContext)
+  const face = faceController.faces[data.actionId] ?? 'action'
+  const flipped = face !== 'action'
   const Icon =
     data.kind === 'video'
       ? Video
@@ -134,67 +166,169 @@ function CellNode({ data, selected }: NodeProps<Node<BookCellData>>) {
             ? Film
             : Image
 
+  const showFace = (next: CellFace) => {
+    faceController.setFace(data.actionId, next)
+  }
+
   return (
-    <article className={`cell-node ${selected ? 'cell-node-selected' : ''}`}>
+    <article
+      className={`cell-node ${selected ? 'cell-node-selected' : ''}`}
+      data-face={face}
+    >
       <Handle type="target" position={Position.Top} id="reference" />
       <Handle type="target" position={Position.Top} id="subject" />
       <Handle type="target" position={Position.Top} id="scene" />
       <Handle type="target" position={Position.Top} id="first-frame" />
-      <header className="cell-node-header">
-        <span>
-          <Icon size={13} />
-          {data.subtitle}
-        </span>
-        <span>{data.stage.toString().padStart(2, '0')}</span>
-      </header>
-      {data.mediaUrl || data.thumbnailUrl ? (
-        <div className="cell-media">
-          {data.kind === 'video' && !data.thumbnailUrl ? (
-            <video
-              src={data.mediaUrl}
-              muted
-              playsInline
-              preload="metadata"
-            />
+      <div className={`cell-node-turn ${flipped ? 'cell-node-turn-flipped' : ''}`}>
+        <section className="cell-node-face cell-node-face-action" aria-hidden={flipped}>
+          <header className="cell-node-header">
+            <span>
+              <Icon size={14} />
+              {data.subtitle}
+            </span>
+            <span className="cell-node-header-actions">
+              <span className="cell-stage-code">
+                {data.stage.toString().padStart(2, '0')}
+              </span>
+              <button
+                type="button"
+                className="cell-face-button nodrag nopan"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  showFace('history')
+                }}
+                aria-label={`View history for ${data.slug}`}
+                title="View history"
+              >
+                <Clock3 size={14} />
+              </button>
+              <button
+                type="button"
+                className="cell-face-button nodrag nopan"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  showFace('source')
+                }}
+                aria-label={`View source for ${data.slug}`}
+                title="View source"
+              >
+                <Braces size={15} />
+              </button>
+            </span>
+          </header>
+          {data.mediaUrl || data.thumbnailUrl ? (
+            <div className="cell-media">
+              {data.kind === 'video' && !data.thumbnailUrl ? (
+                <video
+                  src={data.mediaUrl}
+                  muted
+                  playsInline
+                  preload="metadata"
+                />
+              ) : (
+                <img
+                  src={data.thumbnailUrl ?? data.mediaUrl}
+                  alt={data.slug}
+                />
+              )}
+              {data.width && data.height && (
+                <span className="cell-ratio">
+                  {data.width > data.height
+                    ? '16:9'
+                    : data.width < data.height
+                      ? '9:16'
+                      : '1:1'}
+                </span>
+              )}
+            </div>
           ) : (
-            <img
-              src={data.thumbnailUrl ?? data.mediaUrl}
-              alt={data.slug}
-            />
+            <div className="cell-copy">
+              <Sparkles size={28} />
+              <span>{data.prompt || data.operation}</span>
+            </div>
           )}
-          {data.width && data.height && (
-            <span className="cell-ratio">
-              {data.width > data.height
-                ? '16:9'
-                : data.width < data.height
-                  ? '9:16'
-                  : '1:1'}
+          <footer className="cell-node-footer">
+            <span>
+              <strong>{data.slug}</strong>
+              <small>{data.title}</small>
             </span>
+            <strong>{data.status}</strong>
+          </footer>
+        </section>
+        <section className="cell-node-face cell-node-face-back" aria-hidden={!flipped}>
+          {flipped && (
+            <>
+              <header className="cell-node-header">
+                <span>
+                  {face === 'history' ? <Clock3 size={14} /> : <Braces size={15} />}
+                  {face === 'history' ? 'HISTORY · CARD' : 'SOURCE · ACTION'}
+                </span>
+                <span className="cell-node-header-actions">
+                  <button
+                    type="button"
+                    className="cell-face-button nodrag nopan"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      showFace('action')
+                    }}
+                    aria-label={`Return to ${data.slug}`}
+                    title="Return to action"
+                  >
+                    <RotateCcw size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="cell-face-button nodrag nopan"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      showFace(face === 'history' ? 'source' : 'history')
+                    }}
+                    aria-label={face === 'history'
+                      ? `View source for ${data.slug}`
+                      : `View history for ${data.slug}`}
+                    title={face === 'history' ? 'View source' : 'View history'}
+                  >
+                    {face === 'history' ? <Braces size={15} /> : <Clock3 size={14} />}
+                  </button>
+                </span>
+              </header>
+              {face === 'history' ? (
+                <ol className="cell-trail nodrag nopan nowheel">
+                  {data.trail.map((item) => (
+                    <li key={item.id}>
+                      <div>
+                        <strong>{item.phase}</strong>
+                        <code>{item.revision.slice(0, 7)}</code>
+                      </div>
+                      <p>{item.title}</p>
+                      <small>{item.actor} · {trailDate(item.date)}</small>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <pre className="cell-source nodrag nopan nowheel">
+                  {JSON.stringify(data.source, null, 2)}
+                </pre>
+              )}
+              <footer className="cell-node-footer">
+                <span>
+                  <strong>{data.slug}</strong>
+                  <small>
+                    {face === 'history'
+                      ? `${data.trail.length} history ${data.trail.length === 1 ? 'event' : 'events'}`
+                      : data.operation}
+                  </small>
+                </span>
+                <strong>{data.revision.slice(0, 7)}</strong>
+              </footer>
+            </>
           )}
-        </div>
-      ) : (
-        <div className="cell-copy">
-          <Sparkles size={26} />
-          <span>{data.prompt || data.operation}</span>
-        </div>
-      )}
-      {data.historyExpanded && (
-        <div className="cell-trail">
-          {data.trail.map((item) => (
-            <span key={item.id}>
-              <Clock3 size={10} />
-              {item.title} · {item.phase} · {item.revision.slice(0, 7)}
-            </span>
-          ))}
-        </div>
-      )}
-      <footer className="cell-node-footer">
-        <span>
-          <strong>{data.slug}</strong>
-          <small>{data.title}</small>
-        </span>
-        <strong>{data.status}</strong>
-      </footer>
+        </section>
+      </div>
       <Handle type="source" position={Position.Bottom} />
     </article>
   )
@@ -381,7 +515,8 @@ function App() {
   const [projectSlug, setProjectSlug] = useState('')
   const [projectBook, setProjectBook] = useState<ProjectBook | null>(null)
   const [bookAssets, setBookAssets] = useState<BookAsset[]>([])
-  const [historyExpanded, setHistoryExpanded] = useState(false)
+  const [cellFaces, setCellFaces] = useState<Record<string, CellFace>>({})
+  const [flowInteractive, setFlowInteractive] = useState(true)
   const [panelOpen, setPanelOpen] = useState(() => window.innerWidth > 720)
   const [promptOpen, setPromptOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
@@ -401,6 +536,7 @@ function App() {
   const projectBookRef = useRef<ProjectBook | null>(null)
   const bookAssetsRef = useRef<BookAsset[]>([])
   const flowRef = useRef<ReactFlowInstance<Node<BookCellData>, Edge> | null>(null)
+  const canvasRef = useRef<HTMLElement | null>(null)
   const dragSlotsRef = useRef(new Map<string, NotebookGridSlot>())
 
   const selected = useMemo(
@@ -415,6 +551,15 @@ function App() {
     }),
     [commands, screen],
   )
+
+  const setCellFace = useCallback((id: string, face: CellFace) => {
+    setCellFaces((current) => ({ ...current, [id]: face }))
+  }, [])
+
+  const cellFaceController = useMemo<CellFaceController>(() => ({
+    faces: cellFaces,
+    setFace: setCellFace,
+  }), [cellFaces, setCellFace])
 
   useEffect(() => {
     const closeNarrowInspector = () => {
@@ -448,6 +593,23 @@ function App() {
     setEdges(next)
   }, [])
 
+  const fitBookStages = useCallback((duration = 240) => {
+    const flow = flowRef.current
+    const canvas = canvasRef.current
+    if (!flow || !canvas) return
+    const viewport = notebookGridStageViewport(
+      nodesRef.current.map((node) => node.position),
+      canvas.clientWidth,
+    )
+    void flow.setViewport(viewport, { duration })
+  }, [])
+
+  const scheduleBookStageFit = useCallback(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => fitBookStages())
+    })
+  }, [fitBookStages])
+
   const loadProjects = useCallback(async () => {
     const value = await call('list_projects', {})
     const next = asProjects(value)
@@ -471,9 +633,9 @@ function App() {
     setProjectBook(book)
     setBookAssets(assets)
     setAssetSlugs(asAssetSlugs(assets))
-    replaceNodes(projectBookNodes(book, assets, historyExpanded))
+    replaceNodes(projectBookNodes(book, assets))
     replaceEdges(projectBookEdges(book))
-  }, [historyExpanded, replaceEdges, replaceNodes])
+  }, [replaceEdges, replaceNodes])
 
   const readProjectBook = useCallback(async (slug: string) => {
     const [bookValue, assetsValue] = await Promise.all([
@@ -508,12 +670,14 @@ function App() {
       setCurrentProject(slug)
       applyProjectBook(book, assets)
       setSelectedId(null)
+      setCellFaces({})
       setPromptOpen(false)
       setPaletteDragKind(null)
       setPreviewSlot(null)
       dragSlotsRef.current.clear()
       setPanelOpen(window.innerWidth > 720)
       setScreen('notebook')
+      scheduleBookStageFit()
       setRecords([])
       setProjectMenuOpen(false)
       setWorkspaceNotice(`Opened ${slug}`)
@@ -528,6 +692,7 @@ function App() {
     loadCommands,
     loadProjects,
     readProjectBook,
+    scheduleBookStageFit,
     setCurrentProject,
   ])
 
@@ -799,7 +964,6 @@ function App() {
     const original = projectBookNodes(
       book,
       bookAssetsRef.current,
-      historyExpanded,
     ).find((candidate) => candidate.id === id)
     if (
       original
@@ -847,7 +1011,7 @@ function App() {
     } finally {
       setBusy(false)
     }
-  }, [call, historyExpanded, reloadProjectBook])
+  }, [call, reloadProjectBook])
 
   const commitLayouts = useCallback(async (): Promise<ComposerOutcome> => {
     const slug = projectSlugRef.current
@@ -856,7 +1020,6 @@ function App() {
     const canonical = new Map(projectBookNodes(
       book,
       bookAssetsRef.current,
-      historyExpanded,
     ).map((node) => [node.id, notebookGridSlot(node.position)]))
     const changed = nodesRef.current.filter((node) => {
       const before = canonical.get(node.id)
@@ -887,7 +1050,7 @@ function App() {
     } finally {
       setBusy(false)
     }
-  }, [call, historyExpanded, reloadProjectBook])
+  }, [call, reloadProjectBook])
 
   const connectEntries = useCallback(async (
     connection: Connection,
@@ -941,19 +1104,18 @@ function App() {
     }
   }, [call, reloadProjectBook])
 
-  const toggleHistory = useCallback(async (): Promise<ComposerOutcome> => {
-    const next = !historyExpanded
-    setHistoryExpanded(next)
-    const book = projectBookRef.current
-    if (book) {
-      replaceNodes(projectBookNodes(book, bookAssetsRef.current, next))
-      if (screen !== 'notebook') await navigateScreen('notebook')
+  const showSelectedHistory = useCallback(async (): Promise<ComposerOutcome> => {
+    const actionId = selectedId ?? nodesRef.current[0]?.id
+    if (!actionId) {
+      return { ok: false, message: 'Select a project-book card first' }
     }
+    if (screen !== 'notebook') await navigateScreen('notebook')
+    setCellFace(actionId, 'history')
     return {
       ok: true,
-      message: next ? 'Expanded project-book trails' : 'Collapsed project-book trails',
+      message: 'Opened the card history face',
     }
-  }, [historyExpanded, navigateScreen, replaceNodes, screen])
+  }, [navigateScreen, screen, selectedId, setCellFace])
 
   const ensureCommandCatalog = useCallback(async () => {
     if (commands.length > 0 || mcp.state !== 'ready') return
@@ -999,7 +1161,7 @@ function App() {
       }
     }
     if (action === 'open_revisions' || action === 'show_history') {
-      return toggleHistory()
+      return showSelectedHistory()
     }
     const screens: Record<string, Screen> = {
       open_projects: 'projects',
@@ -1024,7 +1186,7 @@ function App() {
     openCurrentBook,
     openProject,
     renameProject,
-    toggleHistory,
+    showSelectedHistory,
   ])
 
   const executeCommand = useCallback(async (
@@ -1174,18 +1336,6 @@ function App() {
               </button>
             )
           })}
-          <button
-            type="button"
-            className={screen === 'notebook' && historyExpanded ? 'active' : ''}
-            disabled={!projectSlug}
-            onClick={() => void toggleHistory().then((outcome) => {
-              setWorkspaceNotice(outcome.message)
-            })}
-            title="Toggle project-book history trails"
-          >
-            <Clock3 size={19} />
-            <span>History trails</span>
-          </button>
         </nav>
         <div className="navigation-version">v0.1</div>
       </aside>
@@ -1193,8 +1343,10 @@ function App() {
       {screen === 'notebook' ? (
         <>
           <section
-            className="canvas"
+            ref={canvasRef}
+            className={`canvas ${flowInteractive ? '' : 'canvas-locked'}`}
             onDragOver={(event) => {
+              if (!flowInteractive) return
               const kind = paletteDragKind ?? cellKindFromDrag(
                 event.dataTransfer.getData(cellDragType),
               )
@@ -1213,6 +1365,7 @@ function App() {
               }
             }}
             onDrop={(event) => {
+              if (!flowInteractive) return
               const kind = cellKindFromDrag(event.dataTransfer.getData(cellDragType))
                 ?? paletteDragKind
               if (!kind || !flowRef.current) return
@@ -1228,142 +1381,166 @@ function App() {
               setPreviewSlot(null)
             }}
           >
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              nodeTypes={nodeTypes}
-              onNodesChange={(changes) => {
-                let next = nodesRef.current
-                for (const change of changes.filter((item) => item.type !== 'remove')) {
-                  next = applyNodeChanges([change], next)
-                  if (change.type === 'position' && change.position) {
-                    const slot = notebookGridSlot(change.position)
-                    dragSlotsRef.current.set(change.id, slot)
-                    next = snapNotebookGridMove(
-                      next,
-                      change.id,
-                      slot,
-                    )
+            <CellFaceContext.Provider value={cellFaceController}>
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                onNodesChange={(changes) => {
+                  let next = nodesRef.current
+                  for (const change of changes.filter((item) => item.type !== 'remove')) {
+                    next = applyNodeChanges([change], next)
+                    if (change.type === 'position' && change.position) {
+                      const slot = notebookGridSlot(change.position)
+                      dragSlotsRef.current.set(change.id, slot)
+                      next = snapNotebookGridMove(
+                        next,
+                        change.id,
+                        slot,
+                      )
+                    }
                   }
-                }
-                replaceNodes(next)
-              }}
-              onEdgesChange={(changes) => {
-                replaceEdges(applyEdgeChanges(
-                  changes.filter((change) => change.type !== 'remove'),
-                  edgesRef.current,
-                ))
-              }}
-              onNodeDragStop={(_, node) => {
-                const slot = dragSlotsRef.current.get(node.id)
-                  ?? notebookGridSlot(node.position)
-                dragSlotsRef.current.delete(node.id)
-                replaceNodes(resolveNotebookGridMove(nodesRef.current, node.id, slot))
-                setPreviewSlot(null)
-                void commitLayouts().then((outcome) => {
-                  setWorkspaceNotice(outcome.message)
-                })
-              }}
-              onNodeClick={(_, node) => {
-                const selectNode = () => {
-                  setSelectedId(node.id)
-                  setPanelOpen(true)
-                  setPromptOpen(true)
-                }
-                if (selectedId && node.id !== selectedId) {
-                  void commitEntry(selectedId).then((outcome) => {
+                  replaceNodes(next)
+                }}
+                onEdgesChange={(changes) => {
+                  replaceEdges(applyEdgeChanges(
+                    changes.filter((change) => change.type !== 'remove'),
+                    edgesRef.current,
+                  ))
+                }}
+                onNodeDragStop={(_, node) => {
+                  const slot = dragSlotsRef.current.get(node.id)
+                    ?? notebookGridSlot(node.position)
+                  dragSlotsRef.current.delete(node.id)
+                  replaceNodes(resolveNotebookGridMove(nodesRef.current, node.id, slot))
+                  setPreviewSlot(null)
+                  void commitLayouts().then((outcome) => {
                     setWorkspaceNotice(outcome.message)
-                    if (outcome.ok) selectNode()
                   })
-                  return
-                }
-                selectNode()
-              }}
-              onConnect={(connection: Connection) => {
-                void connectEntries(connection).then((outcome) => {
-                  setWorkspaceNotice(outcome.message)
-                })
-              }}
-              onPaneClick={() => {
-                const id = selectedId
-                if (!id) return
-                void commitEntry(id).then((outcome) => {
-                  setWorkspaceNotice(outcome.message)
-                  if (!outcome.ok) return
-                  setSelectedId(null)
-                  setPromptOpen(false)
-                })
-              }}
-              onInit={(instance) => {
-                flowRef.current = instance
-              }}
-              fitView
-              minZoom={0.35}
-              maxZoom={1.7}
-              deleteKeyCode={null}
-              proOptions={{ hideAttribution: true }}
-            >
-              <NotebookStageBoard nodes={nodes} previewSlot={previewSlot} />
-              <Background color="rgba(93, 220, 164, .09)" gap={36} size={1} />
-              <Panel position="top-right" className="palette-panel">
-                <aside className="palette">
-                  <span className="section-label">CELLS</span>
-                  {palette.map((item) => {
-                    const Icon = item.icon
-                    return (
-                      <button
-                        type="button"
-                        key={item.kind}
-                        draggable
-                        onClick={() => void addCell(item.kind).then((outcome) => {
-                          setWorkspaceNotice(outcome.message)
-                        })}
-                        onDragStart={(event) => {
-                          event.dataTransfer.setData(cellDragType, item.kind)
-                          event.dataTransfer.effectAllowed = 'copy'
-                          setPaletteDragKind(item.kind)
-                        }}
-                        onDragEnd={() => {
-                          setPaletteDragKind(null)
-                          setPreviewSlot(null)
-                        }}
-                        title={`Add ${item.label}`}
-                      >
-                        <Icon size={18} />
-                        <span>{item.label}</span>
-                      </button>
-                    )
-                  })}
-                  <button
-                    type="button"
-                    className="palette-add"
-                    draggable
-                    onClick={() => void addCell('prompt').then((outcome) => {
+                }}
+                onNodeClick={(_, node) => {
+                  const selectNode = () => {
+                    setSelectedId(node.id)
+                    setPanelOpen(true)
+                    setPromptOpen(true)
+                  }
+                  if (selectedId && node.id !== selectedId) {
+                    void commitEntry(selectedId).then((outcome) => {
                       setWorkspaceNotice(outcome.message)
+                      if (outcome.ok) selectNode()
+                    })
+                    return
+                  }
+                  selectNode()
+                }}
+                onConnect={(connection: Connection) => {
+                  void connectEntries(connection).then((outcome) => {
+                    setWorkspaceNotice(outcome.message)
+                  })
+                }}
+                onPaneClick={() => {
+                  const id = selectedId
+                  if (!id) return
+                  void commitEntry(id).then((outcome) => {
+                    setWorkspaceNotice(outcome.message)
+                    if (!outcome.ok) return
+                    setSelectedId(null)
+                    setPromptOpen(false)
+                  })
+                }}
+                onInit={(instance) => {
+                  flowRef.current = instance
+                  scheduleBookStageFit()
+                }}
+                fitView={false}
+                minZoom={0.35}
+                maxZoom={1.7}
+                nodesDraggable={flowInteractive}
+                nodesConnectable={flowInteractive}
+                elementsSelectable={flowInteractive}
+                panOnDrag={flowInteractive}
+                panOnScroll={!flowInteractive}
+                panOnScrollMode={PanOnScrollMode.Vertical}
+                panOnScrollSpeed={0.9}
+                zoomOnScroll={flowInteractive}
+                zoomOnPinch={flowInteractive}
+                zoomOnDoubleClick={flowInteractive}
+                deleteKeyCode={null}
+                proOptions={{ hideAttribution: true }}
+              >
+                <NotebookStageBoard nodes={nodes} previewSlot={previewSlot} />
+                <Background color="rgba(93, 220, 164, .09)" gap={36} size={1} />
+                <Panel position="top-right" className="palette-panel">
+                  <aside className="palette">
+                    <span className="section-label">CELLS</span>
+                    {palette.map((item) => {
+                      const Icon = item.icon
+                      return (
+                        <button
+                          type="button"
+                          key={item.kind}
+                          draggable={flowInteractive}
+                          disabled={!flowInteractive || busy}
+                          onClick={() => void addCell(item.kind).then((outcome) => {
+                            setWorkspaceNotice(outcome.message)
+                          })}
+                          onDragStart={(event) => {
+                            event.dataTransfer.setData(cellDragType, item.kind)
+                            event.dataTransfer.effectAllowed = 'copy'
+                            setPaletteDragKind(item.kind)
+                          }}
+                          onDragEnd={() => {
+                            setPaletteDragKind(null)
+                            setPreviewSlot(null)
+                          }}
+                          title={`Add ${item.label}`}
+                        >
+                          <Icon size={18} />
+                          <span>{item.label}</span>
+                        </button>
+                      )
                     })}
-                    onDragStart={(event) => {
-                      event.dataTransfer.setData(cellDragType, 'prompt')
-                      event.dataTransfer.effectAllowed = 'copy'
-                      setPaletteDragKind('prompt')
-                    }}
-                    onDragEnd={() => {
-                      setPaletteDragKind(null)
-                      setPreviewSlot(null)
-                    }}
-                    title="Add prompt cell"
-                  >
-                    <Plus size={20} />
-                    <span>Prompt</span>
-                  </button>
-                </aside>
-              </Panel>
-              <MiniMap
-                className="minimap"
-                nodeColor="rgba(111, 234, 177, .65)"
-                maskColor="rgba(2, 10, 7, .74)"
-              />
-              <Controls position="top-left" className="flow-controls" />
-            </ReactFlow>
+                    <button
+                      type="button"
+                      className="palette-add"
+                      draggable={flowInteractive}
+                      disabled={!flowInteractive || busy}
+                      onClick={() => void addCell('prompt').then((outcome) => {
+                        setWorkspaceNotice(outcome.message)
+                      })}
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData(cellDragType, 'prompt')
+                        event.dataTransfer.effectAllowed = 'copy'
+                        setPaletteDragKind('prompt')
+                      }}
+                      onDragEnd={() => {
+                        setPaletteDragKind(null)
+                        setPreviewSlot(null)
+                      }}
+                      title="Add prompt cell"
+                    >
+                      <Plus size={20} />
+                      <span>Prompt</span>
+                    </button>
+                  </aside>
+                </Panel>
+                <MiniMap
+                  className="minimap"
+                  nodeColor="rgba(111, 234, 177, .65)"
+                  maskColor="rgba(2, 10, 7, .74)"
+                  pannable={flowInteractive}
+                  zoomable={flowInteractive}
+                />
+                <Controls
+                  position="top-left"
+                  className="flow-controls"
+                  onInteractiveChange={(interactive) => {
+                    setFlowInteractive(interactive)
+                    if (!interactive) scheduleBookStageFit()
+                  }}
+                />
+              </ReactFlow>
+            </CellFaceContext.Provider>
           </section>
 
           <aside className={`inspector ${panelOpen ? '' : 'inspector-closed'}`}>

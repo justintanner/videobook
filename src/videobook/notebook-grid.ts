@@ -171,6 +171,12 @@ export interface NotebookGridMetrics {
   height: number
 }
 
+export interface NotebookGridViewport {
+  x: number
+  y: number
+  zoom: number
+}
+
 export function notebookGridMetrics(
   positions: readonly NotebookPosition[],
   preview: NotebookGridSlot | null = null,
@@ -180,7 +186,7 @@ export function notebookGridMetrics(
   const maxStage = Math.max(0, ...slots.map((slot) => slot.stage))
   const maxColumn = Math.max(0, ...slots.map((slot) => slot.column))
   const stageCount = Math.max(notebookGrid.minStages, maxStage + 1)
-  const columnCount = Math.max(notebookGrid.minColumns, maxColumn + 2)
+  const columnCount = Math.max(notebookGrid.minColumns, maxColumn + 1)
   return {
     stageCount,
     columnCount,
@@ -192,5 +198,20 @@ export function notebookGridMetrics(
       + (stageCount - 1) * notebookGrid.stagePitch
       + notebookGrid.cellHeight
       + notebookGrid.stageHeadroom,
+  }
+}
+
+export function notebookGridStageViewport(
+  positions: readonly NotebookPosition[],
+  viewportWidth: number,
+): NotebookGridViewport {
+  const metrics = notebookGridMetrics(positions)
+  const gutter = 24
+  const availableWidth = Math.max(1, viewportWidth - gutter * 2)
+  const zoom = Math.min(1, Math.max(0.35, availableWidth / metrics.width))
+  return {
+    x: (viewportWidth - metrics.width * zoom) / 2,
+    y: 18,
+    zoom,
   }
 }
