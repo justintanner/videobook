@@ -7,7 +7,7 @@ import {
   projectBookEdges,
   projectBookNodes,
 } from './project-book'
-import { notebookGridSlot } from './notebook-grid'
+import { notebookGrid, notebookGridSlot } from './notebook-grid'
 
 function action(
   id: string,
@@ -116,6 +116,42 @@ describe('project book canvas projection', () => {
     expect(css).not.toContain('.navigation {')
     expect(css).toContain('.header-navigation')
     expect(css).toContain('grid-template: 72px minmax(0, 1fr) / minmax(0, 1fr) 400px')
+  })
+
+  it('keeps notebook navigation and creation controls visibly legible', () => {
+    const app = readFileSync(
+      new URL('../App.tsx', import.meta.url),
+      'utf8',
+    )
+    const css = readFileSync(
+      new URL('../index.css', import.meta.url),
+      'utf8',
+    )
+    const homeButton = app.match(
+      /className="brand-project-home"[\s\S]*?<\/button>/,
+    )?.[0]
+    const paletteRule = css.match(
+      /\.palette \{([^}]*)\}/,
+    )?.[1]
+    const commandShellRule = css.match(
+      /\.command-line-shell \{([^}]*)\}/,
+    )?.[1]
+
+    expect(homeButton).toContain('title="Back to project book"')
+    expect(homeButton).toContain('<span>/videobook</span>')
+    expect(homeButton).not.toContain('<strong>')
+    expect(app).toContain('<span className="section-label">ADD CELLS</span>')
+    expect(app).toContain('<span>Add {item.label}</span>')
+    expect(app).not.toContain('className="palette-add"')
+    expect(paletteRule).toContain('width: 152px')
+    expect(css).toContain('left: 190px')
+    expect(css).toContain('opacity: 0.68')
+    expect(notebookGrid.originX).toBe(232)
+    expect(css).toContain('left: 40px')
+    expect(css).toContain('right: 440px')
+    expect(commandShellRule).toContain('border-right-width: 3px')
+    expect(commandShellRule).toContain('border-left-width: 3px')
+    expect(css).toContain('font-size: 14px')
   })
 
   it('renders artifact actions with media, slugs, causal edges, and layout trail', () => {

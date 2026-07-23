@@ -11,7 +11,7 @@ export interface NotebookGridData extends Record<string, unknown> {
 }
 
 export const notebookGrid = {
-  originX: 112,
+  originX: 232,
   originY: 48,
   columnPitch: 348,
   stagePitch: 376,

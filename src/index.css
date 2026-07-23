@@ -109,14 +109,15 @@ textarea:focus-visible {
 
 .brand-project-home {
   gap: 10px;
-  min-width: 0;
-  padding: 0 8px 0 28px;
+  padding: 0 10px 0 28px;
 }
 
 .brand-project-menu-toggle {
-  width: 34px;
+  gap: 7px;
   justify-content: center;
-  padding: 0;
+  min-width: 34px;
+  max-width: 320px;
+  padding: 0 8px;
   color: var(--muted);
 }
 
@@ -125,7 +126,7 @@ textarea:focus-visible {
   color: var(--green);
 }
 
-.brand-project-home strong {
+.brand-project-menu-toggle strong {
   max-width: 280px;
   overflow: hidden;
   color: var(--ink);
@@ -230,76 +231,72 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
-.palette button {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  padding: 0;
-  border: 1px solid transparent;
-  color: var(--muted);
-  background: transparent;
-  cursor: pointer;
-}
-
-.palette button span {
-  position: absolute;
-  left: calc(100% + 12px);
-  z-index: 60;
-  display: none;
-  padding: 7px 9px;
-  border: 1px solid var(--line);
-  color: var(--ink);
-  background: #07150e;
-  font-size: 10px;
-  white-space: nowrap;
-}
-
-.palette button:hover span {
-  display: block;
-}
-
 .palette {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 12px 8px;
-  border: 1px solid var(--line);
-  background: rgba(4, 16, 10, 0.92);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.38);
+  display: grid;
+  gap: 6px;
+  width: 152px;
+  padding: 11px 9px 10px;
+  border: 1px solid rgba(114, 231, 170, 0.58);
+  background: rgba(4, 19, 12, 0.98);
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.52),
+    inset 0 0 24px rgba(72, 178, 111, 0.06);
 }
 
 .palette-panel {
-  margin: 16px !important;
+  margin: 18px !important;
 }
 
 .palette .section-label {
-  margin: 3px 0 7px;
-  writing-mode: vertical-rl;
+  margin: 2px 4px 6px;
+  color: #b9e8cf;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  writing-mode: horizontal-tb;
 }
 
 .palette button span {
-  right: auto;
-  left: calc(100% + 12px);
+  display: block;
+  overflow: hidden;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .palette button {
-  width: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  width: 132px;
   height: 40px;
-  border-color: var(--line);
+  padding: 0 10px;
+  border: 1px solid rgba(114, 231, 170, 0.38);
+  color: #b9e8cf;
+  background: rgba(26, 77, 49, 0.42);
+  cursor: pointer;
+}
+
+.palette button svg {
+  flex: 0 0 auto;
   color: var(--green);
 }
 
-.palette .palette-add {
-  margin-top: 7px;
-  border-color: var(--line-bright);
+.palette button:hover,
+.palette button:focus-visible {
+  border-color: var(--green);
+  color: #e1ffed;
+  background: rgba(49, 137, 85, 0.5);
 }
 
 .palette button:disabled {
   cursor: not-allowed;
-  opacity: 0.32;
+  opacity: 0.68;
 }
 
 .canvas {
@@ -346,9 +343,9 @@ textarea:focus-visible {
 .notebook-stage-label {
   position: absolute;
   top: 50%;
-  left: 20px;
-  color: rgba(122, 214, 164, 0.58);
-  font-size: 17px;
+  left: 190px;
+  color: rgba(151, 235, 188, 0.78);
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: 0.22em;
   transform: rotate(-90deg) translate(-50%, 0);
@@ -1341,9 +1338,9 @@ textarea:focus-visible {
 
 .command-composer {
   position: fixed;
-  right: 24px;
-  bottom: 16px;
-  left: 24px;
+  right: 40px;
+  bottom: 18px;
+  left: 40px;
   z-index: 70;
   display: grid;
   gap: 0;
@@ -1351,7 +1348,7 @@ textarea:focus-visible {
 }
 
 .app-screen-notebook .command-composer {
-  right: 424px;
+  right: 440px;
 }
 
 .prompt-drawer {
@@ -1449,9 +1446,11 @@ textarea:focus-visible {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  min-height: 48px;
-  padding: 0 8px 0 14px;
+  min-height: 56px;
+  padding: 0 9px 0 17px;
   border: 1px solid var(--line-bright);
+  border-right-width: 3px;
+  border-left-width: 3px;
   background: rgba(2, 11, 7, 0.99);
   box-shadow:
     inset 0 0 24px rgba(68, 176, 112, 0.05),
@@ -1467,7 +1466,7 @@ textarea:focus-visible {
 
 .command-chevron {
   color: var(--green);
-  font-size: 20px;
+  font-size: 23px;
   font-weight: 700;
 }
 
@@ -1478,18 +1477,19 @@ textarea:focus-visible {
   outline: 0;
   color: #bce6cf;
   background: transparent;
-  font-size: 12px;
+  font-size: 14px;
+  letter-spacing: 0.01em;
 }
 
 .command-line-shell input::placeholder {
-  color: #476957;
+  color: #6e9880;
 }
 
 .command-send {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   padding: 0;
   border: 1px solid var(--line);
   color: var(--green);
@@ -1589,7 +1589,7 @@ textarea:focus-visible {
   }
 
   .app-screen-notebook .command-composer {
-    right: 24px;
+    right: 40px;
   }
 }
 
@@ -1609,7 +1609,7 @@ textarea:focus-visible {
     font-size: 13px;
   }
 
-  .brand-project-home strong {
+  .brand-project-menu-toggle strong {
     max-width: 26vw;
   }
 

@@ -358,10 +358,10 @@ function ProjectMenu({
           className="brand-project-home"
           onClick={onHome}
           aria-label={activeSlug ? `Open ${activeSlug} project book` : 'Open projects'}
+          title="Back to project book"
         >
           <BookOpen size={18} />
           <span>/videobook</span>
-          <strong>{activeSlug || 'select-project'}</strong>
         </button>
         <button
           type="button"
@@ -371,6 +371,7 @@ function ProjectMenu({
           aria-haspopup="menu"
           aria-label="Choose project"
         >
+          <strong>{activeSlug || 'select-project'}</strong>
           <ChevronDown size={14} />
         </button>
       </div>
@@ -1380,12 +1381,13 @@ function App() {
                 <Background color="rgba(93, 220, 164, .09)" gap={36} size={1} />
                 <Panel position="top-left" className="palette-panel">
                   <aside className="palette">
-                    <span className="section-label">CELLS</span>
+                    <span className="section-label">ADD CELLS</span>
                     {palette.map((item) => {
                       const Icon = item.icon
                       return (
                         <button
                           type="button"
+                          className="palette-action"
                           key={item.kind}
                           draggable={flowInteractive}
                           disabled={!flowInteractive || busy}
@@ -1402,34 +1404,13 @@ function App() {
                             setPreviewSlot(null)
                           }}
                           title={`Add ${item.label}`}
+                          aria-label={`Add ${item.label} cell`}
                         >
                           <Icon size={18} />
-                          <span>{item.label}</span>
+                          <span>Add {item.label}</span>
                         </button>
                       )
                     })}
-                    <button
-                      type="button"
-                      className="palette-add"
-                      draggable={flowInteractive}
-                      disabled={!flowInteractive || busy}
-                      onClick={() => void addCell('prompt').then((outcome) => {
-                        setWorkspaceNotice(outcome.message)
-                      })}
-                      onDragStart={(event) => {
-                        event.dataTransfer.setData(cellDragType, 'prompt')
-                        event.dataTransfer.effectAllowed = 'copy'
-                        setPaletteDragKind('prompt')
-                      }}
-                      onDragEnd={() => {
-                        setPaletteDragKind(null)
-                        setPreviewSlot(null)
-                      }}
-                      title="Add prompt cell"
-                    >
-                      <Plus size={20} />
-                      <span>Prompt</span>
-                    </button>
                   </aside>
                 </Panel>
                 <MiniMap
