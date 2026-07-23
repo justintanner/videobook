@@ -343,13 +343,14 @@ textarea:focus-visible {
 .notebook-stage-label {
   position: absolute;
   top: 50%;
-  left: 190px;
-  color: rgba(151, 235, 188, 0.78);
+  right: 104px;
+  left: auto;
+  color: rgba(151, 235, 188, 0.42);
   font-size: 18px;
   font-weight: 700;
   letter-spacing: 0.22em;
-  transform: rotate(-90deg) translate(-50%, 0);
-  transform-origin: left top;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
 }
 
 .notebook-stage-column {

@@ -10,6 +10,7 @@ import {
 interface NotebookStageBoardProps {
   nodes: Array<Node<BookCellData>>
   previewSlot: NotebookGridSlot | null
+  minimumStageCount: number
 }
 
 function stageLabel(stage: number): string {
@@ -19,10 +20,12 @@ function stageLabel(stage: number): string {
 export function NotebookStageBoard({
   nodes,
   previewSlot,
+  minimumStageCount,
 }: NotebookStageBoardProps) {
   const metrics = notebookGridMetrics(
     nodes.map((node) => node.position),
     previewSlot,
+    minimumStageCount,
   )
   const previewPosition = previewSlot ? notebookGridPosition(previewSlot) : null
 

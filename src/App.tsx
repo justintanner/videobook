@@ -11,7 +11,6 @@ import {
   Background,
   Controls,
   Handle,
-  MiniMap,
   PanOnScrollMode,
   Panel,
   Position,
@@ -23,6 +22,7 @@ import {
   type Node,
   type NodeProps,
   type ReactFlowInstance,
+  type Viewport,
 } from '@xyflow/react'
 import {
   Activity,
@@ -69,7 +69,10 @@ import {
 } from '@/components/videobook/CommandComposer'
 import { NotebookStageBoard } from '@/components/videobook/NotebookStageBoard'
 import {
+  clampNotebookViewport,
   nextNotebookGridSlot,
+  notebookGrid,
+  notebookGridStageCountForViewport,
   notebookGridSlot,
   notebookGridStageViewport,
   resolveNotebookGridMove,
@@ -119,11 +122,21 @@ const headerNavigation: Array<{
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
-const palette = [
+const palette: Array<{
+  kind: BookCellKind
+  label: string
+  shortLabel?: string
+  icon: typeof BookOpen
+}> = [
   { kind: 'prompt' as const, label: 'Prompt', icon: MessageSquareText },
   { kind: 'image' as const, label: 'Image', icon: Image },
   { kind: 'video' as const, label: 'Video', icon: Video },
-  { kind: 'character' as const, label: 'Character', icon: UserRound },
+  {
+    kind: 'character' as const,
+    label: 'Character',
+    shortLabel: 'Char',
+    icon: UserRound,
+  },
   { kind: 'scene' as const, label: 'Scene', icon: Film },
 ]
 
@@ -436,6 +449,9 @@ function App() {
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
   const [paletteDragKind, setPaletteDragKind] = useState<BookCellKind | null>(null)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
+  const [minimumStageCount, setMinimumStageCount] = useState<number>(
+    notebookGrid.minStages,
+  )
   const [busy, setBusy] = useState(false)
   const [records, setRecords] = useState<unknown[]>([])
   const [projects, setProjects] = useState<ProjectRecord[]>([])
@@ -530,6 +546,16 @@ function App() {
     })
   }, [fitBookStages])
 
+  const extendStageRunway = useCallback((viewport: Viewport) => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const next = notebookGridStageCountForViewport(
+      viewport,
+      canvas.clientHeight,
+    )
+    setMinimumStageCount((current) => Math.max(current, next))
+  }, [])
+
   const loadProjects = useCallback(async () => {
     const value = await call('list_projects', {})
     const next = asProjects(value)
@@ -595,6 +621,7 @@ function App() {
       setPromptOpen(false)
       setPaletteDragKind(null)
       setPreviewSlot(null)
+      setMinimumStageCount(notebookGrid.minStages)
       dragSlotsRef.current.clear()
       setPanelOpen(window.innerWidth > 720)
       setScreen('notebook')
@@ -1361,6 +1388,13 @@ function App() {
                   flowRef.current = instance
                   scheduleBookStageFit()
                 }}
+                onMove={(_, viewport) => {
+                  extendStageRunway(viewport)
+                  if (flowInteractive) return
+                  const clamped = clampNotebookViewport(viewport)
+                  if (clamped === viewport) return
+                  void flowRef.current?.setViewport(clamped)
+                }}
                 fitView={false}
                 minZoom={0.35}
                 maxZoom={1.7}
@@ -1377,7 +1411,11 @@ function App() {
                 deleteKeyCode={null}
                 proOptions={{ hideAttribution: true }}
               >
-                <NotebookStageBoard nodes={nodes} previewSlot={previewSlot} />
+                <NotebookStageBoard
+                  nodes={nodes}
+                  previewSlot={previewSlot}
+                  minimumStageCount={minimumStageCount}
+                />
                 <Background color="rgba(93, 220, 164, .09)" gap={36} size={1} />
                 <Panel position="top-left" className="palette-panel">
                   <aside className="palette">
@@ -1390,7 +1428,7 @@ function App() {
                           className="palette-action"
                           key={item.kind}
                           draggable={flowInteractive}
-                          disabled={!flowInteractive || busy}
+                          disabled={busy}
                           onClick={() => void addCell(item.kind).then((outcome) => {
                             setWorkspaceNotice(outcome.message)
                           })}
@@ -1407,19 +1445,12 @@ function App() {
                           aria-label={`Add ${item.label} cell`}
                         >
                           <Icon size={18} />
-                          <span>Add {item.label}</span>
+                          <span>Add {item.shortLabel ?? item.label}</span>
                         </button>
                       )
                     })}
                   </aside>
                 </Panel>
-                <MiniMap
-                  className="minimap"
-                  nodeColor="rgba(111, 234, 177, .65)"
-                  maskColor="rgba(2, 10, 7, .74)"
-                  pannable={flowInteractive}
-                  zoomable={flowInteractive}
-                />
                 <Controls
                   position="top-right"
                   className="flow-controls"

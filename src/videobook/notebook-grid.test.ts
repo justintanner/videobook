@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Node } from '@xyflow/react'
 import {
+  clampNotebookViewport,
   nextNotebookGridSlot,
   notebookGrid,
   notebookGridMetrics,
   notebookGridPosition,
+  notebookGridStageCountForViewport,
   notebookGridStageViewport,
   notebookGridSlot,
   normalizeNotebookGridNodes,
@@ -107,15 +109,25 @@ describe('notebook grid', () => {
     ])).toEqual({ stage: 0, column: 1 })
   })
 
-  it('keeps at least three stages and grows for previews beyond the current board', () => {
+  it('keeps a six-stage runway and grows for previews beyond the current board', () => {
     expect(notebookGridMetrics([], null)).toMatchObject({
-      stageCount: 3,
+      stageCount: 6,
       columnCount: 4,
     })
-    expect(notebookGridMetrics([], { stage: 4, column: 6 })).toMatchObject({
-      stageCount: 5,
+    expect(notebookGridMetrics([], { stage: 8, column: 6 })).toMatchObject({
+      stageCount: 9,
       columnCount: 7,
     })
+  })
+
+  it('extends the runway while scrolling down and clamps scrolling above Stage 01', () => {
+    const top = { x: 24, y: notebookGrid.topViewportY, zoom: 1 }
+    const below = { ...top, y: -1600 }
+
+    expect(notebookGridStageCountForViewport(top, 800)).toBe(6)
+    expect(notebookGridStageCountForViewport(below, 800)).toBe(9)
+    expect(clampNotebookViewport({ ...top, y: 120 })).toEqual(top)
+    expect(clampNotebookViewport(below)).toBe(below)
   })
 
   it('fits stage columns to the viewport width while keeping the book top aligned', () => {

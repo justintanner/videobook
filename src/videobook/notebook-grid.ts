@@ -20,7 +20,9 @@ export const notebookGrid = {
   cellHeight: 288,
   stageHeadroom: 36,
   stageHeight: 352,
-  minStages: 3,
+  minStages: 6,
+  stageOverscan: 2,
+  topViewportY: 18,
   minColumns: 4,
 } as const
 
@@ -180,12 +182,17 @@ export interface NotebookGridViewport {
 export function notebookGridMetrics(
   positions: readonly NotebookPosition[],
   preview: NotebookGridSlot | null = null,
+  minimumStageCount: number = notebookGrid.minStages,
 ): NotebookGridMetrics {
   const slots = positions.map(notebookGridSlot)
   if (preview) slots.push(preview)
   const maxStage = Math.max(0, ...slots.map((slot) => slot.stage))
   const maxColumn = Math.max(0, ...slots.map((slot) => slot.column))
-  const stageCount = Math.max(notebookGrid.minStages, maxStage + 1)
+  const stageCount = Math.max(
+    notebookGrid.minStages,
+    Math.floor(minimumStageCount),
+    maxStage + 1,
+  )
   const columnCount = Math.max(notebookGrid.minColumns, maxColumn + 1)
   return {
     stageCount,
@@ -211,7 +218,33 @@ export function notebookGridStageViewport(
   const zoom = Math.min(1, Math.max(0.35, availableWidth / metrics.width))
   return {
     x: (viewportWidth - metrics.width * zoom) / 2,
-    y: 18,
+    y: notebookGrid.topViewportY,
     zoom,
   }
+}
+
+export function notebookGridStageCountForViewport(
+  viewport: NotebookGridViewport,
+  viewportHeight: number,
+): number {
+  const zoom = Math.max(0.01, viewport.zoom)
+  const bottom = (Math.max(0, viewportHeight) - viewport.y) / zoom
+  const lastVisibleStage = Math.max(
+    0,
+    Math.floor(
+      (bottom - notebookGrid.originY + notebookGrid.stageHeadroom)
+      / notebookGrid.stagePitch,
+    ),
+  )
+  return Math.max(
+    notebookGrid.minStages,
+    lastVisibleStage + 1 + notebookGrid.stageOverscan,
+  )
+}
+
+export function clampNotebookViewport(
+  viewport: NotebookGridViewport,
+): NotebookGridViewport {
+  if (viewport.y <= notebookGrid.topViewportY) return viewport
+  return { ...viewport, y: notebookGrid.topViewportY }
 }

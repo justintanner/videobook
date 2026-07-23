@@ -136,17 +136,34 @@ describe('project book canvas projection', () => {
     const commandShellRule = css.match(
       /\.command-line-shell \{([^}]*)\}/,
     )?.[1]
+    const stageLabelRule = css.match(
+      /\.notebook-stage-label \{([^}]*)\}/,
+    )?.[1]
+    const paletteMarkup = app.match(
+      /<aside className="palette">[\s\S]*?<\/aside>/,
+    )?.[0]
 
     expect(homeButton).toContain('title="Back to project book"')
     expect(homeButton).toContain('<span>/videobook</span>')
     expect(homeButton).not.toContain('<strong>')
     expect(app).toContain('<span className="section-label">ADD CELLS</span>')
-    expect(app).toContain('<span>Add {item.label}</span>')
+    expect(app).toContain("shortLabel: 'Char'")
+    expect(app).toContain('<span>Add {item.shortLabel ?? item.label}</span>')
     expect(app).not.toContain('className="palette-add"')
+    expect(app).not.toContain('<MiniMap')
+    expect(paletteMarkup).toContain('draggable={flowInteractive}')
+    expect(paletteMarkup).toContain('disabled={busy}')
+    expect(paletteMarkup).not.toContain('disabled={!flowInteractive || busy}')
     expect(paletteRule).toContain('width: 152px')
-    expect(css).toContain('left: 190px')
+    expect(stageLabelRule).toContain('right: 104px')
+    expect(stageLabelRule).toContain('left: auto')
+    expect(stageLabelRule).toContain('rgba(151, 235, 188, 0.42)')
+    expect(stageLabelRule).toContain('writing-mode: vertical-rl')
     expect(css).toContain('opacity: 0.68')
     expect(notebookGrid.originX).toBe(232)
+    expect(notebookGrid.minStages).toBe(6)
+    expect(app).toContain('extendStageRunway(viewport)')
+    expect(app).toContain('clampNotebookViewport(viewport)')
     expect(css).toContain('left: 40px')
     expect(css).toContain('right: 440px')
     expect(commandShellRule).toContain('border-right-width: 3px')
