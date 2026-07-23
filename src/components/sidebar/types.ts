@@ -49,7 +49,7 @@ export type ClipState =
 // better-sqlite3), but `import type` is erased by the bundler so the client
 // build is unaffected. If a status is added on either side without the other,
 // one of these assignments fails to compile.
-import type { AssetStatus as EngineAssetStatus } from 'videocity-engine';
+import type { AssetStatus as EngineAssetStatus } from 'videobook-engine';
 const _clientToEngine: EngineAssetStatus = '' as ClipState;
 const _engineToClient: ClipState = '' as EngineAssetStatus;
 void _clientToEngine;

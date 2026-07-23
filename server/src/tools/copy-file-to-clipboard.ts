@@ -1,8 +1,8 @@
 import { exec } from "node:child_process";
 import { join } from "node:path";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { z } from "zod";
-import { findPrimaryMediaFile } from "videocity-engine";
+import { findPrimaryMediaFile } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 
 export function copyFileToClipboardDef(fs: VideocityFs): ToolDef {

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { actionNameForTool, isLoggedToolActivity } from "./activity-policy.js";
 import type { ToolDef } from "./tool-def.js";
 

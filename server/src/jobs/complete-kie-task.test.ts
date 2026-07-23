@@ -3,7 +3,7 @@ import * as fsP from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 import { createServer, type Server } from "node:http";
-import { createFs } from "videocity-engine";
+import { createFs } from "videobook-engine";
 import {
   queue as appQueue,
   registerJobHandler,
@@ -62,6 +62,7 @@ describe("complete_kie_task fal_qwen branches", () => {
     taskType: "fal_qwen_image" | "fal_qwen_image_edit",
   ): Promise<{ assetId: string; assetDir: string; taskId: string; fs: ReturnType<typeof createFs> }> {
     const cfs = createFs({ projectsDir });
+    await setProjectsDir(projectsDir, cfs);
     const created = await cfs.createProject("p");
     expect(created.ok).toBe(true);
     const asset = await cfs.createAsset("img", "qwen-out", "p");

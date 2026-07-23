@@ -6,7 +6,7 @@ import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
 import { sleepDef } from "./sleep.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 
 describe("sleep tool", () => {
   let client: Client;

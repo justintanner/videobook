@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { join } from "node:path";
 import { createElevenLabs } from "@apicity/elevenlabs";
 import { registerJobHandler } from "../queue.js";

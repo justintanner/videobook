@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videocity-engine";
-import { findVideoFile } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
+import { findVideoFile } from "videobook-engine";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -264,7 +264,9 @@ describe("sync_video_to_audio end to end", () => {
     expect(valueOf(await fs.readFile(created.assetId, "original.mp3", PROJECT))).toEqual(sourceMp3);
     expect(valueOf(await fs.readFile(created.assetId, "elevenlabs.json", PROJECT))).toEqual(transcript);
     expect((await fs.readFile(created.assetId, ".original.analysis.json", PROJECT)).ok).toBe(true);
-    expect((await fs.getAssetHistory(created.assetId, PROJECT)).length).toBe(historyCount);
+    const historyAfter = await fs.getAssetHistory(created.assetId, PROJECT);
+    expect(historyAfter).toHaveLength(historyCount + 1);
+    expect(historyAfter[0]?.operation).toBe("restore");
     await expect(stat(outputPath)).rejects.toThrow();
     const manifest = valueOf(await fs.getManifest(created.assetId, PROJECT, { includeDotfiles: true }));
     expect(manifest.files.some((file) => file.name.startsWith(".sync-audio-"))).toBe(false);

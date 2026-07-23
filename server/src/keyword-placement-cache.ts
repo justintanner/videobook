@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { AssetManifestFile, VideocityFs } from "videocity-engine";
+import type { AssetManifestFile, VideocityFs } from "videobook-engine";
 import { z } from "zod";
 import {
   KEYWORD_FRAME_CACHE_FILENAME,

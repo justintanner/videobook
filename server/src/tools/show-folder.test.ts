@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 
 describe("show_folder tool", () => {
   let client: Client;

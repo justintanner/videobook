@@ -1,10 +1,10 @@
-import type { VideocityFs, AssetManifestFile } from "videocity-engine";
+import type { VideocityFs, AssetManifestFile } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { extname } from "node:path";
 import { modelSlug } from "@apicity/cost";
 import { Omnihuman15RequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { findAudioFile } from "videocity-engine";
+import { findAudioFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 

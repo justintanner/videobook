@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createFs } from "videocity-engine";
+import { createFs } from "videobook-engine";
 import {
   GENERATION_ACTIONS,
   getActionSpec,
@@ -50,7 +50,7 @@ describe("generation-registry", () => {
     const registered = new Set(names);
     const canonical = new Set(GENERATION_ACTIONS.map((action) => action.canonical_name));
 
-    expect(names).toHaveLength(211);
+    expect(names).toHaveLength(233);
     expect(registered.size).toBe(names.length);
     for (const action of GENERATION_ACTIONS) {
       expect(registered.has(action.canonical_name), action.canonical_name).toBe(true);

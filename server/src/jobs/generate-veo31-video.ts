@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import type { GoogleFlowProvider } from "@apicity/googleflow";
 import { registerJobHandler } from "../queue.js";
 import { buildVeo31VideoPayload, type GoogleVeo31Model, type Veo31VideoArgs } from "../payload-builders.js";

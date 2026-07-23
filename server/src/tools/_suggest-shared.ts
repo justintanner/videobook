@@ -1,6 +1,6 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { z } from "zod";
-import { findVideoFile } from "videocity-engine";
+import { findVideoFile } from "videobook-engine";
 import { KIE_GEMINI_FLASH_MODEL } from "../kie-gemini.js";
 
 export const MODEL = KIE_GEMINI_FLASH_MODEL;

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createX } from "@apicity/x";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { createFsForTest } from "../fs.js";
 import { postToX } from "./post-to-x.js";
 import { readXPostMetadata, POST_METADATA_FILE } from "./post-metadata.js";

@@ -200,11 +200,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     expect(jpgStat.size).toBeGreaterThan(0);
   });
 
-  it("commits original.jpg through fs.writeFile so it's tracked by git", async () => {
-    // Regression: extract_frame used to invoke ffmpeg with a destination path
-    // inside the asset dir, bypassing fs.writeFile. The file landed on disk
-    // (so manifests + UI worked) but git never saw it, breaking the engine's
-    // version-history invariant.
+  it("records original.jpg in immutable revision history", async () => {
     const result = await client.callTool({
       name: "extract_first_frame",
       arguments: {
@@ -216,12 +212,28 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     await waitForJob(parsed.job_id);
 
-    const projectDir = join(tempDir, "frame-proj");
-    const tracked = await execFileAsync("git", [
-      "-C", projectDir,
-      "ls-files", `${parsed.image_asset_id}/original.jpg`,
-    ]);
-    expect(tracked.stdout.trim()).toBe(`${parsed.image_asset_id}/original.jpg`);
+    const history = await client.callTool({
+      name: "asset_history",
+      arguments: {
+        asset_id: parsed.image_asset_id,
+        project_slug: "frame-proj",
+      },
+    });
+    const revisions = JSON.parse(
+      (history.content as TextContent)[0].text,
+    ) as Array<{ hash: string }>;
+    expect(revisions[0]?.hash).toMatch(/^[a-f0-9]{40}$/);
+
+    const historical = await client.callTool({
+      name: "read_file_at_commit",
+      arguments: {
+        asset_id: parsed.image_asset_id,
+        filename: "original.jpg",
+        commit_hash: revisions[0]!.hash,
+        project_slug: "frame-proj",
+      },
+    });
+    expect(historical.isError).toBeFalsy();
   });
 
   it("writes .original.json with correct metadata", async () => {

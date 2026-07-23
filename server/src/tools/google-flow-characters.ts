@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import {
   GoogleFlowCharactersCreateRequestSchema,
@@ -9,7 +9,7 @@ import { apicityField } from "./schema-from-apicity.js";
 import { toolError } from "./_shared.js";
 
 import { extname } from "node:path";
-import type { AssetManifestFile } from "videocity-engine";
+import type { AssetManifestFile } from "videobook-engine";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 

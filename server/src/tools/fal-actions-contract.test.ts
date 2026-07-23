@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { GENERATION_ACTIONS, getCanonicalName, getActionSpec } from "../generation-registry.js";
 import { getAllToolDefs } from "./index.js";
-import { createFs } from "videocity-engine";
+import { createFs } from "videobook-engine";
 
 describe("fal generation actions contract", () => {
   it("verifies all 36 Fal generation actions have canonical names and exact endpoint IDs", () => {

@@ -6,8 +6,8 @@ import { randomBytes } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { JobHandlerContext } from "../queue.js";
-import { QUEUED_TASK_ID } from "videocity-engine";
-import type { PendingTask, TaskType, VideocityFs } from "videocity-engine";
+import { QUEUED_TASK_ID } from "videobook-engine";
+import type { PendingTask, TaskType, VideocityFs } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
 import { normalizeKieCostPayload, type KieCostHints } from "../cost-adapters.js";
 

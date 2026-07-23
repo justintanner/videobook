@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (211)
+## MCP endpoints (233)
 
 - `add_timeline_audio` — Add an overlay audio clip to the timeline at a given frame offset
 - `analyze_jokes` — Analyze a clip's ElevenLabs transcript and identify the jokes in the bit, classified by type (pun, self-deprecating, observational, etc.). Each joke includes the verbatim text, start/end timestamps, and a one-line note on why it works. Runs in the background and persists to .analyze-jokes.json. Requires an ElevenLabs transcript — run /transcribe first if missing.
@@ -26,17 +26,24 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `create_character` — Create a new character folder (char-*), optionally seeded from existing image assets
 - `create_google_flow_character` — Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref for the character_refs parameter of generate_google_flow_omni_flash_video (character_1..7). Consumes plan credits.
 - `create_google_flow_voice` — Create a reusable Google Flow custom voice from a system preset. Synthesizes a short TTS clip (takes a few seconds and consumes plan credits) and returns a voice ref for the voice_refs parameter of generate_google_flow_omni_flash_video.
-- `create_project` — Create a new videocity project directory with git versioning
+- `create_notebook` — Create an empty version 2 notebook
+- `create_project` — Create a fresh Videobook project with DoltLite revisions
+- `create_prompt` — Create a reusable prompt
 - `create_qart` — Create scan-safe color and monochrome QR mosaics from an img-* source image. The image is sampled per QR module with protected QR structures and white quiet zones.
 - `create_qr_outro` — Build a standalone animated outro from 1-4 QR image assets with configurable duration and optional impact audio.
 - `create_qrbtf` — Generate parametric QR codes in artistic styles (normal, line, dsj, bubble, func) from the qrbtf library. Renders SVG and rasterizes to image assets. Black background with bright modules by default.
+- `create_scene` — Create a reusable scene
 - `create_watermark_card` — Generate a black-and-white QR + 'X: <handle>' watermark card and store it as an img- asset. Apply it via the on-screen graphic (OSG) settings during render.
 - `crop_image` — Crop an image asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source image (0..1). Replaces original in place with canonical dims (1920x1080 / 1080x1920 / 1080x1080) and regenerates derived crops with git versioning.
 - `crop_video` — Crop a video asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source frame (0..1). Re-renders in place to canonical dims (1920x1080 / 1080x1920 / 1080x1080) with git versioning.
 - `delete_asset` — Delete an asset directory
+- `delete_character` — Delete a reusable character
 - `delete_google_flow_character` — Delete a Google Flow character by its ref.
 - `delete_google_flow_voice` — Delete a Google Flow custom voice by its ref.
+- `delete_notebook` — Tombstone a notebook asset
 - `delete_project` — Delete a videocity project directory. Validates slugs, checks for active asset locks, and updates the default project if needed.
+- `delete_prompt` — Delete a reusable prompt
+- `delete_scene` — Delete a reusable scene
 - `describe_image` — Analyze an image asset with vision and create a new script-* asset containing a reproduction-ready prompt (index.md). Returns immediately after enqueueing; reconcile_project_work reports status="generating" until the markdown is written.
 - `detect_scenes` — Run ffmpeg scdet over a video asset and return a candidate timeline of natural visual breaks. Each candidate is { t, score, kind } where kind="shot" is a camera/cut change (scdet score ≥ 10) and kind="settle" is a motion-settle moment inside a steady shot (the falling edge of a sustained high-motion run, e.g. "the man finished standing up"). Runs in the background and persists to .detect-scenes.json and is useful as a standalone read-only diagnostic.
 - `doctor` — Diagnose the health of every asset in a project (all asset types: video, image, audio, script, final, character, plan). Reports assets stuck in the error state and assets wedged in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore that one asset to its last usable state before the current error — clears a stale error or lease when the media is intact, otherwise restores the asset from git history. A bare fix:true scan never bulk-fixes; it just reports.
@@ -134,8 +141,12 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `generate_kie_wan_2_7_text_to_image` (historical names, not exposed: `generate_wan27_image`) — Generate an image using Wan 2.7 Image. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).
 - `generate_kie_wan_2_7_text_to_video` (historical names, not exposed: `generate_wan27_t2v_video`) — Generate a video from a prompt using Wan 2.7 Text to Video. Supports optional custom audio. Creates a new vid- asset and enqueues a background job.
 - `generate_xai_grok_imagine_video` (historical names, not exposed: `generate_grok_imagine_ref_video`, `generate_xai_grok_imagine_reference_to_video`) — Generate a video using xAI Grok Imagine with optional reference images (0-7). Creates a new vid- asset and enqueues a background job.
+- `get_character` — Read a reusable character
 - `get_google_flow_character` — Retrieve normalized details for a single Google Flow character by ref.
+- `get_notebook` — Read a notebook and its typed cells and edges
+- `get_prompt` — Read a reusable prompt
 - `get_render_settings` — Fetch stored render settings for a single asset across all orientations, plus transcript language info (detected source language and cached subtitle translations)
+- `get_scene` — Read a reusable scene
 - `get_timeline` — Get the timeline config for a project: { slots, render } where render is the orientation to produce
 - `get_watermark_config` — Read the saved watermark X-handle preferences: { savedHandle, recent, authenticatedHandle }. Used to pre-fill the /watermark dialog.
 - `inject_first_frame` — Replace exactly the first frame of a vid-* or final video with an img-* asset in place. Preserves runtime and stream-copies the original audio unchanged. For final, orientation defaults to the active timeline orientation.
@@ -144,12 +155,16 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `invert_image` — In-place inverts an img-* asset and regenerates crops.
 - `isolate_vocals` — Isolate vocals from a video or audio asset using ElevenLabs audio-isolation via KIE. Writes audio_vocals.mp3 (for video assets) or mix.mp3 + .mix.json (for audio assets).
 - `list_assets` — List all assets for a project with their media and thumbnail URLs.
+- `list_characters` — List reusable characters
 - `list_chat_history` — List recent chat input history entries.
 - `list_elevenlabs_voices` — List available ElevenLabs voice IDs with custom voices first and generic voices after them
 - `list_google_flow_characters` — List Google Flow characters for an account (display names + optional signed thumbnail previews).
 - `list_google_flow_voices` — List Google Flow voices (custom 'user' voices and/or the 'system' presets) for an account.
+- `list_notebooks` — List first-class Videobook notebooks
 - `list_projects` — List all videocity projects
 - `list_prompt_history` — List recent prompts for a given surface in the current project, newest-first.
+- `list_prompts` — List reusable prompts
+- `list_scenes` — List reusable scenes
 - `mark_asset_seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.
 - `move_timeline_audio` — Move a timeline audio clip to a new start frame
 - `pad_video` — Append black video frames at the end to make a whole-second video tail. Retains original audio and makes the appended tail silent.
@@ -161,7 +176,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `provider_key_status` — List all managed environment keys with their source (1password = injected via op run, read-only; env = from .env, editable), masked values, and live credit/token lookups for supported providers. Never exposes secret values.
 - `push_chat_history` — Append a message to the chat input history log.
 - `read_asset_metadata` — Read an asset's metadata sidecar at HEAD (e.g. `.original.json` → name="original"). Returns the parsed JSON or an error if the file is missing/invalid.
-- `read_file_at_commit` — Read a file's contents from a specific git commit for a given asset. Non-destructive — used to preview an old version of a script/prompt without restoring it. Pairs with restore_asset_version to commit the preview back to HEAD.
+- `read_file_at_commit` — Read a file's contents from a specific immutable revision for a given asset. Non-destructive — used to preview an old version of a script/prompt without restoring it. The legacy endpoint name is preserved for Videocity MCP compatibility.
 - `read_notebook` — Read a Notebook sidecar (nb-*/.notebook.json).
 - `read_transcript` — Read the transcript for a video or audio asset. Prefers timed ElevenLabs word-level cues (elevenlabs.json), falling back to plain text (.analysis.gpt4otrans.json). Returns kind='timed' with per-word start/end cues, kind='plain' with full text, kind='silence' if a transcript exists but contains no dialog, or kind='missing' if no transcript file exists.
 - `reconcile_project_work` (historical names, not exposed: `sync`) — Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.
@@ -179,12 +194,14 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `replace_google_flow_character` — Replace a Google Flow character with updated fields. Returns { character_ref, old_ref, status, warning }. Recreate happens first, then best-effort delete.
 - `replace_video_audio` — Replace the audio track of a video asset in-place with audio from an aud-* asset, or a specific file inside another asset via the `<assetId>/<filename>` form (e.g. `plan/s1.mp3`). Operates on the vid- asset's original.mp4 with git versioning. Existing per-orientation renders are now stale — re-run /render before /final.
 - `restore_archive_clips` — Restore selected archived video/audio clips into the current videocity project as new assets.
-- `restore_asset_version` — Restore an asset to a previous git commit version
+- `restore_asset_version` — Restore an asset from an immutable revision as a new revision
 - `retry_generation` — Retry a failed generation by replaying its original request payload. Reads the persisted generation-request metadata for the asset, clears its error record, and re-enqueues the same job. Use this on a failed asset card to re-run the exact inputs without re-resolving references.
 - `reverse_video` — Reverse video playback (play backwards). Toggle operation — reversing twice restores original. Max 300s due to memory buffering.
-- `rewind_project` — Rewind a project to a previous git commit (creates detached HEAD)
+- `revision_history` — List project revisions using storage-neutral terminology
+- `rewind_project` — Restore a project revision and record the result as a new forward revision
 - `rewrite_prompt` — Rewrite a generation prompt using model-specific best practices. Supports standard mode (rewrite any prompt) and scene mode (rewrite a specific scene in a Kling 3.0 multi-shot asset).
-- `rewrite_script` — Rewrite a generated script asset in-place as a text-to-text transformation of its existing markdown (the source image is NOT re-read). Variants: "full" (full reproduction prompt + breakdown) or "tldr" (1–2 sentence summary). Optional platform preset ("ig" | "tiktok" | "youtube") tunes authentic-capture cues for that feed. Optional custom_prompt applies a transformation instruction (e.g. "replace the pig with a man in a blue suit"). Previous versions are preserved in git history via videocity-engine. Returns immediately; reconcile_project_work reports status="generating" until the new markdown is written.
+- `rewrite_script` — Rewrite a generated script asset in-place as a text-to-text transformation of its existing markdown (the source image is NOT re-read). Variants: "full" (full reproduction prompt + breakdown) or "tldr" (1–2 sentence summary). Optional platform preset ("ig" | "tiktok" | "youtube") tunes authentic-capture cues for that feed. Optional custom_prompt applies a transformation instruction (e.g. "replace the pig with a man in a blue suit"). Previous versions are preserved in git history via videobook-engine. Returns immediately; reconcile_project_work reports status="generating" until the new markdown is written.
+- `run_notebook` — Queue an explicit topological notebook run
 - `search_archive` — Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.
 - `set_character_metadata` — Write free-form metadata to a character's .character.json sidecar. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).
 - `set_env_secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.
@@ -196,6 +213,8 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `splice_video` — Splice two videos with an explicit overlap window. An overlap of 0 concatenates both complete videos; a positive overlap searches that many seconds at the end of the first video for the frame that best matches the first frame of the second. Creates a new vid- asset.
 - `split_video` — Split a video asset into two new assets at chunk_a_end / chunk_b_start. Setting chunk_b_start < chunk_a_end produces an overlap window; equal values produce a clean split. The original asset is preserved.
 - `split_video_by_durations` — Split a video into N targeted chunks plus a leftover chunk with the rest. Pass target_secs as a list (e.g. [10] or [10, 15]); each target produces an exact-length chunk, and the trailing leftover holds whatever's left. If the leftover would be sub-half-second, the last target is backed off by 1s. Source is preserved. When `destination` is provided, chunks are written as files inside an existing asset (one filename per target, no leftover) instead of minting fresh vid-* assets.
+- `storage_status` — Read DoltLite and content-store publication status
+- `storage_sync` — Publish pending content-addressed objects
 - `suggest_cuts` — Analyze a video asset (frames + transcript + metadata) and return structured trim suggestions: dead air, filler words, awkward sections. Runs in the background and persists to .suggest-cuts.json. Requires a transcript — run /transcribe first if missing. Use /apply-cuts to splice the result.
 - `suggest_sfx` — Analyze a video asset (frames + transcript + metadata) and return structured SFX suggestions: timestamps, slug types, and descriptions. Runs in the background and persists to .suggest-sfx.json. Requires a transcript — run /transcribe first if missing. Use /apply-sfx to mix the result.
 - `switch_project` — Switch the active (default) project to the given slug.
@@ -206,6 +225,9 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `trim_audio` — Trim an aud-* asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for vid-* assets so picture and sound remain synchronized. Operates in-place with git versioning.
 - `trim_video` — Trim a video asset: keep a time range (trim_start/trim_end) or cut out a middle section (cut_start/cut_end). Operates in-place with git versioning.
 - `unassign_slot` — Clear an asset from a timeline slot (e.g. slot 's02' = index 1)
+- `update_notebook` — Replace a notebook graph and create a revision
+- `update_prompt` — Update a reusable prompt
+- `update_scene` — Update a reusable scene
 - `update_script` — Update a script asset's markdown content (original.md).
 - `update_timeline_audio` — Update an overlay audio clip's volume / fade-in / fade-out by id
 - `upload_file` — Upload a media or markdown file into a videocity project as an asset

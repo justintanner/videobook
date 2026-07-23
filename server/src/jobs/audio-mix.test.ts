@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createFs, type VideocityFs } from "videocity-engine";
+import { createFs, type VideocityFs } from "videobook-engine";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { resolveAudioMixAsset } from "../tools/audio-mix.js";
 import { buildAudioMixFilter, mixAudioMedia } from "./audio-mix.js";

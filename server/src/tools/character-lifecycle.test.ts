@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createCharacterDef } from "./create-character.js";
 import { setCharacterMetadataDef } from "./set-character-metadata.js";
-import { createFs } from "videocity-engine";
+import { createFs } from "videobook-engine";
 import * as path from "node:path";
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";

@@ -6,7 +6,7 @@
  * then revalidates user edits and finally applies via fs.renameAsset +
  * first-class reference updates.
  */
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";

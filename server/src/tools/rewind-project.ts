@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { z } from "zod";
 import { prepareProjectForRewind, resumeProjectAfterRewind } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
@@ -6,9 +6,9 @@ import type { ToolDef } from "./tool-def.js";
 export function rewindProjectDef(fs: VideocityFs): ToolDef {
   return {
     name: "rewind_project",
-    description: "Rewind a project to a previous git commit (creates detached HEAD)",
+    description: "Restore a project revision and record the result as a new forward revision",
     schema: {
-      commit_hash: z.string().min(7).describe("Git commit hash to rewind to (full hash or a prefix of at least 7 characters)"),
+      commit_hash: z.string().min(7).describe("DoltLite revision hash or an unambiguous prefix"),
       project_slug: z.string().describe("Project slug"),
     },
     handler: async (args) => {
@@ -24,7 +24,7 @@ export function rewindProjectDef(fs: VideocityFs): ToolDef {
             isError: true as const,
             content: [{
               type: "text" as const,
-              text: `Commit ${commit_hash} not found in project history. Use a hash from project_history or the activity log.`,
+              text: `Revision ${commit_hash} not found in project history. Use a hash from revision_history or the activity log.`,
             }],
           };
         }
@@ -33,7 +33,7 @@ export function rewindProjectDef(fs: VideocityFs): ToolDef {
             isError: true as const,
             content: [{
               type: "text" as const,
-              text: `Commit prefix ${commit_hash} is ambiguous (${matches.length} matches). Provide more characters.`,
+              text: `Revision prefix ${commit_hash} is ambiguous (${matches.length} matches). Provide more characters.`,
             }],
           };
         }
@@ -83,4 +83,3 @@ export function rewindProjectDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

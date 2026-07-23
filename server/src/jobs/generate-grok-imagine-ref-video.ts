@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import type { XaiVideoAsyncResponse, XaiVideoGenerateRequest } from "@apicity/xai";
 import { uploadAssetFile } from "../upload.js";
 import { registerJobHandler } from "../queue.js";

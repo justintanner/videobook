@@ -1,8 +1,8 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
-import { findAudioFile } from "videocity-engine";
+import { findAudioFile } from "videobook-engine";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
 

@@ -3,7 +3,7 @@ import * as fsP from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 
-import { createFs } from "videocity-engine";
+import { createFs } from "videobook-engine";
 import {
   queue as appQueue,
   registerJobHandler,
@@ -57,8 +57,8 @@ describe("server queue (sqlite-backed)", () => {
   });
 
   it("lets provider handoff helpers reuse the queue wrapper owner", async () => {
-    await setProjectsDir(projectsDir);
     const cfs = createFs({ projectsDir });
+    await setProjectsDir(projectsDir, cfs);
     const created = await cfs.createProject("p");
     expect(created.ok).toBe(true);
     const asset = await cfs.createAsset("img", "handoff", "p");
@@ -111,8 +111,8 @@ describe("server queue (sqlite-backed)", () => {
   });
 
   it("releases a wrapper-owned synchronous generate before child jobs run", async () => {
-    await setProjectsDir(projectsDir);
     const cfs = createFs({ projectsDir });
+    await setProjectsDir(projectsDir, cfs);
     const created = await cfs.createProject("p");
     expect(created.ok).toBe(true);
     const asset = await cfs.createAsset("img", "sync", "p");
@@ -163,8 +163,8 @@ describe("server queue (sqlite-backed)", () => {
   });
 
   it("drops the jobIdIndex entry once a job reaches a terminal state", async () => {
-    await setProjectsDir(projectsDir);
     const cfs = createFs({ projectsDir });
+    await setProjectsDir(projectsDir, cfs);
     const created = await cfs.createProject("p");
     expect(created.ok).toBe(true);
 

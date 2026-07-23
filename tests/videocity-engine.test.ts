@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createSandbox, type Sandbox } from './helpers/sandbox.js';
 
-describe('videocity-engine integration', () => {
+describe('videobook-engine integration', () => {
   let sandbox: Sandbox;
 
   beforeEach(async () => {

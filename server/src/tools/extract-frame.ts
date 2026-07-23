@@ -1,11 +1,11 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { queue } from "../queue.js";
-import { findVideoFile } from "videocity-engine";
+import { findVideoFile } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 
 const execFileAsync = promisify(execFile);

@@ -6,7 +6,7 @@ import { createFsForTest } from "../fs.js";
 import { failPendingTaskAndLog } from "./task-failure.js";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 
 const SLUG = "doc-proj";
 

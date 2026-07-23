@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createFs } from "videocity-engine";
+import { createFs } from "videobook-engine";
 import sharp from "sharp";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { createTestClient } from "../test-client.js";

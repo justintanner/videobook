@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { findAudioFile, type VideocityFs } from "videocity-engine";
+import { findAudioFile, type VideocityFs } from "videobook-engine";
 import { z } from "zod";
 import {
   MAX_AUDIO_CONTINUATION_MS,

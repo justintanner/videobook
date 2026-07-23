@@ -1,6 +1,6 @@
 /**
  * Pure helpers for the rename_all tool: deterministic slug computation that
- * mirrors videocity-engine's slugifyName, humanization for display, dry-run
+ * mirrors videobook-engine's slugifyName, humanization for display, dry-run
  * row building, edited-name revalidation, and reference rewriting.
  *
  * These are kept side-effect-free and engine-agnostic so the dry-run target
@@ -15,7 +15,7 @@
 export const RENAME_PREFIXES = ["vid", "img"] as const;
 export type RenamePrefix = (typeof RENAME_PREFIXES)[number];
 
-/** Engine stop-word list — kept in sync with videocity-engine/asset/slug.js.
+/** Engine stop-word list — kept in sync with videobook-engine/asset/slug.js.
  *  Reproduced locally because the engine does not export slugifyName. */
 const STOP_WORDS = new Set([
   "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of",
@@ -56,7 +56,7 @@ export interface EditedRename {
   suggested_name: string;
 }
 
-/** Replicate videocity-engine slugifyName(name, prefix). */
+/** Replicate videobook-engine slugifyName(name, prefix). */
 export function slugifyName(name: string, prefix: string): string {
   const prefixLower = prefix.toLowerCase().replace(/-$/, "");
   const words = name

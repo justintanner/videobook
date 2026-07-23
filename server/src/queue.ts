@@ -21,14 +21,14 @@ import {
   isValidProjectSlug,
   queueApi,
   closeStateDb,
-} from "videocity-engine";
+} from "videobook-engine";
 
 import { fs as defaultFs, PROJECTS_DIR } from "./fs.js";
 import { runWithJobDeadline } from "./job-deadline.js";
 
 async function projectExists(dir: string): Promise<boolean> {
   try {
-    await fsp.access(path.join(dir, ".git"));
+    await fsp.access(path.join(dir, ".videobook"));
     return true;
   } catch {
     return false;
@@ -683,8 +683,11 @@ export async function resumeProjectAfterRewind(projectSlug: string): Promise<voi
  * Test-only: redirect all queue operations to a different projectsDir, and
  * tear down any runners pointing at the previous one.
  */
-export async function setProjectsDir(dir: string): Promise<void> {
-  if (dir === activeProjectsDir) return;
+export async function setProjectsDir(
+  dir: string,
+  nextFs?: VideocityFs,
+): Promise<void> {
+  if (dir === activeProjectsDir && !nextFs) return;
   const stale = Array.from(runnerByProject.values());
   runnerByProject.clear();
   jobIdIndex.clear();
@@ -695,7 +698,7 @@ export async function setProjectsDir(dir: string): Promise<void> {
   const prior = fsRef.current;
   if (prior !== defaultFs) prior.close();
   activeProjectsDir = dir;
-  fsRef.current = createFs({ projectsDir: dir });
+  fsRef.current = nextFs ?? createFs({ projectsDir: dir });
 }
 
 export function getProjectsDir(): string {

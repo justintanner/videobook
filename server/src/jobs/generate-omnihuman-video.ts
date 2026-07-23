@@ -1,4 +1,4 @@
-import type { TaskType, VideocityFs } from "videocity-engine";
+import type { TaskType, VideocityFs } from "videobook-engine";
 import type { Omnihuman15OutputResolution } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -6,10 +6,10 @@ import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildOmnihumanPayload } from "../payload-builders.js";
 
-// Forward-compat bridge: videocity-engine ships a closed TaskType union with no
+// Forward-compat bridge: videobook-engine ships a closed TaskType union with no
 // OmniHuman entry, so the persisted task type is asserted here. The string flows
 // through pendingTasks.write → the kie poller → complete_kie_task untouched,
-// where the local union recognizes it. Drop the assertion once videocity-engine
+// where the local union recognizes it. Drop the assertion once videobook-engine
 // adds "omnihuman_video" (mirrors generate-volcengine-lipsync-video.ts).
 const OMNIHUMAN_TASK_TYPE = "omnihuman_video" as TaskType;
 

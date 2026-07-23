@@ -1,5 +1,5 @@
-import type { AssetManifestFile, VideocityFs } from "videocity-engine";
-import { findAudioFile, findVideoFile } from "videocity-engine";
+import type { AssetManifestFile, VideocityFs } from "videobook-engine";
+import { findAudioFile, findVideoFile } from "videobook-engine";
 import { extname } from "node:path";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import type { VeoGenerateRequest, VeoModel } from "@apicity/kie";
 import { submitVeoTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";

@@ -1,11 +1,11 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 import type { KieGeminiPart } from "@apicity/kie";
 import { registerJobHandler, queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
-import { findAudioFile } from "videocity-engine";
+import { findAudioFile } from "videobook-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
 import { enqueueLazyTimelineRender } from "../lazy-render.js";
 import { callGeminiFlashJson, geminiImageBase64Part, geminiTextPart } from "../kie-gemini.js";
@@ -73,7 +73,7 @@ export function registerAnalyzeVideoJob(fs: VideocityFs): void {
           .filter((f) => f.endsWith(".jpg"))
           .sort((a, b) => parseFloat(a) - parseFloat(b))
       : [];
-    // videocity-engine doesn't yet expose a typed read for asset subdir files,
+    // videobook-engine doesn't yet expose a typed read for asset subdir files,
     // so frame bytes are read via node:fs below.
     const framesDir = join(assetDir, "original_frames");
 

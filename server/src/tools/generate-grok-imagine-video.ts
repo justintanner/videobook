@@ -1,5 +1,5 @@
 import { modelSlug } from "@apicity/cost";
-import type { VideocityFs, AssetManifestFile } from "videocity-engine";
+import type { VideocityFs, AssetManifestFile } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { GrokImageToVideoRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";

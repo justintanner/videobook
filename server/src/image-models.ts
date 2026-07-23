@@ -6,7 +6,7 @@
  *
  * Only identity, labels, and image slot limits are configured here.
  */
-import type { ResolvedAsset } from "videocity-engine";
+import type { ResolvedAsset } from "videobook-engine";
 import { createKie } from "@apicity/kie";
 import type { KieMediaModel, PayloadFieldSchema } from "@apicity/kie";
 import { canonicalCharacterId, totalImageReferenceSlots, GOOGLE_IMAGE_MAX_REFERENCE_SLOTS } from "./google-flow-refs.js";

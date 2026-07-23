@@ -5,7 +5,7 @@ import {
   findVideoFile,
   type AssetManifestFile,
   type VideocityFs,
-} from "videocity-engine";
+} from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";

@@ -31,7 +31,7 @@ describe("list_assets tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("returns empty assets array for empty project", async () => {
+  it("returns the scratch notebook for a new project", async () => {
     const slug = "list-empty";
     await client.callTool({
       name: "create_project",
@@ -44,7 +44,11 @@ describe("list_assets tool", () => {
     });
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
-    expect(data.assets).toEqual([]);
+    expect(data.assets).toHaveLength(1);
+    expect(data.assets[0]).toMatchObject({
+      id: "nb-scratch",
+      type: "notebook",
+    });
   });
 
   it("lists uploaded assets", async () => {
@@ -70,7 +74,7 @@ describe("list_assets tool", () => {
     });
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
-    expect(data.assets).toHaveLength(2);
+    expect(data.assets).toHaveLength(3);
     const ids = data.assets.map((a: { id: string }) => a.id);
     expect(ids.some((id: string) => id.startsWith("img-"))).toBe(true);
     expect(ids.some((id: string) => id.startsWith("script-"))).toBe(true);
@@ -110,7 +114,9 @@ describe("list_assets tool", () => {
     });
     const newestContent = newestResult.content as Array<{ type: string; text: string }>;
     const newestData = JSON.parse(newestContent[0].text);
-    const newestIds = newestData.assets.map((a: { id: string }) => a.id);
+    const newestIds = newestData.assets
+      .map((a: { id: string }) => a.id)
+      .filter((id: string) => id !== "nb-scratch");
 
     const oldestResult = await client.callTool({
       name: "list_assets",
@@ -118,7 +124,9 @@ describe("list_assets tool", () => {
     });
     const oldestContent = oldestResult.content as Array<{ type: string; text: string }>;
     const oldestData = JSON.parse(oldestContent[0].text);
-    const oldestIds = oldestData.assets.map((a: { id: string }) => a.id);
+    const oldestIds = oldestData.assets
+      .map((a: { id: string }) => a.id)
+      .filter((id: string) => id !== "nb-scratch");
 
     // Newest should have second asset first, oldest should have first asset first
     expect(newestIds[0]).toBe(secondParsed.assetId);

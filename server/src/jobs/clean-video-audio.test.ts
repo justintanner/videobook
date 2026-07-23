@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
-import { createFs } from "videocity-engine";
+import { createFs } from "videobook-engine";
 import {
   buildCleanAudioFilter,
   renderCleanVideoAudio,
@@ -108,7 +108,7 @@ describe("clean-video-audio job media mix", () => {
     expect(await streamHash(outputPath, "a:0")).not.toBe(await streamHash(sourcePath, "a:0"));
   }, 60_000);
 
-  it("replaces the canonical asset video through videocity-engine", async () => {
+  it("replaces the canonical asset video through videobook-engine", async () => {
     const outputPath = join(tempDir, "replacement.mp4");
     await renderCleanVideoAudio(
       sourcePath,

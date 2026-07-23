@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { submitKieTask } from "./kie-paygate.js";
 import type { GrokImageToVideoRequest } from "@apicity/kie";
 import type { XaiVideoAsyncResponse, XaiVideoGenerateRequest } from "@apicity/xai";

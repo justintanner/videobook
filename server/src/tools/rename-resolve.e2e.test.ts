@@ -6,7 +6,7 @@ import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { createFsForTest } from "../fs.js";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 
 const PROJECT = "e2e-rename-resolve";
 

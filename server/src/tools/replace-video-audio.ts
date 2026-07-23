@@ -1,8 +1,8 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
-import { findVideoFile, findAudioFile } from "videocity-engine";
+import { findVideoFile, findAudioFile } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 
 export function replaceVideoAudioDef(fs: VideocityFs): ToolDef {

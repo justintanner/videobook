@@ -1,5 +1,5 @@
-import type { VideocityFs, AssetManifestFile } from "videocity-engine";
-import { findAudioFile, findVideoFile } from "videocity-engine";
+import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import { findAudioFile, findVideoFile } from "videobook-engine";
 import { extname } from "node:path";
 import { modelSlug } from "@apicity/cost";
 import type { Seedance2FastRequest, Seedance2Request } from "@apicity/kie";

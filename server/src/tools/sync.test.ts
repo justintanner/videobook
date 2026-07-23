@@ -6,7 +6,7 @@ import { createTestClient } from "../test-client.js";
 import { createFsForTest } from "../fs.js";
 import { queue, setProjectsDir } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 
 describe("sync tool", () => {
   let client: Client;
@@ -82,7 +82,7 @@ describe("list_assets tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("empty project returns empty assets array", async () => {
+  it("new project returns its scratch notebook", async () => {
     const slug = "list-empty";
     await client.callTool({
       name: "create_project",
@@ -96,7 +96,12 @@ describe("list_assets tool", () => {
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
-    expect(data.assets).toEqual([]);
+    expect(data.assets).toHaveLength(1);
+    expect(data.assets[0]).toMatchObject({
+      id: "nb-scratch",
+      type: "notebook",
+      status: "ready",
+    });
   });
 
   it("lists assets after upload", async () => {
@@ -134,7 +139,7 @@ describe("buildAssetList", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     fs = createFsForTest(tempDir);
-    await setProjectsDir(tempDir);
+    await setProjectsDir(tempDir, fs);
     await fs.createProject("test-proj");
   });
 
@@ -438,7 +443,7 @@ describe("performSync", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-sync-test-"));
     fs = createFsForTest(tempDir);
-    await setProjectsDir(tempDir);
+    await setProjectsDir(tempDir, fs);
     await fs.createProject("test-proj");
   });
 
@@ -486,7 +491,7 @@ describe("buildAssetList — failed download detection (RC3)", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-rc3-test-"));
     fs = createFsForTest(tempDir);
-    await setProjectsDir(tempDir);
+    await setProjectsDir(tempDir, fs);
     await fs.createProject("test-proj");
   });
 
@@ -564,7 +569,7 @@ describe("performSync — never auto-renders from sync", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-rc2-test-"));
     fs = createFsForTest(tempDir);
-    await setProjectsDir(tempDir);
+    await setProjectsDir(tempDir, fs);
     await fs.createProject("test-proj");
     savedKieKey = process.env.KIE_API_KEY;
     delete process.env.KIE_API_KEY;
@@ -705,7 +710,7 @@ describe("performSync — auto-transcribe", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-autotranscribe-test-"));
     fs = createFsForTest(tempDir);
-    await setProjectsDir(tempDir);
+    await setProjectsDir(tempDir, fs);
     await fs.createProject("test-proj");
     savedKey = process.env.ELEVENLABS_API_KEY;
     process.env.ELEVENLABS_API_KEY = "test-key";

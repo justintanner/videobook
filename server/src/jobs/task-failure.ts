@@ -1,4 +1,4 @@
-import type { VideocityFs, FailureInfo } from "videocity-engine";
+import type { VideocityFs, FailureInfo } from "videobook-engine";
 
 /**
  * CAS-fail a pending task by (asset_id, task_id) and log to the project's

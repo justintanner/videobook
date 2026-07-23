@@ -103,7 +103,7 @@ describe("MCP tools e2e", () => {
     });
     expect(result.isError).toBeFalsy();
     expect(await dirExists(join(tempDir, PROJECT))).toBe(true);
-    expect(await dirExists(join(tempDir, PROJECT, ".git"))).toBe(true);
+    expect(await fileExists(join(tempDir, PROJECT, ".videobook"))).toBe(true);
     expect(await fileExists(join(tempDir, ".default-project"))).toBe(true);
     expect(await readFile(join(tempDir, ".default-project"), "utf-8")).toBe(PROJECT);
   });
@@ -115,7 +115,7 @@ describe("MCP tools e2e", () => {
     });
     expect(result.isError).toBeFalsy();
     expect(await dirExists(join(tempDir, TARGET_PROJECT))).toBe(true);
-    expect(await dirExists(join(tempDir, TARGET_PROJECT, ".git"))).toBe(true);
+    expect(await fileExists(join(tempDir, TARGET_PROJECT, ".videobook"))).toBe(true);
   });
 
   it("lists projects", async () => {

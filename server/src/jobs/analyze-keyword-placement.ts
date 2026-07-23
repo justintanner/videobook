@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { KieGeminiPart } from "@apicity/kie";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import sharp from "sharp";
 import { z } from "zod";
 import { getApiKey } from "../api-key.js";

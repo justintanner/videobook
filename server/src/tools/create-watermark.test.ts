@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import sharp from "sharp";
-import { createFs } from "videocity-engine";
+import { createFs } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import { readWatermarkConfig } from "../watermark-config.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";

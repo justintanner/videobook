@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { createFsForTest } from "../fs.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { queue, waitForJob } from "../queue.js";

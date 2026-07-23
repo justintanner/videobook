@@ -350,7 +350,7 @@ describe("audio sync transcript preparation and rollback", () => {
         created.value.assetId,
         "restore-test",
         "0000000000000000000000000000000000000000",
-      )).rejects.toThrow("engine returned no commit");
+      )).rejects.toThrow("ref not found");
       const work = await fs.assetWork.read("restore-test", created.value.assetId);
       expect(work.ok).toBe(true);
       if (work.ok) expect(work.value?.status).toBe("ready");
@@ -364,8 +364,8 @@ describe("audio sync transcript preparation and rollback", () => {
     const projectsDir = await mkdtemp(join(tmpdir(), "videocity-audio-sync-job-rollback-"));
     const sourcePath = join(projectsDir, "source.mp4");
     await generateMarkedVideo(sourcePath);
-    await setProjectsDir(projectsDir);
     const fs = createFsForTest(projectsDir);
+    await setProjectsDir(projectsDir, fs);
     try {
       const project = await fs.createProject("job-rollback-test");
       if (!project.ok) throw new Error(project.error.message);
@@ -437,7 +437,9 @@ describe("audio sync transcript preparation and rollback", () => {
         "job-rollback-test",
         20,
       );
-      expect(historyAfter.map((entry) => entry.hash)).toEqual(
+      expect(historyAfter).toHaveLength(historyBefore.length + 1);
+      expect(historyAfter[0]?.operation).toBe("restore");
+      expect(historyAfter.slice(1).map((entry) => entry.hash)).toEqual(
         historyBefore.map((entry) => entry.hash),
       );
     } finally {

@@ -1,9 +1,9 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalWanV2p7ReferenceToVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
-import { findVideoFile } from "videocity-engine";
+import { findVideoFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { resolveImageSlugs, slugify } from "./_fal-shared.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";

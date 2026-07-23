@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import jsQR from "jsqr";
 import sharp from "sharp";
-import { createFs, type VideocityFs } from "videocity-engine";
+import { createFs, type VideocityFs } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import { buildQrbtfPng, DEFAULT_QRBTF_SIZE } from "./create-qrbtf.js";
 import type { QrbtfParams } from "./qrbtf-render.js";

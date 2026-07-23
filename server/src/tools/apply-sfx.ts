@@ -1,8 +1,8 @@
-import type { AssetManifestFile, VideocityFs } from "videocity-engine";
+import type { AssetManifestFile, VideocityFs } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
-import { findVideoFile } from "videocity-engine";
+import { findVideoFile } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 
 const MIN_DURATION_S = 0.5;

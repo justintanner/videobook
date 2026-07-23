@@ -1,6 +1,6 @@
 import { createGoogleFlow, GoogleFlowError } from "@apicity/googleflow";
 import type { GoogleFlowVideosRequest, GoogleFlowProvider } from "@apicity/googleflow";
-import type { TaskType, VideocityFs } from "videocity-engine";
+import type { TaskType, VideocityFs } from "videobook-engine";
 import type { JobHandlerContext } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { prepareAssetForUpload, prepareBytesForUpload } from "../upload.js";

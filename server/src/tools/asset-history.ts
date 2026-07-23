@@ -1,4 +1,4 @@
-import type { VideocityFs, GitCommit } from "videocity-engine";
+import type { VideocityFs, GitCommit } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 

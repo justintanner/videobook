@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { VideocityFs } from "videocity-engine";
+import type { VideobookFs, VideocityFs } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
+import { videobookDomainDefs } from "./videobook-domain.js";
 import { apiStatusDef } from "./api-status.js";
 import { providerKeyStatusDef } from "./provider-key-status.js";
 import { setEnvSecretDef } from "./set-env-secret.js";
@@ -442,6 +443,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     createQartDef(fs),
     createQrbtfDef(fs),
     getWatermarkConfigDef(),
+    ...videobookDomainDefs(fs as VideobookFs),
   ];
 
   return rawDefs;

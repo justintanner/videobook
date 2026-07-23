@@ -25,7 +25,7 @@ Guidance for AI coding agents working in the Videocity repository.
 
 - **Frontend (`src/`)**: React 19 + TypeScript + Vite 7 SPA. Entry: `main.tsx` → `App.tsx`. Uses `use-mcp` to connect to MCP server at `/mcp`.
 - **Backend (`server/src/`)**: Express MCP server on port 3001. Entry: `server/src/index.ts`. Tools in `server/src/tools/*.ts` registered via `server/src/tools/index.ts`.
-- **Filesystem (`videocity-engine`)**: npm dependency providing project/asset operations. All project/asset ops MUST use `createFs()` — never `node:fs` directly.
+- **Filesystem (`videobook-engine`)**: npm dependency providing project/asset operations. All project/asset ops MUST use `createFs()` — never `node:fs` directly.
 
 ## Code Style
 
@@ -74,9 +74,9 @@ Guidance for AI coding agents working in the Videocity repository.
 ## Key Rules
 
 ### Filesystem Operations
-**ALWAYS use `videocity-engine`** — never `node:fs` for projects/assets:
+**ALWAYS use `videobook-engine`** — never `node:fs` for projects/assets:
 ```typescript
-import { createFs } from "videocity-engine";
+import { createFs } from "videobook-engine";
 const fs = createFs({ projectsDir: "/path/to/projects" });
 const project = await fs.createProject("my-project");
 const asset = await fs.createAsset("vid", "intro clip", "my-project");
@@ -164,7 +164,7 @@ Always build client before server if both change: `npm run build && npm run buil
 | MCP Server | @modelcontextprotocol/sdk |
 | Server | Express |
 | Validation | Zod |
-| Filesystem | videocity-engine |
+| Filesystem | videobook-engine |
 | Job Queue | @platformatic/job-queue |
 | Linting | ESLint 9 |
 | Testing | Vitest |

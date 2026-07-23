@@ -3,7 +3,7 @@ import * as fsP from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { createFs } from "videocity-engine";
+import { createFs } from "videobook-engine";
 import { JobDeadlineError, runWithJobDeadline } from "./job-deadline.js";
 import type { JobHandlerContext, LeaseToken } from "./queue.js";
 import { withLockedLocalLease } from "./jobs/_lease.js";

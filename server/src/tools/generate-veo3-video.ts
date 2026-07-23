@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { VeoGenerateRequestSchema } from "@apicity/kie/zod";
 import type { VeoModel } from "@apicity/kie";

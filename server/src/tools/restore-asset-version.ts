@@ -1,14 +1,14 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
 export function restoreAssetVersionDef(fs: VideocityFs): ToolDef {
   return {
     name: "restore_asset_version",
-    description: "Restore an asset to a previous git commit version",
+    description: "Restore an asset from an immutable revision as a new revision",
     schema: {
       asset_id: z.string().describe("Asset ID to restore (e.g. img-cute-cat)"),
-      commit_hash: z.string().describe("Git commit hash to restore from"),
+      commit_hash: z.string().describe("DoltLite revision hash to restore from"),
       project_slug: z.string().describe("Project slug"),
     },
     handler: async (args) => {
@@ -19,7 +19,7 @@ export function restoreAssetVersionDef(fs: VideocityFs): ToolDef {
           isError: true as const,
           content: [{
             type: "text" as const,
-            text: "Failed to restore asset. Check asset ID and commit hash.",
+            text: "Failed to restore asset. Check the asset ID and revision hash.",
           }],
         };
       }
@@ -38,4 +38,3 @@ export function restoreAssetVersionDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { createFsForTest } from "../fs.js";
 import { queue, setProjectsDir } from "../queue.js";
 import { createQrOutroDef } from "./create-qr-outro.js";
@@ -20,8 +20,8 @@ describe("create_qr_outro", () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-qr-outro-tool-"));
-    await setProjectsDir(tempDir);
     fs = createFsForTest(tempDir);
+    await setProjectsDir(tempDir, fs);
     const project = await fs.createProject(PROJECT);
     expect(project.ok).toBe(true);
   });

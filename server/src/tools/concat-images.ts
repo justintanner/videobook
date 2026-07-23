@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import sharp from "sharp";
 import { z, type ZodRawShape } from "zod";
 import { cropToFill, probeImage } from "../image.js";

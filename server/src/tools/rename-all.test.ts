@@ -3,7 +3,7 @@ import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createFs } from "videocity-engine";
+import { createFs } from "videobook-engine";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import {
   slugifyName,

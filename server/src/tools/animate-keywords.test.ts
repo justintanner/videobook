@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { createFs, findVideoFile, type VideocityFs } from "videocity-engine";
+import { createFs, findVideoFile, type VideocityFs } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import {
   keywordPlacementFingerprint,

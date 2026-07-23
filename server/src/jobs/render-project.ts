@@ -1,4 +1,4 @@
-import { findVideoFile, type VideocityFs } from "videocity-engine";
+import { findVideoFile, type VideocityFs } from "videobook-engine";
 import { copyFile, mkdir, unlink } from "node:fs/promises";
 import { join, resolve, basename } from "node:path";
 import { renderMedia, selectComposition } from "@remotion/renderer";

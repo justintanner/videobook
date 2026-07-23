@@ -1,5 +1,5 @@
-import type { VideocityFs } from "videocity-engine";
-import { findAudioFile } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
+import { findAudioFile } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import {

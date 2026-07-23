@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 
 // Fetch `url`, write the response bytes to the given asset file, and return
 // the buffer for callers that need it (e.g. for content-hash provenance).

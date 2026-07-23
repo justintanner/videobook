@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videocity-engine";
+import type { VideocityFs, AssetManifestFile } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import {
   AlibabaImageGenerationParametersSchema,

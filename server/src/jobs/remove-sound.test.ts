@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { createElevenLabs, type ElevenLabsSpeechToTextResponse } from "@apicity/elevenlabs";
-import { createFs, type VideocityFs } from "videocity-engine";
+import { createFs, type VideocityFs } from "videobook-engine";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { extractWaveform, FFMPEG, probeVideo } from "../ffmpeg.js";
 import {

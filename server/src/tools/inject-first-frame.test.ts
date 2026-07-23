@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import sharp from "sharp";
-import { createFs, type VideocityFs } from "videocity-engine";
+import { createFs, type VideocityFs } from "videobook-engine";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";

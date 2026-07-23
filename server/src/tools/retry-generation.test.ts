@@ -7,7 +7,7 @@ import { failPendingTaskAndLog } from "../jobs/task-failure.js";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 
 type TextContent = Array<{ type: string; text: string }>;
 

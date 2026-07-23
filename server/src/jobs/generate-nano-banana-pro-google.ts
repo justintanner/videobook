@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { queue, registerJobHandler } from "../queue.js";
 import { contentHash } from "../upload.js";
 import { buildGoogleNbpImagePayload, type GoogleNbpImageArgs } from "../payload-builders.js";

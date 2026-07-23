@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideobookFs, VideocityFs } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { registerTranscribeJob } from "./transcribe.js";
 import { registerTranslateTranscriptJob } from "./translate-transcript.js";
@@ -126,6 +126,7 @@ import { registerPostToXJob } from "./post-to-x.js";
 import { registerGenerateElevenlabsT2aJob } from "./generate-elevenlabs-t2a.js";
 import { registerExtendAudioJob } from "./extend-audio.js";
 import { registerRemoveSoundJob } from "./remove-sound.js";
+import { registerRunNotebookJob } from "./run-notebook.js";
 
 export function registerAllJobHandlers(fs: VideocityFs): void {
   registerTranscribeJob(fs);
@@ -256,6 +257,7 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerExtendAudioJob(fs);
   registerRemoveSoundJob(fs);
   registerPostToXJob(fs);
+  registerRunNotebookJob(fs as VideobookFs);
 
   // Formula plan jobs were removed in the plan-notebook rework, but project
   // queues are persistent (.videocity/state.sqlite): a job enqueued before

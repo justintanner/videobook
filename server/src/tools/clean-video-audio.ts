@@ -1,5 +1,5 @@
-import type { VideocityFs } from "videocity-engine";
-import { findVideoFile } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
+import { findVideoFile } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";

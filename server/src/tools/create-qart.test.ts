@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import jsQR from "jsqr";
 import QRCode from "qrcode";
 import sharp from "sharp";
-import { createFs } from "videocity-engine";
+import { createFs } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import {
   buildQartPng,

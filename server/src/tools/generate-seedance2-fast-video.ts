@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 import { buildSeedance2ToolDef } from "./_seedance2-shared.js";
 

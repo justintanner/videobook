@@ -2,14 +2,14 @@
  * rewrite_prompt MCP tool — rewrites generation prompts using model-specific
  * prompting guides via GPT-5.2.
  */
-import type { VideocityFs, GenerationError } from "videocity-engine";
+import type { VideocityFs, GenerationError } from "videobook-engine";
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createOpenAi, textPart, imageUrlPart, firstContent } from "@apicity/openai";
 import type { OpenAiContentPart, OpenAiMessage } from "@apicity/openai";
-import { resolveAllAssets, expandSlotRefs } from "videocity-engine";
+import { resolveAllAssets, expandSlotRefs } from "videobook-engine";
 import { getCanonicalName } from "../generation-registry.js";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 import type { ToolDef } from "./tool-def.js";

@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { AUDIO_OPTS, extractWaveform, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { queue, registerJobHandler } from "../queue.js";
 import type { AudioMixAssetKind } from "../tools/audio-mix.js";

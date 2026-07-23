@@ -1,4 +1,4 @@
-import type { VideocityFs, GenerationError, AssetView } from "videocity-engine";
+import type { VideocityFs, GenerationError, AssetView } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { queue } from "../queue.js";

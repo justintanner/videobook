@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { GptImage2ImageToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";

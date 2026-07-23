@@ -2,7 +2,7 @@ import {
   findAudioFile,
   findVideoFile,
   type VideocityFs,
-} from "videocity-engine";
+} from "videobook-engine";
 import { z } from "zod";
 import type { RemoveSoundAssetKind, RemoveSoundResult } from "../jobs/remove-sound.js";
 import { queue } from "../queue.js";

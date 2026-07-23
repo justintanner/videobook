@@ -1,9 +1,9 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { modelSlug } from "@apicity/cost";
 import { VolcengineVideoToVideoLipSyncRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
-import { findAudioFile, findVideoFile } from "videocity-engine";
+import { findAudioFile, findVideoFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 

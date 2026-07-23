@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { createFs } from "videocity-engine";
+import { createFs } from "videobook-engine";
 
 describe("rename_asset tool", () => {
   let client: Client;

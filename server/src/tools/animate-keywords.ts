@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { findVideoFile, type VideocityFs } from "videocity-engine";
+import { findVideoFile, type VideocityFs } from "videobook-engine";
 import { z } from "zod";
 import { getApiKey } from "../api-key.js";
 import type { AnalyzeKeywordPlacementResult } from "../jobs/analyze-keyword-placement.js";

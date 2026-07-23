@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { rm } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";

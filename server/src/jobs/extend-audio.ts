@@ -5,7 +5,7 @@ import {
   createElevenLabs,
   type ElevenLabsProvider,
 } from "@apicity/elevenlabs";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import {
   audioCrossfadeMs,
   buildSoundContinuationPrompt,

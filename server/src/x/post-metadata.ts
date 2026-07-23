@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 
 export const POST_METADATA_FILE = ".post.x.json";
 const POST_METADATA_VERSION = 1;

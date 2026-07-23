@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { uploadAssetToFal } from "./_fal-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";

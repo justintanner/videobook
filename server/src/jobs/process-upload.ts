@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetEntry, AssetType } from "videocity-engine";
+import type { VideocityFs, AssetEntry, AssetType } from "videobook-engine";
 import * as path from "node:path";
 import { queue } from "../queue.js";
 import { probeVideo } from "../ffmpeg.js";

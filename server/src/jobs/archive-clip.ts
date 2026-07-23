@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videocity-engine";
+import type { VideocityFs, AssetManifestFile } from "videobook-engine";
 import type {
   ElevenLabsSpeechToTextRequest,
   ElevenLabsSpeechToTextResponse,
@@ -6,7 +6,7 @@ import type {
   ElevenLabsTranscriptWord,
   ElevenLabsTranscriptCharacter,
 } from "@apicity/elevenlabs";
-import { findAudioFile, findPrimaryMediaFile, findVideoFile } from "videocity-engine";
+import { findAudioFile, findPrimaryMediaFile, findVideoFile } from "videobook-engine";
 import { createElevenLabs } from "@apicity/elevenlabs";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";

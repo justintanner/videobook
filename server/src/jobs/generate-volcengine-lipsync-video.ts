@@ -1,4 +1,4 @@
-import type { TaskType, VideocityFs } from "videocity-engine";
+import type { TaskType, VideocityFs } from "videobook-engine";
 import type { VolcengineVideoToVideoLipSyncMode } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -6,11 +6,11 @@ import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { buildVolcengineLipSyncPayload } from "../payload-builders.js";
 
-// Forward-compat bridge: videocity-engine@0.4.1 (latest) ships a closed
+// Forward-compat bridge: videobook-engine@0.4.1 (latest) ships a closed
 // TaskType union with no Volcengine entry, so the persisted task type is
 // asserted here. The string flows through pendingTasks.write → the kie poller
 // → complete_kie_task untouched, where the local union recognizes it. Drop the
-// assertion once videocity-engine adds "volcengine_lipsync_video".
+// assertion once videobook-engine adds "volcengine_lipsync_video".
 const VOLCENGINE_LIPSYNC_TASK_TYPE = "volcengine_lipsync_video" as TaskType;
 
 type RefInput = { assetId: string; filename: string };

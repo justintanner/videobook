@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import type { HappyHorse11AspectRatio, HappyHorseResolution } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { registerJobHandler } from "../queue.js";

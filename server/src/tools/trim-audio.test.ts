@@ -6,7 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
-import { createFs } from "videocity-engine";
+import { createFs } from "videobook-engine";
 import { FFMPEG, FFPROBE } from "../ffmpeg.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 

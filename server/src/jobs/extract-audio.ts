@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";

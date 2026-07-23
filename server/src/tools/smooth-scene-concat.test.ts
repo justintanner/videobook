@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { createFs, type VideocityFs } from "videocity-engine";
+import { createFs, type VideocityFs } from "videobook-engine";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FFMPEG } from "../ffmpeg.js";
 import { queue, waitForJob } from "../queue.js";

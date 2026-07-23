@@ -120,7 +120,7 @@ describe("apply_sfx tool", () => {
   it("returns error when asset has no video", async () => {
     process.env.ELEVENLABS_API_KEY = "test-key";
 
-    const { createFs } = await import("videocity-engine");
+    const { createFs } = await import("videobook-engine");
     const fs = createFs({ projectsDir: tempDir });
     const asset = await fs.createAsset("vid", "no-video", "sfx-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
@@ -144,7 +144,7 @@ describe("apply_sfx tool", () => {
     process.env.ELEVENLABS_API_KEY = "test-key";
     const uploaded = await uploadVideo(client, "sfx-proj", videoPath);
 
-    const { createFs } = await import("videocity-engine");
+    const { createFs } = await import("videobook-engine");
     const fs = createFs({ projectsDir: tempDir });
     await fs.writeMetadata(
       uploaded.assetId,

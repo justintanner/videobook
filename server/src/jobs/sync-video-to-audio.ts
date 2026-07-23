@@ -1,6 +1,6 @@
 import type { ElevenLabsSpeechToTextResponse } from "@apicity/elevenlabs";
-import { findAudioFile, findVideoFile } from "videocity-engine";
-import type { VideocityFs } from "videocity-engine";
+import { findAudioFile, findVideoFile } from "videobook-engine";
+import type { VideocityFs } from "videobook-engine";
 import { basename, join } from "node:path";
 import { hasTimedSpeechWords, resolveAudioCue } from "../audio-cue.js";
 import type { RequestedAudioSyncAnchor } from "../audio-sync-request.js";
@@ -356,7 +356,7 @@ export function registerSyncVideoToAudioJob(fs: VideocityFs): void {
           const history = await fs.getAssetHistory(assetId, projectSlug, 1);
           rollbackState.restoreCommit = history[0]?.hash ?? null;
           if (!rollbackState.restoreCommit) {
-            throw new Error(`sync_video_to_audio requires Git-backed history for ${assetId}`);
+            throw new Error(`sync_video_to_audio requires revision history for ${assetId}`);
           }
 
           const source = await probeVideo(inputPath, { signal: ctx.signal });

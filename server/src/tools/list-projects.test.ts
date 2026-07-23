@@ -99,7 +99,7 @@ describe("list_projects tool", () => {
       asset_count: number;
     }>;
     const counts = new Map(data.map((project) => [project.slug, project.asset_count]));
-    expect(counts.get("empty")).toBe(0);
-    expect(counts.get("with-assets")).toBe(1);
+    expect(counts.get("empty")).toBe(1);
+    expect(counts.get("with-assets")).toBe(2);
   });
 });

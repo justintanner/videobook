@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { z } from "zod";
 import { emptyNotebookDefinition, isNotebookSidecar } from "../notebook-store.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";

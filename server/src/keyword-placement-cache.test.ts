@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AssetManifestFile } from "videocity-engine";
+import type { AssetManifestFile } from "videobook-engine";
 import {
   keywordPlacementFingerprint,
   parseKeywordPlacementAnalysis,

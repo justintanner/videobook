@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videocity-engine";
+import type { VideocityFs, AssetManifestFile } from "videobook-engine";
 import { z } from "zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";

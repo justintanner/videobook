@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videocity-engine";
+import type { VideocityFs, AssetManifestFile } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import {
   AlibabaVideoSynthesisInputSchema,
@@ -7,7 +7,7 @@ import {
 } from "@apicity/alibaba/zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
-import { findVideoFile, findAudioFile } from "videocity-engine";
+import { findVideoFile, findAudioFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";

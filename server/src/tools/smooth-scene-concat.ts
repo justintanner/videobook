@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { z } from "zod";
-import { findVideoFile, type VideocityFs } from "videocity-engine";
+import { findVideoFile, type VideocityFs } from "videobook-engine";
 import { probeVideo, type ProbeResult } from "../ffmpeg.js";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";

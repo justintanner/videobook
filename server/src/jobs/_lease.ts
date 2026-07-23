@@ -1,4 +1,4 @@
-import type { AssetMeta, VideocityFs, AssetWorkKind } from "videocity-engine";
+import type { AssetMeta, VideocityFs, AssetWorkKind } from "videobook-engine";
 import type { JobHandlerContext } from "../queue.js";
 
 const HEARTBEAT_INTERVAL_MS = 20_000;

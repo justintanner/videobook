@@ -1,4 +1,4 @@
-import type { AssetEntry, VideocityFs } from "videocity-engine";
+import type { AssetEntry, VideocityFs } from "videobook-engine";
 import type {
   BackgroundMode,
   FontSizePreset,

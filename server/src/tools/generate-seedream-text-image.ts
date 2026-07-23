@@ -1,5 +1,5 @@
 import { modelSlug } from "@apicity/cost";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { SeedreamTextToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";

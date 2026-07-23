@@ -14,7 +14,7 @@
  * "1password"; the label is approximate but the read-only behavior is right.
  *
  * `.env` lives at the repo root and is server runtime configuration, not a
- * project asset, so direct node:fs is correct here — the videocity-engine
+ * project asset, so direct node:fs is correct here — the videobook-engine
  * rule covers project/asset files under PROJECTS_DIR.
  */
 import { readFileSync } from "node:fs";

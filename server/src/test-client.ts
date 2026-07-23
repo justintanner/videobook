@@ -7,7 +7,7 @@ import { setProjectsDir } from "./queue.js";
 
 export async function createTestClient(projectsDir?: string): Promise<Client> {
   const fs = projectsDir ? createFsForTest(projectsDir) : undefined;
-  if (projectsDir) await setProjectsDir(projectsDir);
+  if (projectsDir) await setProjectsDir(projectsDir, fs);
   registerAllJobHandlers(fs!);
   const server = createServer(fs);
   const client = new Client(

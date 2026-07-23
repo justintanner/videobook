@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { basename, join } from "node:path";
 import { probeVideo, runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { registerJobHandler, queue } from "../queue.js";

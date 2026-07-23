@@ -1,10 +1,10 @@
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
-import { findAudioFile } from "videocity-engine";
+import { findAudioFile } from "videobook-engine";
 import { probeVideo } from "../ffmpeg.js";
 
 const TIMELINE_FPS = 30;

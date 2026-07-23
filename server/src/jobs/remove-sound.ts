@@ -7,7 +7,7 @@ import {
   type ElevenLabsSpeechToTextResponse,
   type ElevenLabsTranscriptWord,
 } from "@apicity/elevenlabs";
-import type { VideocityFs } from "videocity-engine";
+import type { VideocityFs } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
 import { ELEVENLABS_SCRIBE_MODEL } from "../elevenlabs-audio-extension.js";
 import { AUDIO_OPTS, extractWaveform, probeVideo, runFfmpeg } from "../ffmpeg.js";

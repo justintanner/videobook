@@ -1,4 +1,4 @@
-import type { AssetManifestFile, VideocityFs } from "videocity-engine";
+import type { AssetManifestFile, VideocityFs } from "videobook-engine";
 import { z } from "zod";
 import { extname, join } from "node:path";
 import { probeVideo } from "../ffmpeg.js";
