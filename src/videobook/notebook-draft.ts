@@ -4,6 +4,11 @@ import type {
   NotebookCellType,
   NotebookDocument,
 } from 'videobook-engine'
+import {
+  notebookGridSlot,
+  normalizeNotebookGridNodes,
+  normalizeNotebookGridPositions,
+} from './notebook-grid'
 
 export interface NotebookCellData extends Record<string, unknown> {
   kind: NotebookCellType
@@ -19,49 +24,31 @@ export interface NotebookCellData extends Record<string, unknown> {
   inputs?: Record<string, unknown>
 }
 
-function positionsOverlap(
-  left: NotebookCell['position'],
-  right: NotebookCell['position'],
-): boolean {
-  return Math.abs(left.x - right.x) < 520
-    && Math.abs(left.y - right.y) < 330
-}
-
-function normalizedPositions(cells: NotebookCell[]): NotebookCell['position'][] {
-  const positions: NotebookCell['position'][] = []
-  for (const cell of cells) {
-    let position = cell.position
-    let attempt = 0
-    while (positions.some((existing) => positionsOverlap(existing, position))) {
-      attempt += 1
-      position = { x: cell.position.x + 610 * attempt, y: cell.position.y }
-    }
-    positions.push(position)
-  }
-  return positions
-}
-
 export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCellData>> {
-  const positions = normalizedPositions(document.cells)
-  return document.cells.map((cell, index) => ({
-    id: cell.id,
-    type: 'cell',
-    position: positions[index],
-    data: {
-      kind: cell.type,
-      title: cell.title,
-      subtitle: `${cell.type.toUpperCase()} · CELL`,
-      stage: Math.floor(index / 3) + 1,
-      status: 'ready',
-      ...(cell.prompt === undefined ? {} : { prompt: cell.prompt }),
-      ...(cell.model === undefined ? {} : { model: cell.model }),
-      ...(cell.entityId === undefined ? {} : { entityId: cell.entityId }),
-      ...(cell.outputAssetId === undefined
-        ? {}
-        : { outputAssetId: cell.outputAssetId }),
-      ...(cell.inputs === undefined ? {} : { inputs: cell.inputs }),
-    },
-  }))
+  const positions = normalizeNotebookGridPositions(document.cells.map((cell) => cell.position))
+  return document.cells.map((cell, index) => {
+    const position = positions[index]!
+    const slot = notebookGridSlot(position)
+    return {
+      id: cell.id,
+      type: 'cell',
+      position,
+      data: {
+        kind: cell.type,
+        title: cell.title,
+        subtitle: `${cell.type.toUpperCase()} · CELL`,
+        stage: slot.stage + 1,
+        status: 'ready',
+        ...(cell.prompt === undefined ? {} : { prompt: cell.prompt }),
+        ...(cell.model === undefined ? {} : { model: cell.model }),
+        ...(cell.entityId === undefined ? {} : { entityId: cell.entityId }),
+        ...(cell.outputAssetId === undefined
+          ? {}
+          : { outputAssetId: cell.outputAssetId }),
+        ...(cell.inputs === undefined ? {} : { inputs: cell.inputs }),
+      },
+    }
+  })
 }
 
 export function notebookEdges(document: NotebookDocument): Edge[] {
@@ -97,9 +84,10 @@ export function notebookDocument(
   edges: Edge[],
   updatedAt: string,
 ): NotebookDocument {
+  const normalizedNodes = normalizeNotebookGridNodes(nodes)
   return {
     ...base,
-    cells: nodes.map(cellFromNode),
+    cells: normalizedNodes.map(cellFromNode),
     edges: edges.map((edge) => ({
       id: edge.id,
       source: edge.source,

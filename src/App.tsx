@@ -4,6 +4,7 @@ import {
   Controls,
   Handle,
   MiniMap,
+  Panel,
   Position,
   ReactFlow,
   addEdge,
@@ -13,6 +14,7 @@ import {
   type Edge,
   type Node,
   type NodeProps,
+  type ReactFlowInstance,
 } from '@xyflow/react'
 import {
   Activity,
@@ -54,12 +56,19 @@ import {
   type ComposerOutcome,
   type PromptSession,
 } from '@/components/videobook/CommandComposer'
+import { NotebookStageBoard } from '@/components/videobook/NotebookStageBoard'
 import {
   notebookDocument,
   notebookEdges,
   notebookNodes,
   type NotebookCellData,
 } from '@/videobook/notebook-draft'
+import {
+  nextNotebookGridSlot,
+  notebookGridSlot,
+  resolveNotebookGridMove,
+  type NotebookGridSlot,
+} from '@/videobook/notebook-grid'
 
 type Screen =
   | 'notebook'
@@ -110,6 +119,14 @@ const palette = [
   { kind: 'character' as const, label: 'Character', icon: UserRound },
   { kind: 'scene' as const, label: 'Scene', icon: Film },
 ]
+
+const cellDragType = 'application/x-videobook-cell'
+
+function cellKindFromDrag(value: string): NotebookCellType | null {
+  return palette.some((item) => item.kind === value)
+    ? value as NotebookCellType
+    : null
+}
 
 function CellNode({ data, selected }: NodeProps<Node<NotebookCellData>>) {
   const Icon =
@@ -328,6 +345,8 @@ function App() {
   const [promptOpen, setPromptOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
+  const [paletteDragKind, setPaletteDragKind] = useState<NotebookCellType | null>(null)
+  const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
   const [busy, setBusy] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [records, setRecords] = useState<unknown[]>([])
@@ -343,6 +362,7 @@ function App() {
   const dirtyRef = useRef(false)
   const changeVersionRef = useRef(0)
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const flowRef = useRef<ReactFlowInstance<Node<NotebookCellData>, Edge> | null>(null)
 
   const selected = useMemo(
     () => nodes.find((node) => node.id === selectedId) ?? null,
@@ -365,6 +385,15 @@ function App() {
     window.addEventListener('beforeunload', beforeUnload)
     return () => window.removeEventListener('beforeunload', beforeUnload)
   }, [dirty])
+
+  useEffect(() => {
+    const closeNarrowInspector = () => {
+      if (window.innerWidth <= 720) setPanelOpen(false)
+    }
+    closeNarrowInspector()
+    window.addEventListener('resize', closeNarrowInspector)
+    return () => window.removeEventListener('resize', closeNarrowInspector)
+  }, [])
 
   const call = useCallback(
     async (tool: string, args: Record<string, unknown>) => {
@@ -481,6 +510,8 @@ function App() {
     setDirty(false)
     setSelectedId(null)
     setPromptOpen(false)
+    setPaletteDragKind(null)
+    setPreviewSlot(null)
     setPanelOpen(window.innerWidth > 720)
     setScreen('notebook')
     setRecords([])
@@ -799,24 +830,29 @@ function App() {
     }
   }, [call, loadAssets])
 
-  const addCell = useCallback((kind: NotebookCellType) => {
+  const addCell = useCallback((
+    kind: NotebookCellType,
+    requestedSlot?: NotebookGridSlot,
+  ) => {
     const id = `${kind}-${crypto.randomUUID().slice(0, 6)}`
-    replaceNodes([
+    const slot = requestedSlot ?? nextNotebookGridSlot(nodesRef.current)
+    const next = resolveNotebookGridMove([
       ...nodesRef.current,
       {
         id,
         type: 'cell',
-        position: { x: 420, y: 460 + nodesRef.current.length * 36 },
+        position: { x: 0, y: 0 },
         data: {
           kind,
           title: `New ${kind}`,
           subtitle: `${kind.toUpperCase()} · CELL`,
-          stage: 2,
+          stage: slot.stage + 1,
           status: 'draft',
           prompt: '',
         },
       },
-    ])
+    ], id, slot)
+    replaceNodes(next)
     setSelectedId(id)
     setPanelOpen(true)
     setPromptOpen(true)
@@ -1025,7 +1061,6 @@ function App() {
       </header>
 
       <aside className={`navigation ${navOpen ? 'navigation-open' : ''}`}>
-        <div className="navigation-mark">VB</div>
         <nav>
           {navigation.map((item) => {
             const Icon = item.icon
@@ -1049,43 +1084,56 @@ function App() {
 
       {screen === 'notebook' ? (
         <>
-          <aside className="palette">
-            <span className="section-label">CELLS</span>
-            {palette.map((item) => {
-              const Icon = item.icon
-              return (
-                <button
-                  type="button"
-                  key={item.kind}
-                  onClick={() => addCell(item.kind)}
-                  title={`Add ${item.label}`}
-                >
-                  <Icon size={18} />
-                  <span>{item.label}</span>
-                </button>
+          <section
+            className="canvas"
+            onDragOver={(event) => {
+              const kind = paletteDragKind ?? cellKindFromDrag(
+                event.dataTransfer.getData(cellDragType),
               )
-            })}
-            <button type="button" className="palette-add" onClick={() => addCell('prompt')}>
-              <Plus size={20} />
-            </button>
-          </aside>
-
-          <section className="canvas">
-            <div className="stage stage-1">
-              <span>STAGE 01</span>
-            </div>
-            <div className="stage stage-2">
-              <span>STAGE 02</span>
-            </div>
-            <div className="stage stage-3">
-              <span>STAGE 03</span>
-            </div>
+              if (!kind || !flowRef.current) return
+              event.preventDefault()
+              event.dataTransfer.dropEffect = 'copy'
+              const position = flowRef.current.screenToFlowPosition({
+                x: event.clientX,
+                y: event.clientY,
+              })
+              setPreviewSlot(notebookGridSlot(position))
+            }}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as globalThis.Node)) {
+                setPreviewSlot(null)
+              }
+            }}
+            onDrop={(event) => {
+              const kind = cellKindFromDrag(event.dataTransfer.getData(cellDragType))
+                ?? paletteDragKind
+              if (!kind || !flowRef.current) return
+              event.preventDefault()
+              const position = flowRef.current.screenToFlowPosition({
+                x: event.clientX,
+                y: event.clientY,
+              })
+              addCell(kind, notebookGridSlot(position))
+              setPaletteDragKind(null)
+              setPreviewSlot(null)
+            }}
+          >
             <ReactFlow
               nodes={nodes}
               edges={edges}
               nodeTypes={nodeTypes}
               onNodesChange={(changes) => {
-                const next = applyNodeChanges(changes, nodesRef.current)
+                let next = nodesRef.current
+                for (const change of changes) {
+                  next = applyNodeChanges([change], next)
+                  if (change.type === 'position' && change.position) {
+                    next = resolveNotebookGridMove(
+                      next,
+                      change.id,
+                      notebookGridSlot(change.position),
+                    )
+                  }
+                }
                 const changed = changes.some((change) => (
                   change.type === 'position' || change.type === 'remove'
                 ))
@@ -1102,7 +1150,10 @@ function App() {
                 replaceEdges(next, changed)
                 if (changed) void persistNotebook()
               }}
-              onNodeDragStop={() => void persistNotebook()}
+              onNodeDragStop={() => {
+                setPreviewSlot(null)
+                void persistNotebook()
+              }}
               onNodeClick={(_, node) => {
                 if (node.id !== selectedId && dirtyRef.current) {
                   void persistNotebook()
@@ -1124,18 +1175,70 @@ function App() {
                 setSelectedId(null)
                 setPromptOpen(false)
               }}
+              onInit={(instance) => {
+                flowRef.current = instance
+              }}
               fitView
               minZoom={0.35}
               maxZoom={1.7}
               proOptions={{ hideAttribution: true }}
             >
+              <NotebookStageBoard nodes={nodes} previewSlot={previewSlot} />
               <Background color="rgba(93, 220, 164, .09)" gap={36} size={1} />
+              <Panel position="top-right" className="palette-panel">
+                <aside className="palette">
+                  <span className="section-label">CELLS</span>
+                  {palette.map((item) => {
+                    const Icon = item.icon
+                    return (
+                      <button
+                        type="button"
+                        key={item.kind}
+                        draggable
+                        onClick={() => addCell(item.kind)}
+                        onDragStart={(event) => {
+                          event.dataTransfer.setData(cellDragType, item.kind)
+                          event.dataTransfer.effectAllowed = 'copy'
+                          setPaletteDragKind(item.kind)
+                        }}
+                        onDragEnd={() => {
+                          setPaletteDragKind(null)
+                          setPreviewSlot(null)
+                        }}
+                        title={`Add ${item.label}`}
+                      >
+                        <Icon size={18} />
+                        <span>{item.label}</span>
+                      </button>
+                    )
+                  })}
+                  <button
+                    type="button"
+                    className="palette-add"
+                    draggable
+                    onClick={() => addCell('prompt')}
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData(cellDragType, 'prompt')
+                      event.dataTransfer.effectAllowed = 'copy'
+                      setPaletteDragKind('prompt')
+                    }}
+                    onDragEnd={() => {
+                      setPaletteDragKind(null)
+                      setPreviewSlot(null)
+                    }}
+                    title="Add prompt cell"
+                  >
+                    <Plus size={20} />
+                    <span>Prompt</span>
+                  </button>
+                </aside>
+              </Panel>
               <MiniMap
                 className="minimap"
                 nodeColor="rgba(111, 234, 177, .65)"
                 maskColor="rgba(2, 10, 7, .74)"
               />
-              <Controls className="flow-controls" />
+              <Controls position="top-left" className="flow-controls" />
             </ReactFlow>
           </section>
 

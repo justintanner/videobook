@@ -5,6 +5,7 @@ import {
   notebookEdges,
   notebookNodes,
 } from './notebook-draft'
+import { notebookGridPosition } from './notebook-grid'
 
 const source: NotebookDocument = {
   id: 'nb-story',
@@ -51,7 +52,7 @@ describe('notebook draft conversion', () => {
     })
     expect(result.cells[0]).toEqual({
       ...source.cells[0],
-      position: { x: 30, y: 40 },
+      position: notebookGridPosition({ stage: 0, column: 0 }),
       prompt: 'A silver moon garden',
     })
   })
@@ -71,8 +72,8 @@ describe('notebook draft conversion', () => {
     }
 
     expect(notebookNodes(overlapping).map((node) => node.position)).toEqual([
-      { x: 10, y: 20 },
-      { x: 640, y: 40 },
+      notebookGridPosition({ stage: 0, column: 0 }),
+      notebookGridPosition({ stage: 0, column: 1 }),
     ])
   })
 })
