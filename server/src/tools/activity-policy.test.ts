@@ -14,12 +14,15 @@ describe("Videobook activity policy", () => {
     "get_notebook",
     "get_prompt",
     "get_scene",
+    "get_watermark_config",
     "list_characters",
     "list_jobs",
     "list_notebooks",
     "list_prompts",
     "list_scenes",
     "revision_history",
+    "read_transcript",
+    "search_archive",
     "storage_status",
   ])("does not log read-only tool %s", (toolName) => {
     expect(

@@ -26,12 +26,16 @@ const EXCLUDED_TOOLS = new Set([
   "read_asset_metadata",
   "read_file_at_commit",
   "read_notebook",
+  "record_book_action",
+  "record_book_layout",
   "record_prompt",
   "get_render_settings",
+  "get_book_action",
   "get_character",
   "get_notebook",
   "get_prompt",
   "get_scene",
+  "get_project_book",
   "show_folder",
   "list_characters",
   "list_jobs",
@@ -48,6 +52,20 @@ const EXCLUDED_TOOLS = new Set([
   "x_connect_start",
 ]);
 
+const READ_ONLY_PREFIXES = [
+  "check_",
+  "detect_",
+  "estimate_",
+  "get_",
+  "inspect_",
+  "list_",
+  "prepare_",
+  "read_",
+  "search_",
+  "show_",
+  "wait_",
+];
+
 export function actionNameForTool(toolName: string): string {
   return `tool-${toolName.replace(/_/g, "-")}`;
 }
@@ -57,11 +75,21 @@ export function isLoggedToolActivity(
   args: Record<string, unknown>,
   result: ToolResult,
 ): boolean {
-  return typeof args.project_slug === "string" && !result.isError && !EXCLUDED_TOOLS.has(toolName);
+  return isBookToolActivity(toolName, args) && !result.isError;
+}
+
+export function isBookToolActivity(
+  toolName: string,
+  args: Record<string, unknown>,
+): boolean {
+  return typeof args.project_slug === "string" &&
+    !EXCLUDED_TOOLS.has(toolName) &&
+    !READ_ONLY_PREFIXES.some((prefix) => toolName.startsWith(prefix));
 }
 
 export function isExcludedAction(action: string): boolean {
   if (!action.startsWith("tool-")) return false;
   const toolName = action.slice(5).replace(/-/g, "_");
-  return EXCLUDED_TOOLS.has(toolName);
+  return EXCLUDED_TOOLS.has(toolName) ||
+    READ_ONLY_PREFIXES.some((prefix) => toolName.startsWith(prefix));
 }

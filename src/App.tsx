@@ -7,7 +7,6 @@ import {
   Panel,
   Position,
   ReactFlow,
-  addEdge,
   applyEdgeChanges,
   applyNodeChanges,
   type Connection,
@@ -41,8 +40,7 @@ import {
 } from 'lucide-react'
 import { useMcp } from 'use-mcp/react'
 import type {
-  NotebookCellType,
-  NotebookDocument,
+  ProjectBook,
 } from 'videobook-engine'
 import {
   adaptCommandArgs,
@@ -58,24 +56,26 @@ import {
 } from '@/components/videobook/CommandComposer'
 import { NotebookStageBoard } from '@/components/videobook/NotebookStageBoard'
 import {
-  notebookDocument,
-  notebookEdges,
-  notebookNodes,
-  type NotebookCellData,
-} from '@/videobook/notebook-draft'
-import {
   nextNotebookGridSlot,
   notebookGridSlot,
   resolveNotebookGridMove,
   snapNotebookGridMove,
   type NotebookGridSlot,
 } from '@/videobook/notebook-grid'
+import {
+  parseBookAssets,
+  parseProjectBook,
+  projectBookEdges,
+  projectBookNodes,
+  type BookAsset,
+  type BookCellData,
+  type BookCellKind,
+} from '@/videobook/project-book'
 
 type Screen =
   | 'notebook'
   | 'projects'
   | 'library'
-  | 'history'
   | 'jobs'
   | 'settings'
   | 'diagnostics'
@@ -92,11 +92,6 @@ interface ProjectRecord {
   asset_count?: number
 }
 
-interface AssetRecord {
-  id?: string
-  slug?: string
-}
-
 const mcpUrl = new URL('/mcp', window.location.origin).toString()
 const nodeTypes = { cell: CellNode }
 
@@ -105,10 +100,8 @@ const navigation: Array<{
   label: string
   icon: typeof BookOpen
 }> = [
-  { id: 'notebook', label: 'Notebook', icon: BookOpen },
   { id: 'projects', label: 'Projects', icon: FolderKanban },
   { id: 'library', label: 'Entities', icon: Library },
-  { id: 'history', label: 'History', icon: Clock3 },
   { id: 'jobs', label: 'Jobs', icon: Activity },
   { id: 'diagnostics', label: 'Diagnostics', icon: CircleDot },
 ]
@@ -123,13 +116,13 @@ const palette = [
 
 const cellDragType = 'application/x-videobook-cell'
 
-function cellKindFromDrag(value: string): NotebookCellType | null {
+function cellKindFromDrag(value: string): BookCellKind | null {
   return palette.some((item) => item.kind === value)
-    ? value as NotebookCellType
+    ? value as BookCellKind
     : null
 }
 
-function CellNode({ data, selected }: NodeProps<Node<NotebookCellData>>) {
+function CellNode({ data, selected }: NodeProps<Node<BookCellData>>) {
   const Icon =
     data.kind === 'video'
       ? Video
@@ -154,19 +147,52 @@ function CellNode({ data, selected }: NodeProps<Node<NotebookCellData>>) {
         </span>
         <span>{data.stage.toString().padStart(2, '0')}</span>
       </header>
-      {data.preview ? (
-        <div className={`cell-preview preview-${data.preview}`}>
-          <div className="preview-orb" />
-          <div className="preview-ears" />
+      {data.mediaUrl || data.thumbnailUrl ? (
+        <div className="cell-media">
+          {data.kind === 'video' && !data.thumbnailUrl ? (
+            <video
+              src={data.mediaUrl}
+              muted
+              playsInline
+              preload="metadata"
+            />
+          ) : (
+            <img
+              src={data.thumbnailUrl ?? data.mediaUrl}
+              alt={data.slug}
+            />
+          )}
+          {data.width && data.height && (
+            <span className="cell-ratio">
+              {data.width > data.height
+                ? '16:9'
+                : data.width < data.height
+                  ? '9:16'
+                  : '1:1'}
+            </span>
+          )}
         </div>
       ) : (
         <div className="cell-copy">
           <Sparkles size={26} />
-          <span>Reusable context</span>
+          <span>{data.prompt || data.operation}</span>
+        </div>
+      )}
+      {data.historyExpanded && (
+        <div className="cell-trail">
+          {data.trail.map((item) => (
+            <span key={item.id}>
+              <Clock3 size={10} />
+              {item.title} · {item.phase} · {item.revision.slice(0, 7)}
+            </span>
+          ))}
         </div>
       )}
       <footer className="cell-node-footer">
-        <span>{data.title}</span>
+        <span>
+          <strong>{data.slug}</strong>
+          <small>{data.title}</small>
+        </span>
         <strong>{data.status}</strong>
       </footer>
       <Handle type="source" position={Position.Bottom} />
@@ -204,17 +230,6 @@ function asProjects(value: unknown): ProjectRecord[] {
   ))
 }
 
-function asNotebooks(value: unknown): NotebookDocument[] {
-  return asArray(value).filter((item): item is NotebookDocument => (
-    typeof item === 'object'
-    && item !== null
-    && 'id' in item
-    && typeof item.id === 'string'
-    && 'version' in item
-    && item.version === 2
-  ))
-}
-
 function asCommands(value: unknown): ServerCommand[] {
   return asArray(value).filter((item): item is ServerCommand => (
     typeof item === 'object'
@@ -224,16 +239,8 @@ function asCommands(value: unknown): ServerCommand[] {
   ))
 }
 
-function asAssetSlugs(value: unknown): string[] {
-  if (typeof value !== 'object' || value === null || !('assets' in value)) {
-    return []
-  }
-  return asArray(value.assets)
-    .flatMap((item) => {
-      const asset = item as AssetRecord
-      const slug = asset.slug ?? asset.id
-      return typeof slug === 'string' ? [slug.replace(/^@/, '')] : []
-    })
+function asAssetSlugs(assets: BookAsset[]): string[] {
+  return assets.map((asset) => asset.id.replace(/^@/, ''))
 }
 
 function summarize(value: unknown, fallback: string): string {
@@ -261,11 +268,31 @@ function errorOutcome(error: unknown): ComposerOutcome {
   }
 }
 
+function recordedActionId(value: unknown): string | null {
+  if (
+    typeof value !== 'object'
+    || value === null
+    || !('action' in value)
+    || typeof value.action !== 'object'
+    || value.action === null
+    || !('id' in value.action)
+    || typeof value.action.id !== 'string'
+  ) {
+    return null
+  }
+  return value.action.id
+}
+
+function artifactIdForNode(node: Node<BookCellData>): string {
+  return node.data.slug.replace(/^@/, '')
+}
+
 function ProjectMenu({
   open,
   activeSlug,
   projects,
   busy,
+  onHome,
   onToggle,
   onSwitch,
   onManage,
@@ -274,24 +301,35 @@ function ProjectMenu({
   activeSlug: string
   projects: ProjectRecord[]
   busy: boolean
+  onHome: () => void
   onToggle: () => void
   onSwitch: (slug: string) => Promise<ComposerOutcome>
   onManage: () => void
 }) {
   return (
     <div className="brand-project">
-      <button
-        type="button"
-        className="brand-project-trigger"
-        onClick={onToggle}
-        aria-expanded={open}
-        aria-haspopup="menu"
-      >
-        <BookOpen size={18} />
-        <span>/videobook</span>
-        <strong>{activeSlug || 'select-project'}</strong>
-        <ChevronDown size={14} />
-      </button>
+      <div className="brand-project-trigger">
+        <button
+          type="button"
+          className="brand-project-home"
+          onClick={onHome}
+          aria-label={activeSlug ? `Open ${activeSlug} project book` : 'Open projects'}
+        >
+          <BookOpen size={18} />
+          <span>/videobook</span>
+          <strong>{activeSlug || 'select-project'}</strong>
+        </button>
+        <button
+          type="button"
+          className="brand-project-menu-toggle"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-haspopup="menu"
+          aria-label="Choose project"
+        >
+          <ChevronDown size={14} />
+        </button>
+      </div>
       {open && (
         <div
           className="project-menu"
@@ -337,33 +375,32 @@ function App() {
     autoReconnect: 3000,
   })
   const [screen, setScreen] = useState<Screen>('projects')
-  const [nodes, setNodes] = useState<Array<Node<NotebookCellData>>>([])
+  const [nodes, setNodes] = useState<Array<Node<BookCellData>>>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [projectSlug, setProjectSlug] = useState('')
-  const [activeNotebook, setActiveNotebook] = useState<NotebookDocument | null>(null)
+  const [projectBook, setProjectBook] = useState<ProjectBook | null>(null)
+  const [bookAssets, setBookAssets] = useState<BookAsset[]>([])
+  const [historyExpanded, setHistoryExpanded] = useState(false)
   const [panelOpen, setPanelOpen] = useState(() => window.innerWidth > 720)
   const [promptOpen, setPromptOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
-  const [paletteDragKind, setPaletteDragKind] = useState<NotebookCellType | null>(null)
+  const [paletteDragKind, setPaletteDragKind] = useState<BookCellKind | null>(null)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
   const [busy, setBusy] = useState(false)
-  const [dirty, setDirty] = useState(false)
   const [records, setRecords] = useState<unknown[]>([])
   const [projects, setProjects] = useState<ProjectRecord[]>([])
   const [commands, setCommands] = useState<ServerCommand[]>([])
   const [assetSlugs, setAssetSlugs] = useState<string[]>([])
   const [workspaceNotice, setWorkspaceNotice] = useState('Ready')
 
-  const nodesRef = useRef<Array<Node<NotebookCellData>>>([])
+  const nodesRef = useRef<Array<Node<BookCellData>>>([])
   const edgesRef = useRef<Edge[]>([])
   const projectSlugRef = useRef('')
-  const activeNotebookRef = useRef<NotebookDocument | null>(null)
-  const dirtyRef = useRef(false)
-  const changeVersionRef = useRef(0)
-  const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
-  const flowRef = useRef<ReactFlowInstance<Node<NotebookCellData>, Edge> | null>(null)
+  const projectBookRef = useRef<ProjectBook | null>(null)
+  const bookAssetsRef = useRef<BookAsset[]>([])
+  const flowRef = useRef<ReactFlowInstance<Node<BookCellData>, Edge> | null>(null)
   const dragSlotsRef = useRef(new Map<string, NotebookGridSlot>())
 
   const selected = useMemo(
@@ -378,15 +415,6 @@ function App() {
     }),
     [commands, screen],
   )
-
-  useEffect(() => {
-    if (!dirty) return
-    const beforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-    }
-    window.addEventListener('beforeunload', beforeUnload)
-    return () => window.removeEventListener('beforeunload', beforeUnload)
-  }, [dirty])
 
   useEffect(() => {
     const closeNarrowInspector = () => {
@@ -410,73 +438,15 @@ function App() {
     setProjectSlug(slug)
   }, [])
 
-  const setCurrentNotebook = useCallback((document: NotebookDocument | null) => {
-    activeNotebookRef.current = document
-    setActiveNotebook(document)
-  }, [])
-
-  const markDirty = useCallback(() => {
-    dirtyRef.current = true
-    changeVersionRef.current += 1
-    setDirty(true)
-  }, [])
-
-  const replaceNodes = useCallback((
-    next: Array<Node<NotebookCellData>>,
-    shouldMarkDirty = true,
-  ) => {
+  const replaceNodes = useCallback((next: Array<Node<BookCellData>>) => {
     nodesRef.current = next
     setNodes(next)
-    if (shouldMarkDirty) markDirty()
-  }, [markDirty])
+  }, [])
 
-  const replaceEdges = useCallback((next: Edge[], shouldMarkDirty = true) => {
+  const replaceEdges = useCallback((next: Edge[]) => {
     edgesRef.current = next
     setEdges(next)
-    if (shouldMarkDirty) markDirty()
-  }, [markDirty])
-
-  const persistCore = useCallback(async (): Promise<ComposerOutcome> => {
-    const base = activeNotebookRef.current
-    const slug = projectSlugRef.current
-    if (!base || !slug) return { ok: false, message: 'No notebook is open' }
-    if (!dirtyRef.current) return { ok: true, message: 'Notebook is current' }
-    const version = changeVersionRef.current
-    const next = notebookDocument(
-      base,
-      nodesRef.current,
-      edgesRef.current,
-      new Date().toISOString(),
-    )
-    setBusy(true)
-    try {
-      const revision = await call('update_notebook', {
-        project_slug: slug,
-        notebook: next,
-      })
-      setCurrentNotebook(next)
-      if (changeVersionRef.current === version) {
-        dirtyRef.current = false
-        setDirty(false)
-      }
-      return {
-        ok: true,
-        message: summarize(revision, `Saved ${next.name}`),
-      }
-    } catch (error) {
-      dirtyRef.current = true
-      setDirty(true)
-      return errorOutcome(error)
-    } finally {
-      setBusy(false)
-    }
-  }, [call, setCurrentNotebook])
-
-  const persistNotebook = useCallback((): Promise<ComposerOutcome> => {
-    const queued = saveQueueRef.current.then(persistCore, persistCore)
-    saveQueueRef.current = queued.then(() => undefined, () => undefined)
-    return queued
-  }, [persistCore])
+  }, [])
 
   const loadProjects = useCallback(async () => {
     const value = await call('list_projects', {})
@@ -492,67 +462,59 @@ function App() {
     return next
   }, [call])
 
-  const loadAssets = useCallback(async (slug: string) => {
-    const value = await call('list_assets', { project_slug: slug })
-    const next = asAssetSlugs(value)
-    setAssetSlugs(next)
-    return next
+  const applyProjectBook = useCallback((
+    book: ProjectBook,
+    assets: BookAsset[],
+  ) => {
+    projectBookRef.current = book
+    bookAssetsRef.current = assets
+    setProjectBook(book)
+    setBookAssets(assets)
+    setAssetSlugs(asAssetSlugs(assets))
+    replaceNodes(projectBookNodes(book, assets, historyExpanded))
+    replaceEdges(projectBookEdges(book))
+  }, [historyExpanded, replaceEdges, replaceNodes])
+
+  const readProjectBook = useCallback(async (slug: string) => {
+    const [bookValue, assetsValue] = await Promise.all([
+      call('get_project_book', { project_slug: slug, limit: 10_000 }),
+      call('list_assets', { project_slug: slug }),
+    ])
+    const book = parseProjectBook(bookValue)
+    if (!book) throw new Error(`Invalid project book for ${slug}`)
+    return { book, assets: parseBookAssets(assetsValue) }
   }, [call])
 
-  const installNotebook = useCallback((
-    slug: string,
-    document: NotebookDocument,
+  const reloadProjectBook = useCallback(async (
+    selectActionId?: string | null,
   ) => {
-    setCurrentProject(slug)
-    setCurrentNotebook(document)
-    replaceNodes(notebookNodes(document), false)
-    replaceEdges(notebookEdges(document), false)
-    dirtyRef.current = false
-    changeVersionRef.current = 0
-    setDirty(false)
-    setSelectedId(null)
-    setPromptOpen(false)
-    setPaletteDragKind(null)
-    setPreviewSlot(null)
-    dragSlotsRef.current.clear()
-    setPanelOpen(window.innerWidth > 720)
-    setScreen('notebook')
-    setRecords([])
-  }, [
-    replaceEdges,
-    replaceNodes,
-    setCurrentNotebook,
-    setCurrentProject,
-  ])
+    const slug = projectSlugRef.current
+    if (!slug) return
+    const { book, assets } = await readProjectBook(slug)
+    applyProjectBook(book, assets)
+    if (selectActionId !== undefined) setSelectedId(selectActionId)
+  }, [applyProjectBook, readProjectBook])
 
   const openProject = useCallback(async (
     slug: string,
   ): Promise<ComposerOutcome> => {
-    if (dirtyRef.current) {
-      const saved = await persistNotebook()
-      if (!saved.ok) return saved
-    }
     setBusy(true)
     try {
-      let notebooks = asNotebooks(await call('list_notebooks', {
-        project_slug: slug,
-      }))
-      if (notebooks.length === 0) {
-        const created = await call('create_notebook', {
-          project_slug: slug,
-          name: 'Scratch',
-        })
-        notebooks = asNotebooks([created])
-      }
-      const document = notebooks.find((item) => item.id === 'nb-scratch')
-        ?? notebooks[0]
-      if (!document) throw new Error('Could not create or open a notebook')
-      installNotebook(slug, document)
-      await Promise.all([
-        loadAssets(slug),
+      const [{ book, assets }] = await Promise.all([
+        readProjectBook(slug),
         loadCommands(),
         loadProjects(),
       ])
+      setCurrentProject(slug)
+      applyProjectBook(book, assets)
+      setSelectedId(null)
+      setPromptOpen(false)
+      setPaletteDragKind(null)
+      setPreviewSlot(null)
+      dragSlotsRef.current.clear()
+      setPanelOpen(window.innerWidth > 720)
+      setScreen('notebook')
+      setRecords([])
       setProjectMenuOpen(false)
       setWorkspaceNotice(`Opened ${slug}`)
       return { ok: true, message: `Opened ${slug}` }
@@ -562,70 +524,19 @@ function App() {
       setBusy(false)
     }
   }, [
-    call,
-    installNotebook,
-    loadAssets,
+    applyProjectBook,
     loadCommands,
     loadProjects,
-    persistNotebook,
+    readProjectBook,
+    setCurrentProject,
   ])
 
-  const openNotebook = useCallback(async (
-    name?: string,
-  ): Promise<ComposerOutcome> => {
+  const openCurrentBook = useCallback(async (): Promise<ComposerOutcome> => {
     const slug = projectSlugRef.current
-    if (!slug) return { ok: false, message: 'Select a project first' }
-    if (dirtyRef.current) {
-      const saved = await persistNotebook()
-      if (!saved.ok) return saved
-    }
-    setBusy(true)
-    try {
-      const notebooks = asNotebooks(await call('list_notebooks', {
-        project_slug: slug,
-      }))
-      const requested = name?.trim().toLowerCase()
-      let document = requested
-        ? notebooks.find((item) => (
-            item.id.toLowerCase() === requested
-            || item.name.toLowerCase() === requested
-          ))
-        : notebooks[0]
-      if (!document) {
-        document = await call('create_notebook', {
-          project_slug: slug,
-          name: name?.trim() || 'Scratch',
-        }) as NotebookDocument
-      }
-      installNotebook(slug, document)
-      return { ok: true, message: `Opened ${document.name}` }
-    } catch (error) {
-      return errorOutcome(error)
-    } finally {
-      setBusy(false)
-    }
-  }, [call, installNotebook, persistNotebook])
-
-  const runNotebook = useCallback(async (): Promise<ComposerOutcome> => {
-    const saved = await persistNotebook()
-    if (!saved.ok) return saved
-    const document = activeNotebookRef.current
-    const slug = projectSlugRef.current
-    if (!document || !slug) return { ok: false, message: 'No notebook is open' }
-    setBusy(true)
-    try {
-      const value = await call('run_notebook', {
-        project_slug: slug,
-        notebook_id: document.id,
-      })
-      setRecords([value])
-      return { ok: true, message: summarize(value, `Ran ${document.name}`) }
-    } catch (error) {
-      return errorOutcome(error)
-    } finally {
-      setBusy(false)
-    }
-  }, [call, persistNotebook])
+    return slug
+      ? openProject(slug)
+      : { ok: false, message: 'Select a project first' }
+  }, [openProject])
 
   const createProject = useCallback(async (
     slug: string,
@@ -649,10 +560,6 @@ function App() {
     oldSlug: string,
     newSlug: string,
   ): Promise<ComposerOutcome> => {
-    if (oldSlug === projectSlugRef.current && dirtyRef.current) {
-      const saved = await persistNotebook()
-      if (!saved.ok) return saved
-    }
     setBusy(true)
     try {
       const value = await call('rename_project', {
@@ -679,30 +586,26 @@ function App() {
     call,
     loadCommands,
     loadProjects,
-    persistNotebook,
     setCurrentProject,
   ])
 
   const deleteProject = useCallback(async (
     slug: string,
   ): Promise<ComposerOutcome> => {
-    if (slug === projectSlugRef.current && dirtyRef.current) {
-      const saved = await persistNotebook()
-      if (!saved.ok) return saved
-    }
     setBusy(true)
     try {
       const value = await call('delete_project', { project_slug: slug })
       if (slug === projectSlugRef.current) {
         setCurrentProject('')
-        setCurrentNotebook(null)
-        replaceNodes([], false)
-        replaceEdges([], false)
+        projectBookRef.current = null
+        bookAssetsRef.current = []
+        setProjectBook(null)
+        setBookAssets([])
+        replaceNodes([])
+        replaceEdges([])
         setSelectedId(null)
         setPromptOpen(false)
         setAssetSlugs([])
-        dirtyRef.current = false
-        setDirty(false)
       }
       await Promise.all([loadProjects(), loadCommands()])
       setRecords((current) => current.filter((record) => !(
@@ -721,33 +624,26 @@ function App() {
     call,
     loadCommands,
     loadProjects,
-    persistNotebook,
     replaceEdges,
     replaceNodes,
-    setCurrentNotebook,
     setCurrentProject,
   ])
 
   const navigateScreen = useCallback(async (next: Screen) => {
-    if (screen === 'notebook' && next !== 'notebook' && dirtyRef.current) {
-      const saved = await persistNotebook()
-      if (!saved.ok) {
-        setWorkspaceNotice(saved.message)
-        return
-      }
-    }
     if (next !== 'notebook') setPromptOpen(false)
     setScreen(next)
     setRecords([])
     setNavOpen(false)
     setProjectMenuOpen(false)
-  }, [persistNotebook, screen])
+  }, [])
 
   const refreshScreen = useCallback(async () => {
     setBusy(true)
     try {
       let value: unknown
-      if (screen === 'projects') {
+      if (screen === 'notebook') {
+        await reloadProjectBook()
+      } else if (screen === 'projects') {
         value = await call('list_projects', {})
         const next = asProjects(value)
         setProjects(next)
@@ -762,9 +658,6 @@ function App() {
             call('list_scenes', { project_slug: slug }),
           ])
           setRecords(values.flatMap(asArray))
-        } else if (screen === 'history') {
-          value = await call('revision_history', { project_slug: slug })
-          setRecords(asArray(value))
         } else if (screen === 'jobs') {
           value = await call('list_jobs', { project_slug: slug })
           setRecords(asArray(value))
@@ -779,7 +672,7 @@ function App() {
     } finally {
       setBusy(false)
     }
-  }, [call, screen])
+  }, [call, reloadProjectBook, screen])
 
   const createEntity = useCallback(async (
     type: EntityKind,
@@ -797,14 +690,14 @@ function App() {
         ...(prompt ? { prompt } : {}),
       })
       setRecords((current) => [value, ...current])
-      await loadAssets(slug)
+      await reloadProjectBook()
       return { ok: true, message: summarize(value, `Created ${type}`) }
     } catch (error) {
       return errorOutcome(error)
     } finally {
       setBusy(false)
     }
-  }, [call, loadAssets])
+  }, [call, reloadProjectBook])
 
   const deleteEntity = useCallback(async (
     type: EntityKind,
@@ -824,47 +717,70 @@ function App() {
         && 'id' in record
         && record.id === id
       )))
-      await loadAssets(slug)
+      await reloadProjectBook()
       return { ok: true, message: summarize(value, `Deleted ${type}`) }
     } catch (error) {
       return errorOutcome(error)
     } finally {
       setBusy(false)
     }
-  }, [call, loadAssets])
+  }, [call, reloadProjectBook])
 
-  const addCell = useCallback((
-    kind: NotebookCellType,
+  const addCell = useCallback(async (
+    kind: BookCellKind,
     requestedSlot?: NotebookGridSlot,
-  ) => {
-    const id = `${kind}-${crypto.randomUUID().slice(0, 6)}`
+  ): Promise<ComposerOutcome> => {
+    const slug = projectSlugRef.current
+    const book = projectBookRef.current
+    if (!slug || !book) return { ok: false, message: 'Select a project first' }
+    const prefix: Record<BookCellKind, string> = {
+      prompt: 'prm',
+      image: 'img-draft',
+      video: 'vid-draft',
+      character: 'char',
+      scene: 'scn',
+    }
+    const artifactId = `${prefix[kind]}-${crypto.randomUUID().slice(0, 8)}`
     const slot = requestedSlot ?? nextNotebookGridSlot(nodesRef.current)
-    const next = resolveNotebookGridMove([
-      ...nodesRef.current,
-      {
-        id,
-        type: 'cell',
-        position: { x: 0, y: 0 },
-        data: {
-          kind,
-          title: `New ${kind}`,
-          subtitle: `${kind.toUpperCase()} · CELL`,
-          stage: slot.stage + 1,
-          status: 'draft',
-          prompt: '',
+    setBusy(true)
+    try {
+      const value = await call('record_book_action', {
+        project_slug: slug,
+        operation: `create_${kind}_entry`,
+        phase: 'completed',
+        scope: 'artifact',
+        actor: 'human',
+        lane: 'human',
+        base_revision: book.headRevision,
+        output_artifact_ids: [artifactId],
+        stage: slot.stage,
+        column: slot.column,
+        write_set: [`artifact:${artifactId}`],
+        details: {
+          entry: {
+            id: artifactId,
+            kind,
+            title: `New ${kind}`,
+            prompt: '',
+            model: 'auto',
+          },
         },
-      },
-    ], id, slot)
-    replaceNodes(next)
-    setSelectedId(id)
-    setPanelOpen(true)
-    setPromptOpen(true)
-    void persistNotebook()
-  }, [persistNotebook, replaceNodes])
+      })
+      const actionId = recordedActionId(value)
+      await reloadProjectBook(actionId)
+      setPanelOpen(true)
+      setPromptOpen(true)
+      return { ok: true, message: `Added @${artifactId}` }
+    } catch (error) {
+      return errorOutcome(error)
+    } finally {
+      setBusy(false)
+    }
+  }, [call, reloadProjectBook])
 
   const updateSelectedData = useCallback((
     id: string,
-    patch: Partial<NotebookCellData>,
+    patch: Partial<BookCellData>,
   ) => {
     replaceNodes(nodesRef.current.map((node) => (
       node.id === id
@@ -873,28 +789,201 @@ function App() {
     )))
   }, [replaceNodes])
 
+  const commitEntry = useCallback(async (
+    id: string,
+  ): Promise<ComposerOutcome> => {
+    const slug = projectSlugRef.current
+    const book = projectBookRef.current
+    const node = nodesRef.current.find((candidate) => candidate.id === id)
+    if (!slug || !book || !node) return { ok: false, message: 'Entry is unavailable' }
+    const original = projectBookNodes(
+      book,
+      bookAssetsRef.current,
+      historyExpanded,
+    ).find((candidate) => candidate.id === id)
+    if (
+      original
+      && original.data.title === node.data.title
+      && original.data.prompt === node.data.prompt
+      && original.data.model === node.data.model
+    ) {
+      return { ok: true, message: 'Project book is current' }
+    }
+    const artifactId = artifactIdForNode(node)
+    const slot = notebookGridSlot(node.position)
+    setBusy(true)
+    try {
+      const value = await call('record_book_action', {
+        project_slug: slug,
+        operation: 'edit_entry',
+        phase: 'completed',
+        scope: 'artifact',
+        actor: 'human',
+        lane: 'human',
+        base_revision: book.headRevision,
+        parent_action_ids: [node.data.actionId],
+        output_artifact_ids: [artifactId],
+        target_artifact_id: artifactId,
+        target_action_id: node.data.actionId,
+        stage: slot.stage,
+        column: slot.column,
+        write_set: [`artifact:${artifactId}`],
+        details: {
+          entry: {
+            id: artifactId,
+            kind: node.data.kind,
+            title: node.data.title,
+            prompt: node.data.prompt ?? '',
+            model: node.data.model ?? 'auto',
+          },
+        },
+      })
+      const actionId = recordedActionId(value)
+      await reloadProjectBook(actionId)
+      return { ok: true, message: `Updated @${artifactId}` }
+    } catch (error) {
+      await reloadProjectBook(id).catch(() => undefined)
+      return errorOutcome(error)
+    } finally {
+      setBusy(false)
+    }
+  }, [call, historyExpanded, reloadProjectBook])
+
+  const commitLayouts = useCallback(async (): Promise<ComposerOutcome> => {
+    const slug = projectSlugRef.current
+    const book = projectBookRef.current
+    if (!slug || !book) return { ok: false, message: 'Select a project first' }
+    const canonical = new Map(projectBookNodes(
+      book,
+      bookAssetsRef.current,
+      historyExpanded,
+    ).map((node) => [node.id, notebookGridSlot(node.position)]))
+    const changed = nodesRef.current.filter((node) => {
+      const before = canonical.get(node.id)
+      const after = notebookGridSlot(node.position)
+      return before && (before.stage !== after.stage || before.column !== after.column)
+    })
+    if (changed.length === 0) return { ok: true, message: 'Layout is current' }
+    setBusy(true)
+    try {
+      for (const node of changed) {
+        const slot = notebookGridSlot(node.position)
+        await call('record_book_layout', {
+          project_slug: slug,
+          target_action_id: node.data.actionId,
+          stage: slot.stage,
+          column: slot.column,
+          base_revision: book.headRevision,
+        })
+      }
+      await reloadProjectBook()
+      return {
+        ok: true,
+        message: `Recorded ${changed.length} layout ${changed.length === 1 ? 'change' : 'changes'}`,
+      }
+    } catch (error) {
+      await reloadProjectBook().catch(() => undefined)
+      return errorOutcome(error)
+    } finally {
+      setBusy(false)
+    }
+  }, [call, historyExpanded, reloadProjectBook])
+
+  const connectEntries = useCallback(async (
+    connection: Connection,
+  ): Promise<ComposerOutcome> => {
+    const slug = projectSlugRef.current
+    const book = projectBookRef.current
+    const source = nodesRef.current.find((node) => node.id === connection.source)
+    const target = nodesRef.current.find((node) => node.id === connection.target)
+    if (!slug || !book || !source || !target) {
+      return { ok: false, message: 'Both entries must be available' }
+    }
+    const sourceArtifactId = artifactIdForNode(source)
+    const targetArtifactId = artifactIdForNode(target)
+    const slot = notebookGridSlot(target.position)
+    setBusy(true)
+    try {
+      const value = await call('record_book_action', {
+        project_slug: slug,
+        operation: 'link_entries',
+        phase: 'completed',
+        scope: 'artifact',
+        actor: 'human',
+        lane: 'human',
+        base_revision: book.headRevision,
+        parent_action_ids: [source.data.actionId, target.data.actionId],
+        input_artifact_ids: [sourceArtifactId],
+        output_artifact_ids: [targetArtifactId],
+        target_artifact_id: targetArtifactId,
+        target_action_id: target.data.actionId,
+        stage: slot.stage,
+        column: slot.column,
+        write_set: [`artifact:${targetArtifactId}`],
+        details: {
+          target_handle: connection.targetHandle ?? 'input',
+          entry: {
+            id: targetArtifactId,
+            kind: target.data.kind,
+            title: target.data.title,
+            prompt: target.data.prompt ?? '',
+            model: target.data.model ?? 'auto',
+          },
+        },
+      })
+      const actionId = recordedActionId(value)
+      await reloadProjectBook(actionId)
+      return { ok: true, message: `Linked @${sourceArtifactId} to @${targetArtifactId}` }
+    } catch (error) {
+      return errorOutcome(error)
+    } finally {
+      setBusy(false)
+    }
+  }, [call, reloadProjectBook])
+
+  const toggleHistory = useCallback(async (): Promise<ComposerOutcome> => {
+    const next = !historyExpanded
+    setHistoryExpanded(next)
+    const book = projectBookRef.current
+    if (book) {
+      replaceNodes(projectBookNodes(book, bookAssetsRef.current, next))
+      if (screen !== 'notebook') await navigateScreen('notebook')
+    }
+    return {
+      ok: true,
+      message: next ? 'Expanded project-book trails' : 'Collapsed project-book trails',
+    }
+  }, [historyExpanded, navigateScreen, replaceNodes, screen])
+
   const ensureCommandCatalog = useCallback(async () => {
     if (commands.length > 0 || mcp.state !== 'ready') return
     try {
       await Promise.all([
         loadCommands(),
         projectSlugRef.current
-          ? loadAssets(projectSlugRef.current)
+          ? reloadProjectBook()
           : Promise.resolve([]),
       ])
     } catch {
       return
     }
-  }, [commands.length, loadAssets, loadCommands, mcp.state])
+  }, [commands.length, loadCommands, mcp.state, reloadProjectBook])
 
   const executeUiAction = useCallback(async (
     action: string,
     args: Record<string, string>,
     raw: string,
   ): Promise<ComposerOutcome> => {
-    if (action === 'save_notebook') return persistNotebook()
-    if (action === 'run_notebook') return runNotebook()
-    if (action === 'open_notebook') return openNotebook(args.name || raw || undefined)
+    if (action === 'save_notebook') {
+      return { ok: true, message: 'Every project-book action is already saved' }
+    }
+    if (action === 'run_notebook') {
+      return {
+        ok: false,
+        message: 'Run generation commands directly; each result becomes a project-book action',
+      }
+    }
+    if (action === 'open_notebook') return openCurrentBook()
     if (action === 'switch_project') return openProject(raw)
     if (action === 'create_project') return createProject(args.project_slug || raw)
     if (action === 'rename_project') {
@@ -909,12 +998,14 @@ function App() {
         message: 'Open Manage projects to confirm project deletion',
       }
     }
+    if (action === 'open_revisions' || action === 'show_history') {
+      return toggleHistory()
+    }
     const screens: Record<string, Screen> = {
       open_projects: 'projects',
       open_entities: 'library',
       open_jobs: 'jobs',
       open_status: 'jobs',
-      open_revisions: 'history',
       open_provider_keys: 'settings',
       open_diagnostics: 'diagnostics',
     }
@@ -930,11 +1021,10 @@ function App() {
   }, [
     createProject,
     navigateScreen,
-    openNotebook,
+    openCurrentBook,
     openProject,
-    persistNotebook,
     renameProject,
-    runNotebook,
+    toggleHistory,
   ])
 
   const executeCommand = useCallback(async (
@@ -979,9 +1069,7 @@ function App() {
             command.mcpTool.tool,
             toolArgs as Record<string, unknown>,
           )
-          if (projectSlugRef.current) {
-            void loadAssets(projectSlugRef.current)
-          }
+          if (projectSlugRef.current) await reloadProjectBook()
           return {
             ok: true,
             message: summarize(value, command.description),
@@ -989,19 +1077,15 @@ function App() {
         }
         return { ok: false, message: `Command has no action: ${commandName}` }
       }
-      if (dirtyRef.current) {
-        const saved = await persistNotebook()
-        if (!saved.ok) return saved
-      }
       const slug = projectSlugRef.current
       if (!slug) return { ok: false, message: 'Select a project first' }
       const value = await call('chat', { project_slug: slug, prompt: input })
-      void loadAssets(slug)
+      await reloadProjectBook()
       return { ok: true, message: summarize(value, 'Done') }
     } catch (error) {
       return errorOutcome(error)
     }
-  }, [call, commands, executeUiAction, loadAssets, persistNotebook])
+  }, [call, commands, executeUiAction, reloadProjectBook])
 
   const promptSession = useMemo<PromptSession | null>(() => {
     if (screen !== 'notebook' || !selected || !promptOpen) return null
@@ -1012,15 +1096,16 @@ function App() {
       value: selected.data.prompt ?? '',
       assetSlugs,
       onChange: (value) => updateSelectedData(selected.id, { prompt: value }),
-      onCommit: persistNotebook,
+      onCommit: () => commitEntry(selected.id),
       onCollapse: async () => {
-        setPromptOpen(false)
-        return persistNotebook()
+        const outcome = await commitEntry(selected.id)
+        if (outcome.ok) setPromptOpen(false)
+        return outcome
       },
     }
   }, [
     assetSlugs,
-    persistNotebook,
+    commitEntry,
     promptOpen,
     screen,
     selected,
@@ -1043,6 +1128,15 @@ function App() {
           activeSlug={projectSlug}
           projects={projects}
           busy={busy}
+          onHome={() => {
+            if (!projectSlug) {
+              void navigateScreen('projects')
+              return
+            }
+            void openCurrentBook().then((outcome) => {
+              setWorkspaceNotice(outcome.message)
+            })
+          }}
           onToggle={() => {
             const next = !projectMenuOpen
             setProjectMenuOpen(next)
@@ -1072,7 +1166,6 @@ function App() {
                 type="button"
                 key={item.id}
                 className={screen === item.id ? 'active' : ''}
-                disabled={item.id === 'notebook' && !projectSlug}
                 onClick={() => void navigateScreen(item.id)}
                 title={item.label}
               >
@@ -1081,6 +1174,18 @@ function App() {
               </button>
             )
           })}
+          <button
+            type="button"
+            className={screen === 'notebook' && historyExpanded ? 'active' : ''}
+            disabled={!projectSlug}
+            onClick={() => void toggleHistory().then((outcome) => {
+              setWorkspaceNotice(outcome.message)
+            })}
+            title="Toggle project-book history trails"
+          >
+            <Clock3 size={19} />
+            <span>History trails</span>
+          </button>
         </nav>
         <div className="navigation-version">v0.1</div>
       </aside>
@@ -1116,7 +1221,9 @@ function App() {
                 x: event.clientX,
                 y: event.clientY,
               })
-              addCell(kind, notebookGridSlot(position))
+              void addCell(kind, notebookGridSlot(position)).then((outcome) => {
+                setWorkspaceNotice(outcome.message)
+              })
               setPaletteDragKind(null)
               setPreviewSlot(null)
             }}
@@ -1127,7 +1234,7 @@ function App() {
               nodeTypes={nodeTypes}
               onNodesChange={(changes) => {
                 let next = nodesRef.current
-                for (const change of changes) {
+                for (const change of changes.filter((item) => item.type !== 'remove')) {
                   next = applyNodeChanges([change], next)
                   if (change.type === 'position' && change.position) {
                     const slot = notebookGridSlot(change.position)
@@ -1138,23 +1245,14 @@ function App() {
                       slot,
                     )
                   }
-                  if (change.type === 'remove') dragSlotsRef.current.delete(change.id)
                 }
-                const changed = changes.some((change) => (
-                  change.type === 'position' || change.type === 'remove'
-                ))
-                replaceNodes(next, changed)
-                if (changes.some((change) => change.type === 'remove')) {
-                  setSelectedId(null)
-                  setPromptOpen(false)
-                  void persistNotebook()
-                }
+                replaceNodes(next)
               }}
               onEdgesChange={(changes) => {
-                const next = applyEdgeChanges(changes, edgesRef.current)
-                const changed = changes.some((change) => change.type === 'remove')
-                replaceEdges(next, changed)
-                if (changed) void persistNotebook()
+                replaceEdges(applyEdgeChanges(
+                  changes.filter((change) => change.type !== 'remove'),
+                  edgesRef.current,
+                ))
               }}
               onNodeDragStop={(_, node) => {
                 const slot = dragSlotsRef.current.get(node.id)
@@ -1162,28 +1260,39 @@ function App() {
                 dragSlotsRef.current.delete(node.id)
                 replaceNodes(resolveNotebookGridMove(nodesRef.current, node.id, slot))
                 setPreviewSlot(null)
-                void persistNotebook()
+                void commitLayouts().then((outcome) => {
+                  setWorkspaceNotice(outcome.message)
+                })
               }}
               onNodeClick={(_, node) => {
-                if (node.id !== selectedId && dirtyRef.current) {
-                  void persistNotebook()
+                const selectNode = () => {
+                  setSelectedId(node.id)
+                  setPanelOpen(true)
+                  setPromptOpen(true)
                 }
-                setSelectedId(node.id)
-                setPanelOpen(true)
-                setPromptOpen(true)
+                if (selectedId && node.id !== selectedId) {
+                  void commitEntry(selectedId).then((outcome) => {
+                    setWorkspaceNotice(outcome.message)
+                    if (outcome.ok) selectNode()
+                  })
+                  return
+                }
+                selectNode()
               }}
               onConnect={(connection: Connection) => {
-                replaceEdges(addEdge({
-                  ...connection,
-                  id: `edge-${crypto.randomUUID().slice(0, 8)}`,
-                  targetHandle: connection.targetHandle ?? 'input',
-                }, edgesRef.current))
-                void persistNotebook()
+                void connectEntries(connection).then((outcome) => {
+                  setWorkspaceNotice(outcome.message)
+                })
               }}
               onPaneClick={() => {
-                if (dirtyRef.current) void persistNotebook()
-                setSelectedId(null)
-                setPromptOpen(false)
+                const id = selectedId
+                if (!id) return
+                void commitEntry(id).then((outcome) => {
+                  setWorkspaceNotice(outcome.message)
+                  if (!outcome.ok) return
+                  setSelectedId(null)
+                  setPromptOpen(false)
+                })
               }}
               onInit={(instance) => {
                 flowRef.current = instance
@@ -1191,6 +1300,7 @@ function App() {
               fitView
               minZoom={0.35}
               maxZoom={1.7}
+              deleteKeyCode={null}
               proOptions={{ hideAttribution: true }}
             >
               <NotebookStageBoard nodes={nodes} previewSlot={previewSlot} />
@@ -1205,7 +1315,9 @@ function App() {
                         type="button"
                         key={item.kind}
                         draggable
-                        onClick={() => addCell(item.kind)}
+                        onClick={() => void addCell(item.kind).then((outcome) => {
+                          setWorkspaceNotice(outcome.message)
+                        })}
                         onDragStart={(event) => {
                           event.dataTransfer.setData(cellDragType, item.kind)
                           event.dataTransfer.effectAllowed = 'copy'
@@ -1226,7 +1338,9 @@ function App() {
                     type="button"
                     className="palette-add"
                     draggable
-                    onClick={() => addCell('prompt')}
+                    onClick={() => void addCell('prompt').then((outcome) => {
+                      setWorkspaceNotice(outcome.message)
+                    })}
                     onDragStart={(event) => {
                       event.dataTransfer.setData(cellDragType, 'prompt')
                       event.dataTransfer.effectAllowed = 'copy'
@@ -1276,7 +1390,9 @@ function App() {
                     onChange={(event) => updateSelectedData(selected.id, {
                       title: event.target.value,
                     })}
-                    onBlur={() => void persistNotebook()}
+                    onBlur={() => void commitEntry(selected.id).then((outcome) => {
+                      setWorkspaceNotice(outcome.message)
+                    })}
                   />
                 </label>
                 <label>
@@ -1286,10 +1402,13 @@ function App() {
                     onChange={(event) => updateSelectedData(selected.id, {
                       model: event.target.value,
                     })}
-                    onBlur={() => void persistNotebook()}
+                    onBlur={() => void commitEntry(selected.id).then((outcome) => {
+                      setWorkspaceNotice(outcome.message)
+                    })}
                   >
                     <option value="auto">Auto route</option>
-                    <option value="nano-banana">Nano Banana</option>
+                    <option value="nano-banana-pro-google">Nano Banana Pro · Google Flow</option>
+                    <option value="google-omni">Google Omni · Google Flow</option>
                     <option value="seedance">Seedance 2</option>
                     <option value="grok">Grok Imagine</option>
                   </select>
@@ -1318,7 +1437,9 @@ function App() {
           notice={workspaceNotice}
           onRefresh={refreshScreen}
           projectSlug={projectSlug}
-          notebookName={activeNotebook?.name ?? 'No notebook'}
+          bookSummary={projectBook
+            ? `${projectBook.actions.length} actions · ${bookAssets.length} assets · ${projectBook.headRevision.slice(0, 8)}`
+            : 'No project book'}
           onCreateProject={createProject}
           onOpenProject={openProject}
           onRenameProject={renameProject}
@@ -1351,7 +1472,7 @@ interface WorkspaceScreenProps {
   notice: string
   onRefresh: () => Promise<void>
   projectSlug: string
-  notebookName: string
+  bookSummary: string
   onCreateProject: (slug: string) => Promise<ComposerOutcome>
   onOpenProject: (slug: string) => Promise<ComposerOutcome>
   onRenameProject: (oldSlug: string, newSlug: string) => Promise<ComposerOutcome>
@@ -1372,7 +1493,7 @@ function WorkspaceScreen({
   notice,
   onRefresh,
   projectSlug,
-  notebookName,
+  bookSummary,
   onCreateProject,
   onOpenProject,
   onRenameProject,
@@ -1397,10 +1518,9 @@ function WorkspaceScreen({
           <span className="section-label">VIDEOBOOK / {screen.toUpperCase()}</span>
           <h1>{title}</h1>
           <p>
-            {screen === 'projects' && 'Fresh local-first projects and their notebook collections.'}
+            {screen === 'projects' && 'Fresh local-first projects and their canonical project books.'}
             {screen === 'library' && 'Reusable prompts, characters, scenes, images, and videos.'}
-            {screen === 'history' && 'Forward-only DoltLite revisions with exact asset rewind.'}
-            {screen === 'jobs' && 'Queued notebook runs and provider operations.'}
+            {screen === 'jobs' && 'Queued project-book actions and provider operations.'}
             {screen === 'settings' && 'Provider credentials, routing, and model defaults.'}
             {screen === 'diagnostics' && 'Catalog, CAS, MCP, and publication health.'}
           </p>
@@ -1431,7 +1551,7 @@ function WorkspaceScreen({
               value={newProjectSlug}
               onChange={(event) => setNewProjectSlug(event.target.value)}
               placeholder="moon-garden"
-              pattern="[a-z0-9][a-z0-9-]*"
+              pattern="[a-z0-9](?:[a-z0-9]|-)*"
               disabled={busy}
             />
           </label>
@@ -1498,8 +1618,8 @@ function WorkspaceScreen({
             <input value={projectSlug || 'No project selected'} readOnly />
           </label>
           <label>
-            Default notebook
-            <input value={notebookName} readOnly />
+            Project book
+            <input value={bookSummary} readOnly />
           </label>
           {['OpenAI', 'KIE', 'FAL', 'Google Flow', 'ElevenLabs', 'Backblaze B2'].map(
             (provider) => (
@@ -1633,7 +1753,7 @@ function ProjectRecordCard({
           <input
             value={renameValue}
             onChange={(event) => setRenameValue(event.target.value)}
-            pattern="[a-z0-9][a-z0-9-]*"
+            pattern="[a-z0-9](?:[a-z0-9]|-)*"
             autoFocus
           />
           <button type="submit" disabled={busy}>Rename</button>

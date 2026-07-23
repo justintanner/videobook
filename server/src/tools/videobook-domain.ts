@@ -1,4 +1,6 @@
 import type {
+  BookActionPhase,
+  BookActionScope,
   EntityDocument,
   EntityType,
   NotebookDocument,
@@ -13,6 +15,23 @@ const projectSchema = {
   project_slug: z.string().describe("Project slug"),
 };
 
+const bookPhaseSchema = z.enum([
+  "requested",
+  "started",
+  "completed",
+  "failed",
+  "cancelled",
+  "conflicted",
+]);
+
+const bookScopeSchema = z.enum([
+  "project",
+  "artifact",
+  "layout",
+  "external",
+  "system",
+]);
+
 function json(value: unknown): ToolResult {
   return { content: [{ type: "text", text: JSON.stringify(value) }] };
 }
@@ -23,6 +42,135 @@ function failure(message: string): ToolResult {
 
 export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
   return [
+    {
+      name: "get_project_book",
+      description: "Read the canonical project book and DoltLite action history",
+      schema: {
+        ...projectSchema,
+        limit: z.number().int().positive().max(10_000).optional(),
+        cursor: z.string().optional(),
+      },
+      handler: async (args) => {
+        const result = await fs.getProjectBook(String(args.project_slug), {
+          ...(typeof args.limit === "number" ? { limit: args.limit } : {}),
+          ...(typeof args.cursor === "string" ? { cursor: args.cursor } : {}),
+        });
+        return result.ok ? json(result.value) : failure(result.error.message);
+      },
+    },
+    {
+      name: "get_book_action",
+      description: "Read one logical project-book action and its lifecycle events",
+      schema: { ...projectSchema, action_id: z.string() },
+      handler: async (args) => {
+        const result = await fs.getBookAction(
+          String(args.project_slug),
+          String(args.action_id),
+        );
+        return result.ok ? json(result.value) : failure(result.error.message);
+      },
+    },
+    {
+      name: "record_book_action",
+      description: "Append a permanent semantic action to the project book",
+      schema: {
+        ...projectSchema,
+        action_id: z.string().optional(),
+        operation: z.string().min(1),
+        phase: bookPhaseSchema.optional(),
+        scope: bookScopeSchema.optional(),
+        actor: z.string().optional(),
+        lane: z.string().optional(),
+        base_revision: z.string().optional(),
+        parent_action_ids: z.array(z.string()).optional(),
+        input_artifact_ids: z.array(z.string()).optional(),
+        output_artifact_ids: z.array(z.string()).optional(),
+        target_artifact_id: z.string().optional(),
+        target_action_id: z.string().optional(),
+        stage: z.number().int().nonnegative().optional(),
+        column: z.number().int().nonnegative().optional(),
+        write_set: z.array(z.string()).optional(),
+        details: z.record(z.string(), z.unknown()).optional(),
+      },
+      handler: async (args) => {
+        const stage = typeof args.stage === "number" ? args.stage : undefined;
+        const column = typeof args.column === "number" ? args.column : undefined;
+        const result = await fs.recordBookAction({
+          projectSlug: String(args.project_slug),
+          operation: String(args.operation),
+          ...(typeof args.action_id === "string"
+            ? { actionId: args.action_id }
+            : {}),
+          ...(typeof args.phase === "string"
+            ? { phase: args.phase as BookActionPhase }
+            : {}),
+          ...(typeof args.scope === "string"
+            ? { scope: args.scope as BookActionScope }
+            : {}),
+          ...(typeof args.actor === "string" ? { actor: args.actor } : {}),
+          ...(typeof args.lane === "string" ? { lane: args.lane } : {}),
+          ...(typeof args.base_revision === "string"
+            ? { baseRevision: args.base_revision }
+            : {}),
+          ...(Array.isArray(args.parent_action_ids)
+            ? { parentActionIds: args.parent_action_ids as string[] }
+            : {}),
+          ...(Array.isArray(args.input_artifact_ids)
+            ? { inputArtifactIds: args.input_artifact_ids as string[] }
+            : {}),
+          ...(Array.isArray(args.output_artifact_ids)
+            ? { outputArtifactIds: args.output_artifact_ids as string[] }
+            : {}),
+          ...(typeof args.target_artifact_id === "string"
+            ? { targetArtifactId: args.target_artifact_id }
+            : {}),
+          ...(typeof args.target_action_id === "string"
+            ? { targetActionId: args.target_action_id }
+            : {}),
+          ...(stage !== undefined && column !== undefined
+            ? { layout: { stage, column } }
+            : {}),
+          ...(Array.isArray(args.write_set)
+            ? { writeSet: args.write_set as string[] }
+            : {}),
+          ...(args.details
+            ? { details: args.details as Record<string, unknown> }
+            : {}),
+        });
+        return result.ok ? json(result.value) : failure(result.error.message);
+      },
+    },
+    {
+      name: "record_book_layout",
+      description: "Record a permanent stage and column change in the project book",
+      schema: {
+        ...projectSchema,
+        target_action_id: z.string(),
+        stage: z.number().int().nonnegative(),
+        column: z.number().int().nonnegative(),
+        base_revision: z.string().optional(),
+      },
+      handler: async (args) => {
+        const targetActionId = String(args.target_action_id);
+        const result = await fs.recordBookAction({
+          projectSlug: String(args.project_slug),
+          operation: "move_entry",
+          scope: "layout",
+          actor: "human",
+          lane: "human",
+          ...(typeof args.base_revision === "string"
+            ? { baseRevision: args.base_revision }
+            : {}),
+          targetActionId,
+          layout: {
+            stage: Number(args.stage),
+            column: Number(args.column),
+          },
+          writeSet: [`layout:${targetActionId}`],
+        });
+        return result.ok ? json(result.value) : failure(result.error.message);
+      },
+    },
     {
       name: "list_notebooks",
       description: "List first-class Videobook notebooks",
@@ -131,15 +279,17 @@ export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
     },
     {
       name: "revision_history",
-      description: "List project revisions using storage-neutral terminology",
-      schema: { ...projectSchema, limit: z.number().int().positive().optional() },
-      handler: async (args) =>
-        json(
-          await fs.getProjectHistory(
-            String(args.project_slug),
-            typeof args.limit === "number" ? args.limit : undefined,
-          ),
-        ),
+      description: "Read the same canonical action history rendered by the project book",
+      schema: {
+        ...projectSchema,
+        limit: z.number().int().positive().max(10_000).optional(),
+      },
+      handler: async (args) => {
+        const result = await fs.getProjectBook(String(args.project_slug), {
+          ...(typeof args.limit === "number" ? { limit: args.limit } : {}),
+        });
+        return result.ok ? json(result.value) : failure(result.error.message);
+      },
     },
   ];
 }

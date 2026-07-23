@@ -7,7 +7,7 @@
  * (see x/authenticated-handle.ts); `authenticatedHandle` below is a read-through
  * cache so the dialog still pre-fills when the API is unreachable.
  *
- * Stored at ~/.videocity/watermark-config.json (override WATERMARK_CONFIG_PATH),
+ * Stored at ~/.videobook/watermark-config.json (override WATERMARK_CONFIG_PATH),
  * mirroring the atomic-write pattern in x/x-tokens.ts.
  */
 
@@ -28,7 +28,7 @@ const EMPTY_CONFIG: WatermarkConfig = { savedHandle: null, recent: [], authentic
 function configFilePath(): string {
   return (
     process.env.WATERMARK_CONFIG_PATH
-    ?? join(homedir(), ".videocity", "watermark-config.json")
+    ?? join(homedir(), ".videobook", "watermark-config.json")
   );
 }
 

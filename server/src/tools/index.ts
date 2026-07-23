@@ -271,14 +271,14 @@ export function getVideoEditingToolDefs(fs: VideocityFs): ToolDef[] {
   ];
 }
 
-export function registerAllTools(server: McpServer, fs: VideocityFs): void {
+export function registerAllTools(server: McpServer, fs: VideobookFs): void {
   const defs = getAllToolDefs(fs).map((def) => withLogging(def, fs));
   for (const def of defs) {
     server.tool(def.name, def.description, def.schema, def.handler);
   }
 }
 
-export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
+export function getAllToolDefs(fs: VideobookFs): ToolDef[] {
   const rawDefs: ToolDef[] = [
     apiStatusDef(),
     providerKeyStatusDef(),
@@ -443,7 +443,7 @@ export function getAllToolDefs(fs: VideocityFs): ToolDef[] {
     createQartDef(fs),
     createQrbtfDef(fs),
     getWatermarkConfigDef(),
-    ...videobookDomainDefs(fs as VideobookFs),
+    ...videobookDomainDefs(fs),
   ];
 
   return rawDefs;

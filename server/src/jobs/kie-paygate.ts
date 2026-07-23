@@ -28,7 +28,7 @@ type SubmitKieTaskArgs = {
 };
 
 function defaultSecretPath(): string {
-  return join(homedir(), ".videocity", "paygate-secret");
+  return join(homedir(), ".videobook", "paygate-secret");
 }
 
 function writeKey(path: string, content: string, mode: number): void {

@@ -14,7 +14,7 @@ type EnvName =
   | "B2_REGION"
   | "B2_BUCKET"
   | "ELEVENLABS_API_KEY"
-  | "VIDEOCITY_ARCHIVE_DIR";
+  | "VIDEOBOOK_ARCHIVE_DIR";
 
 const envNames: EnvName[] = [
   "B2_ACCESS_KEY_ID",
@@ -22,7 +22,7 @@ const envNames: EnvName[] = [
   "B2_REGION",
   "B2_BUCKET",
   "ELEVENLABS_API_KEY",
-  "VIDEOCITY_ARCHIVE_DIR",
+  "VIDEOBOOK_ARCHIVE_DIR",
 ];
 
 function captureEnv(): Record<EnvName, string | undefined> {
@@ -32,7 +32,7 @@ function captureEnv(): Record<EnvName, string | undefined> {
     B2_REGION: process.env.B2_REGION,
     B2_BUCKET: process.env.B2_BUCKET,
     ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
-    VIDEOCITY_ARCHIVE_DIR: process.env.VIDEOCITY_ARCHIVE_DIR,
+    VIDEOBOOK_ARCHIVE_DIR: process.env.VIDEOBOOK_ARCHIVE_DIR,
   };
 }
 
@@ -118,7 +118,7 @@ describe("archive MCP tools", () => {
 
   function useLocalArchiveDir(): string {
     const archiveDir = join(tempDir!, "archive");
-    process.env.VIDEOCITY_ARCHIVE_DIR = archiveDir;
+    process.env.VIDEOBOOK_ARCHIVE_DIR = archiveDir;
     return archiveDir;
   }
 

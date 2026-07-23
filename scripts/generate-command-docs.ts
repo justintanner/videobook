@@ -9,7 +9,7 @@ import { GENERATION_ACTIONS } from "../server/src/generation-registry.js";
 import { getCanonicalCommands } from "../server/src/tools/commands.js";
 import { getAllToolDefs } from "../server/src/tools/index.js";
 
-const projectFs = createFs({ projectsDir: "/tmp/videocity-command-reference" });
+const projectFs = createFs({ projectsDir: "/tmp/videobook-command-reference" });
 const root = resolve(import.meta.dirname, "..");
 
 writeFileSync(

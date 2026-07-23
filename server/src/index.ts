@@ -1,9 +1,6 @@
 import "./load-env.js";
 import express from "express";
 import cors from "cors";
-import { promises as fsp } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer } from "./server.js";
 import { queue, reconcileQueueOnStartup } from "./queue.js";
@@ -12,48 +9,6 @@ import { fs, PROJECTS_DIR } from "./fs.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
 import { uploadLocalStream } from "./local-upload.js";
-
-// Rename a legacy ~/.clipfirst/ user-config dir to ~/.videocity/ if it still
-// exists. Idempotent — no-op once .videocity/ is in place. If both exist
-// (paranoid), move missing files over and drop the legacy dir.
-async function migrateLegacyUserDir(): Promise<void> {
-  const legacy = join(homedir(), ".clipfirst");
-  const current = join(homedir(), ".videocity");
-  let legacyExists = false;
-  try {
-    await fsp.access(legacy);
-    legacyExists = true;
-  } catch {
-    // path doesn't exist
-  }
-  if (!legacyExists) return;
-  let currentExists = false;
-  try {
-    await fsp.access(current);
-    currentExists = true;
-  } catch {
-    // path doesn't exist
-  }
-  if (!currentExists) {
-    await fsp.rename(legacy, current);
-    console.log("[startup] migrated ~/.clipfirst -> ~/.videocity");
-    return;
-  }
-  const entries = await fsp.readdir(legacy);
-  for (const entry of entries) {
-    const src = join(legacy, entry);
-    const dst = join(current, entry);
-    try {
-      await fsp.access(dst);
-      continue;
-    } catch {
-    // path doesn't exist
-  }
-    await fsp.rename(src, dst);
-  }
-  await fsp.rm(legacy, { recursive: true, force: true });
-  console.log("[startup] merged ~/.clipfirst into ~/.videocity");
-}
 
 const ASSET_REAPER_INTERVAL_MS = 30_000;
 const reaperHandles: { stop: () => void }[] = [];
@@ -128,7 +83,6 @@ app.get("/mcp", (_req, res) => {
 });
 
 async function start(): Promise<void> {
-  await migrateLegacyUserDir();
   registerAllJobHandlers(fs);
   await queue.start();
   for (const project of await fs.listProjects()) {

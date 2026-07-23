@@ -15,14 +15,14 @@ type EnvName =
   | "B2_SECRET_ACCESS_KEY"
   | "B2_REGION"
   | "B2_BUCKET"
-  | "VIDEOCITY_ARCHIVE_DIR";
+  | "VIDEOBOOK_ARCHIVE_DIR";
 
 const envNames: EnvName[] = [
   "B2_ACCESS_KEY_ID",
   "B2_SECRET_ACCESS_KEY",
   "B2_REGION",
   "B2_BUCKET",
-  "VIDEOCITY_ARCHIVE_DIR",
+  "VIDEOBOOK_ARCHIVE_DIR",
 ];
 
 describe("archive store", () => {
@@ -47,7 +47,7 @@ describe("archive store", () => {
   });
 
   it("selects the local store when B2 is not configured", () => {
-    process.env.VIDEOCITY_ARCHIVE_DIR = join(tempDir, "archive");
+    process.env.VIDEOBOOK_ARCHIVE_DIR = join(tempDir, "archive");
     expect(getArchiveStore().kind).toBe("local");
   });
 
@@ -64,14 +64,14 @@ describe("archive store", () => {
     process.env.B2_SECRET_ACCESS_KEY = "test-secret-key";
     process.env.B2_REGION = "us-west-004";
     process.env.B2_BUCKET = "archive-bucket";
-    process.env.VIDEOCITY_ARCHIVE_DIR = join(tempDir, "archive");
+    process.env.VIDEOBOOK_ARCHIVE_DIR = join(tempDir, "archive");
     expect(getArchiveStore().kind).toBe("local");
   });
 
-  it("honors VIDEOCITY_ARCHIVE_DIR and defaults to archive/ next to the projects dir", () => {
-    process.env.VIDEOCITY_ARCHIVE_DIR = join(tempDir, "custom-archive");
+  it("honors VIDEOBOOK_ARCHIVE_DIR and defaults to archive/ next to the projects dir", () => {
+    process.env.VIDEOBOOK_ARCHIVE_DIR = join(tempDir, "custom-archive");
     expect(localArchiveDir()).toBe(join(tempDir, "custom-archive"));
-    delete process.env.VIDEOCITY_ARCHIVE_DIR;
+    delete process.env.VIDEOBOOK_ARCHIVE_DIR;
     expect(localArchiveDir()).toBe(join(dirname(resolve(getProjectsDir())), "archive"));
   });
 

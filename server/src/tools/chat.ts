@@ -1,7 +1,7 @@
 /**
  * chat MCP tool — natural language interface that routes to appropriate tools.
  */
-import type { VideocityFs } from "videobook-engine";
+import type { VideobookFs, VideocityFs } from "videobook-engine";
 import { z } from "zod";
 import { resolveAllAssets, expandSlotRefs } from "videobook-engine";
 import { buildChatRoutingPrompt, getRoutableTool, NESTED_TIMESTAMP_PARAMS, TIMESTAMP_PARAMS } from "../chat-router.js";
@@ -255,7 +255,7 @@ export async function loadScriptContentsForChat(
   return scriptContents;
 }
 
-export function chatDef(fs: VideocityFs): ToolDef {
+export function chatDef(fs: VideobookFs): ToolDef {
   return {
     name: "chat",
     description: "Natural language interface — routes free-form prompts to the appropriate tool. Supports @asset tags (e.g., @vid-foo, @img-bar).",

@@ -1,4 +1,4 @@
-import type { ActionLogEntry, GitCommit, VideocityFs } from "videobook-engine";
+import type { BookAction, VideobookFs } from "videobook-engine";
 import { z } from "zod";
 import { isExcludedAction } from "./activity-policy.js";
 import type { ToolDef } from "./tool-def.js";
@@ -83,39 +83,30 @@ function categorize(action: string, payload?: string | Record<string, unknown>):
   return "other";
 }
 
-function actionEntry(entry: ActionLogEntry): ProjectActivityEntry | null {
-  if (isExcludedAction(entry.action)) return null;
-  const assetId = extractAssetIdFromPayload(entry.payload);
+function actionEntry(entry: BookAction): ProjectActivityEntry | null {
+  const action = entry.operation.replace(/^book:/, "");
+  if (isExcludedAction(action) || /^write/i.test(action)) return null;
+  const event = entry.events.at(-1);
+  if (!event) return null;
+  const payload = entry.details;
+  const assetId =
+    entry.targetArtifactId ??
+    entry.outputArtifacts[0]?.id ??
+    entry.inputArtifacts[0]?.id ??
+    extractAssetIdFromPayload(payload);
+  const source =
+    typeof entry.details.book_action_id === "string"
+      ? "action"
+      : "snapshot";
   return {
-    hash: entry.hash,
-    action: entry.action,
-    title: normalizeActionName(entry.action),
-    category: categorize(entry.action, entry.payload),
-    source: "action",
-    date: entry.date,
-    rewindable: true,
-    payload: entry.payload,
-    ...(assetId ? { assetId } : {}),
-  };
-}
-
-function snapshotEntry(commit: GitCommit): ProjectActivityEntry | null {
-  if (commit.message.startsWith("[action:")) return null;
-  const assetMatch = commit.message.match(/^\[([^\]]+)\]\s+(.+)$/);
-  const projectMatch = commit.message.match(/^(.+): project$/);
-  const action = assetMatch?.[2] ?? projectMatch?.[1] ?? commit.message;
-  // Engine auto-commits every file write as a "write*" snapshot — per-file
-  // mechanics, not user-level events; they flood the feed during pipelines.
-  if (/^write/i.test(action)) return null;
-  const assetId = assetMatch?.[1];
-  return {
-    hash: commit.hash,
+    hash: event.revision,
     action,
-    title: assetId ? `${action.replace(/_/g, " ")} ${assetId}` : action.replace(/_/g, " "),
-    category: categorize(action),
-    source: "snapshot",
-    date: commit.date,
+    title: normalizeActionName(action),
+    category: categorize(action, payload),
+    source,
+    date: event.date,
     rewindable: true,
+    payload,
     ...(assetId ? { assetId } : {}),
   };
 }
@@ -124,10 +115,10 @@ function byNewest(a: ProjectActivityEntry, b: ProjectActivityEntry): number {
   return new Date(b.date).getTime() - new Date(a.date).getTime();
 }
 
-export function projectActivityDef(fs: VideocityFs): ToolDef {
+export function projectActivityDef(fs: VideobookFs): ToolDef {
   return {
     name: "project_activity",
-    description: "Get project-changing activity and rewind snapshots for a project",
+    description: "Read project-changing actions from the canonical project book",
     schema: {
       project_slug: z.string().describe("Project slug"),
       limit: z.number().optional().describe("Max entries to return (default 50)"),
@@ -136,21 +127,20 @@ export function projectActivityDef(fs: VideocityFs): ToolDef {
       const { project_slug, limit } = args as { project_slug: string; limit?: number };
       const max = limit ?? 50;
       const fetchLimit = Math.max(max * 4, 100);
-      const [actions, history] = await Promise.all([
-        fs.getActionLog({ limit: fetchLimit }, project_slug),
-        fs.getHistory(project_slug, fetchLimit),
-      ]);
-      const merged = new Map<string, ProjectActivityEntry>();
-      for (const entry of actions) {
-        const formatted = actionEntry(entry);
-        if (formatted) merged.set(formatted.hash, formatted);
+      const book = await fs.getProjectBook(project_slug, {
+        limit: fetchLimit,
+      });
+      if (!book.ok) {
+        return {
+          isError: true,
+          content: [{ type: "text" as const, text: book.error.message }],
+        };
       }
-      for (const commit of history) {
-        if (merged.has(commit.hash)) continue;
-        const formatted = snapshotEntry(commit);
-        if (formatted) merged.set(formatted.hash, formatted);
-      }
-      const entries = [...merged.values()].sort(byNewest).slice(0, max);
+      const entries = book.value.actions
+        .map(actionEntry)
+        .filter((entry): entry is ProjectActivityEntry => entry !== null)
+        .sort(byNewest)
+        .slice(0, max);
       return {
         content: [{
           type: "text" as const,

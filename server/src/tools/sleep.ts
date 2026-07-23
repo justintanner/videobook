@@ -93,12 +93,42 @@ export function sleepDef(fs: VideocityFs): ToolDef {
           };
         }
 
-        // Check done: no pending task and not locked
+        const jobs = await fs.queue.list(project_slug, {
+          assetId: asset_id,
+          limit: 20,
+        });
+        const failedJob = jobs.find((job) => job.state === "failed");
+        if (failedJob) {
+          return {
+            isError: true as const,
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  asset_id,
+                  status: "failed",
+                  elapsed_seconds: Math.round(
+                    (Date.now() - startTime) / 1000,
+                  ),
+                  iterations,
+                  error: failedJob.error?.message ?? "Asset job failed",
+                  last_sync: lastSync,
+                }),
+              },
+            ],
+          };
+        }
+        const activeJob = jobs.some(
+          (job) =>
+            job.state === "queued" ||
+            job.state === "running" ||
+            job.state === "completing",
+        );
         const ptRead = await fs.pendingTasks.read(project_slug, asset_id);
         const pendingTask = ptRead.ok ? ptRead.value : null;
         const locked = await fs.isLocked(assetDir);
 
-        if (pendingTask === null && !locked) {
+        if (pendingTask === null && !locked && !activeJob) {
           return {
             content: [
               {
@@ -117,7 +147,9 @@ export function sleepDef(fs: VideocityFs): ToolDef {
           };
         }
 
-        await delay(5000);
+        await delay(
+          Math.min(5000, Math.max(1, deadline - Date.now())),
+        );
       }
 
       // Timeout

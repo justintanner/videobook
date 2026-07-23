@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (236)
+## MCP endpoints (240)
 
 - `add_timeline_audio` — Add an overlay audio clip to the timeline at a given frame offset
 - `analyze_jokes` — Analyze a clip's ElevenLabs transcript and identify the jokes in the bit, classified by type (pun, self-deprecating, observational, etc.). Each joke includes the verbatim text, start/end timestamps, and a one-line note on why it works. Runs in the background and persists to .analyze-jokes.json. Requires an ElevenLabs transcript — run /transcribe first if missing.
@@ -142,9 +142,11 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `generate_kie_wan_2_7_text_to_image` (historical names, not exposed: `generate_wan27_image`) — Generate an image using Wan 2.7 Image. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).
 - `generate_kie_wan_2_7_text_to_video` (historical names, not exposed: `generate_wan27_t2v_video`) — Generate a video from a prompt using Wan 2.7 Text to Video. Supports optional custom audio. Creates a new vid- asset and enqueues a background job.
 - `generate_xai_grok_imagine_video` (historical names, not exposed: `generate_grok_imagine_ref_video`, `generate_xai_grok_imagine_reference_to_video`) — Generate a video using xAI Grok Imagine with optional reference images (0-7). Creates a new vid- asset and enqueues a background job.
+- `get_book_action` — Read one logical project-book action and its lifecycle events
 - `get_character` — Read a reusable character
 - `get_google_flow_character` — Retrieve normalized details for a single Google Flow character by ref.
 - `get_notebook` — Read a notebook and its typed cells and edges
+- `get_project_book` — Read the canonical project book and DoltLite action history
 - `get_prompt` — Read a reusable prompt
 - `get_render_settings` — Fetch stored render settings for a single asset across all orientations, plus transcript language info (detected source language and cached subtitle translations)
 - `get_scene` — Read a reusable scene
@@ -173,7 +175,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `post` — Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.
 - `prepare_image_generation` (historical names, not exposed: `preview_image`) — Return a preview with schema, prefilled parameters, validation, and model options for all available image models.
 - `prepare_video_generation` (historical names, not exposed: `preview_video`) — Route a natural language prompt to the best video generation tool and return a preview with schema, prefilled parameters, validation, and model options for all available video models.
-- `project_activity` — Get project-changing activity and rewind snapshots for a project
+- `project_activity` — Read project-changing actions from the canonical project book
 - `project_history` — Get git commit history for a project
 - `provider_key_status` — List all managed environment keys with their source (1password = injected via op run, read-only; env = from .env, editable), masked values, and live credit/token lookups for supported providers. Never exposes secret values.
 - `push_chat_history` — Append a message to the chat input history log.
@@ -182,6 +184,8 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `read_notebook` — Read a Notebook sidecar (nb-*/.notebook.json).
 - `read_transcript` — Read the transcript for a video or audio asset. Prefers timed ElevenLabs word-level cues (elevenlabs.json), falling back to plain text (.analysis.gpt4otrans.json). Returns kind='timed' with per-word start/end cues, kind='plain' with full text, kind='silence' if a transcript exists but contains no dialog, or kind='missing' if no transcript file exists.
 - `reconcile_project_work` (historical names, not exposed: `sync`) — Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.
+- `record_book_action` — Append a permanent semantic action to the project book
+- `record_book_layout` — Record a permanent stage and column change in the project book
 - `record_prompt` — Append a user-typed prompt to the per-surface, per-project history (metadata.sqlite). Surfaces: chat, image_rewrite, video_rewrite, script_rewrite, post, image_generate, video_generate.
 - `recover_asset` — Recover a single asset stuck in the failed/error state by clearing its persisted generation error. Non-destructive: the asset and its media files are kept intact — only the error record is removed, returning the card to its normal ready state. Use this instead of clean_failed_assets when the asset must be preserved.
 - `remove_sound` — Remove a described sound (e.g. a horse neigh) from a vid-* or aud-* asset in place. ElevenLabs Scribe tags audio events with timestamps, events matching the description are silenced with short fades, and video streams are preserved untouched with git versioning.
@@ -199,7 +203,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `restore_asset_version` — Restore an asset from an immutable revision as a new revision
 - `retry_generation` — Retry a failed generation by replaying its original request payload. Reads the persisted generation-request metadata for the asset, clears its error record, and re-enqueues the same job. Use this on a failed asset card to re-run the exact inputs without re-resolving references.
 - `reverse_video` — Reverse video playback (play backwards). Toggle operation — reversing twice restores original. Max 300s due to memory buffering.
-- `revision_history` — List project revisions using storage-neutral terminology
+- `revision_history` — Read the same canonical action history rendered by the project book
 - `rewind_project` — Restore a project revision and record the result as a new forward revision
 - `rewrite_prompt` — Rewrite a generation prompt using model-specific best practices. Supports standard mode (rewrite any prompt) and scene mode (rewrite a specific scene in a Kling 3.0 multi-shot asset).
 - `rewrite_script` — Rewrite a generated script asset in-place as a text-to-text transformation of its existing markdown (the source image is NOT re-read). Variants: "full" (full reproduction prompt + breakdown) or "tldr" (1–2 sentence summary). Optional platform preset ("ig" | "tiktok" | "youtube") tunes authentic-capture cues for that feed. Optional custom_prompt applies a transformation instruction (e.g. "replace the pig with a man in a blue suit"). Previous versions are preserved in git history via videobook-engine. Returns immediately; reconcile_project_work reports status="generating" until the new markdown is written.
@@ -238,7 +242,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `verify_x_mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using xAI live X search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 - `write_notebook` — Write a Notebook sidecar (nb-*/.notebook.json). Creates a new notebook if notebook_id is omitted. Returns the notebook_id.
-- `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns an authorize_url the client should open. After the user approves in the browser, the server captures the callback, exchanges the code, and persists refreshable tokens to ~/.videocity/x-tokens.json.
+- `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns an authorize_url the client should open. After the user approves in the browser, the server captures the callback, exchanges the code, and persists refreshable tokens to ~/.videobook/x-tokens.json.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at? } so the client can poll while the user authorizes in the browser.
 
 ## Slash commands (121 static commands)

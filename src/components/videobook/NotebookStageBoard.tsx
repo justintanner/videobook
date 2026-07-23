@@ -1,5 +1,5 @@
 import { ViewportPortal, type Node } from '@xyflow/react'
-import type { NotebookCellData } from '@/videobook/notebook-draft'
+import type { BookCellData } from '@/videobook/project-book'
 import {
   notebookGrid,
   notebookGridMetrics,
@@ -8,7 +8,7 @@ import {
 } from '@/videobook/notebook-grid'
 
 interface NotebookStageBoardProps {
-  nodes: Array<Node<NotebookCellData>>
+  nodes: Array<Node<BookCellData>>
   previewSlot: NotebookGridSlot | null
 }
 

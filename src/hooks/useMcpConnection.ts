@@ -5,7 +5,7 @@ const mcpUrl = new URL("/mcp", window.location.origin).toString();
 export function useMcpConnection(): UseMcpResult {
   return useMcp({
     url: mcpUrl,
-    clientName: "videocity",
+    clientName: "videobook",
     transportType: "http",
     autoReconnect: 3000,
   });

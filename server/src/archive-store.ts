@@ -40,7 +40,7 @@ export interface ArchiveStore {
 }
 
 export function localArchiveDir(): string {
-  const fromEnv = process.env.VIDEOCITY_ARCHIVE_DIR;
+  const fromEnv = process.env.VIDEOBOOK_ARCHIVE_DIR;
   if (fromEnv) return resolve(fromEnv);
   return join(dirname(resolve(getProjectsDir())), "archive");
 }

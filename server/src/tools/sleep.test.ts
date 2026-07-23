@@ -128,4 +128,25 @@ describe("sleepDef handler", () => {
       }
     }
   }, 15_000);
+
+  it("does not report ready before an enqueued job claims its asset", async () => {
+    const assetResult = await fs.createAsset("img", "queued-asset", "test-proj");
+    if (!assetResult.ok) throw new Error(assetResult.error.message);
+    await fs.queue.enqueue("test-proj", {
+      type: "test_generation",
+      assetId: assetResult.value.assetId,
+      payload: {},
+      assetWorkKind: "generate",
+    });
+
+    const result = await sleepDef(fs).handler({
+      asset_id: assetResult.value.assetId,
+      project_slug: "test-proj",
+      timeout_seconds: 0.01,
+    });
+
+    expect(result.isError).toBe(true);
+    const data = JSON.parse(result.content[0].text);
+    expect(data.status).toBe("timeout");
+  });
 });
