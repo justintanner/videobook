@@ -93,6 +93,31 @@ describe('project book canvas projection', () => {
     expect(rule).toContain('object-fit: contain')
   })
 
+  it('uses right-aligned header icons and combines diagnostics with settings', () => {
+    const app = readFileSync(
+      new URL('../App.tsx', import.meta.url),
+      'utf8',
+    )
+    const css = readFileSync(
+      new URL('../index.css', import.meta.url),
+      'utf8',
+    )
+    const headerNavigation = app.match(
+      /<nav className="header-navigation"[\s\S]*?<\/nav>/,
+    )?.[0]
+
+    expect(headerNavigation).toContain('aria-label={`Open ${item.label}`}')
+    expect(headerNavigation).not.toContain('<span')
+    expect(app).not.toContain('className={`navigation')
+    expect(app).not.toContain("id: 'diagnostics'")
+    expect(app).toContain("open_diagnostics: 'settings'")
+    expect(app).toContain('System diagnostics')
+    expect(app).toContain("call('storage_status', {})")
+    expect(css).not.toContain('.navigation {')
+    expect(css).toContain('.header-navigation')
+    expect(css).toContain('grid-template: 72px minmax(0, 1fr) / minmax(0, 1fr) 400px')
+  })
+
   it('renders artifact actions with media, slugs, causal edges, and layout trail', () => {
     const prompt = action('prompt-action', {
       outputArtifacts: [{

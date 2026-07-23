@@ -61,7 +61,7 @@ textarea:focus-visible {
 
 .app-shell {
   display: grid;
-  grid-template: 72px minmax(0, 1fr) / 74px minmax(0, 1fr) 400px;
+  grid-template: 72px minmax(0, 1fr) / minmax(0, 1fr) 400px;
   width: 100%;
   height: 100%;
   background:
@@ -73,7 +73,7 @@ textarea:focus-visible {
   z-index: 30;
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(120px, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   min-width: 0;
   border: 1px solid var(--line);
@@ -185,24 +185,29 @@ textarea:focus-visible {
   padding: 18px 10px;
 }
 
-.topbar-center {
-  min-width: 0;
+.header-navigation {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  margin-right: 14px;
 }
 
-.settings-trigger {
+.header-navigation button {
+  position: relative;
   display: grid;
   place-items: center;
   width: 44px;
   height: 44px;
-  margin-right: 14px;
+  padding: 0;
   border: 1px solid transparent;
   color: var(--muted);
   background: transparent;
   cursor: pointer;
 }
 
-.settings-trigger:hover,
-.settings-trigger.active {
+.header-navigation button:hover,
+.header-navigation button.active {
   border-color: var(--line-bright);
   color: var(--green);
   background: rgba(30, 87, 56, 0.18);
@@ -225,34 +230,6 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
-.navigation button:disabled {
-  cursor: not-allowed;
-  opacity: 0.38;
-}
-
-.mobile-menu {
-  display: none;
-}
-
-.navigation {
-  z-index: 25;
-  grid-row: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  border-right: 1px solid var(--line);
-  background: rgba(3, 12, 8, 0.96);
-}
-
-.navigation nav {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 8px;
-  padding-top: 18px;
-}
-
-.navigation nav button,
 .palette button {
   position: relative;
   display: grid;
@@ -266,7 +243,6 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
-.navigation nav button span,
 .palette button span {
   position: absolute;
   left: calc(100% + 12px);
@@ -280,22 +256,8 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.navigation nav button:hover span,
 .palette button:hover span {
   display: block;
-}
-
-.navigation nav button:hover,
-.navigation nav button.active {
-  border-color: var(--line-bright);
-  color: var(--green);
-  background: rgba(30, 87, 56, 0.18);
-}
-
-.navigation-version {
-  margin-bottom: 16px;
-  color: #355344;
-  font-size: 9px;
 }
 
 .palette {
@@ -343,7 +305,7 @@ textarea:focus-visible {
 .canvas {
   position: relative;
   grid-row: 2;
-  grid-column: 2;
+  grid-column: 1;
   min-width: 0;
   overflow: hidden;
   background:
@@ -936,7 +898,7 @@ textarea:focus-visible {
 .inspector {
   z-index: 20;
   grid-row: 2;
-  grid-column: 3;
+  grid-column: 2;
   min-width: 0;
   border-left: 1px solid var(--line);
   background: var(--panel);
@@ -1088,7 +1050,7 @@ textarea:focus-visible {
 
 .workspace-screen {
   grid-row: 2;
-  grid-column: 2 / -1;
+  grid-column: 1 / -1;
   min-width: 0;
   overflow: auto;
   padding: 48px;
@@ -1233,6 +1195,52 @@ textarea:focus-visible {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.settings-sections {
+  display: grid;
+  gap: 42px;
+}
+
+.workspace-section-heading {
+  max-width: 720px;
+  margin-top: 30px;
+}
+
+.workspace-section-heading h2 {
+  margin: 8px 0 6px;
+  color: #b6dfc8;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.workspace-section-heading p {
+  margin: 0;
+  color: #54705f;
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+}
+
+.settings-sections .settings-grid,
+.settings-diagnostics-grid {
+  margin-top: 18px;
+}
+
+.settings-diagnostics {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.settings-diagnostics-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-diagnostics-grid .record-card {
+  min-height: 0;
+}
+
+.settings-diagnostics-grid .record-card pre {
+  max-height: 440px;
+}
+
 .provider-card {
   display: flex;
   align-items: center;
@@ -1335,7 +1343,7 @@ textarea:focus-visible {
   position: fixed;
   right: 24px;
   bottom: 16px;
-  left: 98px;
+  left: 24px;
   z-index: 70;
   display: grid;
   gap: 0;
@@ -1561,7 +1569,7 @@ textarea:focus-visible {
 
 @media (max-width: 1100px) {
   .app-shell {
-    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .inspector {
@@ -1573,11 +1581,11 @@ textarea:focus-visible {
   }
 
   .canvas {
-    grid-column: 2;
+    grid-column: 1;
   }
 
   .workspace-screen {
-    grid-column: 2;
+    grid-column: 1;
   }
 
   .app-screen-notebook .command-composer {
@@ -1591,82 +1599,38 @@ textarea:focus-visible {
   }
 
   .topbar {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     height: 62px;
-  }
-
-  .mobile-menu {
-    display: grid;
-    place-items: center;
-    width: 44px;
-    height: 44px;
-    margin-left: 8px;
-    border: 0;
-    background: transparent;
   }
 
   .brand-project-home {
     gap: 7px;
-    padding-left: 4px;
+    padding-left: 14px;
     font-size: 13px;
   }
 
   .brand-project-home strong {
-    max-width: 34vw;
+    max-width: 26vw;
   }
 
-  .topbar-center {
-    display: none;
+  .header-navigation {
+    gap: 0;
+    margin-right: 4px;
   }
 
-  .settings-trigger {
-    margin-right: 8px;
+  .header-navigation button {
+    width: 40px;
+    height: 40px;
   }
 
   .project-menu {
     left: 0;
   }
 
-  .navigation {
-    position: fixed;
-    top: 62px;
-    bottom: 0;
-    left: 0;
-    z-index: 80;
-    width: 220px;
-    align-items: stretch;
-    padding: 16px;
-    transform: translateX(-100%);
-    transition: transform 180ms ease;
-  }
-
-  .navigation-open {
-    transform: translateX(0);
-  }
-
-  .navigation nav button {
-    display: flex;
-    gap: 12px;
-    width: 100%;
-    padding: 0 12px;
-  }
-
-  .navigation nav button span {
-    position: static;
-    display: block;
-    padding: 0;
-    border: 0;
-    background: transparent;
-  }
-
   .canvas,
   .workspace-screen {
     grid-row: 2;
     grid-column: 1;
-  }
-
-  .navigation nav {
-    padding-top: 0;
   }
 
   .palette-panel {

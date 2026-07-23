@@ -37,7 +37,6 @@ import {
   FolderKanban,
   Image,
   Library,
-  Menu,
   MessageSquareText,
   Plus,
   RefreshCw,
@@ -93,7 +92,6 @@ type Screen =
   | 'library'
   | 'jobs'
   | 'settings'
-  | 'diagnostics'
 
 type EntityKind = 'prompt' | 'character' | 'scene'
 
@@ -110,15 +108,15 @@ interface ProjectRecord {
 const mcpUrl = new URL('/mcp', window.location.origin).toString()
 const nodeTypes = { cell: CellNode }
 
-const navigation: Array<{
-  id: Exclude<Screen, 'settings'>
+const headerNavigation: Array<{
+  id: Exclude<Screen, 'notebook'>
   label: string
   icon: typeof BookOpen
 }> = [
   { id: 'projects', label: 'Projects', icon: FolderKanban },
   { id: 'library', label: 'Entities', icon: Library },
   { id: 'jobs', label: 'Jobs', icon: Activity },
-  { id: 'diagnostics', label: 'Diagnostics', icon: CircleDot },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
 const palette = [
@@ -434,7 +432,6 @@ function App() {
   const [flowInteractive, setFlowInteractive] = useState(false)
   const [panelOpen, setPanelOpen] = useState(() => window.innerWidth > 720)
   const [promptOpen, setPromptOpen] = useState(false)
-  const [navOpen, setNavOpen] = useState(false)
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
   const [paletteDragKind, setPaletteDragKind] = useState<BookCellKind | null>(null)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
@@ -721,9 +718,19 @@ function App() {
     if (next !== 'notebook') setPromptOpen(false)
     setScreen(next)
     setRecords([])
-    setNavOpen(false)
     setProjectMenuOpen(false)
-  }, [])
+    if (next !== 'settings') return
+    setBusy(true)
+    try {
+      const value = await call('storage_status', {})
+      setRecords([value])
+      setWorkspaceNotice(`Updated ${new Date().toLocaleTimeString()}`)
+    } catch (error) {
+      setWorkspaceNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }, [call])
 
   const refreshScreen = useCallback(async () => {
     setBusy(true)
@@ -736,6 +743,9 @@ function App() {
         const next = asProjects(value)
         setProjects(next)
         setRecords(next)
+      } else if (screen === 'settings') {
+        value = await call('storage_status', {})
+        setRecords([value])
       } else {
         const slug = projectSlugRef.current
         if (!slug) throw new Error('Select a project first')
@@ -749,9 +759,6 @@ function App() {
         } else if (screen === 'jobs') {
           value = await call('list_jobs', { project_slug: slug })
           setRecords(asArray(value))
-        } else if (screen === 'diagnostics') {
-          value = await call('storage_status', {})
-          setRecords([value])
         }
       }
       setWorkspaceNotice(`Updated ${new Date().toLocaleTimeString()}`)
@@ -1092,7 +1099,7 @@ function App() {
       open_jobs: 'jobs',
       open_status: 'jobs',
       open_provider_keys: 'settings',
-      open_diagnostics: 'diagnostics',
+      open_diagnostics: 'settings',
     }
     const next = screens[action]
     if (next) {
@@ -1200,14 +1207,6 @@ function App() {
   return (
     <main className={`app-shell app-screen-${screen}`}>
       <header className="topbar">
-        <button
-          className="mobile-menu"
-          type="button"
-          onClick={() => setNavOpen((value) => !value)}
-          aria-label="Toggle navigation"
-        >
-          <Menu size={18} />
-        </button>
         <ProjectMenu
           open={projectMenuOpen}
           activeSlug={projectSlug}
@@ -1230,21 +1229,8 @@ function App() {
           onSwitch={openProject}
           onManage={() => void navigateScreen('projects')}
         />
-        <div className="topbar-center" aria-hidden="true" />
-        <button
-          type="button"
-          className={`settings-trigger ${screen === 'settings' ? 'active' : ''}`}
-          onClick={() => void navigateScreen('settings')}
-          aria-label="Open provider settings"
-          title="Provider settings"
-        >
-          <Settings size={18} />
-        </button>
-      </header>
-
-      <aside className={`navigation ${navOpen ? 'navigation-open' : ''}`}>
-        <nav>
-          {navigation.map((item) => {
+        <nav className="header-navigation" aria-label="Primary navigation">
+          {headerNavigation.map((item) => {
             const Icon = item.icon
             return (
               <button
@@ -1252,16 +1238,15 @@ function App() {
                 key={item.id}
                 className={screen === item.id ? 'active' : ''}
                 onClick={() => void navigateScreen(item.id)}
+                aria-label={`Open ${item.label}`}
                 title={item.label}
               >
-                <Icon size={19} />
-                <span>{item.label}</span>
+                <Icon size={18} />
               </button>
             )
           })}
         </nav>
-        <div className="navigation-version">v0.1</div>
-      </aside>
+      </header>
 
       {screen === 'notebook' ? (
         <>
@@ -1630,17 +1615,15 @@ function WorkspaceScreen({
             {screen === 'projects' && 'Fresh local-first projects and their canonical project books.'}
             {screen === 'library' && 'Reusable prompts, characters, scenes, images, and videos.'}
             {screen === 'jobs' && 'Queued project-book actions and provider operations.'}
-            {screen === 'settings' && 'Provider credentials, routing, and model defaults.'}
-            {screen === 'diagnostics' && 'Catalog, CAS, MCP, and publication health.'}
+            {screen === 'settings'
+              && 'Provider configuration plus catalog, CAS, MCP, and publication health.'}
           </p>
           <span className="workspace-notice">{notice}</span>
         </div>
-        {screen !== 'settings' && (
-          <button type="button" onClick={() => void onRefresh()} disabled={busy}>
-            <RefreshCw size={16} className={busy ? 'spin' : ''} />
-            Refresh
-          </button>
-        )}
+        <button type="button" onClick={() => void onRefresh()} disabled={busy}>
+          <RefreshCw size={16} className={busy ? 'spin' : ''} />
+          Refresh
+        </button>
       </header>
 
       {screen === 'projects' && (
@@ -1721,27 +1704,55 @@ function WorkspaceScreen({
       )}
 
       {screen === 'settings' ? (
-        <div className="settings-grid">
-          <label>
-            Project slug
-            <input value={projectSlug || 'No project selected'} readOnly />
-          </label>
-          <label>
-            Project book
-            <input value={bookSummary} readOnly />
-          </label>
-          {['OpenAI', 'KIE', 'FAL', 'Google Flow', 'ElevenLabs', 'Backblaze B2'].map(
-            (provider) => (
-              <article key={provider} className="provider-card">
-                <span className="provider-dot" />
-                <div>
-                  <strong>{provider}</strong>
-                  <p>Environment-managed credential</p>
-                </div>
-                <button type="button" disabled>Environment managed</button>
-              </article>
-            ),
-          )}
+        <div className="settings-sections">
+          <section aria-labelledby="provider-settings-title">
+            <div className="workspace-section-heading">
+              <span className="section-label">PROVIDERS</span>
+              <h2 id="provider-settings-title">Provider settings</h2>
+              <p>Credentials, routing, and model defaults managed by the environment.</p>
+            </div>
+            <div className="settings-grid">
+              <label>
+                Project slug
+                <input value={projectSlug || 'No project selected'} readOnly />
+              </label>
+              <label>
+                Project book
+                <input value={bookSummary} readOnly />
+              </label>
+              {['OpenAI', 'KIE', 'FAL', 'Google Flow', 'ElevenLabs', 'Backblaze B2'].map(
+                (provider) => (
+                  <article key={provider} className="provider-card">
+                    <span className="provider-dot" />
+                    <div>
+                      <strong>{provider}</strong>
+                      <p>Environment-managed credential</p>
+                    </div>
+                    <button type="button" disabled>Environment managed</button>
+                  </article>
+                ),
+              )}
+            </div>
+          </section>
+          <section className="settings-diagnostics" aria-labelledby="system-diagnostics-title">
+            <div className="workspace-section-heading">
+              <span className="section-label">DIAGNOSTICS</span>
+              <h2 id="system-diagnostics-title">System diagnostics</h2>
+              <p>Catalog, object storage, synchronization, and publication health.</p>
+            </div>
+            <div className="record-grid settings-diagnostics-grid">
+              {records.length === 0 ? (
+                <EmptyRecord icon={CircleDot} label="Refresh to load storage status" />
+              ) : (
+                records.map((record, index) => (
+                  <article className="record-card" key={`settings-diagnostics-${index}`}>
+                    <span>STORAGE STATUS</span>
+                    <pre>{JSON.stringify(record, null, 2)}</pre>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
         </div>
       ) : (
         <div className="record-grid">
