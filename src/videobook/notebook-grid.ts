@@ -30,6 +30,13 @@ function slotKey(slot: NotebookGridSlot): string {
   return `${slot.stage}:${slot.column}`
 }
 
+function normalizedSlot(slot: NotebookGridSlot): NotebookGridSlot {
+  return {
+    stage: Math.max(0, slot.stage),
+    column: Math.max(0, slot.column),
+  }
+}
+
 function nextFreeColumn(
   occupied: Set<string>,
   stage: number,
@@ -87,6 +94,22 @@ export function normalizeNotebookGridNodes<T extends NotebookGridData>(
   })
 }
 
+export function snapNotebookGridMove<T extends NotebookGridData>(
+  nodes: readonly Node<T>[],
+  id: string,
+  requested: NotebookGridSlot,
+): Array<Node<T>> {
+  const slot = normalizedSlot(requested)
+  return nodes.map((node) => {
+    if (node.id !== id) return node
+    return {
+      ...node,
+      position: notebookGridPosition(slot),
+      data: { ...node.data, stage: slot.stage + 1 },
+    }
+  })
+}
+
 export function nextNotebookGridSlot<T extends NotebookGridData>(
   nodes: readonly Node<T>[],
   stage = 0,
@@ -104,10 +127,7 @@ export function resolveNotebookGridMove<T extends NotebookGridData>(
   const moving = normalized.find((node) => node.id === id)
   if (!moving) return normalized
 
-  const target = {
-    stage: Math.max(0, requested.stage),
-    column: Math.max(0, requested.column),
-  }
+  const target = normalizedSlot(requested)
   const targetNodes = normalized.filter((node) => (
     node.id !== id && notebookGridSlot(node.position).stage === target.stage
   ))

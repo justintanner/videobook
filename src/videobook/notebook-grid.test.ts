@@ -9,6 +9,7 @@ import {
   normalizeNotebookGridNodes,
   normalizeNotebookGridPositions,
   resolveNotebookGridMove,
+  snapNotebookGridMove,
   type NotebookGridData,
 } from './notebook-grid'
 
@@ -61,6 +62,26 @@ describe('notebook grid', () => {
       node('c', 0, 3),
     ], 'c', { stage: 0, column: 0 })
     expect(result.map((item) => ({ id: item.id, slot: notebookGridSlot(item.position) }))).toEqual([
+      { id: 'a', slot: { stage: 0, column: 1 } },
+      { id: 'b', slot: { stage: 0, column: 2 } },
+      { id: 'c', slot: { stage: 0, column: 0 } },
+    ])
+  })
+
+  it('snaps the moving cell live and resolves an occupied chain only after drop', () => {
+    const live = snapNotebookGridMove([
+      node('a', 0, 0),
+      node('b', 0, 1),
+      node('c', 0, 2),
+    ], 'c', { stage: 0, column: 0 })
+    expect(live.map((item) => ({ id: item.id, slot: notebookGridSlot(item.position) }))).toEqual([
+      { id: 'a', slot: { stage: 0, column: 0 } },
+      { id: 'b', slot: { stage: 0, column: 1 } },
+      { id: 'c', slot: { stage: 0, column: 0 } },
+    ])
+
+    const settled = resolveNotebookGridMove(live, 'c', { stage: 0, column: 0 })
+    expect(settled.map((item) => ({ id: item.id, slot: notebookGridSlot(item.position) }))).toEqual([
       { id: 'a', slot: { stage: 0, column: 1 } },
       { id: 'b', slot: { stage: 0, column: 2 } },
       { id: 'c', slot: { stage: 0, column: 0 } },

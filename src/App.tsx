@@ -67,6 +67,7 @@ import {
   nextNotebookGridSlot,
   notebookGridSlot,
   resolveNotebookGridMove,
+  snapNotebookGridMove,
   type NotebookGridSlot,
 } from '@/videobook/notebook-grid'
 
@@ -363,6 +364,7 @@ function App() {
   const changeVersionRef = useRef(0)
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
   const flowRef = useRef<ReactFlowInstance<Node<NotebookCellData>, Edge> | null>(null)
+  const dragSlotsRef = useRef(new Map<string, NotebookGridSlot>())
 
   const selected = useMemo(
     () => nodes.find((node) => node.id === selectedId) ?? null,
@@ -512,6 +514,7 @@ function App() {
     setPromptOpen(false)
     setPaletteDragKind(null)
     setPreviewSlot(null)
+    dragSlotsRef.current.clear()
     setPanelOpen(window.innerWidth > 720)
     setScreen('notebook')
     setRecords([])
@@ -1127,12 +1130,15 @@ function App() {
                 for (const change of changes) {
                   next = applyNodeChanges([change], next)
                   if (change.type === 'position' && change.position) {
-                    next = resolveNotebookGridMove(
+                    const slot = notebookGridSlot(change.position)
+                    dragSlotsRef.current.set(change.id, slot)
+                    next = snapNotebookGridMove(
                       next,
                       change.id,
-                      notebookGridSlot(change.position),
+                      slot,
                     )
                   }
+                  if (change.type === 'remove') dragSlotsRef.current.delete(change.id)
                 }
                 const changed = changes.some((change) => (
                   change.type === 'position' || change.type === 'remove'
@@ -1150,7 +1156,11 @@ function App() {
                 replaceEdges(next, changed)
                 if (changed) void persistNotebook()
               }}
-              onNodeDragStop={() => {
+              onNodeDragStop={(_, node) => {
+                const slot = dragSlotsRef.current.get(node.id)
+                  ?? notebookGridSlot(node.position)
+                dragSlotsRef.current.delete(node.id)
+                replaceNodes(resolveNotebookGridMove(nodesRef.current, node.id, slot))
                 setPreviewSlot(null)
                 void persistNotebook()
               }}
