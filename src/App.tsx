@@ -41,7 +41,6 @@ import {
   MessageSquareText,
   Plus,
   RefreshCw,
-  RotateCcw,
   Settings,
   Sparkles,
   Trash2,
@@ -60,6 +59,10 @@ import {
   type CommandToolArgs,
   type ServerCommand,
 } from '@/lib/command-registry'
+import {
+  ActionDetailModal,
+  type ActionDetailTab,
+} from '@/components/videobook/ActionDetailModal'
 import {
   CommandComposer,
   type ComposerOutcome,
@@ -128,16 +131,12 @@ const palette = [
 
 const cellDragType = 'application/x-videobook-cell'
 
-type CellFace = 'action' | 'history' | 'source'
-
-interface CellFaceController {
-  faces: Record<string, CellFace>
-  setFace: (id: string, face: CellFace) => void
+interface CellDetailController {
+  openDetail: (id: string, tab: ActionDetailTab) => void
 }
 
-const CellFaceContext = createContext<CellFaceController>({
-  faces: {},
-  setFace: () => undefined,
+const CellDetailContext = createContext<CellDetailController>({
+  openDetail: () => undefined,
 })
 
 function cellKindFromDrag(value: string): BookCellKind | null {
@@ -146,15 +145,8 @@ function cellKindFromDrag(value: string): BookCellKind | null {
     : null
 }
 
-function trailDate(value: string): string {
-  const date = new Date(value)
-  return Number.isNaN(date.valueOf()) ? value : date.toLocaleString()
-}
-
 function CellNode({ data, selected }: NodeProps<Node<BookCellData>>) {
-  const faceController = useContext(CellFaceContext)
-  const face = faceController.faces[data.actionId] ?? 'action'
-  const flipped = face !== 'action'
+  const detailController = useContext(CellDetailContext)
   const Icon =
     data.kind === 'video'
       ? Video
@@ -166,169 +158,85 @@ function CellNode({ data, selected }: NodeProps<Node<BookCellData>>) {
             ? Film
             : Image
 
-  const showFace = (next: CellFace) => {
-    faceController.setFace(data.actionId, next)
-  }
-
   return (
     <article
       className={`cell-node ${selected ? 'cell-node-selected' : ''}`}
-      data-face={face}
     >
       <Handle type="target" position={Position.Top} id="reference" />
       <Handle type="target" position={Position.Top} id="subject" />
       <Handle type="target" position={Position.Top} id="scene" />
       <Handle type="target" position={Position.Top} id="first-frame" />
-      <div className={`cell-node-turn ${flipped ? 'cell-node-turn-flipped' : ''}`}>
-        <section className="cell-node-face cell-node-face-action" aria-hidden={flipped}>
-          <header className="cell-node-header">
-            <span>
-              <Icon size={14} />
-              {data.subtitle}
-            </span>
-            <span className="cell-node-header-actions">
-              <span className="cell-stage-code">
-                {data.stage.toString().padStart(2, '0')}
+      <section className="cell-node-shell">
+        <header className="cell-node-header">
+          <span>
+            <Icon size={14} />
+            {data.kind.toUpperCase()}
+          </span>
+          <span className="cell-node-header-actions">
+            <button
+              type="button"
+              className="cell-face-button nodrag nopan"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                detailController.openDetail(data.actionId, 'history')
+              }}
+              aria-label={`View history for ${data.slug}`}
+              title="View history"
+            >
+              <Clock3 size={14} />
+            </button>
+            <button
+              type="button"
+              className="cell-face-button nodrag nopan"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation()
+                detailController.openDetail(data.actionId, 'source')
+              }}
+              aria-label={`View source for ${data.slug}`}
+              title="View source"
+            >
+              <Braces size={15} />
+            </button>
+          </span>
+        </header>
+        {data.mediaUrl || data.thumbnailUrl ? (
+          <div className="cell-media">
+            {data.kind === 'video' && !data.thumbnailUrl ? (
+              <video
+                src={data.mediaUrl}
+                muted
+                playsInline
+                preload="metadata"
+              />
+            ) : (
+              <img
+                src={data.thumbnailUrl ?? data.mediaUrl}
+                alt={data.slug}
+              />
+            )}
+            {data.width && data.height && (
+              <span className="cell-ratio">
+                {data.width > data.height
+                  ? '16:9'
+                  : data.width < data.height
+                    ? '9:16'
+                    : '1:1'}
               </span>
-              <button
-                type="button"
-                className="cell-face-button nodrag nopan"
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  showFace('history')
-                }}
-                aria-label={`View history for ${data.slug}`}
-                title="View history"
-              >
-                <Clock3 size={14} />
-              </button>
-              <button
-                type="button"
-                className="cell-face-button nodrag nopan"
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  showFace('source')
-                }}
-                aria-label={`View source for ${data.slug}`}
-                title="View source"
-              >
-                <Braces size={15} />
-              </button>
-            </span>
-          </header>
-          {data.mediaUrl || data.thumbnailUrl ? (
-            <div className="cell-media">
-              {data.kind === 'video' && !data.thumbnailUrl ? (
-                <video
-                  src={data.mediaUrl}
-                  muted
-                  playsInline
-                  preload="metadata"
-                />
-              ) : (
-                <img
-                  src={data.thumbnailUrl ?? data.mediaUrl}
-                  alt={data.slug}
-                />
-              )}
-              {data.width && data.height && (
-                <span className="cell-ratio">
-                  {data.width > data.height
-                    ? '16:9'
-                    : data.width < data.height
-                      ? '9:16'
-                      : '1:1'}
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="cell-copy">
-              <Sparkles size={28} />
-              <span>{data.prompt || data.operation}</span>
-            </div>
-          )}
-          <footer className="cell-node-footer">
-            <span>
-              <strong>{data.slug}</strong>
-              <small>{data.title}</small>
-            </span>
-            <strong>{data.status}</strong>
-          </footer>
-        </section>
-        <section className="cell-node-face cell-node-face-back" aria-hidden={!flipped}>
-          {flipped && (
-            <>
-              <header className="cell-node-header">
-                <span>
-                  {face === 'history' ? <Clock3 size={14} /> : <Braces size={15} />}
-                  {face === 'history' ? 'HISTORY · CARD' : 'SOURCE · ACTION'}
-                </span>
-                <span className="cell-node-header-actions">
-                  <button
-                    type="button"
-                    className="cell-face-button nodrag nopan"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      showFace('action')
-                    }}
-                    aria-label={`Return to ${data.slug}`}
-                    title="Return to action"
-                  >
-                    <RotateCcw size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    className="cell-face-button nodrag nopan"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      showFace(face === 'history' ? 'source' : 'history')
-                    }}
-                    aria-label={face === 'history'
-                      ? `View source for ${data.slug}`
-                      : `View history for ${data.slug}`}
-                    title={face === 'history' ? 'View source' : 'View history'}
-                  >
-                    {face === 'history' ? <Braces size={15} /> : <Clock3 size={14} />}
-                  </button>
-                </span>
-              </header>
-              {face === 'history' ? (
-                <ol className="cell-trail nodrag nopan nowheel">
-                  {data.trail.map((item) => (
-                    <li key={item.id}>
-                      <div>
-                        <strong>{item.phase}</strong>
-                        <code>{item.revision.slice(0, 7)}</code>
-                      </div>
-                      <p>{item.title}</p>
-                      <small>{item.actor} · {trailDate(item.date)}</small>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <pre className="cell-source nodrag nopan nowheel">
-                  {JSON.stringify(data.source, null, 2)}
-                </pre>
-              )}
-              <footer className="cell-node-footer">
-                <span>
-                  <strong>{data.slug}</strong>
-                  <small>
-                    {face === 'history'
-                      ? `${data.trail.length} history ${data.trail.length === 1 ? 'event' : 'events'}`
-                      : data.operation}
-                  </small>
-                </span>
-                <strong>{data.revision.slice(0, 7)}</strong>
-              </footer>
-            </>
-          )}
-        </section>
-      </div>
+            )}
+          </div>
+        ) : (
+          <div className="cell-copy">
+            <Sparkles size={28} />
+            <span>{data.prompt || data.operation}</span>
+          </div>
+        )}
+        <footer className="cell-node-footer">
+          <strong>{data.slug}</strong>
+          <strong>{data.status}</strong>
+        </footer>
+      </section>
       <Handle type="source" position={Position.Bottom} />
     </article>
   )
@@ -515,8 +423,11 @@ function App() {
   const [projectSlug, setProjectSlug] = useState('')
   const [projectBook, setProjectBook] = useState<ProjectBook | null>(null)
   const [bookAssets, setBookAssets] = useState<BookAsset[]>([])
-  const [cellFaces, setCellFaces] = useState<Record<string, CellFace>>({})
-  const [flowInteractive, setFlowInteractive] = useState(true)
+  const [cellDetail, setCellDetail] = useState<{
+    actionId: string
+    tab: ActionDetailTab
+  } | null>(null)
+  const [flowInteractive, setFlowInteractive] = useState(false)
   const [panelOpen, setPanelOpen] = useState(() => window.innerWidth > 720)
   const [promptOpen, setPromptOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
@@ -543,6 +454,14 @@ function App() {
     () => nodes.find((node) => node.id === selectedId) ?? null,
     [nodes, selectedId],
   )
+  const detailCell = useMemo(
+    () => (
+      cellDetail
+        ? nodes.find((node) => node.id === cellDetail.actionId)?.data ?? null
+        : null
+    ),
+    [cellDetail, nodes],
+  )
 
   const visibleCommands = useMemo(
     () => commands.filter((command) => {
@@ -552,14 +471,13 @@ function App() {
     [commands, screen],
   )
 
-  const setCellFace = useCallback((id: string, face: CellFace) => {
-    setCellFaces((current) => ({ ...current, [id]: face }))
+  const openCellDetail = useCallback((id: string, tab: ActionDetailTab) => {
+    setCellDetail({ actionId: id, tab })
   }, [])
 
-  const cellFaceController = useMemo<CellFaceController>(() => ({
-    faces: cellFaces,
-    setFace: setCellFace,
-  }), [cellFaces, setCellFace])
+  const cellDetailController = useMemo<CellDetailController>(() => ({
+    openDetail: openCellDetail,
+  }), [openCellDetail])
 
   useEffect(() => {
     const closeNarrowInspector = () => {
@@ -670,7 +588,8 @@ function App() {
       setCurrentProject(slug)
       applyProjectBook(book, assets)
       setSelectedId(null)
-      setCellFaces({})
+      setCellDetail(null)
+      setFlowInteractive(false)
       setPromptOpen(false)
       setPaletteDragKind(null)
       setPreviewSlot(null)
@@ -1110,12 +1029,12 @@ function App() {
       return { ok: false, message: 'Select a project-book card first' }
     }
     if (screen !== 'notebook') await navigateScreen('notebook')
-    setCellFace(actionId, 'history')
+    openCellDetail(actionId, 'history')
     return {
       ok: true,
-      message: 'Opened the card history face',
+      message: 'Opened action history',
     }
-  }, [navigateScreen, screen, selectedId, setCellFace])
+  }, [navigateScreen, openCellDetail, screen, selectedId])
 
   const ensureCommandCatalog = useCallback(async () => {
     if (commands.length > 0 || mcp.state !== 'ready') return
@@ -1381,7 +1300,7 @@ function App() {
               setPreviewSlot(null)
             }}
           >
-            <CellFaceContext.Provider value={cellFaceController}>
+            <CellDetailContext.Provider value={cellDetailController}>
               <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -1540,7 +1459,7 @@ function App() {
                   }}
                 />
               </ReactFlow>
-            </CellFaceContext.Provider>
+            </CellDetailContext.Provider>
           </section>
 
           <aside className={`inspector ${panelOpen ? '' : 'inspector-closed'}`}>
@@ -1626,6 +1545,15 @@ function App() {
           onOutcome={(outcome) => setWorkspaceNotice(outcome.message)}
         />
       )}
+
+      <ActionDetailModal
+        cell={detailCell}
+        tab={cellDetail?.tab ?? 'history'}
+        onTabChange={(tab) => {
+          setCellDetail((current) => current ? { ...current, tab } : current)
+        }}
+        onClose={() => setCellDetail(null)}
+      />
 
       <CommandComposer
         commands={visibleCommands}

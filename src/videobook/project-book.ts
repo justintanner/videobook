@@ -39,7 +39,6 @@ export interface BookCellData extends Record<string, unknown> {
   actionId: string
   kind: BookCellKind
   title: string
-  subtitle: string
   stage: number
   status: string
   slug: string
@@ -296,7 +295,6 @@ export function projectBookNodes(
         actionId: card.action.id,
         kind: card.kind,
         title: actionTitle(card.action, card.artifactId),
-        subtitle: `${card.kind.toUpperCase()} · ACTION`,
         stage: slot.stage + 1,
         status: asset?.status ?? card.action.phase,
         slug: `@${card.artifactId.replace(/^@/, '')}`,

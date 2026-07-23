@@ -41,9 +41,13 @@ function action(
 }
 
 describe('project book canvas projection', () => {
-  it('keeps history and source on card faces while locked scrolling stays vertical', () => {
+  it('opens history and rich source in a modal while locked scrolling stays vertical', () => {
     const app = readFileSync(
       new URL('../App.tsx', import.meta.url),
+      'utf8',
+    )
+    const modal = readFileSync(
+      new URL('../components/videobook/ActionDetailModal.tsx', import.meta.url),
       'utf8',
     )
     const css = readFileSync(
@@ -53,11 +57,18 @@ describe('project book canvas projection', () => {
 
     expect(app).toContain('View history for')
     expect(app).toContain('View source for')
+    expect(app).toContain('useState(false)')
     expect(app).toContain('panOnScroll={!flowInteractive}')
     expect(app).toContain('panOnScrollMode={PanOnScrollMode.Vertical}')
     expect(app).not.toContain('History trails')
-    expect(css).toContain('.cell-node-turn-flipped')
-    expect(css).toContain('transform: rotateY(180deg)')
+    expect(app).not.toContain('cell-node-turn-flipped')
+    expect(app).not.toContain('data.stage.toString()')
+    expect(app).not.toContain('<small>{data.title}</small>')
+    expect(modal).toContain('role="tablist"')
+    expect(modal).toContain('<RichJson value={cell.source} />')
+    expect(css).toContain('.action-detail-modal')
+    expect(css).toContain('width: 80vw')
+    expect(css).toContain('height: 80vh')
   })
 
   it('bounds portrait media to the preview viewport', () => {
