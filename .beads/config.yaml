@@ -56,4 +56,4 @@
 
 # sync.remote disabled — use the local embedded Dolt store (avoids the
 # remote-backed write block from the v49->v53 schema migration conflict).
-# sync.remote: "git+https://github.com/justintanner/videocity.git"
+sync.remote: "git+https://github.com/justintanner/videobook.git"
