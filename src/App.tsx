@@ -226,6 +226,10 @@ function CellNode({ data, selected }: NodeProps<Node<BookCellData>>) {
               </span>
             )}
           </div>
+        ) : data.kind === 'prompt' ? (
+          <div className="cell-copy cell-copy-prompt">
+            <p>{data.prompt || data.operation}</p>
+          </div>
         ) : (
           <div className="cell-copy">
             <Sparkles size={28} />
@@ -1389,7 +1393,7 @@ function App() {
               >
                 <NotebookStageBoard nodes={nodes} previewSlot={previewSlot} />
                 <Background color="rgba(93, 220, 164, .09)" gap={36} size={1} />
-                <Panel position="top-right" className="palette-panel">
+                <Panel position="top-left" className="palette-panel">
                   <aside className="palette">
                     <span className="section-label">CELLS</span>
                     {palette.map((item) => {
@@ -1451,7 +1455,7 @@ function App() {
                   zoomable={flowInteractive}
                 />
                 <Controls
-                  position="top-left"
+                  position="top-right"
                   className="flow-controls"
                   onInteractiveChange={(interactive) => {
                     setFlowInteractive(interactive)
