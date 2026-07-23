@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { BookAction, ProjectBook } from 'videobook-engine'
 
@@ -40,6 +41,20 @@ function action(
 }
 
 describe('project book canvas projection', () => {
+  it('bounds portrait media to the preview viewport', () => {
+    const css = readFileSync(
+      new URL('../index.css', import.meta.url),
+      'utf8',
+    )
+    const rule = css.match(
+      /\.cell-media img,\s*\.cell-media video\s*\{([^}]*)\}/,
+    )?.[1]
+
+    expect(rule).toContain('position: absolute')
+    expect(rule).toContain('inset: 0')
+    expect(rule).toContain('object-fit: contain')
+  })
+
   it('renders artifact actions with media, slugs, causal edges, and layout trail', () => {
     const prompt = action('prompt-action', {
       outputArtifacts: [{
