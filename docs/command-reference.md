@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (233)
+## MCP endpoints (236)
 
 - `add_timeline_audio` — Add an overlay audio clip to the timeline at a given frame offset
 - `analyze_jokes` — Analyze a clip's ElevenLabs transcript and identify the jokes in the bit, classified by type (pun, self-deprecating, observational, etc.). Each joke includes the verbatim text, start/end timestamps, and a one-line note on why it works. Runs in the background and persists to .analyze-jokes.json. Requires an ElevenLabs transcript — run /transcribe first if missing.
@@ -24,6 +24,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `concat_images` — Concatenate 1-9 image assets into a new img-* asset. One or two inputs use a fixed two-slot sheet, with landscape images side-by-side and portrait images stacked. A missing slot stays as background, and each source image is fit into its cell without stretching.
 - `copy_file_to_clipboard` — Copy an asset's original media file to the macOS pasteboard as a file reference
 - `create_character` — Create a new character folder (char-*), optionally seeded from existing image assets
+- `create_character_entity` — Create a reusable character
 - `create_google_flow_character` — Create a reusable Google Flow character from 1-2 project image assets (plus optional personality notes and a voice). Returns a character ref for the character_refs parameter of generate_google_flow_omni_flash_video (character_1..7). Consumes plan credits.
 - `create_google_flow_voice` — Create a reusable Google Flow custom voice from a system preset. Synthesizes a short TTS clip (takes a few seconds and consumes plan credits) and returns a voice ref for the voice_refs parameter of generate_google_flow_omni_flash_video.
 - `create_notebook` — Create an empty version 2 notebook
@@ -160,6 +161,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `list_elevenlabs_voices` — List available ElevenLabs voice IDs with custom voices first and generic voices after them
 - `list_google_flow_characters` — List Google Flow characters for an account (display names + optional signed thumbnail previews).
 - `list_google_flow_voices` — List Google Flow voices (custom 'user' voices and/or the 'system' presets) for an account.
+- `list_jobs` — List persistent jobs for the active project
 - `list_notebooks` — List first-class Videobook notebooks
 - `list_projects` — List all videocity projects
 - `list_prompt_history` — List recent prompts for a given surface in the current project, newest-first.
@@ -225,6 +227,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `trim_audio` — Trim an aud-* asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for vid-* assets so picture and sound remain synchronized. Operates in-place with git versioning.
 - `trim_video` — Trim a video asset: keep a time range (trim_start/trim_end) or cut out a middle section (cut_start/cut_end). Operates in-place with git versioning.
 - `unassign_slot` — Clear an asset from a timeline slot (e.g. slot 's02' = index 1)
+- `update_character` — Update a reusable character
 - `update_notebook` — Replace a notebook graph and create a revision
 - `update_prompt` — Update a reusable prompt
 - `update_scene` — Update a reusable scene

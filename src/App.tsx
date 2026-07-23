@@ -6,6 +6,9 @@ import {
   MiniMap,
   Position,
   ReactFlow,
+  addEdge,
+  type Connection,
+  type Edge,
   type Node,
   type NodeProps,
 } from '@xyflow/react'
@@ -44,6 +47,7 @@ type Screen =
   | 'diagnostics'
 
 type CellKind = 'image' | 'video' | 'prompt' | 'character' | 'scene'
+type EntityKind = 'prompt' | 'character' | 'scene'
 
 interface CellData extends Record<string, unknown> {
   kind: CellKind
@@ -52,6 +56,11 @@ interface CellData extends Record<string, unknown> {
   stage: number
   status?: string
   preview?: string
+  prompt?: string
+  model?: string
+  entityId?: string
+  outputAssetId?: string
+  inputs?: Record<string, unknown>
 }
 
 interface ToolResponse {
@@ -60,80 +69,6 @@ interface ToolResponse {
 }
 
 const mcpUrl = new URL('/mcp', window.location.origin).toString()
-
-const initialNodes: Array<Node<CellData>> = [
-  {
-    id: 'img-look',
-    type: 'cell',
-    position: { x: 120, y: 110 },
-    data: {
-      kind: 'image',
-      title: '@img-nbp-eyes-look-like',
-      subtitle: 'ASSET · IMA',
-      stage: 1,
-      status: 'ready',
-      preview: 'aurora',
-    },
-  },
-  {
-    id: 'img-profile',
-    type: 'cell',
-    position: { x: 500, y: 110 },
-    data: {
-      kind: 'image',
-      title: '@img-vancatprofile',
-      subtitle: 'ASSET · IMA',
-      stage: 1,
-      status: 'ready',
-      preview: 'profile',
-    },
-  },
-  {
-    id: 'img-generation',
-    type: 'cell',
-    position: { x: 180, y: 570 },
-    data: {
-      kind: 'image',
-      title: 'Celestial portrait',
-      subtitle: 'GEN IMAGE · IMG',
-      stage: 2,
-      status: '$0.134',
-      preview: 'result',
-    },
-  },
-  {
-    id: 'scene',
-    type: 'cell',
-    position: { x: 570, y: 610 },
-    data: {
-      kind: 'scene',
-      title: 'Moon garden',
-      subtitle: 'SCENE · SCN',
-      stage: 2,
-      status: 'configured',
-    },
-  },
-  {
-    id: 'video',
-    type: 'cell',
-    position: { x: 330, y: 1040 },
-    data: {
-      kind: 'video',
-      title: 'Arrival sequence',
-      subtitle: 'GEN VIDEO · VID',
-      stage: 3,
-      status: 'draft',
-      preview: 'video',
-    },
-  },
-]
-
-const initialEdges = [
-  { id: 'edge-1', source: 'img-look', target: 'img-generation', targetHandle: 'reference' },
-  { id: 'edge-2', source: 'img-profile', target: 'img-generation', targetHandle: 'subject' },
-  { id: 'edge-3', source: 'img-generation', target: 'video', targetHandle: 'first-frame' },
-  { id: 'edge-4', source: 'scene', target: 'video', targetHandle: 'scene' },
-]
 
 const nodeTypes = { cell: CellNode }
 
@@ -207,6 +142,9 @@ function CellNode({ data, selected }: NodeProps<Node<CellData>>) {
 function parseToolResult(result: unknown): unknown {
   const response = result as ToolResponse
   const text = response.content?.find((item) => item.type === 'text')?.text
+  if (response.isError) {
+    throw new Error(text ?? 'MCP tool failed')
+  }
   if (!text) return null
   try {
     return JSON.parse(text) as unknown
@@ -222,10 +160,11 @@ function App() {
     transportType: 'http',
     autoReconnect: 3000,
   })
-  const [screen, setScreen] = useState<Screen>('notebook')
-  const [nodes, setNodes] = useState(initialNodes)
+  const [screen, setScreen] = useState<Screen>('projects')
+  const [nodes, setNodes] = useState<Array<Node<CellData>>>([])
+  const [edges, setEdges] = useState<Array<Edge>>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [projectSlug, setProjectSlug] = useState('notebook-scratch')
+  const [projectSlug, setProjectSlug] = useState('')
   const [notebookName, setNotebookName] = useState('Scratch')
   const [panelOpen, setPanelOpen] = useState(() => window.innerWidth > 720)
   const [navOpen, setNavOpen] = useState(false)
@@ -249,24 +188,30 @@ function App() {
   const refreshScreen = useCallback(async () => {
     setBusy(true)
     try {
+      if (screen === 'library') {
+        const values = await Promise.all([
+          call('list_prompts', { project_slug: projectSlug }),
+          call('list_characters', { project_slug: projectSlug }),
+          call('list_scenes', { project_slug: projectSlug }),
+        ])
+        setRecords(values.flatMap((value) => (Array.isArray(value) ? value : [])))
+        setNotice(`Updated ${new Date().toLocaleTimeString()}`)
+        return
+      }
       const tool =
         screen === 'projects'
           ? 'list_projects'
-          : screen === 'library'
-            ? 'list_characters'
-            : screen === 'history'
+          : screen === 'history'
               ? 'revision_history'
               : screen === 'jobs'
-                ? 'sync'
+                ? 'list_jobs'
                 : screen === 'diagnostics'
                   ? 'storage_status'
                   : 'list_notebooks'
       const args =
         tool === 'storage_status'
           ? {}
-          : tool === 'sync'
-            ? { project_slug: projectSlug }
-            : { project_slug: projectSlug }
+          : { project_slug: projectSlug }
       const value = await call(tool, args)
       setRecords(Array.isArray(value) ? value : [value])
       setNotice(`Updated ${new Date().toLocaleTimeString()}`)
@@ -276,6 +221,153 @@ function App() {
       setBusy(false)
     }
   }, [call, projectSlug, screen])
+
+  const createEntity = useCallback(
+    async (type: EntityKind, name: string, prompt: string) => {
+      setBusy(true)
+      try {
+        const tool =
+          type === 'character'
+            ? 'create_character_entity'
+            : `create_${type}`
+        const value = await call(tool, {
+          project_slug: projectSlug,
+          name,
+          ...(prompt ? { prompt } : {}),
+        })
+        setRecords((current) => [value, ...current])
+        setNotice(`Created ${type} ${name}`)
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : String(error))
+      } finally {
+        setBusy(false)
+      }
+    },
+    [call, projectSlug],
+  )
+
+  const deleteEntity = useCallback(
+    async (type: EntityKind, id: string) => {
+      setBusy(true)
+      try {
+        await call(`delete_${type}`, {
+          project_slug: projectSlug,
+          entity_id: id,
+        })
+        setRecords((current) =>
+          current.filter(
+            (record) =>
+              !(
+                typeof record === 'object' &&
+                record !== null &&
+                'id' in record &&
+                record.id === id
+              ),
+          ),
+        )
+        setNotice(`Deleted ${type} ${id}`)
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : String(error))
+      } finally {
+        setBusy(false)
+      }
+    },
+    [call, projectSlug],
+  )
+
+  const openProject = useCallback(
+    async (slug: string) => {
+      setBusy(true)
+      try {
+        const value = await call('get_notebook', {
+          project_slug: slug,
+          notebook_id: 'nb-scratch',
+        })
+        const notebook = value as {
+          name?: string
+          cells?: Array<{
+            id: string
+            type: CellKind
+            title?: string
+            position?: { x: number; y: number }
+            prompt?: string
+            model?: string
+            entityId?: string
+            outputAssetId?: string
+            inputs?: Record<string, unknown>
+          }>
+          edges?: Array<{
+            id: string
+            source: string
+            target: string
+            targetInput?: string
+          }>
+        }
+        setProjectSlug(slug)
+        setNotebookName(notebook.name ?? 'Scratch')
+        setNodes(
+          (notebook.cells ?? []).map((cell, index) => ({
+            id: cell.id,
+            type: 'cell',
+            position: cell.position ?? {
+              x: 120 + (index % 3) * 340,
+              y: 80 + Math.floor(index / 3) * 320,
+            },
+            data: {
+              kind: cell.type,
+              title: cell.title ?? cell.id,
+              subtitle: `${cell.type.toUpperCase()} · CELL`,
+              stage: Math.floor(index / 3) + 1,
+              status: 'ready',
+              ...(cell.prompt ? { prompt: cell.prompt } : {}),
+              ...(cell.model ? { model: cell.model } : {}),
+              ...(cell.entityId ? { entityId: cell.entityId } : {}),
+              ...(cell.outputAssetId
+                ? { outputAssetId: cell.outputAssetId }
+                : {}),
+              ...(cell.inputs ? { inputs: cell.inputs } : {}),
+            },
+          })),
+        )
+        setEdges(
+          (notebook.edges ?? []).map((edge) => ({
+            id: edge.id,
+            source: edge.source,
+            target: edge.target,
+            targetHandle: edge.targetInput,
+          })),
+        )
+        setSelectedId(null)
+        setScreen('notebook')
+        setNotice(`Opened ${slug}`)
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : String(error))
+      } finally {
+        setBusy(false)
+      }
+    },
+    [call],
+  )
+
+  const createProject = useCallback(
+    async (slug: string) => {
+      setBusy(true)
+      try {
+        const value = (await call('create_project', {
+          project_slug: slug,
+        })) as { slug?: string }
+        const createdSlug = value.slug ?? slug
+        setRecords((current) => [value, ...current])
+        setNotice(`Created ${createdSlug}`)
+        await openProject(createdSlug)
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : String(error))
+      } finally {
+        setBusy(false)
+      }
+    },
+    [call, openProject],
+  )
 
   const saveNotebook = useCallback(async () => {
     setBusy(true)
@@ -289,13 +381,19 @@ function App() {
           type: node.data.kind,
           title: node.data.title,
           position: node.position,
-          ...(node.data.kind === 'image' ? { outputAssetId: node.id } : {}),
+          ...(node.data.prompt ? { prompt: node.data.prompt } : {}),
+          ...(node.data.model ? { model: node.data.model } : {}),
+          ...(node.data.entityId ? { entityId: node.data.entityId } : {}),
+          ...(node.data.outputAssetId
+            ? { outputAssetId: node.data.outputAssetId }
+            : {}),
+          ...(node.data.inputs ? { inputs: node.data.inputs } : {}),
         })),
-        edges: initialEdges.map((edge) => ({
+        edges: edges.map((edge) => ({
           id: edge.id,
           source: edge.source,
           target: edge.target,
-          targetInput: edge.targetHandle,
+          targetInput: edge.targetHandle ?? 'input',
         })),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -310,7 +408,7 @@ function App() {
     } finally {
       setBusy(false)
     }
-  }, [call, nodes, notebookName, projectSlug])
+  }, [call, edges, nodes, notebookName, projectSlug])
 
   const runNotebook = useCallback(async () => {
     setBusy(true)
@@ -367,8 +465,14 @@ function App() {
         </div>
         <div className="project-switcher">
           <span>PROJECT</span>
-          <button type="button">
-            {projectSlug}
+          <button
+            type="button"
+            onClick={() => {
+              setScreen('projects')
+              setRecords([])
+            }}
+          >
+            {projectSlug || 'Select project'}
             <ChevronDown size={14} />
           </button>
         </div>
@@ -379,7 +483,11 @@ function App() {
           <span className="notice">{notice}</span>
           {screen === 'notebook' && (
             <>
-              <button type="button" onClick={saveNotebook} disabled={busy}>
+              <button
+                type="button"
+                onClick={saveNotebook}
+                disabled={busy || !projectSlug}
+              >
                 <Save size={15} />
                 Save
               </button>
@@ -387,7 +495,7 @@ function App() {
                 className="primary-action"
                 type="button"
                 onClick={runNotebook}
-                disabled={busy}
+                disabled={busy || !projectSlug}
               >
                 <Play size={15} />
                 Run
@@ -407,8 +515,10 @@ function App() {
                 type="button"
                 key={item.id}
                 className={screen === item.id ? 'active' : ''}
+                disabled={item.id === 'notebook' && !projectSlug}
                 onClick={() => {
                   setScreen(item.id)
+                  setRecords([])
                   setNavOpen(false)
                 }}
                 title={item.label}
@@ -457,7 +567,7 @@ function App() {
             </div>
             <ReactFlow
               nodes={nodes}
-              edges={initialEdges}
+              edges={edges}
               nodeTypes={nodeTypes}
               onNodesChange={(changes) => {
                 setNodes((current) =>
@@ -474,6 +584,18 @@ function App() {
               onNodeClick={(_, node) => {
                 setSelectedId(node.id)
                 setPanelOpen(true)
+              }}
+              onConnect={(connection: Connection) => {
+                setEdges((current) =>
+                  addEdge(
+                    {
+                      ...connection,
+                      id: `edge-${crypto.randomUUID().slice(0, 8)}`,
+                      targetHandle: connection.targetHandle ?? 'input',
+                    },
+                    current,
+                  ),
+                )
               }}
               onPaneClick={() => setSelectedId(null)}
               fitView
@@ -529,7 +651,22 @@ function App() {
                 </label>
                 <label>
                   Model
-                  <select defaultValue="auto">
+                  <select
+                    value={selected.data.model ?? 'auto'}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      setNodes((current) =>
+                        current.map((node) =>
+                          node.id === selected.id
+                            ? {
+                                ...node,
+                                data: { ...node.data, model: value },
+                              }
+                            : node,
+                        ),
+                      )
+                    }}
+                  >
                     <option value="auto">Auto route</option>
                     <option value="nano-banana">Nano Banana</option>
                     <option value="seedance">Seedance 2</option>
@@ -540,13 +677,26 @@ function App() {
                   Prompt
                   <textarea
                     rows={7}
+                    value={selected.data.prompt ?? ''}
+                    onChange={(event) => {
+                      const value = event.target.value
+                      setNodes((current) =>
+                        current.map((node) =>
+                          node.id === selected.id
+                            ? {
+                                ...node,
+                                data: { ...node.data, prompt: value },
+                              }
+                            : node,
+                        ),
+                      )
+                    }}
                     placeholder="Describe the desired result or reference a reusable prompt…"
                   />
                 </label>
                 <div className="input-ports">
                   <span>INPUT PORTS</span>
-                  <button type="button">+ reference</button>
-                  <button type="button">+ subject</button>
+                  <p>Drag a source handle into this cell to add an input.</p>
                 </div>
               </div>
             ) : (
@@ -567,9 +717,11 @@ function App() {
           busy={busy}
           onRefresh={refreshScreen}
           projectSlug={projectSlug}
-          onProjectSlug={setProjectSlug}
           notebookName={notebookName}
-          onNotebookName={setNotebookName}
+          onCreateProject={createProject}
+          onOpenProject={openProject}
+          onCreateEntity={createEntity}
+          onDeleteEntity={deleteEntity}
         />
       )}
     </main>
@@ -582,9 +734,11 @@ interface WorkspaceScreenProps {
   busy: boolean
   onRefresh: () => void
   projectSlug: string
-  onProjectSlug: (value: string) => void
   notebookName: string
-  onNotebookName: (value: string) => void
+  onCreateProject: (slug: string) => void
+  onOpenProject: (slug: string) => void
+  onCreateEntity: (type: EntityKind, name: string, prompt: string) => void
+  onDeleteEntity: (type: EntityKind, id: string) => void
 }
 
 function WorkspaceScreen({
@@ -593,10 +747,16 @@ function WorkspaceScreen({
   busy,
   onRefresh,
   projectSlug,
-  onProjectSlug,
   notebookName,
-  onNotebookName,
+  onCreateProject,
+  onOpenProject,
+  onCreateEntity,
+  onDeleteEntity,
 }: WorkspaceScreenProps) {
+  const [newProjectSlug, setNewProjectSlug] = useState('')
+  const [entityType, setEntityType] = useState<EntityKind>('prompt')
+  const [entityName, setEntityName] = useState('')
+  const [entityPrompt, setEntityPrompt] = useState('')
   const title =
     screen === 'library'
       ? 'Entity library'
@@ -616,21 +776,102 @@ function WorkspaceScreen({
             {screen === 'diagnostics' && 'Catalog, CAS, MCP, and publication health.'}
           </p>
         </div>
-        <button type="button" onClick={onRefresh} disabled={busy}>
-          <RefreshCw size={16} className={busy ? 'spin' : ''} />
-          Refresh
-        </button>
+        {screen !== 'settings' && (
+          <button type="button" onClick={onRefresh} disabled={busy}>
+            <RefreshCw size={16} className={busy ? 'spin' : ''} />
+            Refresh
+          </button>
+        )}
       </header>
+
+      {screen === 'projects' && (
+        <form
+          className="project-create"
+          onSubmit={(event) => {
+            event.preventDefault()
+            const slug = newProjectSlug.trim()
+            if (!slug) return
+            onCreateProject(slug)
+            setNewProjectSlug('')
+          }}
+        >
+          <label>
+            New project slug
+            <input
+              value={newProjectSlug}
+              onChange={(event) => setNewProjectSlug(event.target.value)}
+              placeholder="moon-garden"
+              pattern="[a-z0-9][a-z0-9-]*"
+              disabled={busy}
+            />
+          </label>
+          <button type="submit" disabled={busy || !newProjectSlug.trim()}>
+            <Plus size={16} />
+            Create project
+          </button>
+        </form>
+      )}
+
+      {screen === 'library' && (
+        <form
+          className="project-create entity-create"
+          onSubmit={(event) => {
+            event.preventDefault()
+            const name = entityName.trim()
+            if (!name) return
+            onCreateEntity(entityType, name, entityPrompt.trim())
+            setEntityName('')
+            setEntityPrompt('')
+          }}
+        >
+          <label>
+            Entity type
+            <select
+              value={entityType}
+              onChange={(event) =>
+                setEntityType(event.target.value as EntityKind)
+              }
+              disabled={busy}
+            >
+              <option value="prompt">Prompt</option>
+              <option value="character">Character</option>
+              <option value="scene">Scene</option>
+            </select>
+          </label>
+          <label>
+            Name
+            <input
+              value={entityName}
+              onChange={(event) => setEntityName(event.target.value)}
+              placeholder="Moon gardener"
+              disabled={busy}
+            />
+          </label>
+          <label>
+            Prompt
+            <input
+              value={entityPrompt}
+              onChange={(event) => setEntityPrompt(event.target.value)}
+              placeholder="Reusable visual description"
+              disabled={busy}
+            />
+          </label>
+          <button type="submit" disabled={busy || !entityName.trim()}>
+            <Plus size={16} />
+            Create entity
+          </button>
+        </form>
+      )}
 
       {screen === 'settings' ? (
         <div className="settings-grid">
           <label>
             Project slug
-            <input value={projectSlug} onChange={(event) => onProjectSlug(event.target.value)} />
+            <input value={projectSlug || 'No project selected'} readOnly />
           </label>
           <label>
             Default notebook
-            <input value={notebookName} onChange={(event) => onNotebookName(event.target.value)} />
+            <input value={notebookName} readOnly />
           </label>
           {['OpenAI', 'KIE', 'FAL', 'Google Flow', 'ElevenLabs', 'Backblaze B2'].map(
             (provider) => (
@@ -640,7 +881,7 @@ function WorkspaceScreen({
                   <strong>{provider}</strong>
                   <p>Environment-managed credential</p>
                 </div>
-                <button type="button">Configure</button>
+                <button type="button" disabled>Environment managed</button>
               </article>
             ),
           )}
@@ -654,12 +895,48 @@ function WorkspaceScreen({
               <EmptyRecord icon={BookOpen} label="Local data stays revisioned" />
             </>
           ) : (
-            records.map((record, index) => (
-              <article className="record-card" key={`${screen}-${index}`}>
-                <span>{String(index + 1).padStart(2, '0')}</span>
-                <pre>{JSON.stringify(record, null, 2)}</pre>
-              </article>
-            ))
+            records.map((record, index) => {
+              const project =
+                screen === 'projects' &&
+                typeof record === 'object' &&
+                record !== null &&
+                'slug' in record
+                  ? String(record.slug)
+                  : null
+              const entity =
+                screen === 'library' &&
+                typeof record === 'object' &&
+                record !== null &&
+                'id' in record &&
+                'type' in record &&
+                (record.type === 'prompt' ||
+                  record.type === 'character' ||
+                  record.type === 'scene')
+                  ? {
+                      id: String(record.id),
+                      type: record.type as EntityKind,
+                    }
+                  : null
+              return (
+                <article className="record-card" key={`${screen}-${index}`}>
+                  <span>{String(index + 1).padStart(2, '0')}</span>
+                  <pre>{JSON.stringify(record, null, 2)}</pre>
+                  {project && (
+                    <button type="button" onClick={() => onOpenProject(project)}>
+                      Open project
+                    </button>
+                  )}
+                  {entity && (
+                    <button
+                      type="button"
+                      onClick={() => onDeleteEntity(entity.type, entity.id)}
+                    >
+                      Delete entity
+                    </button>
+                  )}
+                </article>
+              )
+            })
           )}
         </div>
       )}

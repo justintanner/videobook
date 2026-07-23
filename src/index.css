@@ -115,6 +115,12 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
+.topbar-actions button:disabled,
+.navigation button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
 .topbar-actions {
   justify-content: flex-end;
   gap: 8px;
@@ -565,13 +571,15 @@ textarea:focus-visible {
   letter-spacing: 0.12em;
 }
 
-.input-ports button {
+.input-ports p {
+  margin: 0;
   padding: 10px;
   border: 1px dashed var(--line);
   color: #6c947b;
   background: transparent;
   text-align: left;
-  cursor: pointer;
+  font-size: 10px;
+  line-height: 1.5;
 }
 
 .flow-controls {
@@ -629,6 +637,63 @@ textarea:focus-visible {
   font-family: system-ui, sans-serif;
 }
 
+.project-create {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  margin-top: 30px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: rgba(5, 18, 12, 0.88);
+}
+
+.project-create label {
+  display: grid;
+  flex: 1;
+  gap: 8px;
+  color: #6d937d;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.project-create input,
+.project-create select {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  background: #031009;
+  color: #bce6cf;
+  outline: none;
+}
+
+.project-create input:focus,
+.project-create select:focus {
+  border-color: var(--green);
+}
+
+.entity-create {
+  flex-wrap: wrap;
+}
+
+.project-create button,
+.record-card button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--green);
+  background: rgba(36, 112, 73, 0.24);
+  color: #bce6cf;
+}
+
+.project-create button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .record-grid,
 .settings-grid {
   display: grid;
@@ -658,6 +723,10 @@ textarea:focus-visible {
   font-size: 10px;
   line-height: 1.6;
   white-space: pre-wrap;
+}
+
+.record-card button {
+  margin-top: 12px;
 }
 
 .empty-record {
@@ -713,6 +782,11 @@ textarea:focus-visible {
   border: 1px solid var(--line);
   color: #739b84;
   background: transparent;
+}
+
+.provider-card button:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .spin {

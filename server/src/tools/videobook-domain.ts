@@ -103,12 +103,19 @@ export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
         }
       },
     },
+    {
+      name: "list_jobs",
+      description: "List persistent jobs for the active project",
+      schema: projectSchema,
+      handler: async (args) =>
+        json(await fs.queue.list(String(args.project_slug))),
+    },
     ...entityDefs(fs, "prompt"),
     ...entityDefs(fs, "scene"),
-    ...entityDefs(fs, "character").filter(
-      (definition) =>
-        definition.name !== "create_character" &&
-        definition.name !== "update_character",
+    ...entityDefs(fs, "character").map((definition) =>
+      definition.name === "create_character"
+        ? { ...definition, name: "create_character_entity" }
+        : definition,
     ),
     {
       name: "storage_status",

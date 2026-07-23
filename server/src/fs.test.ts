@@ -2,7 +2,11 @@ import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { fs as defaultFs, createFsForTest } from "./fs.js";
+import {
+  fs as defaultFs,
+  createFsForTest,
+  environmentValue,
+} from "./fs.js";
 
 describe("fs module", () => {
   let tempDir: string;
@@ -19,6 +23,13 @@ describe("fs module", () => {
     expect(defaultFs).toBeDefined();
     expect(typeof defaultFs.createProject).toBe("function");
     expect(typeof defaultFs.listAssets).toBe("function");
+  });
+
+  it("uses defaults for missing and blank environment values", () => {
+    expect(environmentValue(undefined, "/fallback")).toBe("/fallback");
+    expect(environmentValue("", "/fallback")).toBe("/fallback");
+    expect(environmentValue("   ", "/fallback")).toBe("/fallback");
+    expect(environmentValue(" /custom ", "/fallback")).toBe("/custom");
   });
 
   it("createFsForTest returns a VideocityFs instance", () => {
