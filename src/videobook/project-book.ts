@@ -38,7 +38,6 @@ export interface BookTrailItem {
 export interface BookCellData extends Record<string, unknown> {
   actionId: string
   kind: BookCellKind
-  title: string
   stage: number
   status: string
   slug: string
@@ -181,14 +180,6 @@ function actionPrompt(action: BookAction): string | undefined {
     ?? nestedString(action, 'arguments', 'prompt')
 }
 
-function actionTitle(action: BookAction, artifactId: string): string {
-  const entry = detailsRecord(action, 'entry')
-  const title = entry.title
-  return typeof title === 'string' && title.length > 0
-    ? title
-    : artifactId
-}
-
 function actionModel(action: BookAction): string | undefined {
   const entry = detailsRecord(action, 'entry')
   const model = entry.model
@@ -294,7 +285,6 @@ export function projectBookNodes(
       data: {
         actionId: card.action.id,
         kind: card.kind,
-        title: actionTitle(card.action, card.artifactId),
         stage: slot.stage + 1,
         status: asset?.status ?? card.action.phase,
         slug: `@${card.artifactId.replace(/^@/, '')}`,
@@ -317,6 +307,16 @@ export function projectBookNodes(
       },
     }
   })
+}
+
+export function projectMentionSlugs(
+  nodes: Array<Node<BookCellData>>,
+  assets: BookAsset[],
+): string[] {
+  return [...new Set([
+    ...nodes.map((node) => node.data.slug.replace(/^@/, '')),
+    ...assets.map((asset) => asset.id.replace(/^@/, '')),
+  ])]
 }
 
 export function projectBookEdges(

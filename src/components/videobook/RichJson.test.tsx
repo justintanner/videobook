@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { RichJson } from './ActionDetailModal'
+import { RichJson } from './RichJson'
 
 describe('RichJson', () => {
   it('formats action source values with semantic token classes', () => {

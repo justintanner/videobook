@@ -1,7 +1,5 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -28,11 +26,9 @@ import {
   Activity,
   BookOpen,
   Boxes,
-  Braces,
   ChevronDown,
   Check,
   CircleDot,
-  Clock3,
   Film,
   FolderKanban,
   Image,
@@ -59,14 +55,14 @@ import {
   type ServerCommand,
 } from '@/lib/command-registry'
 import {
-  ActionDetailModal,
-  type ActionDetailTab,
-} from '@/components/videobook/ActionDetailModal'
-import {
   CommandComposer,
   type ComposerOutcome,
   type PromptSession,
 } from '@/components/videobook/CommandComposer'
+import {
+  CellInspectorPanel,
+  type InspectorTab,
+} from '@/components/videobook/CellInspectorPanel'
 import { NotebookStageBoard } from '@/components/videobook/NotebookStageBoard'
 import {
   clampNotebookViewport,
@@ -84,6 +80,7 @@ import {
   parseProjectBook,
   projectBookEdges,
   projectBookNodes,
+  projectMentionSlugs,
   type BookAsset,
   type BookCellData,
   type BookCellKind,
@@ -142,14 +139,6 @@ const palette: Array<{
 
 const cellDragType = 'application/x-videobook-cell'
 
-interface CellDetailController {
-  openDetail: (id: string, tab: ActionDetailTab) => void
-}
-
-const CellDetailContext = createContext<CellDetailController>({
-  openDetail: () => undefined,
-})
-
 function cellKindFromDrag(value: string): BookCellKind | null {
   return palette.some((item) => item.kind === value)
     ? value as BookCellKind
@@ -157,7 +146,6 @@ function cellKindFromDrag(value: string): BookCellKind | null {
 }
 
 function CellNode({ data, selected }: NodeProps<Node<BookCellData>>) {
-  const detailController = useContext(CellDetailContext)
   const Icon =
     data.kind === 'video'
       ? Video
@@ -173,43 +161,19 @@ function CellNode({ data, selected }: NodeProps<Node<BookCellData>>) {
     <article
       className={`cell-node ${selected ? 'cell-node-selected' : ''}`}
     >
-      <Handle type="target" position={Position.Top} id="reference" />
-      <Handle type="target" position={Position.Top} id="subject" />
-      <Handle type="target" position={Position.Top} id="scene" />
-      <Handle type="target" position={Position.Top} id="first-frame" />
+      {data.stage > 1 && (
+        <>
+          <Handle type="target" position={Position.Top} id="reference" />
+          <Handle type="target" position={Position.Top} id="subject" />
+          <Handle type="target" position={Position.Top} id="scene" />
+          <Handle type="target" position={Position.Top} id="first-frame" />
+        </>
+      )}
       <section className="cell-node-shell">
         <header className="cell-node-header">
           <span>
             <Icon size={14} />
             {data.kind.toUpperCase()}
-          </span>
-          <span className="cell-node-header-actions">
-            <button
-              type="button"
-              className="cell-face-button nodrag nopan"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation()
-                detailController.openDetail(data.actionId, 'history')
-              }}
-              aria-label={`View history for ${data.slug}`}
-              title="View history"
-            >
-              <Clock3 size={14} />
-            </button>
-            <button
-              type="button"
-              className="cell-face-button nodrag nopan"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation()
-                detailController.openDetail(data.actionId, 'source')
-              }}
-              aria-label={`View source for ${data.slug}`}
-              title="View source"
-            >
-              <Braces size={15} />
-            </button>
           </span>
         </header>
         {data.mediaUrl || data.thumbnailUrl ? (
@@ -294,10 +258,6 @@ function asCommands(value: unknown): ServerCommand[] {
     && 'command' in item
     && typeof item.command === 'string'
   ))
-}
-
-function asAssetSlugs(assets: BookAsset[]): string[] {
-  return assets.map((asset) => asset.id.replace(/^@/, ''))
 }
 
 function summarize(value: unknown, fallback: string): string {
@@ -439,10 +399,7 @@ function App() {
   const [projectSlug, setProjectSlug] = useState('')
   const [projectBook, setProjectBook] = useState<ProjectBook | null>(null)
   const [bookAssets, setBookAssets] = useState<BookAsset[]>([])
-  const [cellDetail, setCellDetail] = useState<{
-    actionId: string
-    tab: ActionDetailTab
-  } | null>(null)
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('details')
   const [flowInteractive, setFlowInteractive] = useState(false)
   const [panelOpen, setPanelOpen] = useState(() => window.innerWidth > 720)
   const [promptOpen, setPromptOpen] = useState(false)
@@ -472,15 +429,6 @@ function App() {
     () => nodes.find((node) => node.id === selectedId) ?? null,
     [nodes, selectedId],
   )
-  const detailCell = useMemo(
-    () => (
-      cellDetail
-        ? nodes.find((node) => node.id === cellDetail.actionId)?.data ?? null
-        : null
-    ),
-    [cellDetail, nodes],
-  )
-
   const visibleCommands = useMemo(
     () => commands.filter((command) => {
       if (!command.onMount || command.onMount.length === 0) return true
@@ -488,14 +436,6 @@ function App() {
     }),
     [commands, screen],
   )
-
-  const openCellDetail = useCallback((id: string, tab: ActionDetailTab) => {
-    setCellDetail({ actionId: id, tab })
-  }, [])
-
-  const cellDetailController = useMemo<CellDetailController>(() => ({
-    openDetail: openCellDetail,
-  }), [openCellDetail])
 
   useEffect(() => {
     const closeNarrowInspector = () => {
@@ -574,12 +514,13 @@ function App() {
     book: ProjectBook,
     assets: BookAsset[],
   ) => {
+    const nextNodes = projectBookNodes(book, assets)
     projectBookRef.current = book
     bookAssetsRef.current = assets
     setProjectBook(book)
     setBookAssets(assets)
-    setAssetSlugs(asAssetSlugs(assets))
-    replaceNodes(projectBookNodes(book, assets))
+    setAssetSlugs(projectMentionSlugs(nextNodes, assets))
+    replaceNodes(nextNodes)
     replaceEdges(projectBookEdges(book))
   }, [replaceEdges, replaceNodes])
 
@@ -616,7 +557,7 @@ function App() {
       setCurrentProject(slug)
       applyProjectBook(book, assets)
       setSelectedId(null)
-      setCellDetail(null)
+      setInspectorTab('details')
       setFlowInteractive(false)
       setPromptOpen(false)
       setPaletteDragKind(null)
@@ -883,7 +824,6 @@ function App() {
           entry: {
             id: artifactId,
             kind,
-            title: `New ${kind}`,
             prompt: '',
             model: 'auto',
           },
@@ -891,6 +831,7 @@ function App() {
       })
       const actionId = recordedActionId(value)
       await reloadProjectBook(actionId)
+      setInspectorTab('details')
       setPanelOpen(true)
       setPromptOpen(true)
       return { ok: true, message: `Added @${artifactId}` }
@@ -925,7 +866,6 @@ function App() {
     ).find((candidate) => candidate.id === id)
     if (
       original
-      && original.data.title === node.data.title
       && original.data.prompt === node.data.prompt
       && original.data.model === node.data.model
     ) {
@@ -954,7 +894,6 @@ function App() {
           entry: {
             id: artifactId,
             kind: node.data.kind,
-            title: node.data.title,
             prompt: node.data.prompt ?? '',
             model: node.data.model ?? 'auto',
           },
@@ -1046,7 +985,6 @@ function App() {
           entry: {
             id: targetArtifactId,
             kind: target.data.kind,
-            title: target.data.title,
             prompt: target.data.prompt ?? '',
             model: target.data.model ?? 'auto',
           },
@@ -1068,12 +1006,15 @@ function App() {
       return { ok: false, message: 'Select a project-book card first' }
     }
     if (screen !== 'notebook') await navigateScreen('notebook')
-    openCellDetail(actionId, 'history')
+    setSelectedId(actionId)
+    setInspectorTab('history')
+    setPanelOpen(true)
+    setPromptOpen(false)
     return {
       ok: true,
       message: 'Opened action history',
     }
-  }, [navigateScreen, openCellDetail, screen, selectedId])
+  }, [navigateScreen, screen, selectedId])
 
   const ensureCommandCatalog = useCallback(async () => {
     if (commands.length > 0 || mcp.state !== 'ready') return
@@ -1212,7 +1153,7 @@ function App() {
     return {
       id: selected.id,
       kind: selected.data.kind,
-      title: selected.data.title,
+      slug: selected.data.slug,
       value: selected.data.prompt ?? '',
       assetSlugs,
       onChange: (value) => updateSelectedData(selected.id, { prompt: value }),
@@ -1317,8 +1258,7 @@ function App() {
               setPreviewSlot(null)
             }}
           >
-            <CellDetailContext.Provider value={cellDetailController}>
-              <ReactFlow
+            <ReactFlow
                 nodes={nodes}
                 edges={edges}
                 nodeTypes={nodeTypes}
@@ -1357,11 +1297,19 @@ function App() {
                 onNodeClick={(_, node) => {
                   const selectNode = () => {
                     setSelectedId(node.id)
+                    setInspectorTab('details')
                     setPanelOpen(true)
-                    setPromptOpen(true)
+                    setPromptOpen(false)
                   }
                   if (selectedId && node.id !== selectedId) {
                     void commitEntry(selectedId).then((outcome) => {
+                      setWorkspaceNotice(outcome.message)
+                      if (outcome.ok) selectNode()
+                    })
+                    return
+                  }
+                  if (promptOpen && node.id === selectedId) {
+                    void commitEntry(node.id).then((outcome) => {
                       setWorkspaceNotice(outcome.message)
                       if (outcome.ok) selectNode()
                     })
@@ -1400,7 +1348,7 @@ function App() {
                 maxZoom={1.7}
                 nodesDraggable={flowInteractive}
                 nodesConnectable={flowInteractive}
-                elementsSelectable={flowInteractive}
+                elementsSelectable
                 panOnDrag={flowInteractive}
                 panOnScroll={!flowInteractive}
                 panOnScrollMode={PanOnScrollMode.Vertical}
@@ -1450,17 +1398,17 @@ function App() {
                       )
                     })}
                   </aside>
+                  <Controls
+                    position="top-left"
+                    orientation="horizontal"
+                    className="flow-controls"
+                    onInteractiveChange={(interactive) => {
+                      setFlowInteractive(interactive)
+                      if (!interactive) scheduleBookStageFit()
+                    }}
+                  />
                 </Panel>
-                <Controls
-                  position="top-right"
-                  className="flow-controls"
-                  onInteractiveChange={(interactive) => {
-                    setFlowInteractive(interactive)
-                    if (!interactive) scheduleBookStageFit()
-                  }}
-                />
-              </ReactFlow>
-            </CellDetailContext.Provider>
+            </ReactFlow>
           </section>
 
           <aside className={`inspector ${panelOpen ? '' : 'inspector-closed'}`}>
@@ -1475,46 +1423,16 @@ function App() {
               </button>
             </header>
             {selected ? (
-              <div className="inspector-body">
-                <span className="inspector-kicker">
-                  {selected.data.kind} cell
-                </span>
-                <h2>{selected.data.title}</h2>
-                <label>
-                  Label
-                  <input
-                    value={selected.data.title}
-                    onChange={(event) => updateSelectedData(selected.id, {
-                      title: event.target.value,
-                    })}
-                    onBlur={() => void commitEntry(selected.id).then((outcome) => {
-                      setWorkspaceNotice(outcome.message)
-                    })}
-                  />
-                </label>
-                <label>
-                  Model
-                  <select
-                    value={selected.data.model ?? 'auto'}
-                    onChange={(event) => updateSelectedData(selected.id, {
-                      model: event.target.value,
-                    })}
-                    onBlur={() => void commitEntry(selected.id).then((outcome) => {
-                      setWorkspaceNotice(outcome.message)
-                    })}
-                  >
-                    <option value="auto">Auto route</option>
-                    <option value="nano-banana-pro-google">Nano Banana Pro · Google Flow</option>
-                    <option value="google-omni">Google Omni · Google Flow</option>
-                    <option value="seedance">Seedance 2</option>
-                    <option value="grok">Grok Imagine</option>
-                  </select>
-                </label>
-                <div className="input-ports">
-                  <span>INPUT PORTS</span>
-                  <p>Drag a source handle into this cell to add an input.</p>
-                </div>
-              </div>
+              <CellInspectorPanel
+                key={selected.id}
+                cell={selected.data}
+                tab={inspectorTab}
+                onTabChange={setInspectorTab}
+                onUpdate={(patch) => updateSelectedData(selected.id, patch)}
+                onCommit={() => void commitEntry(selected.id).then((outcome) => {
+                  setWorkspaceNotice(outcome.message)
+                })}
+              />
             ) : (
               <div className="empty-inspector">
                 <div className="target-mark">
@@ -1546,15 +1464,6 @@ function App() {
           onOutcome={(outcome) => setWorkspaceNotice(outcome.message)}
         />
       )}
-
-      <ActionDetailModal
-        cell={detailCell}
-        tab={cellDetail?.tab ?? 'history'}
-        onTabChange={(tab) => {
-          setCellDetail((current) => current ? { ...current, tab } : current)
-        }}
-        onClose={() => setCellDetail(null)}
-      />
 
       <CommandComposer
         commands={visibleCommands}

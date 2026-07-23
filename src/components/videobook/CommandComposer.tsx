@@ -3,6 +3,7 @@ import { Check, ChevronUp, Loader2, Send, X } from 'lucide-react'
 import type { UseMcpResult } from 'use-mcp/react'
 import type { ServerCommand } from '@/lib/command-registry'
 import { RichPromptField } from '@/components/ui/RichPromptField'
+import { assetMentionSuggestions } from '@/videobook/mention-suggestions'
 import { applyReadlineEdit } from '@/videobook/readline'
 
 export interface ComposerOutcome {
@@ -13,7 +14,7 @@ export interface ComposerOutcome {
 export interface PromptSession {
   id: string
   kind: string
-  title: string
+  slug: string
   value: string
   assetSlugs: string[]
   onChange: (value: string) => void
@@ -111,18 +112,7 @@ export function CommandComposer({
           type: 'command',
         }))
     }
-    const assetMatch = input.match(/@([\w-]*)$/)
-    if (!assetMatch) return []
-    const filter = assetMatch[1].toLowerCase()
-    return assetSlugs
-      .filter((slug) => slug.toLowerCase().includes(filter))
-      .slice(0, 12)
-      .map((slug) => ({
-        value: `@${slug}`,
-        label: `@${slug}`,
-        description: 'project asset',
-        type: 'asset',
-      }))
+    return assetMentionSuggestions(assetSlugs, input)
   }, [assetSlugs, commands, dismissed, input])
 
   const showOutcome = (next: ComposerOutcome) => {
@@ -281,7 +271,7 @@ export function CommandComposer({
                 ? 'prompt cell'
                 : `${promptSession.kind} prompt`}
             </span>
-            <strong>{promptSession.title}</strong>
+            <strong>{promptSession.slug}</strong>
             <button
               type="button"
               onClick={() => void promptSession.onCollapse().then(showOutcome)}
