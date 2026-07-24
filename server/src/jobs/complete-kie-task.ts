@@ -15,7 +15,7 @@ type CompleteKieTaskPayload = {
   taskType: "nano_banana_image" | "qwen2_image_edit" | "seedream_text_image" | "seedream_image" | "grok_imagine_video" | "grok_imagine_t2v_video" | "grok_imagine_image" | "grok_imagine_text" | "gpt_image" | "gpt_image_text" | "kling30_video" | "kling30_motion_control_video" | "seedance2_video" | "wan27_t2v_video" | "wan27_i2v_video" | "wan27_videoedit_video" | "wan27_r2v_video" | "wan27_extend_video" | "wan27_image" | "wan27_image_pro" | "happyhorse_t2v_video" | "happyhorse_i2v_video" | "happyhorse_ref_video" | "happyhorse_videoedit_video" | "volcengine_lipsync_video" | "omnihuman_video" | "isolate_vocals" | "xai_grok_imagine_video" | "xai_grok_imagine_ref_video" | "grok_imagine_extend_video" | "grok_imagine_upscale_video" | "alibaba_video" | "alibaba_image" | "alibaba_image_pro" | "alibaba_qwen_image" | "alibaba_qwen_image_edit" | "fal_seedance2_i2v" | "fal_seedance2_t2v" | "fal_seedance2_r2v" | "fal_seedance2_fast_i2v" | "fal_seedance2_fast_t2v" | "fal_seedance2_fast_r2v" | "fal_nano_banana_pro" | "fal_nano_banana_pro_edit" | "fal_nano_banana" | "fal_nano_banana_edit" | "fal_nano_banana_2" | "fal_nano_banana_2_edit" | "fal_nano_banana_2_lite" | "fal_nano_banana_2_lite_edit" | "fal_qwen_image" | "fal_qwen_image_edit" | "fal_seedream_v5_lite" | "fal_seedream_v5_lite_edit" | "fal_wan27" | "fal_wan27_edit" | "fal_wan27_pro" | "fal_wan27_pro_edit" | "fal_wan27_t2v" | "fal_wan27_i2v" | "fal_wan27_r2v" | "fal_wan27_videoedit" | "fal_grok_imagine_image" | "fal_grok_imagine_image_edit" | "fal_kling_v3_pro_i2v" | "fal_kling_v3_pro_t2v" | "fal_kling_v3_standard_i2v" | "fal_kling_v3_standard_t2v" | "fal_grok_imagine_video_i2v" | "fal_grok_imagine_video_r2v" | "fal_grok_imagine_video_extend" | "fal_grok_imagine_video_edit";
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
   meta: Record<string, unknown>;
   resultUrls: string[];
   resultObject?: Record<string, unknown>;
@@ -24,14 +24,14 @@ type CompleteKieTaskPayload = {
 export function registerCompleteKieTaskJob(fs: Engine): void {
   registerJobHandler("complete_kie_task", async (payload, ctx) => {
     const {
-      taskId, taskType, assetId, projectSlug, meta,
+      taskId, taskType, assetId, bookId, meta,
       resultUrls, resultObject,
     } = payload as CompleteKieTaskPayload;
 
     // Pattern C: inherit the provider lease via getOwner, abort if the row
     // already terminated, and register the lease so the wrapper's catch path
     // CAS-fails by task_id (unaffected by a fresh retry on the same asset).
-    const ownerId = await fs.jobs.pending.getOwner(projectSlug, assetId, taskId);
+    const ownerId = await fs.jobs.pending.getOwner(assetId, taskId);
     if (!ownerId) {
       // The row was already removed by a fail/delete or a stale duplicate
       // dispatch. Either way the task is no longer ours to complete.
@@ -40,9 +40,9 @@ export function registerCompleteKieTaskJob(fs: Engine): void {
     ctx.setLease({ kind: "task", taskId });
 
     // Resolve the asset directory at runtime so renames don't break completion.
-    const assetDirResult = await fs.workspaces.resolveArtifact(assetId, projectSlug);
+    const assetDirResult = await fs.workspaces.resolveArtifact(assetId);
     if (!assetDirResult.ok) {
-      await fs.jobs.pending.delete(projectSlug, assetId, taskId);
+      await fs.jobs.pending.delete(assetId, taskId);
       return { success: true, skipped: true };
     }
     const assetDir = assetDirResult.value;
@@ -63,7 +63,7 @@ export function registerCompleteKieTaskJob(fs: Engine): void {
     // Renew the provider lease while we work — covers downloads + processing.
     const heartbeat = setInterval(() => {
       try {
-        fs.jobs.artifactWork.renew(projectSlug, assetId, ownerId, 60_000);
+        fs.jobs.artifactWork.renew(assetId, ownerId, 60_000);
       } catch (error) {
         console.warn(`[heartbeat] renew failed for ${assetId}:`, error);
       }
@@ -71,39 +71,39 @@ export function registerCompleteKieTaskJob(fs: Engine): void {
 
     try {
       if (taskType === "nano_banana_image") {
-        await completeNanoBananaImage(fs, assetId, projectSlug, meta, resultUrls, taskType);
+        await completeNanoBananaImage(fs, assetId, bookId, meta, resultUrls, taskType);
       } else if (taskType === "qwen2_image_edit") {
-        await completeQwen2ImageEdit(fs, assetId, projectSlug, meta, resultUrls);
+        await completeQwen2ImageEdit(fs, assetId, bookId, meta, resultUrls);
       } else if (taskType === "seedream_text_image" || taskType === "seedream_image") {
-        await completeSeedreamImage(fs, assetId, projectSlug, meta, resultUrls, taskType);
+        await completeSeedreamImage(fs, assetId, bookId, meta, resultUrls, taskType);
       } else if (taskType === "kling30_video" || taskType === "kling30_motion_control_video") {
-        await completeKling30Video(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskType);
+        await completeKling30Video(fs, assetId, assetDir, bookId, meta, resultUrls, taskType);
       } else if (taskType === "seedance2_video") {
-        await completeSeedance2Video(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskId);
+        await completeSeedance2Video(fs, assetId, assetDir, bookId, meta, resultUrls, taskId);
       } else if (taskType === "grok_imagine_video" || taskType === "grok_imagine_t2v_video" || taskType === "xai_grok_imagine_video" || taskType === "xai_grok_imagine_ref_video" || taskType === "grok_imagine_extend_video" || taskType === "grok_imagine_upscale_video") {
-        await completeGrokImagineVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskType, taskId);
+        await completeGrokImagineVideo(fs, assetId, assetDir, bookId, meta, resultUrls, taskType, taskId);
       } else if (taskType === "wan27_t2v_video" || taskType === "wan27_i2v_video" || taskType === "wan27_videoedit_video" || taskType === "wan27_r2v_video" || taskType === "wan27_extend_video") {
-        await completeWan27Video(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskId);
+        await completeWan27Video(fs, assetId, assetDir, bookId, meta, resultUrls, taskId);
       } else if (taskType === "happyhorse_t2v_video" || taskType === "happyhorse_i2v_video" || taskType === "happyhorse_ref_video" || taskType === "happyhorse_videoedit_video") {
-        await completeHappyHorseVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskType, taskId);
+        await completeHappyHorseVideo(fs, assetId, assetDir, bookId, meta, resultUrls, taskType, taskId);
       } else if (taskType === "volcengine_lipsync_video") {
-        await completeVolcengineLipSyncVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskId);
+        await completeVolcengineLipSyncVideo(fs, assetId, assetDir, bookId, meta, resultUrls, taskId);
       } else if (taskType === "omnihuman_video") {
-        await completeOmnihumanVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskId);
+        await completeOmnihumanVideo(fs, assetId, assetDir, bookId, meta, resultUrls, taskId);
       } else if (taskType === "wan27_image" || taskType === "wan27_image_pro") {
-        await completeWan27Image(fs, assetId, projectSlug, meta, resultUrls, taskType);
+        await completeWan27Image(fs, assetId, bookId, meta, resultUrls, taskType);
       } else if (taskType === "alibaba_video") {
-        await completeAlibabaVideo(fs, assetId, assetDir, projectSlug, meta, resultUrls, taskId);
+        await completeAlibabaVideo(fs, assetId, assetDir, bookId, meta, resultUrls, taskId);
       } else if (taskType === "alibaba_image" || taskType === "alibaba_image_pro") {
-        await completeAlibabaImage(fs, assetId, projectSlug, meta, resultUrls, taskType);
+        await completeAlibabaImage(fs, assetId, bookId, meta, resultUrls, taskType);
       } else if (taskType === "alibaba_qwen_image" || taskType === "alibaba_qwen_image_edit") {
-        await completeAlibabaQwenImage(fs, assetId, projectSlug, meta, resultUrls, taskType);
+        await completeAlibabaQwenImage(fs, assetId, bookId, meta, resultUrls, taskType);
       } else if (taskType === "grok_imagine_image" || taskType === "grok_imagine_text") {
-        await completeGrokImagineImage(fs, assetId, projectSlug, meta, resultUrls);
+        await completeGrokImagineImage(fs, assetId, bookId, meta, resultUrls);
       } else if (taskType === "gpt_image" || taskType === "gpt_image_text") {
-        await completeGptImage(fs, assetId, projectSlug, meta, resultUrls, taskType);
+        await completeGptImage(fs, assetId, bookId, meta, resultUrls, taskType);
       } else if (taskType === "isolate_vocals") {
-        await completeIsolateVocals(fs, assetId, projectSlug, meta, resultUrls);
+        await completeIsolateVocals(fs, assetId, bookId, meta, resultUrls);
       } else if (taskType.startsWith("fal_")) {
         const urls = extractFalUrls(taskType, resultObject);
         if (
@@ -118,33 +118,33 @@ export function registerCompleteKieTaskJob(fs: Engine): void {
           || taskType === "fal_grok_imagine_video_extend"
           || taskType === "fal_grok_imagine_video_edit"
         ) {
-          await completeSeedance2Video(fs, assetId, assetDir, projectSlug, meta, urls, taskId);
+          await completeSeedance2Video(fs, assetId, assetDir, bookId, meta, urls, taskId);
         } else if (
           taskType === "fal_nano_banana_pro" || taskType === "fal_nano_banana_pro_edit" ||
           taskType === "fal_nano_banana" || taskType === "fal_nano_banana_edit" ||
           taskType === "fal_nano_banana_2" || taskType === "fal_nano_banana_2_edit" ||
           taskType === "fal_nano_banana_2_lite" || taskType === "fal_nano_banana_2_lite_edit"
         ) {
-          await completeNanoBananaImage(fs, assetId, projectSlug, meta, urls, taskType);
+          await completeNanoBananaImage(fs, assetId, bookId, meta, urls, taskType);
         } else if (
           taskType === "fal_wan27" || taskType === "fal_wan27_edit" ||
           taskType === "fal_wan27_pro" || taskType === "fal_wan27_pro_edit"
         ) {
           const variant = taskType === "fal_wan27_pro" || taskType === "fal_wan27_pro_edit"
             ? "wan27_image_pro" : "wan27_image";
-          await completeWan27Image(fs, assetId, projectSlug, meta, urls, variant);
+          await completeWan27Image(fs, assetId, bookId, meta, urls, variant);
         } else if (taskType === "fal_grok_imagine_image" || taskType === "fal_grok_imagine_image_edit") {
-          await completeGrokImagineImage(fs, assetId, projectSlug, meta, urls);
+          await completeGrokImagineImage(fs, assetId, bookId, meta, urls);
         } else if (taskType === "fal_seedream_v5_lite" || taskType === "fal_seedream_v5_lite_edit") {
-          await completeSeedreamV5LiteImage(fs, assetId, projectSlug, meta, urls, taskType);
+          await completeSeedreamV5LiteImage(fs, assetId, bookId, meta, urls, taskType);
         } else if (taskType === "fal_qwen_image" || taskType === "fal_qwen_image_edit") {
-          await completeQwen2ImageEdit(fs, assetId, projectSlug, meta, urls, taskType);
+          await completeQwen2ImageEdit(fs, assetId, bookId, meta, urls, taskType);
         } else {
           throw new Error(`Unhandled FAL task type in complete_kie_task: ${taskType}`);
         }
       }
 
-      await fs.jobs.pending.delete(projectSlug, assetId, taskId);
+      await fs.jobs.pending.delete(assetId, taskId);
       return { success: true };
     } finally {
       clearInterval(heartbeat);
@@ -180,7 +180,7 @@ function extractFalUrls(taskType: string, resultObject?: Record<string, unknown>
 async function completeSeedreamImage(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskType: "seedream_text_image" | "seedream_image",
@@ -188,7 +188,7 @@ async function completeSeedreamImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", projectSlug, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", bookId, { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -207,7 +207,7 @@ async function completeSeedreamImage(
   await queue.enqueue(jobId, {
     type: "process_image",
     assetId,
-    projectSlug,
+    bookId,
     extension: ".png",
     provenance: origin,
   } as unknown as Record<string, unknown>);
@@ -216,7 +216,7 @@ async function completeSeedreamImage(
 async function completeSeedreamV5LiteImage(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskType: string,
@@ -224,7 +224,7 @@ async function completeSeedreamV5LiteImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", projectSlug, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", bookId, { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -240,7 +240,7 @@ async function completeSeedreamV5LiteImage(
   await queue.enqueue(jobId, {
     type: "process_image",
     assetId,
-    projectSlug,
+    bookId,
     extension: ".png",
     provenance: origin,
   } as unknown as Record<string, unknown>);
@@ -249,7 +249,7 @@ async function completeSeedreamV5LiteImage(
 async function completeNanoBananaImage(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskType: string,
@@ -258,7 +258,7 @@ async function completeNanoBananaImage(
   if (!imageUrl) throw new Error("No image URL in result");
 
   const ext = (meta.outputFormat as string) ?? "png";
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, projectSlug, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, bookId, { kind: "image" });
 
   let model = "nano-banana-pro";
   if (taskType.includes("banana_2_lite")) {
@@ -286,7 +286,7 @@ async function completeNanoBananaImage(
   await queue.enqueue(jobId, {
     type: "process_image",
     assetId,
-    projectSlug,
+    bookId,
     extension: `.${ext}`,
     provenance: origin,
   } as unknown as Record<string, unknown>);
@@ -295,7 +295,7 @@ async function completeNanoBananaImage(
 async function completeWan27Image(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskType: string,
@@ -303,7 +303,7 @@ async function completeWan27Image(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", projectSlug, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", bookId, { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -320,7 +320,7 @@ async function completeWan27Image(
   await queue.enqueue(jobId, {
     type: "process_image",
     assetId,
-    projectSlug,
+    bookId,
     extension: ".png",
     provenance: origin,
   } as unknown as Record<string, unknown>);
@@ -329,7 +329,7 @@ async function completeWan27Image(
 async function completeQwen2ImageEdit(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskType?: string,
@@ -338,7 +338,7 @@ async function completeQwen2ImageEdit(
   if (!imageUrl) throw new Error("No image URL in result");
 
   const ext = (meta.outputFormat as string) ?? "png";
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, projectSlug, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, bookId, { kind: "image" });
 
   const model =
     taskType === "fal_qwen_image" ? "qwen2/text-to-image" : "qwen2/image-edit";
@@ -358,7 +358,7 @@ async function completeQwen2ImageEdit(
   await queue.enqueue(jobId, {
     type: "process_image",
     assetId,
-    projectSlug,
+    bookId,
     extension: `.${ext}`,
     provenance: origin,
   } as unknown as Record<string, unknown>);
@@ -368,7 +368,7 @@ async function completeKling30Video(
   fs: Engine,
   assetId: string,
   assetDir: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskType?: string,
@@ -376,7 +376,7 @@ async function completeKling30Video(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
 
   const provenance = {
     source_assets: meta.sourceImageIds,
@@ -400,7 +400,7 @@ async function completeKling30Video(
     videoPath,
     assetId,
     assetDir,
-    projectSlug,
+    bookId,
     provenance,
   } as unknown as Record<string, unknown>);
 }
@@ -409,7 +409,7 @@ async function completeSeedance2Video(
   fs: Engine,
   assetId: string,
   assetDir: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskId?: string,
@@ -417,14 +417,14 @@ async function completeSeedance2Video(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
 
   // Optionally save the returned last frame as a secondary image file
   if (meta.return_last_frame === true && resultUrls[1]) {
     const frameResponse = await fetch(resultUrls[1]);
     if (frameResponse.ok) {
       const frameBuffer = Buffer.from(await frameResponse.arrayBuffer());
-      await fs.files.write(assetId, "last_frame.png", frameBuffer, projectSlug);
+      await fs.files.write(assetId, "last_frame.png", frameBuffer);
     }
   }
 
@@ -446,7 +446,7 @@ async function completeSeedance2Video(
 
   // Persist Kie taskId for future operations
   if (taskId !== undefined) {
-    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
   }
 
   // When the caller asked us to splice a specific audio over the seedance
@@ -457,7 +457,7 @@ async function completeSeedance2Video(
   // VIDEO and seedance completion can no longer drop the audio replacement.
   const replaceAudioWith = meta.replaceAudioWith as { assetId: string; filename: string } | undefined;
   if (replaceAudioWith) {
-    const audioManifest = await fs.files.manifest(replaceAudioWith.assetId, projectSlug, { includeDotfiles: true });
+    const audioManifest = await fs.files.manifest(replaceAudioWith.assetId);
     if (!audioManifest.ok) {
       throw new Error(`replaceAudioWith asset not found: ${audioManifest.error.message}`);
     }
@@ -471,7 +471,7 @@ async function completeSeedance2Video(
       assetId,
       assetDir,
       audioAssetId,
-      projectSlug,
+      bookId,
       extraProvenance: provenance,
     } as unknown as Record<string, unknown>);
     return;
@@ -483,7 +483,7 @@ async function completeSeedance2Video(
     videoPath,
     assetId,
     assetDir,
-    projectSlug,
+    bookId,
     provenance,
   } as unknown as Record<string, unknown>);
 }
@@ -492,7 +492,7 @@ async function completeWan27Video(
   fs: Engine,
   assetId: string,
   assetDir: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskId?: string,
@@ -500,7 +500,7 @@ async function completeWan27Video(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
 
   const wan27Model =
     meta.mode === "reference" ? "wan/2-7-r2v"
@@ -521,7 +521,7 @@ async function completeWan27Video(
   const videoPath = join(assetDir, "original.mp4");
 
   if (taskId !== undefined) {
-    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
   }
 
   const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -530,7 +530,7 @@ async function completeWan27Video(
     videoPath,
     assetId,
     assetDir,
-    projectSlug,
+    bookId,
     provenance,
   } as unknown as Record<string, unknown>);
 }
@@ -539,7 +539,7 @@ async function completeVolcengineLipSyncVideo(
   fs: Engine,
   assetId: string,
   assetDir: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskId?: string,
@@ -547,7 +547,7 @@ async function completeVolcengineLipSyncVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
 
   const provenance = {
     source_images: meta.sourceImageIds,
@@ -562,7 +562,7 @@ async function completeVolcengineLipSyncVideo(
   const videoPath = join(assetDir, "original.mp4");
 
   if (taskId !== undefined) {
-    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
   }
 
   const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -571,7 +571,7 @@ async function completeVolcengineLipSyncVideo(
     videoPath,
     assetId,
     assetDir,
-    projectSlug,
+    bookId,
     provenance,
   } as unknown as Record<string, unknown>);
 }
@@ -580,7 +580,7 @@ async function completeOmnihumanVideo(
   fs: Engine,
   assetId: string,
   assetDir: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskId?: string,
@@ -588,7 +588,7 @@ async function completeOmnihumanVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
 
   const provenance = {
     source_images: meta.sourceImageIds,
@@ -604,7 +604,7 @@ async function completeOmnihumanVideo(
   const videoPath = join(assetDir, "original.mp4");
 
   if (taskId !== undefined) {
-    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
   }
 
   const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -613,7 +613,7 @@ async function completeOmnihumanVideo(
     videoPath,
     assetId,
     assetDir,
-    projectSlug,
+    bookId,
     provenance,
   } as unknown as Record<string, unknown>);
 }
@@ -622,7 +622,7 @@ async function completeGrokImagineVideo(
   fs: Engine,
   assetId: string,
   assetDir: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskType: string,
@@ -631,7 +631,7 @@ async function completeGrokImagineVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
 
   const provenance = {
     source_asset: meta.sourceVideoId ?? meta.sourceImageId,
@@ -657,12 +657,12 @@ async function completeGrokImagineVideo(
 
   // Persist Kie taskId for future extend operations
   if (taskId !== undefined && !taskType.startsWith("xai_")) {
-    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
   }
 
   const replaceAudioWith = meta.replaceAudioWith as { assetId: string; filename: string } | undefined;
   if (replaceAudioWith) {
-    const audioManifest = await fs.files.manifest(replaceAudioWith.assetId, projectSlug, { includeDotfiles: true });
+    const audioManifest = await fs.files.manifest(replaceAudioWith.assetId);
     if (!audioManifest.ok) {
       throw new Error(`replaceAudioWith asset not found: ${audioManifest.error.message}`);
     }
@@ -676,7 +676,7 @@ async function completeGrokImagineVideo(
       assetId,
       assetDir,
       audioAssetId,
-      projectSlug,
+      bookId,
       extraProvenance: provenance,
     } as unknown as Record<string, unknown>);
     return;
@@ -688,7 +688,7 @@ async function completeGrokImagineVideo(
     videoPath,
     assetId,
     assetDir,
-    projectSlug,
+    bookId,
     provenance,
   } as unknown as Record<string, unknown>);
 }
@@ -696,14 +696,14 @@ async function completeGrokImagineVideo(
 async function completeGrokImagineImage(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
 ): Promise<void> {
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", projectSlug, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", bookId, { kind: "image" });
 
   const origin = {
     source_asset: meta.sourceImageId,
@@ -717,7 +717,7 @@ async function completeGrokImagineImage(
   await queue.enqueue(jobId, {
     type: "process_image",
     assetId,
-    projectSlug,
+    bookId,
     extension: ".png",
     provenance: origin,
   } as unknown as Record<string, unknown>);
@@ -726,7 +726,7 @@ async function completeGrokImagineImage(
 async function completeGptImage(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskType: "gpt_image" | "gpt_image_text",
@@ -734,7 +734,7 @@ async function completeGptImage(
   const imageUrl = resultUrls[0];
   if (!imageUrl) throw new Error("No image URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", projectSlug, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, "original.png", bookId, { kind: "image" });
 
   const origin = {
     source_assets: meta.sourceImageIds,
@@ -750,7 +750,7 @@ async function completeGptImage(
   await queue.enqueue(jobId, {
     type: "process_image",
     assetId,
-    projectSlug,
+    bookId,
     extension: ".png",
     provenance: origin,
   } as unknown as Record<string, unknown>);
@@ -759,7 +759,7 @@ async function completeGptImage(
 async function completeIsolateVocals(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
 ): Promise<void> {
@@ -790,12 +790,12 @@ async function completeIsolateVocals(
 
   if (isAudioAsset) {
     // Audio assets: write mix.mp3 and .mix.json
-    await fs.files.write(assetId, "mix.mp3", vocalsBuffer, projectSlug);
+    await fs.files.write(assetId, "mix.mp3", vocalsBuffer);
     const mixSettings = { volume: 100, fadeIn: 0, fadeOut: 0 };
-    await fs.files.write(assetId, ".mix.json", JSON.stringify(mixSettings, null, 2), projectSlug);
+    await fs.files.write(assetId, ".mix.json", JSON.stringify(mixSettings, null, 2));
   } else {
     // Video assets: write audio_vocals.mp3
-    await fs.files.write(assetId, "audio_vocals.mp3", vocalsBuffer, projectSlug);
+    await fs.files.write(assetId, "audio_vocals.mp3", vocalsBuffer);
 
     // Optionally write background audio if a second URL exists
     if (resultUrls[1]) {
@@ -814,12 +814,12 @@ async function completeIsolateVocals(
             await unlink(tmpBgOut).catch(() => {});
           }
         }
-        await fs.files.write(assetId, "audio_background.mp3", bgBuffer, projectSlug);
+        await fs.files.write(assetId, "audio_background.mp3", bgBuffer);
       }
     }
   }
 
-  await fs.history.recordOperation("isolate_vocals", assetId, { mode: "cloud" }, projectSlug);
+  await fs.history.recordOperation("isolate_vocals", assetId, { mode: "cloud" });
 }
 
 function extensionFromUrl(url: string, fallback: string): string {
@@ -836,9 +836,9 @@ function extensionFromUrl(url: string, fallback: string): string {
 async function readPayloadModel(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<string | undefined> {
-  const result = await fs.metadata.artifacts.read<{ model?: string }>(assetId, "generation-payload", projectSlug);
+  const result = await fs.metadata.artifacts.read<{ model?: string }>(assetId, "generation-payload");
   if (!result.ok) return undefined;
   return typeof result.value.model === "string" ? result.value.model : undefined;
 }
@@ -847,7 +847,7 @@ async function completeAlibabaVideo(
   fs: Engine,
   assetId: string,
   assetDir: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskId?: string,
@@ -855,9 +855,9 @@ async function completeAlibabaVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in Alibaba result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
 
-  const modelName = (await readPayloadModel(fs, assetId, projectSlug)) ?? "alibaba/wan2.7-video";
+  const modelName = (await readPayloadModel(fs, assetId, bookId)) ?? "alibaba/wan2.7-video";
 
   const provenance = {
     source_images: meta.sourceImageIds,
@@ -871,7 +871,7 @@ async function completeAlibabaVideo(
   };
 
   if (taskId !== undefined) {
-    await fs.metadata.artifacts.write(assetId, "alibaba-task-id", { taskId }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "alibaba-task-id", { taskId });
   }
 
   const videoPath = join(assetDir, "original.mp4");
@@ -881,7 +881,7 @@ async function completeAlibabaVideo(
     videoPath,
     assetId,
     assetDir,
-    projectSlug,
+    bookId,
     provenance,
   } as unknown as Record<string, unknown>);
 }
@@ -889,7 +889,7 @@ async function completeAlibabaVideo(
 async function completeAlibabaQwenImage(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskType: "alibaba_qwen_image" | "alibaba_qwen_image_edit",
@@ -898,12 +898,12 @@ async function completeAlibabaQwenImage(
   if (!imageUrl) throw new Error("No image URL in Alibaba Qwen result");
 
   const ext = extensionFromUrl(imageUrl, "png");
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, projectSlug, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, bookId, { kind: "image" });
 
   const fallbackModel = taskType === "alibaba_qwen_image_edit"
     ? "alibaba/qwen-image-edit-plus"
     : "alibaba/qwen-image-2.0-pro";
-  const modelName = (await readPayloadModel(fs, assetId, projectSlug))
+  const modelName = (await readPayloadModel(fs, assetId, bookId))
     ?? (typeof meta.model === "string" ? `alibaba/${meta.model}` : fallbackModel);
 
   const origin = {
@@ -925,7 +925,7 @@ async function completeAlibabaQwenImage(
   await queue.enqueue(jobId, {
     type: "process_image",
     assetId,
-    projectSlug,
+    bookId,
     extension: `.${ext}`,
     provenance: origin,
   } as unknown as Record<string, unknown>);
@@ -935,7 +935,7 @@ async function completeHappyHorseVideo(
   fs: Engine,
   assetId: string,
   assetDir: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskType: string,
@@ -944,7 +944,7 @@ async function completeHappyHorseVideo(
   const videoUrl = resultUrls[0];
   if (!videoUrl) throw new Error("No video URL in result");
 
-  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", projectSlug, { kind: "video" });
+  const buffer = await downloadUrlIntoAsset(fs, videoUrl, assetId, "original.mp4", bookId, { kind: "video" });
 
   // t2v/i2v/ref generate against HappyHorse 1.1; video-edit has no 1.1 endpoint
   // and stays on 1.0. This string is descriptive provenance only (never fed to
@@ -968,7 +968,7 @@ async function completeHappyHorseVideo(
   const videoPath = join(assetDir, "original.mp4");
 
   if (taskId !== undefined) {
-    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId });
   }
 
   const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -977,7 +977,7 @@ async function completeHappyHorseVideo(
     videoPath,
     assetId,
     assetDir,
-    projectSlug,
+    bookId,
     provenance,
   } as unknown as Record<string, unknown>);
 }
@@ -985,7 +985,7 @@ async function completeHappyHorseVideo(
 async function completeAlibabaImage(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   meta: Record<string, unknown>,
   resultUrls: string[],
   taskType: "alibaba_image" | "alibaba_image_pro",
@@ -994,9 +994,9 @@ async function completeAlibabaImage(
   if (!imageUrl) throw new Error("No image URL in Alibaba result");
 
   const ext = extensionFromUrl(imageUrl, "png");
-  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, projectSlug, { kind: "image" });
+  const buffer = await downloadUrlIntoAsset(fs, imageUrl, assetId, `original.${ext}`, bookId, { kind: "image" });
 
-  const modelName = (await readPayloadModel(fs, assetId, projectSlug))
+  const modelName = (await readPayloadModel(fs, assetId, bookId))
     ?? (taskType === "alibaba_image_pro" ? "alibaba/wan2.7-image-pro" : "alibaba/wan2.7-image");
 
   const origin = {
@@ -1016,7 +1016,7 @@ async function completeAlibabaImage(
   await queue.enqueue(jobId, {
     type: "process_image",
     assetId,
-    projectSlug,
+    bookId,
     extension: `.${ext}`,
     provenance: origin,
   } as unknown as Record<string, unknown>);

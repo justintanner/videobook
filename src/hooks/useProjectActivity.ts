@@ -16,7 +16,7 @@ export interface ActionLogEntry {
 interface UseProjectActivityResult {
   entries: ActionLogEntry[];
   loading: boolean;
-  fetch: (projectSlug: string) => Promise<void>;
+  fetch: (bookId: string) => Promise<void>;
 }
 
 export function useProjectActivity(callTool: UseMcpResult["callTool"]): UseProjectActivityResult {
@@ -27,10 +27,10 @@ export function useProjectActivity(callTool: UseMcpResult["callTool"]): UseProje
     callToolRef.current = callTool;
   }, [callTool]);
 
-  const fetch = useCallback(async (projectSlug: string) => {
+  const fetch = useCallback(async (bookId: string) => {
     setLoading(true);
     try {
-      const result = await callToolRef.current("project_activity", { project_slug: projectSlug, limit: 50 });
+      const result = await callToolRef.current("project_activity", { book_id: bookId, limit: 50 });
       if (!result.isError) {
         const content = result.content as Array<{ type: string; text: string }>;
         setEntries(JSON.parse(content[0].text) as ActionLogEntry[]);

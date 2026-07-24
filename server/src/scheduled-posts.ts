@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { getActiveEngine, queue } from "./queue.js";
+import { appState } from "./app-state.js";
+import { queue } from "./queue.js";
 
 export interface ScheduledPostPayload {
   asset_id: string;
-  project_slug: string;
+  book_id: string;
   platform: "x";
   text?: string;
   orientation?: "portrait" | "landscape";
@@ -41,13 +42,12 @@ function serialize<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 async function readState(): Promise<ScheduledPostEntry[]> {
-  const entries = getActiveEngine().settings.get<unknown>(SETTINGS_KEY);
+  const entries = await appState.get<unknown>(SETTINGS_KEY);
   return Array.isArray(entries) ? entries as ScheduledPostEntry[] : [];
 }
 
 async function writeState(entries: ScheduledPostEntry[]): Promise<void> {
-  const written = getActiveEngine().settings.set(SETTINGS_KEY, entries);
-  if (!written.ok) throw new Error(written.error.message);
+  await appState.set(SETTINGS_KEY, entries);
 }
 
 async function updateEntry(
@@ -92,7 +92,7 @@ async function firePost(scheduleId: string): Promise<void> {
       {
         type: "post_to_x",
         assetId: entry.payload.asset_id,
-        projectSlug: entry.payload.project_slug,
+        bookId: entry.payload.book_id,
         text: entry.payload.text,
         orientation: entry.payload.orientation,
         scheduleId,

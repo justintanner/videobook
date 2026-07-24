@@ -110,13 +110,13 @@ export function executeUiAction(
       break;
     }
     case 'create_project':
-      (fn as UiActionCallbacks['create_project'])(ctx.args.project_slug ?? ctx.raw);
+      (fn as UiActionCallbacks['create_project'])(ctx.args.book_id ?? ctx.raw);
       break;
     case 'rename_project':
       (fn as UiActionCallbacks['rename_project'])(ctx.args.new_slug ?? ctx.raw);
       break;
     case 'delete_project':
-      (fn as UiActionCallbacks['delete_project'])(ctx.args.project_slug ?? '');
+      (fn as UiActionCallbacks['delete_project'])(ctx.args.book_id ?? '');
       break;
     case 'sidebar_collapse':
     case 'sidebar_expand':

@@ -21,7 +21,7 @@ type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 const wan27I2v = Wan27ImageToVideoRequestSchema.shape.input.shape;
 
-async function resolveVideoSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveVideoSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   // `@<assetId>/<filename>` form: address a specific sibling file inside an
   // asset (e.g. `@plan/s1.mp4`). Bypasses the vid- prefix gate.
   const stripped = raw.replace(/^@/, "");
@@ -30,7 +30,7 @@ async function resolveVideoSlug(fs: Engine, raw: string, projectSlug: string): P
     const assetId = stripped.slice(0, slashIdx);
     const filename = stripped.slice(slashIdx + 1);
     if (!assetId || !filename) return { ok: false, error: `Invalid slashed slug: ${raw}` };
-    const manifest = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
+    const manifest = await fs.files.manifest(assetId);
     if (!manifest.ok) return { ok: false, error: manifest.error.message };
     const file = manifest.value.files.find((f) => f.name === filename);
     if (!file) return { ok: false, error: `File ${filename} not found in asset ${assetId}` };
@@ -38,7 +38,7 @@ async function resolveVideoSlug(fs: Engine, raw: string, projectSlug: string): P
   }
   const assetId = stripped;
   if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slug must be a vid-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findVideoFile(manifest.value.files);
   if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
@@ -46,7 +46,7 @@ async function resolveVideoSlug(fs: Engine, raw: string, projectSlug: string): P
 }
 
 const extendWan27VideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   video_slug: z.string().describe("Source video asset to extend (e.g., @vid-scene)"),
   prompt: apicityStringField(wan27I2v.prompt, "Video description (max 5000 chars)", { required: true }),
   negative_prompt: apicityStringField(wan27I2v.negative_prompt, "Negative prompt — things to avoid (max 500 chars)"),
@@ -68,7 +68,7 @@ export function extendWan27VideoDef(fs: Engine): ToolDef {
     schema: extendWan27VideoSchema,
     handler: async (args) => {
       const {
-        project_slug, video_slug, prompt, negative_prompt,
+        book_id, video_slug, prompt, negative_prompt,
         resolution, duration, prompt_extend, watermark, nsfw_checker, seed,
       } = args as Args;
 
@@ -86,12 +86,12 @@ export function extendWan27VideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const videoResult = await resolveVideoSlug(fs, video_slug, project_slug);
+      const videoResult = await resolveVideoSlug(fs, video_slug, book_id);
       if (!videoResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoResult.error }] };
       const sourceVideo = videoResult.value;
 
       const videoName = `${modelSlug("kie", "wan/2-7-image-to-video")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -110,7 +110,7 @@ export function extendWan27VideoDef(fs: Engine): ToolDef {
         type: "extend_wan27_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         sourceVideo,
         sourceVideoIds,

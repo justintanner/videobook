@@ -90,7 +90,7 @@ describe("MCP tools e2e", () => {
   it("creates a project", async () => {
     const result = await client.callTool({
       name: "create_project",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const project = value(fs.projects.get(PROJECT));
@@ -101,7 +101,7 @@ describe("MCP tools e2e", () => {
   it("creates a second project", async () => {
     const result = await client.callTool({
       name: "create_project",
-      arguments: { project_slug: TARGET_PROJECT },
+      arguments: { book_id: TARGET_PROJECT },
     });
     expect(result.isError).toBeFalsy();
     expect(value(fs.projects.get(TARGET_PROJECT)).slug).toBe(
@@ -127,17 +127,17 @@ describe("MCP tools e2e", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const result = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: PROJECT, filename: "hero-shot.png", data },
+      arguments: { book_id: PROJECT, filename: "hero-shot.png", data },
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
     imgAssetId = parsed.assetId as string;
     expect(imgAssetId).toMatch(/^img-/);
-    const artifact = value(fs.artifacts.get(PROJECT, imgAssetId));
+    const artifact = value(fs.artifacts.get(PROJECT));
     imgArtifactId = artifact.artifactId;
     expect(
       value(
-        await fs.files.read(imgArtifactId, "original.png", PROJECT),
+        await fs.files.read(imgArtifactId, "original.png"),
       ).length,
     ).toBeGreaterThan(0);
   });
@@ -146,7 +146,7 @@ describe("MCP tools e2e", () => {
     const data = Buffer.from("# Episode Notes\n\nSome content here.").toString("base64");
     const result = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: PROJECT, filename: "episode-notes.md", data },
+      arguments: { book_id: PROJECT, filename: "episode-notes.md", data },
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
@@ -154,7 +154,7 @@ describe("MCP tools e2e", () => {
     expect(scriptAssetId).toMatch(/^script-/);
     expect(
       value(
-        await fs.files.read(scriptAssetId, "original.md", PROJECT),
+        await fs.files.read(scriptAssetId, "original.md"),
       ).toString(),
     ).toBe("# Episode Notes\n\nSome content here.");
   });
@@ -163,7 +163,7 @@ describe("MCP tools e2e", () => {
     const data = (await readFile(videoPath)).toString("base64");
     const result = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: PROJECT, filename: "original.mp4", data },
+      arguments: { book_id: PROJECT, filename: "original.mp4", data },
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
@@ -171,7 +171,7 @@ describe("MCP tools e2e", () => {
     expect(vidAssetId).toMatch(/^vid-/);
     expect(
       value(
-        await fs.files.read(vidAssetId, "original.mp4", PROJECT),
+        await fs.files.read(vidAssetId, "original.mp4"),
       ).length,
     ).toBeGreaterThan(0);
   });
@@ -181,7 +181,7 @@ describe("MCP tools e2e", () => {
   it("reads image manifest", async () => {
     const result = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: imgAssetId, project_slug: PROJECT },
+      arguments: { asset_id: imgAssetId, book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const data = parse(result);
@@ -192,7 +192,7 @@ describe("MCP tools e2e", () => {
   it("reads script manifest", async () => {
     const result = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: scriptAssetId, project_slug: PROJECT },
+      arguments: { asset_id: scriptAssetId, book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const data = parse(result);
@@ -205,24 +205,21 @@ describe("MCP tools e2e", () => {
   it("renames an asset", async () => {
     const result = await client.callTool({
       name: "rename_asset",
-      arguments: { asset_id: imgAssetId, new_name: "sunset beach", project_slug: PROJECT },
+      arguments: { asset_id: imgAssetId, new_name: "sunset beach", book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
     expect(parsed.old_asset_id).toBe(imgAssetId);
     renamedAssetId = parsed.new_asset_id as string;
     expect(renamedAssetId).toMatch(/^img-sunset-beach/);
-    expect(fs.artifacts.resolveSlug(PROJECT, imgAssetId).ok).toBe(false);
+    expect(fs.artifacts.resolveSlug(PROJECT).ok).toBe(false);
     const renamed = value(
-      fs.artifacts.get(PROJECT, imgArtifactId),
+      fs.artifacts.get(PROJECT),
     );
     expect(renamed.slug).toBe(renamedAssetId);
     expect(
       value(
-        await fs.files.read(
-          imgArtifactId,
-          "original.png",
-          PROJECT,
+        await fs.files.read(imgArtifactId, "original.png"
         ),
       ).length,
     ).toBeGreaterThan(0);
@@ -231,7 +228,7 @@ describe("MCP tools e2e", () => {
   it("reads renamed asset manifest", async () => {
     const result = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: renamedAssetId, project_slug: PROJECT },
+      arguments: { asset_id: renamedAssetId, book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const data = parse(result);
@@ -242,7 +239,7 @@ describe("MCP tools e2e", () => {
   it("duplicates an asset", async () => {
     const result = await client.callTool({
       name: "duplicate_asset",
-      arguments: { asset_id: renamedAssetId, project_slug: PROJECT },
+      arguments: { asset_id: renamedAssetId, book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
@@ -251,7 +248,7 @@ describe("MCP tools e2e", () => {
     expect(dupAssetId).toMatch(/^img-/);
     expect(
       value(
-        await fs.files.read(dupAssetId, "original.png", PROJECT),
+        await fs.files.read(dupAssetId, "original.png"),
       ).length,
     ).toBeGreaterThan(0);
   });
@@ -259,7 +256,7 @@ describe("MCP tools e2e", () => {
   it("verifies duplicate files", async () => {
     const result = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: dupAssetId, project_slug: PROJECT },
+      arguments: { asset_id: dupAssetId, book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const data = parse(result);
@@ -272,7 +269,7 @@ describe("MCP tools e2e", () => {
       name: "export_asset_to_project",
       arguments: {
         asset_id: renamedAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         target_project: TARGET_PROJECT,
       },
     });
@@ -283,10 +280,7 @@ describe("MCP tools e2e", () => {
     exportedAssetId = parsed.new_asset_id as string;
     expect(
       value(
-        await fs.files.read(
-          exportedAssetId,
-          "original.png",
-          TARGET_PROJECT,
+        await fs.files.read(exportedAssetId, "original.png"
         ),
       ).length,
     ).toBeGreaterThan(0);
@@ -294,7 +288,7 @@ describe("MCP tools e2e", () => {
     // Verify manifest in target project
     const manifest = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: exportedAssetId, project_slug: TARGET_PROJECT },
+      arguments: { asset_id: exportedAssetId, book_id: TARGET_PROJECT },
     });
     expect(manifest.isError).toBeFalsy();
     const manifestData = parse(manifest);
@@ -307,7 +301,7 @@ describe("MCP tools e2e", () => {
   it("gets project history", async () => {
     const result = await client.callTool({
       name: "project_history",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const commits = parse(result) as unknown as Array<{ hash: string }>;
@@ -317,7 +311,7 @@ describe("MCP tools e2e", () => {
   it("gets asset history", async () => {
     const result = await client.callTool({
       name: "asset_history",
-      arguments: { asset_id: renamedAssetId, project_slug: PROJECT },
+      arguments: { asset_id: renamedAssetId, book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const commits = parse(result) as unknown as Array<{ hash: string }>;
@@ -328,27 +322,27 @@ describe("MCP tools e2e", () => {
     // First, get a commit hash where the dup exists (for restore later)
     const historyResult = await client.callTool({
       name: "asset_history",
-      arguments: { asset_id: dupAssetId, project_slug: PROJECT },
+      arguments: { asset_id: dupAssetId, book_id: PROJECT },
     });
     const commits = parse(historyResult) as unknown as Array<{ hash: string }>;
     dupPreDeleteHash = commits[0].hash;
     dupArtifactId = value(
-      fs.artifacts.get(PROJECT, dupAssetId),
+      fs.artifacts.get(PROJECT),
     ).artifactId;
 
     const result = await client.callTool({
       name: "delete_asset",
-      arguments: { asset_id: dupAssetId, project_slug: PROJECT },
+      arguments: { asset_id: dupAssetId, book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
     expect(parsed.status).toBe("deleted");
-    expect(fs.artifacts.get(PROJECT, dupAssetId).ok).toBe(false);
+    expect(fs.artifacts.get(PROJECT).ok).toBe(false);
 
     // Verify manifest returns error
     const manifest = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: dupAssetId, project_slug: PROJECT },
+      arguments: { asset_id: dupAssetId, book_id: PROJECT },
     });
     expect(manifest.isError).toBe(true);
   });
@@ -359,7 +353,7 @@ describe("MCP tools e2e", () => {
       arguments: {
         asset_id: dupArtifactId,
         commit_hash: dupPreDeleteHash,
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(result.isError).toBeFalsy();
@@ -367,15 +361,12 @@ describe("MCP tools e2e", () => {
     expect(parsed.status).toBe("restored");
     expect(parsed.asset_id).toBe(dupArtifactId);
     const restored = value(
-      fs.artifacts.get(PROJECT, dupArtifactId),
+      fs.artifacts.get(PROJECT),
     );
     expect(restored.slug).toBe(dupAssetId);
     expect(
       value(
-        await fs.files.read(
-          dupArtifactId,
-          "original.png",
-          PROJECT,
+        await fs.files.read(dupArtifactId, "original.png"
         ),
       ).length,
     ).toBeGreaterThan(0);
@@ -383,7 +374,7 @@ describe("MCP tools e2e", () => {
     // Verify manifest succeeds again
     const manifest = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: dupAssetId, project_slug: PROJECT },
+      arguments: { asset_id: dupAssetId, book_id: PROJECT },
     });
     expect(manifest.isError).toBeFalsy();
   });
@@ -392,26 +383,26 @@ describe("MCP tools e2e", () => {
     // Get earliest commit for the target project
     const historyResult = await client.callTool({
       name: "project_history",
-      arguments: { project_slug: TARGET_PROJECT },
+      arguments: { book_id: TARGET_PROJECT },
     });
     const commits = parse(historyResult) as unknown as Array<{ hash: string }>;
     const earliestCommit = commits[commits.length - 1].hash;
 
     const result = await client.callTool({
       name: "rewind_project",
-      arguments: { commit_hash: earliestCommit, project_slug: TARGET_PROJECT },
+      arguments: { commit_hash: earliestCommit, book_id: TARGET_PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
     expect(parsed.status).toBe("rewound");
     expect(
-      fs.artifacts.get(TARGET_PROJECT, exportedAssetId).ok,
+      fs.artifacts.get(TARGET_PROJECT).ok,
     ).toBe(false);
 
     // Verify exported asset is gone
     const manifest = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: exportedAssetId, project_slug: TARGET_PROJECT },
+      arguments: { asset_id: exportedAssetId, book_id: TARGET_PROJECT },
     });
     expect(manifest.isError).toBe(true);
   });
@@ -434,7 +425,7 @@ describe("MCP tools e2e", () => {
   it("gets empty timeline", async () => {
     const result = await client.callTool({
       name: "get_timeline",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const timeline = parse(result) as { slots: unknown[]; render: string };
@@ -449,16 +440,16 @@ describe("MCP tools e2e", () => {
     ];
     const result = await client.callTool({
       name: "set_timeline",
-      arguments: { project_slug: PROJECT, slots },
+      arguments: { book_id: PROJECT, slots },
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
     expect(parsed.path).toBeTruthy();
     const timeline = value(
-      await fs.metadata.projects.read<{
+      await fs.metadata.book.read<{
         slots: Array<Record<string, unknown>>;
         render: string;
-      }>("timeline", PROJECT),
+      }>("timeline"),
     );
     expect(timeline.slots).toHaveLength(2);
     expect(timeline.slots[0].slug).toBe("vid-intro");
@@ -468,7 +459,7 @@ describe("MCP tools e2e", () => {
   it("reads back timeline", async () => {
     const result = await client.callTool({
       name: "get_timeline",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const timeline = parse(result) as { slots: Array<{
@@ -491,7 +482,7 @@ describe("MCP tools e2e", () => {
   it("sync completes without error", async () => {
     const result = await client.callTool({
       name: "reconcile_project_work",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
@@ -505,10 +496,7 @@ describe("MCP tools e2e", () => {
 
   it("waits for video processing", async () => {
     const meta = value(
-      await fs.metadata.artifacts.read<Record<string, unknown>>(
-        vidAssetId,
-        "original",
-        PROJECT,
+      await fs.metadata.artifacts.read<Record<string, unknown>>(vidAssetId, "original"
       ),
     );
     expect(meta.width).toBeGreaterThan(0);
@@ -521,7 +509,7 @@ describe("MCP tools e2e", () => {
       name: "wait_for_asset_ready",
       arguments: {
         asset_id: vidAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         timeout_seconds: 10,
       },
     });
@@ -536,7 +524,7 @@ describe("MCP tools e2e", () => {
       name: "trim_video",
       arguments: {
         asset_id: vidAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         trim_start: 0.5,
         trim_end: 2.0,
       },
@@ -546,7 +534,7 @@ describe("MCP tools e2e", () => {
     expect(parsed.status).toBe("completed");
     expect(
       value(
-        await fs.files.read(vidAssetId, "original.mp4", PROJECT),
+        await fs.files.read(vidAssetId, "original.mp4"),
       ).length,
     ).toBeGreaterThan(0);
   });
@@ -556,7 +544,7 @@ describe("MCP tools e2e", () => {
       name: "change_video_speed",
       arguments: {
         asset_id: vidAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         speed: 2.0,
       },
     });
@@ -566,7 +554,7 @@ describe("MCP tools e2e", () => {
     await waitForJob(parsed.job_id as string);
     expect(
       value(
-        await fs.files.read(vidAssetId, "original.mp4", PROJECT),
+        await fs.files.read(vidAssetId, "original.mp4"),
       ).length,
     ).toBeGreaterThan(0);
   });
@@ -576,7 +564,7 @@ describe("MCP tools e2e", () => {
       name: "reverse_video",
       arguments: {
         asset_id: vidAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(result.isError).toBeFalsy();
@@ -585,7 +573,7 @@ describe("MCP tools e2e", () => {
     await waitForJob(parsed.job_id as string);
     expect(
       value(
-        await fs.files.read(vidAssetId, "original.mp4", PROJECT),
+        await fs.files.read(vidAssetId, "original.mp4"),
       ).length,
     ).toBeGreaterThan(0);
   });
@@ -595,7 +583,7 @@ describe("MCP tools e2e", () => {
       name: "extract_first_frame",
       arguments: {
         asset_id: vidAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(result.isError).toBeFalsy();
@@ -609,7 +597,7 @@ describe("MCP tools e2e", () => {
     const firstFrameId = parsed.image_asset_id as string;
     const manifest = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: firstFrameId, project_slug: PROJECT },
+      arguments: { asset_id: firstFrameId, book_id: PROJECT },
     });
     expect(manifest.isError).toBeFalsy();
     const manifestData = parse(manifest);
@@ -617,18 +605,12 @@ describe("MCP tools e2e", () => {
     expect(fileNames).toContain("original.jpg");
     expect(
       value(
-        await fs.files.read(
-          firstFrameId,
-          "original.jpg",
-          PROJECT,
+        await fs.files.read(firstFrameId, "original.jpg"
         ),
       ).length,
     ).toBeGreaterThan(0);
     const firstFrameMeta = value(
-      await fs.metadata.artifacts.read<Record<string, unknown>>(
-        firstFrameId,
-        "original",
-        PROJECT,
+      await fs.metadata.artifacts.read<Record<string, unknown>>(firstFrameId, "original"
       ),
     );
     expect(firstFrameMeta.origin).toBe("first_frame");
@@ -639,7 +621,7 @@ describe("MCP tools e2e", () => {
       name: "extract_last_frame",
       arguments: {
         asset_id: vidAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(result.isError).toBeFalsy();
@@ -652,7 +634,7 @@ describe("MCP tools e2e", () => {
     const lastFrameId = parsed.image_asset_id as string;
     const manifest = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: lastFrameId, project_slug: PROJECT },
+      arguments: { asset_id: lastFrameId, book_id: PROJECT },
     });
     expect(manifest.isError).toBeFalsy();
     const manifestData = parse(manifest);
@@ -660,18 +642,12 @@ describe("MCP tools e2e", () => {
     expect(fileNames).toContain("original.jpg");
     expect(
       value(
-        await fs.files.read(
-          lastFrameId,
-          "original.jpg",
-          PROJECT,
+        await fs.files.read(lastFrameId, "original.jpg"
         ),
       ).length,
     ).toBeGreaterThan(0);
     const lastFrameMeta = value(
-      await fs.metadata.artifacts.read<Record<string, unknown>>(
-        lastFrameId,
-        "original",
-        PROJECT,
+      await fs.metadata.artifacts.read<Record<string, unknown>>(lastFrameId, "original"
       ),
     );
     expect(lastFrameMeta.origin).toBe("last_frame");
@@ -682,7 +658,7 @@ describe("MCP tools e2e", () => {
       name: "extract_audio",
       arguments: {
         asset_id: vidAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(result.isError).toBeFalsy();
@@ -696,7 +672,7 @@ describe("MCP tools e2e", () => {
     const audioId = parsed.audio_asset_id as string;
     const manifest = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: audioId, project_slug: PROJECT },
+      arguments: { asset_id: audioId, book_id: PROJECT },
     });
     expect(manifest.isError).toBeFalsy();
     const manifestData = parse(manifest);
@@ -704,14 +680,11 @@ describe("MCP tools e2e", () => {
     expect(fileNames).toContain("original.mp3");
     expect(
       value(
-        await fs.files.read(audioId, "original.mp3", PROJECT),
+        await fs.files.read(audioId, "original.mp3"),
       ).length,
     ).toBeGreaterThan(0);
     const audioMeta = value(
-      await fs.metadata.artifacts.read<Record<string, unknown>>(
-        audioId,
-        "original",
-        PROJECT,
+      await fs.metadata.artifacts.read<Record<string, unknown>>(audioId, "original"
       ),
     );
     expect(audioMeta.origin).toBe("extract_audio");
@@ -724,7 +697,7 @@ describe("MCP tools e2e", () => {
       name: "render_video",
       arguments: {
         asset_id: vidAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         subtitles_enabled: false,
       },
     });
@@ -741,7 +714,7 @@ describe("MCP tools e2e", () => {
   it("render_timeline errors when slots lack rendered files", async () => {
     const result = await client.callTool({
       name: "render_timeline",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
     expect(result.isError).toBe(true);
     // Timeline slots reference vid-intro which doesn't exist as an asset
@@ -757,7 +730,7 @@ describe("MCP tools e2e", () => {
         url: "https://example.com/video.mp4",
         start_time: "60",
         end_time: "30",
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(result.isError).toBe(true);
@@ -783,7 +756,7 @@ describe("MCP tools e2e", () => {
       name: "transcribe",
       arguments: {
         asset_id: vidAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(result.isError).toBe(true);
@@ -798,7 +771,7 @@ describe("MCP tools e2e", () => {
       name: "generate_kie_nano_banana_pro_text_to_image",
       arguments: {
         prompt: "a sunset over the ocean",
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(result.isError).toBe(true);
@@ -811,7 +784,7 @@ describe("MCP tools e2e", () => {
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
         asset_id: renamedAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(result.isError).toBe(true);
@@ -824,7 +797,7 @@ describe("MCP tools e2e", () => {
       name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
         asset_id: renamedAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(result.isError).toBe(true);
@@ -837,7 +810,7 @@ describe("MCP tools e2e", () => {
       name: "generate_kie_gpt_image_2_image_to_image",
       arguments: {
         prompt: "a sunset",
-        project_slug: PROJECT,
+        book_id: PROJECT,
         image_slugs: [`@${renamedAssetId}`],
       },
     });
@@ -853,7 +826,7 @@ describe("MCP tools e2e", () => {
       name: "prepare_video_generation",
       arguments: {
         prompt: "generate a sunset video",
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(result.isError).toBe(true);
@@ -865,7 +838,7 @@ describe("MCP tools e2e", () => {
       name: "prepare_image_generation",
       arguments: {
         prompt: "generate a sunset image",
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(result.isError).toBeFalsy();
@@ -878,7 +851,7 @@ describe("MCP tools e2e", () => {
       name: "chat",
       arguments: {
         prompt: "trim the first 2 seconds",
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(result.isError).toBe(true);

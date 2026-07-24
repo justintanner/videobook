@@ -33,7 +33,7 @@ describe("create_qr_outro", () => {
   });
 
   async function createImage(name: string, color: string): Promise<string> {
-    const asset = await fs.artifacts.create("img", name, PROJECT);
+    const asset = await fs.artifacts.create("img", name);
     if (!asset.ok) throw new Error(asset.error.message);
     const png = await sharp({
       create: {
@@ -43,19 +43,15 @@ describe("create_qr_outro", () => {
         background: color,
       },
     }).png().toBuffer();
-    const written = await fs.files.write(asset.value.slug, "original.png", png, PROJECT);
+    const written = await fs.files.write(asset.value.slug, "original.png", png);
     if (!written.ok) throw new Error(written.error.message);
     return asset.value.slug;
   }
 
   async function createAudio(name: string): Promise<string> {
-    const asset = await fs.artifacts.create("aud", name, PROJECT);
+    const asset = await fs.artifacts.create("aud", name);
     if (!asset.ok) throw new Error(asset.error.message);
-    const written = await fs.files.write(
-      asset.value.slug,
-      "original.wav",
-      Buffer.from("RIFF0000WAVE"),
-      PROJECT,
+    const written = await fs.files.write(asset.value.slug, "original.wav", Buffer.from("RIFF0000WAVE")
     );
     if (!written.ok) throw new Error(written.error.message);
     return asset.value.slug;
@@ -67,7 +63,7 @@ describe("create_qr_outro", () => {
     const sound = await createAudio("slap");
 
     const result = await createQrOutroDef(fs).handler({
-      project_slug: PROJECT,
+      book_id: PROJECT,
       qr_image_slugs: [`@${qrOne}`, qrTwo],
       sound_effect_slug: `@${sound}`,
       aspect_ratio: "9:16",
@@ -86,7 +82,7 @@ describe("create_qr_outro", () => {
     expect(data.asset_id).toBe("vid-qr-outro-qr-one");
     expect(data.job_id).toMatch(/^render-qr-outro-/);
 
-    const status = await fs.status.get(String(data.asset_id), PROJECT);
+    const status = await fs.status.get(String(data.asset_id));
     expect(status.ok && status.value).toBe("render-queued-portrait");
   });
 
@@ -94,7 +90,7 @@ describe("create_qr_outro", () => {
     const qr = await createImage("qr", "#ffffff");
 
     const result = await createQrOutroDef(fs).handler({
-      project_slug: PROJECT,
+      book_id: PROJECT,
       qr_image_slugs: [qr],
     });
 
@@ -112,7 +108,7 @@ describe("create_qr_outro", () => {
     const qr = await createImage("silent-qr", "#ffffff");
 
     const result = await createQrOutroDef(fs).handler({
-      project_slug: PROJECT,
+      book_id: PROJECT,
       qr_image_slugs: [qr],
       duration_seconds: 10,
       include_audio: false,
@@ -132,7 +128,7 @@ describe("create_qr_outro", () => {
     const sound = await createAudio("slap");
 
     const result = await createQrOutroDef(fs).handler({
-      project_slug: PROJECT,
+      book_id: PROJECT,
       qr_image_slugs: [qr],
       sound_effect_slug: sound,
       include_audio: false,
@@ -143,25 +139,25 @@ describe("create_qr_outro", () => {
   });
 
   it("rejects missing media files before creating an output", async () => {
-    const empty = await fs.artifacts.create("img", "empty-qr", PROJECT);
+    const empty = await fs.artifacts.create("img", "empty-qr");
     if (!empty.ok) throw new Error(empty.error.message);
-    const before = await fs.artifacts.list(PROJECT);
+    const before = await fs.artifacts.list();
 
     const result = await createQrOutroDef(fs).handler({
-      project_slug: PROJECT,
+      book_id: PROJECT,
       qr_image_slugs: [empty.value.slug],
     });
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("No image file found");
-    expect(await fs.artifacts.list(PROJECT)).toHaveLength(before.length);
+    expect(await fs.artifacts.list()).toHaveLength(before.length);
   });
 
   it("rejects references with the wrong asset type", async () => {
     const sound = await createAudio("sound");
 
     const result = await createQrOutroDef(fs).handler({
-      project_slug: PROJECT,
+      book_id: PROJECT,
       qr_image_slugs: [sound],
     });
 

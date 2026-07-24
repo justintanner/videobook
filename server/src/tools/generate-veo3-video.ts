@@ -10,7 +10,7 @@ import { resolveImageSlug, slugify, type RefInput } from "./_seedance2-shared.js
 const veoInput = VeoGenerateRequestSchema.shape;
 
 const veo3VideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(veoInput.prompt, "Video description", { required: true }),
   image_slugs: apicityStringArrayField(veoInput.imageUrls, "Reference image @slugs for image-to-video (optional)"),
   aspect_ratio: apicityField(veoInput.aspectRatio, "Output aspect ratio: 16:9 / 9:16 / Auto"),
@@ -31,7 +31,7 @@ function makeVeo3VideoTool(
     schema: veo3VideoSchema,
     handler: async (args) => {
       const raw = args as Veo3VideoArgs;
-      const { project_slug, prompt, image_slugs, aspect_ratio, seed } = raw;
+      const { book_id, prompt, image_slugs, aspect_ratio, seed } = raw;
 
       if (!process.env.KIE_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }] };
@@ -43,13 +43,13 @@ function makeVeo3VideoTool(
 
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageSlug(fs, slug, project_slug);
+        const r = await resolveImageSlug(fs, slug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `image_slugs: ${r.error}` }] };
         imageInputs.push(r.value);
       }
 
       const videoName = `${model}-${slugify(prompt) || Date.now().toString(36)}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
@@ -63,7 +63,7 @@ function makeVeo3VideoTool(
         veoModel: model,
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         imageInputs,
         sourceImageIds,
         prompt,

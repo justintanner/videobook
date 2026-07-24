@@ -27,7 +27,7 @@ export interface SyncResult {
 }
 
 interface UseSyncResult {
-  sync: (projectSlug: string) => void;
+  sync: (bookId: string) => void;
   syncing: boolean;
   result: SyncResult | undefined;
   error: string | undefined;
@@ -46,14 +46,14 @@ export function useSync(callTool: UseMcpResult["callTool"]): UseSyncResult {
   const gateRef = useRef(new SyncRequestGate());
   const prevSyncJsonRef = useRef<string>('');
 
-  const sync = useCallback(async (projectSlug: string) => {
+  const sync = useCallback(async (bookId: string) => {
     if (!gateRef.current.start()) return;
     setSyncing(true);
     setError(undefined);
-    console.log("[sync] calling sync for", projectSlug);
+    console.log("[sync] calling sync for", bookId);
     try {
       const toolResult = await withTimeout(
-        callToolRef.current("reconcile_project_work", { project_slug: projectSlug }),
+        callToolRef.current("reconcile_project_work", { book_id: bookId }),
         SYNC_TIMEOUT_MS,
         'Sync request',
       );

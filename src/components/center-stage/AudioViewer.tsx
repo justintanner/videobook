@@ -31,9 +31,9 @@ function formatAudioDuration(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, callTool, onClose }: {
+export function AudioViewer({ item, bookId, flipped, onFlippedChange, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, callTool, onClose }: {
   item: MediaItem;
-  projectSlug: string;
+  bookId: string;
   flipped: boolean;
   onFlippedChange: (f: boolean) => void;
   pendingFilePosition?: number | null;
@@ -55,7 +55,7 @@ export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendi
   }, []);
 
   const bf = useViewerBackFace({
-    projectSlug,
+    bookId,
     itemId: item.id,
     callTool,
     flipped,
@@ -157,7 +157,7 @@ export function AudioViewer({ item, projectSlug, flipped, onFlippedChange, pendi
                 handleRestore={bf.handleRestore}
                 fetchHistory={bf.fetchHistory}
                 itemId={item.id}
-                projectSlug={projectSlug}
+                bookId={bookId}
               />
             )}
           </div>

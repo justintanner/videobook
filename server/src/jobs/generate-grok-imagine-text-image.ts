@@ -13,7 +13,7 @@ type GenerateGrokImagineTextImagePayload = {
   prompt: string;
   imgAssetId: string;
   imgAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   aspectRatio?: GrokTextToImageRequest["input"]["aspect_ratio"];
   enablePro?: boolean;
   nsfwChecker?: boolean;
@@ -23,7 +23,7 @@ type GenerateGrokImagineTextImagePayload = {
 export function registerGenerateGrokImagineTextImageJob(fs: Engine): void {
   registerJobHandler("generate_grok_imagine_text_image", async (payload, ctx) => {
     const {
-      prompt, imgAssetId, imgAssetDir, projectSlug, aspectRatio, enablePro, nsfwChecker, _provider,
+      prompt, imgAssetId, imgAssetDir, bookId, aspectRatio, enablePro, nsfwChecker, _provider,
     } = payload as GenerateGrokImagineTextImagePayload;
 
     const isXai = _provider !== undefined && _provider.startsWith("xai");
@@ -40,7 +40,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: Engine): void {
         response_format: "url",
         ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio as XaiImageGenerateRequest["aspect_ratio"] } : {}),
       };
-      await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request, projectSlug);
+      await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request);
       const result = await callXaiPaid<XaiImageGenerateRequest, XaiImageResponse>(
         provider.post.v1.images.generations,
         XAI_IMAGE_GENERATIONS_DOT_PATH,
@@ -50,7 +50,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: Engine): void {
       const imageUrl = result.data[0]?.url;
       if (!imageUrl) throw new Error("xAI returned no image URL");
 
-      await downloadUrlIntoAsset(fs, imageUrl, imgAssetId, "original.png", projectSlug, { kind: "result image" });
+      await downloadUrlIntoAsset(fs, imageUrl, imgAssetId, "original.png", bookId, { kind: "result image" });
 
       // Enqueue post-processing so metadata and derived crops are created
       const provenance = {
@@ -62,12 +62,12 @@ export function registerGenerateGrokImagineTextImageJob(fs: Engine): void {
       await queue.enqueue(`process-image-${imgAssetId}-${Date.now()}`, {
         type: "process_image",
         assetId: imgAssetId,
-        projectSlug,
+        bookId,
         extension: ".png",
         provenance,
       } as unknown as Record<string, unknown>);
 
-      await fs.jobs.pending.delete(projectSlug, imgAssetId);
+      await fs.jobs.pending.delete(imgAssetId);
 
       return { success: true, provider: "xai" };
     }
@@ -86,7 +86,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: Engine): void {
       taskType: "grok_imagine_text",
       assetId: imgAssetId,
       assetDir: imgAssetDir,
-      projectSlug,
+      bookId,
       meta: { prompt, ...(aspectRatio !== undefined ? { aspectRatio } : {}) },
     });
 

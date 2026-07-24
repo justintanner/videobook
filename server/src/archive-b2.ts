@@ -17,7 +17,7 @@ export interface ArchiveTag {
 export interface ArchiveSourceRef {
   kind: "url" | "asset";
   url?: string;
-  project_slug?: string;
+  book_id?: string;
   asset_id?: string;
   title?: string;
   created_at: string;

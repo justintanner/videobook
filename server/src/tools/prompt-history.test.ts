@@ -21,7 +21,7 @@ function parseText<T>(result: Awaited<ReturnType<Client["callTool"]>>): T {
 async function createProject(client: Client, slug: string) {
   await client.callTool({
     name: "create_project",
-    arguments: { project_slug: slug },
+    arguments: { book_id: slug },
   });
 }
 
@@ -34,14 +34,14 @@ async function record(
 ) {
   return client.callTool({
     name: "record_prompt",
-    arguments: { project_slug: slug, surface, prompt, params },
+    arguments: { book_id: slug, surface, prompt, params },
   });
 }
 
 async function list(client: Client, slug: string, surface: string, limit?: number) {
   const result = await client.callTool({
     name: "list_prompt_history",
-    arguments: { project_slug: slug, surface, ...(limit ? { limit } : {}) },
+    arguments: { book_id: slug, surface, ...(limit ? { limit } : {}) },
   });
   return parseText<{ entries: HistoryEntry[] }>(result);
 }
@@ -127,7 +127,7 @@ describe("prompt history tools", () => {
     await createProject(client, "p");
     const result = await client.callTool({
       name: "list_prompt_history",
-      arguments: { project_slug: "p", surface: "garbage" },
+      arguments: { book_id: "p", surface: "garbage" },
     });
     expect(result.isError).toBe(true);
   });

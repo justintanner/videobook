@@ -4,12 +4,12 @@ import { cn } from '@/lib/utils'
 import { CHEVRON_DOWN_HACK } from '@/components/ui/interaction-states'
 
 interface ProjectButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  projectSlug: string | undefined
+  bookId: string | undefined
   assetCount?: number
 }
 
 export const ProjectButton = React.forwardRef<HTMLButtonElement, ProjectButtonProps>(
-  ({ projectSlug, assetCount, className, ...props }, ref) => {
+  ({ bookId, assetCount, className, ...props }, ref) => {
     const assetCountLabel = assetCount === 1 ? '1 asset' : `${assetCount ?? 0} assets`
 
     return (
@@ -50,7 +50,7 @@ export const ProjectButton = React.forwardRef<HTMLButtonElement, ProjectButtonPr
             projects
           </span>
           <span className="min-w-0 truncate font-mono font-bold text-xs tracking-widest text-zinc-400/70 group-hover:text-zinc-400/90 transition-colors">
-            /{projectSlug}
+            /{bookId}
           </span>
         </div>
 

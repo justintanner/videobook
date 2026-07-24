@@ -8,7 +8,7 @@ export const SKIP_CROP_EXTENSIONS = new Set([".svg", ".gif"]);
 type ProcessImagePayload = {
   type: "process_image";
   assetId: string;
-  projectSlug: string;
+  bookId: string;
   extension: string;
   provenance: Record<string, unknown>;
 };
@@ -16,17 +16,17 @@ type ProcessImagePayload = {
 export function registerProcessImageJob(fs: Engine): void {
   registerJobHandler("process_image", async (payload, ctx) => {
     const {
-      assetId, projectSlug, extension, provenance,
+      assetId, bookId, extension, provenance,
     } = payload as ProcessImagePayload;
 
-    return withLocalLease(fs, projectSlug, assetId, ctx, "process", async () => {
-      const readResult = await fs.files.read(assetId, `original${extension}`, projectSlug);
+    return withLocalLease(fs, bookId, assetId, ctx, "process", async () => {
+      const readResult = await fs.files.read(assetId, `original${extension}`);
       if (!readResult.ok) throw new Error(`Failed to read original: ${readResult.error.message}`);
 
       const buffer = Buffer.isBuffer(readResult.value) ? readResult.value : Buffer.from(readResult.value);
       const { width, height } = await probeImage(buffer);
 
-      await fs.metadata.artifacts.write(assetId, "original", { ...provenance, width, height }, projectSlug);
+      await fs.metadata.artifacts.write(assetId, "original", { ...provenance, width, height });
 
       if (!SKIP_CROP_EXTENSIONS.has(extension)) {
         const [landscape, portrait, square] = await Promise.all([
@@ -36,9 +36,9 @@ export function registerProcessImageJob(fs: Engine): void {
         ]);
 
         await Promise.all([
-          fs.files.write(assetId, "landscape.jpg", landscape, projectSlug),
-          fs.files.write(assetId, "portrait.jpg", portrait, projectSlug),
-          fs.files.write(assetId, "square.jpg", square, projectSlug),
+          fs.files.write(assetId, "landscape.jpg", landscape),
+          fs.files.write(assetId, "portrait.jpg", portrait),
+          fs.files.write(assetId, "square.jpg", square),
         ]);
       }
 

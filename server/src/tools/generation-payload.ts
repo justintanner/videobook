@@ -21,16 +21,16 @@ export function generationPayloadDef(fs: Engine): ToolDef {
     name: "inspect_generation_request",
     description: "Read the persisted Kie request payload, task meta, and failure info for a single asset. Used by the /inbox hover inspector to show what was sent to the provider.",
     schema: {
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       asset_id: z.string().describe("Asset id (e.g. vid-something)"),
     },
     handler: async (args) => {
-      const { project_slug, asset_id } = args as { project_slug: string; asset_id: string };
+      const { book_id: _book_id, asset_id } = args as { book_id: string; asset_id: string };
 
       const [payloadRes, taskRes, errorRes] = await Promise.all([
-        fs.metadata.artifacts.read<unknown>(asset_id, "generation-payload", project_slug),
-        fs.jobs.pending.read(project_slug, asset_id),
-        fs.jobs.failures.read(project_slug, asset_id),
+        fs.metadata.artifacts.read<unknown>(asset_id, "generation-payload"),
+        fs.jobs.pending.read(asset_id),
+        fs.jobs.failures.read(asset_id),
       ]);
 
       const task = taskRes.ok ? taskRes.value : null;

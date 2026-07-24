@@ -17,7 +17,7 @@ type GenerateKling30MotionControlPayload = {
   type: "generate_kling30_motion_control_video";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   imageInputs: RefInput[];
   videoInputs: RefInput[];
   sourceImageIds: string[];
@@ -28,10 +28,10 @@ type GenerateKling30MotionControlPayload = {
   background_source?: KlingMotionControlRequest["input"]["background_source"];
 };
 
-async function uploadInputs(fs: Engine, inputs: RefInput[], projectSlug: string): Promise<string[]> {
+async function uploadInputs(fs: Engine, inputs: RefInput[], bookId: string): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename, projectSlug));
+    urls.push(await uploadAssetToKie(fs, assetId, filename, bookId));
   }
   return urls;
 }
@@ -39,15 +39,15 @@ async function uploadInputs(fs: Engine, inputs: RefInput[], projectSlug: string)
 export function registerGenerateKling30MotionControlVideoJob(fs: Engine): void {
   registerJobHandler("generate_kling30_motion_control_video", async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug,
+      vidAssetId, vidAssetDir, bookId,
       imageInputs, videoInputs, sourceImageIds, sourceVideoIds,
       prompt, mode, character_orientation, background_source,
     } = payload as GenerateKling30MotionControlPayload;
 
     requireApiKey("KIE_API_KEY");
 
-    const inputUrls = await uploadInputs(fs, imageInputs, projectSlug);
-    const videoUrls = await uploadInputs(fs, videoInputs, projectSlug);
+    const inputUrls = await uploadInputs(fs, imageInputs, bookId);
+    const videoUrls = await uploadInputs(fs, videoInputs, bookId);
 
     // kling-3.0/motion-control has no `duration` field in its kie input schema
     // — the output length matches the input motion video. Surface the first
@@ -63,8 +63,7 @@ export function registerGenerateKling30MotionControlVideoJob(fs: Engine): void {
     );
 
     const motionVideo = videoInputs[0];
-    const motionMeta = await fs.metadata.artifacts.read<{ duration?: number }>(
-      motionVideo.assetId, "original", projectSlug,
+    const motionMeta = await fs.metadata.artifacts.read<{ duration?: number }>(motionVideo.assetId, "original"
     );
     const durationHint =
       motionMeta.ok && typeof motionMeta.value?.duration === "number" && motionMeta.value.duration > 0
@@ -76,7 +75,7 @@ export function registerGenerateKling30MotionControlVideoJob(fs: Engine): void {
       taskType: "kling30_motion_control_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         ...(prompt !== undefined ? { prompt } : {}),
         ...(mode !== undefined ? { mode } : {}),

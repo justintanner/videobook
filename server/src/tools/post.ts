@@ -12,7 +12,7 @@ export function postDef(): ToolDef {
       "Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.",
     schema: {
       asset_id: z.string().describe("Asset to post (e.g. vid-clip-name, img-photo-name)"),
-      project_slug: z.string().describe("Project slug containing the asset"),
+      book_id: z.string().describe("Project slug containing the asset"),
       platform: z.enum(["x"]).default("x").describe("Target platform; defaults to 'x'"),
       text: z
         .string()
@@ -32,10 +32,10 @@ export function postDef(): ToolDef {
         .describe("ISO 8601 timestamp to publish at. Omit to post immediately."),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, platform = "x", text, orientation, scheduled_for } =
+      const { asset_id, book_id, platform = "x", text, orientation, scheduled_for } =
         args as {
           asset_id: string;
-          project_slug: string;
+          book_id: string;
           platform?: "x";
           text?: string;
           orientation?: "portrait" | "landscape";
@@ -64,7 +64,7 @@ export function postDef(): ToolDef {
         if (when - Date.now() > SCHEDULE_LEAD_MS) {
           try {
             const result = await schedulePost(
-              { asset_id, project_slug, platform, text, orientation },
+              { asset_id, book_id, platform, text, orientation },
               scheduled_for,
             );
             return {
@@ -102,7 +102,7 @@ export function postDef(): ToolDef {
         }>(jobId, {
           type: "post_to_x",
           assetId: asset_id,
-          projectSlug: project_slug,
+          bookId: book_id,
           text,
           orientation,
         });

@@ -14,11 +14,11 @@ describe("export_asset_to_project tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "source-proj" },
+      arguments: { book_id: "source-proj" },
     });
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "target-proj" },
+      arguments: { book_id: "target-proj" },
     });
   });
 
@@ -31,7 +31,7 @@ describe("export_asset_to_project tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "source-proj", filename: "photo.png", data },
+      arguments: { book_id: "source-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse(
       (uploadResult.content as Array<{ type: string; text: string }>)[0].text
@@ -41,7 +41,7 @@ describe("export_asset_to_project tool", () => {
       name: "export_asset_to_project",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "source-proj",
+        book_id: "source-proj",
         target_project: "target-proj",
       },
     });
@@ -57,7 +57,7 @@ describe("export_asset_to_project tool", () => {
     // Verify asset exists in target project
     const manifest = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: parsed.new_asset_id, project_slug: "target-proj" },
+      arguments: { asset_id: parsed.new_asset_id, book_id: "target-proj" },
     });
     const manifestParsed = JSON.parse(
       (manifest.content as Array<{ type: string; text: string }>)[0].text
@@ -69,7 +69,7 @@ describe("export_asset_to_project tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "source-proj", filename: "photo.png", data },
+      arguments: { book_id: "source-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse(
       (uploadResult.content as Array<{ type: string; text: string }>)[0].text
@@ -79,7 +79,7 @@ describe("export_asset_to_project tool", () => {
       name: "export_asset_to_project",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "source-proj",
+        book_id: "source-proj",
         target_project: "source-proj",
       },
     });
@@ -93,7 +93,7 @@ describe("export_asset_to_project tool", () => {
       name: "export_asset_to_project",
       arguments: {
         asset_id: "img-no-such-asset",
-        project_slug: "source-proj",
+        book_id: "source-proj",
         target_project: "target-proj",
       },
     });

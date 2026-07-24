@@ -27,11 +27,11 @@ describe("chat history tools", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     const result = await client.callTool({
       name: "list_chat_history",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     const data = parseText(result);
     expect(data).toEqual({ messages: [] });
@@ -41,17 +41,17 @@ describe("chat history tools", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     const pushResult = await client.callTool({
       name: "push_chat_history",
-      arguments: { message: "hello world", project_slug: "test-proj" },
+      arguments: { message: "hello world", book_id: "test-proj" },
     });
     expect(parseText(pushResult)).toEqual({ ok: true });
 
     const listResult = await client.callTool({
       name: "list_chat_history",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     const data = parseText(listResult);
     expect(data.messages).toEqual(["hello world"]);
@@ -61,24 +61,24 @@ describe("chat history tools", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     await client.callTool({
       name: "push_chat_history",
-      arguments: { message: "first", project_slug: "test-proj" },
+      arguments: { message: "first", book_id: "test-proj" },
     });
     await client.callTool({
       name: "push_chat_history",
-      arguments: { message: "second", project_slug: "test-proj" },
+      arguments: { message: "second", book_id: "test-proj" },
     });
     await client.callTool({
       name: "push_chat_history",
-      arguments: { message: "third", project_slug: "test-proj" },
+      arguments: { message: "third", book_id: "test-proj" },
     });
 
     const result = await client.callTool({
       name: "list_chat_history",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     const data = parseText(result) as { messages: string[] };
     expect(data.messages).toEqual(["first", "second", "third"]);
@@ -88,24 +88,24 @@ describe("chat history tools", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     await client.callTool({
       name: "push_chat_history",
-      arguments: { message: "one", project_slug: "test-proj" },
+      arguments: { message: "one", book_id: "test-proj" },
     });
     await client.callTool({
       name: "push_chat_history",
-      arguments: { message: "two", project_slug: "test-proj" },
+      arguments: { message: "two", book_id: "test-proj" },
     });
     await client.callTool({
       name: "push_chat_history",
-      arguments: { message: "three", project_slug: "test-proj" },
+      arguments: { message: "three", book_id: "test-proj" },
     });
 
     const result = await client.callTool({
       name: "list_chat_history",
-      arguments: { project_slug: "test-proj", limit: 2 },
+      arguments: { book_id: "test-proj", limit: 2 },
     });
     const data = parseText(result) as { messages: string[] };
     expect(data.messages).toHaveLength(2);
@@ -115,7 +115,7 @@ describe("chat history tools", () => {
     client = await createTestClient(tempDir);
     const result = await client.callTool({
       name: "push_chat_history",
-      arguments: { message: "hello", project_slug: "no-such-project" },
+      arguments: { message: "hello", book_id: "no-such-project" },
     });
     expect(result.isError).toBe(true);
   });

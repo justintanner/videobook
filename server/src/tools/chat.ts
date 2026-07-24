@@ -10,6 +10,7 @@ import type { ToolDef, ToolResult } from "./tool-def.js";
 import { callGeminiFlashJson, geminiTextPart } from "../kie-gemini.js";
 import { getApiKey } from "../api-key.js";
 import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
+import { timelineSlotSlugs } from "../timeline-helpers.js";
 
 type ChatDecision = {
   tool: string;
@@ -215,7 +216,6 @@ type AssetOriginMeta = {
 export async function enrichAssetContext(
   fs: Engine,
   resolvedAssets: ChatResolvedAsset[],
-  slug: string,
 ): Promise<Array<Record<string, unknown>>> {
   const rows: Array<Record<string, unknown>> = [];
   for (const a of resolvedAssets) {
@@ -225,10 +225,7 @@ export async function enrichAssetContext(
       asset_id: a.artifactSlug,
       has_file: a.filePath !== null,
     };
-    const metaResult = await fs.metadata.artifacts.read<AssetOriginMeta>(
-      a.artifactId,
-      "original",
-      slug,
+    const metaResult = await fs.metadata.artifacts.read<AssetOriginMeta>(a.artifactId, "original"
     );
     if (metaResult.ok) {
       const sourceUrl =
@@ -247,15 +244,11 @@ export async function enrichAssetContext(
 export async function loadScriptContentsForChat(
   fs: Engine,
   resolvedAssets: ChatResolvedAsset[],
-  slug: string,
 ): Promise<Array<{ tag: string; content: string }>> {
   const scriptContents: Array<{ tag: string; content: string }> = [];
   for (const asset of resolvedAssets) {
     if (asset.artifactType !== "script" || !asset.filePath) continue;
-    const readResult = await fs.files.read(
-      asset.artifactId,
-      SCRIPT_FILENAME,
-      slug,
+    const readResult = await fs.files.read(asset.artifactId, SCRIPT_FILENAME
     );
     if (!readResult.ok) continue;
     const content = typeof readResult.value === "string"
@@ -272,23 +265,21 @@ export function chatDef(fs: Engine): ToolDef {
     description: "Natural language interface — routes free-form prompts to the appropriate tool. Supports @asset tags (e.g., @vid-foo, @img-bar).",
     schema: {
       prompt: z.string().describe("Natural language query with optional @asset tags"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().uuid().describe("Book UUID"),
     },
     handler: async (args) => {
-      const { prompt, project_slug: slug } = args as {
+      const { prompt, book_id: bookId } = args as {
         prompt: string;
-        project_slug: string;
+        book_id: string;
       };
+      const book = fs.book.get();
 
       // 1. Expand @s01 slot refs → actual asset slugs
       let expandedPrompt = prompt;
-      const timelineResult = await fs.metadata.projects.read<{ slots: Array<{ slug: string }> }>("timeline", slug);
-      if (timelineResult.ok && timelineResult.value.slots) {
-        expandedPrompt = fs.resolver.expandSlotRefs(prompt, timelineResult.value.slots);
-      }
+      expandedPrompt = fs.resolver.expandSlotRefs(prompt, timelineSlotSlugs(fs));
 
       // 2. Resolve @asset tags
-      const resolvedResult = await fs.resolver.resolveAll(expandedPrompt, slug);
+      const resolvedResult = await fs.resolver.resolveAll(expandedPrompt);
       if (!resolvedResult.ok) return error(resolvedResult.error.message);
       const { resolved: resolvedAssets, unresolved } = resolvedResult.value;
 
@@ -297,7 +288,7 @@ export function chatDef(fs: Engine): ToolDef {
       }
 
       // 3. Build asset context for the LLM (include source_url when known)
-      const assetContext = await enrichAssetContext(fs, resolvedAssets, slug);
+      const assetContext = await enrichAssetContext(fs, resolvedAssets);
 
       const imageFiles = resolvedAssets
         .filter((a) => a.artifactType === "image")
@@ -308,10 +299,10 @@ export function chatDef(fs: Engine): ToolDef {
         .map((a) => a.filePath)
         .filter(Boolean);
 
-      const scriptContents = await loadScriptContentsForChat(fs, resolvedAssets, slug);
+      const scriptContents = await loadScriptContentsForChat(fs, resolvedAssets);
 
       // 4. Read recent history for context
-      const historyLines = fs.logs.read("chat", slug, {
+      const historyLines = fs.logs.read("chat", {
         limit: 10,
       }) as unknown as ChatLogEntry[];
       const historyContext = formatHistoryForPrompt(historyLines);
@@ -321,7 +312,7 @@ export function chatDef(fs: Engine): ToolDef {
         return error("KIE_API_KEY environment variable is not set");
       }
 
-      const systemPrompt = buildChatRoutingPrompt(slug, historyContext || undefined);
+      const systemPrompt = buildChatRoutingPrompt(book.slug, historyContext || undefined);
       const userMessage = `User query: ${expandedPrompt}
 
 Referenced assets:
@@ -389,8 +380,8 @@ Determine which tool to use and what parameters to pass.`;
       // 7. Apply fixups (spread to avoid mutating decision.params for logging)
       const params = normalizeChatTimestampParams(decision.tool, decision.params ?? {});
 
-      // Inject project_slug
-      params.project_slug = slug;
+      // Inject book_id
+      params.book_id = bookId;
 
       // generate_image only accepts @img-* refs; models often put @vid-* in
       // image_slugs for "from the source of @vid-…". Drop non-image slugs and
@@ -428,7 +419,7 @@ Determine which tool to use and what parameters to pass.`;
 
       // 10. Log chat history (fire-and-forget)
       void fs.logs
-        .append("chat", { role: "user", text: prompt, ts: Date.now() }, slug)
+        .append("chat", { role: "user", text: prompt, ts: Date.now() })
         .catch(() => {});
       void fs.logs
         .append(
@@ -441,7 +432,6 @@ Determine which tool to use and what parameters to pass.`;
             error: Boolean(handlerResult.isError),
             ts: Date.now(),
           },
-          slug,
         )
         .catch(() => {});
 

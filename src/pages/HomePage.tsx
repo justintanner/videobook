@@ -158,28 +158,28 @@ function formatAssetCount(count: number): string {
 }
 
 type ProjectScopedState<T> = {
-  projectSlug: string | undefined;
+  bookId: string | undefined;
   value: T;
 };
 
 function useProjectScopedState<T>(
-  projectSlug: string | undefined,
+  bookId: string | undefined,
   createValue: () => T,
 ): [T, Dispatch<SetStateAction<T>>] {
-  const [state, setState] = useState<ProjectScopedState<T>>(() => ({ projectSlug, value: createValue() }));
-  if (state.projectSlug !== projectSlug) {
-    setState({ projectSlug, value: createValue() });
+  const [state, setState] = useState<ProjectScopedState<T>>(() => ({ bookId, value: createValue() }));
+  if (state.bookId !== bookId) {
+    setState({ bookId, value: createValue() });
   }
-  const value = state.projectSlug === projectSlug ? state.value : createValue();
+  const value = state.bookId === bookId ? state.value : createValue();
   const setValue = useCallback<Dispatch<SetStateAction<T>>>((next) => {
     setState((current) => {
-      if (current.projectSlug !== projectSlug) return current;
+      if (current.bookId !== bookId) return current;
       const nextValue = typeof next === 'function'
         ? (next as (previous: T) => T)(current.value)
         : next;
-      return { projectSlug, value: nextValue };
+      return { bookId, value: nextValue };
     });
-  }, [projectSlug]);
+  }, [bookId]);
   return [value, setValue];
 }
 
@@ -239,9 +239,9 @@ export function HomePage() {
 
   const { callTool, state, error: mcpError, retry: mcpRetry } = useMcpConnection();
   const { upload } = useUploadFile();
-  const { projectSlug, setProjectSlug, loading: defaultProjectLoading } = useDefaultProject(callTool, state);
-  const [renderingOverrides, setRenderingOverrides] = useProjectScopedState(projectSlug, createRenderingOverrides);
-  const [deletingIds, setDeletingIds] = useProjectScopedState(projectSlug, createDeletingIds);
+  const { bookId, setProjectSlug, loading: defaultProjectLoading } = useDefaultProject(callTool, state);
+  const [renderingOverrides, setRenderingOverrides] = useProjectScopedState(bookId, createRenderingOverrides);
+  const [deletingIds, setDeletingIds] = useProjectScopedState(bookId, createDeletingIds);
   const { sync, syncCount, result } = useSync(callTool);
   const { switchProject } = useSwitchProject(callTool);
   const { projects, refresh: refreshProjects, loading: projectsLoading } = useListProjects(callTool);
@@ -280,17 +280,17 @@ export function HomePage() {
 
   // Fetch activity when status drawer opens
   useEffect(() => {
-    if (statusOpen && projectSlug) {
-      fetchActivity(projectSlug);
+    if (statusOpen && bookId) {
+      fetchActivity(bookId);
     }
-  }, [statusOpen, projectSlug, fetchActivity]);
+  }, [statusOpen, bookId, fetchActivity]);
 
   // Refresh activity after each sync so async job failures surface live
   useEffect(() => {
-    if (statusOpen && projectSlug && syncCount > 0) {
-      fetchActivity(projectSlug);
+    if (statusOpen && bookId && syncCount > 0) {
+      fetchActivity(bookId);
     }
-  }, [syncCount, statusOpen, projectSlug, fetchActivity]);
+  }, [syncCount, statusOpen, bookId, fetchActivity]);
 
   // Refocus ChatInput after StatusDrawer closes
   useEffect(() => {
@@ -332,15 +332,15 @@ export function HomePage() {
   }, [statusOpen, settingsOpen, archiveOpen]);
 
   useEffect(() => {
-    if (!projectSlug || syncCount === 0) return;
-    listAssets(projectSlug, sortOrder);
-  }, [projectSlug, syncCount, sortOrder, listAssets]);
+    if (!bookId || syncCount === 0) return;
+    listAssets(bookId, sortOrder);
+  }, [bookId, syncCount, sortOrder, listAssets]);
 
   // Refresh timeline after each sync
   useEffect(() => {
-    if (!projectSlug || syncCount === 0) return;
-    fetchTimeline(projectSlug);
-  }, [projectSlug, syncCount, fetchTimeline]);
+    if (!bookId || syncCount === 0) return;
+    fetchTimeline(bookId);
+  }, [bookId, syncCount, fetchTimeline]);
 
 
   const mediaItems = useMemo(() => {
@@ -401,11 +401,11 @@ export function HomePage() {
   }, [assetList, result, renderingOverrides, deletingIds]);
 
   const createNotebook = useCallback(async (name: string): Promise<string | null> => {
-    if (!projectSlug || creatingNotebookRef.current) return null;
+    if (!bookId || creatingNotebookRef.current) return null;
     creatingNotebookRef.current = true;
     try {
       const res = await callTool('write_notebook', {
-        project_slug: projectSlug,
+        book_id: bookId,
         name,
         definition: {
           sequence: [],
@@ -416,7 +416,7 @@ export function HomePage() {
       const content = res.content as Array<{ type: string; text: string }>;
       const notebookId = parseWriteNotebookId(content[0]?.text ?? '');
       if (!notebookId) return null;
-      await listAssets(projectSlug, sortOrder);
+      await listAssets(bookId, sortOrder);
       return notebookId;
     } catch (e) {
       console.error('Failed to create notebook', e);
@@ -424,7 +424,7 @@ export function HomePage() {
     } finally {
       creatingNotebookRef.current = false;
     }
-  }, [projectSlug, callTool, listAssets, sortOrder]);
+  }, [bookId, callTool, listAssets, sortOrder]);
 
   const defaultNotebookSelection = useMemo(() => {
     const notebooks = sortedNotebooks(mediaItems);
@@ -435,7 +435,7 @@ export function HomePage() {
 
   useEnsureDefaultNotebook({
     state,
-    projectSlug,
+    bookId,
     assetList,
     hasNotebook,
     createNotebook,
@@ -518,10 +518,10 @@ export function HomePage() {
   }, [mediaItems, selectedItem]);
 
   const handleMarkSeen = useCallback((assetId: string) => {
-    if (!projectSlug) return;
+    if (!bookId) return;
     markAssetSeenLocal(assetId);
-    void markAssetSeen(assetId, projectSlug);
-  }, [projectSlug, markAssetSeenLocal, markAssetSeen]);
+    void markAssetSeen(assetId, bookId);
+  }, [bookId, markAssetSeenLocal, markAssetSeen]);
 
   const handleSelectItem = useCallback((item: MediaItem) => {
     setSettingsOpen(false);
@@ -550,8 +550,8 @@ export function HomePage() {
 
   const handleViewerSizeChange = useCallback((size: ViewerSize) => {
     setViewerSize(size);
-    if (projectSlug) setCurrentOrientation(projectSlug, size);
-  }, [projectSlug, setCurrentOrientation]);
+    if (bookId) setCurrentOrientation(bookId, size);
+  }, [bookId, setCurrentOrientation]);
 
   const settingsOrientation = useMemo<Orientation>(
     () => viewerSize !== 'original' ? viewerSize as Orientation : 'landscape',
@@ -561,12 +561,12 @@ export function HomePage() {
   // Sync render settings from dedicated endpoint when selection or orientation changes
   const prevSettingsKeyRef = useRef<string>('');
   useEffect(() => {
-    if (!activeSelection?.id || !projectSlug) return;
+    if (!activeSelection?.id || !bookId) return;
     const key = `${activeSelection.id}:${settingsOrientation}`;
     if (key === prevSettingsKeyRef.current) return;
     prevSettingsKeyRef.current = key;
     let cancelled = false;
-    fetchRenderSettings(activeSelection.id, projectSlug).then((all) => {
+    fetchRenderSettings(activeSelection.id, bookId).then((all) => {
       if (cancelled) return;
       const stored = all?.settings?.[settingsOrientation];
       setRenderSettings(stored
@@ -575,12 +575,12 @@ export function HomePage() {
       setTranscriptInfo(all?.transcript ?? null);
     });
     return () => { cancelled = true; };
-  }, [activeSelection?.id, projectSlug, settingsOrientation, fetchRenderSettings, mediaItems]);
+  }, [activeSelection?.id, bookId, settingsOrientation, fetchRenderSettings, mediaItems]);
 
-  const previewData = useTimelinePreview(timeline, mediaItems, projectSlug, settingsOrientation);
+  const previewData = useTimelinePreview(timeline, mediaItems, bookId, settingsOrientation);
 
   const handleRender = useCallback(async (settings?: RenderSettings) => {
-    if (!projectSlug || !activeSelection) return;
+    if (!bookId || !activeSelection) return;
     // Render the orientation the settings panel is showing. viewerSize is
     // 'original' while previewing the source clip, but the panel always targets
     // a concrete orientation (settingsOrientation), so derive from that — using
@@ -598,11 +598,11 @@ export function HomePage() {
     const { ok, error } = await runOptimisticRenderRequest({
       optimisticStatus: `render-queued-${orient}`,
       enqueue: async () => {
-        const outcome = await renderAsset(assetId, projectSlug, orient, settings);
-        if (outcome.ok) sync(projectSlug);
+        const outcome = await renderAsset(assetId, bookId, orient, settings);
+        if (outcome.ok) sync(bookId);
         return outcome;
       },
-      refresh: () => listAssets(projectSlug, sortOrder),
+      refresh: () => listAssets(bookId, sortOrder),
       setOverride: (status) => {
         setRenderingOverrides(prev => {
           const next = new Map(prev);
@@ -616,37 +616,37 @@ export function HomePage() {
       toast({ title: 'Render failed', description: error ?? 'render failed', duration: 6000 });
       return;
     }
-  }, [projectSlug, activeSelection, renderAsset, settingsOrientation, sync, viewerSize, handleViewerSizeChange, setRenderingOverrides, listAssets, sortOrder]);
+  }, [bookId, activeSelection, renderAsset, settingsOrientation, sync, viewerSize, handleViewerSizeChange, setRenderingOverrides, listAssets, sortOrder]);
 
   // Sync on mount + poll every 5s while page is active
   useEffect(() => {
-    if (!projectSlug) return;
-    sync(projectSlug);
-    fetchTimeline(projectSlug).then(config => {
+    if (!bookId) return;
+    sync(bookId);
+    fetchTimeline(bookId).then(config => {
       if (config?.currentOrientation) setViewerSize(config.currentOrientation);
     });
-    const id = setInterval(() => sync(projectSlug), 5_000);
+    const id = setInterval(() => sync(bookId), 5_000);
     return () => clearInterval(id);
-  }, [projectSlug, sync, fetchTimeline]);
+  }, [bookId, sync, fetchTimeline]);
 
   const triggerUpload = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
 
   const handleDrop = useCallback((files: File[]) => {
-    if (!projectSlug) return;
-    const uploads = files.map((file) => upload(projectSlug, file));
+    if (!bookId) return;
+    const uploads = files.map((file) => upload(bookId, file));
     Promise.allSettled(uploads).then(() => {
-      listAssets(projectSlug, sortOrder);
-      sync(projectSlug);
+      listAssets(bookId, sortOrder);
+      sync(bookId);
     });
-  }, [projectSlug, upload, sync, listAssets, sortOrder]);
+  }, [bookId, upload, sync, listAssets, sortOrder]);
 
   const handleDeleteClip = useCallback(async (video: MediaItem) => {
-    if (!projectSlug) return;
+    if (!bookId) return;
     setDeletingIds((prev) => new Set(prev).add(video.id));
     try {
-      const result = await callTool('delete_asset', { asset_id: video.id, project_slug: projectSlug });
+      const result = await callTool('delete_asset', { asset_id: video.id, book_id: bookId });
       if (result.isError) {
         const content = result.content as Array<{ type: string; text: string }> | undefined;
         toast({ title: 'Delete failed', description: content?.[0]?.text ?? 'delete_asset failed', duration: 5000 });
@@ -656,10 +656,10 @@ export function HomePage() {
       setSelectedItem((current) => current?.id === video.id ? null : current);
       setSplitTarget((current) => current?.assetId === video.id ? null : current);
       await Promise.all([
-        fetchTimeline(projectSlug),
-        listAssets(projectSlug, sortOrder),
+        fetchTimeline(bookId),
+        listAssets(bookId, sortOrder),
       ]);
-      sync(projectSlug);
+      sync(bookId);
     } catch (error) {
       toast({ title: 'Delete failed', description: error instanceof Error ? error.message : String(error), duration: 5000 });
     } finally {
@@ -669,49 +669,49 @@ export function HomePage() {
         return next;
       });
     }
-  }, [callTool, fetchTimeline, listAssets, projectSlug, removeAsset, sortOrder, sync, setDeletingIds]);
+  }, [callTool, fetchTimeline, listAssets, bookId, removeAsset, sortOrder, sync, setDeletingIds]);
 
   const handleRecoverClip = useCallback(async (video: MediaItem) => {
-    if (!projectSlug) return;
+    if (!bookId) return;
     try {
-      const result = await callTool('recover_asset', { asset_id: video.id, project_slug: projectSlug });
+      const result = await callTool('recover_asset', { asset_id: video.id, book_id: bookId });
       if (result.isError) {
         const content = result.content as Array<{ type: string; text: string }> | undefined;
         toast({ title: 'Recover failed', description: content?.[0]?.text ?? 'recover_asset failed', duration: 5000 });
         return;
       }
-      await listAssets(projectSlug, sortOrder);
-      sync(projectSlug);
+      await listAssets(bookId, sortOrder);
+      sync(bookId);
     } catch (error) {
       toast({ title: 'Recover failed', description: error instanceof Error ? error.message : String(error), duration: 5000 });
     }
-  }, [callTool, listAssets, projectSlug, sortOrder, sync]);
+  }, [callTool, listAssets, bookId, sortOrder, sync]);
 
   const handleRetryClip = useCallback(async (video: MediaItem) => {
-    if (!projectSlug) return;
+    if (!bookId) return;
     try {
-      const result = await callTool('retry_generation', { asset_id: video.id, project_slug: projectSlug });
+      const result = await callTool('retry_generation', { asset_id: video.id, book_id: bookId });
       if (result.isError) {
         const content = result.content as Array<{ type: string; text: string }> | undefined;
         toast({ title: 'Retry failed', description: content?.[0]?.text ?? 'retry_generation failed', duration: 5000 });
         return;
       }
-      sync(projectSlug);
+      sync(bookId);
     } catch (error) {
       toast({ title: 'Retry failed', description: error instanceof Error ? error.message : String(error), duration: 5000 });
     }
-  }, [callTool, projectSlug, sync]);
+  }, [callTool, bookId, sync]);
 
   const handleAudioDroppedOnVideo = useCallback((video: MediaItem, audioId: string, audioSlug: string) => {
     setAudioReplace({ videoId: video.id, videoSlug: video.slug, audioId, audioSlug });
   }, []);
 
   const handleConfirmAudioReplace = useCallback(async () => {
-    if (!audioReplace || !projectSlug) return;
+    if (!audioReplace || !bookId) return;
     setAudioReplaceSubmitting(true);
     try {
       const result = await callTool('replace_video_audio', {
-        project_slug: projectSlug,
+        book_id: bookId,
         asset_id: audioReplace.videoId,
         audio_asset_id: audioReplace.audioId,
       });
@@ -720,13 +720,13 @@ export function HomePage() {
         toast({ title: 'Replace audio failed', description: msg, duration: 5000 });
       } else {
         toast({ title: 'Audio replaced', description: `${audioReplace.videoSlug} ← ${audioReplace.audioSlug}`, duration: 2500 });
-        sync(projectSlug);
+        sync(bookId);
       }
     } finally {
       setAudioReplaceSubmitting(false);
       setAudioReplace(null);
     }
-  }, [audioReplace, projectSlug, callTool, sync]);
+  }, [audioReplace, bookId, callTool, sync]);
 
   const resetOpenScreens = useCallback(() => {
     setStatusOpen(false);
@@ -789,11 +789,11 @@ export function HomePage() {
   }, []);
 
   const handleAfterDispatch = useCallback((toolName: string, toolArgs: CommandToolArgs) => {
-    if (!projectSlug) return;
+    if (!bookId) return;
     if (toolName === 'remove_timeline_slot') setTimelineSlotIndex(null);
-    fetchTimeline(projectSlug);
-    listAssets(projectSlug, sortOrder);
-    sync(projectSlug);
+    fetchTimeline(bookId);
+    listAssets(bookId, sortOrder);
+    sync(bookId);
     if (toolName === 'delete_asset') {
       const assetId = typeof toolArgs.asset_id === 'string' ? toolArgs.asset_id : String(toolArgs.asset_id);
       removeAsset(assetId);
@@ -803,10 +803,10 @@ export function HomePage() {
         return next;
       });
     }
-  }, [projectSlug, fetchTimeline, listAssets, sortOrder, sync, removeAsset, setDeletingIds]);
+  }, [bookId, fetchTimeline, listAssets, sortOrder, sync, removeAsset, setDeletingIds]);
 
   const handleActivityRewound = useCallback(async () => {
-    if (!projectSlug) return;
+    if (!bookId) return;
     clearAssets();
     setArchiveOpen(false);
     setSelectedItem(null);
@@ -814,14 +814,14 @@ export function HomePage() {
 
     setRenderingOverrides(new Map());
     setDeletingIds(new Set());
-    sync(projectSlug);
+    sync(bookId);
     refreshProjects();
     await Promise.all([
-      listAssets(projectSlug, sortOrder),
-      fetchTimeline(projectSlug),
-      fetchActivity(projectSlug),
+      listAssets(bookId, sortOrder),
+      fetchTimeline(bookId),
+      fetchActivity(bookId),
     ]);
-  }, [projectSlug, clearAssets, sync, refreshProjects, listAssets, sortOrder, fetchTimeline, fetchActivity, setRenderingOverrides, setDeletingIds]);
+  }, [bookId, clearAssets, sync, refreshProjects, listAssets, sortOrder, fetchTimeline, fetchActivity, setRenderingOverrides, setDeletingIds]);
 
   const assetSlugs = useMemo(() => mediaItems.map((m) => m.slug), [mediaItems]);
 
@@ -970,11 +970,11 @@ export function HomePage() {
   // 2s tail so it renders as an end-card. Persists via set_osg and — when the
   // target is the open clip — re-renders immediately (mirrors handleOsgApply).
   const applyWatermark = useCallback(async (value: WatermarkApplyValue) => {
-    if (state !== 'ready' || !projectSlug) return;
+    if (state !== 'ready' || !bookId) return;
     const { targetId, handle, position, scale, saveDefault } = value;
 
     const created = await callTool('create_watermark_card', {
-      project_slug: projectSlug,
+      book_id: bookId,
       handle,
       save_default: saveDefault,
     });
@@ -991,7 +991,7 @@ export function HomePage() {
     // Persist as the watermark OSG: a 2s end-card tail, clearing any prior window.
     const osgResult = await callTool('set_video_overlay', {
       asset_id: targetId,
-      project_slug: projectSlug,
+      book_id: bookId,
       osg_asset_id: osgAssetId,
       osg_position: position,
       osg_size: 'medium',
@@ -1018,8 +1018,8 @@ export function HomePage() {
       void handleRender(nextSettings);
       return;
     }
-    void sync(projectSlug);
-  }, [state, projectSlug, callTool, activeSelection?.id, mediaItems, renderSettings, handleRender, sync]);
+    void sync(bookId);
+  }, [state, bookId, callTool, activeSelection?.id, mediaItems, renderSettings, handleRender, sync]);
 
   // Persist OSG overlay placement from the OsgOverlay (passing null clears it),
   // then re-render so the new placement is reflected in the output. When editing
@@ -1029,10 +1029,10 @@ export function HomePage() {
   // never triggers a render). set_osg persists to all orientations, so the others
   // pick up the placement the next time they render.
   const handleOsgApply = useCallback(async (assetId: string, value: OsgApplyValue | null) => {
-    if (state !== 'ready' || !projectSlug) return;
+    if (state !== 'ready' || !bookId) return;
     const args: Record<string, unknown> = {
       asset_id: assetId,
-      project_slug: projectSlug,
+      book_id: bookId,
       osg_asset_id: value ? value.osgAssetId : null,
       osg_position: value ? value.position : 'top-right',
       osg_size: value ? value.size : 'medium',
@@ -1065,8 +1065,8 @@ export function HomePage() {
       void handleRender(nextSettings);
       return;
     }
-    void sync(projectSlug);
-  }, [state, projectSlug, callTool, activeSelection?.id, mediaItems, renderSettings, handleRender, sync]);
+    void sync(bookId);
+  }, [state, bookId, callTool, activeSelection?.id, mediaItems, renderSettings, handleRender, sync]);
 
   const handleSettingsClick = useCallback(() => {
     setSettingsOpen((open) => !open);
@@ -1134,23 +1134,23 @@ export function HomePage() {
   }, [archiveOpen, openArchive]);
 
   const handleArchiveRestoreComplete = useCallback((response: RestoreResponse) => {
-    if (!projectSlug) return;
-    sync(projectSlug);
-    void listAssets(projectSlug, sortOrder);
+    if (!bookId) return;
+    sync(bookId);
+    void listAssets(bookId, sortOrder);
     toast({
       title: 'Archive restore queued',
       description: `${response.restored.length} restoring, ${response.skipped.length} skipped`,
       duration: 3000,
     });
-  }, [projectSlug, sync, listAssets, sortOrder]);
+  }, [bookId, sync, listAssets, sortOrder]);
 
   // After /rename-all applies: refresh assets + timeline so the new slugs surface.
   const handleRenameAllApplied = useCallback(() => {
-    if (!projectSlug) return;
-    sync(projectSlug);
-    void listAssets(projectSlug, sortOrder);
-    void fetchTimeline(projectSlug);
-  }, [projectSlug, sync, listAssets, sortOrder, fetchTimeline]);
+    if (!bookId) return;
+    sync(bookId);
+    void listAssets(bookId, sortOrder);
+    void fetchTimeline(bookId);
+  }, [bookId, sync, listAssets, sortOrder, fetchTimeline]);
 
   const handleCreateProject = useCallback(async (slug: string) => {
     const cleaned = slug.trim();
@@ -1166,18 +1166,18 @@ export function HomePage() {
 
   const handleRenameProject = useCallback(async (newSlug: string) => {
     const cleaned = newSlug.trim();
-    if (!projectSlug || !cleaned || cleaned === projectSlug) return;
-    const ok = await renameProject(projectSlug, cleaned);
+    if (!bookId || !cleaned || cleaned === bookId) return;
+    const ok = await renameProject(bookId, cleaned);
     if (!ok) {
       toast({ title: 'Rename project failed', description: `Could not rename to "${cleaned}"`, duration: 5000 });
       return;
     }
     await handleProjectChange(cleaned);
     refreshProjects();
-  }, [projectSlug, renameProject, handleProjectChange, refreshProjects]);
+  }, [bookId, renameProject, handleProjectChange, refreshProjects]);
 
   const handleRequestDeleteProject = useCallback((slug: string) => {
-    const target = slug.trim().replace(/^@/, '') || projectSlug;
+    const target = slug.trim().replace(/^@/, '') || bookId;
     if (!target) return;
     if (!projects.some((p) => p.slug === target)) {
       toast({ title: 'Delete project failed', description: `No project "${target}"`, duration: 4000 });
@@ -1189,13 +1189,13 @@ export function HomePage() {
     }
     refreshProjects();
     setDeleteProjectTarget(target);
-  }, [projectSlug, projects, refreshProjects]);
+  }, [bookId, projects, refreshProjects]);
 
   const deleteProjectAssetCount = useMemo(() => {
     if (!deleteProjectTarget) return 0;
-    if (deleteProjectTarget === projectSlug && assetList) return assetList.length;
+    if (deleteProjectTarget === bookId && assetList) return assetList.length;
     return projects.find((p) => p.slug === deleteProjectTarget)?.asset_count ?? 0;
-  }, [deleteProjectTarget, projectSlug, assetList, projects]);
+  }, [deleteProjectTarget, bookId, assetList, projects]);
 
   const handleConfirmDeleteProject = useCallback(async () => {
     if (!deleteProjectTarget) return;
@@ -1206,9 +1206,9 @@ export function HomePage() {
         toast({ title: 'Delete project failed', description: result.error, duration: 5000 });
         return;
       }
-      const nextSlug = result.value.default_project_slug ?? projects.find((p) => p.slug !== deleteProjectTarget)?.slug;
+      const nextSlug = result.value.default_book_id ?? projects.find((p) => p.slug !== deleteProjectTarget)?.slug;
       refreshProjects();
-      if (deleteProjectTarget === projectSlug && nextSlug) {
+      if (deleteProjectTarget === bookId && nextSlug) {
         await handleProjectChange(nextSlug);
       }
       toast({ title: 'Project deleted', description: deleteProjectTarget, duration: 2500 });
@@ -1216,7 +1216,7 @@ export function HomePage() {
       setDeleteProjectSubmitting(false);
       setDeleteProjectTarget(null);
     }
-  }, [deleteProjectTarget, deleteProject, projects, projectSlug, refreshProjects, handleProjectChange]);
+  }, [deleteProjectTarget, deleteProject, projects, bookId, refreshProjects, handleProjectChange]);
 
   const handleCloseViewer = useCallback(() => {
     setSelectedItem(null);
@@ -1246,7 +1246,7 @@ export function HomePage() {
   }, [timeline]);
 
   const handleTimelineAudioAdd = useCallback((assetId: string, startSec: string, durationSec: string) => {
-    if (!projectSlug) return;
+    if (!bookId) return;
     const cleaned = assetId.trim().replace(/^@/, '');
     if (!cleaned.startsWith('aud-')) {
       toast({ title: 'Audio add failed', description: `Expected an aud-* asset, got "${cleaned}"`, duration: 4000 });
@@ -1254,38 +1254,38 @@ export function HomePage() {
     }
     const startFrame = Math.max(0, Math.round((parseFloat(startSec) || 0) * timelineFps));
     const parsedDuration = Math.round((parseFloat(durationSec) || 0) * timelineFps);
-    void addAudio(projectSlug, cleaned, startFrame, parsedDuration > 0 ? parsedDuration : undefined).then((ok) => {
+    void addAudio(bookId, cleaned, startFrame, parsedDuration > 0 ? parsedDuration : undefined).then((ok) => {
       if (!ok) toast({ title: 'Audio add failed', description: cleaned, duration: 4000 });
     });
-  }, [projectSlug, addAudio, timelineFps]);
+  }, [bookId, addAudio, timelineFps]);
 
   const handleTimelineAudioMove = useCallback((audioRef: string, startSec: string) => {
-    if (!projectSlug) return;
+    if (!bookId) return;
     const clip = resolveTimelineAudio(audioRef);
     if (!clip) {
       toast({ title: 'Audio move failed', description: `No timeline audio clip "${audioRef}"`, duration: 4000 });
       return;
     }
     const startFrame = Math.max(0, Math.round((parseFloat(startSec) || 0) * timelineFps));
-    void moveAudio(projectSlug, clip.id, startFrame).then((ok) => {
+    void moveAudio(bookId, clip.id, startFrame).then((ok) => {
       if (!ok) toast({ title: 'Audio move failed', description: clip.slug, duration: 4000 });
     });
-  }, [projectSlug, resolveTimelineAudio, moveAudio, timelineFps]);
+  }, [bookId, resolveTimelineAudio, moveAudio, timelineFps]);
 
   const handleTimelineAudioRemove = useCallback((audioRef: string) => {
-    if (!projectSlug) return;
+    if (!bookId) return;
     const clip = resolveTimelineAudio(audioRef);
     if (!clip) {
       toast({ title: 'Audio remove failed', description: `No timeline audio clip "${audioRef}"`, duration: 4000 });
       return;
     }
-    void removeAudio(projectSlug, clip.id).then((ok) => {
+    void removeAudio(bookId, clip.id).then((ok) => {
       if (!ok) toast({ title: 'Audio remove failed', description: clip.slug, duration: 4000 });
     });
-  }, [projectSlug, resolveTimelineAudio, removeAudio]);
+  }, [bookId, resolveTimelineAudio, removeAudio]);
 
   const handleTimelineAudioUpdate = useCallback((audioRef: string, field: string, value: string) => {
-    if (!projectSlug) return;
+    if (!bookId) return;
     const clip = resolveTimelineAudio(audioRef);
     if (!clip) {
       toast({ title: 'Audio update failed', description: `No timeline audio clip "${audioRef}"`, duration: 4000 });
@@ -1308,21 +1308,21 @@ export function HomePage() {
       toast({ title: 'Audio update failed', description: `Unknown field "${field}" (volume | fade-in | fade-out)`, duration: 4000 });
       return;
     }
-    void updateAudio(projectSlug, clip.id, fields).then((ok) => {
+    void updateAudio(bookId, clip.id, fields).then((ok) => {
       if (!ok) toast({ title: 'Audio update failed', description: clip.slug, duration: 4000 });
     });
-  }, [projectSlug, resolveTimelineAudio, updateAudio]);
+  }, [bookId, resolveTimelineAudio, updateAudio]);
 
   const handleExtractSkeletonCommand = useCallback((assetId: string) => {
-    if (!projectSlug) return;
+    if (!bookId) return;
     const cleaned = assetId.trim().replace(/^@/, '');
     const item = mediaItems.find((m) => m.id === cleaned);
     if (!item || !(item.type === 'image' || item.type === 'character') || !item.filePath) {
       toast({ title: 'Pose extraction failed', description: `No image or character asset "${cleaned}"`, duration: 4000 });
       return;
     }
-    void extractSkeleton({ projectSlug, sourceAssetId: item.id, sourceImageUrl: item.filePath });
-  }, [projectSlug, mediaItems, extractSkeleton]);
+    void extractSkeleton({ bookId, sourceAssetId: item.id, sourceImageUrl: item.filePath });
+  }, [bookId, mediaItems, extractSkeleton]);
 
   const handleRewindCommand = useCallback((commitHash: string) => {
     const hash = commitHash.trim();
@@ -1330,9 +1330,9 @@ export function HomePage() {
       setStatusOpen(true);
       return;
     }
-    if (!projectSlug) return;
+    if (!bookId) return;
     void (async () => {
-      const result = await callTool('rewind_project', { commit_hash: hash, project_slug: projectSlug });
+      const result = await callTool('rewind_project', { commit_hash: hash, book_id: bookId });
       if (result.isError) {
         const content = result.content as Array<{ type: string; text: string }> | undefined;
         toast({ title: 'Rewind failed', description: content?.[0]?.text ?? 'rewind_project failed', duration: 5000 });
@@ -1341,7 +1341,7 @@ export function HomePage() {
       toast({ title: 'Project rewound', description: hash, duration: 2500 });
       await handleActivityRewound();
     })();
-  }, [projectSlug, callTool, handleActivityRewound]);
+  }, [bookId, callTool, handleActivityRewound]);
 
   const handleShowVoices = useCallback(() => {
     void (async () => {
@@ -1561,11 +1561,11 @@ export function HomePage() {
   }, [defaultNotebookSelection]);
 
   const renderAssetCard = (item: MediaItem) => {
-    const canExtractSkeleton = item.type === 'image' && !!item.filePath && !!projectSlug;
+    const canExtractSkeleton = item.type === 'image' && !!item.filePath && !!bookId;
     const itemFilePath = item.filePath;
     const isUnseen = item.seenAt == null && (item.status ?? 'ready') === 'ready';
-    const onMarkSeen = isUnseen && projectSlug ? () => handleMarkSeen(item.id) : undefined;
-    const canProjectExport = !!projectSlug && projects.some((project) => project.slug !== projectSlug);
+    const onMarkSeen = isUnseen && bookId ? () => handleMarkSeen(item.id) : undefined;
+    const canProjectExport = !!bookId && projects.some((project) => project.slug !== bookId);
     const menu = (
       <AssetMenu
         slug={item.slug}
@@ -1574,8 +1574,8 @@ export function HomePage() {
         prompt={item.prompt}
         onAnimateCommand={handleAnimateCommand}
         onAnimateEdit={handleAnimateEdit}
-        onExtractSkeleton={canExtractSkeleton && itemFilePath && projectSlug
-          ? () => extractSkeleton({ projectSlug, sourceAssetId: item.id, sourceImageUrl: itemFilePath })
+        onExtractSkeleton={canExtractSkeleton && itemFilePath && bookId
+          ? () => extractSkeleton({ bookId, sourceAssetId: item.id, sourceImageUrl: itemFilePath })
           : undefined}
         onMarkSeen={onMarkSeen}
         onOpenProjectExport={canProjectExport ? () => setProjectExportAssetId(item.id) : undefined}
@@ -1598,9 +1598,9 @@ export function HomePage() {
   const renderViewer = (item: MediaItem) => {
     return (
       <AssetViewer
-        key={`${projectSlug ?? ''}:${item.id}`}
+        key={`${bookId ?? ''}:${item.id}`}
         item={item}
-        projectSlug={projectSlug ?? ''}
+        bookId={bookId ?? ''}
         size={viewerSize}
         onSizeChange={handleViewerSizeChange}
         flipped={viewerFlipped}
@@ -1672,7 +1672,7 @@ export function HomePage() {
 
   return (
     <MountKeyProvider>
-    <CommandRegistryProvider callTool={callTool} state={state} projectSlug={projectSlug} uiActions={uiActions} onAfterDispatch={handleAfterDispatch}>
+    <CommandRegistryProvider callTool={callTool} state={state} bookId={bookId} uiActions={uiActions} onAfterDispatch={handleAfterDispatch}>
       <div className="w-screen h-screen bg-background overflow-x-auto overflow-y-hidden">
         <input
           ref={fileInputRef}
@@ -1695,7 +1695,7 @@ export function HomePage() {
           loading={activityLoading}
           assetSlugs={assetSlugs}
           callTool={callTool}
-          projectSlug={projectSlug}
+          bookId={bookId}
           onRewound={handleActivityRewound}
         />
         <SplitEditor
@@ -1706,18 +1706,18 @@ export function HomePage() {
           item={splitItem}
           onClose={() => setSplitTarget(null)}
           onComplete={() => {
-            if (!projectSlug) return
-            void listAssets(projectSlug, sortOrder)
-            void sync(projectSlug)
+            if (!bookId) return
+            void listAssets(bookId, sortOrder)
+            void sync(bookId)
           }}
           assetSlugs={assetSlugs}
           callTool={callTool}
-          projectSlug={projectSlug}
+          bookId={bookId}
         />
         <div className="grid grid-rows-[48px_1fr_auto] h-full">
           <HomeHeaderBar
             pulseKey={syncCount}
-            projectSlug={projectSlug}
+            bookId={bookId}
             assetCount={assetList?.length}
             renderingCount={renderingCount}
             notebookCommand={notebookCommand}
@@ -1795,7 +1795,7 @@ export function HomePage() {
                 ) : archiveOpen ? (
                   <ArchiveBrowser
                     key={`${archiveRequestKey}:${archiveInitialLoading ? 'loading' : 'loaded'}`}
-                    projectSlug={projectSlug}
+                    bookId={bookId}
                     callTool={callTool}
                     callState={state}
                     initialResponse={archiveInitialResponse}
@@ -1807,10 +1807,10 @@ export function HomePage() {
                   />
                 ) : postPanel ? (
                   <PostComposerScreen
-                    key={`${projectSlug ?? ''}:${postPanel.assetId ?? ''}:${postPanel.text}`}
+                    key={`${bookId ?? ''}:${postPanel.assetId ?? ''}:${postPanel.text}`}
                     item={postPanel.assetId ? mediaItems.find((m) => m.id === postPanel.assetId) ?? null : null}
                     initialText={postPanel.text}
-                    projectSlug={projectSlug}
+                    bookId={bookId}
                     callTool={callTool}
                     onClose={() => setPostPanel(null)}
                   />
@@ -1818,7 +1818,7 @@ export function HomePage() {
                   renderViewer(activeSelection)
                 ) : renameAllOpen ? (
                   <RenameAllPanel
-                    projectSlug={projectSlug ?? ''}
+                    bookId={bookId ?? ''}
                     callTool={callTool}
                     mediaItems={mediaItems}
                     onApplied={handleRenameAllApplied}
@@ -1826,7 +1826,7 @@ export function HomePage() {
                   />
                 ) : gfCharactersOpen ? (
                   <GoogleFlowCharactersScreen
-                    projectSlug={projectSlug ?? ''}
+                    bookId={bookId ?? ''}
                     callTool={callTool}
                     callState={state}
                     mediaItems={mediaItems}
@@ -1850,7 +1850,7 @@ export function HomePage() {
                   assetSlugs={assetSlugs}
                   slotRefs={slotRefs}
                   callTool={callTool}
-                  projectSlug={projectSlug}
+                  bookId={bookId}
                 />
               </div>
             </div>
@@ -1889,8 +1889,8 @@ export function HomePage() {
                   ))}
                   {clips.map((item) => {
                     const isUnseen = item.seenAt == null && (item.status ?? 'ready') === 'ready';
-                    const onMarkSeen = isUnseen && projectSlug ? () => handleMarkSeen(item.id) : undefined;
-                    const canProjectExport = !!projectSlug && projects.some((p) => p.slug !== projectSlug);
+                    const onMarkSeen = isUnseen && bookId ? () => handleMarkSeen(item.id) : undefined;
+                    const canProjectExport = !!bookId && projects.some((p) => p.slug !== bookId);
                     const menu = (
                       <AssetMenu
                         slug={item.slug}
@@ -1951,16 +1951,16 @@ export function HomePage() {
                 );
               })}
             </div>
-            {projectSlug && previewData.ready && (
+            {bookId && previewData.ready && (
               <TimelineAudioLane
                 audioClips={timeline?.audio ?? []}
                 mediaItems={mediaItems}
                 slotBoundaries={slotBoundaries}
                 totalDurationInFrames={previewData.totalDurationInFrames}
-                onAdd={(assetId, startFrame, durationFrames) => { addAudio(projectSlug, assetId, startFrame, durationFrames); }}
-                onMove={(audioId, startFrame) => { moveAudio(projectSlug, audioId, startFrame); }}
-                onRemove={(audioId) => { removeAudio(projectSlug, audioId); }}
-                onUpdate={(audioId, fields) => { updateAudio(projectSlug, audioId, fields); }}
+                onAdd={(assetId, startFrame, durationFrames) => { addAudio(bookId, assetId, startFrame, durationFrames); }}
+                onMove={(audioId, startFrame) => { moveAudio(bookId, audioId, startFrame); }}
+                onRemove={(audioId) => { removeAudio(bookId, audioId); }}
+                onUpdate={(audioId, fields) => { updateAudio(bookId, audioId, fields); }}
               />
             )}
           </div>
@@ -1971,13 +1971,13 @@ export function HomePage() {
         open={!!watermarkPanel}
         onOpenChange={(next) => { if (!next) setWatermarkPanel(null); }}
         item={watermarkPanel?.assetId ? mediaItems.find((m) => m.id === watermarkPanel.assetId) ?? null : null}
-        projectSlug={projectSlug}
+        bookId={bookId}
         callTool={callTool}
         onApply={(v) => void applyWatermark(v)}
       />
       <ProjectExportPicker
         assetId={projectExportAssetId}
-        projectSlug={projectSlug}
+        bookId={bookId}
         projects={projects}
         callTool={callTool}
         onClose={() => setProjectExportAssetId(null)}

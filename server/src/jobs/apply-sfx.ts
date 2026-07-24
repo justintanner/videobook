@@ -33,7 +33,7 @@ type ApplySfxPayload = {
   sfx: SfxEntry[];
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 async function generateAndWriteSfx(
@@ -42,7 +42,7 @@ async function generateAndWriteSfx(
   entry: SfxEntry,
   index: number,
   assetId: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<string> {
   const text = entry.prompt ?? `${entry.type}: ${entry.description}`;
   const audio = await provider.v1.soundGeneration({
@@ -51,7 +51,7 @@ async function generateAndWriteSfx(
     prompt_influence: 0.75,
   });
   const filename = `original.sfx.${index}.mp3`;
-  const writeResult = await fs.files.write(assetId, filename, Buffer.from(audio), projectSlug);
+  const writeResult = await fs.files.write(assetId, filename, Buffer.from(audio));
   if (!writeResult.ok) throw new Error(`SFX ${index} write failed: ${writeResult.error.message}`);
   return filename;
 }
@@ -124,14 +124,14 @@ export function registerApplySfxJob(fs: Engine): void {
   registerJobHandler("apply_sfx", async (payload, ctx) => {
     const {
       videoPath, outputPath, sfx,
-      assetId, assetDir, projectSlug,
+      assetId, assetDir, bookId,
     } = payload as ApplySfxPayload;
 
     const apiKey = requireApiKey("ELEVENLABS_API_KEY");
 
     const result = await withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       assetDir,
       ctx,
@@ -141,7 +141,7 @@ export function registerApplySfxJob(fs: Engine): void {
       const provider = createElevenLabs({ apiKey, timeout: 60_000 });
 
       const generatedFilenames = await Promise.all(
-        sfx.map((entry, i) => generateAndWriteSfx(provider, fs, entry, i, assetId, projectSlug)),
+        sfx.map((entry, i) => generateAndWriteSfx(provider, fs, entry, i, assetId, bookId)),
       );
 
       await mixSfxIntoVideo(
@@ -155,17 +155,17 @@ export function registerApplySfxJob(fs: Engine): void {
       const inputFilename = basename(videoPath);
       await replaceArtifactFileFromPath(
         fs,
-        projectSlug,
+        bookId,
         assetId,
         inputFilename,
         outputPath,
       );
 
       for (const fn of generatedFilenames) {
-        await fs.files.delete(assetId, fn, projectSlug).catch(() => {});
+        await fs.files.delete(assetId, fn).catch(() => {});
       }
       for (const stale of STALE_DERIVATIVES) {
-        await fs.files.delete(assetId, stale, projectSlug);
+        await fs.files.delete(assetId, stale);
       }
 
       const newVideoPath = join(assetDir, inputFilename);
@@ -179,7 +179,7 @@ export function registerApplySfxJob(fs: Engine): void {
       videoPath: result.newVideoPath,
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
       provenance: {
         origin: "apply_sfx",
         sfx_count: result.sfxCount,

@@ -22,7 +22,7 @@ function slugify(text: string): string {
 const grokT2vInputSchema = GrokTextToVideoRequestSchema.shape.input.shape;
 
 const generateGrokImagineT2vVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(grokT2vInputSchema.prompt, "Video description (max 5000 chars)", { required: true }),
   mode: apicityField(GrokImagineModeSchema, "Generation mode: fun / normal / spicy"),
   duration: apicityField(grokT2vInputSchema.duration, "Video duration in seconds (6-30)"),
@@ -40,7 +40,7 @@ export function generateGrokImagineT2vVideoDef(fs: Engine): ToolDef {
     description: "Generate a video from a text prompt using Grok Imagine text-to-video (no images). Creates a new vid- asset and enqueues a background job.",
     schema: generateGrokImagineT2vVideoSchema,
     handler: async (args) => {
-      const { project_slug, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker } = args as Args;
+      const { book_id, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return {
@@ -50,7 +50,7 @@ export function generateGrokImagineT2vVideoDef(fs: Engine): ToolDef {
       }
 
       const videoName = `${modelSlug("kie", "grok-imagine/text-to-video")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -66,7 +66,7 @@ export function generateGrokImagineT2vVideoDef(fs: Engine): ToolDef {
         type: "generate_grok_imagine_t2v_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         ...(mode !== undefined ? { mode } : {}),
         ...(duration !== undefined ? { duration } : {}),

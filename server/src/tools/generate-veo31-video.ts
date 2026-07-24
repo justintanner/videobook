@@ -23,7 +23,7 @@ const VEO31_SLUGS: Record<GoogleVeo31Model, string> = {
 
 function buildVeo31Schema(allowRefs: boolean) {
   return {
-    project_slug: z.string().describe("Project slug"),
+    book_id: z.string().describe("Project slug"),
     prompt: z.string().describe("Video description"),
     first_frame_slug: z.string().optional().describe("Start frame image asset for image-to-video (e.g., @img-start)"),
     last_frame_slug: z.string().optional().describe("End frame image asset; requires first_frame_slug (e.g., @img-end)"),
@@ -40,7 +40,7 @@ function buildVeo31Schema(allowRefs: boolean) {
 }
 
 type Veo31ToolArgs = {
-  project_slug: string;
+  book_id: string;
   prompt: string;
   first_frame_slug?: string;
   last_frame_slug?: string;
@@ -62,7 +62,7 @@ function makeVeo31VideoTool(
     schema: buildVeo31Schema(allowRefs),
     handler: async (args) => {
       const raw = args as Veo31ToolArgs;
-      const { project_slug, prompt, aspect_ratio, duration, seed } = raw;
+      const { book_id, prompt, aspect_ratio, duration, seed } = raw;
       const blank = (v: unknown): v is "" => typeof v === "string" && v.trim() === "";
       const firstFrameSlug = blank(raw.first_frame_slug) ? undefined : raw.first_frame_slug;
       const lastFrameSlug = blank(raw.last_frame_slug) ? undefined : raw.last_frame_slug;
@@ -80,19 +80,19 @@ function makeVeo31VideoTool(
 
       let firstFrame: RefInput | undefined;
       if (firstFrameSlug !== undefined) {
-        const r = await resolveImageSlug(fs, firstFrameSlug, project_slug);
+        const r = await resolveImageSlug(fs, firstFrameSlug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `first_frame_slug: ${r.error}` }] };
         firstFrame = r.value;
       }
       let lastFrame: RefInput | undefined;
       if (lastFrameSlug !== undefined) {
-        const r = await resolveImageSlug(fs, lastFrameSlug, project_slug);
+        const r = await resolveImageSlug(fs, lastFrameSlug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `last_frame_slug: ${r.error}` }] };
         lastFrame = r.value;
       }
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageSlug(fs, slug, project_slug);
+        const r = await resolveImageSlug(fs, slug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `image_slugs: ${r.error}` }] };
         imageInputs.push(r.value);
       }
@@ -109,7 +109,7 @@ function makeVeo31VideoTool(
 
       const modelSlugLiteral = VEO31_SLUGS[model];
       const videoName = `${modelSlugLiteral}-${slugify(prompt) || Date.now().toString(36)}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
@@ -126,7 +126,7 @@ function makeVeo31VideoTool(
         veoModel: model,
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         ...(firstFrame ? { firstFrame } : {}),
         ...(lastFrame ? { lastFrame } : {}),
         imageInputs,

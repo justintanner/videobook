@@ -5,15 +5,6 @@ import { queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import type { ToolDef } from "./tool-def.js";
 
-async function resolveQueueProjectSlug(fs: Engine, projectSlug: string | undefined): Promise<string> {
-  if (projectSlug) return projectSlug;
-  const existing = await fs.projects.get();
-  if (existing.ok) return existing.value.slug;
-  const created = await fs.projects.create();
-  if (created.ok) return created.value.slug;
-  throw new Error(created.error.message);
-}
-
 function normalizeUrl(url: string): string {
   return /^https?:\/\//i.test(url) ? url : `https://${url}`;
 }
@@ -25,7 +16,7 @@ export function archiveClipDef(fs: Engine): ToolDef {
     schema: {
       url: z.string().optional().describe("Source URL to download in full"),
       asset_id: z.string().optional().describe("Existing video/audio asset ID to archive"),
-      project_slug: z.string().optional().describe("Required for asset_id; optional queue anchor for URL archives"),
+      book_id: z.string().uuid().describe("Book UUID"),
       title: z.string().optional().describe("Optional archive title"),
       topics: z.array(z.string()).optional().default([]).describe("Search topics to attach to this clip"),
       people: z.array(z.string()).optional().default([]).describe("Named people to attach to this clip"),
@@ -37,7 +28,7 @@ export function archiveClipDef(fs: Engine): ToolDef {
       const {
         url,
         asset_id,
-        project_slug,
+        book_id,
         title,
         topics,
         people,
@@ -47,7 +38,7 @@ export function archiveClipDef(fs: Engine): ToolDef {
       } = args as {
         url?: string;
         asset_id?: string;
-        project_slug?: string;
+        book_id: string;
         title?: string;
         topics: string[];
         people: string[];
@@ -63,13 +54,6 @@ export function archiveClipDef(fs: Engine): ToolDef {
         };
       }
 
-      if (asset_id && !project_slug) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "project_slug is required when asset_id is used" }],
-        };
-      }
-
       if (!getApiKey("ELEVENLABS_API_KEY")) {
         return {
           isError: true as const,
@@ -77,18 +61,8 @@ export function archiveClipDef(fs: Engine): ToolDef {
         };
       }
 
-      let queueProjectSlug: string;
-      try {
-        queueProjectSlug = await resolveQueueProjectSlug(fs, project_slug);
-      } catch (error) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
-        };
-      }
-
-      if (asset_id && project_slug) {
-        const manifest = await fs.files.manifest(asset_id, project_slug, { includeDotfiles: true });
+      if (asset_id) {
+        const manifest = await fs.files.manifest(asset_id);
         if (!manifest.ok) {
           return {
             isError: true as const,
@@ -101,8 +75,8 @@ export function archiveClipDef(fs: Engine): ToolDef {
       const jobId = `archive-clip-${ingestId}`;
       await queue.enqueue(jobId, {
         type: "archive_clip",
-        projectSlug: queueProjectSlug,
-        ...(asset_id ? { assetId: asset_id, sourceProjectSlug: project_slug } : {}),
+        bookId: book_id,
+        ...(asset_id ? { assetId: asset_id } : {}),
         ...(url ? { url: normalizeUrl(url) } : {}),
         ...(title ? { title } : {}),
         topics,

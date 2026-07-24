@@ -28,13 +28,13 @@ async function generateTestVideo(outputPath: string, durationSec = 1): Promise<v
 
 async function uploadVideo(
   client: Client,
-  projectSlug: string,
+  bookId: string,
   videoPath: string,
 ): Promise<{ assetId: string; path: string }> {
   const data = (await readFile(videoPath)).toString("base64");
   const result = await client.callTool({
     name: "upload_file",
-    arguments: { project_slug: projectSlug, filename: "original.mp4", data },
+    arguments: { book_id: bookId, filename: "original.mp4", data },
   });
   return JSON.parse((result.content as TextContent)[0].text);
 }
@@ -59,7 +59,7 @@ describe("reverse_video tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "reverse-proj" },
+      arguments: { book_id: "reverse-proj" },
     });
   });
 
@@ -73,7 +73,7 @@ describe("reverse_video tool", () => {
       name: "reverse_video",
       arguments: {
         asset_id: "vid-does-not-exist",
-        project_slug: "reverse-proj",
+        book_id: "reverse-proj",
       },
     });
 
@@ -84,7 +84,7 @@ describe("reverse_video tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "reverse-proj", filename: "photo.png", data },
+      arguments: { book_id: "reverse-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse((uploadResult.content as TextContent)[0].text);
 
@@ -92,7 +92,7 @@ describe("reverse_video tool", () => {
       name: "reverse_video",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "reverse-proj",
+        book_id: "reverse-proj",
       },
     });
 
@@ -108,7 +108,7 @@ describe("reverse_video tool", () => {
       name: "reverse_video",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "reverse-proj",
+        book_id: "reverse-proj",
       },
     });
 

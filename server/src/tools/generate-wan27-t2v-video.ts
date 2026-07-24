@@ -21,10 +21,10 @@ type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 const wan27T2v = Wan27TextToVideoRequestSchema.shape.input.shape;
 
-async function resolveAudioSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveAudioSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("aud-")) return { ok: false, error: `audio_slug must be an aud-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findAudioFile(manifest.value.files, assetId);
   if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
@@ -32,7 +32,7 @@ async function resolveAudioSlug(fs: Engine, raw: string, projectSlug: string): P
 }
 
 const generateWan27T2vVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(wan27T2v.prompt, "Video description (max 5000 chars)", { required: true }),
   negative_prompt: apicityStringField(wan27T2v.negative_prompt, "Negative prompt — things to avoid (max 500 chars)"),
   audio_slug: apicityStringField(wan27T2v.audio_url, "Optional custom audio asset (e.g., @aud-music)"),
@@ -55,7 +55,7 @@ export function generateWan27T2vVideoDef(fs: Engine): ToolDef {
     schema: generateWan27T2vVideoSchema,
     handler: async (args) => {
       const {
-        project_slug, prompt, negative_prompt, audio_slug,
+        book_id, prompt, negative_prompt, audio_slug,
         resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed,
       } = args as Args;
 
@@ -68,13 +68,13 @@ export function generateWan27T2vVideoDef(fs: Engine): ToolDef {
 
       let audioRef: RefInput | undefined;
       if (audio_slug) {
-        const r = await resolveAudioSlug(fs, audio_slug, project_slug);
+        const r = await resolveAudioSlug(fs, audio_slug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         audioRef = r.value;
       }
 
       const videoName = `${modelSlug("kie", "wan/2-7-text-to-video")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -91,7 +91,7 @@ export function generateWan27T2vVideoDef(fs: Engine): ToolDef {
         type: "generate_wan27_t2v_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         ...(negative_prompt !== undefined ? { negative_prompt } : {}),
         ...(audioRef ? { audioRef } : {}),

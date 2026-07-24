@@ -9,15 +9,15 @@ type DetectScenesPayload = {
   type: "detect_scenes";
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 export function registerDetectScenesJob(fs: Engine): void {
   registerJobHandler("detect_scenes", async (payload, ctx) => {
-    const { assetId, projectSlug } = payload as DetectScenesPayload;
+    const { assetId, bookId } = payload as DetectScenesPayload;
 
-    return withLocalLease(fs, projectSlug, assetId, ctx, "analyze", async () => {
-      const manifestResult = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: false });
+    return withLocalLease(fs, bookId, assetId, ctx, "analyze", async () => {
+      const manifestResult = await fs.files.manifest(assetId);
       if (!manifestResult.ok) throw new Error(manifestResult.error.message);
 
       const videoFile = findVideoFile(manifestResult.value.files);
@@ -35,11 +35,7 @@ export function registerDetectScenesJob(fs: Engine): void {
         candidates,
       };
 
-      const writeResult = await fs.files.write(
-        assetId,
-        ".detect-scenes.json",
-        JSON.stringify(final, null, 2),
-        projectSlug,
+      const writeResult = await fs.files.write(assetId, ".detect-scenes.json", JSON.stringify(final, null, 2)
       );
       if (!writeResult.ok) {
         throw new Error(`Scenes detected but failed to persist: ${writeResult.error.message}`);

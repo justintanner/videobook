@@ -7,7 +7,7 @@ type Payload = {
   type: "generate_nano_banana_pro_fal";
   imgAssetId: string;
   imgAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   num_images?: number;
   aspect_ratio?: string;
@@ -20,7 +20,7 @@ type Payload = {
 export function registerGenerateNanoBananaProFalJob(fs: Engine): void {
   registerJobHandler("generate_nano_banana_pro_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.projectSlug, p.imgAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.bookId, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
       const input: Record<string, unknown> = {
         prompt: p.prompt,
@@ -34,7 +34,7 @@ export function registerGenerateNanoBananaProFalJob(fs: Engine): void {
   
       const taskId = await submitFalJob({
         fs,
-        projectSlug: p.projectSlug,
+        bookId: p.bookId,
         assetId: p.imgAssetId,
         assetDir: p.imgAssetDir,
         endpointId: "fal-ai/nano-banana-pro",

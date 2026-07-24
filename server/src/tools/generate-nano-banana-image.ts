@@ -21,7 +21,7 @@ const nanoBananaProInputSchema = NanoBananaProRequestSchema.shape.input.shape;
 
 const generateNanoBananaImageSchema = {
   prompt: apicityStringField(nanoBananaProInputSchema.prompt, "Text prompt for image generation", { required: true }),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   image_slugs: apicityStringArrayField(nanoBananaProInputSchema.image_input, "0-8 @img-* slugs for reference images"),
   aspect_ratio: apicityField(nanoBananaProInputSchema.aspect_ratio, "Aspect ratio"),
   resolution: apicityField(nanoBananaProInputSchema.resolution, "Output resolution"),
@@ -38,7 +38,7 @@ export function generateNanoBananaImageDef(fs: Engine): ToolDef {
     description: "Generate an image using the nano-banana-pro model. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional.",
     schema: generateNanoBananaImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, output_format } = args as Args;
+      const { prompt, book_id, image_slugs, aspect_ratio, resolution, output_format } = args as Args;
       const prefix = "img";
 
       const rawSlugs = image_slugs ?? [];
@@ -63,14 +63,14 @@ export function generateNanoBananaImageDef(fs: Engine): ToolDef {
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      const resolved = await resolveImageSlugs(fs, rawSlugs, project_slug);
+      const resolved = await resolveImageSlugs(fs, rawSlugs, book_id);
       if (!resolved.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
       const assetName = `${modelSlug("kie", "nano-banana-pro")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create(prefix, assetName, project_slug);
+      const assetResult = await fs.artifacts.create(prefix, assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -89,7 +89,7 @@ export function generateNanoBananaImageDef(fs: Engine): ToolDef {
         imgAssetId,
         imgAssetDir,
         sourceImageIds,
-        projectSlug: project_slug,
+        bookId: book_id,
         ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
         ...(output_format !== undefined ? { outputFormat: output_format } : {}),

@@ -19,7 +19,7 @@ type GenerateOmnihumanVideoPayload = {
   type: "generate_omnihuman_video";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   imageInput: RefInput;
   audioInput: RefInput;
   sourceImageIds: string[];
@@ -33,15 +33,15 @@ type GenerateOmnihumanVideoPayload = {
 export function registerGenerateOmnihumanVideoJob(fs: Engine): void {
   registerJobHandler("generate_omnihuman_video", async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug,
+      vidAssetId, vidAssetDir, bookId,
       imageInput, audioInput, sourceImageIds, sourceAudioIds,
       prompt, output_resolution, pe_fast_mode, seed,
     } = payload as GenerateOmnihumanVideoPayload;
 
     requireApiKey("KIE_API_KEY");
 
-    const imageUrl = await uploadAssetToKie(fs, imageInput.assetId, imageInput.filename, projectSlug);
-    const audioUrl = await uploadAssetToKie(fs, audioInput.assetId, audioInput.filename, projectSlug);
+    const imageUrl = await uploadAssetToKie(fs, imageInput.assetId, imageInput.filename, bookId);
+    const audioUrl = await uploadAssetToKie(fs, audioInput.assetId, audioInput.filename, bookId);
 
     const request = buildOmnihumanPayload(
       { prompt, output_resolution, pe_fast_mode, seed },
@@ -50,8 +50,7 @@ export function registerGenerateOmnihumanVideoJob(fs: Engine): void {
 
     // omnihuman-1-5 bills per second of driving audio; schema has no duration.
     // Pass measured audio length as a cost-only hint (see KieCostHints).
-    const audioMeta = await fs.metadata.artifacts.read<{ duration?: number }>(
-      audioInput.assetId, "original", projectSlug,
+    const audioMeta = await fs.metadata.artifacts.read<{ duration?: number }>(audioInput.assetId, "original"
     );
     const durationHint =
       audioMeta.ok && typeof audioMeta.value?.duration === "number" && audioMeta.value.duration > 0
@@ -63,7 +62,7 @@ export function registerGenerateOmnihumanVideoJob(fs: Engine): void {
       taskType: OMNIHUMAN_TASK_TYPE,
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         mode: "omnihuman",
         sourceImageIds,

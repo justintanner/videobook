@@ -27,7 +27,7 @@ describe("generate_veo3_video / generate_veo3_fast_video tools", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -47,7 +47,7 @@ describe("generate_veo3_video / generate_veo3_fast_video tools", () => {
     const result = await client.callTool({
       name: "generate_kie_veo_3_0_video",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "a beautiful sunset",
       },
     });
@@ -59,7 +59,7 @@ describe("generate_veo3_video / generate_veo3_fast_video tools", () => {
     const result = await client.callTool({
       name: "generate_kie_veo_3_0_video",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "a beautiful sunset",
         aspect_ratio: "16:9",
         seed: 42,
@@ -76,14 +76,14 @@ describe("generate_veo3_video / generate_veo3_fast_video tools", () => {
 
   it("enqueues veo3_fast job (image-to-video)", async () => {
     const fs = createEngineForTest(tempDir);
-    const imageAsset = await fs.artifacts.create("img", "source-img", "test-proj");
+    const imageAsset = await fs.artifacts.create("img", "source-img");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
-    await fs.files.write(imageAsset.value.slug, "original.png", await makePng(), "test-proj");
+    await fs.files.write(imageAsset.value.slug, "original.png", await makePng());
 
     const result = await client.callTool({
       name: "generate_kie_veo_3_0_fast_video",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "a fast car",
         image_slugs: [`@${imageAsset.value.slug}`],
       },

@@ -41,7 +41,7 @@ describe("findUnprocessedUploads", () => {
     expect(createResult.ok).toBe(true);
 
     // Create an asset via fs with prefix + name
-    const assetResult = await fs.artifacts.create("img", "photo", "test-proj");
+    const assetResult = await fs.artifacts.create("img", "photo");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
 
@@ -51,10 +51,10 @@ describe("findUnprocessedUploads", () => {
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
       "base64",
     );
-    await fs.files.write(assetId, "original.png", pngData, "test-proj");
-    await fs.metadata.artifacts.write(assetId, "original", { origin: "upload" }, "test-proj");
+    await fs.files.write(assetId, "original.png", pngData);
+    await fs.metadata.artifacts.write(assetId, "original", { origin: "upload" });
 
-    const assets = await fs.artifacts.list("test-proj");
+    const assets = await fs.artifacts.list();
     expect(assets.length).toBeGreaterThan(0);
 
     const result = await findUnprocessedUploads(fs, "test-proj", assets);
@@ -66,7 +66,7 @@ describe("findUnprocessedUploads", () => {
     expect(createResult.ok).toBe(true);
 
     // Create an asset and write a media file but skip origin metadata
-    const assetResult = await fs.artifacts.create("img", "external", "test-proj");
+    const assetResult = await fs.artifacts.create("img", "external");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
 
@@ -76,9 +76,9 @@ describe("findUnprocessedUploads", () => {
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
       "base64",
     );
-    await fs.files.write(assetId, "photo.png", pngData, "test-proj");
+    await fs.files.write(assetId, "photo.png", pngData);
 
-    const assets = await fs.artifacts.list("test-proj");
+    const assets = await fs.artifacts.list();
     expect(assets.length).toBeGreaterThan(0);
 
     const result = await findUnprocessedUploads(fs, "test-proj", assets);
@@ -97,7 +97,7 @@ describe("findUnprocessedUploads", () => {
     const createResult = await fs.projects.create("test-proj");
     expect(createResult.ok).toBe(true);
 
-    const assetResult = await fs.artifacts.create("vid", "from-yt", "test-proj");
+    const assetResult = await fs.artifacts.create("vid", "from-yt");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
     const assetId = assetResult.value.slug;
@@ -106,10 +106,10 @@ describe("findUnprocessedUploads", () => {
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
       "base64",
     );
-    await fs.files.write(assetId, "original.jpg", pngData, "test-proj");
-    await fs.files.write(assetId, "original.mp4", Buffer.from("fake-mp4-bytes"), "test-proj");
+    await fs.files.write(assetId, "original.jpg", pngData);
+    await fs.files.write(assetId, "original.mp4", Buffer.from("fake-mp4-bytes"));
 
-    const assets = await fs.artifacts.list("test-proj");
+    const assets = await fs.artifacts.list();
     const result = await findUnprocessedUploads(fs, "test-proj", assets);
 
     expect(result.length).toBe(1);
@@ -126,7 +126,7 @@ describe("findUnprocessedUploads", () => {
     const createResult = await fs.projects.create("test-proj");
     expect(createResult.ok).toBe(true);
 
-    const assetResult = await fs.artifacts.create("img", "racey", "test-proj");
+    const assetResult = await fs.artifacts.create("img", "racey");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
     const assetId = assetResult.value.slug;
@@ -137,12 +137,12 @@ describe("findUnprocessedUploads", () => {
     );
     // Simulate a real post-process_image asset where .original.json is
     // briefly missing: original.png plus the three cropped variants.
-    await fs.files.write(assetId, "original.png", pngData, "test-proj");
-    await fs.files.write(assetId, "landscape.jpg", Buffer.from("fake"), "test-proj");
-    await fs.files.write(assetId, "portrait.jpg", Buffer.from("fake"), "test-proj");
-    await fs.files.write(assetId, "square.jpg", Buffer.from("fake"), "test-proj");
+    await fs.files.write(assetId, "original.png", pngData);
+    await fs.files.write(assetId, "landscape.jpg", Buffer.from("fake"));
+    await fs.files.write(assetId, "portrait.jpg", Buffer.from("fake"));
+    await fs.files.write(assetId, "square.jpg", Buffer.from("fake"));
 
-    const assets = await fs.artifacts.list("test-proj");
+    const assets = await fs.artifacts.list();
     const result = await findUnprocessedUploads(fs, "test-proj", assets);
 
     // The upload that gets processed must be the canonical original.png —
@@ -162,16 +162,16 @@ describe("findUnprocessedUploads", () => {
     const createResult = await fs.projects.create("test-proj");
     expect(createResult.ok).toBe(true);
 
-    const assetResult = await fs.artifacts.create("img", "variants-only", "test-proj");
+    const assetResult = await fs.artifacts.create("img", "variants-only");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
     const assetId = assetResult.value.slug;
 
-    await fs.files.write(assetId, "landscape.jpg", Buffer.from("fake"), "test-proj");
-    await fs.files.write(assetId, "portrait.jpg", Buffer.from("fake"), "test-proj");
-    await fs.files.write(assetId, "square.jpg", Buffer.from("fake"), "test-proj");
+    await fs.files.write(assetId, "landscape.jpg", Buffer.from("fake"));
+    await fs.files.write(assetId, "portrait.jpg", Buffer.from("fake"));
+    await fs.files.write(assetId, "square.jpg", Buffer.from("fake"));
 
-    const assets = await fs.artifacts.list("test-proj");
+    const assets = await fs.artifacts.list();
     const result = await findUnprocessedUploads(fs, "test-proj", assets);
 
     expect(result).toEqual([]);
@@ -185,20 +185,20 @@ describe("findUnprocessedUploads", () => {
     const createResult = await fs.projects.create("test-proj");
     expect(createResult.ok).toBe(true);
 
-    const assetResult = await fs.artifacts.create("vid", "broken", "test-proj");
+    const assetResult = await fs.artifacts.create("vid", "broken");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
     const assetId = assetResult.value.slug;
 
-    await fs.files.write(assetId, "original.mp4", Buffer.from("fake-mp4-bytes"), "test-proj");
+    await fs.files.write(assetId, "original.mp4", Buffer.from("fake-mp4-bytes"));
 
     // Simulate the failed-job aftermath: lease begun, then failed.
-    const begun = await fs.jobs.artifactWork.begin("test-proj", assetId, { kind: "process", ownerKind: "job", durationMs: 60_000 });
+    const begun = await fs.jobs.artifactWork.begin(assetId, { kind: "process", ownerKind: "job", durationMs: 60_000 });
     expect(begun).not.toBeNull();
     if (!begun) return;
-    await fs.jobs.artifactWork.fail("test-proj", assetId, begun.ownerId, { message: "moov atom not found" });
+    await fs.jobs.artifactWork.fail(assetId, begun.ownerId, { message: "moov atom not found" });
 
-    const assets = await fs.artifacts.list("test-proj");
+    const assets = await fs.artifacts.list();
     const result = await findUnprocessedUploads(fs, "test-proj", assets);
 
     expect(result).toEqual([]);

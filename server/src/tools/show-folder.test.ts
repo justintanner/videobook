@@ -27,7 +27,7 @@ describe("show_folder tool", () => {
     await fs.projects.create("test");
     const result = await client.callTool({
       name: "show_folder",
-      arguments: { asset_id: "img-nonexistent", project_slug: "test" },
+      arguments: { asset_id: "img-nonexistent", book_id: "test" },
     });
     expect(result.isError).toBe(true);
   });
@@ -35,13 +35,13 @@ describe("show_folder tool", () => {
   it("show folder for existing asset returns a result without throwing", async () => {
     client = await createTestClient(tempDir);
     await fs.projects.create("test");
-    const assetResult = await fs.artifacts.create("img", "landscape-photo", "test");
+    const assetResult = await fs.artifacts.create("img", "landscape-photo");
     if (!assetResult.ok) throw new Error(assetResult.error.message);
     const assetId = assetResult.value.slug;
 
     const result = await client.callTool({
       name: "show_folder",
-      arguments: { asset_id: assetId, project_slug: "test" },
+      arguments: { asset_id: assetId, book_id: "test" },
     });
     // On CI/headless, open -R may fail, but the tool should still return a result
     const content = result.content as Array<{ type: string; text: string }>;

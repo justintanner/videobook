@@ -32,19 +32,19 @@ export function smoothSceneConcatDef(fs: Engine): ToolDef {
       first_asset_id: z.string().describe("First vid-* asset in playback order"),
       second_asset_id: z.string().describe("Second vid-* asset in playback order"),
       transition_seconds: z.number().min(0.05).max(5).optional().describe("Optional fixed crossfade duration in seconds. Omit to auto-align shared boundary audio, falling back to 0.35 seconds."),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
       const {
         first_asset_id,
         second_asset_id,
         transition_seconds,
-        project_slug,
+        book_id,
       } = args as {
         first_asset_id: string;
         second_asset_id: string;
         transition_seconds?: number;
-        project_slug: string;
+        book_id: string;
       };
 
       if (!first_asset_id.startsWith("vid-") || !second_asset_id.startsWith("vid-")) {
@@ -55,8 +55,8 @@ export function smoothSceneConcatDef(fs: Engine): ToolDef {
       }
 
       const [firstManifestResult, secondManifestResult] = await Promise.all([
-        fs.files.manifest(first_asset_id, project_slug),
-        fs.files.manifest(second_asset_id, project_slug),
+        fs.files.manifest(first_asset_id),
+        fs.files.manifest(second_asset_id),
       ]);
       if (!firstManifestResult.ok) {
         return error(`First asset: ${firstManifestResult.error.message}`);
@@ -92,10 +92,7 @@ export function smoothSceneConcatDef(fs: Engine): ToolDef {
         return error("transition_seconds must be shorter than both video clips");
       }
 
-      const assetResult = await fs.artifacts.create(
-        "vid",
-        concatName(first_asset_id, second_asset_id),
-        project_slug,
+      const assetResult = await fs.artifacts.create("vid", concatName(first_asset_id, second_asset_id)
       );
       if (!assetResult.ok) {
         return error(`Failed to create scene concat asset: ${assetResult.error.message}`);
@@ -113,7 +110,7 @@ export function smoothSceneConcatDef(fs: Engine): ToolDef {
         secondAssetId: second_asset_id,
         assetId,
         assetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         transitionSeconds: transition_seconds,
       });
 

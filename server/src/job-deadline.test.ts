@@ -23,11 +23,11 @@ describe("job deadlines", () => {
     const fs = createEngineForTest(projectsDir);
     const project = await fs.projects.create("p");
     expect(project.ok).toBe(true);
-    const asset = await fs.artifacts.create("vid", "deadline", "p");
+    const asset = await fs.artifacts.create("vid", "deadline");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
-    const runner = await fs.jobs.queue.createRunner("p", {
+    const runner = await fs.jobs.queue.createRunner({
       concurrency: 1,
       pollIntervalMs: 10,
       resolveHandler: (type) => type === "deadline_probe"
@@ -67,7 +67,7 @@ describe("job deadlines", () => {
     runner.start();
 
     try {
-      const enqueued = await fs.jobs.queue.enqueue("p", {
+      const enqueued = await fs.jobs.queue.enqueue({
         type: "deadline_probe",
         assetId: asset.value.slug,
         payload: {},
@@ -79,11 +79,11 @@ describe("job deadlines", () => {
         "Job deadline_probe timed out after 50ms",
       );
 
-      const job = fs.jobs.queue.get("p", enqueued.job.id);
+      const job = fs.jobs.queue.get(enqueued.job.id);
       expect(job?.state).toBe("failed");
       expect(job?.error?.code).toBe(JobDeadlineError.name);
 
-      const work = await fs.jobs.artifactWork.read("p", asset.value.slug);
+      const work = await fs.jobs.artifactWork.read("p");
       expect(work.ok).toBe(true);
       if (work.ok) {
         expect(work.value?.status).toBe("error");

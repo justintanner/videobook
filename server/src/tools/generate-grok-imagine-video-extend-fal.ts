@@ -11,7 +11,7 @@ import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 const grok = FalXaiGrokImagineVideoExtendVideoRequestSchema.shape;
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(grok.prompt, "Video description", { required: true }),
   video_slug: z.string().describe("Source video asset to extend (e.g., @vid-scene)"),
   duration: apicityField(grok.duration, "Extension duration in seconds (2-10)"),
@@ -25,7 +25,7 @@ export function generateGrokImagineVideoExtendFalDef(fs: Engine): ToolDef {
     description: "Extend a video via fal.ai using xAI Grok Imagine Video extend-video. Creates a new vid- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, video_slug, duration } = args as Args;
+      const { book_id, prompt, video_slug, duration } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
@@ -35,12 +35,12 @@ export function generateGrokImagineVideoExtendFalDef(fs: Engine): ToolDef {
       if (!sourceVideoAssetId.startsWith("vid-")) {
         return { isError: true as const, content: [{ type: "text" as const, text: `video_slug must be a vid-* asset, got: ${sourceVideoAssetId}` }] };
       }
-      const manifest = await fs.files.manifest(sourceVideoAssetId, project_slug);
+      const manifest = await fs.files.manifest(sourceVideoAssetId);
       if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
       const sourceVideoFile = findVideoFile(manifest.value.files);
       if (!sourceVideoFile) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${sourceVideoAssetId}` }] };
 
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "grok-imagine/extend")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "grok-imagine/extend")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
@@ -50,7 +50,7 @@ export function generateGrokImagineVideoExtendFalDef(fs: Engine): ToolDef {
         type: "generate_grok_imagine_video_extend_fal",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         sourceVideo: { assetId: sourceVideoAssetId, filename: sourceVideoFile.name },
         sourceVideoIds: [sourceVideoAssetId],

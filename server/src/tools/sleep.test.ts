@@ -17,7 +17,7 @@ describe("sleep tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -31,7 +31,7 @@ describe("sleep tool", () => {
       name: "wait_for_asset_ready",
       arguments: {
         asset_id: "vid-does-not-exist",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         timeout_seconds: 1,
       },
     });
@@ -46,14 +46,14 @@ describe("sleep tool", () => {
     // fails on synthetic bytes and writes a generation_errors row, which sync
     // surfaces as a failure — same race the clear_failed_tasks test avoids.
     const fs = createEngineForTest(tempDir);
-    const created = await fs.artifacts.create("img", "photo", "test-proj");
+    const created = await fs.artifacts.create("img", "photo");
     if (!created.ok) throw new Error(created.error.message);
 
     const result = await client.callTool({
       name: "wait_for_asset_ready",
       arguments: {
         asset_id: created.value.slug,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         timeout_seconds: 1,
       },
     });
@@ -80,26 +80,23 @@ describe("sleepDef handler", () => {
   });
 
   it("returns timeout for asset with pending task that never completes", async () => {
-    const assetResult = await fs.artifacts.create("vid", "pending-asset", "test-proj");
+    const assetResult = await fs.artifacts.create("vid", "pending-asset");
     if (!assetResult.ok) throw new Error(assetResult.error.message);
     const assetId = assetResult.value.slug;
 
     {
-      const lease = await fs.jobs.artifactWork.begin("test-proj", assetId, {
+      const lease = await fs.jobs.artifactWork.begin(assetId, {
         kind: "transcribe",
         ownerKind: "job",
         durationMs: 60_000,
       });
       if (!lease) throw new Error(`assetWork.begin failed for ${assetId}`);
-      const _ptResult = await fs.jobs.pending.write(
-        "test-proj",
-        {
+      const _ptResult = await fs.jobs.pending.write({
           artifactId: assetResult.value.artifactId,
           taskId: "task-will-timeout",
           taskType: "transcribe",
           meta: {},
-        },
-        lease.ownerId,
+        }, lease.ownerId
       );
       if (!_ptResult.ok) throw new Error(`Failed to write pending-task for ${assetId}: ${_ptResult.error.message}`);
     }
@@ -112,7 +109,7 @@ describe("sleepDef handler", () => {
       const def = sleepDef(fs);
       const result = await def.handler({
         asset_id: assetId,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         timeout_seconds: 0,
       });
 
@@ -129,7 +126,7 @@ describe("sleepDef handler", () => {
   }, 15_000);
 
   it("does not report ready before an enqueued job claims its asset", async () => {
-    const assetResult = await fs.artifacts.create("img", "queued-asset", "test-proj");
+    const assetResult = await fs.artifacts.create("img", "queued-asset");
     if (!assetResult.ok) throw new Error(assetResult.error.message);
     const options = {
       type: "test_generation",
@@ -138,10 +135,8 @@ describe("sleepDef handler", () => {
       artifactWorkKind: "generate" as const,
     };
     expect(options.artifactWorkKind).toBe("generate");
-    fs.jobs.queue.enqueue("test-proj", options);
-    const queuedWork = await fs.jobs.artifactWork.read(
-      "test-proj",
-      assetResult.value.slug,
+    fs.jobs.queue.enqueue(options);
+    const queuedWork = await fs.jobs.artifactWork.read("test-proj"
     );
     expect(queuedWork.ok).toBe(true);
     if (!queuedWork.ok) throw new Error(queuedWork.error.message);
@@ -150,14 +145,14 @@ describe("sleepDef handler", () => {
       meta: { kind: "generate", queued: true },
     });
     expect(
-      fs.jobs.queue.list("test-proj", {
+      fs.jobs.queue.list({
         artifactId: assetResult.value.slug,
       })[0]?.state,
     ).toBe("queued");
 
     const result = await sleepDef(fs).handler({
       asset_id: assetResult.value.slug,
-      project_slug: "test-proj",
+      book_id: "test-proj",
       timeout_seconds: 0.01,
     });
 

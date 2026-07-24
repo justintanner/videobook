@@ -8,7 +8,7 @@ type GenerateGoogleOmniVideoPayload = {
   type: "generate_google_omni_video";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   firstFrame?: RefInput;
   imageInputs: RefInput[];
   videoInput?: RefInput;
@@ -31,13 +31,13 @@ export function registerGenerateGoogleOmniVideoJob(fs: Engine): void {
 
     const referenceImageIds: string[] = [];
     for (const input of p.imageInputs) {
-      referenceImageIds.push(await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, p.projectSlug));
+      referenceImageIds.push(await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, p.bookId));
     }
     const startImageId = p.firstFrame
-      ? await uploadAssetToGoogleFlow(provider, fs, p.firstFrame.assetId, p.firstFrame.filename, p.projectSlug)
+      ? await uploadAssetToGoogleFlow(provider, fs, p.firstFrame.assetId, p.firstFrame.filename, p.bookId)
       : undefined;
     const referenceVideoId = p.videoInput
-      ? await uploadAssetToGoogleFlow(provider, fs, p.videoInput.assetId, p.videoInput.filename, p.projectSlug)
+      ? await uploadAssetToGoogleFlow(provider, fs, p.videoInput.assetId, p.videoInput.filename, p.bookId)
       : undefined;
 
     const request = buildGoogleOmniVideoPayload(
@@ -64,7 +64,7 @@ export function registerGenerateGoogleOmniVideoJob(fs: Engine): void {
       request,
       assetId: p.vidAssetId,
       assetDir: p.vidAssetDir,
-      projectSlug: p.projectSlug,
+      bookId: p.bookId,
       // Rides the shared single-mp4 completion (see generate-veo31-video.ts).
       taskType: "seedance2_video",
       meta: {

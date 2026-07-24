@@ -10,7 +10,7 @@ import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 const base = FalWanV2p7ImageToVideoRequestSchema.shape;
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(base.prompt, "Video description", { required: true }),
   first_frame_slug: apicityStringField(base.image_url, "First frame image asset (e.g., @img-start)", { required: true }),
   end_frame_slug: apicityStringField(base.end_image_url, "Optional end frame image asset"),
@@ -30,18 +30,18 @@ export function generateWan27I2vFalDef(fs: Engine): ToolDef {
     description: "Generate a video via fal.ai using Alibaba Wan v2.7 from a first-frame image (optional end frame). Creates a new vid- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, first_frame_slug, end_frame_slug, resolution, duration, negative_prompt, enable_prompt_expansion, enable_safety_checker, seed } = args as Args;
+      const { book_id, prompt, first_frame_slug, end_frame_slug, resolution, duration, negative_prompt, enable_prompt_expansion, enable_safety_checker, seed } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
       const slugs = end_frame_slug ? [first_frame_slug, end_frame_slug] : [first_frame_slug];
-      const resolved = await resolveImageSlugs(fs, slugs, project_slug);
+      const resolved = await resolveImageSlugs(fs, slugs, book_id);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [firstFrame, endFrame] = resolved.inputs;
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "wan/2-7-image-to-video")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "wan/2-7-image-to-video")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
@@ -51,7 +51,7 @@ export function generateWan27I2vFalDef(fs: Engine): ToolDef {
         type: "generate_wan27_i2v_fal",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         firstFrame,
         ...(endFrame ? { endFrame } : {}),

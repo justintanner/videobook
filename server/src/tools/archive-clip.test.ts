@@ -209,7 +209,7 @@ describe("archive MCP tools", () => {
     clearArchiveEnv();
     const result = await c.callTool({
       name: "restore_archive_clips",
-      arguments: { project_slug: "test-proj", archive_ids: ["not-an-id"] },
+      arguments: { book_id: "test-proj", archive_ids: ["not-an-id"] },
     });
 
     expect(result.isError).toBe(true);
@@ -227,7 +227,7 @@ describe("archive MCP tools", () => {
 
     const result = await c.callTool({
       name: "restore_archive_clips",
-      arguments: { project_slug: created.value.slug, archive_ids: [sha] },
+      arguments: { book_id: created.value.slug, archive_ids: [sha] },
     });
 
     expect(result.isError).toBe(true);

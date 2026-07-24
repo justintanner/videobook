@@ -10,16 +10,16 @@ export function translateSubtitlesDef(fs: Engine): ToolDef {
       "Translate an asset's transcribed subtitles into another language. Writes elevenlabs.<lang>.json next to elevenlabs.json; renders with subtitle_language set to that language use it. Cached per language — re-runs only after re-transcription.",
     schema: {
       asset_id: z.string().describe("Asset ID (vid-* or aud-*)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       language: z
         .string()
         .regex(/^[a-z]{2}$/)
         .describe("Target language as a two-letter ISO 639-1 code (e.g. 'en')"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, language } = args as {
+      const { asset_id, book_id, language } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         language: string;
       };
 
@@ -37,7 +37,7 @@ export function translateSubtitlesDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -60,7 +60,7 @@ export function translateSubtitlesDef(fs: Engine): ToolDef {
       await queue.enqueue(jobId, {
         type: "translate_transcript",
         assetId: asset_id,
-        projectSlug: project_slug,
+        bookId: book_id,
         targetLanguage: language,
       });
 

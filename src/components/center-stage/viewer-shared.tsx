@@ -404,15 +404,15 @@ export function FilesBackPane({ manifest, manifestLoading, selectedFile, fileCon
   );
 }
 
-export function HistoryBackPane({ commits, historyLoading, selectedCommitHash, setSelectedCommitHash, handleRestore, fetchHistory, itemId, projectSlug, onReusePrompt }: {
+export function HistoryBackPane({ commits, historyLoading, selectedCommitHash, setSelectedCommitHash, handleRestore, fetchHistory, itemId, bookId, onReusePrompt }: {
   commits: Revision[];
   historyLoading: boolean;
   selectedCommitHash: string | null;
   setSelectedCommitHash: (hash: string | null) => void;
   handleRestore: (hash: string) => Promise<void>;
-  fetchHistory: (itemId: string, projectSlug: string) => void;
+  fetchHistory: (itemId: string, bookId: string) => void;
   itemId: string;
-  projectSlug: string;
+  bookId: string;
   onReusePrompt?: (meta: RewriteMeta) => void;
 }) {
   if (commits.length === 0) {
@@ -430,7 +430,7 @@ export function HistoryBackPane({ commits, historyLoading, selectedCommitHash, s
           commits={commits}
           selectedHash={selectedCommitHash}
           onSelectCommit={setSelectedCommitHash}
-          onRefresh={() => fetchHistory(itemId, projectSlug)}
+          onRefresh={() => fetchHistory(itemId, bookId)}
           loading={historyLoading}
         />
       </div>
@@ -449,8 +449,8 @@ export function HistoryBackPane({ commits, historyLoading, selectedCommitHash, s
 // ── useViewerBackFace Hook ──
 
 // eslint-disable-next-line react-refresh/only-export-components
-export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFlippedChange, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, defaultBackTab }: {
-  projectSlug: string;
+export function useViewerBackFace({ bookId, itemId, callTool, flipped, onFlippedChange, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, defaultBackTab }: {
+  bookId: string;
   itemId: string;
   callTool: UseMcpResult['callTool'];
   flipped: boolean;
@@ -489,13 +489,13 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
   }, [selectedFile]);
 
   const fileUrl = useMemo(
-    () => `/files/${projectSlug}/${itemId}/${selectedFile}`,
-    [projectSlug, itemId, selectedFile],
+    () => `/files/${bookId}/${itemId}/${selectedFile}`,
+    [bookId, itemId, selectedFile],
   );
 
   const requestFileContent = useCallback((fileName: string) => {
     const requestId = ++fileRequestIdRef.current;
-    void fetch(`/files/${projectSlug}/${itemId}/${fileName}`)
+    void fetch(`/files/${bookId}/${itemId}/${fileName}`)
       .then(async (res) => {
         if (!res.ok) return `Error: ${res.status} ${res.statusText}`;
         const text = await res.text();
@@ -517,7 +517,7 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
       .finally(() => {
         if (requestId === fileRequestIdRef.current) setFileLoading(false);
       });
-  }, [projectSlug, itemId]);
+  }, [bookId, itemId]);
 
   const fetchFileContent = useCallback((fileName: string) => {
     if (isBinaryFile(fileName)) {
@@ -539,7 +539,7 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
 
   const requestManifest = useCallback(() => {
     const requestId = ++manifestRequestIdRef.current;
-    void fetch(`/api/manifest/${projectSlug}/${itemId}`)
+    void fetch(`/api/manifest/${bookId}/${itemId}`)
       .then(async (res) => {
         if (!res.ok) return [];
         const data = await res.json() as { files: ManifestFile[] };
@@ -561,7 +561,7 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
       .finally(() => {
         if (requestId === manifestRequestIdRef.current) setManifestLoading(false);
       });
-  }, [projectSlug, itemId, handleSelectFile]);
+  }, [bookId, itemId, handleSelectFile]);
 
   const fetchManifest = useCallback(() => {
     setManifestLoading(true);
@@ -589,17 +589,17 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
   // Fetch history when history tab is active
   useEffect(() => {
     if (flipped && backTab === 'history') {
-      fetchHistory(itemId, projectSlug);
+      fetchHistory(itemId, bookId);
     }
   }, [flipped, backTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRestore = async (hash: string) => {
     const short = hash.slice(0, 7);
     toast({ title: `Restoring ${short}...`, duration: 2000 });
-    const ok = await restoreVersion(itemId, hash, projectSlug);
+    const ok = await restoreVersion(itemId, hash, bookId);
     if (ok) {
       toast({ title: 'Restored', description: short, duration: 2000 });
-      fetchHistory(itemId, projectSlug);
+      fetchHistory(itemId, bookId);
     } else {
       toast({ title: 'Restore failed', description: short, variant: 'destructive', duration: 4000 });
     }

@@ -17,12 +17,12 @@ export function isolateVocalsDef(fs: Engine): ToolDef {
       "Writes audio_vocals.mp3 (for video assets) or mix.mp3 + .mix.json (for audio assets).",
     schema: {
       asset_id: z.string().describe("Asset ID (vid-* or aud-*)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug } = args as {
+      const { asset_id, book_id } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
       };
 
       if (!process.env.KIE_API_KEY) {
@@ -32,7 +32,7 @@ export function isolateVocalsDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -61,7 +61,7 @@ export function isolateVocalsDef(fs: Engine): ToolDef {
         audioFilename: audioFile.name,
         assetId: asset_id,
         assetDir: manifest.path,
-        projectSlug: project_slug,
+        bookId: book_id,
         isAudioAsset: asset_id.startsWith("aud-"),
       } as unknown as Record<string, unknown>);
 

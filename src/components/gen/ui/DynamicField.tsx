@@ -22,7 +22,7 @@ interface DynamicFieldProps {
   theme?: GenTheme;
   callTool?: UseMcpResult['callTool'];
   mcpState?: UseMcpResult['state'];
-  projectSlug?: string;
+  bookId?: string;
   /** Denser controls for settings rows (clip window, duration toggles). */
   compact?: boolean;
 }
@@ -88,7 +88,7 @@ export function DynamicField({
   theme,
   callTool,
   mcpState,
-  projectSlug,
+  bookId,
   compact,
 }: DynamicFieldProps) {
   const label = labelOverride || formatLabel(name);
@@ -115,7 +115,7 @@ export function DynamicField({
               theme={theme}
               callTool={callTool}
               mcpState={mcpState}
-              projectSlug={projectSlug}
+              bookId={bookId}
               description={placeholderOverride ?? schema.description}
             />
           );

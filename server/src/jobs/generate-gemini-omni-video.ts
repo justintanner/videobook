@@ -13,7 +13,7 @@ type GenerateGeminiOmniVideoPayload = {
   type: "generate_gemini_omni_video";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   imageInputs: RefInput[];
   videoInput?: RefInput;
   sourceImageIds: string[];
@@ -30,7 +30,7 @@ type GenerateGeminiOmniVideoPayload = {
 export function registerGenerateGeminiOmniVideoJob(fs: Engine): void {
   registerJobHandler("generate_gemini_omni_video", async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug,
+      vidAssetId, vidAssetDir, bookId,
       imageInputs, videoInput,
       sourceImageIds, sourceVideoIds,
       prompt, duration, aspect_ratio, resolution, seed,
@@ -41,10 +41,10 @@ export function registerGenerateGeminiOmniVideoJob(fs: Engine): void {
 
     const imageUrls: string[] = [];
     for (const { assetId, filename } of imageInputs) {
-      imageUrls.push(await uploadAssetToKie(fs, assetId, filename, projectSlug));
+      imageUrls.push(await uploadAssetToKie(fs, assetId, filename, bookId));
     }
     const videoUrl = videoInput
-      ? await uploadAssetToKie(fs, videoInput.assetId, videoInput.filename, projectSlug)
+      ? await uploadAssetToKie(fs, videoInput.assetId, videoInput.filename, bookId)
       : undefined;
 
     const normalizedPrompt = replaceNaturalAssetMentions(prompt, {
@@ -75,7 +75,7 @@ export function registerGenerateGeminiOmniVideoJob(fs: Engine): void {
       taskType: "seedance2_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         apiModel: "gemini-omni-video",
         sourceImageIds,

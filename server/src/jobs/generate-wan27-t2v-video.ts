@@ -12,7 +12,7 @@ type GenerateWan27T2vVideoPayload = {
   type: "generate_wan27_t2v_video";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   negative_prompt?: string;
   audioRef?: RefInput;
@@ -29,14 +29,14 @@ type GenerateWan27T2vVideoPayload = {
 export function registerGenerateWan27T2vVideoJob(fs: Engine): void {
   registerJobHandler("generate_wan27_t2v_video", async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,
+      vidAssetId, vidAssetDir, bookId, prompt, negative_prompt,
       audioRef, sourceAudioIds,
       resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed,
     } = payload as GenerateWan27T2vVideoPayload;
 
     requireApiKey("KIE_API_KEY");
 
-    const audioUrl = audioRef ? await uploadAssetToKie(fs, audioRef.assetId, audioRef.filename, projectSlug) : undefined;
+    const audioUrl = audioRef ? await uploadAssetToKie(fs, audioRef.assetId, audioRef.filename, bookId) : undefined;
 
     const request = buildWan27TextToVideoPayload(
       { prompt, negative_prompt, resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed },
@@ -47,7 +47,7 @@ export function registerGenerateWan27T2vVideoJob(fs: Engine): void {
       taskType: "wan27_t2v_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         prompt,
         mode: "t2v",

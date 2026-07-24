@@ -30,13 +30,13 @@ async function generateTestVideo(outputPath: string): Promise<void> {
 
 async function uploadVideo(
   client: Client,
-  projectSlug: string,
+  bookId: string,
   videoPath: string,
 ): Promise<{ assetId: string; path: string }> {
   const data = (await readFile(videoPath)).toString("base64");
   const result = await client.callTool({
     name: "upload_file",
-    arguments: { project_slug: projectSlug, filename: "original.mp4", data },
+    arguments: { book_id: bookId, filename: "original.mp4", data },
   });
   return JSON.parse((result.content as TextContent)[0].text);
 }
@@ -66,7 +66,7 @@ describe("apply_sfx tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "sfx-proj" },
+      arguments: { book_id: "sfx-proj" },
     });
   });
 
@@ -85,7 +85,7 @@ describe("apply_sfx tool", () => {
       name: "apply_sfx",
       arguments: {
         asset_id: "vid-anything",
-        project_slug: "sfx-proj",
+        book_id: "sfx-proj",
         sfx: [{ timestamp: 1, type: "whoosh", description: "test" }],
       },
     });
@@ -110,7 +110,7 @@ describe("apply_sfx tool", () => {
       name: "apply_sfx",
       arguments: {
         asset_id: "vid-does-not-exist",
-        project_slug: "sfx-proj",
+        book_id: "sfx-proj",
         sfx: [{ timestamp: 1, type: "whoosh", description: "test" }],
       },
     });
@@ -121,15 +121,15 @@ describe("apply_sfx tool", () => {
   it("returns error when asset has no video", async () => {
     process.env.ELEVENLABS_API_KEY = "test-key";
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("vid", "no-video", "sfx-proj");
+    const asset = await fs.artifacts.create("vid", "no-video");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "notes.txt", "hello", "sfx-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "apply_sfx",
       arguments: {
         asset_id: asset.value.slug,
-        project_slug: "sfx-proj",
+        book_id: "sfx-proj",
         sfx: [{ timestamp: 1, type: "whoosh", description: "test" }],
       },
     });
@@ -143,18 +143,14 @@ describe("apply_sfx tool", () => {
     process.env.ELEVENLABS_API_KEY = "test-key";
     const uploaded = await uploadVideo(client, "sfx-proj", videoPath);
     const fs = createEngineForTest(tempDir);
-    await fs.metadata.artifacts.write(
-      uploaded.assetId,
-      "original",
-      { width: 320, height: 240, duration: 3, hasAudio: true },
-      "sfx-proj",
+    await fs.metadata.artifacts.write(uploaded.assetId, "original", { width: 320, height: 240, duration: 3, hasAudio: true }
     );
 
     const result = await client.callTool({
       name: "apply_sfx",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "sfx-proj",
+        book_id: "sfx-proj",
         sfx: [{ timestamp: 99, type: "whoosh", description: "after-end" }],
       },
     });
@@ -177,7 +173,7 @@ describe("apply_sfx tool", () => {
       name: "apply_sfx",
       arguments: {
         asset_id: "vid-any",
-        project_slug: "sfx-proj",
+        book_id: "sfx-proj",
         sfx,
       },
     });
@@ -192,7 +188,7 @@ describe("apply_sfx tool", () => {
       name: "apply_sfx",
       arguments: {
         asset_id: "vid-any",
-        project_slug: "sfx-proj",
+        book_id: "sfx-proj",
         sfx: [],
       },
     });

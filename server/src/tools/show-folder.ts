@@ -9,11 +9,11 @@ export function showFolderDef(fs: Engine): ToolDef {
     description: "Reveal an asset's folder in Finder",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. img-cute-cat)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
-      const result = await fs.workspaces.resolveArtifact(asset_id, project_slug);
+      const { asset_id, book_id: _book_id } = args as { asset_id: string; book_id: string };
+      const result = await fs.workspaces.resolveArtifact(asset_id);
       if (!result.ok) {
         return {
           isError: true as const,

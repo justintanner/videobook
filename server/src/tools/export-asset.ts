@@ -8,15 +8,15 @@ export function exportAssetDef(fs: Engine): ToolDef {
     description: "Export an asset from one project to a different project",
     schema: {
       asset_id: z.string().describe("Asset ID to export (e.g. img-cute-cat)"),
-      project_slug: z.string().describe("Source project slug"),
+      book_id: z.string().describe("Source project slug"),
       target_project: z.string().describe("Target project slug"),
       new_name: z.string().optional().describe("Optional custom name for the exported asset"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, target_project, new_name } = args as {
-        asset_id: string; project_slug: string; target_project: string; new_name?: string;
+      const { asset_id, book_id, target_project, new_name } = args as {
+        asset_id: string; book_id: string; target_project: string; new_name?: string;
       };
-      if (project_slug === target_project) {
+      if (book_id === target_project) {
         return {
           isError: true as const,
           content: [{
@@ -26,7 +26,7 @@ export function exportAssetDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -38,7 +38,7 @@ export function exportAssetDef(fs: Engine): ToolDef {
       const originalName = asset_id.slice(prefix.length + 1);
       const name = new_name ?? originalName;
 
-      const createResult = await fs.artifacts.create(prefix, name, target_project);
+      const createResult = await fs.artifacts.create(prefix, name);
       if (!createResult.ok) {
         return {
           isError: true as const,
@@ -49,14 +49,14 @@ export function exportAssetDef(fs: Engine): ToolDef {
       const newAssetId = createResult.value.slug;
 
       for (const file of manifestResult.value.files) {
-        const readResult = await fs.files.read(asset_id, file.name, project_slug);
+        const readResult = await fs.files.read(asset_id, file.name);
         if (!readResult.ok) {
           return {
             isError: true as const,
             content: [{ type: "text" as const, text: readResult.error.message }],
           };
         }
-        const writeResult = await fs.files.write(newAssetId, file.name, readResult.value, target_project);
+        const writeResult = await fs.files.write(newAssetId, file.name, readResult.value);
         if (!writeResult.ok) {
           return {
             isError: true as const,
@@ -71,7 +71,7 @@ export function exportAssetDef(fs: Engine): ToolDef {
           text: JSON.stringify({
             source_asset_id: asset_id,
             new_asset_id: newAssetId,
-            source_project: project_slug,
+            source_project: book_id,
             target_project,
           }),
         }],

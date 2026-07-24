@@ -23,7 +23,7 @@ type SuggestSfxPayload = {
   type: "suggest_sfx";
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 const SYSTEM_PROMPT_SFX = `You are a senior video editor reviewing a short clip. From the frames, transcript, and metadata you receive, return a strict JSON object suggesting sound effects to add.
@@ -68,13 +68,13 @@ const ModelOutputSchema = z.object({
 
 export function registerSuggestSfxJob(fs: Engine): void {
   registerJobHandler("suggest_sfx", async (payload, ctx) => {
-    const { assetId, projectSlug } = payload as SuggestSfxPayload;
+    const { assetId, bookId } = payload as SuggestSfxPayload;
 
-    return withLocalLease(fs, projectSlug, assetId, ctx, "analyze", async () => {
+    return withLocalLease(fs, bookId, assetId, ctx, "analyze", async () => {
       const apiKey = getApiKey("KIE_API_KEY");
       if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
 
-      const loaded = await loadAssetForAnalysis(fs, assetId, projectSlug);
+      const loaded = await loadAssetForAnalysis(fs, assetId, bookId);
       if (!loaded.ok) throw new Error(loaded.error.message);
       const { framesDir, frameNames, transcript, meta, prior } = loaded.value;
 
@@ -146,11 +146,7 @@ export function registerSuggestSfxJob(fs: Engine): void {
         asset_id: assetId,
       };
 
-      const writeResult = await fs.files.write(
-        assetId,
-        ".suggest-sfx.json",
-        JSON.stringify(final, null, 2),
-        projectSlug,
+      const writeResult = await fs.files.write(assetId, ".suggest-sfx.json", JSON.stringify(final, null, 2)
       );
       if (!writeResult.ok) {
         throw new Error(`Suggestions generated but failed to persist: ${writeResult.error.message}`);

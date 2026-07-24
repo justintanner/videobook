@@ -5,7 +5,7 @@ import { countLandmarks, renderSkeletonPng } from "@/lib/poseRender";
 import { uploadProjectFile } from "@/lib/upload";
 
 export interface ExtractSkeletonArgs {
-  projectSlug: string;
+  bookId: string;
   sourceAssetId: string;
   sourceImageUrl: string;
 }
@@ -16,7 +16,7 @@ export interface UseExtractSkeletonResult {
 }
 
 export function useExtractSkeleton(
-  sync: (projectSlug: string) => void,
+  sync: (bookId: string) => void,
 ): UseExtractSkeletonResult {
   const [submitting, setSubmitting] = useState(false);
   const syncRef = useRef(sync);
@@ -43,7 +43,7 @@ export function useExtractSkeleton(
       });
       const landmarkCount = countLandmarks(holistic);
       const uploaded = await uploadProjectFile(
-        args.projectSlug,
+        args.bookId,
         skeleton.blob,
         `pose-skeleton-${args.sourceAssetId}.png`,
       );
@@ -52,7 +52,7 @@ export function useExtractSkeleton(
         description: `${landmarkCount} landmarks · @${uploaded.assetId}`,
         duration: 3000,
       });
-      syncRef.current(args.projectSlug);
+      syncRef.current(args.bookId);
       return uploaded.assetId;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

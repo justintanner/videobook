@@ -9,15 +9,15 @@ const homepageSrc = readFileSync(
 );
 
 describe("HomePage optimistic UI reset wiring", () => {
-  it("keys renderingOverrides/deletingIds by projectSlug", () => {
+  it("keys renderingOverrides/deletingIds by bookId", () => {
     expect(homepageSrc).toMatch(
-      /useProjectScopedState\(projectSlug, createRenderingOverrides\)[\s\S]*?useProjectScopedState\(projectSlug, createDeletingIds\)/,
+      /useProjectScopedState\(bookId, createRenderingOverrides\)[\s\S]*?useProjectScopedState\(bookId, createDeletingIds\)/,
     );
   });
 
   it("does not clear optimistic UI in the syncCount asset-refresh effect cleanup", () => {
     expect(homepageSrc).not.toMatch(
-      /listAssets\(projectSlug, sortOrder\);\s*return \(\) => \{\s*setRenderingOverrides/,
+      /listAssets\(bookId, sortOrder\);\s*return \(\) => \{\s*setRenderingOverrides/,
     );
   });
 });

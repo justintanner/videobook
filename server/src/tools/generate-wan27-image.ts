@@ -29,7 +29,7 @@ function slugify(text: string): string {
 
 const generateWan27ImageSchema = {
   prompt: apicityStringField(wan27ImageInput.prompt, "Text prompt for image generation (max 5000 chars)", { required: true }),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   image_slugs: apicityStringArrayField(wan27ImageInput.input_urls, "0-9 @img-* slugs for reference images"),
   aspect_ratio: apicityField(wan27ImageInput.aspect_ratio, "Output aspect ratio (default 16:9)"),
   resolution: apicityField(wan27ImageInput.resolution, "Output resolution (default 2K)"),
@@ -52,7 +52,7 @@ export function generateWan27ImageDef(fs: Engine): ToolDef {
     description: "Generate an image using Wan 2.7 Image. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).",
     schema: generateWan27ImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, seed, nsfw_checker } = args as Args;
+      const { prompt, book_id, image_slugs, aspect_ratio, resolution, seed, nsfw_checker } = args as Args;
 
       const ids = (image_slugs ?? []).map((s) => s.replace(/^@/, ""));
 
@@ -82,7 +82,7 @@ export function generateWan27ImageDef(fs: Engine): ToolDef {
             };
           }
 
-          const manifestResult = await fs.files.manifest(id, project_slug);
+          const manifestResult = await fs.files.manifest(id);
           if (!manifestResult.ok) {
             return {
               isError: true as const,
@@ -105,7 +105,7 @@ export function generateWan27ImageDef(fs: Engine): ToolDef {
       }
 
       const assetName = `${modelSlug("kie", "wan/2-7-image")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("img", assetName, project_slug);
+      const assetResult = await fs.artifacts.create("img", assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -124,7 +124,7 @@ export function generateWan27ImageDef(fs: Engine): ToolDef {
         imgAssetId,
         imgAssetDir,
         sourceImageIds,
-        projectSlug: project_slug,
+        bookId: book_id,
         ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
         ...(seed !== undefined ? { seed } : {}),

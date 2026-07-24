@@ -52,6 +52,7 @@ export type AssetWorkProjection = {
 
 export type SyncAsset = {
   id: string;
+  artifact_id: string;
   type: string;
   created_at: string;
   path: string;
@@ -98,10 +99,10 @@ export type OsgSummary = {
  *  identically across orientations, so the first orientation that carries an
  *  osgAssetId wins. Returns null when no overlay is configured. */
 export async function readOsgSummary(
-  fs: Engine, assetId: string, projectSlug: string,
+  fs: Engine, assetId: string, _bookId: string,
 ): Promise<OsgSummary | null> {
   for (const orient of RENDER_ORIENTATIONS) {
-    const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
+    const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`);
     if (!meta.ok) continue;
     const osgAssetId = meta.value.osgAssetId;
     if (typeof osgAssetId !== "string" || !osgAssetId) continue;
@@ -187,7 +188,7 @@ export function isTransientKieFailure(data: KieTaskInfoData): boolean {
 
 function buildFrameDirs(
   directories: Record<string, string[]> | undefined,
-  projectSlug: string,
+  bookId: string,
   assetId: string,
 ): Record<string, string[]> {
   const out: Record<string, string[]> = {};
@@ -197,7 +198,7 @@ function buildFrameDirs(
     out[dir] = fileList
       .filter((f) => f.endsWith(".jpg"))
       .sort()
-      .map((f) => `/files/${projectSlug}/${assetId}/${dir}/${f}`);
+      .map((f) => `/files/${bookId}/${assetId}/${dir}/${f}`);
   }
   return out;
 }
@@ -205,10 +206,10 @@ function buildFrameDirs(
 async function readWaveformOrSchedule(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   videoFilename: string | null,
 ): Promise<number[] | null> {
-  const existing = await fs.metadata.waveforms.read(assetId, projectSlug);
+  const existing = await fs.metadata.waveforms.read(assetId);
   if (existing.ok) {
     // Empty peaks are a negative-cache marker ("extracted, nothing usable"):
     // surface them as no-waveform so the UI is unchanged, but don't re-extract.
@@ -221,20 +222,20 @@ async function readWaveformOrSchedule(
   // long videos, so it must never run inline in list_assets / sync. Hand it to
   // the job queue (deduped per asset) and return no-waveform now; the UI fills
   // it in on a later poll once the background job has persisted the peaks.
-  scheduleWaveformExtraction(projectSlug, assetId, videoFilename);
+  scheduleWaveformExtraction(bookId, assetId, videoFilename);
   return null;
 }
 
 function scheduleWaveformExtraction(
-  projectSlug: string,
+  bookId: string,
   assetId: string,
   videoFilename: string,
 ): void {
-  const jobId = `extract-waveform-${projectSlug}-${assetId}`;
+  const jobId = `extract-waveform-${bookId}-${assetId}`;
   void queue
     .enqueue(jobId, {
       type: "extract_waveform",
-      projectSlug,
+      bookId,
       waveformAssetId: assetId,
       videoFilename,
     })
@@ -255,11 +256,11 @@ const DURATION_PROBE_EXT_RE = /\.(mp4|mov|webm|mkv|mp3|wav|m4a|aac|ogg|flac)$/i;
 export const RENDER_ORIENTATIONS = MEDIA_RENDER_ORIENTATIONS;
 
 export async function readRenderSettings(
-  fs: Engine, assetId: string, projectSlug: string, orientations: string[],
+  fs: Engine, assetId: string, bookId: string, orientations: string[],
 ): Promise<Record<string, Record<string, unknown>>> {
   const result: Record<string, Record<string, unknown>> = {};
   await Promise.all(orientations.map(async (orient) => {
-    const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
+    const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`);
     if (meta.ok) result[orient] = meta.value;
   }));
   return result;
@@ -310,7 +311,7 @@ const ORIENTATION_OVERRIDES: Record<string, Record<string, unknown>> = {
 };
 
 export async function readStoredRenderDefaults(
-  fs: Engine, assetId: string, projectSlug: string, targetOrientation: string,
+  fs: Engine, assetId: string, bookId: string, targetOrientation: string,
 ): Promise<Record<string, unknown>> {
   const defaults = { ...BASE_DEFAULTS, ...(ORIENTATION_OVERRIDES[targetOrientation] ?? ORIENTATION_OVERRIDES.landscape) };
   // Read every orientation's render metadata in parallel, then pick the
@@ -318,13 +319,13 @@ export async function readStoredRenderDefaults(
   const tryOrder = [targetOrientation, ...RENDER_ORIENTATIONS.filter((o) => o !== targetOrientation)];
   const metas = await Promise.all(
     tryOrder.map((orient) =>
-      fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug),
+      fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`),
     ),
   );
   for (const meta of metas) {
     if (meta.ok) return { ...defaults, ...meta.value };
   }
-  const recs = await readAnalysisRecommendations(fs, assetId, projectSlug);
+  const recs = await readAnalysisRecommendations(fs, assetId, bookId);
   return { ...defaults, ...recs };
 }
 
@@ -332,9 +333,9 @@ const VALID_SUB_POSITIONS = new Set(["top", "middle", "bottom"]);
 const VALID_OSG_POSITIONS = new Set(["top-left", "top-right", "bottom-left", "bottom-right"]);
 
 async function readAnalysisRecommendations(
-  fs: Engine, assetId: string, projectSlug: string,
+  fs: Engine, assetId: string, _bookId: string,
 ): Promise<Record<string, unknown>> {
-  const result = await fs.files.read(assetId, ".original.analysis.json", projectSlug);
+  const result = await fs.files.read(assetId, ".original.analysis.json");
   if (!result.ok) return {};
   try {
     const raw = typeof result.value === "string"
@@ -390,18 +391,18 @@ function renderedOrientationsFor(
   return RENDER_ORIENTATIONS.filter((o) => fileSet.has(`${o}.mp4`));
 }
 
-export async function buildAssetList(fs: Engine, project_slug: string, sort?: "newest" | "oldest"): Promise<SyncAsset[]> {
-  const assets = await fs.artifacts.list(project_slug, { sort });
+export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest" | "oldest"): Promise<SyncAsset[]> {
+  const assets = fs.artifacts.list({ ...(sort ? { sort } : {}) });
   const assetRows = await Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
       const [manifestResult, lockData, pendingTask, generationError, metadata, archiveMetadata, assetWorkRow] = await Promise.all([
-        fs.files.manifest(a.slug, project_slug, { includeDotfiles: true }),
+        fs.files.manifest(a.slug),
         fs.jobs.locks.get(a.path),
-        fs.jobs.pending.read(project_slug, a.slug),
-        fs.jobs.failures.read(project_slug, a.slug),
-        fs.metadata.artifacts.read<Record<string, unknown>>(a.slug, "original", project_slug),
-        fs.metadata.artifacts.read<ArchiveMetadata>(a.slug, "archive", project_slug),
-        fs.jobs.artifactWork.read(project_slug, a.slug),
+        fs.jobs.pending.read(a.slug),
+        fs.jobs.failures.read(a.slug),
+        fs.metadata.artifacts.read<Record<string, unknown>>(a.slug, "original"),
+        fs.metadata.artifacts.read<ArchiveMetadata>(a.slug, "archive"),
+        fs.jobs.artifactWork.read(a.slug),
       ]);
 
       // If the asset directory disappeared between listAssets and getManifest,
@@ -414,11 +415,11 @@ export async function buildAssetList(fs: Engine, project_slug: string, sort?: "n
       const hasThumbnail = fileNames.has("original.jpg");
       const renders = renderedOrientationsFor(files, a.slug);
       const hasPartFile = files.some((f) => PARTIAL_DOWNLOAD_RE.test(f.name));
-      const frameDirs = buildFrameDirs(directories, project_slug, a.slug);
+      const frameDirs = buildFrameDirs(directories, book_id, a.slug);
       const waveform = await readWaveformOrSchedule(
         fs,
         a.slug,
-        project_slug,
+        book_id,
         mediaFile?.name ?? null,
       );
 
@@ -444,15 +445,15 @@ export async function buildAssetList(fs: Engine, project_slug: string, sort?: "n
       }
       
       const media_url = charImage
-        ? `/files/${project_slug}/${a.slug}/${charImage.name}${cacheBust}`
+        ? `/files/${book_id}/${a.slug}/${charImage.name}${cacheBust}`
         : mediaFile
-        ? `/files/${project_slug}/${a.slug}/${mediaFile.name}${cacheBust}`
+        ? `/files/${book_id}/${a.slug}/${mediaFile.name}${cacheBust}`
         : null;
       const isImage = a.kind === "image";
       const thumbnail_url = charImage
-        ? `/files/${project_slug}/${a.slug}/${charImage.name}${cacheBust}`
+        ? `/files/${book_id}/${a.slug}/${charImage.name}${cacheBust}`
         : hasThumbnail
-        ? `/files/${project_slug}/${a.slug}/original.jpg${cacheBust}`
+        ? `/files/${book_id}/${a.slug}/original.jpg${cacheBust}`
         : isImage ? media_url : null;
 
       // Status derivation lives in videobook-engine (`computeArtifactStatus`). We pass
@@ -490,7 +491,7 @@ export async function buildAssetList(fs: Engine, project_slug: string, sort?: "n
             duration = probe.duration;
             // Persist so we don't re-probe next time
             if (metadata.ok) {
-              await fs.metadata.artifacts.write(a.slug, "original", { ...metadata.value, duration }, project_slug);
+              await fs.metadata.artifacts.write(a.slug, "original", { ...metadata.value, duration });
             }
           }
         } catch { /* non-fatal */ }
@@ -504,13 +505,13 @@ export async function buildAssetList(fs: Engine, project_slug: string, sort?: "n
       // render its badge on clip cards and timeline slots without a per-asset
       // settings fetch. Bounded to one metadata read per OSG-eligible asset.
       const osg = (a.kind === "video" || a.kind === "final")
-        ? await readOsgSummary(fs, a.slug, project_slug)
+        ? await readOsgSummary(fs, a.slug, book_id)
         : null;
 
       // Read script content from its canonical artifact file.
       let prompt = (meta?.prompt as string) ?? null;
       if (!prompt && a.kind === "script") {
-        const md = await fs.files.read(a.slug, "original.md", project_slug);
+        const md = await fs.files.read(a.slug, "original.md");
         if (md.ok) prompt = md.value.toString();
       }
 
@@ -526,6 +527,7 @@ export async function buildAssetList(fs: Engine, project_slug: string, sort?: "n
 
       return {
         id: a.slug,
+        artifact_id: a.artifactId,
         type: a.kind,
         created_at: new Date(a.createdAt).toISOString(),
         path: a.path,
@@ -550,9 +552,10 @@ export async function buildAssetList(fs: Engine, project_slug: string, sort?: "n
     }),
   );
   const notebookRows: SyncAsset[] = fs.notebooks
-    .list(project_slug)
+    .list()
     .map((notebook) => ({
       id: notebook.id,
+      artifact_id: notebook.id,
       type: "notebook",
       created_at: notebook.createdAt,
       path: `notebook:${notebook.id}`,
@@ -585,28 +588,28 @@ export async function buildAssetList(fs: Engine, project_slug: string, sort?: "n
   );
 }
 
-export async function performSync(fs: Engine, project_slug: string): Promise<SyncResult> {
+export async function performSync(fs: Engine, book_id: string): Promise<SyncResult> {
   const result: SyncResult = {
     pending: [], completed: [], failed: [],
     external_uploads: [], auto_render: [], auto_transcribe: [],
   };
 
   // Single listAssets call, shared by all consumers
-  const assets = await fs.artifacts.list(project_slug);
+  const assets = await fs.artifacts.list();
 
   // Run all discovery steps in parallel
   const [uploads, tasksRes, transcribeActions, failuresRes] = await Promise.all([
-    findUnprocessedUploads(fs, project_slug, assets),
-    fs.jobs.pending.findAll(project_slug),
-    findAutoTranscribeActions(fs, project_slug, assets),
-    fs.jobs.failures.findAll(project_slug),
+    findUnprocessedUploads(fs, book_id, assets),
+    fs.jobs.pending.findAll(),
+    findAutoTranscribeActions(fs, book_id, assets),
+    fs.jobs.failures.findAll(),
   ]);
   const tasks: PendingTask[] = tasksRes.ok ? tasksRes.value : [];
   const persistedFailures = failuresRes.ok ? failuresRes.value : [];
 
   // Process external uploads
   for (const upload of uploads) {
-    await processExternalUpload(fs, upload, project_slug);
+    await processExternalUpload(fs, upload, book_id);
     result.external_uploads.push({ assetId: upload.assetId, mediaFilename: upload.mediaFilename });
   }
 
@@ -620,12 +623,12 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
     let t = originalTask;
     if (isQueuedKiePendingTask(t)) {
       try {
-        t = await submitQueuedKieTask(fs, project_slug, t);
+        t = await submitQueuedKieTask(fs, book_id, t);
       } catch (e) {
         const failMsg = e instanceof Error ? e.message : "Queued KIE submit failed";
         const prompt = metaPrompt(t.meta);
         result.failed.push({ assetId: t.artifactSlug, taskType: t.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-        await failPendingTaskAndLog(fs, project_slug, t.artifactSlug, t.taskId, { message: failMsg, prompt });
+        await failPendingTaskAndLog(fs, book_id, t.artifactSlug, t.taskId, { message: failMsg, prompt });
         continue;
       }
     }
@@ -635,7 +638,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
       const failMsg = `Task timed out after ${ageMinutes}m without reaching success or fail state`;
       const prompt = metaPrompt(t.meta);
       result.failed.push({ assetId: t.artifactSlug, taskType: t.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-      await failPendingTaskAndLog(fs, project_slug, t.artifactSlug, t.taskId, { message: failMsg, prompt });
+      await failPendingTaskAndLog(fs, book_id, t.artifactSlug, t.taskId, { message: failMsg, prompt });
     } else {
       activeTasks.push(t);
     }
@@ -654,9 +657,9 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
 
   await Promise.all(
     pollableTasks.map(async (task) => {
-      const ownerId = await fs.jobs.pending.getOwner(project_slug, task.artifactSlug, task.taskId);
+      const ownerId = await fs.jobs.pending.getOwner(task.artifactSlug, task.taskId);
       if (ownerId) {
-        await fs.jobs.artifactWork.renew(project_slug, task.artifactSlug, ownerId, 30 * 60_000);
+        await fs.jobs.artifactWork.renew(task.artifactSlug, ownerId, 30 * 60_000);
       }
     }),
   );
@@ -670,7 +673,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
     await Promise.all(kieTasks.map(async (task) => {
       try {
         const taskInfo = await provider.get.api.v1.jobs.recordInfo(task.taskId);
-        await processSyncedTask(fs, task, taskInfo, result, project_slug);
+        await processSyncedTask(fs, task, taskInfo, result, book_id);
       } catch (e) {
         const failMsg = e instanceof Error ? e.message : "Poll failed";
         const prompt = metaPrompt(task.meta);
@@ -679,7 +682,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
           // TS narrowing on `e` is unreliable here, use an explicit assertion.
           const kieErr = e as KieError;
           if (kieErr.status >= 400 && kieErr.status < 500) {
-            await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -702,15 +705,15 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
           if (urls.length === 0) {
             const failMsg = "Veo task succeeded but returned no resultUrls";
             result.failed.push({ assetId: task.artifactSlug, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-            await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: failMsg, prompt });
             return;
           }
-          const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactSlug, project_slug);
+          const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactSlug);
           if (!assetDirResult.ok) {
-            await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: `Asset not found: ${task.artifactSlug}`, prompt });
+            await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: `Asset not found: ${task.artifactSlug}`, prompt });
             return;
           }
-          await fs.jobs.pending.markCompleting(project_slug, task.artifactSlug);
+          await fs.jobs.pending.markCompleting(task.artifactSlug);
           const jobId = `complete-veo-${task.artifactSlug}-${Date.now()}`;
           await queue.enqueue(jobId, {
             type: "complete_kie_task",
@@ -718,7 +721,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
             taskType: task.taskType,
             assetId: task.artifactSlug,
             assetDir: assetDirResult.value,
-            projectSlug: project_slug,
+            bookId: book_id,
             meta: task.meta,
             resultUrls: urls,
           } as unknown as Record<string, unknown>);
@@ -726,7 +729,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
         } else if (data?.successFlag === 2) {
           const failMsg = data.errorMessage ?? "Veo task failed";
           result.failed.push({ assetId: task.artifactSlug, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-          await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: failMsg, prompt });
+          await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: failMsg, prompt });
         } else {
           result.pending.push({
             assetId: task.artifactSlug,
@@ -743,7 +746,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
         if (e instanceof KieError) {
           const kieErr = e as KieError;
           if (kieErr.status >= 400 && kieErr.status < 500) {
-            await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -765,17 +768,17 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
           const urls = googleFlowResultUrls(job);
           if (urls.length === 0) {
             const failMsg = "Google Flow job completed but returned no media URLs";
-            await fs.metadata.artifacts.write(task.artifactSlug, "generation-error", job, project_slug).catch(() => {});
+            await fs.metadata.artifacts.write(task.artifactSlug, "generation-error", job).catch(() => {});
             result.failed.push({ assetId: task.artifactSlug, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-            await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: failMsg, prompt });
             return;
           }
-          const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactSlug, project_slug);
+          const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactSlug);
           if (!assetDirResult.ok) {
-            await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: `Asset not found: ${task.artifactSlug}`, prompt });
+            await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: `Asset not found: ${task.artifactSlug}`, prompt });
             return;
           }
-          await fs.jobs.pending.markCompleting(project_slug, task.artifactSlug);
+          await fs.jobs.pending.markCompleting(task.artifactSlug);
           const jobId = `complete-google-flow-${task.artifactSlug}-${Date.now()}`;
           await queue.enqueue(jobId, {
             type: "complete_kie_task",
@@ -783,16 +786,16 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
             taskType: task.taskType,
             assetId: task.artifactSlug,
             assetDir: assetDirResult.value,
-            projectSlug: project_slug,
+            bookId: book_id,
             meta: task.meta,
             resultUrls: urls,
           } as unknown as Record<string, unknown>);
           result.completed.push({ assetId: task.artifactSlug, taskType: task.taskType, jobId });
         } else if (status === "failed") {
           const { message: failMsg, failCode } = describeGoogleFlowJobFailure(job as Record<string, unknown>);
-          await fs.metadata.artifacts.write(task.artifactSlug, "generation-error", job, project_slug).catch(() => {});
+          await fs.metadata.artifacts.write(task.artifactSlug, "generation-error", job).catch(() => {});
           result.failed.push({ assetId: task.artifactSlug, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-          await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: failMsg, prompt, ...(failCode !== undefined ? { failCode } : {}) });
+          await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: failMsg, prompt, ...(failCode !== undefined ? { failCode } : {}) });
         } else {
           result.pending.push({
             assetId: task.artifactSlug,
@@ -810,7 +813,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
           const googleErr = e as GoogleFlowError;
           // 4xx is permanent (bad/expired/foreign job id) except 429 rate limits.
           if (googleErr.status >= 400 && googleErr.status < 500 && googleErr.status !== 429) {
-            await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -827,12 +830,12 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
       try {
         const videoResult = await provider.get.v1.videos(task.taskId);
         if (videoResult.status === "done" && videoResult.video?.url) {
-          const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactSlug, project_slug);
+          const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactSlug);
           if (!assetDirResult.ok) {
-            await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: `Asset not found: ${task.artifactSlug}`, prompt });
+            await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: `Asset not found: ${task.artifactSlug}`, prompt });
             return;
           }
-          await fs.jobs.pending.markCompleting(project_slug, task.artifactSlug);
+          await fs.jobs.pending.markCompleting(task.artifactSlug);
           const jobId = `complete-xai-${task.artifactSlug}-${Date.now()}`;
           await queue.enqueue(jobId, {
             type: "complete_kie_task",
@@ -840,7 +843,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
             taskType: task.taskType,
             assetId: task.artifactSlug,
             assetDir: assetDirResult.value,
-            projectSlug: project_slug,
+            bookId: book_id,
             meta: task.meta,
             resultUrls: [videoResult.video.url],
           } as unknown as Record<string, unknown>);
@@ -848,7 +851,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
         } else if (videoResult.status === "failed" || videoResult.status === "expired") {
           const failMsg = `xAI task ${videoResult.status}`;
           result.failed.push({ assetId: task.artifactSlug, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-          await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: failMsg, prompt });
+          await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: failMsg, prompt });
         } else {
           result.pending.push({
             assetId: task.artifactSlug,
@@ -865,7 +868,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
         if (e instanceof XaiError) {
           const xaiErr = e as XaiError;
           if (xaiErr.status >= 400 && xaiErr.status < 500) {
-            await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -884,12 +887,12 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
         const status = taskStatus.output.task_status;
 
         if (status === "SUCCEEDED") {
-          const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactSlug, project_slug);
+          const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactSlug);
           if (!assetDirResult.ok) {
-            await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: `Asset not found: ${task.artifactSlug}`, prompt });
+            await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: `Asset not found: ${task.artifactSlug}`, prompt });
             return;
           }
-          await fs.jobs.pending.markCompleting(project_slug, task.artifactSlug);
+          await fs.jobs.pending.markCompleting(task.artifactSlug);
           const jobId = `complete-alibaba-${task.artifactSlug}-${Date.now()}`;
 
           // Video result has video_url, image result has choices with image URLs
@@ -913,7 +916,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
             taskType: task.taskType,
             assetId: task.artifactSlug,
             assetDir: assetDirResult.value,
-            projectSlug: project_slug,
+            bookId: book_id,
             meta: task.meta,
             resultUrls,
           } as unknown as Record<string, unknown>);
@@ -922,7 +925,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
           const failMsg = taskStatus.output.message ?? `Alibaba task ${status}`;
           const code = taskStatus.output.code;
           result.failed.push({ assetId: task.artifactSlug, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-          await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, {
+          await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, {
             message: failMsg,
             prompt,
             ...(code !== undefined ? { failCode: code } : {}),
@@ -943,7 +946,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
         if (e instanceof AlibabaError) {
           const alibabaErr = e as AlibabaError;
           if (alibabaErr.status >= 400 && alibabaErr.status < 500) {
-            await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -968,7 +971,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
       if (!endpointId) {
         const failMsg = `FAL task missing falEndpointId in meta`;
         result.failed.push({ assetId: task.artifactSlug, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-        await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: failMsg, prompt });
+        await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: failMsg, prompt });
         return;
       }
       const statusEndpointId = falNamespace(endpointId);
@@ -978,18 +981,18 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
           if (status.error) {
             const failMsg = status.error;
             result.failed.push({ assetId: task.artifactSlug, taskType: task.taskType, failMsg, failedAt: new Date().toISOString(), prompt });
-            await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: failMsg, prompt });
             return;
           }
-          const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactSlug, project_slug);
+          const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactSlug);
           if (!assetDirResult.ok) {
-            await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: `Asset not found: ${task.artifactSlug}`, prompt });
+            await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: `Asset not found: ${task.artifactSlug}`, prompt });
             return;
           }
           const resultObject = await provider.v1.queue.result({ endpoint_id: statusEndpointId, request_id: task.taskId });
           // Mark the pending task as completing BEFORE enqueueing so any
           // overlapping sync poll skips it instead of enqueueing a duplicate.
-          await fs.jobs.pending.markCompleting(project_slug, task.artifactSlug);
+          await fs.jobs.pending.markCompleting(task.artifactSlug);
           const jobId = `complete-fal-${task.artifactSlug}-${Date.now()}`;
           await queue.enqueue(jobId, {
             type: "complete_kie_task",
@@ -997,7 +1000,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
             taskType: task.taskType,
             assetId: task.artifactSlug,
             assetDir: assetDirResult.value,
-            projectSlug: project_slug,
+            bookId: book_id,
             meta: task.meta,
             resultUrls: [],
             resultObject,
@@ -1019,7 +1022,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
         if (e instanceof FalError) {
           const falErr = e as FalError;
           if (falErr.status >= 400 && falErr.status < 500) {
-            await failPendingTaskAndLog(fs, project_slug, task.artifactSlug, task.taskId, { message: failMsg, prompt });
+            await failPendingTaskAndLog(fs, book_id, task.artifactSlug, task.taskId, { message: failMsg, prompt });
           }
         }
       }
@@ -1034,7 +1037,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
     if (!reportedAssetIds.has(failure.artifactSlug) && !pendingAssetIds.has(failure.artifactSlug)) {
       const asset = assets.find(a => a.slug === failure.artifactSlug);
       if (asset) {
-        const manifestResult = await fs.files.manifest(failure.artifactSlug, project_slug);
+        const manifestResult = await fs.files.manifest(failure.artifactSlug);
         if (manifestResult.ok) {
           const files = manifestResult.value.files;
           let hasMedia = false;
@@ -1044,7 +1047,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
              hasMedia = findPrimaryMediaFile(files, failure.artifactSlug) !== null;
           }
           if (hasMedia) {
-             await fs.jobs.failures.clear(project_slug, failure.artifactSlug);
+             await fs.jobs.failures.clear(failure.artifactSlug);
              continue;
           }
         }
@@ -1081,7 +1084,7 @@ export async function performSync(fs: Engine, project_slug: string): Promise<Syn
       diarize: true,
       assetId: action.assetId,
       assetDir: action.assetDir,
-      projectSlug: project_slug,
+      bookId: book_id,
     } as unknown as Record<string, unknown>);
     result.auto_transcribe.push({ assetId: action.assetId, jobId });
   }
@@ -1094,11 +1097,11 @@ export function syncDef(fs: Engine): ToolDef {
     name: "reconcile_project_work",
     description: "Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.",
     schema: {
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { project_slug } = args as { project_slug: string };
-      const syncResult = await performSync(fs, project_slug);
+      const { book_id } = args as { book_id: string };
+      const syncResult = await performSync(fs, book_id);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(syncResult) }],
       };
@@ -1111,14 +1114,14 @@ async function processSyncedTask(
   task: PendingTask,
   taskInfo: KieTaskInfo,
   result: SyncResult,
-  projectSlug: string,
+  bookId: string,
 ): Promise<void> {
   const data = taskInfo.data;
   const prompt = metaPrompt(task.meta);
   if (data?.state === "success") {
-    const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactSlug, projectSlug);
+    const assetDirResult = await fs.workspaces.resolveArtifact(task.artifactSlug);
     if (!assetDirResult.ok) {
-      await failPendingTaskAndLog(fs, projectSlug, task.artifactSlug, task.taskId, { message: `Asset not found: ${task.artifactSlug}`, prompt });
+      await failPendingTaskAndLog(fs, bookId, task.artifactSlug, task.taskId, { message: `Asset not found: ${task.artifactSlug}`, prompt });
       return;
     }
 
@@ -1131,7 +1134,7 @@ async function processSyncedTask(
 
     // Mark the pending task as completing BEFORE enqueueing so any
     // overlapping sync poll skips it instead of enqueueing a duplicate.
-    await fs.jobs.pending.markCompleting(projectSlug, task.artifactSlug);
+    await fs.jobs.pending.markCompleting(task.artifactSlug);
 
     await queue.enqueue(jobId, {
       type: "complete_kie_task",
@@ -1139,7 +1142,7 @@ async function processSyncedTask(
       taskType: task.taskType,
       assetId: task.artifactSlug,
       assetDir: assetDirResult.value,
-      projectSlug,
+      bookId,
       meta: task.meta,
       resultUrls: parsed.resultUrls ?? [],
       resultObject: parsed.resultObject,
@@ -1169,7 +1172,7 @@ async function processSyncedTask(
       failedAt: new Date().toISOString(),
       prompt,
     });
-    await failPendingTaskAndLog(fs, projectSlug, task.artifactSlug, task.taskId, {
+    await failPendingTaskAndLog(fs, bookId, task.artifactSlug, task.taskId, {
       message: failMsg,
       prompt,
       ...(data.failCode !== undefined ? { failCode: data.failCode } : {}),
@@ -1196,13 +1199,13 @@ export type RenderAction = {
 
 export async function findAutoRenderActions(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   assets: Artifact[],
   orientation: string,
 ): Promise<RenderAction[]> {
   const candidates = await Promise.all(
     assets.filter((a) => a.slug.startsWith("vid-")).map(async (asset): Promise<RenderAction | null> => {
-      const manifestResult = await fs.files.manifest(asset.slug, projectSlug, { includeDotfiles: true });
+      const manifestResult = await fs.files.manifest(asset.slug);
       if (!manifestResult.ok) return null;
 
       const manifest = manifestResult.value;
@@ -1210,10 +1213,7 @@ export async function findAutoRenderActions(
       const fileNames = new Set(files.map((f) => f.name));
 
       // Skip: already rendered for target orientation
-      const renderMetadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
-        asset.artifactId,
-        `${orientation}.render`,
-        projectSlug,
+      const renderMetadata = await fs.metadata.artifacts.read<Record<string, unknown>>(asset.artifactId, `${orientation}.render`
       );
       if (renderMetadata.ok && typeof renderMetadata.value.renderedAt === "string") return null;
       // Skip: process_video incomplete
@@ -1221,12 +1221,12 @@ export async function findAutoRenderActions(
 
       // Skip if speech-to-text analysis not yet complete (unless video has no audio)
       if (!fileNames.has(".analysis.gpt4otrans.json")) {
-        const meta = await fs.metadata.artifacts.read<{ hasAudio?: boolean }>(asset.slug, "original", projectSlug);
+        const meta = await fs.metadata.artifacts.read<{ hasAudio?: boolean }>(asset.slug, "original");
         if (meta.ok && meta.value.hasAudio) return null;
       }
 
       // For videos with dialog, wait for ElevenLabs transcription
-      const dialogQuality = await readAndAssessDialog(fs, asset.slug, projectSlug);
+      const dialogQuality = await readAndAssessDialog(fs, asset.slug, bookId);
       if (dialogQuality.hasDialog && !fileNames.has("elevenlabs.json")) return null;
 
       const videoFile = findVideoFile(files);
@@ -1254,7 +1254,7 @@ type TranscribeAction = {
 
 async function findAutoTranscribeActions(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   assets: Artifact[],
 ): Promise<TranscribeAction[]> {
   if (!process.env.ELEVENLABS_API_KEY) return [];
@@ -1262,9 +1262,9 @@ async function findAutoTranscribeActions(
   const candidates = await Promise.all(
     assets.filter((a) => a.slug.startsWith("vid-")).map(async (asset): Promise<TranscribeAction | null> => {
       const [manifestResult, locked, errorRow] = await Promise.all([
-        fs.files.manifest(asset.slug, projectSlug, { includeDotfiles: true }),
+        fs.files.manifest(asset.slug),
         fs.jobs.locks.isLocked(asset.path),
-        fs.jobs.failures.read(projectSlug, asset.slug),
+        fs.jobs.failures.read(asset.slug),
       ]);
       if (!manifestResult.ok) return null;
 
@@ -1283,7 +1283,7 @@ async function findAutoTranscribeActions(
       if (locked) return null;
 
       // Must have real dialog
-      const dialogQuality = await readAndAssessDialog(fs, asset.slug, projectSlug);
+      const dialogQuality = await readAndAssessDialog(fs, asset.slug, bookId);
       if (!dialogQuality.hasDialog) return null;
 
       // Must have an audio file

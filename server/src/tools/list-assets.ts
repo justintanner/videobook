@@ -9,12 +9,12 @@ export function listAssetsDef(fs: Engine): ToolDef {
     description:
       "List all assets for a project with their media and thumbnail URLs.",
     schema: {
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       sort: z.enum(["newest", "oldest"]).optional().describe("Sort order by creation date"),
     },
     handler: async (args) => {
-      const { project_slug, sort } = args as { project_slug: string; sort?: "newest" | "oldest" };
-      const assets = await buildAssetList(fs, project_slug, sort);
+      const { book_id, sort } = args as { book_id: string; sort?: "newest" | "oldest" };
+      const assets = await buildAssetList(fs, book_id, sort);
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ assets }) }],
       };

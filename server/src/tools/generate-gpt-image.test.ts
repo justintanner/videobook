@@ -29,7 +29,7 @@ describe("generate_gpt_image tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -48,7 +48,7 @@ describe("generate_gpt_image tool", () => {
       name: "generate_kie_gpt_image_2_image_to_image",
       arguments: {
         prompt: "test prompt",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: ["@img-test"],
       },
     });
@@ -65,7 +65,7 @@ describe("generate_gpt_image tool", () => {
       name: "generate_kie_gpt_image_2_image_to_image",
       arguments: {
         prompt: "test prompt",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: [],
       },
     });
@@ -82,7 +82,7 @@ describe("generate_gpt_image tool", () => {
       name: "generate_kie_gpt_image_2_image_to_image",
       arguments: {
         prompt: "test prompt",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: Array.from({ length: 17 }, (_, i) => `@img-${i}`),
       },
     });
@@ -99,7 +99,7 @@ describe("generate_gpt_image tool", () => {
       name: "generate_kie_gpt_image_2_image_to_image",
       arguments: {
         prompt: "test prompt",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: ["@vid-something"],
       },
     });
@@ -116,7 +116,7 @@ describe("generate_gpt_image tool", () => {
       name: "generate_kie_gpt_image_2_image_to_image",
       arguments: {
         prompt: "test prompt",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: ["@img-does-not-exist"],
       },
     });
@@ -128,17 +128,17 @@ describe("generate_gpt_image tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "empty-img", "test-proj");
+    const asset = await fs.artifacts.create("img", "empty-img");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     // Write a non-image file so the asset exists but has no image
-    await fs.files.write(asset.value.slug, "notes.txt", "hello", "test-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "generate_kie_gpt_image_2_image_to_image",
       arguments: {
         prompt: "test prompt",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: [`@${asset.value.slug}`],
       },
     });
@@ -152,19 +152,19 @@ describe("generate_gpt_image tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "test-img", "test-proj");
+    const asset = await fs.artifacts.create("img", "test-img");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png);
 
     const result = await client.callTool({
       name: "generate_kie_gpt_image_2_image_to_image",
       arguments: {
         prompt: "test prompt",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: [`@${asset.value.slug}`],
       },
     });

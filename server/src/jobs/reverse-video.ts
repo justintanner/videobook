@@ -25,19 +25,19 @@ type ReverseVideoPayload = {
   hasAudio: boolean;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 export function registerReverseVideoJob(fs: Engine): void {
   registerJobHandler("reverse_video", async (payload, ctx) => {
     const {
       inputPath, outputPath, hasAudio,
-      assetId, assetDir, projectSlug,
+      assetId, assetDir, bookId,
     } = payload as ReverseVideoPayload;
 
     const result = await withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       assetDir,
       ctx,
@@ -59,7 +59,7 @@ export function registerReverseVideoJob(fs: Engine): void {
       const inputFilename = basename(inputPath);
       await replaceArtifactFileFromPath(
         fs,
-        projectSlug,
+        bookId,
         assetId,
         inputFilename,
         outputPath,
@@ -76,7 +76,7 @@ export function registerReverseVideoJob(fs: Engine): void {
       videoPath: result.videoPath,
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
       provenance: { origin: "reverse", reversed_at: new Date().toISOString() },
       force: true,
       skipDownstreamJobs: true,

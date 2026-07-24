@@ -42,13 +42,13 @@ export async function uploadAssetToFal(
   fs: Engine,
   assetId: string,
   filename: string,
-  projectSlug: string,
+  bookId: string,
 ): Promise<string> {
   const { data, hashedFilename, contentType } = await prepareAssetForUpload(
     fs,
     assetId,
     filename,
-    projectSlug,
+    bookId,
   );
   return uploadPreparedToFal(data, hashedFilename, contentType);
 }

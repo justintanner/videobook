@@ -25,22 +25,22 @@ type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-async function resolveImageSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveImageSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("img-")) {
     return { ok: false, error: `image_slug must be an img-* asset, got: ${assetId}` };
   }
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
   if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-async function resolveAudioSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveAudioSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("aud-")) return { ok: false, error: `audio_slug must be an aud-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findAudioFile(manifest.value.files, assetId);
   if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
@@ -48,7 +48,7 @@ async function resolveAudioSlug(fs: Engine, raw: string, projectSlug: string): P
 }
 
 const generateOmnihumanVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   image_slug: apicityStringField(omnihuman.image_url, "Portrait image asset to animate (e.g., @img-face)", { required: true }),
   audio_slug: apicityStringField(omnihuman.audio_url, "Driving audio asset whose speech/song drives the avatar (max 60s, e.g., @aud-voice)", { required: true }),
   prompt: apicityStringField(omnihuman.prompt, "Optional motion/expression description (e.g. 'speaking naturally with gentle expressions')"),
@@ -67,7 +67,7 @@ export function generateOmnihumanVideoDef(fs: Engine): ToolDef {
     schema: generateOmnihumanVideoSchema,
     handler: async (args) => {
       const {
-        project_slug, image_slug, audio_slug,
+        book_id, image_slug, audio_slug,
         prompt, output_resolution, pe_fast_mode, seed,
       } = args as Args;
 
@@ -85,16 +85,16 @@ export function generateOmnihumanVideoDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "OmniHuman requires audio_slug" }] };
       }
 
-      const imageResult = await resolveImageSlug(fs, image_slug, project_slug);
+      const imageResult = await resolveImageSlug(fs, image_slug, book_id);
       if (!imageResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: imageResult.error }] };
       const imageInput = imageResult.value;
 
-      const audioResult = await resolveAudioSlug(fs, audio_slug, project_slug);
+      const audioResult = await resolveAudioSlug(fs, audio_slug, book_id);
       if (!audioResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: audioResult.error }] };
       const audioInput = audioResult.value;
 
       const videoName = `${SLUG}-${imageInput.assetId.replace(/^(img|char)-/, "")}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -112,7 +112,7 @@ export function generateOmnihumanVideoDef(fs: Engine): ToolDef {
         type: "generate_omnihuman_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         imageInput,
         audioInput,
         sourceImageIds,

@@ -1,8 +1,7 @@
-import type { Engine } from "videobook-engine";
 import { getOAuthFlowStatus, startOAuthFlow } from "../x/oauth-flow.js";
 import type { ToolDef } from "./tool-def.js";
 
-export function xConnectStartDef(fs: Engine): ToolDef {
+export function xConnectStartDef(): ToolDef {
   return {
     name: "x_connect_start",
     description:
@@ -10,7 +9,7 @@ export function xConnectStartDef(fs: Engine): ToolDef {
     schema: {},
     handler: async () => {
       try {
-        const result = await startOAuthFlow(fs);
+        const result = await startOAuthFlow();
         return {
           content: [
             {
@@ -34,14 +33,14 @@ export function xConnectStartDef(fs: Engine): ToolDef {
   };
 }
 
-export function xConnectStatusDef(fs: Engine): ToolDef {
+export function xConnectStatusDef(): ToolDef {
   return {
     name: "x_connect_status",
     description:
       "Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at? } so the client can poll while the user authorizes in the browser.",
     schema: {},
     handler: async () => {
-      const status = await getOAuthFlowStatus(fs);
+      const status = await getOAuthFlowStatus();
       return {
         content: [
           { type: "text" as const, text: JSON.stringify(status) },

@@ -39,13 +39,13 @@ export async function uploadAssetToKie(
   fs: Engine,
   assetId: string,
   filename: string,
-  projectSlug: string,
+  bookId: string,
 ): Promise<string> {
   const { data, hashedFilename, contentType } = await prepareAssetForUpload(
     fs,
     assetId,
     filename,
-    projectSlug,
+    bookId,
   );
   return uploadPreparedToKie(data, hashedFilename, contentType);
 }

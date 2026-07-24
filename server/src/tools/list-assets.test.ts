@@ -35,12 +35,12 @@ describe("list_assets tool", () => {
     const slug = "list-empty";
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: slug },
+      arguments: { book_id: slug },
     });
 
     const result = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: slug },
+      arguments: { book_id: slug },
     });
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
@@ -57,22 +57,22 @@ describe("list_assets tool", () => {
     const slug = "list-uploaded";
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: slug },
+      arguments: { book_id: slug },
     });
 
     const pngData = MINIMAL_PNG.toString("base64");
     await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: slug, filename: "photo.png", data: pngData },
+      arguments: { book_id: slug, filename: "photo.png", data: pngData },
     });
     await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: slug, filename: "script.md", data: Buffer.from("# Hello").toString("base64") },
+      arguments: { book_id: slug, filename: "script.md", data: Buffer.from("# Hello").toString("base64") },
     });
 
     const result = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: slug },
+      arguments: { book_id: slug },
     });
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
@@ -86,13 +86,13 @@ describe("list_assets tool", () => {
     const slug = "list-sort";
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: slug },
+      arguments: { book_id: slug },
     });
 
     const pngData = MINIMAL_PNG.toString("base64");
     const firstResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: slug, filename: "first.png", data: pngData },
+      arguments: { book_id: slug, filename: "first.png", data: pngData },
     });
     const firstParsed = JSON.parse(
       (firstResult.content as Array<{ type: string; text: string }>)[0].text,
@@ -100,7 +100,7 @@ describe("list_assets tool", () => {
     await new Promise((resolve) => setTimeout(resolve, 2));
     const secondResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: slug, filename: "second.png", data: pngData },
+      arguments: { book_id: slug, filename: "second.png", data: pngData },
     });
     const secondParsed = JSON.parse(
       (secondResult.content as Array<{ type: string; text: string }>)[0].text,
@@ -108,7 +108,7 @@ describe("list_assets tool", () => {
 
     const newestResult = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: slug, sort: "newest" },
+      arguments: { book_id: slug, sort: "newest" },
     });
     const newestContent = newestResult.content as Array<{ type: string; text: string }>;
     const newestData = JSON.parse(newestContent[0].text);
@@ -118,7 +118,7 @@ describe("list_assets tool", () => {
 
     const oldestResult = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: slug, sort: "oldest" },
+      arguments: { book_id: slug, sort: "oldest" },
     });
     const oldestContent = oldestResult.content as Array<{ type: string; text: string }>;
     const oldestData = JSON.parse(oldestContent[0].text);

@@ -48,8 +48,8 @@ async function backfillAsset(projectDir: string, assetId: string): Promise<"done
 }
 
 async function main() {
-  const projectSlug = process.argv[2];
-  if (!projectSlug) {
+  const bookId = process.argv[2];
+  if (!bookId) {
     console.error("usage: tsx server/scripts/backfill-image-analysis.ts <project-slug>");
     process.exit(1);
   }
@@ -57,14 +57,14 @@ async function main() {
     console.error("OPENAI_API_KEY not set");
     process.exit(1);
   }
-  const projectDir = join(PROJECTS_DIR, projectSlug);
+  const projectDir = join(PROJECTS_DIR, bookId);
   if (!(await fileExists(projectDir))) {
     console.error(`project not found: ${projectDir}`);
     process.exit(1);
   }
   const entries = await readdir(projectDir);
   const imgAssets = entries.filter((e) => e.startsWith("img-"));
-  console.log(`scanning ${imgAssets.length} img-* assets in ${projectSlug}…`);
+  console.log(`scanning ${imgAssets.length} img-* assets in ${bookId}…`);
   let done = 0, skipped = 0, missing = 0, failed = 0;
   for (const assetId of imgAssets) {
     const result = await backfillAsset(projectDir, assetId);

@@ -11,7 +11,7 @@ type Payload = {
   type: "generate_nano_banana_2_lite_edit_fal";
   imgAssetId: string;
   imgAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   imageInputs: RefInput[];
   sourceImageIds: string[];
@@ -27,10 +27,10 @@ export function registerGenerateNanoBanana2LiteEditFalJob(fs: Engine): void {
   registerJobHandler("generate_nano_banana_2_lite_edit_fal", async (payload, ctx) => {
     requireApiKey("FAL_API_KEY");
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.projectSlug, p.imgAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.bookId, p.imgAssetId, ctx, "generate", async (ownerId) => {
 
       const image_urls = await Promise.all(
-        p.imageInputs.map((i) => uploadAssetToFal(fs, i.assetId, i.filename, p.projectSlug)),
+        p.imageInputs.map((i) => uploadAssetToFal(fs, i.assetId, i.filename, p.bookId)),
       );
 
       const input: Record<string, unknown> = {
@@ -46,7 +46,7 @@ export function registerGenerateNanoBanana2LiteEditFalJob(fs: Engine): void {
 
       const taskId = await submitFalJob({
         fs,
-        projectSlug: p.projectSlug,
+        bookId: p.bookId,
         assetId: p.imgAssetId,
         assetDir: p.imgAssetDir,
         endpointId: "google/nano-banana-lite/edit",

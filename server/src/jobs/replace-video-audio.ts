@@ -21,7 +21,7 @@ type ReplaceVideoAudioPayload = {
   assetId: string;
   assetDir: string;
   audioAssetId: string;
-  projectSlug: string;
+  bookId: string;
   // Merged into the final process_video provenance. Lets a chained caller
   // (e.g. completeSeedance2Video) preserve its own source/model/prompt fields
   // — without this they'd be overwritten by the replace-audio metadata write.
@@ -32,13 +32,13 @@ export function registerReplaceVideoAudioJob(fs: Engine): void {
   registerJobHandler("replace_video_audio", async (payload, ctx) => {
     const {
       inputPath, audioPath, outputPath,
-      assetId, assetDir, audioAssetId, projectSlug,
+      assetId, assetDir, audioAssetId, bookId,
       extraProvenance,
     } = payload as ReplaceVideoAudioPayload;
 
     const result = await withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       assetDir,
       ctx,
@@ -61,14 +61,14 @@ export function registerReplaceVideoAudioJob(fs: Engine): void {
       const inputFilename = basename(inputPath);
       await replaceArtifactFileFromPath(
         fs,
-        projectSlug,
+        bookId,
         assetId,
         inputFilename,
         outputPath,
       );
 
       for (const stale of STALE_ANALYSIS_FILES) {
-        await fs.files.delete(assetId, stale, projectSlug);
+        await fs.files.delete(assetId, stale);
       }
 
       const videoPath = join(assetDir, inputFilename);
@@ -82,7 +82,7 @@ export function registerReplaceVideoAudioJob(fs: Engine): void {
       videoPath: result.videoPath,
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
       provenance: {
         ...(extraProvenance ?? {}),
         origin: "replace_audio",

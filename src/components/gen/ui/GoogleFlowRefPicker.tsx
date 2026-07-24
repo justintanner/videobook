@@ -21,7 +21,7 @@ interface GoogleFlowRefPickerProps {
   callTool?: UseMcpResult['callTool']
   mcpState?: UseMcpResult['state']
   description?: string
-  projectSlug?: string
+  bookId?: string
   onManage?: () => void
 }
 

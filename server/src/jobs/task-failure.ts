@@ -8,22 +8,19 @@ import type { Engine, FailureInfo } from "videobook-engine";
  */
 export async function failPendingTaskAndLog(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   assetId: string,
   taskId: string,
   info: FailureInfo,
 ): Promise<void> {
-  const result = await fs.jobs.pending.fail(projectSlug, assetId, taskId, info);
+  const result = await fs.jobs.pending.fail(assetId, taskId, info);
   if (!result.ok) return;
   await fs
-    .history.logAction(
-      "job-error",
-      {
+    .history.logAction("job-error", {
         assetId,
         error: info.message,
         ...(info.failCode !== undefined ? { failCode: info.failCode } : {}),
-      },
-      projectSlug,
+      }
     )
     .catch(() => {});
 }

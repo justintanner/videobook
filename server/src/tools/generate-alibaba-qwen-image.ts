@@ -33,7 +33,7 @@ function slugify(text: string): string {
 
 const generateAlibabaQwenImageSchema = {
   prompt: apicityStringField(AlibabaImageTextContentSchema.shape.text, "Text prompt for image generation", { required: true }),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   image_slugs: apicityStringArrayField(AlibabaQwenImageGenerationImageSlotsSchema, "0-3 @img-* slugs for reference images"),
   model: apicityField(AlibabaQwenImageGenerationStableModelSchema, "Qwen generation model", { required: true }),
   size: apicityField(AlibabaMultimodalGenerationParametersSchema.shape.size, "Output size (e.g., '1024*1024')"),
@@ -54,7 +54,7 @@ export function generateAlibabaQwenImageDef(fs: Engine): ToolDef {
     schema: generateAlibabaQwenImageSchema,
     handler: async (args) => {
       const {
-        prompt, project_slug, image_slugs, model, size, n,
+        prompt, book_id, image_slugs, model, size, n,
         negative_prompt, prompt_extend, watermark, seed,
       } = args as Args;
 
@@ -83,7 +83,7 @@ export function generateAlibabaQwenImageDef(fs: Engine): ToolDef {
             content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${id}` }],
           };
         }
-        const manifestResult = await fs.files.manifest(id, project_slug);
+        const manifestResult = await fs.files.manifest(id);
         if (!manifestResult.ok) {
           return {
             isError: true as const,
@@ -103,7 +103,7 @@ export function generateAlibabaQwenImageDef(fs: Engine): ToolDef {
 
       const resolvedModel = AlibabaQwenImageGenerationStableModelSchema.parse(model);
 
-      const assetResult = await fs.artifacts.create("img", `${modelSlug("alibaba", resolvedModel)}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("img", `${modelSlug("alibaba", resolvedModel)}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -122,7 +122,7 @@ export function generateAlibabaQwenImageDef(fs: Engine): ToolDef {
         imgAssetId,
         imgAssetDir,
         sourceImageIds,
-        projectSlug: project_slug,
+        bookId: book_id,
         model: resolvedModel,
         ...(size !== undefined ? { size } : {}),
         ...(n !== undefined ? { n } : {}),

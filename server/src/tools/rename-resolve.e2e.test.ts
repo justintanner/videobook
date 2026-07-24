@@ -23,7 +23,7 @@ describe("rename and resolve e2e", () => {
 
     const createResult = await client.callTool({
       name: "create_project",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
     expect(createResult.isError).toBeFalsy();
   });
@@ -35,19 +35,19 @@ describe("rename and resolve e2e", () => {
   });
 
   it("keeps stable identity while replacing the active slug", async () => {
-    const assetRes = await fs.artifacts.create("img", "original-name", PROJECT);
+    const assetRes = await fs.artifacts.create("img", "original-name");
     expect(assetRes.ok).toBe(true);
     const originalId = assetRes.ok ? assetRes.value.slug : "";
     const artifactId = assetRes.ok ? assetRes.value.artifactId : "";
 
-    await fs.files.write(originalId, "original.png", Buffer.from("fake data"), PROJECT);
+    await fs.files.write(originalId, "original.png", Buffer.from("fake data"));
 
     const renameRes = await client.callTool({
       name: "rename_asset",
       arguments: {
         asset_id: originalId,
         new_name: "new name",
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(renameRes.isError).toBeFalsy();
@@ -55,16 +55,16 @@ describe("rename and resolve e2e", () => {
     const newId = parsed.new_asset_id;
     expect(newId).not.toBe(originalId);
 
-    expect(fs.artifacts.resolveSlug(PROJECT, originalId).ok).toBe(false);
-    const renamed = fs.artifacts.get(PROJECT, artifactId);
+    expect(fs.artifacts.resolveSlug(PROJECT).ok).toBe(false);
+    const renamed = fs.artifacts.get(PROJECT);
     expect(renamed.ok).toBe(true);
     expect(renamed.ok && renamed.value.slug).toBe(newId);
 
-    const readRes = await fs.files.read(artifactId, "original.png", PROJECT);
+    const readRes = await fs.files.read(artifactId, "original.png");
     expect(readRes.ok).toBe(true);
     expect(readRes.ok && readRes.value.toString()).toBe("fake data");
 
-    const manifest = await fs.files.manifest(artifactId, PROJECT);
+    const manifest = await fs.files.manifest(artifactId);
     expect(manifest.ok).toBe(true);
   });
 });

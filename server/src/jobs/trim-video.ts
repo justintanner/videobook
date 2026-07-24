@@ -307,7 +307,7 @@ type TrimVideoPayload = {
   cutEnd?: number;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
   commitParams: Record<string, unknown>;
 };
 
@@ -315,12 +315,12 @@ export function registerTrimVideoJob(fs: Engine): void {
   registerJobHandler("trim_video", async (payload, ctx) => {
     const {
       inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd,
-      assetId, assetDir, projectSlug,
+      assetId, assetDir, bookId,
     } = payload as TrimVideoPayload;
 
     const result = await withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       assetDir,
       ctx,
@@ -343,7 +343,7 @@ export function registerTrimVideoJob(fs: Engine): void {
       const inputFilename = basename(inputPath);
       await replaceArtifactFileFromPath(
         fs,
-        projectSlug,
+        bookId,
         assetId,
         inputFilename,
         outputPath,
@@ -354,7 +354,7 @@ export function registerTrimVideoJob(fs: Engine): void {
         ".analysis.gpt4otrans.json",
         "elevenlabs.json",
       ]) {
-        await fs.files.delete(assetId, stale, projectSlug);
+        await fs.files.delete(assetId, stale);
       }
 
       const videoPath = join(assetDir, inputFilename);
@@ -368,7 +368,7 @@ export function registerTrimVideoJob(fs: Engine): void {
       videoPath: result.videoPath,
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
         provenance: { origin: "trim", trimmed_at: new Date().toISOString() },
         force: true,
       } as unknown as Record<string, unknown>);

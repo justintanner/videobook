@@ -13,7 +13,7 @@ type TranscribePayload = {
   languageCode?: string;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 export function registerTranscribeJob(fs: Engine): void {
@@ -24,17 +24,17 @@ export function registerTranscribeJob(fs: Engine): void {
       diarize,
       languageCode,
       assetId,
-      projectSlug,
+      bookId,
     } = payload as TranscribePayload;
 
     const result = await withLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       ctx,
       "transcribe",
       async () => {
-        await transcribeAssetToElevenLabsJson(fs, projectSlug, assetId, audioFilename, {
+        await transcribeAssetToElevenLabsJson(fs, bookId, assetId, audioFilename, {
           tagAudioEvents,
           diarize,
           ...(languageCode ? { languageCode } : {}),
@@ -43,7 +43,7 @@ export function registerTranscribeJob(fs: Engine): void {
       },
     );
     try {
-      await enqueueLazyTimelineRender(fs, projectSlug, assetId);
+      await enqueueLazyTimelineRender(fs, bookId, assetId);
     } catch (err) {
       void err;
     }

@@ -13,7 +13,7 @@ const grokExtend = GrokVideoExtendRequestSchema.shape.input.shape;
 const extendGrokImagineVideoSchema = {
   asset_id: z.string().optional().describe("Video asset ID (must be vid-*)"),
   video_slug: z.string().optional().describe("Video slug (e.g., '@vid-sunset'). Used as fallback when asset_id is not provided."),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(grokExtend.prompt, "Describe how to extend the video", { required: true }),
   extend_at: z.number().describe("Seconds into the source video to start extending from"),
   extend_times: apicityField(grokExtend.extend_times, "Extension duration in seconds: 6 or 10", { required: true }),
@@ -27,7 +27,7 @@ export function extendGrokImagineVideoDef(fs: Engine): ToolDef {
     description: "Extend an existing video asset using Kie's grok-imagine/extend. Creates a new vid- asset and enqueues a background job. Requires at least one of asset_id or video_slug.",
     schema: extendGrokImagineVideoSchema,
     handler: async (args) => {
-      const { asset_id: rawAssetId, video_slug, project_slug, prompt, extend_at, extend_times } = args as Args;
+      const { asset_id: rawAssetId, video_slug, book_id, prompt, extend_at, extend_times } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return toolError("KIE_API_KEY environment variable is not set");
@@ -48,7 +48,7 @@ export function extendGrokImagineVideoDef(fs: Engine): ToolDef {
         return toolError(`asset_id must start with vid-, got: ${asset_id}`);
       }
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return toolError(manifestResult.error.message);
       }
@@ -59,7 +59,7 @@ export function extendGrokImagineVideoDef(fs: Engine): ToolDef {
         return toolError(`No video file found in asset ${asset_id}`);
       }
 
-      const generationPayloadResult = await fs.metadata.artifacts.read<{ model?: string }>(asset_id, "generation-payload", project_slug);
+      const generationPayloadResult = await fs.metadata.artifacts.read<{ model?: string }>(asset_id, "generation-payload");
       if (generationPayloadResult.ok) {
         const model = generationPayloadResult.value.model;
         if (model && !model.includes("grok-imagine")) {
@@ -69,7 +69,7 @@ export function extendGrokImagineVideoDef(fs: Engine): ToolDef {
 
       const baseName = asset_id.startsWith("vid-") ? asset_id.slice(4) : asset_id;
       const videoName = `extend-${baseName}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return toolError(`Failed to create video asset: ${assetResult.error.message}`);
       }
@@ -84,7 +84,7 @@ export function extendGrokImagineVideoDef(fs: Engine): ToolDef {
         sourceVideoFilename: videoFile.name,
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         ...(extend_at !== undefined ? { extend_at } : {}),
         ...(extend_times !== undefined ? { extend_times } : {}),

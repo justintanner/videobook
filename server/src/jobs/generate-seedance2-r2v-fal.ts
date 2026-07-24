@@ -10,7 +10,7 @@ type Payload = {
   type: "generate_seedance2_r2v_fal";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   imageInputs: MediaInput[];
   videoInputs: MediaInput[];
@@ -28,19 +28,19 @@ type Payload = {
 export function registerGenerateSeedance2R2vFalJob(fs: Engine): void {
   registerJobHandler("generate_seedance2_r2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.projectSlug, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.bookId, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
       const image_urls: string[] = [];
       for (const img of p.imageInputs) {
-        image_urls.push(await uploadAssetToFal(fs, img.assetId, img.filename, p.projectSlug));
+        image_urls.push(await uploadAssetToFal(fs, img.assetId, img.filename, p.bookId));
       }
       const video_urls: string[] = [];
       for (const vid of p.videoInputs) {
-        video_urls.push(await uploadAssetToFal(fs, vid.assetId, vid.filename, p.projectSlug));
+        video_urls.push(await uploadAssetToFal(fs, vid.assetId, vid.filename, p.bookId));
       }
       const audio_urls: string[] = [];
       for (const aud of p.audioInputs) {
-        audio_urls.push(await uploadAssetToFal(fs, aud.assetId, aud.filename, p.projectSlug));
+        audio_urls.push(await uploadAssetToFal(fs, aud.assetId, aud.filename, p.bookId));
       }
   
       const input: Record<string, unknown> = {
@@ -57,7 +57,7 @@ export function registerGenerateSeedance2R2vFalJob(fs: Engine): void {
   
       const taskId = await submitFalJob({
         fs,
-        projectSlug: p.projectSlug,
+        bookId: p.bookId,
         assetId: p.vidAssetId,
         assetDir: p.vidAssetDir,
         endpointId: "bytedance/seedance-2.0/reference-to-video",

@@ -22,22 +22,22 @@ export function analyzeJokesDef(fs: Engine): ToolDef {
       "Requires an ElevenLabs transcript — run /transcribe first if missing.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-* or @vid-slug)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
+      const { asset_id, book_id } = args as { asset_id: string; book_id: string };
       const assetId = asset_id.replace(/^@/, "");
 
       if (!process.env.OPENAI_API_KEY) {
         return error("OPENAI_API_KEY environment variable is not set");
       }
 
-      const manifestResult = await fs.files.manifest(assetId, project_slug);
+      const manifestResult = await fs.files.manifest(assetId);
       if (!manifestResult.ok) {
         return error(manifestResult.error.message);
       }
 
-      const read = await fs.files.read(assetId, "elevenlabs.json", project_slug);
+      const read = await fs.files.read(assetId, "elevenlabs.json");
       if (!read.ok) {
         return error(`No ElevenLabs transcript found for ${assetId} — run /transcribe @${assetId} first.`);
       }
@@ -56,7 +56,7 @@ export function analyzeJokesDef(fs: Engine): ToolDef {
         type: "analyze_jokes",
         assetId,
         assetDir: manifestResult.value.path,
-        projectSlug: project_slug,
+        bookId: book_id,
       });
 
       return {

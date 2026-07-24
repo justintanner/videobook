@@ -17,6 +17,7 @@ import type { ActionLogEntry } from "../video-models.js";
 import type { ToolDef } from "./tool-def.js";
 
 import { getCanonicalName } from "../generation-registry.js";
+import { timelineSlotSlugs } from "../timeline-helpers.js";
 
 function findSelectedModel(rawToolName: string): string | null {
   const canonical = getCanonicalName(rawToolName);
@@ -34,27 +35,24 @@ export function previewVideoGenDef(fs: Engine): ToolDef {
       "Route a natural language prompt to the best video generation tool and return a preview with schema, prefilled parameters, validation, and model options for all available video models.",
     schema: {
       prompt: z.string().describe("Natural language generation prompt (e.g., 'gen a video of a sunset')"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       selected_model: z.string().optional().describe("Override: which model key to select (e.g. 'kling30')"),
       selected_provider: z.string().optional().describe("Override: which provider key to select (e.g. 'kie')"),
     },
     handler: async (args) => {
-      const { prompt, project_slug: slug, selected_model: modelOverride, selected_provider: providerOverride } = args as {
+      const { prompt, book_id: slug, selected_model: modelOverride, selected_provider: providerOverride } = args as {
         prompt: string;
-        project_slug: string;
+        book_id: string;
         selected_model?: string;
         selected_provider?: string;
       };
 
       // 1. Expand @s01 slot refs → actual asset slugs
       let expandedPrompt = prompt;
-      const timelineResult = await fs.metadata.projects.read<{ slots: Array<{ slug: string }> }>("timeline", slug);
-      if (timelineResult.ok && timelineResult.value.slots) {
-        expandedPrompt = fs.resolver.expandSlotRefs(prompt, timelineResult.value.slots);
-      }
+      expandedPrompt = fs.resolver.expandSlotRefs(prompt, timelineSlotSlugs(fs));
 
       // 2. Resolve @asset tags
-      const resolvedResult = await fs.resolver.resolveAll(expandedPrompt, slug);
+      const resolvedResult = await fs.resolver.resolveAll(expandedPrompt);
       if (!resolvedResult.ok) {
         return {
           isError: true as const,
@@ -135,7 +133,7 @@ Determine which video generation tool to use and what parameters to pass.`;
       // 4. Load prompt history from action log
       let historyEntries: ActionLogEntry[] = [];
       try {
-        const log = fs.history.actionLog(slug, { limit: 100 });
+        const log = fs.history.actionLog();
         historyEntries = log as ActionLogEntry[];
       } catch {
         // action log unavailable
@@ -143,7 +141,7 @@ Determine which video generation tool to use and what parameters to pass.`;
 
       // 4b. Build set of valid asset tags for the current project so
       //     historical slug references that no longer exist are stripped.
-      const allProjectAssets = fs.artifacts.list(slug);
+      const allProjectAssets = fs.artifacts.list();
       const projectAssetTags = new Set(allProjectAssets.map((a) => `@${a.slug}`));
 
       // 5. Build model options for all 5 video models

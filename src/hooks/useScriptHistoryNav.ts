@@ -29,7 +29,7 @@ const EMPTY_COMMITS: Revision[] = [];
 interface Args {
   callTool: UseMcpResult["callTool"];
   assetId: string;
-  projectSlug: string;
+  bookId: string;
 }
 
 interface HistoryState {
@@ -38,7 +38,7 @@ interface HistoryState {
   idx: number;
 }
 
-export function useScriptHistoryNav({ callTool, assetId, projectSlug }: Args): UseScriptHistoryNavResult {
+export function useScriptHistoryNav({ callTool, assetId, bookId }: Args): UseScriptHistoryNavResult {
   const [history, setHistory] = useState<HistoryState>(() => ({ assetId, commits: [], idx: 0 }));
   const [loading, setLoading] = useState(false);
   if (history.assetId !== assetId) {
@@ -56,7 +56,7 @@ export function useScriptHistoryNav({ callTool, assetId, projectSlug }: Args): U
   const fetchCommits = useCallback(async (): Promise<Revision[]> => {
     const result = await callToolRef.current("asset_history", {
       asset_id: assetId,
-      project_slug: projectSlug,
+      book_id: bookId,
       limit: 50,
     });
     if (result.isError) return [];
@@ -65,7 +65,7 @@ export function useScriptHistoryNav({ callTool, assetId, projectSlug }: Args): U
     const filtered = raw.filter((c) => !c.files || c.files.length === 0 || c.files.includes(FILENAME));
     setHistory({ assetId, commits: filtered, idx: 0 });
     return filtered;
-  }, [assetId, projectSlug]);
+  }, [assetId, bookId]);
 
   const stepTo = useCallback(async (targetIdx: number, list: Revision[]) => {
     const commit = list[targetIdx];
@@ -73,7 +73,7 @@ export function useScriptHistoryNav({ callTool, assetId, projectSlug }: Args): U
     const result = await callToolRef.current("restore_asset_version", {
       asset_id: assetId,
       commit_hash: commit.hash,
-      project_slug: projectSlug,
+      book_id: bookId,
     });
     if (result.isError) {
       const content = result.content as Array<{ type: string; text: string }> | undefined;
@@ -81,8 +81,8 @@ export function useScriptHistoryNav({ callTool, assetId, projectSlug }: Args): U
       return;
     }
     setHistory({ assetId, commits: list, idx: targetIdx });
-    await callToolRef.current("reconcile_project_work", { project_slug: projectSlug });
-  }, [assetId, projectSlug]);
+    await callToolRef.current("reconcile_project_work", { book_id: bookId });
+  }, [assetId, bookId]);
 
   const prev = useCallback(async () => {
     if (inFlightRef.current) return;

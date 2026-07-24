@@ -40,7 +40,7 @@ import { inspectProviderPayloadSlugs } from './provider-payload-hints'
 import { transformNotebookSubmitArgs } from './transform-submit-args'
 
 interface NotebookSidebarProps {
-  projectSlug: string
+  bookId: string
   callTool: UseMcpResult['callTool']
   mcpState: UseMcpResult['state']
   definition: NotebookPlanDefinition
@@ -157,7 +157,7 @@ function LoadoutHeader({
 }
 
 export function NotebookSidebar({
-  projectSlug,
+  bookId,
   callTool,
   mcpState,
   definition,
@@ -214,7 +214,7 @@ export function NotebookSidebar({
   }
   return (
     <GenerationSidebar
-      projectSlug={projectSlug}
+      bookId={bookId}
       callTool={callTool}
       mcpState={mcpState}
       definition={definition}
@@ -263,7 +263,7 @@ function AssetSidebar({
 }
 
 interface GenerationSidebarProps {
-  projectSlug: string
+  bookId: string
   callTool: UseMcpResult['callTool']
   mcpState: UseMcpResult['state']
   definition: NotebookPlanDefinition
@@ -280,7 +280,7 @@ interface GenerationSidebarProps {
 }
 
 function GenerationSidebar({
-  projectSlug,
+  bookId,
   callTool,
   mcpState,
   definition,
@@ -298,7 +298,7 @@ function GenerationSidebar({
   const category: 'image' | 'video' = step.type === 'video' ? 'video' : 'image'
   const model = typeof step.properties.model === 'string' ? step.properties.model : ''
   const provider = typeof step.properties.provider === 'string' ? step.properties.provider : ''
-  const preview = useGenPreview({ category, projectSlug, callTool, model, provider })
+  const preview = useGenPreview({ category, bookId, callTool, model, provider })
   const option = preview.selectedOption
   const modeKey = resolveModeKey(option?.modes, step.properties.mode)
   const activeMode = option?.modes && modeKey ? getMode(option.modes, modeKey) : null
@@ -317,7 +317,7 @@ function GenerationSidebar({
     () => (option?.modes && modeKey ? visibleParams(option.modes, modeKey) : null),
     [option, modeKey],
   )
-  const history = usePromptHistory(callTool, category === 'image' ? 'image_generate' : 'video_generate', projectSlug)
+  const history = usePromptHistory(callTool, category === 'image' ? 'image_generate' : 'video_generate', bookId)
   
   const charEntities = useGoogleFlowEntities('character', (category === 'video' || (modeVisible?.has('character_refs') ?? !!option?.schema.properties.character_refs)) ? callTool : undefined, mcpState)
   const characterRefs = useMemo(
@@ -359,7 +359,7 @@ function GenerationSidebar({
   const requiredMissing = useMemo(() => {
     if (!option) return ['model']
     const missing = (option.schema.required ?? []).filter((name) => {
-      if (name === 'project_slug') return false
+      if (name === 'book_id') return false
       if (modeVisible && !modeVisible.has(name)) return false
       const value = mergedValues[name]
       return value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)
@@ -402,7 +402,7 @@ function GenerationSidebar({
     : null
   const showClipComposite = clipStartVisible && clipEndsVisible
   const fieldVisible = (name: string): boolean =>
-    name !== 'project_slug'
+    name !== 'book_id'
     && name !== 'prompt'
     && name !== 'character_refs'
     && name !== 'voice_refs'
@@ -482,11 +482,11 @@ function GenerationSidebar({
       tool_name: effectiveToolName(option, modeKey),
       args: {
         ...submitValues,
-        project_slug: projectSlug,
+        book_id: bookId,
         _provider: preview.selectedProviderKey || undefined,
       },
     }
-  }, [option, modeKey, submitValues, projectSlug, preview.selectedProviderKey])
+  }, [option, modeKey, submitValues, bookId, preview.selectedProviderKey])
   const providerPayload = useTranslatePayload(
     callTool,
     toolPayload?.tool_name ?? null,
@@ -591,7 +591,7 @@ function GenerationSidebar({
                   disabled={running}
                   callTool={callTool}
                   mcpState={mcpState}
-                  projectSlug={projectSlug}
+                  bookId={bookId}
                   onManage={onManageCharacters}
                   theme={genThemes.notebook}
                 />
@@ -682,7 +682,7 @@ function GenerationSidebar({
                     theme={notebookTheme}
                     callTool={callTool}
                     mcpState={mcpState}
-                    projectSlug={projectSlug}
+                    bookId={bookId}
                     compact
                   />
                 )

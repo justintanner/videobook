@@ -14,7 +14,7 @@ type GenerateSeedreamImagePayload = {
   imgAssetId: string;
   imgAssetDir: string;
   sourceImageIds: string[];
-  projectSlug: string;
+  bookId: string;
   aspectRatio?: SeedreamImageToImageRequest["input"]["aspect_ratio"];
   quality?: SeedreamImageToImageRequest["input"]["quality"];
   nsfwChecker?: boolean;
@@ -24,7 +24,7 @@ export function registerGenerateSeedreamImageJob(fs: Engine): void {
   registerJobHandler("generate_seedream_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,
-      sourceImageIds, projectSlug, aspectRatio, quality, nsfwChecker,
+      sourceImageIds, bookId, aspectRatio, quality, nsfwChecker,
     } = payload as GenerateSeedreamImagePayload;
 
     requireApiKey("KIE_API_KEY");
@@ -34,7 +34,7 @@ export function registerGenerateSeedreamImageJob(fs: Engine): void {
       if ("url" in input) {
         uploadedUrls.push(input.url);
       } else {
-        uploadedUrls.push(await uploadAssetToKie(fs, input.assetId, input.filename, projectSlug));
+        uploadedUrls.push(await uploadAssetToKie(fs, input.assetId, input.filename, bookId));
       }
     }
 
@@ -52,7 +52,7 @@ export function registerGenerateSeedreamImageJob(fs: Engine): void {
       taskType: "seedream_image",
       assetId: imgAssetId,
       assetDir: imgAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         sourceImageIds,
         prompt,

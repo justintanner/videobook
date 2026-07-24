@@ -1,205 +1,96 @@
-import type { Engine, Artifact } from "videobook-engine";
+import type { Artifact, Engine, TimelineSlotInput } from "videobook-engine";
 import { z } from "zod";
-import type { Orientation } from "../remotion/subtitles/types.js";
-import type { ToolDef, ToolResult } from "./tool-def.js";
 import { queue } from "../queue.js";
-import { SKIP_CROP_EXTENSIONS } from "../jobs/process-image.js";
 import { enqueueLazyTimelineRender } from "../lazy-render.js";
-
-const IMAGE_ORIGINAL_RE = /^original\.(jpe?g|png|webp|gif|svg)$/i;
-
-type LazyAnalysisResult = {
-  jobId: string;
-  kind: "analyze_video" | "describe_image";
-};
+import {
+  resolveArtifact,
+  slotIndex,
+  timelineFailure,
+  timelineInput,
+  timelinePayload,
+} from "../timeline-helpers.js";
+import type { ToolDef } from "./tool-def.js";
 
 async function enqueueLazyAnalysis(
-  fs: Engine,
+  engine: Engine,
   asset: Artifact,
-  projectSlug: string,
-): Promise<LazyAnalysisResult | null> {
-  const isVideo = asset.slug.startsWith("vid-");
-  const isImage = asset.slug.startsWith("img-");
-  if (!isVideo && !isImage) return null;
-
-  // Skip if user clearly hasn't configured a vision provider. Truthy env
-  // check (not getApiKey) so the gate also lets through placeholder keys
-  // used in tests; the real placeholder defense lives at the actual API
-  // call inside analyze-video / describe-image (via requireApiKey/getApiKey).
+  bookId: string,
+): Promise<{ jobId: string; kind: "analyze_video" | "describe_image" } | null> {
   if (!process.env.KIE_API_KEY) return null;
-
-  const manifestResult = await fs.files.manifest(asset.slug, projectSlug, { includeDotfiles: true });
-  if (!manifestResult.ok) return null;
-  const manifest = manifestResult.value;
-  const fileNames = new Set(manifest.files.map((f) => f.name));
-
-  // Already analyzed — nothing to do.
-  if (fileNames.has(".original.analysis.json")) return null;
-
-  if (isVideo) {
-    // Stable dedupe key, shared with enqueueLazyAnalysisIfSlotted: a slot
-    // re-drop racing a re-process revival yields one analyze job, not two.
+  if (asset.kind !== "video" && asset.kind !== "image") return null;
+  const manifest = await engine.files.manifest(asset.artifactId);
+  if (!manifest.ok) return null;
+  if (manifest.value.files.some((file) => file.name === ".original.analysis.json")) return null;
+  if (asset.kind === "video") {
     const jobId = `auto-analyze-${asset.slug}`;
     await queue.enqueue(jobId, {
       type: "analyze_video",
+      bookId,
       assetId: asset.slug,
-      assetDir: manifest.path,
-      projectSlug,
-      hasTranscription: fileNames.has(".analysis.gpt4otrans.json"),
-    } as unknown as Record<string, unknown>);
+      assetDir: manifest.value.path,
+      hasTranscription: manifest.value.files.some((file) => file.name === ".analysis.gpt4otrans.json"),
+    });
     return { jobId, kind: "analyze_video" };
   }
-
-  // Image: find the original.<ext>, skip vector/animated formats where vision
-  // is unreliable.
-  const originalFile = manifest.files.find((f) => IMAGE_ORIGINAL_RE.test(f.name));
-  if (!originalFile) return null;
-  const ext = originalFile.name.slice(originalFile.name.lastIndexOf("."));
-  if (SKIP_CROP_EXTENSIONS.has(ext.toLowerCase())) return null;
-
+  const original = manifest.value.files.find((file) => /^original\.(jpe?g|png|webp)$/i.test(file.name));
+  if (!original) return null;
   const jobId = `auto-describe-${asset.slug}`;
   await queue.enqueue(jobId, {
     type: "describe_image",
+    bookId,
     sourceAssetId: asset.slug,
-    sourceImageFilename: originalFile.name,
-    projectSlug,
-  } as unknown as Record<string, unknown>);
+    sourceImageFilename: original.name,
+  });
   return { jobId, kind: "describe_image" };
 }
 
-type TimelineSlot = {
-  slug: string;
-  volume?: number;
-  audioFadeIn?: number;
-  audioFadeOut?: number;
-};
-
-type TimelineAudioClip = {
-  id: string;
-  slug: string;
-  startFrame: number;
-  durationFrames: number;
-  volume?: number;
-  fadeIn?: number;
-  fadeOut?: number;
-};
-
-type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
-
-type TimelineConfig = {
-  slots: TimelineSlot[];
-  audio?: TimelineAudioClip[];
-  render: Orientation;
-  currentOrientation?: ViewerSize;
-};
-
-function toolError(msg: string): ToolResult {
-  return { isError: true as const, content: [{ type: "text" as const, text: msg }] };
-}
-
-function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
-  if (Array.isArray(raw)) return { slots: raw, render: "landscape" };
-  return {
-    ...raw,
-    render: Array.isArray(raw.render)
-      ? ((raw.render as unknown as string[])[0] ?? "landscape") as Orientation
-      : raw.render,
-  };
-}
-
-export function assignSlotDef(fs: Engine): ToolDef {
+export function assignSlotDef(engine: Engine): ToolDef {
   return {
     name: "assign_slot",
-    description: "Assign an asset to a timeline slot (e.g. slot 's02' = index 1)",
+    description: "Assign an artifact to a typed timeline slot",
     schema: {
-      project_slug: z.string().describe("Project slug"),
-      asset_id: z.string().describe("Asset ID to assign to the slot"),
-      slot: z.string().describe("Slot identifier like 's02' (@ prefix already stripped)"),
+      book_id: z.string().uuid(),
+      asset_id: z.string(),
+      slot: z.string(),
     },
     handler: async (args) => {
-      const { project_slug, asset_id, slot } = args as {
-        project_slug: string;
-        asset_id: string;
-        slot: string;
-      };
-
-      // Parse slot index from e.g. "s02" → 1
-      const match = slot.match(/^s(\d+)$/);
-      if (!match) {
-        return toolError(`Invalid slot format: "${slot}". Expected format like "s01", "s02", etc.`);
+      const index = slotIndex(String(args.slot));
+      if (index === null) return timelineFailure("Slot must use the form s01, s02, and so on");
+      const asset = resolveArtifact(engine, String(args.asset_id));
+      if (!asset) return timelineFailure(`Artifact not found: ${String(args.asset_id)}`);
+      const timeline = engine.timeline.get();
+      if (index > timeline.slots.length) {
+        return timelineFailure("Typed timelines cannot contain empty gaps; assign the next available slot first");
       }
-      const index = parseInt(match[1], 10) - 1;
-      if (index < 0) {
-        return toolError(`Slot index must be >= 1, got "${slot}"`);
+      const slots: TimelineSlotInput[] = timeline.slots.map((slot) => ({
+        id: slot.id,
+        artifactId: slot.artifactId,
+        ...(slot.volume === undefined ? {} : { volume: slot.volume }),
+        ...(slot.audioFadeIn === undefined ? {} : { audioFadeIn: slot.audioFadeIn }),
+        ...(slot.audioFadeOut === undefined ? {} : { audioFadeOut: slot.audioFadeOut }),
+      }));
+      const replacement: TimelineSlotInput = index < slots.length
+        ? { ...slots[index]!, artifactId: asset.artifactId }
+        : { artifactId: asset.artifactId };
+      if (index < slots.length) slots[index] = replacement;
+      else slots.push(replacement);
+      const result = await engine.timeline.set({ ...timelineInput(timeline), slots });
+      if (!result.ok) return timelineFailure(result.error.message);
+      const response: Record<string, unknown> = timelinePayload(result.value);
+      const bookId = String(args.book_id);
+      try {
+        const analysis = await enqueueLazyAnalysis(engine, asset, bookId);
+        if (analysis) response.auto_analyze = analysis;
+      } catch {
+        delete response.auto_analyze;
       }
-
-      // Validate asset exists
-      const assets = await fs.artifacts.list(project_slug);
-      const asset = assets.find((a) => a.slug === asset_id);
-      if (!asset) {
-        return toolError(`Asset "${asset_id}" not found in project "${project_slug}"`);
+      try {
+        const render = await enqueueLazyTimelineRender(engine, bookId, asset.slug, asset);
+        if (render) response.auto_render = render;
+      } catch {
+        delete response.auto_render;
       }
-
-      // Read current timeline (default to empty)
-      const readResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
-      let config: TimelineConfig;
-      if (readResult.ok) {
-        config = normalizeConfig(readResult.value);
-      } else {
-        const err = (readResult as { ok: false; error: { code: string; message: string } }).error;
-        if (err.code === "NOT_FOUND") {
-          config = { slots: [], render: "landscape" };
-        } else {
-          return toolError(err.message);
-        }
-      }
-
-      // Pad slots array if needed
-      while (config.slots.length <= index) {
-        config.slots.push({ slug: "" });
-      }
-
-      // Assign asset to slot (preserve existing volume/fade)
-      config.slots[index] = { ...config.slots[index], slug: asset_id };
-
-      // Write back
-      const writeResult = await fs.metadata.projects.write("timeline", config, project_slug);
-      if (writeResult.ok) {
-        // Lazy vision analysis: enqueue analyze_video (vid-) or describe_image
-        // (img-) when the asset has no .original.analysis.json yet. Failure
-        // here must not fail the slot assignment.
-        let autoAnalyze: LazyAnalysisResult | null = null;
-        try {
-          autoAnalyze = await enqueueLazyAnalysis(fs, asset, project_slug);
-        } catch {
-          // swallow — analysis is best-effort
-        }
-
-        // Auto-render eligible videos after assignment
-        let autoRenderJobId: string | undefined;
-        if (asset_id.startsWith("vid-")) {
-          try {
-            const autoRender = await enqueueLazyTimelineRender(fs, project_slug, asset_id, asset);
-            autoRenderJobId = autoRender?.jobId;
-          } catch {
-            // Auto-render failure must not fail the assignment
-          }
-        }
-
-        const response: Record<string, unknown> = { ...config };
-        if (autoRenderJobId) {
-          response.auto_render = { jobId: autoRenderJobId };
-        }
-        if (autoAnalyze) {
-          response.auto_analyze = autoAnalyze;
-        }
-
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(response) }],
-        };
-      }
-      const writeErr = (writeResult as { ok: false; error: { message: string } }).error;
-      return toolError(writeErr.message);
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
     },
   };
 }

@@ -16,7 +16,7 @@ describe("translate_payload tool", () => {
         aspect_ratio: "1:1",
         image_slugs: ["@img-nbp-frame-reference-1", "@img-catblack"],
         character_refs: [],
-        project_slug: "realcat",
+        book_id: "realcat",
         _provider: "google",
       }),
     });

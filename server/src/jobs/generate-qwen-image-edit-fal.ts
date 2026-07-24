@@ -9,7 +9,7 @@ type Payload = {
   type: "generate_qwen_image_edit_fal";
   imgAssetId: string;
   imgAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   refImage: ImageInput;
   sourceImageIds: string[];
@@ -27,11 +27,11 @@ type Payload = {
 export function registerGenerateQwenImageEditFalJob(fs: Engine): void {
   registerJobHandler("generate_qwen_image_edit_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.projectSlug, p.imgAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.bookId, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
       const image_url = "url" in p.refImage
         ? p.refImage.url
-        : await uploadAssetToFal(fs, p.refImage.assetId, p.refImage.filename, p.projectSlug);
+        : await uploadAssetToFal(fs, p.refImage.assetId, p.refImage.filename, p.bookId);
   
       const input: Record<string, unknown> = {
         prompt: p.prompt,
@@ -49,7 +49,7 @@ export function registerGenerateQwenImageEditFalJob(fs: Engine): void {
   
       const taskId = await submitFalJob({
         fs,
-        projectSlug: p.projectSlug,
+        bookId: p.bookId,
         assetId: p.imgAssetId,
         assetDir: p.imgAssetDir,
         endpointId: "fal-ai/qwen-image/edit",

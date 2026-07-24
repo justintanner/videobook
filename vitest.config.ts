@@ -13,6 +13,11 @@ export default defineConfig({
   test: {
     globalSetup: ['./vitest.global-setup.ts'],
     fileParallelism: false,
+    include: [
+      'tests/v2/**/*.test.ts',
+      'tests/dolt-native-cutover.test.ts',
+      'src/videobook/notebook-draft.test.ts',
+    ],
     exclude: ['**/*.e2e.test.ts', '**/*.spec.ts', 'server/dist/**', ...configDefaults.exclude],
     setupFiles: ['./vitest.setup.ts'],
     testTimeout: 30_000,

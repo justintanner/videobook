@@ -7,7 +7,7 @@ type Payload = {
   type: "generate_seedance2_t2v_fal";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   resolution?: string;
   duration?: string;
@@ -19,7 +19,7 @@ type Payload = {
 export function registerGenerateSeedance2T2vFalJob(fs: Engine): void {
   registerJobHandler("generate_seedance2_t2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.projectSlug, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.bookId, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
       const input: Record<string, unknown> = {
         prompt: p.prompt,
@@ -32,7 +32,7 @@ export function registerGenerateSeedance2T2vFalJob(fs: Engine): void {
   
       const taskId = await submitFalJob({
         fs,
-        projectSlug: p.projectSlug,
+        bookId: p.bookId,
         assetId: p.vidAssetId,
         assetDir: p.vidAssetDir,
         endpointId: "bytedance/seedance-2.0/text-to-video",

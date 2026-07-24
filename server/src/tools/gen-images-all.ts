@@ -46,7 +46,7 @@ const MODELS: readonly ModelSpec[] = [
 
 const schema = {
   prompt: z.string().describe("Text prompt for image generation"),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   source_script_id: z.string().optional().describe("Optional script asset that originated this prompt"),
 } satisfies ZodRawShape;
 
@@ -60,14 +60,11 @@ async function enqueueModel(
   fs: Engine,
   spec: ModelSpec,
   prompt: string,
-  projectSlug: string,
+  bookId: string,
   sourceScriptId: string | undefined,
   promptSlug: string,
 ): Promise<EnqueueOutcome> {
-  const assetResult = await fs.artifacts.create(
-    "img",
-    `${spec.slugPrefix}-${promptSlug}`,
-    projectSlug,
+  const assetResult = await fs.artifacts.create("img", `${spec.slugPrefix}-${promptSlug}`
   );
   if (!assetResult.ok) {
     return { model: spec.canonicalName, error: assetResult.error.message };
@@ -79,7 +76,7 @@ async function enqueueModel(
     type: spec.jobType,
     imgAssetId,
     imgAssetDir,
-    projectSlug,
+    bookId,
     prompt,
   } as unknown as Record<string, unknown>);
 
@@ -93,7 +90,7 @@ export function genImagesAllDef(fs: Engine): ToolDef {
       "Generate a text-to-image across leading t2i models in parallel (Nano Banana Pro, Wan 2.7 Pro, Seedream v5 Lite, Grok Imagine). Creates one img-* asset per model and enqueues background jobs.",
     schema,
     handler: async (args) => {
-      const { prompt, project_slug, source_script_id } = args as Args;
+      const { prompt, book_id, source_script_id } = args as Args;
 
       if (!prompt.trim()) {
         return {
@@ -110,7 +107,7 @@ export function genImagesAllDef(fs: Engine): ToolDef {
 
       const promptSlug = slugify(prompt) || String(Date.now());
       const results = await Promise.all(
-        MODELS.map((spec) => enqueueModel(fs, spec, prompt, project_slug, source_script_id, promptSlug)),
+        MODELS.map((spec) => enqueueModel(fs, spec, prompt, book_id, source_script_id, promptSlug)),
       );
 
       return {

@@ -28,7 +28,7 @@ describe("suggest_cuts tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "cuts-proj" },
+      arguments: { book_id: "cuts-proj" },
     });
   });
 
@@ -45,7 +45,7 @@ describe("suggest_cuts tool", () => {
   it("returns error when KIE_API_KEY is not set", async () => {
     const result = await client.callTool({
       name: "suggest_cuts",
-      arguments: { asset_id: "vid-anything", project_slug: "cuts-proj" },
+      arguments: { asset_id: "vid-anything", book_id: "cuts-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -58,7 +58,7 @@ describe("suggest_cuts tool", () => {
 
     const result = await client.callTool({
       name: "suggest_cuts",
-      arguments: { asset_id: "vid-does-not-exist", project_slug: "cuts-proj" },
+      arguments: { asset_id: "vid-does-not-exist", book_id: "cuts-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -68,13 +68,13 @@ describe("suggest_cuts tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("vid", "empty-vid", "cuts-proj");
+    const asset = await fs.artifacts.create("vid", "empty-vid");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "notes.txt", "hello", "cuts-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "suggest_cuts",
-      arguments: { asset_id: asset.value.slug, project_slug: "cuts-proj" },
+      arguments: { asset_id: asset.value.slug, book_id: "cuts-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -86,13 +86,13 @@ describe("suggest_cuts tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("vid", "no-frames-vid", "cuts-proj");
+    const asset = await fs.artifacts.create("vid", "no-frames-vid");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "original.mp4", Buffer.from([0]), "cuts-proj");
+    await fs.files.write(asset.value.slug, "original.mp4", Buffer.from([0]));
 
     const result = await client.callTool({
       name: "suggest_cuts",
-      arguments: { asset_id: asset.value.slug, project_slug: "cuts-proj" },
+      arguments: { asset_id: asset.value.slug, book_id: "cuts-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -104,19 +104,15 @@ describe("suggest_cuts tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("vid", "no-transcript-vid", "cuts-proj");
+    const asset = await fs.artifacts.create("vid", "no-transcript-vid");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "original.mp4", Buffer.from([0]), "cuts-proj");
-    await fs.files.write(
-      asset.value.slug,
-      "original_frames/0.000.jpg",
-      Buffer.from([0xff, 0xd8, 0xff]),
-      "cuts-proj",
+    await fs.files.write(asset.value.slug, "original.mp4", Buffer.from([0]));
+    await fs.files.write(asset.value.slug, "original_frames/0.000.jpg", Buffer.from([0xff, 0xd8, 0xff])
     );
 
     const result = await client.callTool({
       name: "suggest_cuts",
-      arguments: { asset_id: asset.value.slug, project_slug: "cuts-proj" },
+      arguments: { asset_id: asset.value.slug, book_id: "cuts-proj" },
     });
 
     expect(result.isError).toBe(true);

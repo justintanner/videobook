@@ -37,7 +37,7 @@ type AnalyzeKeywordPlacementPayload = {
   type: "analyze_keyword_placement";
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
   videoPath: string;
   fingerprint: string;
   graphics: KeywordGraphic[];
@@ -258,16 +258,12 @@ async function analyzeFrames(
 async function writeContactSheetIfChanged(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   contactSheet: Buffer,
 ): Promise<void> {
-  const existing = await fs.files.read(assetId, KEYWORD_FRAME_CACHE_FILENAME, projectSlug);
+  const existing = await fs.files.read(assetId, KEYWORD_FRAME_CACHE_FILENAME);
   if (existing.ok && existing.value.equals(contactSheet)) return;
-  const write = await fs.files.write(
-    assetId,
-    KEYWORD_FRAME_CACHE_FILENAME,
-    contactSheet,
-    projectSlug,
+  const write = await fs.files.write(assetId, KEYWORD_FRAME_CACHE_FILENAME, contactSheet
   );
   if (!write.ok) throw new Error(`Failed to persist keyword frame cache: ${write.error.message}`);
 }
@@ -277,14 +273,14 @@ export function registerAnalyzeKeywordPlacementJob(fs: Engine): void {
     const {
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
       videoPath,
       fingerprint,
       graphics,
     } = payload as AnalyzeKeywordPlacementPayload;
     return withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       assetDir,
       ctx,
@@ -310,8 +306,8 @@ export function registerAnalyzeKeywordPlacementJob(fs: Engine): void {
             regions: regions.get(frame.cueId) ?? [],
           })),
         };
-        await writeContactSheetIfChanged(fs, assetId, projectSlug, extracted.contactSheet);
-        await writeKeywordPlacementAnalysis(fs, assetId, projectSlug, analysis);
+        await writeContactSheetIfChanged(fs, assetId, bookId, extracted.contactSheet);
+        await writeKeywordPlacementAnalysis(fs, assetId, bookId, analysis);
         return { analysis } satisfies AnalyzeKeywordPlacementResult;
       },
       { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },

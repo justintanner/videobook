@@ -229,17 +229,13 @@ describe("estimate_cost tool", () => {
     const projectResult = await fs.projects.create("est-proj");
     expect(projectResult.ok).toBe(true);
 
-    const assetResult = await fs.artifacts.create("vid", "long-motion", "est-proj");
+    const assetResult = await fs.artifacts.create("vid", "long-motion");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
     const motionAssetId = assetResult.value.slug;
 
     const ACTUAL_DURATION = 30;
-    const writeMeta = await fs.metadata.artifacts.write(
-      motionAssetId,
-      "original",
-      { duration: ACTUAL_DURATION, width: 720, height: 1280 },
-      "est-proj",
+    const writeMeta = await fs.metadata.artifacts.write(motionAssetId, "original", { duration: ACTUAL_DURATION, width: 720, height: 1280 }
     );
     expect(writeMeta.ok).toBe(true);
 
@@ -263,7 +259,7 @@ describe("estimate_cost tool", () => {
           input: {
             mode: "1080p",
             motion_video_slugs: [motionAssetId],
-            project_slug: "est-proj",
+            book_id: "est-proj",
           },
         }],
       },
@@ -281,17 +277,13 @@ describe("estimate_cost tool", () => {
     const projectResult = await fs.projects.create("est-at-proj");
     expect(projectResult.ok).toBe(true);
 
-    const assetResult = await fs.artifacts.create("vid", "at-motion", "est-at-proj");
+    const assetResult = await fs.artifacts.create("vid", "at-motion");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
     const motionAssetId = assetResult.value.slug;
 
     const ACTUAL_DURATION = 24;
-    const writeMeta = await fs.metadata.artifacts.write(
-      motionAssetId,
-      "original",
-      { duration: ACTUAL_DURATION, width: 720, height: 1280 },
-      "est-at-proj",
+    const writeMeta = await fs.metadata.artifacts.write(motionAssetId, "original", { duration: ACTUAL_DURATION, width: 720, height: 1280 }
     );
     expect(writeMeta.ok).toBe(true);
 
@@ -303,7 +295,7 @@ describe("estimate_cost tool", () => {
           input: {
             mode: "1080p",
             motion_video_slugs: [`@${motionAssetId}`],
-            project_slug: "est-at-proj",
+            book_id: "est-at-proj",
           },
         }],
       },
@@ -322,17 +314,13 @@ describe("estimate_cost tool", () => {
     const projectResult = await fs.projects.create("est-hh-proj");
     expect(projectResult.ok).toBe(true);
 
-    const assetResult = await fs.artifacts.create("vid", "long-source", "est-hh-proj");
+    const assetResult = await fs.artifacts.create("vid", "long-source");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
     const sourceAssetId = assetResult.value.slug;
 
     const ACTUAL_DURATION = 30;
-    const writeMeta = await fs.metadata.artifacts.write(
-      sourceAssetId,
-      "original",
-      { duration: ACTUAL_DURATION, width: 1920, height: 1080 },
-      "est-hh-proj",
+    const writeMeta = await fs.metadata.artifacts.write(sourceAssetId, "original", { duration: ACTUAL_DURATION, width: 1920, height: 1080 }
     );
     expect(writeMeta.ok).toBe(true);
 
@@ -356,7 +344,7 @@ describe("estimate_cost tool", () => {
           input: {
             resolution: "1080p",
             video_slug: `@${sourceAssetId}`,
-            project_slug: "est-hh-proj",
+            book_id: "est-hh-proj",
           },
         }],
       },
@@ -374,7 +362,7 @@ describe("estimate_cost tool", () => {
     const projectResult = await fs.projects.create("est-hh-fallback");
     expect(projectResult.ok).toBe(true);
 
-    const assetResult = await fs.artifacts.create("vid", "legacy-source", "est-hh-fallback");
+    const assetResult = await fs.artifacts.create("vid", "legacy-source");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
 
@@ -386,7 +374,7 @@ describe("estimate_cost tool", () => {
           input: {
             resolution: "1080p",
             video_slug: assetResult.value.slug,
-            project_slug: "est-hh-fallback",
+            book_id: "est-hh-fallback",
           },
         }],
       },
@@ -401,15 +389,11 @@ describe("estimate_cost tool", () => {
     const projectResult = await fs.projects.create("grok-extend-estimate");
     expect(projectResult.ok).toBe(true);
 
-    const assetResult = await fs.artifacts.create("vid", "grok-source", "grok-extend-estimate");
+    const assetResult = await fs.artifacts.create("vid", "grok-source");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
 
-    const writeMeta = await fs.metadata.artifacts.write(
-      assetResult.value.slug,
-      "generation-payload",
-      { model: "grok-imagine/image-to-video", input: { resolution: "720p" } },
-      "grok-extend-estimate",
+    const writeMeta = await fs.metadata.artifacts.write(assetResult.value.slug, "generation-payload", { model: "grok-imagine/image-to-video", input: { resolution: "720p" } }
     );
     expect(writeMeta.ok).toBe(true);
 
@@ -419,7 +403,7 @@ describe("estimate_cost tool", () => {
         calls: [{
           tool_name: "extend_grok_imagine_video",
           input: {
-            project_slug: "grok-extend-estimate",
+            book_id: "grok-extend-estimate",
             video_slug: `@${assetResult.value.slug}`,
             extend_times: "10",
           },

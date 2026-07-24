@@ -23,16 +23,16 @@ export interface TimelineConfig {
 
 interface UseTimelineResult {
   timeline: TimelineConfig | undefined;
-  fetchTimeline: (projectSlug: string) => Promise<TimelineConfig | null>;
-  setRenderOrientation: (projectSlug: string, orient: Orientation) => Promise<boolean>;
-  setCurrentOrientation: (projectSlug: string, orient: ViewerSize) => void;
-  assignSlot: (projectSlug: string, assetId: string, slotIndex: number) => Promise<boolean>;
-  clearSlot: (projectSlug: string, slotIndex: number) => Promise<boolean>;
-  addAudio: (projectSlug: string, assetId: string, startFrame: number, durationFrames?: number) => Promise<boolean>;
-  moveAudio: (projectSlug: string, audioId: string, startFrame: number) => Promise<boolean>;
-  removeAudio: (projectSlug: string, audioId: string) => Promise<boolean>;
+  fetchTimeline: (bookId: string) => Promise<TimelineConfig | null>;
+  setRenderOrientation: (bookId: string, orient: Orientation) => Promise<boolean>;
+  setCurrentOrientation: (bookId: string, orient: ViewerSize) => void;
+  assignSlot: (bookId: string, assetId: string, slotIndex: number) => Promise<boolean>;
+  clearSlot: (bookId: string, slotIndex: number) => Promise<boolean>;
+  addAudio: (bookId: string, assetId: string, startFrame: number, durationFrames?: number) => Promise<boolean>;
+  moveAudio: (bookId: string, audioId: string, startFrame: number) => Promise<boolean>;
+  removeAudio: (bookId: string, audioId: string) => Promise<boolean>;
   updateAudio: (
-    projectSlug: string,
+    bookId: string,
     audioId: string,
     fields: { volume?: number; fadeIn?: number; fadeOut?: number },
   ) => Promise<boolean>;
@@ -43,9 +43,9 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
   const callToolRef = useRef(callTool);
   useEffect(() => { callToolRef.current = callTool; }, [callTool]);
 
-  const fetchTimeline = useCallback(async (projectSlug: string): Promise<TimelineConfig | null> => {
+  const fetchTimeline = useCallback(async (bookId: string): Promise<TimelineConfig | null> => {
     try {
-      const result = await callToolRef.current("get_timeline", { project_slug: projectSlug });
+      const result = await callToolRef.current("get_timeline", { book_id: bookId });
       if (result.isError) return null;
       const content = result.content as Array<{ type: string; text: string }>;
       const parsed: TimelineConfig = JSON.parse(content[0].text);
@@ -57,9 +57,9 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
     }
   }, []);
 
-  const setRenderOrientation = useCallback(async (projectSlug: string, orient: Orientation): Promise<boolean> => {
+  const setRenderOrientation = useCallback(async (bookId: string, orient: Orientation): Promise<boolean> => {
     try {
-      const getResult = await callToolRef.current("get_timeline", { project_slug: projectSlug });
+      const getResult = await callToolRef.current("get_timeline", { book_id: bookId });
       if (getResult.isError) return false;
       const content = getResult.content as Array<{ type: string; text: string }>;
       const current: TimelineConfig = JSON.parse(content[0].text);
@@ -67,7 +67,7 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
       const updatedConfig = { ...current, render: orient };
 
       const editResult = await callToolRef.current("set_timeline", {
-        project_slug: projectSlug,
+        book_id: bookId,
         slots: updatedConfig.slots,
         render: orient,
         ...(current.audio !== undefined && { audio: current.audio }),
@@ -83,14 +83,14 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
     }
   }, []);
 
-  const setCurrentOrientation = useCallback((projectSlug: string, orient: ViewerSize) => {
-    callToolRef.current("get_timeline", { project_slug: projectSlug }).then(async getResult => {
+  const setCurrentOrientation = useCallback((bookId: string, orient: ViewerSize) => {
+    callToolRef.current("get_timeline", { book_id: bookId }).then(async getResult => {
       if (getResult.isError) return;
       const content = getResult.content as Array<{ type: string; text: string }>;
       const current: TimelineConfig = JSON.parse(content[0].text);
       const updated = { ...current, currentOrientation: orient };
       const editResult = await callToolRef.current("set_timeline", {
-        project_slug: projectSlug,
+        book_id: bookId,
         slots: updated.slots,
         render: updated.render,
         ...(current.audio !== undefined && { audio: current.audio }),
@@ -101,17 +101,17 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
     }).catch(() => {});
   }, []);
 
-  const assignSlot = useCallback(async (projectSlug: string, assetId: string, slotIndex: number): Promise<boolean> => {
+  const assignSlot = useCallback(async (bookId: string, assetId: string, slotIndex: number): Promise<boolean> => {
     try {
       const slot = `s${String(slotIndex + 1).padStart(2, '0')}`;
       const result = await callToolRef.current("assign_slot", {
-        project_slug: projectSlug,
+        book_id: bookId,
         asset_id: assetId,
         slot,
       });
       if (result.isError) return false;
       // Re-fetch to sync local state
-      await fetchTimeline(projectSlug);
+      await fetchTimeline(bookId);
       return true;
     } catch (e: unknown) {
       console.error("[assign_slot] exception:", e instanceof Error ? e.message : String(e));
@@ -119,15 +119,15 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
     }
   }, [fetchTimeline]);
 
-  const clearSlot = useCallback(async (projectSlug: string, slotIndex: number): Promise<boolean> => {
+  const clearSlot = useCallback(async (bookId: string, slotIndex: number): Promise<boolean> => {
     try {
       const slot = `s${String(slotIndex + 1).padStart(2, '0')}`;
       const result = await callToolRef.current("unassign_slot", {
-        project_slug: projectSlug,
+        book_id: bookId,
         slot,
       });
       if (result.isError) return false;
-      await fetchTimeline(projectSlug);
+      await fetchTimeline(bookId);
       return true;
     } catch (e: unknown) {
       console.error("[unassign_slot] exception:", e instanceof Error ? e.message : String(e));
@@ -135,10 +135,10 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
     }
   }, [fetchTimeline]);
 
-  const addAudio = useCallback(async (projectSlug: string, assetId: string, startFrame: number, durationFrames?: number): Promise<boolean> => {
+  const addAudio = useCallback(async (bookId: string, assetId: string, startFrame: number, durationFrames?: number): Promise<boolean> => {
     try {
       const args: Record<string, unknown> = {
-        project_slug: projectSlug,
+        book_id: bookId,
         asset_id: assetId,
         start_frame: startFrame,
       };
@@ -147,7 +147,7 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
       }
       const result = await callToolRef.current("add_timeline_audio", args);
       if (result.isError) return false;
-      await fetchTimeline(projectSlug);
+      await fetchTimeline(bookId);
       return true;
     } catch (e: unknown) {
       console.error("[add_timeline_audio] exception:", e instanceof Error ? e.message : String(e));
@@ -155,15 +155,15 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
     }
   }, [fetchTimeline]);
 
-  const moveAudio = useCallback(async (projectSlug: string, audioId: string, startFrame: number): Promise<boolean> => {
+  const moveAudio = useCallback(async (bookId: string, audioId: string, startFrame: number): Promise<boolean> => {
     try {
       const result = await callToolRef.current("move_timeline_audio", {
-        project_slug: projectSlug,
+        book_id: bookId,
         audio_id: audioId,
         start_frame: startFrame,
       });
       if (result.isError) return false;
-      await fetchTimeline(projectSlug);
+      await fetchTimeline(bookId);
       return true;
     } catch (e: unknown) {
       console.error("[move_timeline_audio] exception:", e instanceof Error ? e.message : String(e));
@@ -171,14 +171,14 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
     }
   }, [fetchTimeline]);
 
-  const removeAudio = useCallback(async (projectSlug: string, audioId: string): Promise<boolean> => {
+  const removeAudio = useCallback(async (bookId: string, audioId: string): Promise<boolean> => {
     try {
       const result = await callToolRef.current("remove_timeline_audio", {
-        project_slug: projectSlug,
+        book_id: bookId,
         audio_id: audioId,
       });
       if (result.isError) return false;
-      await fetchTimeline(projectSlug);
+      await fetchTimeline(bookId);
       return true;
     } catch (e: unknown) {
       console.error("[remove_timeline_audio] exception:", e instanceof Error ? e.message : String(e));
@@ -187,13 +187,13 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
   }, [fetchTimeline]);
 
   const updateAudio = useCallback(async (
-    projectSlug: string,
+    bookId: string,
     audioId: string,
     fields: { volume?: number; fadeIn?: number; fadeOut?: number },
   ): Promise<boolean> => {
     try {
       const args: Record<string, unknown> = {
-        project_slug: projectSlug,
+        book_id: bookId,
         audio_id: audioId,
       };
       if (fields.volume !== undefined) args.volume = fields.volume;
@@ -201,7 +201,7 @@ export function useTimeline(callTool: UseMcpResult["callTool"]): UseTimelineResu
       if (fields.fadeOut !== undefined) args.fade_out = fields.fadeOut;
       const result = await callToolRef.current("update_timeline_audio", args);
       if (result.isError) return false;
-      await fetchTimeline(projectSlug);
+      await fetchTimeline(bookId);
       return true;
     } catch (e: unknown) {
       console.error("[update_timeline_audio] exception:", e instanceof Error ? e.message : String(e));

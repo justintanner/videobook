@@ -12,13 +12,13 @@ export function replaceVideoAudioDef(fs: Engine): ToolDef {
     schema: {
       asset_id: z.string().describe("Video asset whose audio is being replaced (vid-*)"),
       audio_asset_id: z.string().describe("Audio source: an aud-* asset id, or `<assetId>/<filename>` to point at a specific file inside another asset (e.g. `plan/s1.mp3`)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, audio_asset_id, project_slug } = args as {
+      const { asset_id, audio_asset_id, book_id } = args as {
         asset_id: string;
         audio_asset_id: string;
-        project_slug: string;
+        book_id: string;
       };
 
       if (!asset_id.startsWith("vid-")) {
@@ -41,7 +41,7 @@ export function replaceVideoAudioDef(fs: Engine): ToolDef {
         };
       }
 
-      const videoManifest = await fs.files.manifest(asset_id, project_slug);
+      const videoManifest = await fs.files.manifest(asset_id);
       if (!videoManifest.ok) {
         return {
           isError: true as const,
@@ -56,7 +56,7 @@ export function replaceVideoAudioDef(fs: Engine): ToolDef {
         };
       }
 
-      const audioManifest = await fs.files.manifest(audioAssetIdResolved, project_slug, { includeDotfiles: true });
+      const audioManifest = await fs.files.manifest(audioAssetIdResolved);
       if (!audioManifest.ok) {
         return {
           isError: true as const,
@@ -99,7 +99,7 @@ export function replaceVideoAudioDef(fs: Engine): ToolDef {
           assetId: asset_id,
           assetDir,
           audioAssetId: audio_asset_id,
-          projectSlug: project_slug,
+          bookId: book_id,
         } as unknown as Record<string, unknown>);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);

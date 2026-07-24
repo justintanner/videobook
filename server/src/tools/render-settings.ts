@@ -15,11 +15,11 @@ const TRANSLATED_SIDECAR_RE = /^elevenlabs\.([a-z]{2})\.json$/;
 async function readTranscriptInfo(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<TranscriptInfo> {
   const info: TranscriptInfo = { sourceLanguageCode: null, sourceLanguage: null, cachedTranslations: [] };
 
-  const manifestResult = await fs.files.manifest(assetId, projectSlug);
+  const manifestResult = await fs.files.manifest(assetId);
   if (manifestResult.ok) {
     for (const file of manifestResult.value.files) {
       const match = TRANSLATED_SIDECAR_RE.exec(file.name);
@@ -27,7 +27,7 @@ async function readTranscriptInfo(
     }
   }
 
-  const transcriptResult = await fs.files.read(assetId, "elevenlabs.json", projectSlug);
+  const transcriptResult = await fs.files.read(assetId, "elevenlabs.json");
   if (transcriptResult.ok) {
     try {
       const raw = JSON.parse(transcriptResult.value.toString()) as unknown;
@@ -47,13 +47,13 @@ export function getRenderSettingsDef(fs: Engine): ToolDef {
     description: "Fetch stored render settings for a single asset across all orientations, plus transcript language info (detected source language and cached subtitle translations)",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-running-dog)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
+      const { asset_id, book_id } = args as { asset_id: string; book_id: string };
       const [settings, transcript] = await Promise.all([
-        readRenderSettings(fs, asset_id, project_slug, [...RENDER_ORIENTATIONS]),
-        readTranscriptInfo(fs, asset_id, project_slug),
+        readRenderSettings(fs, asset_id, book_id, [...RENDER_ORIENTATIONS]),
+        readTranscriptInfo(fs, asset_id, book_id),
       ]);
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ settings, transcript }) }],

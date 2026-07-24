@@ -29,8 +29,8 @@ export interface Revision {
 interface UseAssetHistoryResult {
   commits: Revision[];
   loading: boolean;
-  fetchHistory: (assetId: string, projectSlug: string) => Promise<void>;
-  restoreVersion: (assetId: string, commitHash: string, projectSlug: string) => Promise<boolean>;
+  fetchHistory: (assetId: string, bookId: string) => Promise<void>;
+  restoreVersion: (assetId: string, commitHash: string, bookId: string) => Promise<boolean>;
 }
 
 export function useAssetHistory(callTool: UseMcpResult["callTool"]): UseAssetHistoryResult {
@@ -39,10 +39,10 @@ export function useAssetHistory(callTool: UseMcpResult["callTool"]): UseAssetHis
   const callToolRef = useRef(callTool);
   useEffect(() => { callToolRef.current = callTool; }, [callTool]);
 
-  const fetchHistory = useCallback(async (assetId: string, projectSlug: string) => {
+  const fetchHistory = useCallback(async (assetId: string, bookId: string) => {
     setLoading(true);
     try {
-      const result = await callToolRef.current("asset_history", { asset_id: assetId, project_slug: projectSlug });
+      const result = await callToolRef.current("asset_history", { asset_id: assetId, book_id: bookId });
       if (result.isError) {
         setCommits([]);
         return;
@@ -58,12 +58,12 @@ export function useAssetHistory(callTool: UseMcpResult["callTool"]): UseAssetHis
     }
   }, []);
 
-  const restoreVersion = useCallback(async (assetId: string, commitHash: string, projectSlug: string): Promise<boolean> => {
+  const restoreVersion = useCallback(async (assetId: string, commitHash: string, bookId: string): Promise<boolean> => {
     try {
       const result = await callToolRef.current("restore_asset_version", {
         asset_id: assetId,
         commit_hash: commitHash,
-        project_slug: projectSlug,
+        book_id: bookId,
       });
       return !result.isError;
     } catch (e: unknown) {

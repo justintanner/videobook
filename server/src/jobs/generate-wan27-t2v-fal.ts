@@ -7,7 +7,7 @@ type Payload = {
   type: "generate_wan27_t2v_fal";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   aspect_ratio?: string;
   resolution?: string;
@@ -21,7 +21,7 @@ type Payload = {
 export function registerGenerateWan27T2vFalJob(fs: Engine): void {
   registerJobHandler("generate_wan27_t2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.projectSlug, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.bookId, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
       const input: Record<string, unknown> = {
         prompt: p.prompt,
@@ -36,7 +36,7 @@ export function registerGenerateWan27T2vFalJob(fs: Engine): void {
   
       const taskId = await submitFalJob({
         fs,
-        projectSlug: p.projectSlug,
+        bookId: p.bookId,
         assetId: p.vidAssetId,
         assetDir: p.vidAssetDir,
         endpointId: "fal-ai/wan/v2.7/text-to-video",

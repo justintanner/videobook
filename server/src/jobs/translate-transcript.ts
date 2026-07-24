@@ -16,7 +16,7 @@ import {
 export type TranslateTranscriptPayload = {
   type: "translate_transcript";
   assetId: string;
-  projectSlug: string;
+  bookId: string;
   targetLanguage: string;
 };
 
@@ -32,19 +32,19 @@ export async function runTranslateTranscript(
   payload: TranslateTranscriptPayload,
   ctx: JobHandlerContext,
 ): Promise<TranslateTranscriptResult> {
-  const { assetId, projectSlug, targetLanguage } = payload;
+  const { assetId, bookId, targetLanguage } = payload;
 
   // Leased as "transcribe": the engine's ArtifactWorkKind union has no
   // translate kind, and sharing it serializes translation against
   // re-transcription of the same asset.
   const result = await withLocalLease(
     fs,
-    projectSlug,
+    bookId,
     assetId,
     ctx,
     "transcribe",
     async (): Promise<TranslateTranscriptResult> => {
-      const readResult = await fs.files.read(assetId, "elevenlabs.json", projectSlug);
+      const readResult = await fs.files.read(assetId, "elevenlabs.json");
       if (!readResult.ok) {
         throw new Error(`No transcript for ${assetId}: ${readResult.error.message}. Transcribe the asset first.`);
       }
@@ -55,7 +55,7 @@ export async function runTranslateTranscript(
       }
 
       const sidecarFilename = translatedTranscriptFilename(targetLanguage);
-      const existing = await fs.files.read(assetId, sidecarFilename, projectSlug);
+      const existing = await fs.files.read(assetId, sidecarFilename);
       if (existing.ok) {
         const sourceSegments = parseSegments(raw as Parameters<typeof parseSegments>[0]);
         try {
@@ -71,23 +71,19 @@ export async function runTranslateTranscript(
       const responses = buildResponses(requireApiKey("KIE_API_KEY"));
       const sidecar = await translateTranscript(raw, targetLanguage, responses);
 
-      const writeResult = await fs.files.write(
-        assetId,
-        sidecarFilename,
-        JSON.stringify(sidecar, null, 2),
-        projectSlug,
+      const writeResult = await fs.files.write(assetId, sidecarFilename, JSON.stringify(sidecar, null, 2)
       );
       if (!writeResult.ok) {
         throw new Error(`Failed to write ${sidecarFilename}: ${writeResult.error.message}`);
       }
 
-      await fs.history.recordOperation("translate_transcript", assetId, { targetLanguage }, projectSlug);
+      await fs.history.recordOperation("translate_transcript", assetId, { targetLanguage });
 
       return { success: true, targetLanguage };
     },
   );
   try {
-    await enqueueLazyTimelineRender(fs, projectSlug, assetId);
+    await enqueueLazyTimelineRender(fs, bookId, assetId);
   } catch (err) {
     void err;
   }

@@ -301,7 +301,7 @@ describe("findPreviousErrorForPrompt", () => {
   });
 
   async function createAsset(fs: Engine, name: string): Promise<string> {
-    const result = await fs.artifacts.create("vid", name, "err-proj");
+    const result = await fs.artifacts.create("vid", name);
     if (!result.ok) throw new Error(result.error.message);
     return result.value.slug;
   }
@@ -311,7 +311,7 @@ describe("findPreviousErrorForPrompt", () => {
     assetId: string,
     info: { message: string; failCode?: string; prompt?: string | null },
   ): Promise<void> {
-    const result = await fs.jobs.failures.write("err-proj", assetId, info);
+    const result = await fs.jobs.failures.write(assetId, info);
     if (!result.ok) throw new Error(result.error.message);
   }
 
@@ -567,7 +567,7 @@ describe("rewrite_prompt tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -585,7 +585,7 @@ describe("rewrite_prompt tool", () => {
       arguments: {
         prompt: "a cat running",
         model: "nano_banana",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
     expect(result.isError).toBe(true);
@@ -599,7 +599,7 @@ describe("rewrite_prompt tool", () => {
       name: "rewrite_prompt",
       arguments: {
         model: "nano_banana",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
     expect(result.isError).toBe(true);
@@ -613,7 +613,7 @@ describe("rewrite_prompt tool", () => {
     const data = Buffer.from("fake-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "myvid.mp4", data },
+      arguments: { book_id: "test-proj", filename: "myvid.mp4", data },
     });
     const uploaded = JSON.parse((uploadResult.content as TextContent)[0].text);
 
@@ -621,7 +621,7 @@ describe("rewrite_prompt tool", () => {
       name: "rewrite_prompt",
       arguments: {
         model: "kling30",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         asset_slug: uploaded.assetId,
         scene_index: 0,
       },
@@ -639,7 +639,7 @@ describe("rewrite_prompt tool", () => {
         prompt: "a cat",
         model: "nano_banana",
         image_slugs: ["nonexistent-slug"],
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
     expect(result.isError).toBe(true);
@@ -659,7 +659,7 @@ describe("rewrite_prompt tool", () => {
         prompt: "a cat",
         model: "gemini_omni",
         image_slugs: ["nonexistent-slug"],
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
     expect(result.isError).toBe(true);
@@ -676,7 +676,7 @@ describe("rewrite_prompt tool", () => {
         prompt: "a cat",
         model: "gemini_omni",
         previous_error: "PUBLIC_ERROR_PROMINENT_PEOPLE_FILTER_FAILED",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
     // Without API key, the tool returns the not-set error (past schema validation).
@@ -693,7 +693,7 @@ describe("rewrite_prompt tool", () => {
         prompt: "a cat",
         model: "nano_banana",
         previous_error: "",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
     expect(result.isError).toBe(true);
@@ -713,7 +713,7 @@ describe("rewrite_prompt tool", () => {
         prompt: "a cat",
         model: "gemini_omni",
         image_slugs: ["nonexistent-slug"],
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
     expect(result.isError).toBe(true);

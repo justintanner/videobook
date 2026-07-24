@@ -23,7 +23,7 @@ export function timewarpVideoDef(fs: Engine): ToolDef {
     description: "Retime one video range and compensate the remaining picture to preserve the original duration and audio.",
     schema: {
       asset_id: z.string().describe("Video asset ID"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       start_seconds: z.number().describe("Selected range start in seconds"),
       end_seconds: z.number().describe("Selected range end in seconds"),
       stretch_factor: z.number().describe("Duration multiplier from 0.25 to 4; values above 1 lengthen the selection"),
@@ -31,19 +31,19 @@ export function timewarpVideoDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const {
         asset_id,
-        project_slug,
+        book_id,
         start_seconds,
         end_seconds,
         stretch_factor,
       } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         start_seconds: number;
         end_seconds: number;
         stretch_factor: number;
       };
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) return errorResult(manifestResult.error.message);
       const videoFile = findVideoFile(manifestResult.value.files);
       if (!videoFile) return errorResult(`No video file found in asset ${asset_id}`);
@@ -84,7 +84,7 @@ export function timewarpVideoDef(fs: Engine): ToolDef {
         stretchFactor: stretch_factor,
         assetId: asset_id,
         assetDir: manifestResult.value.path,
-        projectSlug: project_slug,
+        bookId: book_id,
       } as unknown as Record<string, unknown>);
 
       return {

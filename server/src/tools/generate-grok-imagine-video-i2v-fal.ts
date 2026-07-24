@@ -10,7 +10,7 @@ import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 const base = FalXaiGrokImagineVideoImageToVideoRequestSchema.shape;
 
 const generateGrokImagineVideoI2vFalSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(base.prompt, "Video description (max 4096 chars)", { required: true }),
   first_frame_slug: z.string().describe("First frame image asset (e.g., @img-start)"),
   duration: apicityField(base.duration, "Video duration in seconds (1-15)"),
@@ -26,17 +26,17 @@ export function generateGrokImagineVideoI2vFalDef(fs: Engine): ToolDef {
     description: "Generate a video via fal.ai using xAI Grok Imagine Video image-to-video. Requires a first-frame image. Creates a new vid- asset and enqueues a background job.",
     schema: generateGrokImagineVideoI2vFalSchema,
     handler: async (args) => {
-      const { project_slug, prompt, first_frame_slug, duration, aspect_ratio, resolution } = args as Args;
+      const { book_id, prompt, first_frame_slug, duration, aspect_ratio, resolution } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const resolved = await resolveImageSlugs(fs, [first_frame_slug], project_slug);
+      const resolved = await resolveImageSlugs(fs, [first_frame_slug], book_id);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [firstFrame] = resolved.inputs;
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "grok-imagine/image-to-video")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "grok-imagine/image-to-video")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
@@ -46,7 +46,7 @@ export function generateGrokImagineVideoI2vFalDef(fs: Engine): ToolDef {
         type: "generate_grok_imagine_video_i2v_fal",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         firstFrame,
         sourceImageIds: resolved.sourceImageIds,

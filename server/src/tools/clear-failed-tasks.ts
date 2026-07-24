@@ -26,12 +26,12 @@ export function clearFailedTasksDef(fs: Engine): ToolDef {
     description:
       "Clean up assets with a persisted generation error: delete unmaterialized generation husks (returned as 'cleared'), but keep assets that already hold media and only clear their error row (returned as 'error_cleared').",
     schema: {
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { project_slug } = args as { project_slug: string };
+      const { book_id: _book_id } = args as { book_id: string };
 
-      const failuresRes = await fs.jobs.failures.findAll(project_slug);
+      const failuresRes = await fs.jobs.failures.findAll();
       const failures = failuresRes.ok ? failuresRes.value : [];
 
       const cleared: string[] = [];
@@ -39,12 +39,12 @@ export function clearFailedTasksDef(fs: Engine): ToolDef {
       const errors: Array<{ assetId: string; message: string }> = [];
 
       for (const failure of failures) {
-        const manifest = await fs.files.manifest(failure.artifactSlug, project_slug);
+        const manifest = await fs.files.manifest(failure.artifactSlug);
         const materialized =
           manifest.ok && hasMediaFile(manifest.value.files, failure.artifactSlug);
 
         if (materialized) {
-          const clearResult = await fs.jobs.failures.clear(project_slug, failure.artifactSlug);
+          const clearResult = await fs.jobs.failures.clear(failure.artifactSlug);
           if (clearResult.ok) {
             errorCleared.push(failure.artifactSlug);
           } else {
@@ -53,7 +53,7 @@ export function clearFailedTasksDef(fs: Engine): ToolDef {
           continue;
         }
 
-        const result = await fs.artifacts.delete(failure.artifactSlug, project_slug);
+        const result = await fs.artifacts.delete(failure.artifactSlug);
         if (result.ok) {
           cleared.push(failure.artifactSlug);
         } else {

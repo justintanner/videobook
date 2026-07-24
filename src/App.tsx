@@ -1,15 +1,16 @@
 import {
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
+  type ChangeEvent,
+  type FormEvent,
 } from 'react'
 import {
   Background,
   Controls,
   Handle,
-  PanOnScrollMode,
+  MiniMap,
   Panel,
   Position,
   ReactFlow,
@@ -20,33 +21,27 @@ import {
   type Node,
   type NodeProps,
   type ReactFlowInstance,
-  type Viewport,
 } from '@xyflow/react'
 import {
   Activity,
   BookOpen,
-  Boxes,
-  ChevronDown,
   Check,
+  ChevronDown,
   CircleDot,
   Film,
   FolderKanban,
   Image,
   Library,
-  MessageSquareText,
+  LoaderCircle,
   Plus,
   RefreshCw,
   Settings,
   Sparkles,
   Trash2,
-  UserRound,
   Video,
-  X,
 } from 'lucide-react'
 import { useMcp } from 'use-mcp/react'
-import type {
-  ProjectBook,
-} from 'videobook-engine'
+import type { NotebookCellType, NotebookDocument } from 'videobook-engine'
 import {
   adaptCommandArgs,
   parseCommandArgs,
@@ -57,179 +52,150 @@ import {
 import {
   CommandComposer,
   type ComposerOutcome,
-  type PromptSession,
 } from '@/components/videobook/CommandComposer'
 import {
-  CellInspectorPanel,
-  type InspectorTab,
-} from '@/components/videobook/CellInspectorPanel'
-import { NotebookStageBoard } from '@/components/videobook/NotebookStageBoard'
-import { useProjectScreenLoader } from '@/hooks/useProjectScreenLoader'
+  notebookEdges,
+  notebookNodes,
+  type NotebookCellData,
+} from '@/videobook/notebook-draft'
 import {
-  clampNotebookViewport,
   nextNotebookGridSlot,
-  notebookGrid,
-  notebookGridStageCountForViewport,
+  notebookGridPosition,
   notebookGridSlot,
-  notebookGridStageViewport,
-  resolveNotebookGridMove,
-  snapNotebookGridMove,
-  type NotebookGridSlot,
 } from '@/videobook/notebook-grid'
-import {
-  parseBookAssets,
-  parseProjectBook,
-  projectBookEdges,
-  projectBookNodes,
-  projectMentionSlugs,
-  type BookAsset,
-  type BookCellData,
-  type BookCellKind,
-} from '@/videobook/project-book'
 
-type Screen =
-  | 'notebook'
-  | 'projects'
-  | 'library'
-  | 'jobs'
-  | 'settings'
+type Screen = 'notebook' | 'books' | 'library' | 'timeline' | 'jobs' | 'settings'
 
-type EntityKind = 'prompt' | 'character' | 'scene'
-
-interface ToolResponse {
+type ToolResponse = {
   content?: Array<{ type: string; text?: string }>
   isError?: boolean
 }
 
-interface ProjectRecord {
+type BookSummary = {
+  bookId: string
   slug: string
-  asset_count?: number
+  createdAt: number
+  artifactCount: number
+  notebookCount: number
 }
 
-const mcpUrl = new URL('/mcp', window.location.origin).toString()
-const nodeTypes = { cell: CellNode }
+type AssetRecord = {
+  id: string
+  artifactId: string
+  type: string
+  createdAt: string
+  mediaUrl: string | null
+  thumbnailUrl: string | null
+  status: string
+  prompt: string | null
+  width: number | null
+  height: number | null
+}
 
-const headerNavigation: Array<{
+type TimelineSlot = {
+  id: string
+  artifactId: string
+  volume?: number
+  audioFadeIn?: number
+  audioFadeOut?: number
+}
+
+type TimelineAudio = {
+  id: string
+  artifactId: string
+  startFrame: number
+  durationFrames: number
+  volume?: number
+  fadeIn?: number
+  fadeOut?: number
+}
+
+type TimelineRecord = {
+  bookId: string
+  render: 'landscape' | 'portrait' | 'square'
+  slots: TimelineSlot[]
+  audio: TimelineAudio[]
+}
+
+type JobRecord = {
+  id: number
+  type: string
+  state: string
+  artifactId: string | null
+  error: { message: string } | null
+  enqueuedAt: number
+}
+
+type ProviderRecord = {
+  envKey: string
+  provider: string
+  label: string
+  keyStatus: string
+  maskedKey: string | null
+}
+
+const supportedUiActions = new Set([
+  'switch_book',
+  'open_notebook',
+  'open_projects',
+  'open_provider_keys',
+])
+
+interface CanvasCellData extends NotebookCellData {
+  asset?: AssetRecord
+  onRun?: () => void
+}
+
+type CanvasNode = Node<CanvasCellData>
+
+const mcpUrl = new URL('/mcp', window.location.origin).toString()
+
+const screenNavigation: Array<{
   id: Exclude<Screen, 'notebook'>
   label: string
   icon: typeof BookOpen
 }> = [
-  { id: 'projects', label: 'Projects', icon: FolderKanban },
-  { id: 'library', label: 'Entities', icon: Library },
+  { id: 'books', label: 'Books', icon: FolderKanban },
+  { id: 'library', label: 'Library', icon: Library },
+  { id: 'timeline', label: 'Timeline', icon: Film },
   { id: 'jobs', label: 'Jobs', icon: Activity },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
-const palette: Array<{
-  kind: BookCellKind
+const cellPalette: Array<{
+  type: NotebookCellType
   label: string
-  shortLabel?: string
   icon: typeof BookOpen
 }> = [
-  { kind: 'prompt' as const, label: 'Prompt', icon: MessageSquareText },
-  { kind: 'image' as const, label: 'Image', icon: Image },
-  { kind: 'video' as const, label: 'Video', icon: Video },
-  {
-    kind: 'character' as const,
-    label: 'Character',
-    shortLabel: 'Char',
-    icon: UserRound,
-  },
-  { kind: 'scene' as const, label: 'Scene', icon: Film },
+  { type: 'prompt', label: 'Prompt', icon: CircleDot },
+  { type: 'image', label: 'Image', icon: Image },
+  { type: 'video', label: 'Video', icon: Video },
+  { type: 'character', label: 'Character', icon: BookOpen },
+  { type: 'scene', label: 'Scene', icon: Film },
 ]
 
-const cellDragType = 'application/x-videobook-cell'
-
-function cellKindFromDrag(value: string): BookCellKind | null {
-  return palette.some((item) => item.kind === value)
-    ? value as BookCellKind
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
     : null
 }
 
-function CellNode({ data, selected }: NodeProps<Node<BookCellData>>) {
-  const Icon =
-    data.kind === 'video'
-      ? Video
-      : data.kind === 'prompt'
-        ? MessageSquareText
-        : data.kind === 'character'
-          ? UserRound
-          : data.kind === 'scene'
-            ? Film
-            : Image
-
-  return (
-    <article
-      className={`cell-node ${selected ? 'cell-node-selected' : ''}`}
-    >
-      {data.stage > 1 && (
-        <>
-          <Handle type="target" position={Position.Top} id="reference" />
-          <Handle type="target" position={Position.Top} id="subject" />
-          <Handle type="target" position={Position.Top} id="scene" />
-          <Handle type="target" position={Position.Top} id="first-frame" />
-        </>
-      )}
-      <section className="cell-node-shell">
-        <header className="cell-node-header">
-          <span>
-            <Icon size={14} />
-            {data.kind.toUpperCase()}
-          </span>
-        </header>
-        {data.mediaUrl || data.thumbnailUrl ? (
-          <div className="cell-media">
-            {data.kind === 'video' && !data.thumbnailUrl ? (
-              <video
-                src={data.mediaUrl}
-                muted
-                playsInline
-                preload="metadata"
-              />
-            ) : (
-              <img
-                src={data.thumbnailUrl ?? data.mediaUrl}
-                alt={data.slug}
-              />
-            )}
-            {data.width && data.height && (
-              <span className="cell-ratio">
-                {data.width > data.height
-                  ? '16:9'
-                  : data.width < data.height
-                    ? '9:16'
-                    : '1:1'}
-              </span>
-            )}
-          </div>
-        ) : data.kind === 'prompt' ? (
-          <div className="cell-copy cell-copy-prompt">
-            <p>{data.prompt || data.operation}</p>
-          </div>
-        ) : (
-          <div className="cell-copy">
-            <Sparkles size={28} />
-            <span>{data.prompt || data.operation}</span>
-          </div>
-        )}
-        <footer className="cell-node-footer">
-          <strong>{data.slug}</strong>
-          <strong>{data.status}</strong>
-        </footer>
-      </section>
-      <Handle type="source" position={Position.Bottom} />
-    </article>
-  )
+function asString(value: unknown): string | null {
+  return typeof value === 'string' ? value : null
 }
 
-function textFromToolResult(result: unknown): string | null {
+function asNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function responseText(result: unknown): string | null {
   const response = result as ToolResponse
   return response.content?.find((item) => item.type === 'text')?.text ?? null
 }
 
-function parseToolResult(result: unknown): unknown {
+function parseResult(result: unknown): unknown {
   const response = result as ToolResponse
-  const text = textFromToolResult(result)
+  const text = responseText(result)
   if (response.isError) throw new Error(text ?? 'MCP tool failed')
   if (!text) return null
   try {
@@ -239,152 +205,330 @@ function parseToolResult(result: unknown): unknown {
   }
 }
 
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : []
-}
-
-function asProjects(value: unknown): ProjectRecord[] {
-  return asArray(value).filter((item): item is ProjectRecord => (
-    typeof item === 'object'
-    && item !== null
-    && 'slug' in item
-    && typeof item.slug === 'string'
-  ))
-}
-
-function asCommands(value: unknown): ServerCommand[] {
-  return asArray(value).filter((item): item is ServerCommand => (
-    typeof item === 'object'
-    && item !== null
-    && 'command' in item
-    && typeof item.command === 'string'
-  ))
-}
-
-function summarize(value: unknown, fallback: string): string {
+function messageFor(value: unknown, fallback: string): string {
   if (typeof value === 'string') return value
-  if (Array.isArray(value)) {
-    return `${value.length} ${value.length === 1 ? 'result' : 'results'}`
-  }
-  if (typeof value === 'object' && value !== null) {
-    for (const key of ['message', 'name', 'id', 'asset_id', 'notebookId', 'hash']) {
-      if (key in value && typeof value[key as keyof typeof value] === 'string') {
-        return `${fallback}: ${String(value[key as keyof typeof value])}`
-      }
-    }
-    if ('status' in value && typeof value.status === 'string') {
-      return `${fallback}: ${value.status}`
-    }
+  const item = record(value)
+  if (!item) return fallback
+  for (const key of ['message', 'job_id', 'notebook_id', 'slug', 'bookId']) {
+    const candidate = asString(item[key])
+    if (candidate) return `${fallback}: ${candidate}`
   }
   return fallback
 }
 
-function errorOutcome(error: unknown): ComposerOutcome {
+function asBooks(value: unknown): BookSummary[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    const item = record(entry)
+    const bookId = item && asString(item.bookId)
+    const slug = item && asString(item.slug)
+    const createdAt = item && asNumber(item.createdAt)
+    if (!item || !bookId || !slug || createdAt === null) return []
+    return [{
+      bookId,
+      slug,
+      createdAt,
+      artifactCount: asNumber(item.artifactCount) ?? 0,
+      notebookCount: asNumber(item.notebookCount) ?? 0,
+    }]
+  })
+}
+
+function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | null {
+  const item = record(value)
+  const id = item && asString(item.id)
+  const type = item && asString(item.type)
+  const title = item && asString(item.title)
+  const position = item && record(item.position)
+  const x = position && asNumber(position.x)
+  const y = position && asNumber(position.y)
+  if (!item || !id || !title || x === null || y === null) return null
+  if (!['prompt', 'character', 'scene', 'asset', 'image', 'video'].includes(type ?? '')) return null
+  const inputs = record(item.inputs)
   return {
-    ok: false,
-    message: error instanceof Error ? error.message : String(error),
+    id,
+    type: type as NotebookCellType,
+    title,
+    position: { x, y },
+    ...(asString(item.entity_id ?? item.entityId)
+      ? { entityId: asString(item.entity_id ?? item.entityId)! }
+      : {}),
+    ...(asString(item.prompt) !== null ? { prompt: asString(item.prompt)! } : {}),
+    ...(asString(item.model) !== null ? { model: asString(item.model)! } : {}),
+    ...(inputs ? { inputs } : {}),
+    ...(asString(item.output_artifact_id ?? item.outputArtifactId)
+      ? { outputArtifactId: asString(item.output_artifact_id ?? item.outputArtifactId)! }
+      : {}),
   }
 }
 
-function recordedActionId(value: unknown): string | null {
-  if (
-    typeof value !== 'object'
-    || value === null
-    || !('action' in value)
-    || typeof value.action !== 'object'
-    || value.action === null
-    || !('id' in value.action)
-    || typeof value.action.id !== 'string'
-  ) {
-    return null
+function asNotebook(value: unknown): NotebookDocument | null {
+  const item = record(value)
+  const id = item && asString(item.id)
+  const name = item && asString(item.name)
+  const createdAt = item && asString(item.created_at ?? item.createdAt)
+  if (!item || !id || !name || !createdAt) return null
+  const cells = Array.isArray(item.cells)
+    ? item.cells.flatMap((cell) => {
+      const parsed = asNotebookCell(cell)
+      return parsed ? [parsed] : []
+    })
+    : []
+  const edges = Array.isArray(item.edges)
+    ? item.edges.flatMap((edge) => {
+      const parsed = record(edge)
+      const edgeId = parsed && asString(parsed.id)
+      const source = parsed && asString(parsed.source)
+      const target = parsed && asString(parsed.target)
+      const targetInput = parsed && asString(parsed.targetInput ?? parsed.target_input)
+      return edgeId && source && target && targetInput
+        ? [{ id: edgeId, source, target, targetInput }]
+        : []
+    })
+    : []
+  return {
+    id,
+    name,
+    createdAt,
+    ...(record(item.properties) ? { properties: record(item.properties)! } : {}),
+    cells,
+    edges,
   }
-  return value.action.id
 }
 
-function artifactIdForNode(node: Node<BookCellData>): string {
-  return node.data.slug.replace(/^@/, '')
+function asNotebooks(value: unknown): NotebookDocument[] {
+  return Array.isArray(value)
+    ? value.flatMap((entry) => {
+      const notebook = asNotebook(entry)
+      return notebook ? [notebook] : []
+    })
+    : []
 }
 
-function ProjectMenu({
-  open,
-  activeSlug,
-  projects,
-  busy,
-  onHome,
-  onToggle,
-  onSwitch,
-  onManage,
-}: {
-  open: boolean
-  activeSlug: string
-  projects: ProjectRecord[]
-  busy: boolean
-  onHome: () => void
-  onToggle: () => void
-  onSwitch: (slug: string) => Promise<ComposerOutcome>
-  onManage: () => void
-}) {
+function asAssets(value: unknown): AssetRecord[] {
+  const container = record(value)
+  const source = Array.isArray(value)
+    ? value
+    : Array.isArray(container?.assets)
+      ? container.assets
+      : []
+  return source.flatMap((entry) => {
+    const item = record(entry)
+    const id = item && asString(item.id)
+    const artifactId = item && asString(item.artifact_id ?? item.artifactId)
+    const type = item && asString(item.type)
+    if (!item || !id || !artifactId || !type) return []
+    return [{
+      id,
+      artifactId,
+      type,
+      createdAt: asString(item.created_at ?? item.createdAt) ?? '',
+      mediaUrl: asString(item.media_url ?? item.mediaUrl),
+      thumbnailUrl: asString(item.thumbnail_url ?? item.thumbnailUrl),
+      status: asString(item.status) ?? 'ready',
+      prompt: asString(item.prompt),
+      width: asNumber(item.width),
+      height: asNumber(item.height),
+    }]
+  })
+}
+
+function asTimeline(value: unknown): TimelineRecord {
+  const item = record(value)
+  const render = asString(item?.render)
+  const slots = Array.isArray(item?.slots) ? item!.slots.flatMap((entry) => {
+    const slot = record(entry)
+    const id = slot && asString(slot.id)
+    const artifactId = slot && asString(slot.artifact_id ?? slot.artifactId)
+    return id && artifactId
+      ? [{
+        id,
+        artifactId,
+        ...(asNumber(slot.volume) !== null ? { volume: asNumber(slot.volume)! } : {}),
+        ...(asNumber(slot.audioFadeIn) !== null ? { audioFadeIn: asNumber(slot.audioFadeIn)! } : {}),
+        ...(asNumber(slot.audioFadeOut) !== null ? { audioFadeOut: asNumber(slot.audioFadeOut)! } : {}),
+      }]
+      : []
+  }) : []
+  const audio = Array.isArray(item?.audio) ? item!.audio.flatMap((entry) => {
+    const clip = record(entry)
+    const id = clip && asString(clip.id)
+    const artifactId = clip && asString(clip.artifact_id ?? clip.artifactId)
+    const startFrame = clip && asNumber(clip.startFrame ?? clip.start_frame)
+    const durationFrames = clip && asNumber(clip.durationFrames ?? clip.duration_frames)
+    return id && artifactId && startFrame !== null && durationFrames !== null
+      ? [{ id, artifactId, startFrame, durationFrames }]
+      : []
+  }) : []
+  return {
+    bookId: asString(item?.book_id ?? item?.bookId) ?? '',
+    render: render === 'portrait' || render === 'square' ? render : 'landscape',
+    slots,
+    audio,
+  }
+}
+
+function asJobs(value: unknown): JobRecord[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => {
+    const item = record(entry)
+    const id = item && asNumber(item.id)
+    const type = item && asString(item.type)
+    const state = item && asString(item.state)
+    if (!item || id === null || !type || !state) return []
+    const error = record(item.error)
+    return [{
+      id,
+      type,
+      state,
+      artifactId: asString(item.artifactId ?? item.artifact_id),
+      error: error && asString(error.message) ? { message: asString(error.message)! } : null,
+      enqueuedAt: asNumber(item.enqueuedAt ?? item.enqueued_at) ?? 0,
+    }]
+  })
+}
+
+function asCommands(value: unknown): ServerCommand[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is ServerCommand => {
+      const item = record(entry)
+      const uiAction = item && asString(item.uiAction)
+      return item !== null
+        && typeof item.command === 'string'
+        && typeof item.description === 'string'
+        && (!uiAction || supportedUiActions.has(uiAction))
+    })
+    : []
+}
+
+function asProviders(value: unknown): ProviderRecord[] {
+  const item = record(value)
+  if (!Array.isArray(item?.providers)) return []
+  return item.providers.flatMap((entry) => {
+    const provider = record(entry)
+    const envKey = provider && asString(provider.envKey)
+    const label = provider && asString(provider.label)
+    const group = provider && asString(provider.provider)
+    if (!provider || !envKey || !label || !group) return []
+    return [{
+      envKey,
+      provider: group,
+      label,
+      keyStatus: asString(provider.keyStatus) ?? 'missing',
+      maskedKey: asString(provider.maskedKey),
+    }]
+  })
+}
+
+function savedValue(key: string): string {
+  try {
+    return window.localStorage.getItem(key) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function saveValue(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value)
+  } catch {
+    return
+  }
+}
+
+function artifactForCell(
+  assets: ReadonlyMap<string, AssetRecord>,
+  outputArtifactId: string | undefined,
+): AssetRecord | undefined {
+  return outputArtifactId ? assets.get(outputArtifactId) : undefined
+}
+
+function cellExecutionStatus(
+  document: NotebookDocument,
+  cellId: string,
+): string {
+  const execution = record(document.properties?.execution)
+  const item = execution && record(execution[cellId])
+  if (!item) return 'ready'
+  if (asString(item.error)) return 'error'
+  return asString(item.status) ?? 'ready'
+}
+
+function canvasNodes(
+  document: NotebookDocument,
+  assets: AssetRecord[],
+  onRun: (cellId: string) => void,
+): CanvasNode[] {
+  const byArtifactId = new Map(assets.map((asset) => [asset.artifactId, asset]))
+  return notebookNodes(document).map((node) => ({
+    ...node,
+    data: {
+      ...node.data,
+      status: cellExecutionStatus(document, node.id),
+      asset: artifactForCell(byArtifactId, node.data.outputArtifactId),
+      onRun: () => onRun(node.id),
+    },
+  }))
+}
+
+function CellNode({ data, selected }: NodeProps<CanvasNode>) {
+  const Icon = data.kind === 'video'
+    ? Video
+    : data.kind === 'image'
+      ? Image
+      : data.kind === 'scene'
+        ? Film
+        : data.kind === 'prompt'
+          ? CircleDot
+          : BookOpen
+  const mediaUrl = data.asset?.mediaUrl
+  const thumbnailUrl = data.asset?.thumbnailUrl
+  const canRun = data.kind === 'image' || data.kind === 'video'
+
   return (
-    <div className="brand-project">
-      <div className="brand-project-trigger">
-        <button
-          type="button"
-          className="brand-project-home"
-          onClick={onHome}
-          aria-label={activeSlug ? `Open ${activeSlug} project book` : 'Open projects'}
-          title="Back to project book"
-        >
-          <BookOpen size={18} />
-          <span>/videobook</span>
-        </button>
-        <button
-          type="button"
-          className="brand-project-menu-toggle"
-          onClick={onToggle}
-          aria-expanded={open}
-          aria-haspopup="menu"
-          aria-label="Choose project"
-        >
-          <strong>{activeSlug || 'select-project'}</strong>
-          <ChevronDown size={14} />
-        </button>
-      </div>
-      {open && (
-        <div
-          className="project-menu"
-          role="menu"
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') onToggle()
-          }}
-        >
-          <span>PROJECTS</span>
-          {projects.length === 0 ? (
-            <p>No projects found</p>
-          ) : (
-            projects.map((project) => (
-              <button
-                type="button"
-                role="menuitem"
-                key={project.slug}
-                disabled={busy}
-                className={project.slug === activeSlug ? 'active' : ''}
-                onClick={() => void onSwitch(project.slug)}
-              >
-                <span>{project.slug}</span>
-                <small>{project.asset_count ?? 0} assets</small>
-                {project.slug === activeSlug && <Check size={13} />}
-              </button>
-            ))
+    <article className={`cell-node ${selected ? 'cell-node-selected' : ''}`}>
+      <Handle type="target" position={Position.Top} id="input" />
+      <section className="cell-node-shell">
+        <header className="cell-node-header">
+          <span><Icon size={14} />{data.kind.toUpperCase()}</span>
+          {canRun && (
+            <button
+              type="button"
+              className="cell-run-button nodrag"
+              onClick={(event) => {
+                event.stopPropagation()
+                data.onRun?.()
+              }}
+            >
+              Run
+            </button>
           )}
-          <button type="button" role="menuitem" onClick={onManage}>
-            <Settings size={13} />
-            <span>Manage projects…</span>
-          </button>
-        </div>
-      )}
-    </div>
+        </header>
+        {mediaUrl || thumbnailUrl ? (
+          <div className="cell-media">
+            {data.kind === 'video' && mediaUrl ? (
+              <video src={mediaUrl} poster={thumbnailUrl ?? undefined} muted playsInline preload="metadata" />
+            ) : (
+              <img src={thumbnailUrl ?? mediaUrl ?? ''} alt={data.title} />
+            )}
+          </div>
+        ) : (
+          <div className={`cell-copy ${data.kind === 'prompt' ? 'cell-copy-prompt' : ''}`}>
+            {data.kind === 'prompt' ? <p>{data.prompt || data.title}</p> : <Sparkles size={28} />}
+            {data.kind !== 'prompt' && <span>{data.prompt || data.title}</span>}
+          </div>
+        )}
+        <footer className="cell-node-footer">
+          <strong>{data.title}</strong>
+          <strong>{data.status}</strong>
+        </footer>
+      </section>
+      <Handle type="source" position={Position.Bottom} id="output" />
+    </article>
   )
 }
+
+const nodeTypes = { cell: CellNode }
 
 function App() {
   const mcp = useMcp({
@@ -393,1487 +537,918 @@ function App() {
     transportType: 'http',
     autoReconnect: 3000,
   })
-  const [screen, setScreen] = useState<Screen>('projects')
-  const [nodes, setNodes] = useState<Array<Node<BookCellData>>>([])
-  const [edges, setEdges] = useState<Edge[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [projectSlug, setProjectSlug] = useState('')
-  const [projectBook, setProjectBook] = useState<ProjectBook | null>(null)
-  const [bookAssets, setBookAssets] = useState<BookAsset[]>([])
-  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('details')
-  const [flowInteractive, setFlowInteractive] = useState(false)
-  const [panelOpen, setPanelOpen] = useState(() => window.innerWidth > 720)
-  const [promptOpen, setPromptOpen] = useState(false)
-  const [projectMenuOpen, setProjectMenuOpen] = useState(false)
-  const [paletteDragKind, setPaletteDragKind] = useState<BookCellKind | null>(null)
-  const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
-  const [minimumStageCount, setMinimumStageCount] = useState<number>(
-    notebookGrid.minStages,
-  )
-  const [busy, setBusy] = useState(false)
-  const [records, setRecords] = useState<unknown[]>([])
-  const [projects, setProjects] = useState<ProjectRecord[]>([])
+  const [screen, setScreen] = useState<Screen>('notebook')
+  const [books, setBooks] = useState<BookSummary[]>([])
+  const [bookId, setBookId] = useState(() => savedValue('videobook.active-book'))
+  const [notebooks, setNotebooks] = useState<NotebookDocument[]>([])
+  const [notebook, setNotebook] = useState<NotebookDocument | null>(null)
+  const [assets, setAssets] = useState<AssetRecord[]>([])
+  const [timeline, setTimeline] = useState<TimelineRecord>(() => asTimeline(null))
+  const [jobs, setJobs] = useState<JobRecord[]>([])
   const [commands, setCommands] = useState<ServerCommand[]>([])
-  const [assetSlugs, setAssetSlugs] = useState<string[]>([])
-  const [workspaceNotice, setWorkspaceNotice] = useState('Ready')
+  const [providers, setProviders] = useState<ProviderRecord[]>([])
+  const [storage, setStorage] = useState<unknown>(null)
+  const [nodes, setNodes] = useState<CanvasNode[]>([])
+  const [edges, setEdges] = useState<Edge[]>([])
+  const [selectedCellId, setSelectedCellId] = useState<string | null>(null)
+  const [bookMenuOpen, setBookMenuOpen] = useState(false)
+  const [notebookMenuOpen, setNotebookMenuOpen] = useState(false)
+  const [createSlug, setCreateSlug] = useState('')
+  const [renameSlug, setRenameSlug] = useState('')
+  const [deleteSlug, setDeleteSlug] = useState('')
+  const [newNotebookName, setNewNotebookName] = useState('')
+  const [renameNotebookName, setRenameNotebookName] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [timelineAssetId, setTimelineAssetId] = useState('')
+  const [secretKey, setSecretKey] = useState('KIE_API_KEY')
+  const [secretValue, setSecretValue] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState('Connect to the server, then load your books.')
+  const flowRef = useRef<ReactFlowInstance<CanvasNode, Edge> | null>(null)
 
-  const nodesRef = useRef<Array<Node<BookCellData>>>([])
-  const edgesRef = useRef<Edge[]>([])
-  const projectSlugRef = useRef('')
-  const projectBookRef = useRef<ProjectBook | null>(null)
-  const bookAssetsRef = useRef<BookAsset[]>([])
-  const flowRef = useRef<ReactFlowInstance<Node<BookCellData>, Edge> | null>(null)
-  const canvasRef = useRef<HTMLElement | null>(null)
-  const dragSlotsRef = useRef(new Map<string, NotebookGridSlot>())
-
-  const selected = useMemo(
-    () => nodes.find((node) => node.id === selectedId) ?? null,
-    [nodes, selectedId],
+  const activeBook = useMemo(
+    () => books.find((book) => book.bookId === bookId) ?? null,
+    [bookId, books],
   )
-  const visibleCommands = useMemo(
-    () => commands.filter((command) => {
-      if (!command.onMount || command.onMount.length === 0) return true
-      return screen === 'notebook' && command.onMount.includes('notebook')
-    }),
-    [commands, screen],
+  const selectedCell = useMemo(
+    () => nodes.find((node) => node.id === selectedCellId) ?? null,
+    [nodes, selectedCellId],
   )
-
-  useEffect(() => {
-    const closeNarrowInspector = () => {
-      if (window.innerWidth <= 720) setPanelOpen(false)
-    }
-    closeNarrowInspector()
-    window.addEventListener('resize', closeNarrowInspector)
-    return () => window.removeEventListener('resize', closeNarrowInspector)
-  }, [])
-
-  const call = useCallback(
-    async (tool: string, args: Record<string, unknown>) => {
-      if (mcp.state !== 'ready') throw new Error('MCP server is not ready')
-      return parseToolResult(await mcp.callTool(tool, args))
-    },
-    [mcp],
+  const assetById = useMemo(
+    () => new Map(assets.map((asset) => [asset.artifactId, asset])),
+    [assets],
   )
 
-  const setCurrentProject = useCallback((slug: string) => {
-    projectSlugRef.current = slug
-    setProjectSlug(slug)
-  }, [])
+  const call = useCallback(async (tool: string, args: Record<string, unknown>) => {
+    if (mcp.state !== 'ready') throw new Error('MCP server is not ready')
+    return parseResult(await mcp.callTool(tool, args))
+  }, [mcp])
 
-  const replaceNodes = useCallback((next: Array<Node<BookCellData>>) => {
-    nodesRef.current = next
-    setNodes(next)
-  }, [])
-
-  const replaceEdges = useCallback((next: Edge[]) => {
-    edgesRef.current = next
-    setEdges(next)
-  }, [])
-
-  const fitBookStages = useCallback((duration = 240) => {
-    const flow = flowRef.current
-    const canvas = canvasRef.current
-    if (!flow || !canvas) return
-    const viewport = notebookGridStageViewport(
-      nodesRef.current.map((node) => node.position),
-      canvas.clientWidth,
-    )
-    void flow.setViewport(viewport, { duration })
-  }, [])
-
-  const scheduleBookStageFit = useCallback(() => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => fitBookStages())
-    })
-  }, [fitBookStages])
-
-  const extendStageRunway = useCallback((viewport: Viewport) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const next = notebookGridStageCountForViewport(
-      viewport,
-      canvas.clientHeight,
-    )
-    setMinimumStageCount((current) => Math.max(current, next))
-  }, [])
-
-  const loadProjects = useCallback(async () => {
-    const value = await call('list_projects', {})
-    const next = asProjects(value)
-    setProjects(next)
-    return next
-  }, [call])
-
-  const loadProjectScreen = useCallback(async () => {
+  const runCell = useCallback(async (cellId: string) => {
+    if (!bookId || !notebook) return
     setBusy(true)
     try {
-      const next = await loadProjects()
-      setRecords(next)
-      setWorkspaceNotice(`Updated ${new Date().toLocaleTimeString()}`)
+      const result = await call('run_notebook_cell', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        cell_id: cellId,
+      })
+      setNotice(messageFor(result, 'Cell queued'))
     } catch (error) {
-      setWorkspaceNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error))
     } finally {
       setBusy(false)
     }
-  }, [loadProjects])
+  }, [bookId, call, notebook])
 
-  const loadCommands = useCallback(async () => {
-    const value = await call('slash_commands', {})
-    const next = asCommands(value)
-    setCommands(next)
+  const applyNotebook = useCallback((next: NotebookDocument, nextAssets: AssetRecord[]) => {
+    setNotebook(next)
+    setNodes(canvasNodes(next, nextAssets, (cellId) => void runCell(cellId)))
+    setEdges(notebookEdges(next))
+    setSelectedCellId(null)
+    setRenameNotebookName(next.name)
+  }, [runCell])
+
+  const refreshNotebook = useCallback(async (targetBookId: string, notebookId: string) => {
+    const value = await call('get_notebook', {
+      book_id: targetBookId,
+      notebook_id: notebookId,
+    })
+    const next = asNotebook(value)
+    if (!next) throw new Error('The server returned an invalid notebook')
+    setNotebooks((current) => current.map((entry) => entry.id === next.id ? next : entry))
+    applyNotebook(next, assets)
     return next
-  }, [call])
+  }, [applyNotebook, assets, call])
 
-  const applyProjectBook = useCallback((
-    book: ProjectBook,
-    assets: BookAsset[],
-  ) => {
-    const nextNodes = projectBookNodes(book, assets)
-    projectBookRef.current = book
-    bookAssetsRef.current = assets
-    setProjectBook(book)
-    setBookAssets(assets)
-    setAssetSlugs(projectMentionSlugs(nextNodes, assets))
-    replaceNodes(nextNodes)
-    replaceEdges(projectBookEdges(book))
-  }, [replaceEdges, replaceNodes])
-
-  const readProjectBook = useCallback(async (slug: string) => {
-    const [bookValue, assetsValue] = await Promise.all([
-      call('get_project_book', { project_slug: slug, limit: 10_000 }),
-      call('list_assets', { project_slug: slug }),
+  const refreshBookData = useCallback(async (targetBookId: string, preferredNotebookId?: string) => {
+    const [notebookValue, assetValue, timelineValue, jobValue] = await Promise.all([
+      call('list_notebooks', { book_id: targetBookId }),
+      call('list_assets', { book_id: targetBookId, sort: 'newest' }),
+      call('get_timeline', { book_id: targetBookId }),
+      call('list_jobs', { book_id: targetBookId }),
     ])
-    const book = parseProjectBook(bookValue)
-    if (!book) throw new Error(`Invalid project book for ${slug}`)
-    return { book, assets: parseBookAssets(assetsValue) }
-  }, [call])
-
-  const reloadProjectBook = useCallback(async (
-    selectActionId?: string | null,
-  ) => {
-    const slug = projectSlugRef.current
-    if (!slug) return
-    const { book, assets } = await readProjectBook(slug)
-    applyProjectBook(book, assets)
-    if (selectActionId !== undefined) setSelectedId(selectActionId)
-  }, [applyProjectBook, readProjectBook])
-
-  const openProject = useCallback(async (
-    slug: string,
-  ): Promise<ComposerOutcome> => {
-    setBusy(true)
-    try {
-      const [{ book, assets }] = await Promise.all([
-        readProjectBook(slug),
-        loadCommands(),
-        loadProjects(),
-      ])
-      setCurrentProject(slug)
-      applyProjectBook(book, assets)
-      setSelectedId(null)
-      setInspectorTab('details')
-      setFlowInteractive(false)
-      setPromptOpen(false)
-      setPaletteDragKind(null)
-      setPreviewSlot(null)
-      setMinimumStageCount(notebookGrid.minStages)
-      dragSlotsRef.current.clear()
-      setPanelOpen(window.innerWidth > 720)
-      setScreen('notebook')
-      scheduleBookStageFit()
-      setRecords([])
-      setProjectMenuOpen(false)
-      setWorkspaceNotice(`Opened ${slug}`)
-      return { ok: true, message: `Opened ${slug}` }
-    } catch (error) {
-      return errorOutcome(error)
-    } finally {
-      setBusy(false)
-    }
-  }, [
-    applyProjectBook,
-    loadCommands,
-    loadProjects,
-    readProjectBook,
-    scheduleBookStageFit,
-    setCurrentProject,
-  ])
-
-  const openCurrentBook = useCallback(async (): Promise<ComposerOutcome> => {
-    const slug = projectSlugRef.current
-    return slug
-      ? openProject(slug)
-      : { ok: false, message: 'Select a project first' }
-  }, [openProject])
-
-  const createProject = useCallback(async (
-    slug: string,
-  ): Promise<ComposerOutcome> => {
-    setBusy(true)
-    try {
-      const value = await call('create_project', { project_slug: slug })
-      await Promise.all([loadProjects(), loadCommands()])
-      const opened = await openProject(slug)
-      return opened.ok
-        ? { ok: true, message: summarize(value, `Created ${slug}`) }
-        : opened
-    } catch (error) {
-      return errorOutcome(error)
-    } finally {
-      setBusy(false)
-    }
-  }, [call, loadCommands, loadProjects, openProject])
-
-  const renameProject = useCallback(async (
-    oldSlug: string,
-    newSlug: string,
-  ): Promise<ComposerOutcome> => {
-    setBusy(true)
-    try {
-      const value = await call('rename_project', {
-        old_slug: oldSlug,
-        new_slug: newSlug,
-      })
-      if (oldSlug === projectSlugRef.current) setCurrentProject(newSlug)
-      await Promise.all([loadProjects(), loadCommands()])
-      setRecords((current) => current.map((record) => (
-        typeof record === 'object'
-        && record !== null
-        && 'slug' in record
-        && record.slug === oldSlug
-          ? { ...record, slug: newSlug }
-          : record
-      )))
-      return { ok: true, message: summarize(value, `Renamed to ${newSlug}`) }
-    } catch (error) {
-      return errorOutcome(error)
-    } finally {
-      setBusy(false)
-    }
-  }, [
-    call,
-    loadCommands,
-    loadProjects,
-    setCurrentProject,
-  ])
-
-  const deleteProject = useCallback(async (
-    slug: string,
-  ): Promise<ComposerOutcome> => {
-    setBusy(true)
-    try {
-      const value = await call('delete_project', { project_slug: slug })
-      if (slug === projectSlugRef.current) {
-        setCurrentProject('')
-        projectBookRef.current = null
-        bookAssetsRef.current = []
-        setProjectBook(null)
-        setBookAssets([])
-        replaceNodes([])
-        replaceEdges([])
-        setSelectedId(null)
-        setPromptOpen(false)
-        setAssetSlugs([])
-      }
-      await Promise.all([loadProjects(), loadCommands()])
-      setRecords((current) => current.filter((record) => !(
-        typeof record === 'object'
-        && record !== null
-        && 'slug' in record
-        && record.slug === slug
-      )))
-      return { ok: true, message: summarize(value, `Deleted ${slug}`) }
-    } catch (error) {
-      return errorOutcome(error)
-    } finally {
-      setBusy(false)
-    }
-  }, [
-    call,
-    loadCommands,
-    loadProjects,
-    replaceEdges,
-    replaceNodes,
-    setCurrentProject,
-  ])
-
-  const navigateScreen = useCallback(async (next: Screen) => {
-    if (next !== 'notebook') setPromptOpen(false)
-    setScreen(next)
-    setRecords([])
-    setProjectMenuOpen(false)
-    if (next !== 'settings') return
-    setBusy(true)
-    try {
-      const value = await call('storage_status', {})
-      setRecords([value])
-      setWorkspaceNotice(`Updated ${new Date().toLocaleTimeString()}`)
-    } catch (error) {
-      setWorkspaceNotice(error instanceof Error ? error.message : String(error))
-    } finally {
-      setBusy(false)
-    }
-  }, [call])
-
-  const refreshScreen = useCallback(async () => {
-    setBusy(true)
-    try {
-      let value: unknown
-      if (screen === 'notebook') {
-        await reloadProjectBook()
-      } else if (screen === 'projects') {
-        value = await call('list_projects', {})
-        const next = asProjects(value)
-        setProjects(next)
-        setRecords(next)
-      } else if (screen === 'settings') {
-        value = await call('storage_status', {})
-        setRecords([value])
-      } else {
-        const slug = projectSlugRef.current
-        if (!slug) throw new Error('Select a project first')
-        if (screen === 'library') {
-          const values = await Promise.all([
-            call('list_prompts', { project_slug: slug }),
-            call('list_characters', { project_slug: slug }),
-            call('list_scenes', { project_slug: slug }),
-          ])
-          setRecords(values.flatMap(asArray))
-        } else if (screen === 'jobs') {
-          value = await call('list_jobs', { project_slug: slug })
-          setRecords(asArray(value))
-        }
-      }
-      setWorkspaceNotice(`Updated ${new Date().toLocaleTimeString()}`)
-    } catch (error) {
-      setWorkspaceNotice(error instanceof Error ? error.message : String(error))
-    } finally {
-      setBusy(false)
-    }
-  }, [call, reloadProjectBook, screen])
-
-  useProjectScreenLoader({
-    active: mcp.state === 'ready' && screen === 'projects',
-    load: loadProjectScreen,
-  })
-
-  const createEntity = useCallback(async (
-    type: EntityKind,
-    name: string,
-    prompt: string,
-  ): Promise<ComposerOutcome> => {
-    const slug = projectSlugRef.current
-    if (!slug) return { ok: false, message: 'Select a project first' }
-    setBusy(true)
-    try {
-      const tool = type === 'character' ? 'create_character_entity' : `create_${type}`
-      const value = await call(tool, {
-        project_slug: slug,
-        name,
-        ...(prompt ? { prompt } : {}),
-      })
-      setRecords((current) => [value, ...current])
-      await reloadProjectBook()
-      return { ok: true, message: summarize(value, `Created ${type}`) }
-    } catch (error) {
-      return errorOutcome(error)
-    } finally {
-      setBusy(false)
-    }
-  }, [call, reloadProjectBook])
-
-  const deleteEntity = useCallback(async (
-    type: EntityKind,
-    id: string,
-  ): Promise<ComposerOutcome> => {
-    const slug = projectSlugRef.current
-    if (!slug) return { ok: false, message: 'Select a project first' }
-    setBusy(true)
-    try {
-      const value = await call(`delete_${type}`, {
-        project_slug: slug,
-        entity_id: id,
-      })
-      setRecords((current) => current.filter((record) => !(
-        typeof record === 'object'
-        && record !== null
-        && 'id' in record
-        && record.id === id
-      )))
-      await reloadProjectBook()
-      return { ok: true, message: summarize(value, `Deleted ${type}`) }
-    } catch (error) {
-      return errorOutcome(error)
-    } finally {
-      setBusy(false)
-    }
-  }, [call, reloadProjectBook])
-
-  const addCell = useCallback(async (
-    kind: BookCellKind,
-    requestedSlot?: NotebookGridSlot,
-  ): Promise<ComposerOutcome> => {
-    const slug = projectSlugRef.current
-    const book = projectBookRef.current
-    if (!slug || !book) return { ok: false, message: 'Select a project first' }
-    const prefix: Record<BookCellKind, string> = {
-      prompt: 'prm',
-      image: 'img-draft',
-      video: 'vid-draft',
-      character: 'char',
-      scene: 'scn',
-    }
-    const artifactId = `${prefix[kind]}-${crypto.randomUUID().slice(0, 8)}`
-    const slot = requestedSlot ?? nextNotebookGridSlot(nodesRef.current)
-    setBusy(true)
-    try {
-      const value = await call('record_book_action', {
-        project_slug: slug,
-        operation: `create_${kind}_entry`,
-        phase: 'completed',
-        scope: 'artifact',
-        actor: 'human',
-        lane: 'human',
-        base_revision: book.headRevision,
-        output_artifact_ids: [artifactId],
-        stage: slot.stage,
-        column: slot.column,
-        write_set: [`artifact:${artifactId}`],
-        details: {
-          entry: {
-            id: artifactId,
-            kind,
-            prompt: '',
-            model: 'auto',
-          },
-        },
-      })
-      const actionId = recordedActionId(value)
-      await reloadProjectBook(actionId)
-      setInspectorTab('details')
-      setPanelOpen(true)
-      setPromptOpen(true)
-      return { ok: true, message: `Added @${artifactId}` }
-    } catch (error) {
-      return errorOutcome(error)
-    } finally {
-      setBusy(false)
-    }
-  }, [call, reloadProjectBook])
-
-  const updateSelectedData = useCallback((
-    id: string,
-    patch: Partial<BookCellData>,
-  ) => {
-    replaceNodes(nodesRef.current.map((node) => (
-      node.id === id
-        ? { ...node, data: { ...node.data, ...patch } }
-        : node
-    )))
-  }, [replaceNodes])
-
-  const commitEntry = useCallback(async (
-    id: string,
-  ): Promise<ComposerOutcome> => {
-    const slug = projectSlugRef.current
-    const book = projectBookRef.current
-    const node = nodesRef.current.find((candidate) => candidate.id === id)
-    if (!slug || !book || !node) return { ok: false, message: 'Entry is unavailable' }
-    const original = projectBookNodes(
-      book,
-      bookAssetsRef.current,
-    ).find((candidate) => candidate.id === id)
-    if (
-      original
-      && original.data.prompt === node.data.prompt
-      && original.data.model === node.data.model
-    ) {
-      return { ok: true, message: 'Project book is current' }
-    }
-    const artifactId = artifactIdForNode(node)
-    const slot = notebookGridSlot(node.position)
-    setBusy(true)
-    try {
-      const value = await call('record_book_action', {
-        project_slug: slug,
-        operation: 'edit_entry',
-        phase: 'completed',
-        scope: 'artifact',
-        actor: 'human',
-        lane: 'human',
-        base_revision: book.headRevision,
-        parent_action_ids: [node.data.actionId],
-        output_artifact_ids: [artifactId],
-        target_artifact_id: artifactId,
-        target_action_id: node.data.actionId,
-        stage: slot.stage,
-        column: slot.column,
-        write_set: [`artifact:${artifactId}`],
-        details: {
-          entry: {
-            id: artifactId,
-            kind: node.data.kind,
-            prompt: node.data.prompt ?? '',
-            model: node.data.model ?? 'auto',
-          },
-        },
-      })
-      const actionId = recordedActionId(value)
-      await reloadProjectBook(actionId)
-      return { ok: true, message: `Updated @${artifactId}` }
-    } catch (error) {
-      await reloadProjectBook(id).catch(() => undefined)
-      return errorOutcome(error)
-    } finally {
-      setBusy(false)
-    }
-  }, [call, reloadProjectBook])
-
-  const commitLayouts = useCallback(async (): Promise<ComposerOutcome> => {
-    const slug = projectSlugRef.current
-    const book = projectBookRef.current
-    if (!slug || !book) return { ok: false, message: 'Select a project first' }
-    const canonical = new Map(projectBookNodes(
-      book,
-      bookAssetsRef.current,
-    ).map((node) => [node.id, notebookGridSlot(node.position)]))
-    const changed = nodesRef.current.filter((node) => {
-      const before = canonical.get(node.id)
-      const after = notebookGridSlot(node.position)
-      return before && (before.stage !== after.stage || before.column !== after.column)
-    })
-    if (changed.length === 0) return { ok: true, message: 'Layout is current' }
-    setBusy(true)
-    try {
-      for (const node of changed) {
-        const slot = notebookGridSlot(node.position)
-        await call('record_book_layout', {
-          project_slug: slug,
-          target_action_id: node.data.actionId,
-          stage: slot.stage,
-          column: slot.column,
-          base_revision: book.headRevision,
-        })
-      }
-      await reloadProjectBook()
-      return {
-        ok: true,
-        message: `Recorded ${changed.length} layout ${changed.length === 1 ? 'change' : 'changes'}`,
-      }
-    } catch (error) {
-      await reloadProjectBook().catch(() => undefined)
-      return errorOutcome(error)
-    } finally {
-      setBusy(false)
-    }
-  }, [call, reloadProjectBook])
-
-  const connectEntries = useCallback(async (
-    connection: Connection,
-  ): Promise<ComposerOutcome> => {
-    const slug = projectSlugRef.current
-    const book = projectBookRef.current
-    const source = nodesRef.current.find((node) => node.id === connection.source)
-    const target = nodesRef.current.find((node) => node.id === connection.target)
-    if (!slug || !book || !source || !target) {
-      return { ok: false, message: 'Both entries must be available' }
-    }
-    const sourceArtifactId = artifactIdForNode(source)
-    const targetArtifactId = artifactIdForNode(target)
-    const slot = notebookGridSlot(target.position)
-    setBusy(true)
-    try {
-      const value = await call('record_book_action', {
-        project_slug: slug,
-        operation: 'link_entries',
-        phase: 'completed',
-        scope: 'artifact',
-        actor: 'human',
-        lane: 'human',
-        base_revision: book.headRevision,
-        parent_action_ids: [source.data.actionId, target.data.actionId],
-        input_artifact_ids: [sourceArtifactId],
-        output_artifact_ids: [targetArtifactId],
-        target_artifact_id: targetArtifactId,
-        target_action_id: target.data.actionId,
-        stage: slot.stage,
-        column: slot.column,
-        write_set: [`artifact:${targetArtifactId}`],
-        details: {
-          target_handle: connection.targetHandle ?? 'input',
-          entry: {
-            id: targetArtifactId,
-            kind: target.data.kind,
-            prompt: target.data.prompt ?? '',
-            model: target.data.model ?? 'auto',
-          },
-        },
-      })
-      const actionId = recordedActionId(value)
-      await reloadProjectBook(actionId)
-      return { ok: true, message: `Linked @${sourceArtifactId} to @${targetArtifactId}` }
-    } catch (error) {
-      return errorOutcome(error)
-    } finally {
-      setBusy(false)
-    }
-  }, [call, reloadProjectBook])
-
-  const showSelectedHistory = useCallback(async (): Promise<ComposerOutcome> => {
-    const actionId = selectedId ?? nodesRef.current[0]?.id
-    if (!actionId) {
-      return { ok: false, message: 'Select a project-book card first' }
-    }
-    if (screen !== 'notebook') await navigateScreen('notebook')
-    setSelectedId(actionId)
-    setInspectorTab('history')
-    setPanelOpen(true)
-    setPromptOpen(false)
-    return {
-      ok: true,
-      message: 'Opened action history',
-    }
-  }, [navigateScreen, screen, selectedId])
-
-  const ensureCommandCatalog = useCallback(async () => {
-    if (commands.length > 0 || mcp.state !== 'ready') return
-    try {
-      await Promise.all([
-        loadCommands(),
-        projectSlugRef.current
-          ? reloadProjectBook()
-          : Promise.resolve([]),
-      ])
-    } catch {
+    const nextNotebooks = asNotebooks(notebookValue)
+    const nextAssets = asAssets(assetValue)
+    const remembered = savedValue(`videobook.active-notebook:${targetBookId}`)
+    const nextNotebook = nextNotebooks.find((entry) => entry.id === preferredNotebookId)
+      ?? nextNotebooks.find((entry) => entry.id === remembered)
+      ?? nextNotebooks[0]
+      ?? null
+    setBookId(targetBookId)
+    saveValue('videobook.active-book', targetBookId)
+    setNotebooks(nextNotebooks)
+    setAssets(nextAssets)
+    setTimeline(asTimeline(timelineValue))
+    setJobs(asJobs(jobValue))
+    if (!nextNotebook) {
+      setNotebook(null)
+      setNodes([])
+      setEdges([])
       return
     }
-  }, [commands.length, loadCommands, mcp.state, reloadProjectBook])
+    saveValue(`videobook.active-notebook:${targetBookId}`, nextNotebook.id)
+    applyNotebook(nextNotebook, nextAssets)
+  }, [applyNotebook, call])
 
-  const executeUiAction = useCallback(async (
-    action: string,
-    args: Record<string, string>,
-    raw: string,
-  ): Promise<ComposerOutcome> => {
-    if (action === 'save_notebook') {
-      return { ok: true, message: 'Every project-book action is already saved' }
-    }
-    if (action === 'run_notebook') {
-      return {
-        ok: false,
-        message: 'Run generation commands directly; each result becomes a project-book action',
-      }
-    }
-    if (action === 'open_notebook') return openCurrentBook()
-    if (action === 'switch_project') return openProject(raw)
-    if (action === 'create_project') return createProject(args.project_slug || raw)
-    if (action === 'rename_project') {
-      const slug = projectSlugRef.current
-      return slug
-        ? renameProject(slug, args.new_slug || raw)
-        : { ok: false, message: 'Select a project first' }
-    }
-    if (action === 'delete_project') {
-      return {
-        ok: false,
-        message: 'Open Manage projects to confirm project deletion',
-      }
-    }
-    if (action === 'open_revisions' || action === 'show_history') {
-      return showSelectedHistory()
-    }
-    const screens: Record<string, Screen> = {
-      open_projects: 'projects',
-      open_entities: 'library',
-      open_jobs: 'jobs',
-      open_status: 'jobs',
-      open_provider_keys: 'settings',
-      open_diagnostics: 'settings',
-    }
-    const next = screens[action]
-    if (next) {
-      await navigateScreen(next)
-      return { ok: true, message: `Opened ${next}` }
-    }
-    return {
-      ok: false,
-      message: `/${action.replaceAll('_', '-')} is not available on this screen`,
-    }
-  }, [
-    createProject,
-    navigateScreen,
-    openCurrentBook,
-    openProject,
-    renameProject,
-    showSelectedHistory,
-  ])
-
-  const executeCommand = useCallback(async (
-    input: string,
-  ): Promise<ComposerOutcome> => {
+  const loadBooks = useCallback(async (preferredBookId?: string) => {
+    setBusy(true)
     try {
-      if (input.startsWith('/')) {
-        const space = input.indexOf(' ')
-        const commandName = space === -1 ? input : input.slice(0, space)
-        const rest = space === -1 ? '' : input.slice(space + 1).trim()
-        const command = selectCommandForInput(commands, commandName, rest)
-        if (!command) return { ok: false, message: `Unknown command: ${commandName}` }
-        const parsed = parseCommandArgs(rest, command.params)
-        if (command.uiAction) {
-          const stringArgs = Object.fromEntries(
-            Object.entries(parsed).map(([key, value]) => [
-              key,
-              Array.isArray(value) ? value.join(' ') : String(value),
-            ]),
-          )
-          const raw = command.uiAction === 'switch_project'
-            ? commandName.slice(1)
-            : rest
-          return executeUiAction(command.uiAction, stringArgs, raw)
-        }
-        if (command.mcpTool) {
-          let toolArgs: CommandToolArgs = { ...parsed }
-          if (command.mcpTool.autoInject?.includes('project_slug')) {
-            const slug = projectSlugRef.current
-            if (!slug) return { ok: false, message: 'Select a project first' }
-            toolArgs.project_slug = slug
-          }
-          if (command.mcpTool.injectParams) {
-            Object.assign(toolArgs, command.mcpTool.injectParams)
-          }
-          toolArgs = adaptCommandArgs(
-            command.mcpTool.adapter,
-            command.mcpTool.tool,
-            toolArgs,
-          )
-          const value = await call(
-            command.mcpTool.tool,
-            toolArgs as Record<string, unknown>,
-          )
-          if (projectSlugRef.current) await reloadProjectBook()
-          return {
-            ok: true,
-            message: summarize(value, command.description),
-          }
-        }
-        return { ok: false, message: `Command has no action: ${commandName}` }
+      const [bookValue, commandValue] = await Promise.all([
+        call('list_books', { sort: 'newest' }),
+        call('slash_commands', {}),
+      ])
+      const nextBooks = asBooks(bookValue)
+      setBooks(nextBooks)
+      setCommands(asCommands(commandValue))
+      const target = nextBooks.find((book) => book.bookId === preferredBookId)
+        ?? nextBooks.find((book) => book.bookId === bookId)
+        ?? nextBooks[0]
+      if (target) {
+        await refreshBookData(target.bookId)
+        setNotice(`Loaded ${target.slug}`)
+      } else {
+        setBookId('')
+        setNotebooks([])
+        setNotebook(null)
+        setAssets([])
+        setNodes([])
+        setEdges([])
+        setNotice('Create your first book to start a notebook.')
       }
-      const slug = projectSlugRef.current
-      if (!slug) return { ok: false, message: 'Select a project first' }
-      const value = await call('chat', { project_slug: slug, prompt: input })
-      await reloadProjectBook()
-      return { ok: true, message: summarize(value, 'Done') }
     } catch (error) {
-      return errorOutcome(error)
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
     }
-  }, [call, commands, executeUiAction, reloadProjectBook])
+  }, [bookId, call, refreshBookData])
 
-  const promptSession = useMemo<PromptSession | null>(() => {
-    if (screen !== 'notebook' || !selected || !promptOpen) return null
-    return {
-      id: selected.id,
-      kind: selected.data.kind,
-      slug: selected.data.slug,
-      value: selected.data.prompt ?? '',
-      assetSlugs,
-      onChange: (value) => updateSelectedData(selected.id, { prompt: value }),
-      onCommit: () => commitEntry(selected.id),
-      onCollapse: async () => {
-        const outcome = await commitEntry(selected.id)
-        if (outcome.ok) setPromptOpen(false)
-        return outcome
-      },
+  const chooseBook = useCallback(async (nextBookId: string) => {
+    setBusy(true)
+    try {
+      await refreshBookData(nextBookId)
+      const next = books.find((book) => book.bookId === nextBookId)
+      setNotice(next ? `Opened ${next.slug}` : 'Book opened')
+      setScreen('notebook')
+      setBookMenuOpen(false)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
     }
-  }, [
-    assetSlugs,
-    commitEntry,
-    promptOpen,
-    screen,
-    selected,
-    updateSelectedData,
-  ])
+  }, [books, refreshBookData])
+
+  const chooseNotebook = useCallback(async (nextNotebook: NotebookDocument) => {
+    if (!bookId) return
+    setBusy(true)
+    try {
+      const loaded = await refreshNotebook(bookId, nextNotebook.id)
+      saveValue(`videobook.active-notebook:${bookId}`, loaded.id)
+      setNotebookMenuOpen(false)
+      setNotice(`Opened ${loaded.name}`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }, [bookId, refreshNotebook])
+
+  const createBook = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!createSlug.trim()) return
+    setBusy(true)
+    try {
+      const value = record(await call('create_book', { slug: createSlug.trim() }))
+      const nextBookId = asString(value?.bookId)
+      if (!nextBookId) throw new Error('The server did not return a book identity')
+      setCreateSlug('')
+      setBookMenuOpen(false)
+      await loadBooks(nextBookId)
+      setScreen('notebook')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const renameBook = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!activeBook || !renameSlug.trim()) return
+    setBusy(true)
+    try {
+      await call('rename_book', { book_id: activeBook.bookId, slug: renameSlug.trim() })
+      await loadBooks(activeBook.bookId)
+      setNotice(`Renamed book to ${renameSlug.trim()}`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const deleteBook = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!activeBook) return
+    setBusy(true)
+    try {
+      await call('delete_book', { book_id: activeBook.bookId, confirm_slug: deleteSlug })
+      setDeleteSlug('')
+      setBookMenuOpen(false)
+      await loadBooks()
+      setNotice(`Deleted ${activeBook.slug}`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const createNotebook = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!bookId || !newNotebookName.trim()) return
+    setBusy(true)
+    try {
+      const created = asNotebook(await call('create_notebook', {
+        book_id: bookId,
+        name: newNotebookName.trim(),
+      }))
+      if (!created) throw new Error('The server did not return a notebook')
+      setNewNotebookName('')
+      await refreshBookData(bookId, created.id)
+      setNotebookMenuOpen(false)
+      setNotice(`Created ${created.name}`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const renameNotebook = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!bookId || !notebook || !renameNotebookName.trim()) return
+    setBusy(true)
+    try {
+      await call('rename_notebook', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        name: renameNotebookName.trim(),
+      })
+      await refreshBookData(bookId, notebook.id)
+      setNotice(`Renamed notebook to ${renameNotebookName.trim()}`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const deleteNotebook = async () => {
+    if (!bookId || !notebook || notebooks.length <= 1) return
+    setBusy(true)
+    try {
+      await call('delete_notebook', { book_id: bookId, notebook_id: notebook.id })
+      await refreshBookData(bookId)
+      setNotebookMenuOpen(false)
+      setNotice(`Deleted ${notebook.name}`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const createCell = async (type: NotebookCellType, position?: { x: number; y: number }) => {
+    if (!bookId || !notebook) return
+    const slot = position ? notebookGridSlot(position) : nextNotebookGridSlot(nodes)
+    const cellPosition = notebookGridPosition(slot)
+    const labels: Record<NotebookCellType, string> = {
+      prompt: 'Prompt',
+      character: 'Character',
+      scene: 'Scene',
+      asset: 'Asset',
+      image: 'Image generation',
+      video: 'Video generation',
+    }
+    const defaults: Partial<Record<NotebookCellType, string>> = {
+      image: 'generate_kie_gpt_image_2_text_to_image',
+      video: 'generate_kie_wan_2_7_text_to_video',
+    }
+    setBusy(true)
+    try {
+      await call('create_notebook_cell', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        cell: {
+          type,
+          title: labels[type],
+          position: cellPosition,
+          ...(type === 'prompt' || type === 'image' || type === 'video'
+            ? { prompt: '' }
+            : {}),
+          ...(defaults[type] ? { model: defaults[type] } : {}),
+        },
+      })
+      await refreshBookData(bookId, notebook.id)
+      setNotice(`Added ${labels[type].toLowerCase()} cell`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const updateCell = async (patch: Record<string, unknown>) => {
+    if (!bookId || !notebook || !selectedCell) return
+    setBusy(true)
+    try {
+      await call('update_notebook_cell', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        cell_id: selectedCell.id,
+        cell: patch,
+      })
+      await refreshNotebook(bookId, notebook.id)
+      setNotice('Cell saved')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const deleteSelectedCell = async () => {
+    if (!bookId || !notebook || !selectedCell) return
+    setBusy(true)
+    try {
+      await call('delete_notebook_cell', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        cell_id: selectedCell.id,
+      })
+      await refreshBookData(bookId, notebook.id)
+      setNotice('Cell deleted')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const persistPositions = async (nextNodes: CanvasNode[]) => {
+    if (!bookId || !notebook) return
+    try {
+      await call('move_notebook_cells', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        positions: nextNodes.map((node) => ({ id: node.id, x: node.position.x, y: node.position.y })),
+      })
+      await refreshNotebook(bookId, notebook.id)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const connectCells = async (connection: Connection) => {
+    if (!bookId || !notebook || !connection.source || !connection.target) return
+    setBusy(true)
+    try {
+      await call('connect_notebook_cells', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        source_cell_id: connection.source,
+        target_cell_id: connection.target,
+        target_input: connection.targetHandle ?? 'input',
+      })
+      await refreshNotebook(bookId, notebook.id)
+      setNotice('Cells connected')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const removeEdges = async (edgeIds: string[]) => {
+    if (!bookId || !notebook || edgeIds.length === 0) return
+    try {
+      await Promise.all(edgeIds.map((edgeId) => call('disconnect_notebook_cells', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        edge_id: edgeId,
+      })))
+      await refreshNotebook(bookId, notebook.id)
+      setNotice('Connection removed')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const runNotebook = async () => {
+    if (!bookId || !notebook) return
+    setBusy(true)
+    try {
+      const result = await call('run_notebook', { book_id: bookId, notebook_id: notebook.id })
+      setNotice(messageFor(result, 'Notebook queued'))
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const upload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !bookId) return
+    setUploading(true)
+    try {
+      const response = await fetch(
+        `/api/books/${encodeURIComponent(bookId)}/upload?filename=${encodeURIComponent(file.name)}`,
+        { method: 'POST', body: file },
+      )
+      const payload = await response.json() as { error?: string }
+      if (!response.ok) throw new Error(payload.error ?? 'Upload failed')
+      await refreshBookData(bookId, notebook?.id)
+      setNotice(`Uploaded ${file.name}`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const saveTimeline = async (next: TimelineRecord) => {
+    if (!bookId) return
+    setBusy(true)
+    try {
+      const value = await call('set_timeline', {
+        book_id: bookId,
+        render: next.render,
+        slots: next.slots.map((slot) => ({
+          ...(slot.id ? { id: slot.id } : {}),
+          artifact_id: slot.artifactId,
+          volume: slot.volume,
+          audioFadeIn: slot.audioFadeIn,
+          audioFadeOut: slot.audioFadeOut,
+        })),
+        audio: next.audio.map((clip) => ({
+          id: clip.id,
+          artifact_id: clip.artifactId,
+          startFrame: clip.startFrame,
+          durationFrames: clip.durationFrames,
+          volume: clip.volume,
+          fadeIn: clip.fadeIn,
+          fadeOut: clip.fadeOut,
+        })),
+      })
+      setTimeline(asTimeline(value))
+      setNotice('Timeline saved')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const refreshSettings = async () => {
+    setBusy(true)
+    try {
+      const status = await call('provider_key_status', {})
+      setProviders(asProviders(status))
+      if (bookId) setStorage(await call('storage_status', { book_id: bookId }))
+      setNotice('Settings refreshed')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const storeSecret = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!secretValue) return
+    setBusy(true)
+    try {
+      await call('set_env_secret', { key: secretKey, value: secretValue })
+      setSecretValue('')
+      await refreshSettings()
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const executeCommand = async (input: string): Promise<ComposerOutcome> => {
+    try {
+      if (!bookId) return { ok: false, message: 'Load or create a book first.' }
+      if (!input.startsWith('/')) {
+        const value = await call('chat', { book_id: bookId, prompt: input })
+        await refreshBookData(bookId, notebook?.id)
+        return { ok: true, message: messageFor(value, 'Request sent') }
+      }
+      const [commandToken, ...restParts] = input.trim().split(/\s+/)
+      const rest = restParts.join(' ')
+      const command = selectCommandForInput(commands, commandToken, rest)
+      if (!command) return { ok: false, message: `Unknown command: ${commandToken}` }
+      if (command.uiAction === 'switch_book') {
+        const slug = command.command.slice(1)
+        const target = books.find((book) => book.slug === slug)
+        if (!target) return { ok: false, message: `Book not found: ${slug}` }
+        await chooseBook(target.bookId)
+        return { ok: true, message: `Opened ${slug}` }
+      }
+      if (command.uiAction === 'open_projects') {
+        setScreen('books')
+        return { ok: true, message: 'Book library opened' }
+      }
+      if (command.uiAction === 'open_notebook') {
+        setScreen('notebook')
+        return { ok: true, message: 'Notebook opened' }
+      }
+      if (command.uiAction === 'open_provider_keys') {
+        setScreen('settings')
+        await refreshSettings()
+        return { ok: true, message: 'Settings opened' }
+      }
+      if (!command.mcpTool) return { ok: false, message: `${command.command} is available from its workspace.` }
+      const parsed = parseCommandArgs(rest, command.params)
+      const adapted = adaptCommandArgs(command.mcpTool.adapter, command.mcpTool.tool, parsed)
+      const args: CommandToolArgs = {
+        ...adapted,
+        ...(command.mcpTool.injectParams ?? {}),
+      }
+      if (command.mcpTool.autoInject?.includes('book_id')) args.book_id = bookId
+      const result = await call(command.mcpTool.tool, args)
+      await refreshBookData(bookId, notebook?.id)
+      return { ok: true, message: messageFor(result, `${command.command} complete`) }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  const navigate = (next: Screen) => {
+    setScreen(next)
+    if (next === 'settings') void refreshSettings()
+    if ((next === 'library' || next === 'timeline' || next === 'jobs') && bookId) {
+      void refreshBookData(bookId, notebook?.id).catch((error: unknown) => {
+        setNotice(error instanceof Error ? error.message : String(error))
+      })
+    }
+  }
+
+  const emptyWorkspace = (
+    <section className="workspace-screen">
+      <header>
+        <div>
+          <span className="section-label">VIDEOBOOK ENGINE 2.0.1</span>
+          <h1>Books contain real notebooks.</h1>
+          <p>Create a book to get a Main notebook, then add connected prompt, image, and video cells.</p>
+        </div>
+        <button type="button" disabled={busy || mcp.state !== 'ready'} onClick={() => void loadBooks()}>
+          {busy ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}
+          Load books
+        </button>
+      </header>
+      <form className="project-create" onSubmit={createBook}>
+        <label>
+          New book slug
+          <input value={createSlug} onChange={(event) => setCreateSlug(event.target.value)} placeholder="summer-promo" />
+        </label>
+        <button type="submit" disabled={busy || !createSlug.trim()}>Create book</button>
+      </form>
+      <span className="workspace-notice">{notice}</span>
+    </section>
+  )
 
   return (
     <main className={`app-shell app-screen-${screen}`}>
       <header className="topbar">
-        <ProjectMenu
-          open={projectMenuOpen}
-          activeSlug={projectSlug}
-          projects={projects}
-          busy={busy}
-          onHome={() => {
-            if (!projectSlug) {
-              void navigateScreen('projects')
-              return
-            }
-            void openCurrentBook().then((outcome) => {
-              setWorkspaceNotice(outcome.message)
-            })
-          }}
-          onToggle={() => {
-            const next = !projectMenuOpen
-            setProjectMenuOpen(next)
-            if (next && mcp.state === 'ready') void loadProjects()
-          }}
-          onSwitch={openProject}
-          onManage={() => void navigateScreen('projects')}
-        />
-        <nav className="header-navigation" aria-label="Primary navigation">
-          {headerNavigation.map((item) => {
-            const Icon = item.icon
-            return (
+        <div className="topbar-book-controls">
+          <div className="brand-project">
+            <div className="brand-project-trigger">
               <button
                 type="button"
-                key={item.id}
-                className={screen === item.id ? 'active' : ''}
-                onClick={() => void navigateScreen(item.id)}
-                aria-label={`Open ${item.label}`}
-                title={item.label}
+                className="brand-project-home"
+                title="Open notebook"
+                onClick={() => navigate('notebook')}
               >
-                <Icon size={18} />
+                <BookOpen size={18} />
+                <span>/videobook</span>
+              </button>
+              <button
+                type="button"
+                className="brand-project-menu-toggle"
+                aria-expanded={bookMenuOpen}
+                aria-haspopup="menu"
+                onClick={() => setBookMenuOpen((open) => !open)}
+              >
+                <strong>{activeBook?.slug ?? 'select-book'}</strong>
+                <ChevronDown size={14} />
+              </button>
+            </div>
+            {bookMenuOpen && (
+              <div className="project-menu book-menu" role="menu">
+                <span>BOOKS</span>
+                {books.map((book) => (
+                  <button
+                    key={book.bookId}
+                    type="button"
+                    role="menuitem"
+                    disabled={busy}
+                    className={book.bookId === bookId ? 'active' : ''}
+                    onClick={() => void chooseBook(book.bookId)}
+                  >
+                    <span>{book.slug}</span>
+                    <small>{book.notebookCount} notebooks</small>
+                    {book.bookId === bookId && <Check size={13} />}
+                  </button>
+                ))}
+                <form className="menu-form" onSubmit={createBook}>
+                  <input value={createSlug} onChange={(event) => setCreateSlug(event.target.value)} placeholder="new-book" aria-label="New book slug" />
+                  <button type="submit" disabled={busy || !createSlug.trim()}><Plus size={13} />Create</button>
+                </form>
+                {activeBook && (
+                  <>
+                    <form className="menu-form" onSubmit={renameBook}>
+                      <input value={renameSlug} onChange={(event) => setRenameSlug(event.target.value)} placeholder={activeBook.slug} aria-label="Rename book" />
+                      <button type="submit" disabled={busy || !renameSlug.trim()}>Rename</button>
+                    </form>
+                    <form className="menu-form menu-form-danger" onSubmit={deleteBook}>
+                      <input value={deleteSlug} onChange={(event) => setDeleteSlug(event.target.value)} placeholder={`Type ${activeBook.slug} to delete`} aria-label="Confirm book deletion" />
+                      <button type="submit" disabled={busy || deleteSlug !== activeBook.slug}><Trash2 size={13} />Delete</button>
+                    </form>
+                  </>
+                )}
+                {books.length === 0 && <button type="button" onClick={() => void loadBooks()}>Refresh book list</button>}
+              </div>
+            )}
+          </div>
+          {activeBook && (
+            <div className="notebook-selector">
+              <button type="button" onClick={() => setNotebookMenuOpen((open) => !open)} aria-expanded={notebookMenuOpen}>
+                <span>NOTEBOOK</span>
+                <strong>{notebook?.name ?? 'select'}</strong>
+                <ChevronDown size={13} />
+              </button>
+              {notebookMenuOpen && (
+                <div className="notebook-menu" role="menu">
+                  {notebooks.map((entry) => (
+                    <button key={entry.id} type="button" role="menuitem" className={entry.id === notebook?.id ? 'active' : ''} onClick={() => void chooseNotebook(entry)}>
+                      {entry.name}{entry.id === notebook?.id && <Check size={13} />}
+                    </button>
+                  ))}
+                  <form className="menu-form" onSubmit={createNotebook}>
+                    <input value={newNotebookName} onChange={(event) => setNewNotebookName(event.target.value)} placeholder="New notebook" aria-label="New notebook name" />
+                    <button type="submit" disabled={busy || !newNotebookName.trim()}><Plus size={13} />Add</button>
+                  </form>
+                  {notebook && (
+                    <>
+                      <form className="menu-form" onSubmit={renameNotebook}>
+                        <input value={renameNotebookName} onChange={(event) => setRenameNotebookName(event.target.value)} aria-label="Rename notebook" />
+                        <button type="submit" disabled={busy || !renameNotebookName.trim()}>Rename</button>
+                      </form>
+                      <button type="button" className="menu-delete" disabled={busy || notebooks.length <= 1} onClick={() => void deleteNotebook()}>
+                        <Trash2 size={13} />Delete notebook
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <nav className="header-navigation" aria-label="Workspace navigation">
+          <button type="button" title="Refresh books" aria-label="Refresh books" disabled={busy || mcp.state !== 'ready'} onClick={() => void loadBooks(bookId)}>
+            {busy ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
+          </button>
+          {screenNavigation.map((item) => {
+            const Icon = item.icon
+            return (
+              <button key={item.id} type="button" className={screen === item.id ? 'active' : ''} title={item.label} aria-label={`Open ${item.label}`} onClick={() => navigate(item.id)}>
+                <Icon size={17} />
               </button>
             )
           })}
         </nav>
       </header>
 
-      {screen === 'notebook' ? (
+      {!activeBook ? emptyWorkspace : (
         <>
-          <section
-            ref={canvasRef}
-            className={`canvas ${flowInteractive ? '' : 'canvas-locked'}`}
-            onDragOver={(event) => {
-              if (!flowInteractive) return
-              const kind = paletteDragKind ?? cellKindFromDrag(
-                event.dataTransfer.getData(cellDragType),
-              )
-              if (!kind || !flowRef.current) return
-              event.preventDefault()
-              event.dataTransfer.dropEffect = 'copy'
-              const position = flowRef.current.screenToFlowPosition({
-                x: event.clientX,
-                y: event.clientY,
-              })
-              setPreviewSlot(notebookGridSlot(position))
-            }}
-            onDragLeave={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget as globalThis.Node)) {
-                setPreviewSlot(null)
-              }
-            }}
-            onDrop={(event) => {
-              if (!flowInteractive) return
-              const kind = cellKindFromDrag(event.dataTransfer.getData(cellDragType))
-                ?? paletteDragKind
-              if (!kind || !flowRef.current) return
-              event.preventDefault()
-              const position = flowRef.current.screenToFlowPosition({
-                x: event.clientX,
-                y: event.clientY,
-              })
-              void addCell(kind, notebookGridSlot(position)).then((outcome) => {
-                setWorkspaceNotice(outcome.message)
-              })
-              setPaletteDragKind(null)
-              setPreviewSlot(null)
-            }}
-          >
-            <ReactFlow
-                nodes={nodes}
-                edges={edges}
-                nodeTypes={nodeTypes}
-                onNodesChange={(changes) => {
-                  let next = nodesRef.current
-                  for (const change of changes.filter((item) => item.type !== 'remove')) {
-                    next = applyNodeChanges([change], next)
-                    if (change.type === 'position' && change.position) {
-                      const slot = notebookGridSlot(change.position)
-                      dragSlotsRef.current.set(change.id, slot)
-                      next = snapNotebookGridMove(
-                        next,
-                        change.id,
-                        slot,
-                      )
-                    }
-                  }
-                  replaceNodes(next)
-                }}
-                onEdgesChange={(changes) => {
-                  replaceEdges(applyEdgeChanges(
-                    changes.filter((change) => change.type !== 'remove'),
-                    edgesRef.current,
-                  ))
-                }}
-                onNodeDragStop={(_, node) => {
-                  const slot = dragSlotsRef.current.get(node.id)
-                    ?? notebookGridSlot(node.position)
-                  dragSlotsRef.current.delete(node.id)
-                  replaceNodes(resolveNotebookGridMove(nodesRef.current, node.id, slot))
-                  setPreviewSlot(null)
-                  void commitLayouts().then((outcome) => {
-                    setWorkspaceNotice(outcome.message)
-                  })
-                }}
-                onNodeClick={(_, node) => {
-                  const selectNode = () => {
-                    setSelectedId(node.id)
-                    setInspectorTab('details')
-                    setPanelOpen(true)
-                    setPromptOpen(false)
-                  }
-                  if (selectedId && node.id !== selectedId) {
-                    void commitEntry(selectedId).then((outcome) => {
-                      setWorkspaceNotice(outcome.message)
-                      if (outcome.ok) selectNode()
-                    })
-                    return
-                  }
-                  if (promptOpen && node.id === selectedId) {
-                    void commitEntry(node.id).then((outcome) => {
-                      setWorkspaceNotice(outcome.message)
-                      if (outcome.ok) selectNode()
-                    })
-                    return
-                  }
-                  selectNode()
-                }}
-                onConnect={(connection: Connection) => {
-                  void connectEntries(connection).then((outcome) => {
-                    setWorkspaceNotice(outcome.message)
-                  })
-                }}
-                onPaneClick={() => {
-                  const id = selectedId
-                  if (!id) return
-                  void commitEntry(id).then((outcome) => {
-                    setWorkspaceNotice(outcome.message)
-                    if (!outcome.ok) return
-                    setSelectedId(null)
-                    setPromptOpen(false)
-                  })
-                }}
-                onInit={(instance) => {
-                  flowRef.current = instance
-                  scheduleBookStageFit()
-                }}
-                onMove={(_, viewport) => {
-                  extendStageRunway(viewport)
-                  if (flowInteractive) return
-                  const clamped = clampNotebookViewport(viewport)
-                  if (clamped === viewport) return
-                  void flowRef.current?.setViewport(clamped)
-                }}
-                fitView={false}
-                minZoom={0.35}
-                maxZoom={1.7}
-                nodesDraggable={flowInteractive}
-                nodesConnectable={flowInteractive}
-                elementsSelectable
-                panOnDrag={flowInteractive}
-                panOnScroll={!flowInteractive}
-                panOnScrollMode={PanOnScrollMode.Vertical}
-                panOnScrollSpeed={0.9}
-                zoomOnScroll={flowInteractive}
-                zoomOnPinch={flowInteractive}
-                zoomOnDoubleClick={flowInteractive}
-                deleteKeyCode={null}
-                proOptions={{ hideAttribution: true }}
-              >
-                <NotebookStageBoard
-                  nodes={nodes}
-                  previewSlot={previewSlot}
-                  minimumStageCount={minimumStageCount}
-                />
-                <Background color="rgba(93, 220, 164, .09)" gap={36} size={1} />
-                <Panel position="top-left" className="palette-panel">
-                  <aside className="palette">
-                    <span className="section-label">ADD CELLS</span>
-                    {palette.map((item) => {
-                      const Icon = item.icon
-                      return (
-                        <button
-                          type="button"
-                          className="palette-action"
-                          key={item.kind}
-                          draggable={flowInteractive}
-                          disabled={busy}
-                          onClick={() => void addCell(item.kind).then((outcome) => {
-                            setWorkspaceNotice(outcome.message)
-                          })}
-                          onDragStart={(event) => {
-                            event.dataTransfer.setData(cellDragType, item.kind)
-                            event.dataTransfer.effectAllowed = 'copy'
-                            setPaletteDragKind(item.kind)
-                          }}
-                          onDragEnd={() => {
-                            setPaletteDragKind(null)
-                            setPreviewSlot(null)
-                          }}
-                          title={`Add ${item.label}`}
-                          aria-label={`Add ${item.label} cell`}
-                        >
-                          <Icon size={18} />
-                          <span>Add {item.shortLabel ?? item.label}</span>
-                        </button>
-                      )
-                    })}
-                  </aside>
-                  <Controls
-                    position="top-left"
-                    orientation="horizontal"
-                    className="flow-controls"
-                    onInteractiveChange={(interactive) => {
-                      setFlowInteractive(interactive)
-                      if (!interactive) scheduleBookStageFit()
+          {screen === 'notebook' && (
+            <>
+              <section className="canvas">
+                {!notebook ? (
+                  <div className="canvas-empty-state">
+                    <strong>No notebook selected</strong>
+                    <button type="button" onClick={() => setNotebookMenuOpen(true)}>Choose a notebook</button>
+                  </div>
+                ) : (
+                  <ReactFlow<CanvasNode, Edge>
+                    nodes={nodes}
+                    edges={edges}
+                    nodeTypes={nodeTypes}
+                    onInit={(instance) => { flowRef.current = instance }}
+                    onNodesChange={(changes) => setNodes((current) => applyNodeChanges(changes, current))}
+                    onEdgesChange={(changes) => {
+                      setEdges((current) => applyEdgeChanges(changes, current))
+                      const removed = changes.filter((change) => change.type === 'remove').map((change) => change.id)
+                      if (removed.length > 0) void removeEdges(removed)
                     }}
-                  />
-                </Panel>
-            </ReactFlow>
-          </section>
+                    onNodeClick={(_event, node) => setSelectedCellId(node.id)}
+                    onPaneClick={() => setSelectedCellId(null)}
+                    onNodeDragStop={(_event, node) => {
+                      const nextNodes = nodes.map((entry) => entry.id === node.id ? { ...entry, position: node.position } : entry)
+                      setNodes(nextNodes)
+                      void persistPositions(nextNodes)
+                    }}
+                    onConnect={(connection) => void connectCells(connection)}
+                    onDrop={(event) => {
+                      event.preventDefault()
+                      const raw = event.dataTransfer.getData('application/x-videobook-cell')
+                      if (!['prompt', 'character', 'scene', 'asset', 'image', 'video'].includes(raw)) return
+                      const point = flowRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+                      void createCell(raw as NotebookCellType, point)
+                    }}
+                    onDragOver={(event) => event.preventDefault()}
+                    fitView
+                    deleteKeyCode={null}
+                  >
+                    <Background gap={36} size={1} color="rgba(96, 196, 141, 0.14)" />
+                    <Controls className="flow-controls" showInteractive={false} />
+                    <MiniMap className="minimap" pannable zoomable />
+                    <Panel position="top-left" className="palette-panel">
+                      <aside className="palette">
+                        <span className="section-label">ADD CELLS</span>
+                        {cellPalette.map((item) => {
+                          const Icon = item.icon
+                          return (
+                            <button
+                              key={item.type}
+                              type="button"
+                              draggable
+                              disabled={busy}
+                              onDragStart={(event) => event.dataTransfer.setData('application/x-videobook-cell', item.type)}
+                              onClick={() => void createCell(item.type)}
+                            >
+                              <Icon size={15} /><span>Add {item.label}</span>
+                            </button>
+                          )
+                        })}
+                        <button type="button" disabled={busy} onClick={() => void runNotebook()}><Sparkles size={15} /><span>Run notebook</span></button>
+                      </aside>
+                    </Panel>
+                  </ReactFlow>
+                )}
+              </section>
+              <aside className="inspector">
+                <header><span>INSPECTOR</span><button type="button" onClick={() => setSelectedCellId(null)}>×</button></header>
+                {!selectedCell ? (
+                  <div className="empty-inspector"><CircleDot size={20} /><strong>Select a notebook cell</strong><p>Edit its prompt and model, then run it directly from the canvas.</p></div>
+                ) : (
+                  <div className="inspector-body">
+                    <h2 className="inspector-slug">{selectedCell.data.title}</h2>
+                    <span className="workspace-notice">{selectedCell.data.kind.toUpperCase()} · {selectedCell.data.status}</span>
+                    <label>
+                      Title
+                      <input defaultValue={selectedCell.data.title} onBlur={(event) => {
+                        const title = event.target.value.trim()
+                        if (title && title !== selectedCell.data.title) void updateCell({ title })
+                      }} />
+                    </label>
+                    {(selectedCell.data.kind === 'prompt' || selectedCell.data.kind === 'image' || selectedCell.data.kind === 'video') && (
+                      <label>
+                        Prompt
+                        <textarea defaultValue={selectedCell.data.prompt ?? ''} rows={8} onBlur={(event) => {
+                          if (event.target.value !== (selectedCell.data.prompt ?? '')) void updateCell({ prompt: event.target.value })
+                        }} />
+                      </label>
+                    )}
+                    {(selectedCell.data.kind === 'image' || selectedCell.data.kind === 'video') && (
+                      <label>
+                        Tool model
+                        <input defaultValue={selectedCell.data.model ?? ''} placeholder="Generation tool name" onBlur={(event) => {
+                          if (event.target.value !== (selectedCell.data.model ?? '')) void updateCell({ model: event.target.value })
+                        }} />
+                      </label>
+                    )}
+                    {selectedCell.data.asset?.mediaUrl && (
+                      <a className="inspector-media-link" href={selectedCell.data.asset.mediaUrl} target="_blank" rel="noreferrer">Open output</a>
+                    )}
+                    <div className="record-card-actions">
+                      {(selectedCell.data.kind === 'image' || selectedCell.data.kind === 'video') && <button type="button" onClick={() => void runCell(selectedCell.id)} disabled={busy}>Run cell</button>}
+                      <button type="button" className="danger-button" onClick={() => void deleteSelectedCell()} disabled={busy}><Trash2 size={13} />Delete</button>
+                    </div>
+                  </div>
+                )}
+              </aside>
+            </>
+          )}
 
-          <aside className={`inspector ${panelOpen ? '' : 'inspector-closed'}`}>
-            <header>
-              <span>
-                {selected
-                  ? `${selected.data.kind.toUpperCase()} CELL`
-                  : 'INSPECTOR'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setPanelOpen(false)}
-                aria-label="Close inspector"
-              >
-                <X size={16} />
-              </button>
-            </header>
-            {selected ? (
-              <CellInspectorPanel
-                key={selected.id}
-                cell={selected.data}
-                tab={inspectorTab}
-                onTabChange={setInspectorTab}
-                onUpdate={(patch) => updateSelectedData(selected.id, patch)}
-                onCommit={() => void commitEntry(selected.id).then((outcome) => {
-                  setWorkspaceNotice(outcome.message)
-                })}
-              />
-            ) : (
-              <div className="empty-inspector">
-                <div className="target-mark">
-                  <CircleDot size={42} />
-                </div>
-                <strong>NO CELL SELECTED</strong>
-                <p>Select a cell on the canvas to configure its model, inputs, and settings.</p>
+          {screen === 'books' && (
+            <section className="workspace-screen">
+              <header>
+                <div><span className="section-label">BOOK LIBRARY</span><h1>Independent books, independent v2 roots.</h1><p>Each book has its own UUID-backed engine root and starts with a Main notebook.</p></div>
+                <button type="button" onClick={() => void loadBooks(bookId)} disabled={busy}><RefreshCw size={15} />Refresh</button>
+              </header>
+              <form className="project-create" onSubmit={createBook}>
+                <label>New book slug<input value={createSlug} onChange={(event) => setCreateSlug(event.target.value)} placeholder="new-story" /></label>
+                <button type="submit" disabled={busy || !createSlug.trim()}><Plus size={15} />Create book</button>
+              </form>
+              <div className="record-grid">
+                {books.map((book) => (
+                  <article className="record-card project-record-card" key={book.bookId}>
+                    <span>BOOK</span><div className="project-record-meta"><strong>{book.slug}</strong><small>{book.notebookCount} notebooks · {book.artifactCount} artifacts</small></div>
+                    <div className="record-card-actions"><button type="button" onClick={() => void chooseBook(book.bookId)} disabled={busy}>{book.bookId === bookId ? 'Open' : 'Switch'}</button></div>
+                  </article>
+                ))}
               </div>
-            )}
-          </aside>
+              <span className="workspace-notice">{notice}</span>
+            </section>
+          )}
+
+          {screen === 'library' && (
+            <section className="workspace-screen">
+              <header>
+                <div><span className="section-label">ARTIFACT LIBRARY</span><h1>{activeBook.slug} assets</h1><p>Uploads and generated artifacts are stored through the selected book’s engine.</p></div>
+                <label className="upload-button">{uploading ? 'Uploading…' : 'Upload file'}<input type="file" disabled={uploading} onChange={upload} /></label>
+              </header>
+              <div className="record-grid">
+                {assets.map((asset) => (
+                  <article className="record-card asset-card" key={asset.artifactId}>
+                    <span>{asset.type.toUpperCase()} · {asset.status}</span>
+                    {asset.mediaUrl ? asset.type === 'video' ? <video src={asset.mediaUrl} controls playsInline preload="metadata" /> : <img src={asset.thumbnailUrl ?? asset.mediaUrl} alt={asset.id} /> : <div className="asset-placeholder"><Library size={28} /></div>}
+                    <strong>{asset.id}</strong><small>{asset.prompt ?? asset.createdAt}</small>
+                  </article>
+                ))}
+                {assets.length === 0 && <div className="empty-record"><Library size={25} /><strong>No assets yet</strong><p>Upload media or generate an image/video from the notebook.</p></div>}
+              </div>
+            </section>
+          )}
+
+          {screen === 'timeline' && (
+            <section className="workspace-screen">
+              <header>
+                <div><span className="section-label">TYPED TIMELINE</span><h1>{timeline.slots.length} timeline slots</h1><p>The timeline holds stable artifact UUID references inside the selected book.</p></div>
+                <button type="button" disabled={busy} onClick={() => void saveTimeline(timeline)}><Check size={15} />Save timeline</button>
+              </header>
+              <form className="project-create entity-create" onSubmit={(event) => {
+                event.preventDefault()
+                if (!timelineAssetId) return
+                void saveTimeline({ ...timeline, slots: [...timeline.slots, { id: '', artifactId: timelineAssetId }] })
+              }}>
+                <label>Render orientation<select value={timeline.render} onChange={(event) => setTimeline({ ...timeline, render: event.target.value as TimelineRecord['render'] })}><option value="landscape">Landscape</option><option value="portrait">Portrait</option><option value="square">Square</option></select></label>
+                <label>Add artifact<select value={timelineAssetId} onChange={(event) => setTimelineAssetId(event.target.value)}><option value="">Select artifact</option>{assets.filter((asset) => asset.type === 'video' || asset.type === 'image').map((asset) => <option key={asset.artifactId} value={asset.artifactId}>{asset.id}</option>)}</select></label>
+                <button type="submit" disabled={busy || !timelineAssetId}><Plus size={15} />Add slot</button>
+              </form>
+              <div className="record-grid">
+                {timeline.slots.map((slot, index) => {
+                  const asset = assetById.get(slot.artifactId)
+                  return <article className="record-card" key={slot.id}><span>SLOT {String(index + 1).padStart(2, '0')}</span><strong>{asset?.id ?? slot.artifactId}</strong><small>{asset?.type ?? 'missing artifact'}</small><button type="button" disabled={busy} onClick={() => void saveTimeline({ ...timeline, slots: timeline.slots.filter((entry) => entry.id !== slot.id) })}>Remove</button></article>
+                })}
+                {timeline.slots.length === 0 && <div className="empty-record"><Film size={25} /><strong>No timeline slots</strong><p>Add an image or video artifact to begin a typed render timeline.</p></div>}
+              </div>
+            </section>
+          )}
+
+          {screen === 'jobs' && (
+            <section className="workspace-screen">
+              <header><div><span className="section-label">PERSISTENT JOBS</span><h1>Book job queue</h1><p>Generation, processing, and notebook runs are recorded in the selected book’s durable queue.</p></div><button type="button" disabled={busy} onClick={() => bookId && void refreshBookData(bookId, notebook?.id)}><RefreshCw size={15} />Refresh</button></header>
+              <div className="record-grid">
+                {jobs.map((job) => <article className="record-card" key={job.id}><span>{job.state.toUpperCase()}</span><strong>{job.type}</strong><small>{job.artifactId ?? 'book-level job'}</small><pre>{job.error?.message ?? new Date(job.enqueuedAt).toLocaleString()}</pre></article>)}
+                {jobs.length === 0 && <div className="empty-record"><Activity size={25} /><strong>No jobs recorded</strong><p>Run a cell or a notebook to queue work.</p></div>}
+              </div>
+            </section>
+          )}
+
+          {screen === 'settings' && (
+            <section className="workspace-screen">
+              <header><div><span className="section-label">APPLICATION SETTINGS</span><h1>Provider and storage state</h1><p>Provider keys and X OAuth are application-level; object publication state is scoped to the selected book.</p></div><button type="button" disabled={busy} onClick={() => void refreshSettings()}><RefreshCw size={15} />Refresh</button></header>
+              <form className="project-create" onSubmit={storeSecret}>
+                <label>Provider key<select value={secretKey} onChange={(event) => setSecretKey(event.target.value)}>{['KIE_API_KEY', 'OPENAI_API_KEY', 'XAI_API_KEY', 'ELEVENLABS_API_KEY', 'FAL_API_KEY', 'GOOGLE_FLOW_API_KEY', 'X_CLIENT_ID', 'X_CLIENT_SECRET'].map((key) => <option key={key} value={key}>{key}</option>)}</select></label>
+                <label>Value<input type="password" value={secretValue} onChange={(event) => setSecretValue(event.target.value)} placeholder="Stored locally in .env" /></label>
+                <button type="submit" disabled={busy || !secretValue}>Save key</button>
+              </form>
+              <div className="settings-sections"><div className="settings-grid">{providers.map((provider) => <article className="provider-card" key={provider.envKey}><span className={`provider-dot provider-${provider.keyStatus}`} /><div><strong>{provider.label}</strong><p>{provider.keyStatus}{provider.maskedKey ? ` · ${provider.maskedKey}` : ''}</p></div></article>)}</div><div className="settings-diagnostics"><div className="workspace-section-heading"><h2>Selected book storage</h2><p>Catalog and object publication status from videobook-engine 2.0.1.</p></div><div className="settings-diagnostics-grid"><article className="record-card"><pre>{storage ? JSON.stringify(storage, null, 2) : 'Refresh settings to inspect storage.'}</pre></article></div></div></div>
+            </section>
+          )}
         </>
-      ) : (
-        <WorkspaceScreen
-          screen={screen}
-          records={records}
-          busy={busy}
-          notice={workspaceNotice}
-          onRefresh={refreshScreen}
-          projectSlug={projectSlug}
-          bookSummary={projectBook
-            ? `${projectBook.actions.length} actions · ${bookAssets.length} assets · ${projectBook.headRevision.slice(0, 8)}`
-            : 'No project book'}
-          onCreateProject={createProject}
-          onOpenProject={openProject}
-          onRenameProject={renameProject}
-          onDeleteProject={deleteProject}
-          onCreateEntity={createEntity}
-          onDeleteEntity={deleteEntity}
-          onOutcome={(outcome) => setWorkspaceNotice(outcome.message)}
-        />
       )}
 
       <CommandComposer
-        commands={visibleCommands}
-        assetSlugs={assetSlugs}
-        projectSlug={projectSlug}
+        commands={commands}
+        assetSlugs={assets.map((asset) => asset.id)}
+        bookId={bookId}
         callTool={mcp.callTool}
-        disabled={mcp.state !== 'ready'}
-        connectionLabel={`MCP ${mcp.state}`}
-        promptSession={promptSession}
-        onEnsureCatalog={ensureCommandCatalog}
+        disabled={busy || !bookId || mcp.state !== 'ready'}
+        connectionLabel={mcp.state === 'ready' ? 'Load a book to begin' : 'Connecting to MCP…'}
+        promptSession={null}
+        onEnsureCatalog={() => loadBooks(bookId)}
         onExecute={executeCommand}
       />
     </main>
-  )
-}
-
-interface WorkspaceScreenProps {
-  screen: Exclude<Screen, 'notebook'>
-  records: unknown[]
-  busy: boolean
-  notice: string
-  onRefresh: () => Promise<void>
-  projectSlug: string
-  bookSummary: string
-  onCreateProject: (slug: string) => Promise<ComposerOutcome>
-  onOpenProject: (slug: string) => Promise<ComposerOutcome>
-  onRenameProject: (oldSlug: string, newSlug: string) => Promise<ComposerOutcome>
-  onDeleteProject: (slug: string) => Promise<ComposerOutcome>
-  onCreateEntity: (
-    type: EntityKind,
-    name: string,
-    prompt: string,
-  ) => Promise<ComposerOutcome>
-  onDeleteEntity: (type: EntityKind, id: string) => Promise<ComposerOutcome>
-  onOutcome: (outcome: ComposerOutcome) => void
-}
-
-function WorkspaceScreen({
-  screen,
-  records,
-  busy,
-  notice,
-  onRefresh,
-  projectSlug,
-  bookSummary,
-  onCreateProject,
-  onOpenProject,
-  onRenameProject,
-  onDeleteProject,
-  onCreateEntity,
-  onDeleteEntity,
-  onOutcome,
-}: WorkspaceScreenProps) {
-  const [newProjectSlug, setNewProjectSlug] = useState('')
-  const [entityType, setEntityType] = useState<EntityKind>('prompt')
-  const [entityName, setEntityName] = useState('')
-  const [entityPrompt, setEntityPrompt] = useState('')
-  const title =
-    screen === 'library'
-      ? 'Entity library'
-      : screen[0]!.toUpperCase() + screen.slice(1)
-
-  return (
-    <section className="workspace-screen">
-      <header>
-        <div>
-          <span className="section-label">VIDEOBOOK / {screen.toUpperCase()}</span>
-          <h1>{title}</h1>
-          <p>
-            {screen === 'projects' && 'Fresh local-first projects and their canonical project books.'}
-            {screen === 'library' && 'Reusable prompts, characters, scenes, images, and videos.'}
-            {screen === 'jobs' && 'Queued project-book actions and provider operations.'}
-            {screen === 'settings'
-              && 'Provider configuration plus catalog, CAS, MCP, and publication health.'}
-          </p>
-          <span className="workspace-notice">{notice}</span>
-        </div>
-        <button type="button" onClick={() => void onRefresh()} disabled={busy}>
-          <RefreshCw size={16} className={busy ? 'spin' : ''} />
-          Refresh
-        </button>
-      </header>
-
-      {screen === 'projects' && (
-        <form
-          className="project-create"
-          onSubmit={(event) => {
-            event.preventDefault()
-            const slug = newProjectSlug.trim()
-            if (!slug) return
-            setNewProjectSlug('')
-            void onCreateProject(slug).then(onOutcome)
-          }}
-        >
-          <label>
-            New project slug
-            <input
-              value={newProjectSlug}
-              onChange={(event) => setNewProjectSlug(event.target.value)}
-              placeholder="moon-garden"
-              pattern="[a-z0-9](?:[a-z0-9]|-)*"
-              disabled={busy}
-            />
-          </label>
-          <button type="submit" disabled={busy || !newProjectSlug.trim()}>
-            <Plus size={16} />
-            Create project
-          </button>
-        </form>
-      )}
-
-      {screen === 'library' && (
-        <form
-          className="project-create entity-create"
-          onSubmit={(event) => {
-            event.preventDefault()
-            const name = entityName.trim()
-            if (!name) return
-            setEntityName('')
-            setEntityPrompt('')
-            void onCreateEntity(entityType, name, entityPrompt.trim()).then(onOutcome)
-          }}
-        >
-          <label>
-            Entity type
-            <select
-              value={entityType}
-              onChange={(event) => setEntityType(event.target.value as EntityKind)}
-              disabled={busy}
-            >
-              <option value="prompt">Prompt</option>
-              <option value="character">Character</option>
-              <option value="scene">Scene</option>
-            </select>
-          </label>
-          <label>
-            Name
-            <input
-              value={entityName}
-              onChange={(event) => setEntityName(event.target.value)}
-              placeholder="Moon gardener"
-              disabled={busy}
-            />
-          </label>
-          <label>
-            Prompt
-            <input
-              value={entityPrompt}
-              onChange={(event) => setEntityPrompt(event.target.value)}
-              placeholder="Reusable visual description"
-              disabled={busy}
-            />
-          </label>
-          <button type="submit" disabled={busy || !entityName.trim()}>
-            <Plus size={16} />
-            Create entity
-          </button>
-        </form>
-      )}
-
-      {screen === 'settings' ? (
-        <div className="settings-sections">
-          <section aria-labelledby="provider-settings-title">
-            <div className="workspace-section-heading">
-              <span className="section-label">PROVIDERS</span>
-              <h2 id="provider-settings-title">Provider settings</h2>
-              <p>Credentials, routing, and model defaults managed by the environment.</p>
-            </div>
-            <div className="settings-grid">
-              <label>
-                Project slug
-                <input value={projectSlug || 'No project selected'} readOnly />
-              </label>
-              <label>
-                Project book
-                <input value={bookSummary} readOnly />
-              </label>
-              {['OpenAI', 'KIE', 'FAL', 'Google Flow', 'ElevenLabs', 'Backblaze B2'].map(
-                (provider) => (
-                  <article key={provider} className="provider-card">
-                    <span className="provider-dot" />
-                    <div>
-                      <strong>{provider}</strong>
-                      <p>Environment-managed credential</p>
-                    </div>
-                    <button type="button" disabled>Environment managed</button>
-                  </article>
-                ),
-              )}
-            </div>
-          </section>
-          <section className="settings-diagnostics" aria-labelledby="system-diagnostics-title">
-            <div className="workspace-section-heading">
-              <span className="section-label">DIAGNOSTICS</span>
-              <h2 id="system-diagnostics-title">System diagnostics</h2>
-              <p>Catalog, object storage, synchronization, and publication health.</p>
-            </div>
-            <div className="record-grid settings-diagnostics-grid">
-              {records.length === 0 ? (
-                <EmptyRecord icon={CircleDot} label="Refresh to load storage status" />
-              ) : (
-                records.map((record, index) => (
-                  <article className="record-card" key={`settings-diagnostics-${index}`}>
-                    <span>STORAGE STATUS</span>
-                    <pre>{JSON.stringify(record, null, 2)}</pre>
-                  </article>
-                ))
-              )}
-            </div>
-          </section>
-        </div>
-      ) : (
-        <div className="record-grid">
-          {records.length === 0 ? (
-            <>
-              <EmptyRecord
-                icon={Boxes}
-                label={busy && screen === 'projects'
-                  ? 'Loading projects…'
-                  : screen === 'projects'
-                    ? 'No projects yet'
-                    : 'No records loaded'}
-              />
-              <EmptyRecord
-                icon={Sparkles}
-                label={screen === 'projects'
-                  ? 'Create a project or use the command bar'
-                  : 'Use Refresh or the command bar'}
-              />
-              <EmptyRecord icon={BookOpen} label="Local data stays revisioned" />
-            </>
-          ) : (
-            records.map((record, index) => {
-              const project =
-                screen === 'projects'
-                && typeof record === 'object'
-                && record !== null
-                && 'slug' in record
-                  ? String(record.slug)
-                  : null
-              const entity =
-                screen === 'library'
-                && typeof record === 'object'
-                && record !== null
-                && 'id' in record
-                && 'type' in record
-                && (record.type === 'prompt'
-                  || record.type === 'character'
-                  || record.type === 'scene')
-                  ? {
-                      id: String(record.id),
-                      type: record.type as EntityKind,
-                    }
-                  : null
-              if (project) {
-                return (
-                  <ProjectRecordCard
-                    key={project}
-                    record={record}
-                    slug={project}
-                    busy={busy}
-                    onOpen={() => void onOpenProject(project).then(onOutcome)}
-                    onRename={(next) => onRenameProject(project, next)}
-                    onDelete={() => onDeleteProject(project)}
-                    onOutcome={onOutcome}
-                  />
-                )
-              }
-              return (
-                <article className="record-card" key={`${screen}-${index}`}>
-                  <span>{String(index + 1).padStart(2, '0')}</span>
-                  <pre>{JSON.stringify(record, null, 2)}</pre>
-                  {entity && (
-                    <button
-                      type="button"
-                      onClick={() => void onDeleteEntity(entity.type, entity.id).then(onOutcome)}
-                    >
-                      Delete entity
-                    </button>
-                  )}
-                </article>
-              )
-            })
-          )}
-        </div>
-      )}
-    </section>
-  )
-}
-
-function ProjectRecordCard({
-  record,
-  slug,
-  busy,
-  onOpen,
-  onRename,
-  onDelete,
-  onOutcome,
-}: {
-  record: unknown
-  slug: string
-  busy: boolean
-  onOpen: () => void
-  onRename: (slug: string) => Promise<ComposerOutcome>
-  onDelete: () => Promise<ComposerOutcome>
-  onOutcome: (outcome: ComposerOutcome) => void
-}) {
-  const [renaming, setRenaming] = useState(false)
-  const [renameValue, setRenameValue] = useState(slug)
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const project = typeof record === 'object' && record !== null
-    ? record as Record<string, unknown>
-    : {}
-  const assetCount = typeof project.asset_count === 'number'
-    ? project.asset_count
-    : 0
-  const created = typeof project.created === 'number'
-    ? new Date(project.created * 1000).toLocaleDateString()
-    : 'Fresh project'
-
-  return (
-    <article className="record-card project-record-card">
-      <span>{slug}</span>
-      <div className="project-record-meta">
-        <strong>{assetCount} {assetCount === 1 ? 'asset' : 'assets'}</strong>
-        <small>{created}</small>
-      </div>
-      {renaming ? (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
-            const next = renameValue.trim()
-            if (!next || next === slug) return
-            void onRename(next).then((outcome) => {
-              onOutcome(outcome)
-              if (outcome.ok) setRenaming(false)
-            })
-          }}
-        >
-          <input
-            value={renameValue}
-            onChange={(event) => setRenameValue(event.target.value)}
-            pattern="[a-z0-9](?:[a-z0-9]|-)*"
-            autoFocus
-          />
-          <button type="submit" disabled={busy}>Rename</button>
-          <button type="button" onClick={() => setRenaming(false)}>Cancel</button>
-        </form>
-      ) : confirmingDelete ? (
-        <div className="project-delete-confirm">
-          <span>Delete {slug}?</span>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void onDelete().then((outcome) => {
-              onOutcome(outcome)
-              if (!outcome.ok) setConfirmingDelete(false)
-            })}
-          >
-            <Trash2 size={14} />
-            Confirm delete
-          </button>
-          <button type="button" onClick={() => setConfirmingDelete(false)}>Cancel</button>
-        </div>
-      ) : (
-        <div className="record-card-actions">
-          <button type="button" onClick={onOpen}>Open project</button>
-          <button type="button" onClick={() => setRenaming(true)}>Rename</button>
-          <button type="button" onClick={() => setConfirmingDelete(true)}>Delete</button>
-        </div>
-      )}
-    </article>
-  )
-}
-
-function EmptyRecord({
-  icon: Icon,
-  label,
-}: {
-  icon: typeof Boxes
-  label: string
-}) {
-  return (
-    <div className="empty-record">
-      <Icon size={24} />
-      <strong>{label}</strong>
-    </div>
   )
 }
 

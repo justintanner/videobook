@@ -66,20 +66,20 @@ export function syncVideoToAudioDef(fs: Engine): ToolDef {
     description: "Smoothly retime a video's picture through multiple anchors while preserving its original audio unchanged.",
     schema: {
       asset_id: z.string().describe("Video asset ID"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       anchors: z.array(z.union([cueAnchor, videoAnchor])).min(1).describe("Visual timestamps mapped to transcript cues or numeric audio timestamps"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, anchors } = args as {
+      const { asset_id, book_id, anchors } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         anchors: Array<
           | { video_seconds: number; audio_cue: string }
           | { video_seconds: number; audio_seconds: number }
         >;
       };
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) return errorResult(manifestResult.error.message);
       const videoFile = findVideoFile(manifestResult.value.files);
       if (!videoFile) return errorResult(`No video file found in asset ${asset_id}`);
@@ -130,7 +130,7 @@ export function syncVideoToAudioDef(fs: Engine): ToolDef {
         anchors: requestedAnchors,
         assetId: asset_id,
         assetDir: manifestResult.value.path,
-        projectSlug: project_slug,
+        bookId: book_id,
       } as unknown as Record<string, unknown>);
 
       return {

@@ -9,8 +9,8 @@ if (testRoot) {
     `worker-${process.env.VITEST_POOL_ID ?? "0"}`,
     randomUUID(),
   );
-  process.env.VIDEOBOOK_DATA_DIR = join(fileRoot, "data");
-  process.env.VIDEOBOOK_WORKSPACE_DIR = join(fileRoot, "workspaces");
+  process.env.VIDEOBOOK_LIBRARY_DIR = join(fileRoot, "books");
+  process.env.VIDEOBOOK_APP_STATE_PATH = join(fileRoot, "runtime", "app-state.json");
 }
 
 /**

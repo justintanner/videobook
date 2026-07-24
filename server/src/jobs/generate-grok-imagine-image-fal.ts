@@ -7,7 +7,7 @@ type Payload = {
   type: "generate_grok_imagine_image_fal";
   imgAssetId: string;
   imgAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   num_images?: number;
   aspect_ratio?: string;
@@ -18,7 +18,7 @@ type Payload = {
 export function registerGenerateGrokImagineImageFalJob(fs: Engine): void {
   registerJobHandler("generate_grok_imagine_image_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.projectSlug, p.imgAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.bookId, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
       const input: Record<string, unknown> = {
         prompt: p.prompt,
@@ -30,7 +30,7 @@ export function registerGenerateGrokImagineImageFalJob(fs: Engine): void {
   
       const taskId = await submitFalJob({
         fs,
-        projectSlug: p.projectSlug,
+        bookId: p.bookId,
         assetId: p.imgAssetId,
         assetDir: p.imgAssetDir,
         endpointId: "xai/grok-imagine-image",

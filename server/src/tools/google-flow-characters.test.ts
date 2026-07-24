@@ -58,7 +58,7 @@ describe("google flow character tools — handler guards", () => {
   it("create errors cleanly when GOOGLE_FLOW_API_KEY is missing", async () => {
     delete process.env.GOOGLE_FLOW_API_KEY;
     const result = await createGoogleFlowCharacterDef(fs).handler({
-      project_slug: "test-proj",
+      book_id: "test-proj",
       display_name: "Hero",
       image_slugs: ["@img-hero"],
     });
@@ -69,7 +69,7 @@ describe("google flow character tools — handler guards", () => {
   it("create rejects more than two image slugs", async () => {
     process.env.GOOGLE_FLOW_API_KEY = "test-key";
     const result = await createGoogleFlowCharacterDef(fs).handler({
-      project_slug: "test-proj",
+      book_id: "test-proj",
       display_name: "Hero",
       image_slugs: ["@img-a", "@img-b", "@img-c"],
     });
@@ -79,12 +79,12 @@ describe("google flow character tools — handler guards", () => {
 
   it("create resolves real slugs then fails closed on a placeholder key", async () => {
     process.env.GOOGLE_FLOW_API_KEY = "test-key";
-    const asset = await fs.artifacts.create("img", "hero", "test-proj");
+    const asset = await fs.artifacts.create("img", "hero");
     if (!asset.ok) throw new Error("failed to create image asset");
-    await fs.files.write(asset.value.slug, "original.png", await makePng(), "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", await makePng());
 
     const result = await createGoogleFlowCharacterDef(fs).handler({
-      project_slug: "test-proj",
+      book_id: "test-proj",
       display_name: "Hero",
       image_slugs: [`@${asset.value.slug}`],
     });
@@ -311,9 +311,9 @@ describe("replaceGoogleFlowCharacter — stubbed provider", () => {
     const tempDir = await mkdtemp(join(tmpdir(), "videocity-replace-test-"));
     const fs = createEngineForTest(tempDir);
     await fs.projects.create("test-proj");
-    const asset = await fs.artifacts.create("img", "newimg", "test-proj");
+    const asset = await fs.artifacts.create("img", "newimg");
     if (!asset.ok) throw new Error("failed to create asset");
-    await fs.files.write(asset.value.slug, "original.png", await makePng(), "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", await makePng());
 
     const result = await replaceGoogleFlowCharacter(provider, fs, "test-proj", OLD_REF, {
       imageSlugs: [`@${asset.value.slug}`],

@@ -6,7 +6,7 @@ type UrlTargetInput = {
 
 export type DownloadVideoArguments = Record<string, unknown> & {
   url: string;
-  project_slug: string;
+  book_id: string;
   full: true;
   export_videos: false;
 };
@@ -29,10 +29,10 @@ export function isHttpUrl(value: string): boolean {
   }
 }
 
-export function buildDownloadVideoArguments(url: string, projectSlug: string): DownloadVideoArguments {
+export function buildDownloadVideoArguments(url: string, bookId: string): DownloadVideoArguments {
   return {
     url,
-    project_slug: projectSlug,
+    book_id: bookId,
     full: true,
     export_videos: false,
   };

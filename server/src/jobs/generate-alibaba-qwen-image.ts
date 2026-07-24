@@ -13,7 +13,7 @@ type GenerateAlibabaQwenImagePayload = {
   imgAssetId: string;
   imgAssetDir: string;
   sourceImageIds: string[];
-  projectSlug: string;
+  bookId: string;
   model: AlibabaMultimodalGenerationRequest["model"];
   size?: string;
   n?: number;
@@ -31,14 +31,14 @@ async function runQwenImageJob(
 ): Promise<{ success: true; requestId: string }> {
   const {
     prompt, imageInputs, imgAssetId, imgAssetDir, sourceImageIds,
-    projectSlug, model, size, n, negativePrompt, promptExtend, watermark, seed,
+    bookId, model, size, n, negativePrompt, promptExtend, watermark, seed,
   } = payload;
 
   const apiKey = requireApiKey("DASHSCOPE_API_KEY");
 
   const uploadedUrls: string[] = [];
   for (const { assetId: srcAssetId, filename } of imageInputs) {
-    uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, projectSlug, model));
+    uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, bookId, model));
   }
 
   const provider = createAlibaba({ apiKey, timeout: 120_000 });
@@ -52,7 +52,7 @@ async function runQwenImageJob(
     },
     uploadedUrls,
   );
-  await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request, projectSlug);
+  await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request);
 
   const response = await provider.post.api.v1.services.aigc.multimodalGeneration.generation(request);
 
@@ -67,7 +67,7 @@ async function runQwenImageJob(
   // Hand off to the downstream completion job: write a pending_tasks row so
   // complete_kie_task can claim the lease via getOwner+setLease, then mark
   // completing so a duplicate dispatch is skipped.
-  const ptResult = await fs.jobs.pending.write(projectSlug, {
+  const ptResult = await fs.jobs.pending.write({
     taskId: response.request_id,
     taskType,
     artifactId: imgAssetId,
@@ -80,7 +80,7 @@ async function runQwenImageJob(
     throw new Error("Lost local lease while writing pending-task");
   }
   ctx.setLease({ kind: "task", taskId: response.request_id });
-  await fs.jobs.pending.markCompleting(projectSlug, imgAssetId);
+  await fs.jobs.pending.markCompleting(imgAssetId);
 
   const jobId = `complete-alibaba-qwen-${imgAssetId}-${Date.now()}`;
   await queue.enqueue(jobId, {
@@ -89,7 +89,7 @@ async function runQwenImageJob(
     taskType,
     assetId: imgAssetId,
     assetDir: imgAssetDir,
-    projectSlug,
+    bookId,
     meta: {
       sourceImageIds,
       prompt,

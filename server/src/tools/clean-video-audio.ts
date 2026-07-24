@@ -16,7 +16,7 @@ export function cleanVideoAudioDef(fs: Engine): ToolDef {
       "Clean a vid-* asset's audio in place with ElevenLabs Voice Isolator. Preserves dialogue as the main track, keeps a quiet denoised source bed for important sound effects, suppresses odd start/end sounds with fades, and can add subtle instrumental ElevenLabs music. The video stream is copied unchanged and process_video refreshes derived audio artifacts.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-* or @vid-*)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       source_mix: z
         .number()
         .min(0)
@@ -54,7 +54,7 @@ export function cleanVideoAudioDef(fs: Engine): ToolDef {
 
       const {
         asset_id,
-        project_slug,
+        book_id,
         source_mix,
         edge_fade_ms,
         add_light_music,
@@ -62,7 +62,7 @@ export function cleanVideoAudioDef(fs: Engine): ToolDef {
         music_volume,
       } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         source_mix?: number;
         edge_fade_ms?: number;
         add_light_music?: boolean;
@@ -74,7 +74,7 @@ export function cleanVideoAudioDef(fs: Engine): ToolDef {
         return toolError(`clean_video_audio requires a vid-* asset, got ${asset_id}`);
       }
 
-      const manifestResult = await fs.files.manifest(assetId, project_slug);
+      const manifestResult = await fs.files.manifest(assetId);
       if (!manifestResult.ok) return toolError(manifestResult.error.message);
 
       const manifest = manifestResult.value;
@@ -92,7 +92,7 @@ export function cleanVideoAudioDef(fs: Engine): ToolDef {
           assetId,
           assetDir: manifest.path,
           videoFilename: videoFile.name,
-          projectSlug: project_slug,
+          bookId: book_id,
           sourceMix: source_mix ?? DEFAULT_SOURCE_MIX,
           edgeFadeMs: edge_fade_ms ?? DEFAULT_EDGE_FADE_MS,
           addMusic,

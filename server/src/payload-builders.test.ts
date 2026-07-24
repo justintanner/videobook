@@ -401,7 +401,7 @@ describe("translateToolPayload", () => {
       prompt: "@img-vancat in multiple poses like @img-shots in the purple nebula",
       image_slugs: ["@img-shots", "@img-vcprof", "@img-vancat"],
       aspect_ratio: "16:9",
-      project_slug: "realcat",
+      book_id: "realcat",
     }, "google");
 
     expect(result?.provider_path).toBe("googleflow.v1.images()");

@@ -33,13 +33,13 @@ type FormState = {
 };
 
 export function GoogleFlowCharactersScreen({
-  projectSlug,
+  bookId,
   callTool,
   callState,
   mediaItems = [],
   onClose,
 }: {
-  projectSlug: string;
+  bookId: string;
   callTool: UseMcpResult['callTool'];
   callState: UseMcpResult['state'];
   mediaItems?: MediaItem[];
@@ -126,12 +126,12 @@ export function GoogleFlowCharactersScreen({
 
   const handleFormSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (callState !== 'ready' || !projectSlug) return;
+    if (callState !== 'ready' || !bookId) return;
     setSubmitting(true);
     try {
       if (mode === 'create') {
         const res = await callTool('create_google_flow_character', {
-          project_slug: projectSlug,
+          book_id: bookId,
           display_name: form.displayName,
           image_slugs: form.imageSlugs,
           ...(form.personalityNotes.trim() ? { personality_notes: form.personalityNotes } : {}),
@@ -156,7 +156,7 @@ export function GoogleFlowCharactersScreen({
       } else if (mode === 'edit' && detail) {
         const res = await callTool('replace_google_flow_character', {
           ref: detail.ref,
-          project_slug: projectSlug,
+          book_id: bookId,
           display_name: form.displayName,
           ...(form.imageSlugs.length > 0 ? { image_slugs: form.imageSlugs } : {}),
           personality_notes: form.personalityNotes,
@@ -186,7 +186,7 @@ export function GoogleFlowCharactersScreen({
     } finally {
       setSubmitting(false);
     }
-  }, [callState, projectSlug, mode, form, detail, callTool, refreshChars, handleSelect]);
+  }, [callState, bookId, mode, form, detail, callTool, refreshChars, handleSelect]);
 
   const handleDelete = useCallback(async (ref: string) => {
     if (callState !== 'ready') return;

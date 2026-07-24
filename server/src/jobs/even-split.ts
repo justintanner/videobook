@@ -20,7 +20,7 @@ type EvenSplitPayload = {
   sourcePath: string;
   sourceAssetId: string;
   chunks: EvenSplitChunkPayload[];
-  projectSlug: string;
+  bookId: string;
   /**
    * When set, every chunk in `chunks` shares this destination asset and was
    * written into it as a sibling file (no per-chunk asset minted). The job
@@ -38,7 +38,7 @@ async function buildChunk(
     start: number;
     end: number;
     assetId: string;
-    projectSlug: string;
+    bookId: string;
     provenance: Record<string, unknown>;
     /**
      * If true, encode with `trimRangeExact` so the container duration reads
@@ -54,7 +54,7 @@ async function buildChunk(
     skipMetadata?: boolean;
   },
 ): Promise<void> {
-  const { sourcePath, outputPath, start, end, assetId, projectSlug, provenance, exact, skipMetadata } = args;
+  const { sourcePath, outputPath, start, end, assetId, bookId, provenance, exact, skipMetadata } = args;
   try {
     if (exact) {
       await trimRangeExact(sourcePath, outputPath, start, end - start);
@@ -69,19 +69,19 @@ async function buildChunk(
   if (!skipMetadata) {
     await ingestWorkspaceOutputs(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       [outputPath.split("/").pop()!],
       "even_split_chunk",
       provenance,
     );
-    await fs.metadata.artifacts.write(assetId, "original", provenance, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "original", provenance);
   }
 }
 
 export function registerEvenSplitJob(fs: Engine): void {
   registerJobHandler("even_split", async (payload) => {
-    const { sourcePath, sourceAssetId, chunks, projectSlug, destination } = payload as EvenSplitPayload;
+    const { sourcePath, sourceAssetId, chunks, bookId, destination } = payload as EvenSplitPayload;
     const splitAtIso = new Date().toISOString();
     const destinationMode = destination !== undefined;
 
@@ -104,7 +104,7 @@ export function registerEvenSplitJob(fs: Engine): void {
         start: chunk.start,
         end: chunk.end,
         assetId: chunk.assetId,
-        projectSlug,
+        bookId,
         provenance,
         exact: chunk.exact,
         skipMetadata: destinationMode,
@@ -120,7 +120,7 @@ export function registerEvenSplitJob(fs: Engine): void {
       const filenames = chunks.map((chunk) => chunk.outputPath.split("/").pop()!);
       await ingestWorkspaceOutputs(
         fs,
-        projectSlug,
+        bookId,
         destination.assetId,
         filenames,
         "even_split",
@@ -144,7 +144,7 @@ export function registerEvenSplitJob(fs: Engine): void {
         videoPath: chunk.outputPath,
         assetId: chunk.assetId,
         assetDir: chunk.assetDir,
-        projectSlug,
+        bookId,
         skipDownstreamJobs: true,
         provenance: {
           origin: "even_split",

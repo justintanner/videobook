@@ -20,7 +20,7 @@ import {
 const NBP_GOOGLE_ASPECT_RATIOS = ["16:9", "4:3", "1:1", "3:4", "9:16", "auto"] as const;
 
 const generateNanoBananaProGoogleSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: z.string().describe("Image description"),
   image_slugs: z.array(z.string()).max(10).optional().describe("Reference image @slugs or http(s) URLs (0-10, e.g., @img-style)"),
   character_refs: z.array(z.string()).max(7).optional().describe("Optional Google Flow character references (up to 7)"),
@@ -38,7 +38,7 @@ export function generateNanoBananaProGoogleDef(fs: Engine): ToolDef {
     schema: generateNanoBananaProGoogleSchema,
     handler: async (args) => {
       const raw = args as Args;
-      const { project_slug, prompt, image_slugs, character_refs, aspect_ratio, seed } = raw;
+      const { book_id, prompt, image_slugs, character_refs, aspect_ratio, seed } = raw;
       const blank = (v: unknown): v is "" => typeof v === "string" && v.trim() === "";
 
       if (!process.env.GOOGLE_FLOW_API_KEY) {
@@ -68,7 +68,7 @@ export function generateNanoBananaProGoogleDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "aspect_ratio 'auto' requires at least one reference image" }] };
       }
 
-      const resolution = await resolveImageSlugs(fs, rawSlugs, project_slug);
+      const resolution = await resolveImageSlugs(fs, rawSlugs, book_id);
       if (!resolution.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolution.error }] };
       }
@@ -79,7 +79,7 @@ export function generateNanoBananaProGoogleDef(fs: Engine): ToolDef {
       const nameSlug = modelSlug("kie", "nano-banana-pro");
       const normalizedPrompt = rewriteImageSlugMentions(prompt, rawSlugs, "reference").replace(/@referenceImage_/g, "@reference_");
       const imageName = `${nameSlug}-${slugify(normalizedPrompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("img", imageName, project_slug);
+      const assetResult = await fs.artifacts.create("img", imageName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
       }
@@ -91,7 +91,7 @@ export function generateNanoBananaProGoogleDef(fs: Engine): ToolDef {
         type: "generate_nano_banana_pro_google",
         imgAssetId,
         imgAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt: normalizedPrompt,
         imageInputs,
         sourceImageIds,

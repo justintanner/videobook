@@ -31,7 +31,7 @@ function slugify(text: string): string {
 type RefInput = { assetId: string; filename: string };
 
 const generateHappyhorseVideoeditVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   video_slug: apicityStringField(happyHorseVideoEdit.video_url, "Source video asset to edit (3-60s, e.g., @vid-scene)", { required: true }),
   prompt: apicityStringField(happyHorseVideoEdit.prompt, "Edit instruction (max 5000 chars / 2500 Chinese chars)", { required: true }),
   image_slugs: apicityStringArrayField(happyHorseVideoEdit.reference_image, "0-5 optional reference images for character/style guidance"),
@@ -49,7 +49,7 @@ export function generateHappyhorseVideoeditVideoDef(fs: Engine): ToolDef {
     description: "Edit a source video using HappyHorse video-edit with optional reference images for character/style. Creates a new vid- asset and enqueues a background job.",
     schema: generateHappyhorseVideoeditVideoSchema,
     handler: async (args) => {
-      const { project_slug, video_slug, prompt, image_slugs, resolution, audio_setting, seed } = args as Args;
+      const { book_id, video_slug, prompt, image_slugs, resolution, audio_setting, seed } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }] };
@@ -59,7 +59,7 @@ export function generateHappyhorseVideoeditVideoDef(fs: Engine): ToolDef {
       if (!videoAssetId.startsWith("vid-")) {
         return { isError: true as const, content: [{ type: "text" as const, text: `video_slug must be a vid-* asset, got: ${videoAssetId}` }] };
       }
-      const videoManifest = await fs.files.manifest(videoAssetId, project_slug);
+      const videoManifest = await fs.files.manifest(videoAssetId);
       if (!videoManifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoManifest.error.message }] };
       const videoFile = findVideoFile(videoManifest.value.files);
       if (!videoFile) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${videoAssetId}` }] };
@@ -70,7 +70,7 @@ export function generateHappyhorseVideoeditVideoDef(fs: Engine): ToolDef {
         if (!assetId.startsWith("img-")) {
           return { isError: true as const, content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${assetId}` }] };
         }
-        const manifest = await fs.files.manifest(assetId, project_slug);
+        const manifest = await fs.files.manifest(assetId);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
         const file = findImageFile(manifest.value.files);
         if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
@@ -78,7 +78,7 @@ export function generateHappyhorseVideoeditVideoDef(fs: Engine): ToolDef {
       }
 
       const videoName = `${modelSlug("kie", "happyhorse/video-edit")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
@@ -92,7 +92,7 @@ export function generateHappyhorseVideoeditVideoDef(fs: Engine): ToolDef {
         type: "generate_happyhorse_videoedit_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         sourceVideo: { assetId: videoAssetId, filename: videoFile.name },
         imageInputs,

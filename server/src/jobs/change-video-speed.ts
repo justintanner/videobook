@@ -41,19 +41,19 @@ type ChangeVideoSpeedPayload = {
   hasAudio: boolean;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 export function registerChangeVideoSpeedJob(fs: Engine): void {
   registerJobHandler("change_video_speed", async (payload, ctx) => {
     const {
       inputPath, outputPath, speed, targetDuration, hasAudio,
-      assetId, assetDir, projectSlug,
+      assetId, assetDir, bookId,
     } = payload as ChangeVideoSpeedPayload;
 
     const result = await withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       assetDir,
       ctx,
@@ -78,7 +78,7 @@ export function registerChangeVideoSpeedJob(fs: Engine): void {
       const inputFilename = basename(inputPath);
       await replaceArtifactFileFromPath(
         fs,
-        projectSlug,
+        bookId,
         assetId,
         inputFilename,
         outputPath,
@@ -95,7 +95,7 @@ export function registerChangeVideoSpeedJob(fs: Engine): void {
       videoPath: result.videoPath,
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
       provenance: { origin: "speed_change", speed, targetDuration, speed_changed_at: new Date().toISOString() },
       force: true,
       skipDownstreamJobs: true,

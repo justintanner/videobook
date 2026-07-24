@@ -20,7 +20,7 @@ describe("invert_image tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
   });
 
@@ -30,7 +30,7 @@ describe("invert_image tool", () => {
   });
 
   it("inverts an image asset in-place", async () => {
-    const asset = await fs.artifacts.create("img", "test-image", PROJECT);
+    const asset = await fs.artifacts.create("img", "test-image");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
@@ -40,12 +40,12 @@ describe("invert_image tool", () => {
       0, 0, 0, 0, 0, 0,             // black, black
     ]);
     const png = await sharp(rawData, { raw: { width: 2, height: 2, channels: 3 } }).png().toBuffer();
-    await fs.files.write(asset.value.slug, "original.png", png, PROJECT);
+    await fs.files.write(asset.value.slug, "original.png", png);
 
     const result = await client!.callTool({
       name: "invert_image",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         asset_id: asset.value.slug,
       },
     });
@@ -54,7 +54,7 @@ describe("invert_image tool", () => {
       throw new Error(`Tool failed: ${JSON.stringify(result.content)}`);
     }
 
-    const read = await fs.files.read(asset.value.slug, "original.png", PROJECT);
+    const read = await fs.files.read(asset.value.slug, "original.png");
     expect(read.ok).toBe(true);
     if (!read.ok) return;
 

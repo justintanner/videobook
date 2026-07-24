@@ -14,7 +14,7 @@ describe("get_timeline tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -26,7 +26,7 @@ describe("get_timeline tool", () => {
   it("returns empty slots and default render when no timeline set", async () => {
     const result = await client.callTool({
       name: "get_timeline",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
@@ -41,12 +41,12 @@ describe("get_timeline tool", () => {
     ];
     await client.callTool({
       name: "set_timeline",
-      arguments: { project_slug: "test-proj", slots, render: "portrait" },
+      arguments: { book_id: "test-proj", slots, render: "portrait" },
     });
 
     const result = await client.callTool({
       name: "get_timeline",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
@@ -60,12 +60,12 @@ describe("get_timeline tool", () => {
     const slots = [{ slug: "vid-a" }, { slug: "vid-b", volume: 1.0, audioFadeIn: 200 }];
     await client.callTool({
       name: "set_timeline",
-      arguments: { project_slug: "test-proj", slots, render: "square" },
+      arguments: { book_id: "test-proj", slots, render: "square" },
     });
 
     const result = await client.callTool({
       name: "get_timeline",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);

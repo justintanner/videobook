@@ -46,10 +46,10 @@ export type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-export async function resolveImageSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+export async function resolveImageSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("img-")) return { ok: false, error: `image slug must be img-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
   if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
@@ -63,7 +63,7 @@ export async function resolveImageSlug(fs: Engine, raw: string, projectSlug: str
 async function resolveSlashedSlug(
   fs: Engine,
   raw: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<ResolveOk | ResolveErr | null> {
   const stripped = raw.replace(/^@/, "");
   const slashIdx = stripped.indexOf("/");
@@ -71,19 +71,19 @@ async function resolveSlashedSlug(
   const assetId = stripped.slice(0, slashIdx);
   const filename = stripped.slice(slashIdx + 1);
   if (!assetId || !filename) return { ok: false, error: `Invalid slashed slug: ${raw}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = manifest.value.files.find((f) => f.name === filename);
   if (!file) return { ok: false, error: `File ${filename} not found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename } };
 }
 
-export async function resolveVideoSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
-  const slashed = await resolveSlashedSlug(fs, raw, projectSlug);
+export async function resolveVideoSlug(fs: Engine, raw: string, bookId: string): Promise<ResolveOk | ResolveErr> {
+  const slashed = await resolveSlashedSlug(fs, raw, bookId);
   if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("vid-")) return { ok: false, error: `video slug must be vid-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findVideoFile(manifest.value.files);
   if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
@@ -92,10 +92,10 @@ export async function resolveVideoSlug(fs: Engine, raw: string, projectSlug: str
 
 // Audio replacement always targets a first-class audio artifact. Notebook
 // cells reference artifact identities; they do not expose nested file paths.
-export async function resolveAudioSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+export async function resolveAudioSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("aud-")) return { ok: false, error: `audio slug must be aud-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findAudioFile(manifest.value.files, assetId);
   if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
@@ -107,7 +107,7 @@ export function buildSeedance2Schema(apiModel: Seedance2Model) {
     ? Seedance2InputSchema.shape
     : Seedance2FastInputSchema.shape;
   return {
-    project_slug: z.string().describe("Project slug"),
+    book_id: z.string().describe("Project slug"),
     prompt: apicityStringField(inputSchema.prompt, "Video description (3-20000 characters)", { required: true }),
     first_frame_slug: apicityStringField(inputSchema.first_frame_url, "First frame image asset (e.g., @img-start)"),
     last_frame_slug: apicityStringField(inputSchema.last_frame_url, "Last frame image asset (e.g., @img-end)"),
@@ -146,7 +146,7 @@ export function buildSeedance2ToolDef(
     handler: async (args) => {
       const raw = args as Args;
       const {
-        project_slug, prompt,
+        book_id, prompt,
         image_slugs, video_slugs, audio_slugs,
         aspect_ratio, resolution, duration,
         generate_audio, web_search, nsfw_checker,
@@ -200,48 +200,48 @@ export function buildSeedance2ToolDef(
 
       let firstFrame: RefInput | undefined;
       if (first_frame_slug !== undefined) {
-        const r = await resolveImageSlug(fs, first_frame_slug, project_slug);
+        const r = await resolveImageSlug(fs, first_frame_slug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstFrame = r.value;
       }
 
       let lastFrame: RefInput | undefined;
       if (last_frame_slug !== undefined) {
-        const r = await resolveImageSlug(fs, last_frame_slug, project_slug);
+        const r = await resolveImageSlug(fs, last_frame_slug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         lastFrame = r.value;
       }
 
       const imageInputs: RefInput[] = [];
       for (const raw of imgs) {
-        const r = await resolveImageSlug(fs, raw, project_slug);
+        const r = await resolveImageSlug(fs, raw, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       const videoInputs: RefInput[] = [];
       for (const raw of vids) {
-        const r = await resolveVideoSlug(fs, raw, project_slug);
+        const r = await resolveVideoSlug(fs, raw, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInputs.push(r.value);
       }
 
       const audioInputs: RefInput[] = [];
       for (const raw of auds) {
-        const r = await resolveAudioSlug(fs, raw, project_slug);
+        const r = await resolveAudioSlug(fs, raw, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         audioInputs.push(r.value);
       }
 
       let replaceAudioWith: RefInput | undefined;
       if (replace_audio_with !== undefined) {
-        const r = await resolveAudioSlug(fs, replace_audio_with, project_slug);
+        const r = await resolveAudioSlug(fs, replace_audio_with, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `replace_audio_with: ${r.error}` }] };
         replaceAudioWith = r.value;
       }
 
       const videoName = `${modelSlug("kie", opts.apiModel)}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -263,7 +263,7 @@ export function buildSeedance2ToolDef(
         type: opts.jobType,
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         apiModel: opts.apiModel,
         ...(firstFrame ? { firstFrame } : {}),

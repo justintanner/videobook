@@ -12,7 +12,7 @@ import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 const editBase = FalWanV2p7EditVideoRequestSchema.shape;
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(editBase.prompt, "Edit instruction", { required: true }),
   video_slug: apicityStringField(editBase.video_url, "Source video asset to edit (e.g., @vid-scene)", { required: true }),
   image_slug: apicityStringField(editBase.reference_image_url, "Optional reference image for character/style guidance"),
@@ -34,7 +34,7 @@ export function generateWan27VideoeditFalDef(fs: Engine): ToolDef {
     schema,
     handler: async (args) => {
       const {
-        project_slug, prompt,
+        book_id, prompt,
         video_slug, image_slug,
         aspect_ratio, resolution, duration, audio_setting,
         negative_prompt, enable_safety_checker, seed,
@@ -48,7 +48,7 @@ export function generateWan27VideoeditFalDef(fs: Engine): ToolDef {
       if (!sourceVideoAssetId.startsWith("vid-")) {
         return { isError: true as const, content: [{ type: "text" as const, text: `video_slug must be a vid-* asset, got: ${sourceVideoAssetId}` }] };
       }
-      const manifest = await fs.files.manifest(sourceVideoAssetId, project_slug);
+      const manifest = await fs.files.manifest(sourceVideoAssetId);
       if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
       const sourceVideoFile = findVideoFile(manifest.value.files);
       if (!sourceVideoFile) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${sourceVideoAssetId}` }] };
@@ -56,13 +56,13 @@ export function generateWan27VideoeditFalDef(fs: Engine): ToolDef {
       let refImage: ImageInput | undefined;
       let refImageAssetId: string | undefined;
       if (image_slug) {
-        const resolved = await resolveImageSlugs(fs, [image_slug], project_slug);
+        const resolved = await resolveImageSlugs(fs, [image_slug], book_id);
         if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
         refImage = resolved.inputs[0];
         refImageAssetId = resolved.sourceImageIds[0];
       }
 
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "wan/2-7-videoedit")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "wan/2-7-videoedit")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
@@ -72,7 +72,7 @@ export function generateWan27VideoeditFalDef(fs: Engine): ToolDef {
         type: "generate_wan27_videoedit_fal",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         sourceVideo: { assetId: sourceVideoAssetId, filename: sourceVideoFile.name },
         ...(refImage ? { refImage } : {}),

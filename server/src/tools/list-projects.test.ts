@@ -33,11 +33,11 @@ describe("list_projects tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "alpha" },
+      arguments: { book_id: "alpha" },
     });
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "beta" },
+      arguments: { book_id: "beta" },
     });
     const result = await client.callTool({
       name: "list_projects",
@@ -53,11 +53,11 @@ describe("list_projects tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "alpha" },
+      arguments: { book_id: "alpha" },
     });
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "beta" },
+      arguments: { book_id: "beta" },
     });
     const result = await client.callTool({
       name: "list_projects",
@@ -75,16 +75,16 @@ describe("list_projects tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "empty" },
+      arguments: { book_id: "empty" },
     });
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "with-assets" },
+      arguments: { book_id: "with-assets" },
     });
     await client.callTool({
       name: "upload_file",
       arguments: {
-        project_slug: "with-assets",
+        book_id: "with-assets",
         filename: "note.md",
         data: Buffer.from("hello").toString("base64"),
       },

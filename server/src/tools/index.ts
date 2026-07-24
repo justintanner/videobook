@@ -1,5 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Engine } from "videobook-engine";
+import type { BookManager } from "../book-manager.js";
+import { withBookContext } from "../book-context.js";
+import { bookManager } from "../fs.js";
 import type { ToolDef } from "./tool-def.js";
 import { videobookDomainDefs } from "./videobook-domain.js";
 import { apiStatusDef } from "./api-status.js";
@@ -18,15 +21,9 @@ import {
   getGoogleFlowCharacterDef,
   replaceGoogleFlowCharacterDef,
 } from "./google-flow-characters.js";
-import { createProjectDef } from "./create-project.js";
 import { createCharacterDef } from "./create-character.js";
 import { setCharacterMetadataDef } from "./set-character-metadata.js";
 import { reorderCharacterImagesDef } from "./reorder-character-images.js";
-import { renameProjectDef } from "./rename-project.js";
-import { deleteProjectDef } from "./delete-project.js";
-import { switchProjectDef } from "./switch-project.js";
-import { listProjectsDef } from "./list-projects.js";
-import { getDefaultProjectDef } from "./get-default-project.js";
 import { uploadFileDef } from "./upload-file.js";
 import { assetManifestDef } from "./asset-manifest.js";
 import { deleteAssetDef } from "./delete-asset.js";
@@ -39,13 +36,10 @@ import { renameAllDef } from "./rename-all.js";
 import { markAssetSeenDef } from "./mark-asset-seen.js";
 import { duplicateAssetDef } from "./duplicate-asset.js";
 import { exportAssetDef } from "./export-asset.js";
-import { projectHistoryDef } from "./project-history.js";
-import { projectActivityDef } from "./project-activity.js";
 import { assetHistoryDef } from "./asset-history.js";
 import { restoreAssetVersionDef } from "./restore-asset-version.js";
 import { readFileAtCommitDef } from "./read-file-at-commit.js";
 import { readAssetMetadataDef } from "./read-asset-metadata.js";
-import { rewindProjectDef } from "./rewind-project.js";
 import { trimVideoDef } from "./trim-video.js";
 import { trimAudioDef } from "./trim-audio.js";
 import { splitVideoDef } from "./split-video.js";
@@ -197,8 +191,6 @@ import { generateGrokImagineVideoExtendFalDef } from "./generate-grok-imagine-vi
 import { generateGrokImagineVideoEditFalDef } from "./generate-grok-imagine-video-edit-fal.js";
 import { genImagesAllDef } from "./gen-images-all.js";
 
-import { readNotebookDef } from "./read-notebook.js";
-import { writeNotebookDef } from "./write-notebook.js";
 import { detectScenesDef } from "./detect-scenes.js";
 import { suggestCutsDef } from "./suggest-cuts.js";
 import { suggestSfxDef } from "./suggest-sfx.js";
@@ -271,14 +263,53 @@ export function getVideoEditingToolDefs(fs: Engine): ToolDef[] {
   ];
 }
 
-export function registerAllTools(server: McpServer, fs: Engine): void {
-  const defs = getAllToolDefs(fs).map((def) => withLogging(def, fs));
+function scopeTool(def: ToolDef, books: BookManager): ToolDef {
+  const scope = def.scope ?? ("book_id" in def.schema ? "book" : "global");
+  if (scope === "global") return def;
+  return {
+    ...def,
+    scope,
+    handler: async (args) => {
+      const bookId = args.book_id;
+      if (typeof bookId !== "string") {
+        return {
+          isError: true,
+          content: [{ type: "text", text: "book_id is required" }],
+        };
+      }
+      await books.ready();
+      const book = books.get(bookId);
+      if (!book.ok) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: book.error.message }],
+        };
+      }
+      return withBookContext(
+        { bookId, engine: book.value.engine },
+        () => def.handler(args),
+      );
+    },
+  };
+}
+
+export function registerAllTools(
+  server: McpServer,
+  fs: Engine,
+  books: BookManager = bookManager,
+): void {
+  const defs = getAllToolDefs(fs, books)
+    .map((def) => withLogging(def, fs))
+    .map((def) => scopeTool(def, books));
   for (const def of defs) {
     server.tool(def.name, def.description, def.schema, def.handler);
   }
 }
 
-export function getAllToolDefs(fs: Engine): ToolDef[] {
+export function getAllToolDefs(
+  fs: Engine,
+  books: BookManager = bookManager,
+): ToolDef[] {
   const rawDefs: ToolDef[] = [
     apiStatusDef(),
     providerKeyStatusDef(),
@@ -293,15 +324,9 @@ export function getAllToolDefs(fs: Engine): ToolDef[] {
     listGoogleFlowCharactersDef(),
     deleteGoogleFlowCharacterDef(),
     estimateCostDef(fs),
-    createProjectDef(fs),
     createCharacterDef(fs),
     setCharacterMetadataDef(fs),
     reorderCharacterImagesDef(fs),
-    renameProjectDef(fs),
-    deleteProjectDef(fs),
-    switchProjectDef(fs),
-    listProjectsDef(fs),
-    getDefaultProjectDef(fs),
     uploadFileDef(fs),
     assetManifestDef(fs),
     deleteAssetDef(fs),
@@ -314,13 +339,10 @@ export function getAllToolDefs(fs: Engine): ToolDef[] {
     markAssetSeenDef(fs),
     duplicateAssetDef(fs),
     exportAssetDef(fs),
-    projectHistoryDef(fs),
-    projectActivityDef(fs),
     assetHistoryDef(fs),
     restoreAssetVersionDef(fs),
     readFileAtCommitDef(fs),
     readAssetMetadataDef(fs),
-    rewindProjectDef(fs),
     ...getVideoEditingToolDefs(fs),
     downloadVideoDef(fs),
     archiveClipDef(fs),
@@ -391,7 +413,7 @@ export function getAllToolDefs(fs: Engine): ToolDef[] {
     rewritePromptDef(fs),
     describeImageDef(fs),
     rewriteScriptDef(fs),
-    commandsDef(fs),
+    commandsDef(),
     translatePayloadDef(),
     updateScriptDef(fs),
     generateSeedance2I2vFalDef(fs),
@@ -432,18 +454,15 @@ export function getAllToolDefs(fs: Engine): ToolDef[] {
     generateGrokImagineVideoEditFalDef(fs),
     genImagesAllDef(fs),
 
-    readNotebookDef(fs),
-    writeNotebookDef(fs),
-
     generateElevenlabsT2aDef(fs),
     postDef(),
-    xConnectStartDef(fs),
-    xConnectStatusDef(fs),
+    xConnectStartDef(),
+    xConnectStatusDef(),
     createQrOutroDef(fs),
     createQartDef(fs),
     createQrbtfDef(fs),
     getWatermarkConfigDef(fs),
-    ...videobookDomainDefs(fs),
+    ...videobookDomainDefs(fs, books),
   ];
 
   return rawDefs;

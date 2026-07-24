@@ -30,7 +30,7 @@ function parseOriginalToRewrite(json: OriginalJson): RewriteMeta | null {
 export function useAssetOriginalMeta(
   callTool: UseMcpResult['callTool'],
   assetId: string | null,
-  projectSlug: string,
+  bookId: string,
 ): { meta: RewriteMeta | null; refresh: () => void } {
   const [meta, setMeta] = useState<RewriteMeta | null>(null);
   const callToolRef = useRef(callTool);
@@ -45,7 +45,7 @@ export function useAssetOriginalMeta(
       const result = await callToolRef.current('read_asset_metadata', {
         asset_id: assetId,
         name: 'original',
-        project_slug: projectSlug,
+        book_id: bookId,
       });
       if (result.isError) {
         setMeta(null);
@@ -58,7 +58,7 @@ export function useAssetOriginalMeta(
     } catch {
       setMeta(null);
     }
-  }, [assetId, projectSlug]);
+  }, [assetId, bookId]);
 
   useEffect(() => {
     // setState runs inside fetchMeta after an async MCP round-trip — this is an

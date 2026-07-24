@@ -8,7 +8,7 @@ export async function downloadUrlIntoAsset(
   url: string,
   assetId: string,
   filename: string,
-  projectSlug: string,
+  bookId: string,
   options: { kind?: string; fetchInit?: RequestInit } = {},
 ): Promise<Buffer> {
   const response = await fetch(url, options.fetchInit);
@@ -18,11 +18,7 @@ export async function downloadUrlIntoAsset(
     );
   }
   const buffer = Buffer.from(await response.arrayBuffer());
-  const written = await fs.files.write(
-    assetId,
-    filename,
-    buffer,
-    projectSlug,
+  const written = await fs.files.write(assetId, filename, buffer
   );
   if (!written.ok) {
     throw new Error(

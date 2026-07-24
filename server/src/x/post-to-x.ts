@@ -51,7 +51,7 @@ export type PostOrientation = "portrait" | "landscape";
 export interface PostToXArgs {
   fs: Engine;
   assetId: string;
-  projectSlug: string;
+  bookId: string;
   text?: string;
   orientation?: PostOrientation;
   scheduleId?: string;
@@ -118,11 +118,11 @@ function tweetUrl(id: string): string {
 }
 
 async function getXClient(
-  fs: Engine,
+  _fs: Engine,
   injected?: XProvider,
 ): Promise<XProvider> {
   if (injected) return injected;
-  const accessToken = await getValidAccessToken({ engine: fs });
+  const accessToken = await getValidAccessToken();
   return createX({ accessToken });
 }
 
@@ -213,7 +213,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
   const {
     fs,
     assetId,
-    projectSlug,
+    bookId,
     text,
     orientation,
     scheduleId,
@@ -221,7 +221,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
     signal,
   } = args;
 
-  const manifestResult = await fs.files.manifest(assetId, projectSlug);
+  const manifestResult = await fs.files.manifest(assetId);
   if (!manifestResult.ok) {
     throw new Error(`Asset ${assetId} not found: ${manifestResult.error.message}`);
   }
@@ -247,14 +247,14 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
       tempPath = transformed.tempPath;
       info = { mediaType: transformed.mediaType, mediaCategory: "tweet_video" };
     } else {
-      const readResult = await fs.files.read(assetId, file.name, projectSlug);
+      const readResult = await fs.files.read(assetId, file.name);
       if (!readResult.ok) {
         throw new Error(`Failed to read ${file.name}: ${readResult.error.message}`);
       }
       buffer = readResult.value;
     }
   } else {
-    const readResult = await fs.files.read(assetId, file.name, projectSlug);
+    const readResult = await fs.files.read(assetId, file.name);
     if (!readResult.ok) {
       throw new Error(`Failed to read ${file.name}: ${readResult.error.message}`);
     }
@@ -281,7 +281,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
       await appendXPostMetadata({
         fs,
         assetId,
-        projectSlug,
+        bookId,
         entry: {
           tweet_id: tweetId,
           tweet_url: tweetUrl(tweetId),

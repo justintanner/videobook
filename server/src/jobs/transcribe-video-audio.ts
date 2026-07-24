@@ -24,7 +24,7 @@ type TranscribeVideoAudioPayload = {
   videoPath: string;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 type TranscribeVideoAudioResult = {
@@ -70,12 +70,12 @@ export async function runTranscribeVideoAudio(
   payload: TranscribeVideoAudioPayload,
   ctx: JobHandlerContext,
 ): Promise<TranscribeVideoAudioResult> {
-  const { videoPath, assetId, projectSlug } = payload;
+  const { videoPath, assetId, bookId } = payload;
 
   const apiKey = getApiKey("OPENAI_API_KEY");
   if (!apiKey) return { success: false, reason: "OPENAI_API_KEY not set" };
 
-  const result = await withLocalLease(fs, projectSlug, assetId, ctx, "transcribe", async (): Promise<TranscribeVideoAudioResult> => {
+  const result = await withLocalLease(fs, bookId, assetId, ctx, "transcribe", async (): Promise<TranscribeVideoAudioResult> => {
     try {
       const provider = createOpenAi({ apiKey, timeout: 120_000 });
       const probe = await probeVideo(videoPath);
@@ -86,13 +86,13 @@ export async function runTranscribeVideoAudio(
         chunkCount = chunkStarts(probe.duration, CHUNK_SECONDS).length;
         text = await transcribeChunked(provider, videoPath, probe.duration);
       } else {
-        const readResult = await fs.files.read(assetId, "original.mp3", projectSlug);
+        const readResult = await fs.files.read(assetId, "original.mp3");
         if (!readResult.ok) throw new Error(readResult.error.message);
         text = await transcribeBytes(provider, new Uint8Array(readResult.value), "original.mp3");
       }
 
       const jsonString = JSON.stringify({ text }, null, 2);
-      await fs.files.write(assetId, ".analysis.gpt4otrans.json", jsonString, projectSlug);
+      await fs.files.write(assetId, ".analysis.gpt4otrans.json", jsonString);
 
       return { success: true, text, chunk_count: chunkCount };
     } catch (err) {
@@ -104,7 +104,7 @@ export async function runTranscribeVideoAudio(
       // lease, so the asset stays claimable for a later retry.
       const reason = err instanceof Error ? err.message : String(err);
       console.warn(`[transcribe_video_audio] soft-failed for ${assetId}: ${reason}`);
-      await fs.history.logAction("transcribe-soft-fail", { assetId, error: reason }, projectSlug).catch(() => undefined);
+      await fs.history.logAction("transcribe-soft-fail", { assetId, error: reason }).catch(() => undefined);
       return { success: false, reason };
     }
   });
@@ -113,12 +113,12 @@ export async function runTranscribeVideoAudio(
   // prompt includes the fresh transcript — which revives auto-transcribe and
   // the lazy render below (that call skips while the analysis is missing).
   try {
-    await enqueueLazyAnalysisIfSlotted(fs, projectSlug, assetId);
+    await enqueueLazyAnalysisIfSlotted(fs, bookId, assetId);
   } catch (err) {
     void err;
   }
   try {
-    await enqueueLazyTimelineRender(fs, projectSlug, assetId);
+    await enqueueLazyTimelineRender(fs, bookId, assetId);
   } catch (err) {
     void err;
   }

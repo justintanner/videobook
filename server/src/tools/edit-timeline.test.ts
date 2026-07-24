@@ -14,7 +14,7 @@ describe("edit_timeline tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -27,7 +27,7 @@ describe("edit_timeline tool", () => {
     const result = await client.callTool({
       name: "set_timeline",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slots: [{ slug: "vid-intro" }, { slug: "vid-outro", volume: 0.5 }],
       },
     });
@@ -41,7 +41,7 @@ describe("edit_timeline tool", () => {
     const result = await client.callTool({
       name: "set_timeline",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slots: [{ slug: "vid-hero" }],
         render: "portrait",
       },
@@ -59,7 +59,7 @@ describe("edit_timeline tool", () => {
     const first = await client.callTool({
       name: "set_timeline",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slots: [{ slug: "vid-intro" }],
         render: "portrait",
         audio,
@@ -72,7 +72,7 @@ describe("edit_timeline tool", () => {
     const second = await client.callTool({
       name: "set_timeline",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slots: [{ slug: "vid-intro" }],
         render: "landscape",
       },
@@ -81,7 +81,7 @@ describe("edit_timeline tool", () => {
 
     const readBack = await client.callTool({
       name: "get_timeline",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     expect(readBack.isError).toBeFalsy();
     const content = readBack.content as Array<{ type: string; text: string }>;
@@ -95,7 +95,7 @@ describe("edit_timeline tool", () => {
     await client.callTool({
       name: "set_timeline",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slots: [{ slug: "vid-intro" }],
         audio: [{ id: "aud-1", slug: "aud-music", startFrame: 0, durationFrames: 120 }],
       },
@@ -103,7 +103,7 @@ describe("edit_timeline tool", () => {
     const cleared = await client.callTool({
       name: "set_timeline",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slots: [{ slug: "vid-intro" }],
         audio: [],
       },
@@ -112,7 +112,7 @@ describe("edit_timeline tool", () => {
 
     const readBack = await client.callTool({
       name: "get_timeline",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     const content = readBack.content as Array<{ type: string; text: string }>;
     const config = JSON.parse(content[0].text);
@@ -124,7 +124,7 @@ describe("edit_timeline tool", () => {
     const result = await client.callTool({
       name: "set_timeline",
       arguments: {
-        project_slug: "no-such-project",
+        book_id: "no-such-project",
         slots: [{ slug: "vid-intro" }],
       },
     });

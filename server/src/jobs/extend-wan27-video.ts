@@ -12,7 +12,7 @@ type ExtendWan27VideoPayload = {
   type: "extend_wan27_video";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   sourceVideo: RefInput;
   sourceImageIds: string[];
@@ -30,7 +30,7 @@ type ExtendWan27VideoPayload = {
 export function registerExtendWan27VideoJob(fs: Engine): void {
   registerJobHandler("extend_wan27_video", async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,
+      vidAssetId, vidAssetDir, bookId, prompt, negative_prompt,
       sourceVideo,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
       resolution, duration, prompt_extend, watermark, nsfw_checker, seed,
@@ -38,7 +38,7 @@ export function registerExtendWan27VideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const firstClipUrl = await uploadAssetToKie(fs, sourceVideo.assetId, sourceVideo.filename, projectSlug);
+    const firstClipUrl = await uploadAssetToKie(fs, sourceVideo.assetId, sourceVideo.filename, bookId);
 
     const request = buildWan27FramesVideoPayload(
       { prompt, negative_prompt, resolution, duration, prompt_extend, watermark, nsfw_checker, seed },
@@ -49,7 +49,7 @@ export function registerExtendWan27VideoJob(fs: Engine): void {
       taskType: "wan27_extend_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         prompt,
         mode: "extend",

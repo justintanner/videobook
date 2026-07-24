@@ -14,7 +14,7 @@ describe("rename_project tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "original" },
+      arguments: { book_id: "original" },
     });
   });
 
@@ -32,7 +32,7 @@ describe("rename_project tool", () => {
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
     expect(data.slug).toBe("renamed");
-    expect(data.projectId).toBeTruthy();
+    expect(data.bookId).toBeTruthy();
   });
 
   it("old slug not found and new slug works after rename", async () => {
@@ -44,20 +44,20 @@ describe("rename_project tool", () => {
     // Old slug should fail
     await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: "original" },
+      arguments: { book_id: "original" },
     });
     // listAssets on nonexistent project returns empty or error
     // Let's check via switch_project which explicitly errors on missing
     const switchOld = await client.callTool({
       name: "switch_project",
-      arguments: { project_slug: "original" },
+      arguments: { book_id: "original" },
     });
     expect(switchOld.isError).toBe(true);
 
     // New slug should work
     const switchNew = await client.callTool({
       name: "switch_project",
-      arguments: { project_slug: "renamed" },
+      arguments: { book_id: "renamed" },
     });
     expect(switchNew.isError).toBeFalsy();
   });

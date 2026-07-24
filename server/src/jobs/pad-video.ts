@@ -13,7 +13,7 @@ export type PadVideoPayload = {
   sourcePath: string;
   assetDir: string;
   sourceAssetId: string;
-  projectSlug: string;
+  bookId: string;
   targetSecs: number;
   hasAudio: boolean;
 };
@@ -21,11 +21,11 @@ export type PadVideoPayload = {
 export function registerPadVideoJob(fs: Engine): void {
   registerJobHandler("pad_video", async (payload, ctx) => {
     console.log("pad_video payload:", payload);
-    const { sourcePath, assetDir, sourceAssetId, projectSlug, targetSecs, hasAudio } = payload as PadVideoPayload;
+    const { sourcePath, assetDir, sourceAssetId, bookId, targetSecs, hasAudio } = payload as PadVideoPayload;
     
     const result = await withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       sourceAssetId,
       assetDir,
       ctx,
@@ -72,7 +72,7 @@ export function registerPadVideoJob(fs: Engine): void {
           const inputFilename = basename(sourcePath);
           await replaceArtifactFileFromPath(
             fs,
-            projectSlug,
+            bookId,
             sourceAssetId,
             inputFilename,
             outputPath,
@@ -83,10 +83,10 @@ export function registerPadVideoJob(fs: Engine): void {
             ".analysis.gpt4otrans.json",
             "elevenlabs.json",
           ]) {
-            await fs.files.delete(sourceAssetId, stale, projectSlug);
+            await fs.files.delete(sourceAssetId, stale);
           }
 
-          await fs.metadata.artifacts.write(sourceAssetId, "original", provenance, projectSlug);
+          await fs.metadata.artifacts.write(sourceAssetId, "original", provenance);
 
           const videoPath = join(assetDir, inputFilename);
           return { videoPath, provenance };
@@ -103,7 +103,7 @@ export function registerPadVideoJob(fs: Engine): void {
       videoPath: result.videoPath,
       assetId: sourceAssetId,
       assetDir: assetDir,
-      projectSlug,
+      bookId,
       skipDownstreamJobs: true,
       provenance: result.provenance,
     } as unknown as Record<string, unknown>);

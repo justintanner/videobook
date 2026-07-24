@@ -13,7 +13,7 @@ type GenerateHappyhorseI2vVideoPayload = {
   type: "generate_happyhorse_i2v_video";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   firstFrame: RefInput;
   sourceImageIds: string[];
   prompt?: string;
@@ -24,14 +24,14 @@ type GenerateHappyhorseI2vVideoPayload = {
 export function registerGenerateHappyhorseI2vVideoJob(fs: Engine): void {
   registerJobHandler("generate_happyhorse_i2v_video", async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug,
+      vidAssetId, vidAssetDir, bookId,
       firstFrame, sourceImageIds,
       prompt, resolution, duration,
     } = payload as GenerateHappyhorseI2vVideoPayload;
 
     requireApiKey("KIE_API_KEY");
 
-    const imageUrl = await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename, projectSlug);
+    const imageUrl = await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename, bookId);
 
     // First frame rides image_urls; strip confirmed @img-* from free-form prompt.
     const normalizedPrompt = prompt === undefined
@@ -46,7 +46,7 @@ export function registerGenerateHappyhorseI2vVideoJob(fs: Engine): void {
       taskType: "happyhorse_i2v_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: { mode: "i2v", sourceImageIds, ...(prompt !== undefined ? { prompt } : {}) },
     });
 

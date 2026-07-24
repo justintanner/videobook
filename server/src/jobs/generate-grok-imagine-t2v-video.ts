@@ -9,7 +9,7 @@ type GenerateGrokImagineT2vVideoPayload = {
   type: "generate_grok_imagine_t2v_video";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   mode?: GrokTextToVideoRequest["input"]["mode"];
   duration?: number;
@@ -21,7 +21,7 @@ type GenerateGrokImagineT2vVideoPayload = {
 export function registerGenerateGrokImagineT2vVideoJob(fs: Engine): void {
   registerJobHandler("generate_grok_imagine_t2v_video", async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug, prompt,
+      vidAssetId, vidAssetDir, bookId, prompt,
       mode, duration, resolution, aspect_ratio, nsfw_checker,
     } = payload as GenerateGrokImagineT2vVideoPayload;
 
@@ -35,7 +35,7 @@ export function registerGenerateGrokImagineT2vVideoJob(fs: Engine): void {
       taskType: "grok_imagine_t2v_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         prompt,
         ...(mode !== undefined ? { mode } : {}),

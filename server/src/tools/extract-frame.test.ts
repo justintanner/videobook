@@ -45,14 +45,14 @@ async function generateAudioLongerThanVideo(outputPath: string): Promise<void> {
 
 async function uploadVideo(
   client: Client,
-  projectSlug: string,
+  bookId: string,
   videoPath: string,
   filename = "original.mp4",
 ): Promise<{ assetId: string; path: string }> {
   const data = (await readFile(videoPath)).toString("base64");
   const result = await client.callTool({
     name: "upload_file",
-    arguments: { project_slug: projectSlug, filename, data },
+    arguments: { book_id: bookId, filename, data },
   });
   return JSON.parse((result.content as TextContent)[0].text);
 }
@@ -76,7 +76,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "frame-proj" },
+      arguments: { book_id: "frame-proj" },
     });
     videoPath = join(tempDir, "test-source.mp4");
     await generateTestVideo(videoPath);
@@ -94,7 +94,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
       name: "extract_first_frame",
       arguments: {
         asset_id: sharedUpload.assetId,
-        project_slug: "frame-proj",
+        book_id: "frame-proj",
       },
     });
 
@@ -108,7 +108,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
 
     const manifest = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: parsed.image_asset_id, project_slug: "frame-proj" },
+      arguments: { asset_id: parsed.image_asset_id, book_id: "frame-proj" },
     });
     const manifestData = JSON.parse((manifest.content as TextContent)[0].text);
     const jpgFile = manifestData.files.find((f: { name: string }) => f.name === "original.jpg");
@@ -123,7 +123,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
       name: "extract_last_frame",
       arguments: {
         asset_id: sharedUpload.assetId,
-        project_slug: "frame-proj",
+        book_id: "frame-proj",
       },
     });
 
@@ -137,7 +137,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
 
     const manifest = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: parsed.image_asset_id, project_slug: "frame-proj" },
+      arguments: { asset_id: parsed.image_asset_id, book_id: "frame-proj" },
     });
     const manifestData = JSON.parse((manifest.content as TextContent)[0].text);
     const jpgFile = manifestData.files.find((f: { name: string }) => f.name === "original.jpg");
@@ -149,7 +149,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
       name: "extract_first_frame",
       arguments: {
         asset_id: "vid-does-not-exist",
-        project_slug: "frame-proj",
+        book_id: "frame-proj",
       },
     });
 
@@ -160,7 +160,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "frame-proj", filename: "photo.png", data },
+      arguments: { book_id: "frame-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse((uploadResult.content as TextContent)[0].text);
 
@@ -168,7 +168,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
       name: "extract_first_frame",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "frame-proj",
+        book_id: "frame-proj",
       },
     });
 
@@ -186,7 +186,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
       name: "extract_last_frame",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "frame-proj",
+        book_id: "frame-proj",
       },
     });
 
@@ -195,7 +195,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
 
     const manifest = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: parsed.image_asset_id, project_slug: "frame-proj" },
+      arguments: { asset_id: parsed.image_asset_id, book_id: "frame-proj" },
     });
     const manifestData = JSON.parse((manifest.content as TextContent)[0].text);
     const jpgFile = manifestData.files.find((f: { name: string }) => f.name === "original.jpg");
@@ -209,7 +209,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
       name: "extract_first_frame",
       arguments: {
         asset_id: sharedUpload.assetId,
-        project_slug: "frame-proj",
+        book_id: "frame-proj",
       },
     });
 
@@ -220,7 +220,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
       name: "asset_history",
       arguments: {
         asset_id: parsed.image_asset_id,
-        project_slug: "frame-proj",
+        book_id: "frame-proj",
       },
     });
     const revisions = JSON.parse(
@@ -234,7 +234,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
         asset_id: parsed.image_asset_id,
         filename: "original.jpg",
         commit_hash: revisions[0]!.hash,
-        project_slug: "frame-proj",
+        book_id: "frame-proj",
       },
     });
     expect(historical.isError).toBeFalsy();
@@ -245,7 +245,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
       name: "extract_first_frame",
       arguments: {
         asset_id: sharedUpload.assetId,
-        project_slug: "frame-proj",
+        book_id: "frame-proj",
       },
     });
 
@@ -258,7 +258,7 @@ describe("extract_first_frame / extract_last_frame tools", () => {
       timestamp: number;
       width: number;
       height: number;
-    }>(parsed.image_asset_id, "original", "frame-proj");
+    }>(parsed.image_asset_id, "original");
     expect(origin.ok && origin.value.origin).toBe("first_frame");
     expect(origin.ok && origin.value.source_asset).toBe(sharedUpload.assetId);
     expect(origin.ok && origin.value.timestamp).toBe(0.1);

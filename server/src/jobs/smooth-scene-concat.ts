@@ -32,7 +32,7 @@ type SmoothSceneConcatPayload = {
   secondAssetId: string;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
   transitionSeconds?: number;
 };
 
@@ -374,13 +374,13 @@ export function registerSmoothSceneConcatJob(fs: Engine): void {
       secondAssetId,
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
       transitionSeconds,
     } = payload as SmoothSceneConcatPayload;
 
     const result = await withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       assetDir,
       ctx,
@@ -408,13 +408,13 @@ export function registerSmoothSceneConcatJob(fs: Engine): void {
         };
         await ingestWorkspaceOutputs(
           fs,
-          projectSlug,
+          bookId,
           assetId,
           [outputPath.split("/").pop()!],
           "smooth_scene_concat",
           provenance,
         );
-        await fs.metadata.artifacts.write(assetId, "original", provenance, projectSlug);
+        await fs.metadata.artifacts.write(assetId, "original", provenance);
         return { concat, provenance };
       },
       { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
@@ -426,7 +426,7 @@ export function registerSmoothSceneConcatJob(fs: Engine): void {
       videoPath: outputPath,
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
       provenance: result.provenance,
     });
 

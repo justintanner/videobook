@@ -15,7 +15,7 @@ import {
 const wan = FalWanV2p7EditRequestSchema.shape;
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(wan.prompt, "Edit instruction", { required: true }),
   image_slugs: apicityStringArrayField(wan.image_urls, "1-4 @img-* slugs for reference images", { required: true }),
   negative_prompt: apicityStringField(wan.negative_prompt, "Negative prompt"),
@@ -32,16 +32,16 @@ export function generateWan27EditFalDef(fs: Engine): ToolDef {
     description: "Edit images via fal.ai using Wan 2.7 edit (image-to-image) with 1-4 @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, image_slugs, negative_prompt, image_size, num_images, seed } = args as Args;
+      const { book_id, prompt, image_slugs, negative_prompt, image_size, num_images, seed } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const resolved = await resolveImageSlugs(fs, image_slugs, project_slug);
+      const resolved = await resolveImageSlugs(fs, image_slugs, book_id);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "wan/2-7-image")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "wan/2-7-image")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
@@ -51,7 +51,7 @@ export function generateWan27EditFalDef(fs: Engine): ToolDef {
         type: "generate_wan27_edit_fal",
         imgAssetId,
         imgAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         imageInputs: resolved.inputs,
         sourceImageIds: resolved.sourceImageIds,

@@ -18,13 +18,13 @@ export function retryGenerationDef(fs: Engine): ToolDef {
       "Retry a failed generation by replaying its original request payload. Reads the persisted generation-request metadata for the asset, clears its error record, and re-enqueues the same job. Use this on a failed asset card to re-run the exact inputs without re-resolving references.",
     schema: {
       asset_id: z.string().describe("Asset ID of the failed generation to retry (vid-*, or @-prefixed)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
+      const { asset_id, book_id: _book_id } = args as { asset_id: string; book_id: string };
       const assetId = asset_id.replace(/^@/, "");
 
-      const metaResult = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "generation-request", project_slug);
+      const metaResult = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "generation-request");
       if (!metaResult.ok || metaResult.value === null) {
         return error(`No generation-request metadata found for ${assetId} — cannot retry. Recover or regenerate instead.`);
       }
@@ -44,13 +44,13 @@ export function retryGenerationDef(fs: Engine): ToolDef {
       }
 
       // Refuse if an active task is already in flight for this asset.
-      const taskResult = await fs.jobs.pending.read(project_slug, assetId);
+      const taskResult = await fs.jobs.pending.read(assetId);
       const activeTask = taskResult.ok ? taskResult.value : null;
       if (activeTask !== null) {
         return error(`${assetId} already has an active generation in progress (task ${activeTask.taskId})`);
       }
 
-      const cleared = await fs.jobs.failures.clear(project_slug, assetId);
+      const cleared = await fs.jobs.failures.clear(assetId);
       if (!cleared.ok) {
         return error(`Failed to clear error for ${assetId}: ${cleared.error.message}`);
       }

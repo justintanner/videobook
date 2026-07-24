@@ -18,7 +18,7 @@ describe("asset_history tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -31,7 +31,7 @@ describe("asset_history tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo.png", data },
+      arguments: { book_id: "test-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse(
       (uploadResult.content as Array<{ type: string; text: string }>)[0].text
@@ -39,7 +39,7 @@ describe("asset_history tool", () => {
 
     const result = await client.callTool({
       name: "asset_history",
-      arguments: { asset_id: uploaded.assetId, project_slug: "test-proj" },
+      arguments: { asset_id: uploaded.assetId, book_id: "test-proj" },
     });
 
     const commits = JSON.parse(
@@ -53,16 +53,13 @@ describe("asset_history tool", () => {
 
   it("attaches rewrite metadata when native original metadata exists for a script asset", async () => {
     const fs = createEngineForTest(tempDir);
-    const createResult = await fs.artifacts.create("script", "desc-x-pig-1", "test-proj");
+    const createResult = await fs.artifacts.create("script", "desc-x-pig-1");
     expect(createResult.ok).toBe(true);
     if (!createResult.ok) return;
     const scriptAssetId = createResult.value.slug;
 
-    await fs.files.write(scriptAssetId, "original.md", "a pig sits upright", "test-proj");
-    await fs.metadata.artifacts.write(
-      scriptAssetId,
-      "original",
-      {
+    await fs.files.write(scriptAssetId, "original.md", "a pig sits upright");
+    await fs.metadata.artifacts.write(scriptAssetId, "original", {
         origin: "describe_image",
         sourceAssetId: "img-source-1",
         model: "gpt-5.2",
@@ -70,13 +67,12 @@ describe("asset_history tool", () => {
         platform: "ig",
         customPrompt: "replace the pig with a man in a blue suit",
         processed_at: "2026-04-22T10:00:00.000Z",
-      },
-      "test-proj",
+      }
     );
 
     const result = await client.callTool({
       name: "asset_history",
-      arguments: { asset_id: scriptAssetId, project_slug: "test-proj" },
+      arguments: { asset_id: scriptAssetId, book_id: "test-proj" },
     });
     const commits = JSON.parse(
       (result.content as Array<{ type: string; text: string }>)[0].text
@@ -100,14 +96,14 @@ describe("asset_history tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo.png", data },
+      arguments: { book_id: "test-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse(
       (uploadResult.content as Array<{ type: string; text: string }>)[0].text
     );
     const result = await client.callTool({
       name: "asset_history",
-      arguments: { asset_id: uploaded.assetId, project_slug: "test-proj" },
+      arguments: { asset_id: uploaded.assetId, book_id: "test-proj" },
     });
     const commits = JSON.parse(
       (result.content as Array<{ type: string; text: string }>)[0].text
@@ -120,7 +116,7 @@ describe("asset_history tool", () => {
   it("returns an error for a nonexistent asset", async () => {
     const result = await client.callTool({
       name: "asset_history",
-      arguments: { asset_id: "img-nonexistent-asset", project_slug: "test-proj" },
+      arguments: { asset_id: "img-nonexistent-asset", book_id: "test-proj" },
     });
     expect(result.isError).toBe(true);
   });

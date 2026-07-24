@@ -13,7 +13,7 @@ type GenerateHappyhorseRefVideoPayload = {
   type: "generate_happyhorse_ref_video";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   imageInputs: RefInput[];
   sourceImageIds: string[];
@@ -25,7 +25,7 @@ type GenerateHappyhorseRefVideoPayload = {
 export function registerGenerateHappyhorseRefVideoJob(fs: Engine): void {
   registerJobHandler("generate_happyhorse_ref_video", async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug, prompt,
+      vidAssetId, vidAssetDir, bookId, prompt,
       imageInputs, sourceImageIds,
       resolution, aspect_ratio, duration,
     } = payload as GenerateHappyhorseRefVideoPayload;
@@ -34,7 +34,7 @@ export function registerGenerateHappyhorseRefVideoJob(fs: Engine): void {
 
     const referenceImages: string[] = [];
     for (const { assetId, filename } of imageInputs) {
-      referenceImages.push(await uploadAssetToKie(fs, assetId, filename, projectSlug));
+      referenceImages.push(await uploadAssetToKie(fs, assetId, filename, bookId));
     }
 
     // 1.1 reference-to-video resolves "[Image N]" markers against reference_image[]
@@ -52,7 +52,7 @@ export function registerGenerateHappyhorseRefVideoJob(fs: Engine): void {
       taskType: "happyhorse_ref_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: { prompt, mode: "ref", sourceImageIds },
     });
 

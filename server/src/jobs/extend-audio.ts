@@ -31,7 +31,7 @@ export type ExtendAudioPayload = {
   sourceDurationMs: number;
   targetDurationMs: number;
   continuationPrompt?: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 function audioMime(filename: string): string {
@@ -225,7 +225,7 @@ export async function extendAudioWithElevenLabs(
   generationAttempts: number;
   loopFilled: boolean;
 }> {
-  const source = await fs.files.read(payload.sourceAssetId, payload.sourceFilename, payload.projectSlug);
+  const source = await fs.files.read(payload.sourceAssetId, payload.sourceFilename);
   if (!source.ok) throw new Error(`Failed to read source audio: ${source.error.message}`);
 
   const sourceBytes = new Uint8Array(source.value);
@@ -260,10 +260,10 @@ export async function extendAudioWithElevenLabs(
     crossfadeMs,
     signal,
   );
-  const write = await fs.files.write(payload.audAssetId, "original.mp3", output, payload.projectSlug);
+  const write = await fs.files.write(payload.audAssetId, "original.mp3", output);
   if (!write.ok) throw new Error(`Failed to write extended audio: ${write.error.message}`);
 
-  const assetDir = await fs.workspaces.resolveArtifact(payload.audAssetId, payload.projectSlug);
+  const assetDir = await fs.workspaces.resolveArtifact(payload.audAssetId);
   if (!assetDir.ok) throw new Error(`Failed to resolve extended audio: ${assetDir.error.message}`);
   const probe = await probeVideo(join(assetDir.value, "original.mp3"));
   const duration = probe.audioDuration ?? probe.duration;
@@ -290,7 +290,7 @@ export async function extendAudioWithElevenLabs(
     continuation_prompt: payload.continuationPrompt ?? null,
     duration,
     generated_at: new Date().toISOString(),
-  }, payload.projectSlug);
+  });
   if (!metadata.ok) throw new Error(`Failed to write extended audio metadata: ${metadata.error.message}`);
 
   return {

@@ -36,7 +36,7 @@ type CleanVideoAudioPayload = {
   assetId: string;
   assetDir: string;
   videoFilename: string;
-  projectSlug: string;
+  bookId: string;
   sourceMix: number;
   edgeFadeMs: number;
   addMusic: boolean;
@@ -175,9 +175,9 @@ async function deleteIfPresent(
   fs: Engine,
   assetId: string,
   filename: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<void> {
-  const result = await fs.files.delete(assetId, filename, projectSlug);
+  const result = await fs.files.delete(assetId, filename);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
     throw new Error(`Failed to delete stale ${filename}: ${result.error.message}`);
   }
@@ -188,10 +188,10 @@ export async function replaceVideoAssetInPlace(
   assetId: string,
   videoFilename: string,
   renderedPath: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<void> {
   const outputBytes = await readFile(renderedPath);
-  const written = await fs.files.write(assetId, videoFilename, outputBytes, projectSlug);
+  const written = await fs.files.write(assetId, videoFilename, outputBytes);
   if (!written.ok) throw new Error(`Failed to replace ${videoFilename}: ${written.error.message}`);
 }
 
@@ -201,7 +201,7 @@ export function registerCleanVideoAudioJob(fs: Engine): void {
       assetId,
       assetDir,
       videoFilename,
-      projectSlug,
+      bookId,
       sourceMix,
       edgeFadeMs,
       addMusic,
@@ -212,7 +212,7 @@ export function registerCleanVideoAudioJob(fs: Engine): void {
 
     const result = await withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       assetDir,
       ctx,
@@ -226,7 +226,7 @@ export function registerCleanVideoAudioJob(fs: Engine): void {
           throw new Error(`ElevenLabs Voice Isolator requires a video between 0 and ${MAX_ISOLATION_DURATION_SECONDS} seconds; got ${probe.duration}`);
         }
 
-        const sourceResult = await fs.files.read(assetId, videoFilename, projectSlug);
+        const sourceResult = await fs.files.read(assetId, videoFilename);
         if (!sourceResult.ok) throw new Error(sourceResult.error.message);
         if (sourceResult.value.byteLength > MAX_ISOLATION_BYTES) {
           throw new Error(`ElevenLabs Voice Isolator supports files up to ${MAX_ISOLATION_BYTES} bytes`);
@@ -280,13 +280,13 @@ export function registerCleanVideoAudioJob(fs: Engine): void {
             ctx.signal,
           );
 
-          await replaceVideoAssetInPlace(fs, assetId, videoFilename, outputPath, projectSlug);
+          await replaceVideoAssetInPlace(fs, assetId, videoFilename, outputPath, bookId);
         } finally {
           await rm(tempDir, { recursive: true, force: true });
         }
 
         for (const filename of STALE_DERIVATIVES) {
-          await deleteIfPresent(fs, assetId, filename, projectSlug);
+          await deleteIfPresent(fs, assetId, filename, bookId);
         }
 
         return { videoPath: inputPath };
@@ -299,7 +299,7 @@ export function registerCleanVideoAudioJob(fs: Engine): void {
       videoPath: result.videoPath,
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
       provenance: {
         origin: "clean_video_audio",
         provider: "elevenlabs",

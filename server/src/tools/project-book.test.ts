@@ -26,10 +26,7 @@ describe("project book tools", () => {
     root = await mkdtemp(join(tmpdir(), "videobook-project-book-"));
     const fs = createEngine({ rootDir: root });
     await fs.projects.create("studio");
-    const prompt = await fs.artifacts.create({
-      project: "studio",
-      kind: "prompt",
-      slug: "prm-cat",
+    const prompt = await fs.artifacts.create({kind: "prompt", slug: "prm-cat"
     });
     if (!prompt.ok) throw new Error(prompt.error.message);
     const tools = new Map(
@@ -44,7 +41,7 @@ describe("project book tools", () => {
     if (!record || !layout || !read) throw new Error("Missing book tools");
 
     const created = await record.handler({
-      project_slug: "studio",
+      book_id: "studio",
       action_id: "prompt-action",
       operation: "create_prompt",
       scope: "artifact",
@@ -55,7 +52,7 @@ describe("project book tools", () => {
     });
     expect(created.isError).toBeUndefined();
     const moved = await layout.handler({
-      project_slug: "studio",
+      book_id: "studio",
       target_action_id: "prompt-action",
       stage: 2,
       column: 1,
@@ -63,7 +60,7 @@ describe("project book tools", () => {
     expect(moved.isError).toBeUndefined();
 
     const bookResult = await read.handler({
-      project_slug: "studio",
+      book_id: "studio",
       limit: 100,
     });
     const book = resultValue(bookResult) as {
@@ -92,15 +89,9 @@ describe("project book tools", () => {
     root = await mkdtemp(join(tmpdir(), "videobook-wrapper-book-"));
     const fs = createEngine({ rootDir: root });
     await fs.projects.create("studio");
-    const prompt = await fs.artifacts.create({
-      project: "studio",
-      kind: "prompt",
-      slug: "prm-cat",
+    const prompt = await fs.artifacts.create({kind: "prompt", slug: "prm-cat"
     });
-    const image = await fs.artifacts.create({
-      project: "studio",
-      kind: "image",
-      slug: "img-cat",
+    const image = await fs.artifacts.create({kind: "image", slug: "img-cat"
     });
     if (!prompt.ok) throw new Error(prompt.error.message);
     if (!image.ok) throw new Error(image.error.message);
@@ -108,7 +99,7 @@ describe("project book tools", () => {
       name: "generate_test_image",
       description: "test",
       schema: {
-        project_slug: z.string(),
+        book_id: z.string(),
         prompt_slug: z.string(),
       },
       handler: async () => ({
@@ -122,7 +113,7 @@ describe("project book tools", () => {
       }),
     }, fs);
     await wrapped.handler({
-      project_slug: "studio",
+      book_id: "studio",
       prompt_slug: "@prm-cat",
     });
 
@@ -155,17 +146,14 @@ describe("project book tools", () => {
     root = await mkdtemp(join(tmpdir(), "videobook-wrapper-failed-book-"));
     const fs = createEngine({ rootDir: root });
     await fs.projects.create("studio");
-    const image = await fs.artifacts.create({
-      project: "studio",
-      kind: "image",
-      slug: "img-cat",
+    const image = await fs.artifacts.create({kind: "image", slug: "img-cat"
     });
     if (!image.ok) throw new Error(image.error.message);
     const wrapped = withLogging({
       name: "generate_test_video",
       description: "test",
       schema: {
-        project_slug: z.string(),
+        book_id: z.string(),
         image_slug: z.string(),
       },
       handler: async () => ({
@@ -174,7 +162,7 @@ describe("project book tools", () => {
       }),
     }, fs);
     await wrapped.handler({
-      project_slug: "studio",
+      book_id: "studio",
       image_slug: "@img-cat",
     });
 

@@ -16,7 +16,7 @@ const qwen2ImageEditInputSchema = Qwen2ImageEditRequestSchema.shape.input.shape;
 
 const generateQwen2ImageEditSchema = {
   prompt: apicityStringField(qwen2ImageEditInputSchema.prompt, "Image editing prompt (max 800 chars)", { required: true }),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   image_slugs: apicityStringArrayField(qwen2ImageEditInputSchema.image_url, "Exactly 1 @img-* slug for the reference image to edit", { required: true }),
   image_size: apicityField(qwen2ImageEditInputSchema.image_size, "Output aspect ratio (default 16:9)"),
   output_format: apicityField(qwen2ImageEditInputSchema.output_format, "Output image format (default png)"),
@@ -34,7 +34,7 @@ export function generateQwen2ImageEditDef(fs: Engine): ToolDef {
     description: "Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new img- asset and enqueues a background job.",
     schema: generateQwen2ImageEditSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, image_size, output_format, seed } = args as Args;
+      const { prompt, book_id, image_slugs, image_size, output_format, seed } = args as Args;
       const prefix = "img";
 
       if (!process.env.KIE_API_KEY) {
@@ -71,7 +71,7 @@ export function generateQwen2ImageEditDef(fs: Engine): ToolDef {
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      const resolved = await resolveImageSlugs(fs, rawSlugs, project_slug);
+      const resolved = await resolveImageSlugs(fs, rawSlugs, book_id);
       if (!resolved.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }
@@ -79,7 +79,7 @@ export function generateQwen2ImageEditDef(fs: Engine): ToolDef {
 
       const nameSeed = sourceImageIds[0] ?? `ephemeral-${Date.now()}`;
       const imgName = deriveImageName(nameSeed);
-      const assetResult = await fs.artifacts.create(prefix, imgName, project_slug);
+      const assetResult = await fs.artifacts.create(prefix, imgName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -98,7 +98,7 @@ export function generateQwen2ImageEditDef(fs: Engine): ToolDef {
         imgAssetId,
         imgAssetDir,
         sourceImageIds,
-        projectSlug: project_slug,
+        bookId: book_id,
         ...(image_size !== undefined ? { imageSize: image_size } : {}),
         ...(output_format !== undefined ? { outputFormat: output_format } : {}),
         ...(seed !== undefined ? { seed } : {}),

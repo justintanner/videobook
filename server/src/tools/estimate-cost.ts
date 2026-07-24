@@ -41,14 +41,14 @@ async function enrichMotionControlInput(
 ): Promise<Record<string, unknown>> {
   if (typeof input.duration === "number") return input;
 
-  const projectSlug = typeof input.project_slug === "string" ? input.project_slug : null;
+  const bookId = typeof input.book_id === "string" ? input.book_id : null;
   const motionSlugs = Array.isArray(input.motion_video_slugs)
     ? (input.motion_video_slugs as unknown[]).filter((s): s is string => typeof s === "string")
     : [];
-  if (!projectSlug || motionSlugs.length === 0) return input;
+  if (!bookId || motionSlugs.length === 0) return input;
 
   const motionSlug = motionSlugs[0].replace(/^@/, "");
-  const meta = await fs.metadata.artifacts.read(motionSlug, "original", projectSlug);
+  const meta = await fs.metadata.artifacts.read(motionSlug, "original");
   if (!meta.ok) return input;
   const duration = (meta.value as { duration?: unknown }).duration;
   if (typeof duration !== "number" || duration <= 0) return input;
@@ -61,19 +61,16 @@ async function enrichGrokExtendInput(
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   if (typeof input.resolution === "string" && input.resolution) return input;
-  const projectSlug = typeof input.project_slug === "string" ? input.project_slug : null;
+  const bookId = typeof input.book_id === "string" ? input.book_id : null;
   const source = typeof input.video_slug === "string"
     ? input.video_slug
     : typeof input.asset_id === "string"
       ? input.asset_id
       : null;
-  if (!projectSlug || !source) return input;
+  if (!bookId || !source) return input;
 
   const assetId = source.replace(/^@/, "");
-  const meta = await fs.metadata.artifacts.read<{ resolution?: unknown; input?: { resolution?: unknown } }>(
-    assetId,
-    "generation-payload",
-    projectSlug,
+  const meta = await fs.metadata.artifacts.read<{ resolution?: unknown; input?: { resolution?: unknown } }>(assetId, "generation-payload"
   );
   if (!meta.ok) return input;
   const resolution = meta.value.input?.resolution ?? meta.value.resolution;
@@ -92,14 +89,14 @@ async function enrichHappyHorseVideoEditInput(
 ): Promise<Record<string, unknown>> {
   if (typeof input.duration === "number") return input;
 
-  const projectSlug = typeof input.project_slug === "string" ? input.project_slug : null;
+  const bookId = typeof input.book_id === "string" ? input.book_id : null;
   const videoSlug = typeof input.video_slug === "string" ? input.video_slug : null;
-  if (!projectSlug || !videoSlug) return input;
+  if (!bookId || !videoSlug) return input;
 
   const assetId = videoSlug.replace(/^@/, "");
   if (!assetId.startsWith("vid-")) return input;
 
-  const meta = await fs.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original", projectSlug);
+  const meta = await fs.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original");
   if (!meta.ok) return input;
   const duration = meta.value.duration;
   if (typeof duration !== "number" || duration <= 0) return input;
@@ -114,12 +111,12 @@ async function enrichSourceDuration(
   expectedPrefix: "vid-" | "aud-",
 ): Promise<Record<string, unknown>> {
   if (typeof input.duration === "number") return input;
-  const projectSlug = typeof input.project_slug === "string" ? input.project_slug : null;
+  const bookId = typeof input.book_id === "string" ? input.book_id : null;
   const raw = typeof input[slugField] === "string" ? input[slugField] as string : null;
-  if (!projectSlug || !raw) return input;
+  if (!bookId || !raw) return input;
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith(expectedPrefix)) return input;
-  const meta = await fs.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original", projectSlug);
+  const meta = await fs.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original");
   if (!meta.ok) return input;
   const duration = meta.value.duration;
   if (typeof duration !== "number" || duration <= 0) return input;

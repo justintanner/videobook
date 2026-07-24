@@ -40,13 +40,13 @@ async function generateVideoNoAudio(outputPath: string): Promise<void> {
 
 async function uploadVideo(
   client: Client,
-  projectSlug: string,
+  bookId: string,
   videoPath: string,
 ): Promise<{ assetId: string; path: string }> {
   const data = (await readFile(videoPath)).toString("base64");
   const result = await client.callTool({
     name: "upload_file",
-    arguments: { project_slug: projectSlug, filename: "original.mp4", data },
+    arguments: { book_id: bookId, filename: "original.mp4", data },
   });
   return JSON.parse((result.content as TextContent)[0].text);
 }
@@ -73,7 +73,7 @@ describe("extract_audio tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "audio-proj" },
+      arguments: { book_id: "audio-proj" },
     });
   });
 
@@ -89,7 +89,7 @@ describe("extract_audio tool", () => {
       name: "extract_audio",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "audio-proj",
+        book_id: "audio-proj",
       },
     });
 
@@ -104,7 +104,7 @@ describe("extract_audio tool", () => {
     // Verify the audio file exists and is non-empty
     const manifest = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: parsed.audio_asset_id, project_slug: "audio-proj" },
+      arguments: { asset_id: parsed.audio_asset_id, book_id: "audio-proj" },
     });
     const manifestData = JSON.parse((manifest.content as TextContent)[0].text);
     const mp3File = manifestData.files.find((f: { name: string }) => f.name === "original.mp3");
@@ -119,7 +119,7 @@ describe("extract_audio tool", () => {
       name: "extract_audio",
       arguments: {
         asset_id: "vid-does-not-exist",
-        project_slug: "audio-proj",
+        book_id: "audio-proj",
       },
     });
 
@@ -130,7 +130,7 @@ describe("extract_audio tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "audio-proj", filename: "photo.png", data },
+      arguments: { book_id: "audio-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse((uploadResult.content as TextContent)[0].text);
 
@@ -138,7 +138,7 @@ describe("extract_audio tool", () => {
       name: "extract_audio",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "audio-proj",
+        book_id: "audio-proj",
       },
     });
 
@@ -154,7 +154,7 @@ describe("extract_audio tool", () => {
     const data = (await readFile(noAudioPath)).toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "audio-proj", filename: "original.mp4", data },
+      arguments: { book_id: "audio-proj", filename: "original.mp4", data },
     });
     const uploaded = JSON.parse((uploadResult.content as TextContent)[0].text);
 
@@ -162,7 +162,7 @@ describe("extract_audio tool", () => {
       name: "extract_audio",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "audio-proj",
+        book_id: "audio-proj",
       },
     });
 
@@ -178,7 +178,7 @@ describe("extract_audio tool", () => {
       name: "extract_audio",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "audio-proj",
+        book_id: "audio-proj",
       },
     });
 
@@ -189,7 +189,7 @@ describe("extract_audio tool", () => {
       origin: string;
       source_asset: string;
       duration: number;
-    }>(parsed.audio_asset_id, "original", "audio-proj");
+    }>(parsed.audio_asset_id, "original");
     expect(origin.ok && origin.value.origin).toBe("extract_audio");
     expect(origin.ok && origin.value.source_asset).toBe(uploaded.assetId);
     expect(origin.ok && typeof origin.value.duration).toBe("number");
@@ -205,7 +205,7 @@ describe("extract_audio tool", () => {
         name: "extract_audio",
         arguments: {
           asset_id: uploaded.assetId,
-          project_slug: "audio-proj",
+          book_id: "audio-proj",
           destination: { asset_id: uploaded.assetId, filename: "s1.mp3" },
         },
       });
@@ -219,7 +219,7 @@ describe("extract_audio tool", () => {
 
       const manifest = await client.callTool({
         name: "asset_manifest",
-        arguments: { asset_id: uploaded.assetId, project_slug: "audio-proj" },
+        arguments: { asset_id: uploaded.assetId, book_id: "audio-proj" },
       });
       const manifestData = JSON.parse((manifest.content as TextContent)[0].text);
       const mp3 = (manifestData.files as Array<{ name: string }>).find((f) => f.name === "s1.mp3");
@@ -234,7 +234,7 @@ describe("extract_audio tool", () => {
         name: "extract_audio",
         arguments: {
           asset_id: uploaded.assetId,
-          project_slug: "audio-proj",
+          book_id: "audio-proj",
           destination: { asset_id: uploaded.assetId, filename: "original.mp4" },
         },
       });
@@ -249,7 +249,7 @@ describe("extract_audio tool", () => {
         name: "extract_audio",
         arguments: {
           asset_id: uploaded.assetId,
-          project_slug: "audio-proj",
+          book_id: "audio-proj",
           destination: { asset_id: "vid-does-not-exist", filename: "s1.mp3" },
         },
       });
@@ -266,7 +266,7 @@ describe("extract_audio tool", () => {
         name: "extract_audio",
         arguments: {
           asset_id: uploaded.assetId,
-          project_slug: "audio-proj",
+          book_id: "audio-proj",
           destination: { asset_id: uploaded.assetId, filename: "s1-range.mp3" },
           range: { start_s: 0.5, duration_s: 0.5 },
         },
@@ -276,7 +276,7 @@ describe("extract_audio tool", () => {
 
       const manifest = await client.callTool({
         name: "asset_manifest",
-        arguments: { asset_id: uploaded.assetId, project_slug: "audio-proj" },
+        arguments: { asset_id: uploaded.assetId, book_id: "audio-proj" },
       });
       const manifestData = JSON.parse((manifest.content as TextContent)[0].text);
       const mp3Path = join(manifestData.path, "s1-range.mp3");

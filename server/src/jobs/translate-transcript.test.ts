@@ -18,14 +18,14 @@ const testCtx: JobHandlerContext = {
 describe("runTranslateTranscript", () => {
   let fs: Engine;
   let tempDir: string;
-  const projectSlug = "test-proj";
+  const bookId = "test-proj";
   const originalKey = process.env.KIE_API_KEY;
 
   beforeEach(async () => {
     delete process.env.KIE_API_KEY;
     tempDir = await mkdtemp(join(tmpdir(), "videocity-translate-test-"));
     fs = createEngineForTest(tempDir);
-    const project = await fs.projects.create(projectSlug);
+    const project = await fs.projects.create(bookId);
     if (!project.ok) throw new Error(project.error.message);
   });
 
@@ -47,21 +47,21 @@ describe("runTranslateTranscript", () => {
   };
 
   async function createTranscribedAsset(): Promise<string> {
-    const created = await fs.artifacts.create("vid", "clip", projectSlug);
+    const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
     const assetId = created.value.slug;
-    const write = await fs.files.write(assetId, "elevenlabs.json", JSON.stringify(transcriptJson), projectSlug);
+    const write = await fs.files.write(assetId, "elevenlabs.json", JSON.stringify(transcriptJson));
     if (!write.ok) throw new Error(write.error.message);
     return assetId;
   }
 
   it("throws when the asset has no transcript", async () => {
-    const created = await fs.artifacts.create("vid", "clip", projectSlug);
+    const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
     await expect(runTranslateTranscript(fs, {
       type: "translate_transcript",
       assetId: created.value.slug,
-      projectSlug,
+      bookId,
       targetLanguage: "en",
     }, testCtx)).rejects.toThrow(/No transcript/);
   });
@@ -71,7 +71,7 @@ describe("runTranslateTranscript", () => {
     const result = await runTranslateTranscript(fs, {
       type: "translate_transcript",
       assetId,
-      projectSlug,
+      bookId,
       targetLanguage: "zh",
     }, testCtx);
     expect(result).toEqual({ success: true, targetLanguage: "zh", skipped: "matches-source" });
@@ -85,13 +85,13 @@ describe("runTranslateTranscript", () => {
       targetLanguage: "en",
       segments: [{ start: 0, end: 2.2, text: "Drink the milk. Thanks mom.", words: [] }],
     };
-    const write = await fs.files.write(assetId, "elevenlabs.en.json", JSON.stringify(sidecar), projectSlug);
+    const write = await fs.files.write(assetId, "elevenlabs.en.json", JSON.stringify(sidecar));
     if (!write.ok) throw new Error(write.error.message);
 
     const result = await runTranslateTranscript(fs, {
       type: "translate_transcript",
       assetId,
-      projectSlug,
+      bookId,
       targetLanguage: "en",
     }, testCtx);
     expect(result).toEqual({ success: true, targetLanguage: "en", cached: true });
@@ -104,14 +104,14 @@ describe("runTranslateTranscript", () => {
       targetLanguage: "en",
       segments: [{ start: 0, end: 2.2, text: "stale", words: [] }],
     };
-    const write = await fs.files.write(assetId, "elevenlabs.en.json", JSON.stringify(stale), projectSlug);
+    const write = await fs.files.write(assetId, "elevenlabs.en.json", JSON.stringify(stale));
     if (!write.ok) throw new Error(write.error.message);
 
     // Translation is attempted (not served from cache), which fails fast on the missing key.
     await expect(runTranslateTranscript(fs, {
       type: "translate_transcript",
       assetId,
-      projectSlug,
+      bookId,
       targetLanguage: "en",
     }, testCtx)).rejects.toThrow(/KIE_API_KEY/);
   });

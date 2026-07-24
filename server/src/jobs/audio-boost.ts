@@ -27,19 +27,19 @@ type AudioBoostPayload = {
   isVideo: boolean;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 export function registerAudioBoostJob(fs: Engine): void {
   registerJobHandler("audio_boost", async (payload, ctx) => {
     const {
       inputPath, outputPath, boost, isVideo,
-      assetId, assetDir, projectSlug,
+      assetId, assetDir, bookId,
     } = payload as AudioBoostPayload;
 
     const result = await withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       assetDir,
       ctx,
@@ -61,7 +61,7 @@ export function registerAudioBoostJob(fs: Engine): void {
         const inputFilename = basename(inputPath);
         await replaceArtifactFileFromPath(
           fs,
-          projectSlug,
+          bookId,
           assetId,
           inputFilename,
           outputPath,
@@ -79,7 +79,7 @@ export function registerAudioBoostJob(fs: Engine): void {
         videoPath: result.mediaPath,
         assetId,
         assetDir,
-        projectSlug,
+        bookId,
         provenance: { origin: "audio_boost", boost, boosted_at: new Date().toISOString() },
         force: true,
         skipDownstreamJobs: true,

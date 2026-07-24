@@ -35,18 +35,18 @@ describe("runTranscribeVideoAudio", () => {
   let assetId: string;
   let assetDir: string;
   let savedApiKey: string | undefined;
-  const projectSlug = "test-proj";
+  const bookId = "test-proj";
 
   beforeEach(async () => {
     savedApiKey = process.env.OPENAI_API_KEY;
     tempDir = await mkdtemp(join(tmpdir(), "videocity-transcribe-test-"));
     fs = createEngineForTest(tempDir);
-    const project = await fs.projects.create(projectSlug);
+    const project = await fs.projects.create(bookId);
     if (!project.ok) throw new Error(project.error.message);
-    const created = await fs.artifacts.create("vid", "clip", projectSlug);
+    const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
     assetId = created.value.slug;
-    const manifest = await fs.files.manifest(assetId, projectSlug);
+    const manifest = await fs.files.manifest(assetId);
     if (!manifest.ok) throw new Error(manifest.error.message);
     assetDir = manifest.value.path;
   });
@@ -66,7 +66,7 @@ describe("runTranscribeVideoAudio", () => {
       videoPath: join(assetDir, "original.mp4"),
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
     };
   }
 
@@ -76,7 +76,7 @@ describe("runTranscribeVideoAudio", () => {
     const result = await runTranscribeVideoAudio(fs, payload(), makeContext());
 
     expect(result).toEqual({ success: false, reason: "OPENAI_API_KEY not set" });
-    const work = await fs.jobs.artifactWork.read(projectSlug, assetId);
+    const work = await fs.jobs.artifactWork.read(bookId);
     expect(work.ok).toBe(true);
     if (work.ok && work.value) expect(work.value.status).not.toBe("error");
   });
@@ -100,16 +100,16 @@ describe("runTranscribeVideoAudio", () => {
     expect(result.reason).toBeTruthy();
 
     // The asset must stay clean: lease completed, no persisted error.
-    const work = await fs.jobs.artifactWork.read(projectSlug, assetId);
+    const work = await fs.jobs.artifactWork.read(bookId);
     expect(work.ok).toBe(true);
     if (!work.ok) return;
     expect(work.value?.status).toBe("ready");
 
-    const generationError = await fs.jobs.failures.read(projectSlug, assetId);
+    const generationError = await fs.jobs.failures.read(assetId);
     expect(generationError.ok).toBe(true);
     if (generationError.ok) expect(generationError.value).toBeNull();
 
-    const manifest = await fs.files.manifest(assetId, projectSlug);
+    const manifest = await fs.files.manifest(assetId);
     expect(manifest.ok).toBe(true);
     if (manifest.ok) {
       const names = manifest.value.files.map((file) => file.name);
@@ -117,12 +117,12 @@ describe("runTranscribeVideoAudio", () => {
     }
 
     // The exact property the bug broke: the asset must be re-claimable.
-    const lease = await fs.jobs.artifactWork.begin(projectSlug, assetId, {
+    const lease = await fs.jobs.artifactWork.begin(assetId, {
       kind: "transcribe",
       ownerKind: "job",
       durationMs: 60_000,
     });
     expect(lease).not.toBeNull();
-    if (lease) await fs.jobs.artifactWork.complete(projectSlug, assetId, lease.ownerId);
+    if (lease) await fs.jobs.artifactWork.complete(assetId, lease.ownerId);
   });
 });

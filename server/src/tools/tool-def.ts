@@ -12,6 +12,7 @@ type ToolDef = {
   description: string;
   schema: ZodRawShape;
   handler: ToolHandler;
+  scope?: "global" | "book";
 };
 
 type SchemaArgs<TSchema extends ZodRawShape> = zInfer<ZodObject<TSchema>>;

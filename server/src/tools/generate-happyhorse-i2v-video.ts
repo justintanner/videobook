@@ -24,7 +24,7 @@ function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | nu
 }
 
 const generateHappyhorseI2vVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   first_frame_slug: z.string().describe("First frame image asset (e.g., @img-start)"),
   prompt: apicityStringField(HappyHorse11ImageToVideoRequestSchema.shape.input.shape.prompt, "Optional video description (max 5000 chars / 2500 Chinese chars)"),
   resolution: apicityField(HappyHorseResolutionSchema, "Output resolution: 720p / 1080p (default 1080p)"),
@@ -40,7 +40,7 @@ export function generateHappyhorseI2vVideoDef(fs: Engine): ToolDef {
     description: "Generate a video from a single first-frame image using HappyHorse image-to-video. Creates a new vid- asset and enqueues a background job.",
     schema: generateHappyhorseI2vVideoSchema,
     handler: async (args) => {
-      const { project_slug, first_frame_slug, prompt, resolution, duration } = args as Args;
+      const { book_id, first_frame_slug, prompt, resolution, duration } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }] };
@@ -50,13 +50,13 @@ export function generateHappyhorseI2vVideoDef(fs: Engine): ToolDef {
       if (!assetId.startsWith("img-")) {
         return { isError: true as const, content: [{ type: "text" as const, text: `first_frame_slug must be an img-* asset, got: ${assetId}` }] };
       }
-      const manifest = await fs.files.manifest(assetId, project_slug);
+      const manifest = await fs.files.manifest(assetId);
       if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
       const file = findImageFile(manifest.value.files);
       if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
 
       const videoName = `${SLUG}-${assetId.replace(/^img-/, "")}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
@@ -69,7 +69,7 @@ export function generateHappyhorseI2vVideoDef(fs: Engine): ToolDef {
         type: "generate_happyhorse_i2v_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         firstFrame: { assetId, filename: file.name },
         sourceImageIds,
         ...(prompt !== undefined ? { prompt } : {}),

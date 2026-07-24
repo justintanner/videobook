@@ -1,29 +1,18 @@
-import type { Engine } from "videobook-engine";
-import { z } from "zod";
 import { join } from "node:path";
-import { queue } from "../queue.js";
+import type { Engine } from "videobook-engine";
 import { findAudioFile } from "videobook-engine";
-import type { Orientation } from "../remotion/subtitles/types.js";
+import { z } from "zod";
+import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 
 const TIMELINE_FPS = 30;
+const RENDER_FILENAMES = {
+  landscape: "landscape.mp4",
+  portrait: "portrait.mp4",
+  square: "square.mp4",
+} as const;
 
-type TimelineSlot = {
-  slug: string;
-  volume?: number;
-  audioFadeIn?: number;
-  audioFadeOut?: number;
-};
-
-type TimelineAudioClip = {
-  id: string;
-  slug: string;
-  startFrame: number;
-  durationFrames: number;
-  volume?: number;
-  fadeIn?: number;
-  fadeOut?: number;
-};
+type Orientation = keyof typeof RENDER_FILENAMES;
 
 type ResolvedSlot = {
   slug: string;
@@ -48,115 +37,58 @@ export type RenderTimelineOutcome =
   | { status: "enqueued"; jobId: string; slotCount: number; orientation: Orientation }
   | { status: "missing_renders"; orientation: Orientation; missingSlugs: string[]; message: string }
   | { status: "empty"; message: string }
-  | { status: "no_timeline"; message: string }
   | { status: "error"; message: string };
 
-const LANDSCAPE_RENDER = "landscape.mp4";
-const PORTRAIT_RENDER = "portrait.mp4";
-const SQUARE_RENDER = "square.mp4";
-
-async function runRenderTimeline(
-  fs: Engine,
-  projectSlug: string,
+export async function runRenderTimeline(
+  engine: Engine,
+  bookId: string,
   orientationOverride?: Orientation,
 ): Promise<RenderTimelineOutcome> {
-  const timelineResult = await fs.metadata.projects.read<
-    {
-      slots: TimelineSlot[];
-      audio?: TimelineAudioClip[];
-      render?: string;
-      currentOrientation?: string;
-    } | TimelineSlot[]
-  >("timeline", projectSlug);
-  if (!timelineResult.ok) {
-    if (timelineResult.error.code === "NOT_FOUND") {
-      return {
-        status: "no_timeline",
-        message: "No timeline found for this project. Use edit_timeline first.",
-      };
-    }
-    return { status: "error", message: timelineResult.error.message };
+  const timeline = engine.timeline.get();
+  const orientation = orientationOverride ?? timeline.render;
+  if (timeline.slots.length === 0) {
+    return { status: "empty", message: "Timeline has no assigned artifacts." };
   }
-
-  const raw = timelineResult.value;
-  const slots = (Array.isArray(raw) ? raw : raw.slots).filter((s) => s.slug);
-  const audioClips: TimelineAudioClip[] = Array.isArray(raw) ? [] : (raw.audio ?? []);
-  const currentTab = !Array.isArray(raw) && raw.currentOrientation;
-  const tabOrientation: Orientation | undefined =
-    currentTab === "portrait" || currentTab === "square" || currentTab === "landscape"
-      ? currentTab
-      : undefined;
-  const renderField = !Array.isArray(raw) ? (raw.render as Orientation | undefined) : undefined;
-  const orientation: Orientation =
-    orientationOverride ?? tabOrientation ?? renderField ?? "landscape";
-  if (slots.length === 0) {
-    return { status: "empty", message: "Timeline has no slots with assets assigned." };
-  }
-
-  const renderFilename =
-    orientation === "portrait" ? PORTRAIT_RENDER : orientation === "square" ? SQUARE_RENDER : LANDSCAPE_RENDER;
-
+  const renderFilename = RENDER_FILENAMES[orientation];
   const resolvedSlots: ResolvedSlot[] = [];
   const missingSlugs: string[] = [];
-
-  for (const slot of slots) {
-    const manifestResult = await fs.files.manifest(slot.slug, projectSlug, { includeDotfiles: true });
-    if (!manifestResult.ok) {
-      return {
-        status: "error",
-        message: `Asset ${slot.slug} not found: ${manifestResult.error.message}`,
-      };
-    }
-
-    const manifest = manifestResult.value;
-    const files = manifest.files;
-
-    if (files.some((f) => f.name === renderFilename)) {
-      resolvedSlots.push({
-        slug: slot.slug,
-        volume: slot.volume ?? 100,
-        fadeIn: slot.audioFadeIn ?? 0,
-        fadeOut: slot.audioFadeOut ?? 0,
-        assetDir: manifest.path,
-      });
+  for (const slot of timeline.slots) {
+    const artifact = engine.artifacts.get(slot.artifactId);
+    if (!artifact.ok) return { status: "error", message: artifact.error.message };
+    const manifest = await engine.files.manifest(artifact.value.artifactId);
+    if (!manifest.ok) return { status: "error", message: manifest.error.message };
+    if (!manifest.value.files.some((file) => file.name === renderFilename)) {
+      missingSlugs.push(artifact.value.slug);
       continue;
     }
-
-    missingSlugs.push(slot.slug);
+    resolvedSlots.push({
+      slug: artifact.value.slug,
+      volume: slot.volume ?? 100,
+      fadeIn: slot.audioFadeIn ?? 0,
+      fadeOut: slot.audioFadeOut ?? 0,
+      assetDir: manifest.value.path,
+    });
   }
-
   if (missingSlugs.length > 0) {
     return {
       status: "missing_renders",
       orientation,
       missingSlugs,
-      message:
-        `Cannot render timeline: ${missingSlugs.length} slot(s) missing ${renderFilename} — ` +
-        `${missingSlugs.join(", ")}. Run /render on each before /final.`,
+      message: `Missing ${renderFilename} for ${missingSlugs.join(", ")}`,
     };
   }
-
   const resolvedAudio: ResolvedAudioOverlay[] = [];
-  for (const clip of audioClips) {
-    const manifestResult = await fs.files.manifest(clip.slug, projectSlug);
-    if (!manifestResult.ok) {
-      return {
-        status: "error",
-        message: `Audio asset ${clip.slug} not found: ${manifestResult.error.message}`,
-      };
-    }
-    const manifest = manifestResult.value;
-    const audioFile = findAudioFile(manifest.files, clip.slug);
-    if (!audioFile) {
-      return {
-        status: "error",
-        message: `Audio asset ${clip.slug} has no audio file.`,
-      };
-    }
+  for (const clip of timeline.audio) {
+    const artifact = engine.artifacts.get(clip.artifactId);
+    if (!artifact.ok) return { status: "error", message: artifact.error.message };
+    const manifest = await engine.files.manifest(artifact.value.artifactId);
+    if (!manifest.ok) return { status: "error", message: manifest.error.message };
+    const audioFile = findAudioFile(manifest.value.files, artifact.value.slug);
+    if (!audioFile) return { status: "error", message: `No audio file found in ${artifact.value.slug}` };
     resolvedAudio.push({
       id: clip.id,
-      slug: clip.slug,
-      audioPath: join(manifest.path, audioFile.name),
+      slug: artifact.value.slug,
+      audioPath: join(manifest.value.path, audioFile.name),
       startMs: Math.round((clip.startFrame / TIMELINE_FPS) * 1000),
       durationMs: Math.round((clip.durationFrames / TIMELINE_FPS) * 1000),
       volume: (clip.volume ?? 100) / 100,
@@ -164,81 +96,59 @@ async function runRenderTimeline(
       fadeOutMs: clip.fadeOut ?? 0,
     });
   }
-
-  const jobId = `render-timeline-${projectSlug}-${Date.now()}`;
-
+  const jobId = `render-timeline-${bookId}-${Date.now()}`;
   await queue.enqueue(jobId, {
     type: "render_timeline",
-    projectSlug: projectSlug,
+    bookId,
     orientation,
     resolvedSlots,
     resolvedAudio,
   });
-
   return { status: "enqueued", jobId, slotCount: resolvedSlots.length, orientation };
 }
 
-export function renderTimelineDef(fs: Engine): ToolDef {
+export function renderTimelineDef(engine: Engine): ToolDef {
   return {
     name: "render_timeline",
-    description:
-      "Concatenate rendered video clips in timeline order into a single final output. Requires every slot to already have its per-orientation render — if any are missing, returns status 'missing_renders' listing the slugs that need /render first. Writes the concat output to the 'final' singleton asset. Orientation precedence: explicit arg → timeline.currentOrientation (active tab) → timeline.render → landscape.",
+    description: "Render the selected book's typed v2 timeline",
     schema: {
-      project_slug: z.string().describe("Project slug"),
-      orientation: z
-        .enum(["landscape", "portrait", "square"])
-        .optional()
-        .describe("Override the orientation to render"),
+      book_id: z.string().uuid(),
+      orientation: z.enum(["landscape", "portrait", "square"]).optional(),
     },
     handler: async (args) => {
-      const { project_slug, orientation } = args as {
-        project_slug: string;
-        orientation?: Orientation;
-      };
-      const outcome = await runRenderTimeline(fs, project_slug, orientation);
-
-      switch (outcome.status) {
-        case "no_timeline":
-        case "error":
-          return {
-            isError: true as const,
-            content: [{ type: "text" as const, text: outcome.message }],
-          };
-        case "empty":
-          return {
-            isError: true as const,
-            content: [{ type: "text" as const, text: outcome.message }],
-          };
-        case "missing_renders":
-          return {
-            isError: true as const,
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  status: "missing_renders",
-                  orientation: outcome.orientation,
-                  missing_slugs: outcome.missingSlugs,
-                  message: outcome.message,
-                }),
-              },
-            ],
-          };
-        case "enqueued":
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify({
-                  job_id: outcome.jobId,
-                  status: "enqueued",
-                  slot_count: outcome.slotCount,
-                  orientation: outcome.orientation,
-                }),
-              },
-            ],
-          };
+      const outcome = await runRenderTimeline(
+        engine,
+        String(args.book_id),
+        args.orientation as Orientation | undefined,
+      );
+      if (outcome.status === "error" || outcome.status === "empty") {
+        return { isError: true, content: [{ type: "text", text: outcome.message }] };
       }
+      if (outcome.status === "missing_renders") {
+        return {
+          isError: true,
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              status: outcome.status,
+              orientation: outcome.orientation,
+              missing_slugs: outcome.missingSlugs,
+              message: outcome.message,
+            }),
+          }],
+        };
+      }
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            status: outcome.status,
+            job_id: outcome.jobId,
+            slot_count: outcome.slotCount,
+            orientation: outcome.orientation,
+          }),
+        }],
+      };
     },
   };
 }

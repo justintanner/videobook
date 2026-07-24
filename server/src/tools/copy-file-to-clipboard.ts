@@ -11,12 +11,12 @@ export function copyFileToClipboardDef(fs: Engine): ToolDef {
     description: "Copy an asset's original media file to the macOS pasteboard as a file reference",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-sunset-drive)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
+      const { asset_id, book_id: _book_id } = args as { asset_id: string; book_id: string };
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

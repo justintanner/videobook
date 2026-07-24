@@ -111,12 +111,12 @@ describe("readAndAssessDialog", () => {
   });
 
   it("returns real dialog quality for valid transcription file", async () => {
-    const assetResult = await fs.artifacts.create("vid", "dialog-asset", "test-proj");
+    const assetResult = await fs.artifacts.create("vid", "dialog-asset");
     if (!assetResult.ok) throw new Error(assetResult.error.message);
     const assetId = assetResult.value.slug;
 
     const transcription = JSON.stringify({ text: "The quick brown fox jumps over the lazy dog" });
-    await fs.files.write(assetId, ".analysis.gpt4otrans.json", transcription, "test-proj");
+    await fs.files.write(assetId, ".analysis.gpt4otrans.json", transcription);
 
     const result = await readAndAssessDialog(fs, assetId, "test-proj");
     expect(result.hasDialog).toBe(true);
@@ -125,7 +125,7 @@ describe("readAndAssessDialog", () => {
   });
 
   it("returns no_transcription for nonexistent transcription file", async () => {
-    const assetResult = await fs.artifacts.create("vid", "no-trans", "test-proj");
+    const assetResult = await fs.artifacts.create("vid", "no-trans");
     if (!assetResult.ok) throw new Error(assetResult.error.message);
     const assetId = assetResult.value.slug;
 
@@ -137,11 +137,11 @@ describe("readAndAssessDialog", () => {
   });
 
   it("returns no_transcription for invalid JSON in transcription file", async () => {
-    const assetResult = await fs.artifacts.create("vid", "bad-json", "test-proj");
+    const assetResult = await fs.artifacts.create("vid", "bad-json");
     if (!assetResult.ok) throw new Error(assetResult.error.message);
     const assetId = assetResult.value.slug;
 
-    await fs.files.write(assetId, ".analysis.gpt4otrans.json", "not valid json {{{", "test-proj");
+    await fs.files.write(assetId, ".analysis.gpt4otrans.json", "not valid json {{{");
 
     const result = await readAndAssessDialog(fs, assetId, "test-proj");
     expect(result.hasDialog).toBe(false);

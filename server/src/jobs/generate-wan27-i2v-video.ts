@@ -12,7 +12,7 @@ type GenerateWan27I2vVideoPayload = {
   type: "generate_wan27_i2v_video";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   negative_prompt?: string;
   firstFrame?: RefInput;
@@ -33,15 +33,15 @@ type GenerateWan27I2vVideoPayload = {
 async function uploadInput(
   fs: Engine,
   input: RefInput,
-  projectSlug: string,
+  bookId: string,
 ): Promise<string> {
-  return uploadAssetToKie(fs, input.assetId, input.filename, projectSlug);
+  return uploadAssetToKie(fs, input.assetId, input.filename, bookId);
 }
 
 export function registerGenerateWan27I2vVideoJob(fs: Engine): void {
   registerJobHandler("generate_wan27_i2v_video", async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,
+      vidAssetId, vidAssetDir, bookId, prompt, negative_prompt,
       firstFrame, lastFrame, firstClip, drivingAudio,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
       resolution, duration, prompt_extend, watermark, nsfw_checker, seed,
@@ -49,10 +49,10 @@ export function registerGenerateWan27I2vVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const firstFrameUrl = firstFrame ? await uploadInput(fs, firstFrame, projectSlug) : undefined;
-    const lastFrameUrl = lastFrame ? await uploadInput(fs, lastFrame, projectSlug) : undefined;
-    const firstClipUrl = firstClip ? await uploadInput(fs, firstClip, projectSlug) : undefined;
-    const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio, projectSlug) : undefined;
+    const firstFrameUrl = firstFrame ? await uploadInput(fs, firstFrame, bookId) : undefined;
+    const lastFrameUrl = lastFrame ? await uploadInput(fs, lastFrame, bookId) : undefined;
+    const firstClipUrl = firstClip ? await uploadInput(fs, firstClip, bookId) : undefined;
+    const drivingAudioUrl = drivingAudio ? await uploadInput(fs, drivingAudio, bookId) : undefined;
 
     const request = buildWan27FramesVideoPayload(
       { prompt, negative_prompt, resolution, duration, prompt_extend, watermark, nsfw_checker, seed },
@@ -63,7 +63,7 @@ export function registerGenerateWan27I2vVideoJob(fs: Engine): void {
       taskType: "wan27_i2v_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         prompt,
         mode: "i2v",

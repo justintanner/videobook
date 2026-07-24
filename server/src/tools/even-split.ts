@@ -128,7 +128,7 @@ export function splitVideoByDurationsDef(fs: Engine): ToolDef {
       "Split a video into N targeted chunks plus a leftover chunk with the rest. Pass target_secs as a list (e.g. [10] or [10, 15]); each target produces an exact-length chunk, and the trailing leftover holds whatever's left. If the leftover would be sub-half-second, the last target is backed off by 1s. Source is preserved. When `destination` is provided, chunks are written as files inside an existing asset (one filename per target, no leftover) instead of minting fresh vid-* assets.",
     schema: {
       asset_id: z.string().describe("Source video asset ID (e.g. vid-my-clip)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       // Accept array of strings/numbers; chat positional args arrive as strings
       // (possibly with unit suffixes like "10s"), MCP clients typically pass numbers.
       target_secs: z
@@ -148,9 +148,9 @@ export function splitVideoByDurationsDef(fs: Engine): ToolDef {
         ),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, target_secs, destination } = args as {
+      const { asset_id, book_id, target_secs, destination } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         target_secs?: Array<number | string>;
         destination?: { asset_id: string; filenames: string[] };
       };
@@ -170,7 +170,7 @@ export function splitVideoByDurationsDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -237,7 +237,7 @@ export function splitVideoByDurationsDef(fs: Engine): ToolDef {
 
       if (destination !== undefined) {
         destinationMode = true;
-        const destManifest = await fs.files.manifest(destination.asset_id, project_slug, { includeDotfiles: true });
+        const destManifest = await fs.files.manifest(destination.asset_id);
         if (!destManifest.ok) {
           return {
             isError: true as const,
@@ -272,7 +272,7 @@ export function splitVideoByDurationsDef(fs: Engine): ToolDef {
         for (let i = 0; i < plan.chunks.length; i++) {
           const chunk = plan.chunks[i];
           const name = deriveChunkName(asset_id, i + 1);
-          const c = await fs.artifacts.create(prefix, name, project_slug);
+          const c = await fs.artifacts.create(prefix, name);
           if (!c.ok) {
             return {
               isError: true as const,
@@ -300,7 +300,7 @@ export function splitVideoByDurationsDef(fs: Engine): ToolDef {
         sourcePath,
         sourceAssetId: asset_id,
         chunks: created,
-        projectSlug: project_slug,
+        bookId: book_id,
         destination: destinationMode ? { assetId: destination!.asset_id } : undefined,
       });
 

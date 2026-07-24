@@ -27,7 +27,7 @@ describe("clean_video_audio tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "clean-audio-proj" },
+      arguments: { book_id: "clean-audio-proj" },
     });
   });
 
@@ -40,7 +40,7 @@ describe("clean_video_audio tool", () => {
   it("requires the ElevenLabs key", async () => {
     const result = await client.callTool({
       name: "clean_video_audio",
-      arguments: { asset_id: "vid-test", project_slug: "clean-audio-proj" },
+      arguments: { asset_id: "vid-test", book_id: "clean-audio-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -51,7 +51,7 @@ describe("clean_video_audio tool", () => {
     process.env.ELEVENLABS_API_KEY = "test-key";
     const result = await client.callTool({
       name: "clean_video_audio",
-      arguments: { asset_id: "aud-test", project_slug: "clean-audio-proj" },
+      arguments: { asset_id: "aud-test", book_id: "clean-audio-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -62,7 +62,7 @@ describe("clean_video_audio tool", () => {
     process.env.ELEVENLABS_API_KEY = "test-key";
     const result = await client.callTool({
       name: "clean_video_audio",
-      arguments: { asset_id: "vid-missing", project_slug: "clean-audio-proj" },
+      arguments: { asset_id: "vid-missing", book_id: "clean-audio-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -71,14 +71,14 @@ describe("clean_video_audio tool", () => {
   it("rejects an asset without a video file", async () => {
     process.env.ELEVENLABS_API_KEY = "test-key";
     const fs = createEngineForTest(tempDir);
-    const created = await fs.artifacts.create("vid", "no-video", "clean-audio-proj");
+    const created = await fs.artifacts.create("vid", "no-video");
     if (!created.ok) throw new Error(created.error.message);
-    const written = await fs.files.write(created.value.slug, "notes.txt", "hello", "clean-audio-proj");
+    const written = await fs.files.write(created.value.slug, "notes.txt", "hello");
     if (!written.ok) throw new Error(written.error.message);
 
     const result = await client.callTool({
       name: "clean_video_audio",
-      arguments: { asset_id: created.value.slug, project_slug: "clean-audio-proj" },
+      arguments: { asset_id: created.value.slug, book_id: "clean-audio-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -91,7 +91,7 @@ describe("clean_video_audio tool", () => {
       name: "clean_video_audio",
       arguments: {
         asset_id: "vid-test",
-        project_slug: "clean-audio-proj",
+        book_id: "clean-audio-proj",
         source_mix: 0.8,
         music_volume: 0.5,
       },

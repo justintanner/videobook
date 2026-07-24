@@ -42,7 +42,7 @@ import type { ArchiveStore } from "../archive-store.js";
 
 type ArchiveClipPayload = {
   type: "archive_clip";
-  projectSlug: string;
+  bookId: string;
   assetId?: string;
   sourceProjectSlug?: string;
   url?: string;
@@ -70,7 +70,7 @@ type AssetSnapshotFile = {
 };
 
 type AssetSnapshot = {
-  projectSlug: string;
+  bookId: string;
   assetId: string;
   files: AssetSnapshotFile[];
 };
@@ -104,7 +104,7 @@ function pickMediaFile(files: ArtifactManifestFile[], assetId: string): Artifact
 
 function buildAssetSnapshot(
   manifest: { path: string; files: ArtifactManifestFile[]; directories?: Record<string, string[]> },
-  projectSlug: string,
+  bookId: string,
   assetId: string,
 ): AssetSnapshot {
   const files: AssetSnapshotFile[] = manifest.files.map((file) => ({
@@ -120,15 +120,15 @@ function buildAssetSnapshot(
       });
     }
   }
-  return { projectSlug, assetId, files };
+  return { bookId, assetId, files };
 }
 
 async function readAnalysisTopics(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<string[]> {
-  const read = await fs.files.read(assetId, ".original.analysis.json", projectSlug);
+  const read = await fs.files.read(assetId, ".original.analysis.json");
   if (!read.ok) return [];
   try {
     const parsed = JSON.parse(new TextDecoder().decode(read.value)) as Record<string, unknown>;
@@ -155,7 +155,7 @@ async function prepareAssetMedia(
   if (!payload.assetId || !payload.sourceProjectSlug) {
     throw new Error("asset archive requires assetId and sourceProjectSlug");
   }
-  const manifest = await fs.files.manifest(payload.assetId, payload.sourceProjectSlug, { includeDotfiles: true });
+  const manifest = await fs.files.manifest(payload.assetId);
   if (!manifest.ok) throw new Error(manifest.error.message);
   const media = pickMediaFile(manifest.value.files, payload.assetId);
   if (!media) throw new Error(`No media file found in asset ${payload.assetId}`);
@@ -169,7 +169,7 @@ async function prepareAssetMedia(
     filename: `original${extension}`,
     source: {
       kind: "asset",
-      project_slug: payload.sourceProjectSlug,
+      book_id: payload.sourceProjectSlug,
       asset_id: payload.assetId,
       ...(title ? { title } : {}),
       created_at: new Date().toISOString(),
@@ -534,7 +534,7 @@ async function writeArchiveMetadata(fs: Engine, payload: ArchiveClipPayload, res
     topics: result.topics,
     people: result.people,
     archived_at: new Date().toISOString(),
-  }, payload.sourceProjectSlug);
+  });
   if (!write.ok) throw new Error(write.error.message);
 }
 
@@ -542,7 +542,7 @@ export function registerArchiveClipJob(fs: Engine): void {
   registerJobHandler("archive_clip", async (payload, ctx) => {
     const p = payload as ArchiveClipPayload;
     if (p.assetId) {
-      return withLocalLease(fs, p.sourceProjectSlug ?? p.projectSlug, p.assetId, ctx, "archive", async () => {
+      return withLocalLease(fs, p.sourceProjectSlug ?? p.bookId, p.assetId, ctx, "archive", async () => {
         const result = await runArchive(fs, p);
         await writeArchiveMetadata(fs, p, result);
         return result;

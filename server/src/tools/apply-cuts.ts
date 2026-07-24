@@ -50,7 +50,7 @@ export function applyCutsDef(fs: Engine): ToolDef {
       + "Pair with /suggest-cuts to source ranges, or hand-pick them.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-*)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       cuts: z
         .array(
           z.object({
@@ -62,14 +62,14 @@ export function applyCutsDef(fs: Engine): ToolDef {
         .describe("Ranges to remove. Sorted, non-overlapping, within [0, duration]."),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, cuts } = args as {
+      const { asset_id, book_id, cuts } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         cuts: Cut[];
       };
       const assetId = asset_id.replace(/^@/, "");
 
-      const manifestResult = await fs.files.manifest(assetId, project_slug);
+      const manifestResult = await fs.files.manifest(assetId);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -85,8 +85,7 @@ export function applyCutsDef(fs: Engine): ToolDef {
         };
       }
 
-      const metaResult = await fs.metadata.artifacts.read<{ duration?: number; hasAudio?: boolean }>(
-        assetId, "original", project_slug,
+      const metaResult = await fs.metadata.artifacts.read<{ duration?: number; hasAudio?: boolean }>(assetId, "original"
       );
       const duration = metaResult.ok && typeof metaResult.value.duration === "number"
         ? metaResult.value.duration
@@ -119,7 +118,7 @@ export function applyCutsDef(fs: Engine): ToolDef {
           hasAudio,
           assetId,
           assetDir,
-          projectSlug: project_slug,
+          bookId: book_id,
         });
       } catch (err) {
         return {

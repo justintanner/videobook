@@ -33,6 +33,8 @@ dist-ssr
 # Projects directory
 projects/
 data/
+books/
+runtime/
 
 # TypeScript build info
 *.tsbuildinfo

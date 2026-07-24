@@ -7,7 +7,7 @@ type Payload = {
   type: "generate_seedream_v5_lite_fal";
   imgAssetId: string;
   imgAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   image_size?: string;
   auto_4K?: boolean;
@@ -18,7 +18,7 @@ type Payload = {
 export function registerGenerateSeedreamV5LiteFalJob(fs: Engine): void {
   registerJobHandler("generate_seedream_v5_lite_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.projectSlug, p.imgAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.bookId, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
       const input: Record<string, unknown> = {
         prompt: p.prompt,
@@ -30,7 +30,7 @@ export function registerGenerateSeedreamV5LiteFalJob(fs: Engine): void {
   
       const taskId = await submitFalJob({
         fs,
-        projectSlug: p.projectSlug,
+        bookId: p.bookId,
         assetId: p.imgAssetId,
         assetDir: p.imgAssetDir,
         endpointId: "fal-ai/bytedance/seedream/v5/lite/text-to-image",

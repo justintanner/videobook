@@ -18,13 +18,13 @@ export function removeSoundDef(fs: Engine): ToolDef {
     schema: {
       asset_id: z.string().describe("Asset to edit in-place (vid-* or aud-*)"),
       sound: z.string().min(1).max(200).describe('Description of the sound to remove, e.g. "horse neighing"'),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, sound, project_slug } = args as {
+      const { asset_id, sound, book_id } = args as {
         asset_id: string;
         sound: string;
-        project_slug: string;
+        book_id: string;
       };
 
       if (!process.env.ELEVENLABS_API_KEY) {
@@ -39,7 +39,7 @@ export function removeSoundDef(fs: Engine): ToolDef {
         return toolError(`remove_sound only supports vid-* or aud-* assets, got ${assetId}`);
       }
 
-      const manifest = await fs.files.manifest(assetId, project_slug);
+      const manifest = await fs.files.manifest(assetId);
       if (!manifest.ok) return toolError(manifest.error.message);
       const file = kind === "video"
         ? findVideoFile(manifest.value.files)
@@ -58,7 +58,7 @@ export function removeSoundDef(fs: Engine): ToolDef {
           assetDir: manifest.value.path,
           filename: file.name,
           sound: sound.trim(),
-          projectSlug: project_slug,
+          bookId: book_id,
         } as unknown as Record<string, unknown>, JOB_TIMEOUT_MS);
       } catch (error) {
         return toolError(`Sound removal failed: ${error instanceof Error ? error.message : String(error)}`);

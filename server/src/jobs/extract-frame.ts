@@ -31,7 +31,7 @@ type ExtractFramePayload = {
   imageAssetId: string;
   imageAssetDir: string;
   sourceVideoId: string;
-  projectSlug: string;
+  bookId: string;
   width: number;
   height: number;
   mode: "first" | "last" | "custom";
@@ -42,7 +42,7 @@ export function registerExtractFrameJob(fs: Engine): void {
     const {
       inputPath, timestamp,
       imageAssetId, imageAssetDir, sourceVideoId,
-      projectSlug, width, height, mode,
+      bookId, width, height, mode,
     } = payload as ExtractFramePayload;
 
     // ffmpeg has no API for "write to memory", so we stage the frame in a
@@ -56,7 +56,7 @@ export function registerExtractFrameJob(fs: Engine): void {
     try {
       const origin = await withLockedLocalLease(
         fs,
-        projectSlug,
+        bookId,
         imageAssetId,
         imageAssetDir,
         ctx,
@@ -80,7 +80,7 @@ export function registerExtractFrameJob(fs: Engine): void {
         }
 
         const buffer = await readFile(tempPath);
-        const writeResult = await fs.files.write(imageAssetId, "original.jpg", buffer, projectSlug);
+        const writeResult = await fs.files.write(imageAssetId, "original.jpg", buffer);
         if (!writeResult.ok) {
           throw new Error(
             `failed to write original.jpg for ${imageAssetId}: ${writeResult.error.message}`,
@@ -94,7 +94,7 @@ export function registerExtractFrameJob(fs: Engine): void {
           width,
           height,
         };
-        await fs.metadata.artifacts.write(imageAssetId, "original", origin, projectSlug);
+        await fs.metadata.artifacts.write(imageAssetId, "original", origin);
         return origin;
         },
         { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
@@ -104,7 +104,7 @@ export function registerExtractFrameJob(fs: Engine): void {
       await queue.enqueue(jobId, {
         type: "process_image",
         assetId: imageAssetId,
-        projectSlug,
+        bookId,
         extension: ".jpg",
         provenance: origin,
       } as unknown as Record<string, unknown>);

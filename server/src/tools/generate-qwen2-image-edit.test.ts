@@ -29,7 +29,7 @@ describe("generate_qwen2_image_edit tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -48,7 +48,7 @@ describe("generate_qwen2_image_edit tool", () => {
       name: "generate_kie_qwen_2_0_edit_image",
       arguments: {
         prompt: "exactly the same remove game",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: ["@img-nbp-scene-reference-2-3"],
       },
     });
@@ -66,7 +66,7 @@ describe("generate_qwen2_image_edit tool", () => {
       name: "generate_kie_qwen_2_0_edit_image",
       arguments: {
         prompt: "edit me",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: [],
       },
     });
@@ -79,7 +79,7 @@ describe("generate_qwen2_image_edit tool", () => {
       name: "generate_kie_qwen_2_0_edit_image",
       arguments: {
         prompt: "edit me",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: ["@img-a", "@img-b"],
       },
     });
@@ -93,19 +93,19 @@ describe("generate_qwen2_image_edit tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "nbp-scene-reference-2-3", "test-proj");
+    const asset = await fs.artifacts.create("img", "nbp-scene-reference-2-3");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png);
 
     const result = await client.callTool({
       name: "generate_kie_qwen_2_0_edit_image",
       arguments: {
         prompt: "exactly the same remove game",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: [`@${asset.value.slug}`],
         image_size: "16:9",
         output_format: "png",

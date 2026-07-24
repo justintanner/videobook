@@ -18,7 +18,7 @@ type GenerateHappyhorseVideoeditPayload = {
   type: "generate_happyhorse_videoedit_video";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   sourceVideo: RefInput;
   imageInputs: RefInput[];
@@ -32,17 +32,17 @@ type GenerateHappyhorseVideoeditPayload = {
 export function registerGenerateHappyhorseVideoeditVideoJob(fs: Engine): void {
   registerJobHandler("generate_happyhorse_videoedit_video", async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug, prompt,
+      vidAssetId, vidAssetDir, bookId, prompt,
       sourceVideo, imageInputs, sourceVideoIds, sourceImageIds,
       resolution, audio_setting, seed,
     } = payload as GenerateHappyhorseVideoeditPayload;
 
     requireApiKey("KIE_API_KEY");
 
-    const videoUrl = await uploadAssetToKie(fs, sourceVideo.assetId, sourceVideo.filename, projectSlug);
+    const videoUrl = await uploadAssetToKie(fs, sourceVideo.assetId, sourceVideo.filename, bookId);
     const referenceImages: string[] = [];
     for (const { assetId, filename } of imageInputs) {
-      referenceImages.push(await uploadAssetToKie(fs, assetId, filename, projectSlug));
+      referenceImages.push(await uploadAssetToKie(fs, assetId, filename, bookId));
     }
 
     // happyhorse/video-edit has no `duration` field in its kie input schema —
@@ -71,8 +71,7 @@ export function registerGenerateHappyhorseVideoeditVideoJob(fs: Engine): void {
       referenceImages,
     );
 
-    const sourceMeta = await fs.metadata.artifacts.read<{ duration?: number }>(
-      sourceVideo.assetId, "original", projectSlug,
+    const sourceMeta = await fs.metadata.artifacts.read<{ duration?: number }>(sourceVideo.assetId, "original"
     );
     const durationHint =
       sourceMeta.ok && typeof sourceMeta.value?.duration === "number" && sourceMeta.value.duration > 0
@@ -84,7 +83,7 @@ export function registerGenerateHappyhorseVideoeditVideoJob(fs: Engine): void {
       taskType: "happyhorse_videoedit_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: { prompt, mode: "videoedit", sourceVideoIds, sourceImageIds },
       costHints: { duration: durationHint },
     });

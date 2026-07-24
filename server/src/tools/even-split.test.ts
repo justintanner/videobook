@@ -30,13 +30,13 @@ async function generateTestVideo(outputPath: string, durationSec: number): Promi
 
 async function uploadVideo(
   client: Client,
-  projectSlug: string,
+  bookId: string,
   videoPath: string,
 ): Promise<{ assetId: string; path: string }> {
   const data = (await readFile(videoPath)).toString("base64");
   const result = await client.callTool({
     name: "upload_file",
-    arguments: { project_slug: projectSlug, filename: "original.mp4", data },
+    arguments: { book_id: bookId, filename: "original.mp4", data },
   });
   return JSON.parse((result.content as TextContent)[0].text);
 }
@@ -248,7 +248,7 @@ describe("even_split tool (integration)", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "even-split-proj" },
+      arguments: { book_id: "even-split-proj" },
     });
   }, 120_000);
 
@@ -268,7 +268,7 @@ describe("even_split tool (integration)", () => {
       name: "split_video_by_durations",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "even-split-proj",
+        book_id: "even-split-proj",
       },
     });
 
@@ -286,7 +286,7 @@ describe("even_split tool (integration)", () => {
       name: "split_video_by_durations",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "even-split-proj",
+        book_id: "even-split-proj",
       },
     });
 
@@ -305,7 +305,7 @@ describe("even_split tool (integration)", () => {
     for (const chunk of parsed.chunks) {
       const manifest = await client.callTool({
         name: "asset_manifest",
-        arguments: { asset_id: chunk.asset_id, project_slug: "even-split-proj" },
+        arguments: { asset_id: chunk.asset_id, book_id: "even-split-proj" },
       });
       const path = join(JSON.parse((manifest.content as TextContent)[0].text).path, "original.mp4");
       const dur = await probeDuration(path);
@@ -316,7 +316,7 @@ describe("even_split tool (integration)", () => {
     // Source asset preserved.
     const sourceManifest = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: uploaded.assetId, project_slug: "even-split-proj" },
+      arguments: { asset_id: uploaded.assetId, book_id: "even-split-proj" },
     });
     expect(sourceManifest.isError).toBeFalsy();
   }, 120_000);
@@ -330,7 +330,7 @@ describe("even_split tool (integration)", () => {
       name: "split_video_by_durations",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "even-split-proj",
+        book_id: "even-split-proj",
         target_secs: [7, 7, 7],
       },
     });
@@ -346,7 +346,7 @@ describe("even_split tool (integration)", () => {
     for (const chunk of parsed.chunks) {
       const manifest = await client.callTool({
         name: "asset_manifest",
-        arguments: { asset_id: chunk.asset_id, project_slug: "even-split-proj" },
+        arguments: { asset_id: chunk.asset_id, book_id: "even-split-proj" },
       });
       const path = join(JSON.parse((manifest.content as TextContent)[0].text).path, "original.mp4");
       const dur = await probeDuration(path);
@@ -364,7 +364,7 @@ describe("even_split tool (integration)", () => {
       name: "split_video_by_durations",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "even-split-proj",
+        book_id: "even-split-proj",
         target_secs: ["10s"],
       },
     });
@@ -383,7 +383,7 @@ describe("even_split tool (integration)", () => {
       name: "split_video_by_durations",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "even-split-proj",
+        book_id: "even-split-proj",
         target_secs: ["10", "15"],
       },
     });
@@ -407,7 +407,7 @@ describe("even_split tool (integration)", () => {
       const chunk = parsed.chunks[i];
       const manifest = await client.callTool({
         name: "asset_manifest",
-        arguments: { asset_id: chunk.asset_id, project_slug: "even-split-proj" },
+        arguments: { asset_id: chunk.asset_id, book_id: "even-split-proj" },
       });
       const path = join(JSON.parse((manifest.content as TextContent)[0].text).path, "original.mp4");
       const dur = await probeDuration(path);
@@ -421,7 +421,7 @@ describe("even_split tool (integration)", () => {
       name: "split_video_by_durations",
       arguments: {
         asset_id: "vid-does-not-exist",
-        project_slug: "even-split-proj",
+        book_id: "even-split-proj",
       },
     });
 
@@ -432,7 +432,7 @@ describe("even_split tool (integration)", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "even-split-proj", filename: "photo.png", data },
+      arguments: { book_id: "even-split-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse((uploadResult.content as TextContent)[0].text);
 
@@ -440,7 +440,7 @@ describe("even_split tool (integration)", () => {
       name: "split_video_by_durations",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "even-split-proj",
+        book_id: "even-split-proj",
       },
     });
 
@@ -464,7 +464,7 @@ describe("even_split tool (integration)", () => {
         name: "split_video_by_durations",
         arguments: {
           asset_id: source.assetId,
-          project_slug: "even-split-proj",
+          book_id: "even-split-proj",
           target_secs: [7, 7, 7],
           destination: { asset_id: dest.assetId, filenames: ["s1.mp4", "s2.mp4", "s3.mp4"] },
         },
@@ -480,7 +480,7 @@ describe("even_split tool (integration)", () => {
 
       const manifest = await client.callTool({
         name: "asset_manifest",
-        arguments: { asset_id: dest.assetId, project_slug: "even-split-proj" },
+        arguments: { asset_id: dest.assetId, book_id: "even-split-proj" },
       });
       const data = JSON.parse((manifest.content as TextContent)[0].text);
       const names = new Set((data.files as Array<{ name: string }>).map((f) => f.name));
@@ -508,7 +508,7 @@ describe("even_split tool (integration)", () => {
         name: "split_video_by_durations",
         arguments: {
           asset_id: source.assetId,
-          project_slug: "even-split-proj",
+          book_id: "even-split-proj",
           target_secs: [7, 7, 7],
           destination: { asset_id: dest.assetId, filenames: ["s1.mp4", "s2.mp4"] },
         },
@@ -531,7 +531,7 @@ describe("even_split tool (integration)", () => {
         name: "split_video_by_durations",
         arguments: {
           asset_id: source.assetId,
-          project_slug: "even-split-proj",
+          book_id: "even-split-proj",
           target_secs: [7, 7],
           destination: { asset_id: dest.assetId, filenames: ["s1.mp4", "original.mp4"] },
         },
@@ -550,7 +550,7 @@ describe("even_split tool (integration)", () => {
         name: "split_video_by_durations",
         arguments: {
           asset_id: source.assetId,
-          project_slug: "even-split-proj",
+          book_id: "even-split-proj",
           target_secs: [7, 7],
           destination: { asset_id: "vid-does-not-exist", filenames: ["s1.mp4", "s2.mp4"] },
         },

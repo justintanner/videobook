@@ -12,7 +12,7 @@ import { queue } from "../queue.js";
 import { createTestClient } from "../test-client.js";
 
 const execFileAsync = promisify(execFile);
-const PROJECT_SLUG = "audio-mix-tool-test";
+const BOOK_ID = "audio-mix-tool-test";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -45,25 +45,17 @@ describe("audio_mix tool", () => {
     ]);
 
     fs = createEngineForTest(tempDir);
-    const project = await fs.projects.create(PROJECT_SLUG);
+    const project = await fs.projects.create(BOOK_ID);
     if (!project.ok) throw new Error(project.error.message);
-    const target = await fs.artifacts.create("aud", "target", PROJECT_SLUG);
-    const layer = await fs.artifacts.create("aud", "layer", PROJECT_SLUG);
+    const target = await fs.artifacts.create("aud", "target");
+    const layer = await fs.artifacts.create("aud", "layer");
     if (!target.ok) throw new Error(target.error.message);
     if (!layer.ok) throw new Error(layer.error.message);
     targetAssetId = target.value.slug;
     layerAssetId = layer.value.slug;
-    const targetWrite = await fs.files.write(
-      targetAssetId,
-      "original.wav",
-      await readFile(targetFixture),
-      PROJECT_SLUG,
+    const targetWrite = await fs.files.write(targetAssetId, "original.wav", await readFile(targetFixture)
     );
-    const layerWrite = await fs.files.write(
-      layerAssetId,
-      "original.wav",
-      await readFile(layerFixture),
-      PROJECT_SLUG,
+    const layerWrite = await fs.files.write(layerAssetId, "original.wav", await readFile(layerFixture)
     );
     if (!targetWrite.ok) throw new Error(targetWrite.error.message);
     if (!layerWrite.ok) throw new Error(layerWrite.error.message);
@@ -84,7 +76,7 @@ describe("audio_mix tool", () => {
         target_asset_id: targetAssetId,
         layer_asset_id: layerAssetId,
         volume: 30,
-        project_slug: PROJECT_SLUG,
+        book_id: BOOK_ID,
       },
     });
 
@@ -95,7 +87,7 @@ describe("audio_mix tool", () => {
       volume: 30,
       status: "completed",
     });
-    const manifest = await fs.files.manifest(targetAssetId, PROJECT_SLUG);
+    const manifest = await fs.files.manifest(targetAssetId);
     if (!manifest.ok) throw new Error(manifest.error.message);
     const targetFile = findAudioFile(manifest.value.files, targetAssetId);
     expect(targetFile?.name).toBe("original.wav");
@@ -104,7 +96,7 @@ describe("audio_mix tool", () => {
     const probe = await probeVideo(join(manifest.value.path, "original.wav"));
     expect(probe.hasAudio).toBe(true);
     expect(probe.audioDuration).toBeCloseTo(2, 1);
-    const waveform = await fs.metadata.waveforms.read(targetAssetId, PROJECT_SLUG);
+    const waveform = await fs.metadata.waveforms.read(targetAssetId);
     expect(waveform.ok).toBe(true);
   }, 30_000);
 
@@ -115,7 +107,7 @@ describe("audio_mix tool", () => {
         target_asset_id: targetAssetId,
         layer_asset_id: layerAssetId,
         volume: 101,
-        project_slug: PROJECT_SLUG,
+        book_id: BOOK_ID,
       },
     });
     expect(result.isError).toBe(true);

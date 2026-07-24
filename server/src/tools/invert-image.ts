@@ -29,12 +29,12 @@ export function invertImageDef(fs: Engine): ToolDef {
     description: "In-place inverts an img-* asset and regenerates crops.",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. img-my-photo)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
+      const { asset_id, book_id } = args as { asset_id: string; book_id: string };
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return { isError: true, content: [{ type: "text", text: manifestResult.error.message }] };
       }
@@ -47,7 +47,7 @@ export function invertImageDef(fs: Engine): ToolDef {
       const rawExt = imageFile.extension ?? extname(imageFile.name);
       const extWithDot = rawExt.startsWith(".") ? rawExt : `.${rawExt}`;
       
-      const readResult = await fs.files.read(asset_id, imageFile.name, project_slug);
+      const readResult = await fs.files.read(asset_id, imageFile.name);
       if (!readResult.ok) {
         return { isError: true, content: [{ type: "text", text: readResult.error.message }] };
       }
@@ -61,19 +61,19 @@ export function invertImageDef(fs: Engine): ToolDef {
         return { isError: true, content: [{ type: "text", text: `Invert failed: ${err instanceof Error ? err.message : String(err)}` }] };
       }
 
-      const writeResult = await fs.files.write(asset_id, imageFile.name, inverted, project_slug);
+      const writeResult = await fs.files.write(asset_id, imageFile.name, inverted);
       if (!writeResult.ok) {
         return { isError: true, content: [{ type: "text", text: writeResult.error.message }] };
       }
 
-      const metadataResult = await fs.metadata.artifacts.read(asset_id, "original", project_slug);
+      const metadataResult = await fs.metadata.artifacts.read(asset_id, "original");
       const provenance = metadataResult.ok && metadataResult.value ? metadataResult.value : { origin: "invert_image" };
 
       const jobId = `invert-${asset_id}-${Date.now()}`;
       await queue.enqueueAndWait(jobId, {
         type: "process_image",
         assetId: asset_id,
-        projectSlug: project_slug,
+        bookId: book_id,
         extension: extWithDot,
         provenance,
       });

@@ -26,11 +26,11 @@ export function reverseVideoDef(fs: Engine): ToolDef {
     description: "Reverse video playback (play backwards). Toggle operation — reversing twice restores original. Max 300s due to memory buffering.",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-my-video)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const { asset_id, book_id } = args as { asset_id: string; book_id: string };
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -72,7 +72,7 @@ export function reverseVideoDef(fs: Engine): ToolDef {
         hasAudio,
         assetId: asset_id,
         assetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
       } as unknown as Record<string, unknown>);
 
       return {

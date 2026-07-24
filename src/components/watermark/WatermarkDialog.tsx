@@ -18,7 +18,7 @@ interface WatermarkDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   item: MediaItem | null;
-  projectSlug: string | undefined;
+  bookId: string | undefined;
   callTool: UseMcpResult['callTool'];
   onApply: (value: WatermarkApplyValue) => void;
 }
@@ -49,11 +49,11 @@ const POSITION_LABEL: Record<OsgPosition, string> = {
 
 export function WatermarkDialog(props: WatermarkDialogProps) {
   if (!props.open) return null;
-  const key = `${props.projectSlug ?? ''}:${props.item?.id ?? ''}`;
+  const key = `${props.bookId ?? ''}:${props.item?.id ?? ''}`;
   return <WatermarkDialogContent key={key} {...props} />;
 }
 
-function WatermarkDialogContent({ onOpenChange, item, projectSlug, callTool, onApply }: WatermarkDialogProps) {
+function WatermarkDialogContent({ onOpenChange, item, bookId, callTool, onApply }: WatermarkDialogProps) {
   const [handle, setHandle] = useState('');
   const [recent, setRecent] = useState<string[]>([]);
   const [position, setPosition] = useState<OsgPosition>('bottom-right');
@@ -82,7 +82,7 @@ function WatermarkDialogContent({ onOpenChange, item, projectSlug, callTool, onA
   }, [callTool]);
 
   const cleanHandle = handle.trim().replace(/^@/, '');
-  const canApply = !!item && !!projectSlug && cleanHandle.length > 0;
+  const canApply = !!item && !!bookId && cleanHandle.length > 0;
 
   const apply = () => {
     if (!canApply || !item) return;

@@ -22,16 +22,16 @@ describe("switch_project tool", () => {
   it("switches to an existing project", async () => {
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "alpha" },
+      arguments: { book_id: "alpha" },
     });
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "beta" },
+      arguments: { book_id: "beta" },
     });
 
     const result = await client.callTool({
       name: "switch_project",
-      arguments: { project_slug: "alpha" },
+      arguments: { book_id: "alpha" },
     });
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
@@ -52,7 +52,7 @@ describe("switch_project tool", () => {
   it("returns error for nonexistent project", async () => {
     const result = await client.callTool({
       name: "switch_project",
-      arguments: { project_slug: "no-such-project" },
+      arguments: { book_id: "no-such-project" },
     });
     expect(result.isError).toBe(true);
   });

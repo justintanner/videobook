@@ -17,7 +17,7 @@ const MAX_TEXT = 280;
 interface PostComposerScreenProps {
   item: MediaItem | null;
   initialText: string;
-  projectSlug: string | undefined;
+  bookId: string | undefined;
   callTool: UseMcpResult['callTool'];
   onClose: () => void;
 }
@@ -75,7 +75,7 @@ function localDatetimeNowPlus(minutes: number): string {
 export function PostComposerScreen({
   item,
   initialText,
-  projectSlug,
+  bookId,
   callTool,
   onClose,
 }: PostComposerScreenProps) {
@@ -89,8 +89,8 @@ export function PostComposerScreen({
   const userPickedOrientationRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const history = usePromptHistory(callTool, 'post', projectSlug);
-  const mentionCheck = useVerifyMentions(callTool, projectSlug);
+  const history = usePromptHistory(callTool, 'post', bookId);
+  const mentionCheck = useVerifyMentions(callTool, bookId);
   const mentions = useMemo(() => extractXMentions(text), [text]);
   const mentionVerdicts = useMemo(
     () => mentionCheck.verdicts.filter((verdict) =>
@@ -115,7 +115,7 @@ export function PostComposerScreen({
   const overLimit = charCount > MAX_TEXT;
   const hasMedia = !!item;
   const needsXConnect = xStatus !== null && !xStatus.connected;
-  const canSubmit = !submitting && hasMedia && !overLimit && !!projectSlug && !needsXConnect;
+  const canSubmit = !submitting && hasMedia && !overLimit && !!bookId && !needsXConnect;
 
   const previewKind = useMemo(() => {
     if (!item) return null;
@@ -125,14 +125,14 @@ export function PostComposerScreen({
   }, [item]);
 
   const submit = async () => {
-    if (!canSubmit || !item || !projectSlug) return;
+    if (!canSubmit || !item || !bookId) return;
     setSubmitting(true);
     setError(null);
     try {
       const trimmedText = text.trim();
       const args: Record<string, unknown> = {
         asset_id: item.id,
-        project_slug: projectSlug,
+        book_id: bookId,
         platform: 'x',
       };
       if (trimmedText.length > 0) args.text = trimmedText;

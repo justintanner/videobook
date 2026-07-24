@@ -54,7 +54,7 @@ export function setCharacterMetadataDef(fs: Engine): ToolDef {
       "Accepts a JSON object, a JSON-stringified object, or plain-text notes " +
       "(stored as { notes: \"...\" }).",
     schema: {
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       char_asset_id: z.string().describe("Character asset ID (must start with char-)"),
       metadata: z
         .union([z.string(), z.record(z.string(), z.unknown())])
@@ -63,8 +63,8 @@ export function setCharacterMetadataDef(fs: Engine): ToolDef {
         ),
     },
     handler: async (args) => {
-      const { project_slug, char_asset_id, metadata } = args as {
-        project_slug: string;
+      const { book_id: _book_id, char_asset_id, metadata } = args as {
+        book_id: string;
         char_asset_id: string;
         metadata: string | Record<string, unknown>;
       };
@@ -85,7 +85,7 @@ export function setCharacterMetadataDef(fs: Engine): ToolDef {
         };
       }
 
-      const writeResult = await fs.metadata.artifacts.write(id, "character", parsed.value, project_slug);
+      const writeResult = await fs.metadata.artifacts.write(id, "character", parsed.value);
       if (!writeResult.ok) {
         return {
           isError: true as const,

@@ -20,10 +20,6 @@ function cleanAssetId(value: string): string {
   return value.trim().replace(/^@/, "");
 }
 
-function isOrientation(value: unknown): value is Orientation {
-  return value === "landscape" || value === "portrait" || value === "square";
-}
-
 function orientationForDimensions(width: number, height: number): Orientation {
   if (width === height) return "square";
   return width > height ? "landscape" : "portrait";
@@ -42,20 +38,16 @@ function findCanonicalVideo(files: ArtifactManifestFile[]): ArtifactManifestFile
   return files.find((file) => /^original\.(mp4|mov)$/i.test(file.name)) ?? null;
 }
 
-async function timelineOrientation(fs: Engine, projectSlug: string): Promise<Orientation | null> {
-  const result = await fs.metadata.projects.read<Record<string, unknown> | unknown[]>("timeline", projectSlug);
-  if (!result.ok || Array.isArray(result.value)) return null;
-  if (isOrientation(result.value.currentOrientation)) return result.value.currentOrientation;
-  return isOrientation(result.value.render) ? result.value.render : null;
+function timelineOrientation(fs: Engine): Orientation {
+  return fs.timeline.get().render;
 }
 
 async function findFinalVideo(
   fs: Engine,
-  projectSlug: string,
   files: ArtifactManifestFile[],
   requested?: Orientation,
 ): Promise<{ file: ArtifactManifestFile; orientation: Orientation } | null> {
-  const preferred = requested ?? await timelineOrientation(fs, projectSlug);
+  const preferred = requested ?? timelineOrientation(fs);
   const candidates: Orientation[] = [
     ...(preferred ? [preferred] : []),
     "landscape",
@@ -78,7 +70,7 @@ export function injectFirstFrameDef(fs: Engine): ToolDef {
     schema: {
       target_asset_id: z.string().describe("Target vid-* asset or final"),
       image_asset_id: z.string().describe("Source img-* asset"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       orientation: z
         .enum(["landscape", "portrait", "square"])
         .optional()
@@ -88,12 +80,12 @@ export function injectFirstFrameDef(fs: Engine): ToolDef {
       const {
         target_asset_id,
         image_asset_id,
-        project_slug,
+        book_id,
         orientation,
       } = args as {
         target_asset_id: string;
         image_asset_id: string;
-        project_slug: string;
+        book_id: string;
         orientation?: Orientation;
       };
       const targetAssetId = cleanAssetId(target_asset_id);
@@ -110,8 +102,8 @@ export function injectFirstFrameDef(fs: Engine): ToolDef {
       }
 
       const [targetManifest, imageManifest] = await Promise.all([
-        fs.files.manifest(targetAssetId, project_slug),
-        fs.files.manifest(imageAssetId, project_slug),
+        fs.files.manifest(targetAssetId),
+        fs.files.manifest(imageAssetId),
       ]);
       if (!targetManifest.ok) return toolError(targetManifest.error.message);
       if (!imageManifest.ok) return toolError(imageManifest.error.message);
@@ -121,7 +113,6 @@ export function injectFirstFrameDef(fs: Engine): ToolDef {
       if (targetAssetId === "final") {
         const resolved = await findFinalVideo(
           fs,
-          project_slug,
           targetManifest.value.files,
           orientation,
         );
@@ -157,7 +148,7 @@ export function injectFirstFrameDef(fs: Engine): ToolDef {
         outputPath: join(targetManifest.value.path, outputFilename),
         imageAssetId,
         imagePath: join(imageManifest.value.path, imageFile.name),
-        projectSlug: project_slug,
+        bookId: book_id,
         orientation: targetAssetId === "final" ? targetOrientation : null,
       });
 

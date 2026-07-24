@@ -16,20 +16,20 @@ type IsolateVocalsPayload = {
   audioFilename: string;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
   isAudioAsset: boolean;
 };
 
 export function registerIsolateVocalsJob(fs: Engine): void {
   registerJobHandler("isolate_vocals", async (payload, ctx) => {
     const {
-      audioFilename, assetId, assetDir, projectSlug, isAudioAsset,
+      audioFilename, assetId, assetDir, bookId, isAudioAsset,
     } = payload as IsolateVocalsPayload;
 
     requireApiKey("KIE_API_KEY");
 
     // Read audio file from asset
-    const readResult = await fs.files.read(assetId, audioFilename, projectSlug);
+    const readResult = await fs.files.read(assetId, audioFilename);
     if (!readResult.ok) throw new Error(readResult.error.message);
     const audioBuffer = Buffer.from(readResult.value);
 
@@ -77,7 +77,7 @@ export function registerIsolateVocalsJob(fs: Engine): void {
       taskType: "isolate_vocals",
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
       meta: {
         isAudioAsset,
         ...(originalDuration !== undefined ? { originalDuration } : {}),

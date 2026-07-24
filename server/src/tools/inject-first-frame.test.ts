@@ -61,14 +61,14 @@ async function generateImage(outputPath: string): Promise<void> {
 
 async function upload(
   client: Client,
-  projectSlug: string,
+  bookId: string,
   filename: string,
   filePath: string,
 ): Promise<UploadedAsset> {
   const result = await client.callTool({
     name: "upload_file",
     arguments: {
-      project_slug: projectSlug,
+      book_id: bookId,
       filename,
       data: (await readFile(filePath)).toString("base64"),
     },
@@ -175,9 +175,9 @@ async function assetHash(
   fs: Engine,
   assetId: string,
   filename: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<string> {
-  const result = await fs.files.read(assetId, filename, projectSlug);
+  const result = await fs.files.read(assetId, filename);
   if (!result.ok) throw new Error(result.error.message);
   return createHash("sha256").update(result.value).digest("hex");
 }
@@ -189,7 +189,7 @@ describe("inject_first_frame tool", () => {
   let fixtureDir: string;
   let videoFixture: string;
   let imageFixture: string;
-  const projectSlug = "inject-first-frame-proj";
+  const bookId = "inject-first-frame-proj";
 
   beforeAll(async () => {
     await queue.start();
@@ -213,7 +213,7 @@ describe("inject_first_frame tool", () => {
     fs = createEngineForTest(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: projectSlug },
+      arguments: { book_id: bookId },
     });
   }, 60_000);
 
@@ -224,8 +224,8 @@ describe("inject_first_frame tool", () => {
   }, 60_000);
 
   it("replaces only frame zero of a vid asset and preserves encoded audio and timing", async () => {
-    const video = await upload(client, projectSlug, "blue.mp4", videoFixture);
-    const image = await upload(client, projectSlug, "red.png", imageFixture);
+    const video = await upload(client, bookId, "blue.mp4", videoFixture);
+    const image = await upload(client, bookId, "red.png", imageFixture);
     const videoPath = join(video.path, "original.mp4");
     const beforeProbe = await probeSummary(videoPath);
     const beforeFrameCount = await frameCount(videoPath);
@@ -236,7 +236,7 @@ describe("inject_first_frame tool", () => {
       arguments: {
         target_asset_id: `@${video.assetId}`,
         image_asset_id: `@${image.assetId}`,
-        project_slug: projectSlug,
+        book_id: bookId,
       },
     });
 
@@ -264,18 +264,18 @@ describe("inject_first_frame tool", () => {
   }, 120_000);
 
   it("uses the active final orientation and leaves other final outputs untouched", async () => {
-    const video = await upload(client, projectSlug, "blue.mp4", videoFixture);
-    const image = await upload(client, projectSlug, "red.png", imageFixture);
-    const original = await fs.files.read(video.assetId, "original.mp4", projectSlug);
+    const video = await upload(client, bookId, "blue.mp4", videoFixture);
+    const image = await upload(client, bookId, "red.png", imageFixture);
+    const original = await fs.files.read(video.assetId, "original.mp4");
     if (!original.ok) throw new Error(original.error.message);
     const writes = await Promise.all([
-      fs.files.write(video.assetId, "landscape.mp4", original.value, projectSlug),
-      fs.files.write(video.assetId, "portrait.mp4", original.value, projectSlug),
-      fs.metadata.projects.write("timeline", {
+      fs.files.write(video.assetId, "landscape.mp4", original.value),
+      fs.files.write(video.assetId, "portrait.mp4", original.value),
+      fs.metadata.book.write("timeline", {
         slots: [{ slug: video.assetId }],
         render: "portrait",
         currentOrientation: "portrait",
-      }, projectSlug),
+      }),
     ]);
     for (const write of writes) {
       if (!write.ok) throw new Error(write.error.message);
@@ -284,27 +284,27 @@ describe("inject_first_frame tool", () => {
     for (const orientation of ["landscape", "portrait"] as const) {
       const render = await client.callTool({
         name: "render_timeline",
-        arguments: { project_slug: projectSlug, orientation },
+        arguments: { book_id: bookId, orientation },
       });
       if (render.isError) throw new Error((render.content as TextContent)[0].text);
       const renderResult = JSON.parse((render.content as TextContent)[0].text) as Record<string, unknown>;
       await waitForJob(String(renderResult.job_id));
     }
 
-    const finalManifest = await fs.files.manifest("final", projectSlug);
+    const finalManifest = await fs.files.manifest("final");
     if (!finalManifest.ok) throw new Error(finalManifest.error.message);
     const portraitPath = join(finalManifest.value.path, "timeline_portrait.mp4");
     const beforeProbe = await probeSummary(portraitPath);
     const beforeAudioHash = await audioPacketHash(portraitPath);
     const beforeFrameCount = await frameCount(portraitPath);
-    const landscapeHash = await assetHash(fs, "final", "timeline_landscape.mp4", projectSlug);
+    const landscapeHash = await assetHash(fs, "final", "timeline_landscape.mp4", bookId);
 
     const result = await client.callTool({
       name: "inject_first_frame",
       arguments: {
         target_asset_id: "final",
         image_asset_id: image.assetId,
-        project_slug: projectSlug,
+        book_id: bookId,
       },
     });
 
@@ -320,7 +320,7 @@ describe("inject_first_frame tool", () => {
     expect(afterProbe.duration).toBeCloseTo(beforeProbe.duration, 2);
     expect(afterProbe.videoDuration).toBeCloseTo(beforeProbe.videoDuration, 2);
     expect(afterProbe.audioDuration).toBeCloseTo(beforeProbe.audioDuration!, 2);
-    expect(await assetHash(fs, "final", "timeline_landscape.mp4", projectSlug)).toBe(landscapeHash);
+    expect(await assetHash(fs, "final", "timeline_landscape.mp4", bookId)).toBe(landscapeHash);
 
     const first = await frameColor(portraitPath, 0, tempDir, "final-first");
     const second = await frameColor(portraitPath, 1, tempDir, "final-second");
@@ -331,15 +331,15 @@ describe("inject_first_frame tool", () => {
   }, 120_000);
 
   it("rejects invalid target, image, and orientation combinations", async () => {
-    const video = await upload(client, projectSlug, "blue.mp4", videoFixture);
-    const image = await upload(client, projectSlug, "red.png", imageFixture);
+    const video = await upload(client, bookId, "blue.mp4", videoFixture);
+    const image = await upload(client, bookId, "red.png", imageFixture);
 
     const invalidTarget = await client.callTool({
       name: "inject_first_frame",
       arguments: {
         target_asset_id: image.assetId,
         image_asset_id: image.assetId,
-        project_slug: projectSlug,
+        book_id: bookId,
       },
     });
     expect(invalidTarget.isError).toBe(true);
@@ -349,7 +349,7 @@ describe("inject_first_frame tool", () => {
       arguments: {
         target_asset_id: video.assetId,
         image_asset_id: video.assetId,
-        project_slug: projectSlug,
+        book_id: bookId,
       },
     });
     expect(invalidImage.isError).toBe(true);
@@ -359,7 +359,7 @@ describe("inject_first_frame tool", () => {
       arguments: {
         target_asset_id: video.assetId,
         image_asset_id: image.assetId,
-        project_slug: projectSlug,
+        book_id: bookId,
         orientation: "portrait",
       },
     });

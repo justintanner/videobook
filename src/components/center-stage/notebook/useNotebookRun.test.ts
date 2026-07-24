@@ -50,7 +50,7 @@ describe('submitNotebookGeneration lifecycle', () => {
     const callTool = async (name: string, args: Record<string, unknown>) => {
       callToolSeen = true
       expect(name).toBe('generate_image')
-      expect(args.project_slug).toBe('demo')
+      expect(args.book_id).toBe('demo')
       expect(args.prompt).toBe('a fox')
       duringCallTool = 'pending'
       const result = await toolPromise
@@ -72,7 +72,7 @@ describe('submitNotebookGeneration lifecycle', () => {
       option,
       provider: 'google',
       values: { prompt: 'a fox' },
-      projectSlug: 'demo',
+      bookId: 'demo',
       callTool: callTool as never,
       getDefinition: () => definition,
       replaceDefinition,
@@ -111,7 +111,7 @@ describe('submitNotebookGeneration lifecycle', () => {
       option,
       provider: 'google',
       values: { prompt: 'x' },
-      projectSlug: 'demo',
+      bookId: 'demo',
       callTool: (async () => ({
         isError: true,
         content: [{ type: 'text', text: 'quota exceeded' }],

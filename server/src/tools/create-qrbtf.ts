@@ -115,29 +115,29 @@ export async function buildQrbtfPng(
 
 async function persistQrbtfAsset(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   assetName: string,
   files: QrbtfFiles,
   metadata: Record<string, unknown>,
 ): Promise<{ ok: true; assetId: string } | { ok: false; error: string }> {
-  const created = await fs.artifacts.create("img", assetName, projectSlug);
+  const created = await fs.artifacts.create("img", assetName);
   if (!created.ok) return { ok: false, error: `Failed to create image asset: ${created.error.message}` };
   const assetId = created.value.slug;
   const writes = await Promise.all([
-    fs.files.write(assetId, "original.png", files.original, projectSlug),
-    fs.files.write(assetId, "landscape.jpg", files.landscape, projectSlug),
-    fs.files.write(assetId, "portrait.jpg", files.portrait, projectSlug),
-    fs.files.write(assetId, "square.jpg", files.square, projectSlug),
+    fs.files.write(assetId, "original.png", files.original),
+    fs.files.write(assetId, "landscape.jpg", files.landscape),
+    fs.files.write(assetId, "portrait.jpg", files.portrait),
+    fs.files.write(assetId, "square.jpg", files.square),
   ]);
   const writeFailure = writes.find((result) => !result.ok);
   if (writeFailure && !writeFailure.ok) {
-    await fs.artifacts.delete(assetId, projectSlug).catch(() => undefined);
+    await fs.artifacts.delete(assetId).catch(() => undefined);
     return { ok: false, error: writeFailure.error.message };
   }
 
-  const metadataResult = await fs.metadata.artifacts.write(assetId, "original", metadata, projectSlug);
+  const metadataResult = await fs.metadata.artifacts.write(assetId, "original", metadata);
   if (!metadataResult.ok) {
-    await fs.artifacts.delete(assetId, projectSlug).catch(() => undefined);
+    await fs.artifacts.delete(assetId).catch(() => undefined);
     return { ok: false, error: metadataResult.error.message };
   }
   return { ok: true, assetId };
@@ -149,7 +149,7 @@ export function createQrbtfDef(fs: Engine): ToolDef {
     description:
       "Generate parametric QR codes in artistic styles (normal, line, dsj, bubble, func) from the qrbtf library. Renders SVG and rasterizes to image assets. Black background with bright modules by default.",
     schema: {
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       value: z.string().min(1).describe("Text or URL encoded in the QR code"),
       style: z
         .enum(["normal", "line", "dsj", "bubble", "func"])
@@ -198,7 +198,7 @@ export function createQrbtfDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const {
-        project_slug,
+        book_id,
         value,
         style,
         point_type,
@@ -212,7 +212,7 @@ export function createQrbtfDef(fs: Engine): ToolDef {
         size,
         name,
       } = args as {
-        project_slug: string;
+        book_id: string;
         value: string;
         style?: QrbtfStyle;
         point_type?: "rect" | "round" | "rand";
@@ -276,7 +276,7 @@ export function createQrbtfDef(fs: Engine): ToolDef {
 
       const resultAsset = await persistQrbtfAsset(
         fs,
-        project_slug,
+        book_id,
         `qrbtf-${stem}-${stamp}`,
         files,
         metadata,

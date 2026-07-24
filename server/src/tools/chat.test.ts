@@ -66,7 +66,7 @@ describe("chat tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -85,7 +85,7 @@ describe("chat tool", () => {
       name: "chat",
       arguments: {
         prompt: "do something with @nonexistent-asset",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
     expect(result.isError).toBe(true);
@@ -99,7 +99,7 @@ describe("chat tool", () => {
       name: "chat",
       arguments: {
         prompt: "generate something cool",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
     expect(result.isError).toBe(true);
@@ -112,7 +112,7 @@ describe("chat tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "sunset.png", data },
+      arguments: { book_id: "test-proj", filename: "sunset.png", data },
     });
 
     delete process.env.KIE_API_KEY;
@@ -120,7 +120,7 @@ describe("chat tool", () => {
       name: "chat",
       arguments: {
         prompt: "do something with @img-sunset",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -136,7 +136,7 @@ describe("chat tool", () => {
       name: "chat",
       arguments: {
         prompt: "combine @img-foo and @vid-bar",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
     expect(result.isError).toBe(true);
@@ -152,7 +152,7 @@ describe("chat tool", () => {
       name: "chat",
       arguments: {
         prompt: "make me a cool video",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
     expect(result.isError).toBe(true);
@@ -245,18 +245,14 @@ describe("enrichAssetContext", () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-chat-enrich-"));
     const fs = createEngineForTest(tempDir);
     await fs.projects.create("enrich-proj");
-    const asset = await fs.artifacts.create("vid", "og", "enrich-proj");
+    const asset = await fs.artifacts.create("vid", "og");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
-    await fs.metadata.artifacts.write(
-      asset.value.slug,
-      "original",
-      {
+    await fs.metadata.artifacts.write(asset.value.slug, "original", {
         origin: "download",
         source_url: "https://www.youtube.com/watch?v=b-3853ow72Q",
-      },
-      "enrich-proj",
+      }
     );
 
     const rows = await enrichAssetContext(
@@ -291,15 +287,15 @@ describe("loadScriptContentsForChat", () => {
     const project = await fs.projects.create("chat-script-proj");
     expect(project.ok).toBe(true);
 
-    const script = await fs.artifacts.create("script", "scene-one", "chat-script-proj");
+    const script = await fs.artifacts.create("script", "scene-one");
     expect(script.ok).toBe(true);
     if (!script.ok) return;
 
     const body = "A pig sits upright on a red stool.";
-    const wrote = await fs.files.write(script.value.slug, SCRIPT_FILENAME, body, "chat-script-proj");
+    const wrote = await fs.files.write(script.value.slug, SCRIPT_FILENAME, body);
     expect(wrote.ok).toBe(true);
 
-    const decoy = await fs.files.write(script.value.slug, "index.md", "WRONG PLAN FILE", "chat-script-proj");
+    const decoy = await fs.files.write(script.value.slug, "index.md", "WRONG PLAN FILE");
     expect(decoy.ok).toBe(true);
 
     const contents = await loadScriptContentsForChat(
@@ -324,9 +320,9 @@ describe("loadScriptContentsForChat", () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-chat-script-bad-"));
     const fs = createEngineForTest(tempDir);
     await fs.projects.create("chat-script-proj");
-    const script = await fs.artifacts.create("script", "orphan", "chat-script-proj");
+    const script = await fs.artifacts.create("script", "orphan");
     if (!script.ok) throw new Error(script.error.message);
-    await fs.files.write(script.value.slug, "index.md", "should not be loaded", "chat-script-proj");
+    await fs.files.write(script.value.slug, "index.md", "should not be loaded");
 
     const contents = await loadScriptContentsForChat(
       fs,

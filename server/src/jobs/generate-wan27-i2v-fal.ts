@@ -10,7 +10,7 @@ type Payload = {
   type: "generate_wan27_i2v_fal";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   firstFrame: FrameInput;
   endFrame?: FrameInput;
@@ -26,11 +26,11 @@ type Payload = {
 export function registerGenerateWan27I2vFalJob(fs: Engine): void {
   registerJobHandler("generate_wan27_i2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.projectSlug, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.bookId, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
-      const image_url = await uploadAssetToFal(fs, p.firstFrame.assetId, p.firstFrame.filename, p.projectSlug);
+      const image_url = await uploadAssetToFal(fs, p.firstFrame.assetId, p.firstFrame.filename, p.bookId);
       const end_image_url = p.endFrame
-        ? await uploadAssetToFal(fs, p.endFrame.assetId, p.endFrame.filename, p.projectSlug)
+        ? await uploadAssetToFal(fs, p.endFrame.assetId, p.endFrame.filename, p.bookId)
         : undefined;
   
       const input: Record<string, unknown> = {
@@ -47,7 +47,7 @@ export function registerGenerateWan27I2vFalJob(fs: Engine): void {
   
       const taskId = await submitFalJob({
         fs,
-        projectSlug: p.projectSlug,
+        bookId: p.bookId,
         assetId: p.vidAssetId,
         assetDir: p.vidAssetDir,
         endpointId: "fal-ai/wan/v2.7/image-to-video",

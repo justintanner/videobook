@@ -12,7 +12,7 @@ export interface RewriteOptions {
 }
 
 export interface UseRewriteScriptResult {
-  rewrite: (assetId: string, projectSlug: string, opts: RewriteOptions) => Promise<boolean>;
+  rewrite: (assetId: string, bookId: string, opts: RewriteOptions) => Promise<boolean>;
   rewriting: boolean;
   error: string | undefined;
 }
@@ -20,7 +20,7 @@ export interface UseRewriteScriptResult {
 interface ToolArgs {
   asset_id: string;
   variant: RewriteVariant;
-  project_slug: string;
+  book_id: string;
   platform?: RewritePlatform;
   custom_prompt?: string;
 }
@@ -41,7 +41,7 @@ export function useRewriteScript(callTool: UseMcpResult["callTool"]): UseRewrite
   }, [callTool]);
   const inFlightRef = useRef(false);
 
-  const rewrite = useCallback(async (assetId: string, projectSlug: string, opts: RewriteOptions): Promise<boolean> => {
+  const rewrite = useCallback(async (assetId: string, bookId: string, opts: RewriteOptions): Promise<boolean> => {
     if (inFlightRef.current) return false;
     inFlightRef.current = true;
     setRewriting(true);
@@ -50,7 +50,7 @@ export function useRewriteScript(callTool: UseMcpResult["callTool"]): UseRewrite
       const args: ToolArgs = {
         asset_id: assetId,
         variant: opts.variant,
-        project_slug: projectSlug,
+        book_id: bookId,
       };
       if (opts.platform) args.platform = opts.platform;
       if (opts.customPrompt && opts.customPrompt.trim().length > 0) {
@@ -71,7 +71,7 @@ export function useRewriteScript(callTool: UseMcpResult["callTool"]): UseRewrite
         description: assetId,
         duration: 2000,
       });
-      await callToolRef.current("reconcile_project_work", { project_slug: projectSlug });
+      await callToolRef.current("reconcile_project_work", { book_id: bookId });
       return true;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);

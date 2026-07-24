@@ -17,7 +17,7 @@ import {
 } from "./extend-audio.js";
 
 const execFileAsync = promisify(execFile);
-const PROJECT_SLUG = "extend-audio-test";
+const BOOK_ID = "extend-audio-test";
 
 type CapturedRequest = {
   contentType: string;
@@ -118,7 +118,7 @@ describe("extend audio ElevenLabs job", () => {
     });
 
     fs = createEngineForTest(join(tempDir, "projects"));
-    const project = await fs.projects.create(PROJECT_SLUG);
+    const project = await fs.projects.create(BOOK_ID);
     if (!project.ok) throw new Error(project.error.message);
   });
 
@@ -129,11 +129,11 @@ describe("extend audio ElevenLabs job", () => {
   });
 
   it("describes the source, generates its continuation, crossfades it, and writes a 15s aud-* asset", async () => {
-    const source = await fs.artifacts.create("aud", "source", PROJECT_SLUG);
-    const output = await fs.artifacts.create("aud", "extended", PROJECT_SLUG);
+    const source = await fs.artifacts.create("aud", "source");
+    const output = await fs.artifacts.create("aud", "extended");
     if (!source.ok) throw new Error(source.error.message);
     if (!output.ok) throw new Error(output.error.message);
-    const sourceWrite = await fs.files.write(source.value.slug, "original.mp3", sourceAudio, PROJECT_SLUG);
+    const sourceWrite = await fs.files.write(source.value.slug, "original.mp3", sourceAudio);
     if (!sourceWrite.ok) throw new Error(sourceWrite.error.message);
 
     const port = await listen(server);
@@ -149,7 +149,7 @@ describe("extend audio ElevenLabs job", () => {
       sourceFilename: "original.mp3",
       sourceDurationMs: 6_048,
       targetDurationMs: 15_000,
-      projectSlug: PROJECT_SLUG,
+      bookId: BOOK_ID,
     };
 
     const result = await extendAudioWithElevenLabs(fs, payload, provider);
@@ -184,18 +184,18 @@ describe("extend audio ElevenLabs job", () => {
     expect(soundBody.text).toContain("No intro, unrelated sound, fade-in, early ending, or silent tail");
     expect(soundBody.text?.length).toBeLessThanOrEqual(450);
 
-    const written = await fs.files.read(output.value.slug, "original.mp3", PROJECT_SLUG);
+    const written = await fs.files.read(output.value.slug, "original.mp3");
     expect(written.ok).toBe(true);
     if (!written.ok) return;
     expect(written.value).not.toEqual(sourceAudio);
     expect(written.value).not.toEqual(continuationAudio);
-    const manifest = await fs.files.manifest(output.value.slug, PROJECT_SLUG, { includeDotfiles: true });
+    const manifest = await fs.files.manifest(output.value.slug, BOOK_ID);
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
     const probe = await probeVideo(join(manifest.value.path, "original.mp3"));
     expect(probe.audioDuration).toBeCloseTo(15, 1);
 
-    const metadata = await fs.metadata.artifacts.read(output.value.slug, "original", PROJECT_SLUG);
+    const metadata = await fs.metadata.artifacts.read(output.value.slug, "original");
     expect(metadata.ok).toBe(true);
     if (metadata.ok) {
       expect(metadata.value).toMatchObject({
@@ -216,11 +216,11 @@ describe("extend audio ElevenLabs job", () => {
   }, 30_000);
 
   it("leads the sound generation prompt with a continuation direction like add outro music", async () => {
-    const source = await fs.artifacts.create("aud", "source", PROJECT_SLUG);
-    const output = await fs.artifacts.create("aud", "extended", PROJECT_SLUG);
+    const source = await fs.artifacts.create("aud", "source");
+    const output = await fs.artifacts.create("aud", "extended");
     if (!source.ok) throw new Error(source.error.message);
     if (!output.ok) throw new Error(output.error.message);
-    const sourceWrite = await fs.files.write(source.value.slug, "original.mp3", sourceAudio, PROJECT_SLUG);
+    const sourceWrite = await fs.files.write(source.value.slug, "original.mp3", sourceAudio);
     if (!sourceWrite.ok) throw new Error(sourceWrite.error.message);
 
     const port = await listen(server);
@@ -237,7 +237,7 @@ describe("extend audio ElevenLabs job", () => {
       sourceDurationMs: 6_048,
       targetDurationMs: 15_000,
       continuationPrompt: "add outro music",
-      projectSlug: PROJECT_SLUG,
+      bookId: BOOK_ID,
     };
 
     const result = await extendAudioWithElevenLabs(fs, payload, provider);
@@ -249,7 +249,7 @@ describe("extend audio ElevenLabs job", () => {
     expect(soundBody.text).not.toContain("unrelated sound");
     expect(soundBody.text?.length).toBeLessThanOrEqual(450);
 
-    const metadata = await fs.metadata.artifacts.read(output.value.slug, "original", PROJECT_SLUG);
+    const metadata = await fs.metadata.artifacts.read(output.value.slug, "original");
     expect(metadata.ok).toBe(true);
     if (metadata.ok) {
       expect(metadata.value).toMatchObject({ continuation_prompt: "add outro music" });

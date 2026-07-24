@@ -26,7 +26,7 @@ describe("generate_nano_banana_2_lite_fal / generate_nano_banana_2_lite_edit_fal
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -46,7 +46,7 @@ describe("generate_nano_banana_2_lite_fal / generate_nano_banana_2_lite_edit_fal
       name: "generate_fal_nano_banana_2_lite_text_to_image",
       arguments: {
         prompt: "a beautiful sunset",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -59,7 +59,7 @@ describe("generate_nano_banana_2_lite_fal / generate_nano_banana_2_lite_edit_fal
       name: "generate_fal_nano_banana_2_lite_text_to_image",
       arguments: {
         prompt: "a beautiful sunset",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         aspect_ratio: "16:9",
       },
     });
@@ -73,15 +73,15 @@ describe("generate_nano_banana_2_lite_fal / generate_nano_banana_2_lite_edit_fal
 
   it("enqueues generate_nano_banana_2_lite_edit_fal job (image-to-image)", async () => {
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "ref-img", "test-proj");
+    const asset = await fs.artifacts.create("img", "ref-img");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "original.png", await makePng(), "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", await makePng());
 
     const result = await client.callTool({
       name: "generate_fal_nano_banana_2_lite_edit_image",
       arguments: {
         prompt: "add a sunset",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: [`@${asset.value.slug}`],
       },
     });

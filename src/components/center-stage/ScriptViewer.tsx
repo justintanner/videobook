@@ -54,9 +54,9 @@ function getCurrentLineAtCursor(text: string, cursorPos: number): { line: string
   return { line: text.slice(lineStart, cursorPos), lineStart };
 }
 
-export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, callTool, onClose }: {
+export function ScriptViewer({ item, bookId, flipped, onFlippedChange, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, callTool, onClose }: {
   item: MediaItem;
-  projectSlug: string;
+  bookId: string;
   flipped: boolean;
   onFlippedChange: (f: boolean) => void;
   pendingFilePosition?: number | null;
@@ -150,13 +150,13 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
   }, [isDirty]);
 
   // Script history navigation — Prev/Next instantly restore HEAD one step back/forward
-  const historyNav = useScriptHistoryNav({ callTool, assetId: item.id, projectSlug });
+  const historyNav = useScriptHistoryNav({ callTool, assetId: item.id, bookId });
 
   // Last-rewrite metadata (model/variant/platform/customPrompt).
   const { meta: lastRewrite, refresh: refreshLastRewrite } = useAssetOriginalMeta(
     callTool,
     item.id,
-    projectSlug,
+    bookId,
   );
 
   // Pre-filled args when user clicks the chip or "Use this prompt" in history.
@@ -181,9 +181,9 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
       // Clear dirty state before kicking off the rewrite so the overlay →
       // new-prompt transition stays clean.
       setDraft(item.prompt ?? '');
-      void rewrite(item.id, projectSlug, args);
+      void rewrite(item.id, bookId, args);
     },
-    [rewrite, item.id, item.prompt, projectSlug],
+    [rewrite, item.id, item.prompt, bookId],
   );
 
   const openRewriteWith = useCallback((meta: Pick<RewriteMeta, 'variant' | 'platform' | 'customPrompt'>) => {
@@ -222,14 +222,14 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
       const result = await callTool('update_script', {
         asset_id: item.id,
         content,
-        project_slug: projectSlug,
+        book_id: bookId,
       });
       if (result.isError) {
         const msg = result.content?.[0]?.type === 'text' ? result.content[0].text : 'Save failed';
         toast({ title: 'Save failed', description: msg, duration: 4000 });
         return null;
       }
-      await callTool('reconcile_project_work', { project_slug: projectSlug });
+      await callTool('reconcile_project_work', { book_id: bookId });
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
       setJustSaved(true);
       savedTimerRef.current = setTimeout(() => setJustSaved(false), 1500);
@@ -257,7 +257,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
       savingRef.current = false;
       setSaving(false);
     }
-  }, [callTool, item.id, item.prompt, projectSlug]);
+  }, [callTool, item.id, item.prompt, bookId]);
 
   // Debounced autosave on draft change
   useEffect(() => {
@@ -297,7 +297,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
     try {
       const result = await callTool('generate_image_model_comparison', {
         prompt,
-        project_slug: projectSlug,
+        book_id: bookId,
         source_script_id: item.id,
       });
       if (result.isError) {
@@ -306,11 +306,11 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
         return;
       }
       toast({ title: 'Image jobs queued', description: '5 models', duration: 2000 });
-      await callTool('reconcile_project_work', { project_slug: projectSlug });
+      await callTool('reconcile_project_work', { book_id: bookId });
     } finally {
       setGenInFlight(false);
     }
-  }, [genInFlight, isDirty, draft, saveNow, callTool, item.id, item.prompt, projectSlug]);
+  }, [genInFlight, isDirty, draft, saveNow, callTool, item.id, item.prompt, bookId]);
 
   const promptText = (item.prompt ?? '').trim();
 
@@ -405,7 +405,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
   }, [showSuggestions, autocompleteItems, selectedIndex, selectSuggestion]);
 
   const bf = useViewerBackFace({
-    projectSlug,
+    bookId,
     itemId: item.id,
     callTool,
     flipped,
@@ -511,7 +511,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                   rewriting={rewriting}
                   initial={pendingRewriteArgs}
                   callTool={callTool}
-                  projectSlug={projectSlug}
+                  bookId={bookId}
                   trigger={
                     <button
                       type="button"
@@ -729,7 +729,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
                 fetchHistory={bf.fetchHistory}
                 onReusePrompt={handleReuseFromHistory}
                 itemId={item.id}
-                projectSlug={projectSlug}
+                bookId={bookId}
               />
             )}
           </div>

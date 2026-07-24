@@ -14,7 +14,7 @@ export function sleepDef(fs: Engine): ToolDef {
       "Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.",
     schema: {
       asset_id: z.string().describe("Asset ID to wait on"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       timeout_seconds: z
         .number()
         .default(300)
@@ -23,16 +23,16 @@ export function sleepDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const {
         asset_id,
-        project_slug,
+        book_id,
         timeout_seconds,
       } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         timeout_seconds: number;
       };
 
       // Verify asset exists
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -60,7 +60,7 @@ export function sleepDef(fs: Engine): ToolDef {
         iterations++;
 
         // Drive state machine forward
-        const syncResult = await syncHandler({ project_slug });
+        const syncResult = await syncHandler({ book_id });
         const syncData = JSON.parse(syncResult.content[0].text) as {
           pending: Array<{ assetId: string }>;
           completed: Array<{ assetId: string }>;
@@ -93,7 +93,7 @@ export function sleepDef(fs: Engine): ToolDef {
           };
         }
 
-        const jobs = fs.jobs.queue.list(project_slug, {
+        const jobs = fs.jobs.queue.list({
           artifactId: asset_id,
           limit: 20,
         });
@@ -124,12 +124,10 @@ export function sleepDef(fs: Engine): ToolDef {
             job.state === "running" ||
             job.state === "completing",
         );
-        const ptRead = await fs.jobs.pending.read(project_slug, asset_id);
+        const ptRead = await fs.jobs.pending.read(asset_id);
         const pendingTask = ptRead.ok ? ptRead.value : null;
         const locked = await fs.jobs.locks.isLocked(assetDir);
-        const workRead = await fs.jobs.artifactWork.read(
-          project_slug,
-          asset_id,
+        const workRead = await fs.jobs.artifactWork.read(book_id
         );
         const activeWork =
           workRead.ok &&

@@ -20,7 +20,7 @@ const gptImageToImageInputSchema = GptImage2ImageToImageRequestSchema.shape.inpu
 
 const generateGptImageSchema = {
   prompt: apicityStringField(gptImageToImageInputSchema.prompt, "Text prompt for image editing", { required: true }),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   image_slugs: apicityStringArrayField(gptImageToImageInputSchema.input_urls, "1-16 @img-* slugs for reference images", { required: true }),
   aspect_ratio: apicityField(gptImageToImageInputSchema.aspect_ratio, "Aspect ratio"),
   resolution: apicityField(gptImageToImageInputSchema.resolution, "Output resolution. 1:1 cannot upscale to 4K; auto/unset aspect_ratio is 1K only."),
@@ -37,7 +37,7 @@ export function generateGptImageDef(fs: Engine): ToolDef {
     description: "Generate an image using GPT Image 2.0 editing with 1-16 reference images. Creates a new img- asset and enqueues a background job.",
     schema: generateGptImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, aspect_ratio, resolution, nsfw_checker } = args as Args;
+      const { prompt, book_id, image_slugs, aspect_ratio, resolution, nsfw_checker } = args as Args;
       const prefix = "img";
 
       const rawSlugs = image_slugs ?? [];
@@ -62,14 +62,14 @@ export function generateGptImageDef(fs: Engine): ToolDef {
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      const resolved = await resolveImageSlugs(fs, rawSlugs, project_slug);
+      const resolved = await resolveImageSlugs(fs, rawSlugs, book_id);
       if (!resolved.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
       const assetName = slugify(prompt);
-      const assetResult = await fs.artifacts.create(prefix, assetName, project_slug);
+      const assetResult = await fs.artifacts.create(prefix, assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -88,7 +88,7 @@ export function generateGptImageDef(fs: Engine): ToolDef {
         imgAssetId,
         imgAssetDir,
         sourceImageIds,
-        projectSlug: project_slug,
+        bookId: book_id,
         ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
         ...(nsfw_checker !== undefined ? { nsfwChecker: nsfw_checker } : {}),

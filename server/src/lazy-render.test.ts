@@ -10,12 +10,12 @@ import { queue } from "./queue.js";
 describe("enqueueLazyTimelineRender", () => {
   let fs: Engine;
   let tempDir: string;
-  const projectSlug = "test-proj";
+  const bookId = "test-proj";
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-lazy-render-test-"));
     fs = createEngineForTest(tempDir);
-    const project = await fs.projects.create(projectSlug);
+    const project = await fs.projects.create(bookId);
     if (!project.ok) throw new Error(project.error.message);
   });
 
@@ -25,14 +25,14 @@ describe("enqueueLazyTimelineRender", () => {
   });
 
   async function createVideoAsset(): Promise<string> {
-    const created = await fs.artifacts.create("vid", "clip", projectSlug);
+    const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
     const assetId = created.value.slug;
     const writes = await Promise.all([
-      fs.files.write(assetId, "original.mp4", Buffer.from("fake-video"), projectSlug),
-      fs.files.write(assetId, ".original.analysis.json", Buffer.from(JSON.stringify({ burnedInSubtitles: null })), projectSlug),
-      fs.files.write(assetId, ".analysis.gpt4otrans.json", Buffer.from(JSON.stringify({ text: "real spoken words" })), projectSlug),
-      fs.files.write(assetId, "elevenlabs.json", Buffer.from(JSON.stringify({ words: [] })), projectSlug),
+      fs.files.write(assetId, "original.mp4", Buffer.from("fake-video")),
+      fs.files.write(assetId, ".original.analysis.json", Buffer.from(JSON.stringify({ burnedInSubtitles: null }))),
+      fs.files.write(assetId, ".analysis.gpt4otrans.json", Buffer.from(JSON.stringify({ text: "real spoken words" }))),
+      fs.files.write(assetId, "elevenlabs.json", Buffer.from(JSON.stringify({ words: [] }))),
     ]);
     for (const write of writes) {
       if (!write.ok) throw new Error(write.error.message);
@@ -43,13 +43,13 @@ describe("enqueueLazyTimelineRender", () => {
   it("enqueues assigned video renders with clean audio and subtitles off by default", async () => {
     const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
     const assetId = await createVideoAsset();
-    const timeline = await fs.metadata.projects.write("timeline", {
+    const timeline = await fs.metadata.book.write("timeline", {
       slots: [{ slug: assetId }],
       render: "portrait",
-    }, projectSlug);
+    });
     if (!timeline.ok) throw new Error(timeline.error.message);
 
-    const result = await enqueueLazyTimelineRender(fs, projectSlug, assetId);
+    const result = await enqueueLazyTimelineRender(fs, bookId, assetId);
 
     // Exact stable id: it doubles as the queue dedupe key, so racing
     // triggers collapse onto one render job.
@@ -75,13 +75,13 @@ describe("enqueueLazyTimelineRender", () => {
       audioVolume: 70,
       audioFadeIn: 200,
       audioFadeOut: 300,
-    }, projectSlug);
-    await fs.metadata.projects.write("timeline", {
+    });
+    await fs.metadata.book.write("timeline", {
       slots: [{ slug: assetId }],
       render: "portrait",
-    }, projectSlug);
+    });
 
-    await enqueueLazyTimelineRender(fs, projectSlug, assetId);
+    await enqueueLazyTimelineRender(fs, bookId, assetId);
 
     expect(enqueue).toHaveBeenCalledTimes(1);
     const payload = enqueue.mock.calls[0][1];
@@ -96,13 +96,13 @@ describe("enqueueLazyTimelineRender", () => {
     const assetId = await createVideoAsset();
     // Settings live on another orientation: target-orientation metadata would
     // mark the clip already rendered, and readStoredRenderDefaults falls back.
-    await fs.metadata.artifacts.write(assetId, "landscape.render", { subtitleLanguage: "en" }, projectSlug);
-    await fs.metadata.projects.write("timeline", {
+    await fs.metadata.artifacts.write(assetId, "landscape.render", { subtitleLanguage: "en" });
+    await fs.metadata.book.write("timeline", {
       slots: [{ slug: assetId }],
       render: "portrait",
-    }, projectSlug);
+    });
 
-    await enqueueLazyTimelineRender(fs, projectSlug, assetId);
+    await enqueueLazyTimelineRender(fs, bookId, assetId);
 
     expect(enqueue).toHaveBeenCalledTimes(1);
     expect(enqueue.mock.calls[0][1].subtitleLanguage).toBe("en");
@@ -111,13 +111,13 @@ describe("enqueueLazyTimelineRender", () => {
   it("normalizes an invalid stored subtitleLanguage to 'original'", async () => {
     const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
     const assetId = await createVideoAsset();
-    await fs.metadata.artifacts.write(assetId, "landscape.render", { subtitleLanguage: "english!!" }, projectSlug);
-    await fs.metadata.projects.write("timeline", {
+    await fs.metadata.artifacts.write(assetId, "landscape.render", { subtitleLanguage: "english!!" });
+    await fs.metadata.book.write("timeline", {
       slots: [{ slug: assetId }],
       render: "portrait",
-    }, projectSlug);
+    });
 
-    await enqueueLazyTimelineRender(fs, projectSlug, assetId);
+    await enqueueLazyTimelineRender(fs, bookId, assetId);
 
     expect(enqueue).toHaveBeenCalledTimes(1);
     expect(enqueue.mock.calls[0][1].subtitleLanguage).toBe("original");
@@ -127,7 +127,7 @@ describe("enqueueLazyTimelineRender", () => {
     const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
     const assetId = await createVideoAsset();
 
-    const result = await enqueueLazyTimelineRender(fs, projectSlug, assetId);
+    const result = await enqueueLazyTimelineRender(fs, bookId, assetId);
 
     expect(result).toBeNull();
     expect(enqueue).not.toHaveBeenCalled();
@@ -137,13 +137,13 @@ describe("enqueueLazyTimelineRender", () => {
 describe("enqueueLazyAnalysisIfSlotted", () => {
   let fs: Engine;
   let tempDir: string;
-  const projectSlug = "test-proj";
+  const bookId = "test-proj";
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-lazy-analysis-test-"));
     fs = createEngineForTest(tempDir);
     vi.stubEnv("KIE_API_KEY", "test-key");
-    const project = await fs.projects.create(projectSlug);
+    const project = await fs.projects.create(bookId);
     if (!project.ok) throw new Error(project.error.message);
   });
 
@@ -156,12 +156,12 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
   // Mirrors the state a trim leaves behind: video re-processed (frames and
   // speech-to-text fresh) but the vision analysis sidecar deleted.
   async function createTrimmedVideoAsset(): Promise<string> {
-    const created = await fs.artifacts.create("vid", "clip", projectSlug);
+    const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
     const assetId = created.value.slug;
     const writes = await Promise.all([
-      fs.files.write(assetId, "original.mp4", Buffer.from("fake-video"), projectSlug),
-      fs.files.write(assetId, ".analysis.gpt4otrans.json", Buffer.from(JSON.stringify({ text: "real spoken words" })), projectSlug),
+      fs.files.write(assetId, "original.mp4", Buffer.from("fake-video")),
+      fs.files.write(assetId, ".analysis.gpt4otrans.json", Buffer.from(JSON.stringify({ text: "real spoken words" }))),
     ]);
     for (const write of writes) {
       if (!write.ok) throw new Error(write.error.message);
@@ -170,10 +170,10 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
   }
 
   async function assignToTimeline(assetId: string): Promise<void> {
-    const timeline = await fs.metadata.projects.write("timeline", {
+    const timeline = await fs.metadata.book.write("timeline", {
       slots: [{ slug: assetId }],
       render: "landscape",
-    }, projectSlug);
+    });
     if (!timeline.ok) throw new Error(timeline.error.message);
   }
 
@@ -182,7 +182,7 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
     const assetId = await createTrimmedVideoAsset();
     await assignToTimeline(assetId);
 
-    const result = await enqueueLazyAnalysisIfSlotted(fs, projectSlug, assetId);
+    const result = await enqueueLazyAnalysisIfSlotted(fs, bookId, assetId);
 
     // Exact stable id shared with assign_slot's trigger: it doubles as the
     // queue dedupe key, so racing triggers collapse onto one analyze job.
@@ -191,21 +191,19 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
     const payload = enqueue.mock.calls[0][1];
     expect(payload.type).toBe("analyze_video");
     expect(payload.assetId).toBe(assetId);
-    expect(payload.projectSlug).toBe(projectSlug);
+    expect(payload.bookId).toBe(bookId);
     expect(payload.hasTranscription).toBe(true);
   });
 
   it("does not enqueue when the analysis already exists", async () => {
     const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
     const assetId = await createTrimmedVideoAsset();
-    const written = await fs.files.write(
-      assetId, ".original.analysis.json",
-      Buffer.from(JSON.stringify({ burnedInSubtitles: null })), projectSlug,
+    const written = await fs.files.write(assetId, ".original.analysis.json", Buffer.from(JSON.stringify({ burnedInSubtitles: null }))
     );
     if (!written.ok) throw new Error(written.error.message);
     await assignToTimeline(assetId);
 
-    const result = await enqueueLazyAnalysisIfSlotted(fs, projectSlug, assetId);
+    const result = await enqueueLazyAnalysisIfSlotted(fs, bookId, assetId);
 
     expect(result).toBeNull();
     expect(enqueue).not.toHaveBeenCalled();
@@ -215,7 +213,7 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
     const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
     const assetId = await createTrimmedVideoAsset();
 
-    const result = await enqueueLazyAnalysisIfSlotted(fs, projectSlug, assetId);
+    const result = await enqueueLazyAnalysisIfSlotted(fs, bookId, assetId);
 
     expect(result).toBeNull();
     expect(enqueue).not.toHaveBeenCalled();
@@ -227,7 +225,7 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
     const assetId = await createTrimmedVideoAsset();
     await assignToTimeline(assetId);
 
-    const result = await enqueueLazyAnalysisIfSlotted(fs, projectSlug, assetId);
+    const result = await enqueueLazyAnalysisIfSlotted(fs, bookId, assetId);
 
     expect(result).toBeNull();
     expect(enqueue).not.toHaveBeenCalled();

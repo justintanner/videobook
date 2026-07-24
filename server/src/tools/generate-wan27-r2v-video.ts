@@ -32,32 +32,32 @@ type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-async function resolveImageSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveImageSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("img-")) {
     return { ok: false, error: `image_slugs entries must be img-* assets, got: ${assetId}` };
   }
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
   if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-async function resolveVideoSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveVideoSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slugs entries must be vid-* assets, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findVideoFile(manifest.value.files);
   if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-async function resolveAudioSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveAudioSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("aud-")) return { ok: false, error: `audio_slug must be an aud-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findAudioFile(manifest.value.files, assetId);
   if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
@@ -65,7 +65,7 @@ async function resolveAudioSlug(fs: Engine, raw: string, projectSlug: string): P
 }
 
 const generateWan27R2vVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(wan27R2v.prompt, "Video description (max 5000 chars)", { required: true }),
   negative_prompt: apicityStringField(wan27R2v.negative_prompt, "Negative prompt — things to avoid (max 500 chars)"),
   image_slugs: apicityStringArrayField(wan27R2v.reference_image, "Reference image @slugs (max 5 combined with videos)"),
@@ -91,7 +91,7 @@ export function generateWan27R2vVideoDef(fs: Engine): ToolDef {
     schema: generateWan27R2vVideoSchema,
     handler: async (args) => {
       const {
-        project_slug, prompt, negative_prompt,
+        book_id, prompt, negative_prompt,
         image_slugs, video_slugs, first_frame_slug, audio_slug,
         resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed,
       } = args as Args;
@@ -116,34 +116,34 @@ export function generateWan27R2vVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const raw of imgs) {
-        const r = await resolveImageSlug(fs, raw, project_slug);
+        const r = await resolveImageSlug(fs, raw, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       const videoInputs: RefInput[] = [];
       for (const raw of vids) {
-        const r = await resolveVideoSlug(fs, raw, project_slug);
+        const r = await resolveVideoSlug(fs, raw, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInputs.push(r.value);
       }
 
       let firstFrame: RefInput | undefined;
       if (first_frame_slug) {
-        const r = await resolveImageSlug(fs, first_frame_slug, project_slug);
+        const r = await resolveImageSlug(fs, first_frame_slug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstFrame = r.value;
       }
 
       let voiceRef: RefInput | undefined;
       if (audio_slug) {
-        const r = await resolveAudioSlug(fs, audio_slug, project_slug);
+        const r = await resolveAudioSlug(fs, audio_slug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         voiceRef = r.value;
       }
 
       const videoName = `${modelSlug("kie", "wan/2-7-r2v")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -162,7 +162,7 @@ export function generateWan27R2vVideoDef(fs: Engine): ToolDef {
         type: "generate_wan27_r2v_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         ...(negative_prompt !== undefined ? { negative_prompt } : {}),
         imageInputs,

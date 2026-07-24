@@ -31,7 +31,7 @@ import type {
 type TextContent = Array<{ type: string; text: string }>;
 
 interface RenameAllPanelProps {
-  projectSlug: string;
+  bookId: string;
   callTool: UseMcpResult['callTool'];
   mediaItems?: MediaItem[];
   onApplied: () => void;
@@ -41,7 +41,7 @@ interface RenameAllPanelProps {
 type Phase = "loading" | "ready" | "revalidating" | "applying" | "done";
 
 export function RenameAllPanel({
-  projectSlug,
+  bookId,
   callTool,
   mediaItems = [],
   onApplied,
@@ -90,7 +90,7 @@ export function RenameAllPanel({
   const fetchSuggestions = useCallback(async () => {
     try {
       const result = await callTool("rename_all", {
-        project_slug: projectSlug,
+        book_id: bookId,
         dry_run: true,
       });
       applyDryRunResult(result);
@@ -98,7 +98,7 @@ export function RenameAllPanel({
       setError(e instanceof Error ? e.message : "Dry run failed");
       setPhase("ready");
     }
-  }, [callTool, projectSlug, applyDryRunResult]);
+  }, [callTool, bookId, applyDryRunResult]);
 
   const runDryRun = useCallback(async () => {
     setPhase("loading");
@@ -110,14 +110,14 @@ export function RenameAllPanel({
     const cancelled = { current: false };
     void (async () => {
       const result = await callTool("rename_all", {
-        project_slug: projectSlug,
+        book_id: bookId,
         dry_run: true,
       });
       if (cancelled.current) return;
       applyDryRunResult(result);
     })();
     return () => { cancelled.current = true; };
-  }, [callTool, projectSlug, applyDryRunResult]);
+  }, [callTool, bookId, applyDryRunResult]);
 
   const occupiedIds = useMemo(() => {
     const set = new Set<string>();
@@ -133,7 +133,7 @@ export function RenameAllPanel({
     try {
       const payload = buildRevalidatePayload(rows);
       const result = await callTool("rename_all", {
-        project_slug: projectSlug,
+        book_id: bookId,
         dry_run: true,
         renames: payload,
       });
@@ -152,7 +152,7 @@ export function RenameAllPanel({
       setError(e instanceof Error ? e.message : "Revalidation failed");
       setPhase("ready");
     }
-  }, [callTool, projectSlug, rows]);
+  }, [callTool, bookId, rows]);
 
   const confirm = useCallback(async () => {
     setPhase("applying");
@@ -160,7 +160,7 @@ export function RenameAllPanel({
     try {
       const payload = buildApplyPayload(rows);
       const result = await callTool("rename_all", {
-        project_slug: projectSlug,
+        book_id: bookId,
         dry_run: false,
         renames: payload,
       });
@@ -185,7 +185,7 @@ export function RenameAllPanel({
       setError(e instanceof Error ? e.message : "Apply failed");
       setPhase("ready");
     }
-  }, [callTool, projectSlug, rows, onApplied]);
+  }, [callTool, bookId, rows, onApplied]);
 
   const dirty = hasDirtyRows(rows);
   const confirmable = canConfirm(rows);

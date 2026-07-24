@@ -50,7 +50,7 @@ function findMediaFile(
 export async function resolveAudioMixAsset(
   fs: Engine,
   assetIdInput: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<ResolvedAudioMixAsset> {
   const assetId = normalizeAssetId(assetIdInput);
   const kind = assetKind(assetId);
@@ -58,7 +58,7 @@ export async function resolveAudioMixAsset(
     throw new Error(`Audio mix assets must start with vid-* or aud-*, got: ${assetId}`);
   }
 
-  const manifestResult = await fs.files.manifest(assetId, projectSlug);
+  const manifestResult = await fs.files.manifest(assetId);
   if (!manifestResult.ok) throw new Error(manifestResult.error.message);
 
   const file = findMediaFile(manifestResult.value.files, assetId, kind);
@@ -86,22 +86,22 @@ export function audioMixDef(fs: Engine): ToolDef {
       target_asset_id: z.string().describe("Asset to edit in-place (vid-* or aud-*)"),
       layer_asset_id: z.string().describe("Asset whose audio is layered onto the target (vid-* or aud-*)"),
       volume: z.number().min(0).max(100).describe("Layer volume percentage from 0 to 100"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { target_asset_id, layer_asset_id, volume, project_slug } = args as {
+      const { target_asset_id, layer_asset_id, volume, book_id } = args as {
         target_asset_id: string;
         layer_asset_id: string;
         volume: number;
-        project_slug: string;
+        book_id: string;
       };
 
       let target: ResolvedAudioMixAsset;
       let layer: ResolvedAudioMixAsset;
       try {
         [target, layer] = await Promise.all([
-          resolveAudioMixAsset(fs, target_asset_id, project_slug),
-          resolveAudioMixAsset(fs, layer_asset_id, project_slug),
+          resolveAudioMixAsset(fs, target_asset_id, book_id),
+          resolveAudioMixAsset(fs, layer_asset_id, book_id),
         ]);
       } catch (error) {
         return toolError(error instanceof Error ? error.message : String(error));
@@ -121,7 +121,7 @@ export function audioMixDef(fs: Engine): ToolDef {
           volume,
           assetId: target.assetId,
           assetDir: target.assetDir,
-          projectSlug: project_slug,
+          bookId: book_id,
         } as unknown as Record<string, unknown>, 1_800_000);
       } catch (error) {
         return toolError(`Audio mix failed: ${error instanceof Error ? error.message : String(error)}`);

@@ -55,7 +55,7 @@ describe("read_transcript tool (integration)", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "transcript-proj" },
+      arguments: { book_id: "transcript-proj" },
     });
   }, 120_000);
 
@@ -71,7 +71,7 @@ describe("read_transcript tool (integration)", () => {
     const uploadResult = await client.callTool({
       name: "upload_file",
       arguments: {
-        project_slug: "transcript-proj",
+        book_id: "transcript-proj",
         filename: "original.mp4",
         data: Buffer.from("fake-video-data").toString("base64"),
       },
@@ -82,11 +82,7 @@ describe("read_transcript tool (integration)", () => {
     const text = typeof content === "string"
       ? content
       : JSON.stringify(content, null, 2);
-    const written = await fs.files.write(
-      assetId,
-      filename,
-      text,
-      "transcript-proj",
+    const written = await fs.files.write(assetId, filename, text
     );
     if (!written.ok) throw new Error(written.error.message);
 
@@ -96,7 +92,7 @@ describe("read_transcript tool (integration)", () => {
   async function callReadTranscript(assetId: string): Promise<TranscriptResponse> {
     const result = await client.callTool({
       name: "read_transcript",
-      arguments: { asset_id: assetId, project_slug: "transcript-proj" },
+      arguments: { asset_id: assetId, book_id: "transcript-proj" },
     });
     expect(result.isError).toBeFalsy();
     return JSON.parse((result.content as TextContent)[0].text) as TranscriptResponse;
@@ -179,7 +175,7 @@ describe("read_transcript tool (integration)", () => {
     const uploadResult = await client.callTool({
       name: "upload_file",
       arguments: {
-        project_slug: "transcript-proj",
+        book_id: "transcript-proj",
         filename: "original.mp4",
         data: Buffer.from("fake-video-data").toString("base64"),
       },
@@ -209,7 +205,7 @@ describe("read_transcript tool (integration)", () => {
     const uploadResult = await client.callTool({
       name: "upload_file",
       arguments: {
-        project_slug: "transcript-proj",
+        book_id: "transcript-proj",
         filename: "original.mp4",
         data: Buffer.from("fake-video-data").toString("base64"),
       },
@@ -217,17 +213,9 @@ describe("read_transcript tool (integration)", () => {
     const asset = JSON.parse((uploadResult.content as TextContent)[0].text);
     const assetId = asset.assetId as string;
 
-    const timedWrite = await fs.files.write(
-      assetId,
-      "elevenlabs.json",
-      JSON.stringify(elevenLabsJson, null, 2),
-      "transcript-proj",
+    const timedWrite = await fs.files.write(assetId, "elevenlabs.json", JSON.stringify(elevenLabsJson, null, 2)
     );
-    const plainWrite = await fs.files.write(
-      assetId,
-      ".analysis.gpt4otrans.json",
-      JSON.stringify(plainJson, null, 2),
-      "transcript-proj",
+    const plainWrite = await fs.files.write(assetId, ".analysis.gpt4otrans.json", JSON.stringify(plainJson, null, 2)
     );
     if (!timedWrite.ok) throw new Error(timedWrite.error.message);
     if (!plainWrite.ok) throw new Error(plainWrite.error.message);

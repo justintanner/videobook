@@ -2,11 +2,7 @@
 
 Videobook is a local-first notebook studio for generative media. Images, videos,
 prompts, characters, and scenes are first-class cells in an executable graph,
-while every project mutation is recorded as an immutable DoltLite revision.
-
-The repository preserves the complete Videocity history and its 211 fork-time
-MCP endpoints. Videobook adds notebook, reusable-entity, revision, and storage
-tools without removing those existing automation contracts.
+while every book mutation is recorded as an immutable DoltLite revision.
 
 ## Repositories
 
@@ -16,7 +12,7 @@ tools without removing those existing automation contracts.
 
 ## Product model
 
-A project contains one or more notebooks. A notebook is a directed graph of
+A book contains one or more notebooks. A notebook is a directed graph of
 typed cells:
 
 - prompt
@@ -26,28 +22,29 @@ typed cells:
 - video
 
 Connections carry outputs into named inputs. Runs are explicit and queued, and
-their cell order and resulting asset/entity references are recorded. New
-projects begin with the `nb-scratch` notebook.
+their cell order and resulting asset/entity references are recorded. New books
+begin with a `Main` notebook.
 
-The frontend is a new notebook-first workspace with stage bands, a typed cell
-palette, reusable entity views, revision history, storage health, jobs,
-providers, and diagnostics.
+The frontend is a green notebook-first workspace with book and notebook
+pickers, a typed cell canvas, a timeline, an asset library, jobs, history,
+storage health, and provider settings.
 
 ## Storage
 
-`videobook-engine` keeps durable, rewindable metadata and file manifests in one
-embedded DoltLite catalog at `VIDEOBOOK_DATA_DIR/videobook.db`. Media bytes live
-in a SHA-256 content-addressed cache and can be published to B2 under immutable
-keys. Runtime jobs, leases, pending tasks, locks, failures, and publication
-state are unversioned tables in that same Dolt database.
+Each book owns an isolated `videobook-engine` v2.0.1 root under
+`VIDEOBOOK_LIBRARY_DIR/<book UUIDv7>/`. That root holds its embedded DoltLite
+catalog, content-addressed objects, managed files, notebook graph, timeline,
+history, and runtime tables. Media bytes can be published to B2 under immutable
+keys. Application-wide settings such as provider credentials and X OAuth tokens
+live separately at `VIDEOBOOK_APP_STATE_PATH`.
 
 Rewind is forward-only: Videobook materializes the selected historical state,
 then creates a new revision. It never checks out detached history, rewrites
 history, or deletes canonical B2 objects.
 
-The engine materializes UUID-addressed scratch workspaces under
-`VIDEOBOOK_WORKSPACE_DIR` for ffmpeg and Remotion. `/files` resolves content
-through the engine; workspace paths are not an authoritative data model.
+The engine materializes scratch paths within each book root for ffmpeg and
+Remotion. `/files/:bookId/:artifactId/*` resolves managed content through the
+selected book engine; file paths are not an authoritative data model.
 
 ## Development
 
@@ -81,9 +78,10 @@ The frontend is served on port 5173 and the MCP server on port 3001.
 The storage-specific variables are:
 
 ```text
-VIDEOBOOK_DATA_DIR
-VIDEOBOOK_WORKSPACE_DIR
+VIDEOBOOK_LIBRARY_DIR
+VIDEOBOOK_APP_STATE_PATH
 VIDEOBOOK_OBJECT_PREFIX
+VIDEOBOOK_CATALOG_BACKUP_URL_TEMPLATE
 B2_ACCESS_KEY_ID
 B2_SECRET_ACCESS_KEY
 B2_REGION

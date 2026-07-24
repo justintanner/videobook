@@ -1,97 +1,64 @@
-import type { Engine } from "videobook-engine";
+import type { Engine, TimelineInput } from "videobook-engine";
 import { z } from "zod";
-import type { Orientation } from "../remotion/subtitles/types.js";
+import { timelineFailure, timelineSuccess } from "../timeline-helpers.js";
 import type { ToolDef } from "./tool-def.js";
 
-type TimelineSlot = {
-  slug: string;
-  volume?: number;
-  audioFadeIn?: number;
-  audioFadeOut?: number;
-};
+const slotSchema = z.object({
+  id: z.string().uuid().optional(),
+  artifact_id: z.string().uuid(),
+  volume: z.number().min(0).optional(),
+  audioFadeIn: z.number().min(0).optional(),
+  audioFadeOut: z.number().min(0).optional(),
+});
 
-type TimelineAudioClip = {
-  id: string;
-  slug: string;
-  startFrame: number;
-  durationFrames: number;
-  volume?: number;
-  fadeIn?: number;
-  fadeOut?: number;
-};
+const audioSchema = z.object({
+  id: z.string().uuid().optional(),
+  artifact_id: z.string().uuid(),
+  startFrame: z.number().int().min(0),
+  durationFrames: z.number().int().positive(),
+  volume: z.number().min(0).optional(),
+  fadeIn: z.number().min(0).optional(),
+  fadeOut: z.number().min(0).optional(),
+});
 
-type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
-
-type TimelineConfig = {
-  slots: TimelineSlot[];
-  audio?: TimelineAudioClip[];
-  render: Orientation;
-  currentOrientation?: ViewerSize;
-};
-
-export function setTimelineDef(fs: Engine): ToolDef {
+export function setTimelineDef(engine: Engine): ToolDef {
   return {
     name: "set_timeline",
-    description: "Set the timeline for a project (replaces all slots and render orientation; unspecified optional fields like audio are preserved)",
+    description: "Replace a book's typed v2 timeline using stable artifact UUIDs",
     schema: {
-      project_slug: z.string().describe("Project slug"),
-      slots: z.array(z.object({
-        slug: z.string(),
-        volume: z.number().optional(),
-        audioFadeIn: z.number().optional(),
-        audioFadeOut: z.number().optional(),
-      })).describe("Timeline slots"),
-      audio: z.array(z.object({
-        id: z.string(),
-        slug: z.string(),
-        startFrame: z.number(),
-        durationFrames: z.number(),
-        volume: z.number().optional(),
-        fadeIn: z.number().optional(),
-        fadeOut: z.number().optional(),
-      })).optional().describe("Overlay audio clips on the timeline"),
-      render: z.enum(["landscape", "portrait", "square"])
-        .optional()
-        .describe("Orientation to render (default: \"landscape\")"),
-      currentOrientation: z.enum(["landscape", "portrait", "square", "original"])
-        .optional()
-        .describe("Last-used viewer orientation for clips"),
+      book_id: z.string().uuid(),
+      render: z.enum(["landscape", "portrait", "square"]),
+      slots: z.array(slotSchema).optional(),
+      audio: z.array(audioSchema).optional(),
     },
     handler: async (args) => {
-      const { project_slug, slots, audio, render = "landscape", currentOrientation } = args as {
-        project_slug: string;
-        slots: TimelineSlot[];
-        audio?: TimelineAudioClip[];
-        render?: Orientation;
-        currentOrientation?: ViewerSize;
+      const slots = args.slots as Array<z.infer<typeof slotSchema>> | undefined;
+      const audio = args.audio as Array<z.infer<typeof audioSchema>> | undefined;
+      const input: TimelineInput = {
+        render: args.render as TimelineInput["render"],
+        ...(slots === undefined ? {} : {
+          slots: slots.map((slot) => ({
+            ...(slot.id ? { id: slot.id } : {}),
+            artifactId: slot.artifact_id,
+            ...(slot.volume === undefined ? {} : { volume: slot.volume }),
+            ...(slot.audioFadeIn === undefined ? {} : { audioFadeIn: slot.audioFadeIn }),
+            ...(slot.audioFadeOut === undefined ? {} : { audioFadeOut: slot.audioFadeOut }),
+          })),
+        }),
+        ...(audio === undefined ? {} : {
+          audio: audio.map((clip) => ({
+            ...(clip.id ? { id: clip.id } : {}),
+            artifactId: clip.artifact_id,
+            startFrame: clip.startFrame,
+            durationFrames: clip.durationFrames,
+            ...(clip.volume === undefined ? {} : { volume: clip.volume }),
+            ...(clip.fadeIn === undefined ? {} : { fadeIn: clip.fadeIn }),
+            ...(clip.fadeOut === undefined ? {} : { fadeOut: clip.fadeOut }),
+          })),
+        }),
       };
-
-      // Preserve optional fields the caller didn't send — a partial update
-      // (e.g. orientation only) must not wipe existing audio clips.
-      const existingResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
-      const existing: TimelineConfig | undefined =
-        existingResult.ok && !Array.isArray(existingResult.value)
-          ? existingResult.value
-          : undefined;
-
-      const mergedAudio = audio ?? existing?.audio;
-      const mergedOrientation = currentOrientation ?? existing?.currentOrientation;
-      const config: TimelineConfig = {
-        slots,
-        render,
-        ...(mergedAudio !== undefined && { audio: mergedAudio }),
-        ...(mergedOrientation !== undefined && { currentOrientation: mergedOrientation }),
-      };
-      const result = await fs.metadata.projects.write("timeline", config, project_slug);
-      if (result.ok) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ path: result.value }) }],
-        };
-      }
-      return {
-        isError: true as const,
-        content: [{ type: "text" as const, text: result.error.message }],
-      };
+      const result = await engine.timeline.set(input);
+      return result.ok ? timelineSuccess(result.value) : timelineFailure(result.error.message);
     },
   };
 }

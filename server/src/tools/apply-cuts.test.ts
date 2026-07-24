@@ -47,18 +47,14 @@ async function generateSilentVideo(outputPath: string): Promise<void> {
 // whichever test happens to be next.
 async function placeVideo(
   projectsDir: string,
-  projectSlug: string,
+  bookId: string,
   videoPath: string,
 ): Promise<{ assetId: string; path: string }> {
   const fs = createEngineForTest(projectsDir);
-  const asset = await fs.artifacts.create("vid", "test-source", projectSlug);
+  const asset = await fs.artifacts.create("vid", "test-source");
   if (!asset.ok) throw new Error(`createAsset failed: ${asset.error.message}`);
   const bytes = await readFile(videoPath);
-  const written = await fs.files.write(
-    asset.value.slug,
-    "original.mp4",
-    bytes,
-    projectSlug,
+  const written = await fs.files.write(asset.value.slug, "original.mp4", bytes
   );
   if (!written.ok) throw new Error(`writeFile failed: ${written.error.message}`);
   return { assetId: asset.value.slug, path: asset.value.path };
@@ -87,7 +83,7 @@ describe("apply_cuts tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "cuts-proj" },
+      arguments: { book_id: "cuts-proj" },
     });
   });
 
@@ -103,7 +99,7 @@ describe("apply_cuts tool", () => {
       name: "apply_cuts",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "cuts-proj",
+        book_id: "cuts-proj",
         cuts: [{ cut_start: 1, cut_end: 2 }],
       },
     });
@@ -125,7 +121,7 @@ describe("apply_cuts tool", () => {
       name: "apply_cuts",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "cuts-proj",
+        book_id: "cuts-proj",
         cuts: [
           { cut_start: 0.5, cut_end: 1.0 },
           { cut_start: 2.0, cut_end: 2.5 },
@@ -147,7 +143,7 @@ describe("apply_cuts tool", () => {
       name: "apply_cuts",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "cuts-proj",
+        book_id: "cuts-proj",
         cuts: [
           { cut_start: 0.5, cut_end: 1.5 },
           { cut_start: 1.0, cut_end: 2.0 },
@@ -163,18 +159,14 @@ describe("apply_cuts tool", () => {
   it("returns error for cut_end past duration", async () => {
     const uploaded = await placeVideo(tempDir, "cuts-proj", videoPath);
     const fs = createEngineForTest(tempDir);
-    await fs.metadata.artifacts.write(
-      uploaded.assetId,
-      "original",
-      { width: 320, height: 240, duration: 3, hasAudio: true },
-      "cuts-proj",
+    await fs.metadata.artifacts.write(uploaded.assetId, "original", { width: 320, height: 240, duration: 3, hasAudio: true }
     );
 
     const result = await client.callTool({
       name: "apply_cuts",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "cuts-proj",
+        book_id: "cuts-proj",
         cuts: [{ cut_start: 1, cut_end: 99 }],
       },
     });
@@ -191,7 +183,7 @@ describe("apply_cuts tool", () => {
       name: "apply_cuts",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "cuts-proj",
+        book_id: "cuts-proj",
         cuts: [{ cut_start: 2, cut_end: 1 }],
       },
     });
@@ -206,7 +198,7 @@ describe("apply_cuts tool", () => {
       name: "apply_cuts",
       arguments: {
         asset_id: "vid-does-not-exist",
-        project_slug: "cuts-proj",
+        book_id: "cuts-proj",
         cuts: [{ cut_start: 1, cut_end: 2 }],
       },
     });
@@ -216,15 +208,15 @@ describe("apply_cuts tool", () => {
 
   it("returns error when asset has no video", async () => {
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("vid", "no-video", "cuts-proj");
+    const asset = await fs.artifacts.create("vid", "no-video");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "notes.txt", "hello", "cuts-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "apply_cuts",
       arguments: {
         asset_id: asset.value.slug,
-        project_slug: "cuts-proj",
+        book_id: "cuts-proj",
         cuts: [{ cut_start: 1, cut_end: 2 }],
       },
     });
@@ -241,18 +233,14 @@ describe("apply_cuts tool", () => {
 
     // Metadata has duration but deliberately no hasAudio — old code assumed true and failed.
     const fs = createEngineForTest(tempDir);
-    await fs.metadata.artifacts.write(
-      uploaded.assetId,
-      "original",
-      { width: 320, height: 240, duration: 3 },
-      "cuts-proj",
+    await fs.metadata.artifacts.write(uploaded.assetId, "original", { width: 320, height: 240, duration: 3 }
     );
 
     const result = await client.callTool({
       name: "apply_cuts",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "cuts-proj",
+        book_id: "cuts-proj",
         cuts: [{ cut_start: 1, cut_end: 2 }],
       },
     });

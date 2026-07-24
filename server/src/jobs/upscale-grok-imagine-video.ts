@@ -8,18 +8,18 @@ type UpscaleGrokImagineVideoPayload = {
   sourceVideoFilename: string;
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 export function registerUpscaleGrokImagineVideoJob(fs: Engine): void {
   registerJobHandler("upscale_grok_imagine_video", async (payload, ctx) => {
     const {
-      sourceVideoId, vidAssetId, vidAssetDir, projectSlug,
+      sourceVideoId, vidAssetId, vidAssetDir, bookId,
     } = payload as UpscaleGrokImagineVideoPayload;
 
     requireApiKey("KIE_API_KEY");
 
-    const kieTaskIdResult = await fs.metadata.artifacts.read<{ taskId: string }>(sourceVideoId, "kie-task-id", projectSlug);
+    const kieTaskIdResult = await fs.metadata.artifacts.read<{ taskId: string }>(sourceVideoId, "kie-task-id");
     if (!kieTaskIdResult.ok) {
       throw new Error(`No Kie taskId found for source video ${sourceVideoId}. The source video must have been generated via Kie.`);
     }
@@ -37,7 +37,7 @@ export function registerUpscaleGrokImagineVideoJob(fs: Engine): void {
       taskType: "grok_imagine_upscale_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         sourceVideoId,
         upscale: true,

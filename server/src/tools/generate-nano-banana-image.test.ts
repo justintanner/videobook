@@ -29,7 +29,7 @@ describe("generate_nano_banana_image tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -48,7 +48,7 @@ describe("generate_nano_banana_image tool", () => {
       name: "generate_kie_nano_banana_pro_text_to_image",
       arguments: {
         prompt: "a beautiful sunset",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -64,7 +64,7 @@ describe("generate_nano_banana_image tool", () => {
       name: "generate_kie_nano_banana_pro_text_to_image",
       arguments: {
         prompt: "test prompt",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: [
           "@img-a", "@img-b", "@img-c", "@img-d",
           "@img-e", "@img-f", "@img-g", "@img-h", "@img-i",
@@ -84,7 +84,7 @@ describe("generate_nano_banana_image tool", () => {
       name: "generate_kie_nano_banana_pro_text_to_image",
       arguments: {
         prompt: "test prompt",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: ["@vid-something"],
       },
     });
@@ -101,7 +101,7 @@ describe("generate_nano_banana_image tool", () => {
       name: "generate_kie_nano_banana_pro_text_to_image",
       arguments: {
         prompt: "test prompt",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: ["@img-does-not-exist"],
       },
     });
@@ -113,16 +113,16 @@ describe("generate_nano_banana_image tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "empty-img", "test-proj");
+    const asset = await fs.artifacts.create("img", "empty-img");
     if (!asset.ok) throw new Error("Failed to create asset");
 
-    await fs.files.write(asset.value.slug, "notes.txt", "hello", "test-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "generate_kie_nano_banana_pro_text_to_image",
       arguments: {
         prompt: "test prompt",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: [`@${asset.value.slug}`],
       },
     });
@@ -139,7 +139,7 @@ describe("generate_nano_banana_image tool", () => {
       name: "generate_kie_nano_banana_pro_text_to_image",
       arguments: {
         prompt: "a beautiful sunset",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -154,19 +154,19 @@ describe("generate_nano_banana_image tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "ref-img", "test-proj");
+    const asset = await fs.artifacts.create("img", "ref-img");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png);
 
     const result = await client.callTool({
       name: "generate_kie_nano_banana_pro_text_to_image",
       arguments: {
         prompt: "transform this image",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         image_slugs: [`@${asset.value.slug}`],
       },
     });

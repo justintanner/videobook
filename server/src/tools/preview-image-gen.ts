@@ -14,6 +14,7 @@ import {
 } from "../image-models.js";
 import type { ActionLogEntry } from "../image-models.js";
 import type { ToolDef } from "./tool-def.js";
+import { timelineSlotSlugs } from "../timeline-helpers.js";
 
 export function previewImageGenDef(fs: Engine): ToolDef {
   return {
@@ -22,27 +23,24 @@ export function previewImageGenDef(fs: Engine): ToolDef {
       "Return a preview with schema, prefilled parameters, validation, and model options for all available image models.",
     schema: {
       prompt: z.string().describe("Natural language generation prompt (e.g., 'generate an image of a sunset')"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       selected_model: z.string().optional().describe("Override: which model key to select (e.g. 'nano_banana')"),
       selected_provider: z.string().optional().describe("Override: which provider key to select (e.g. 'xai')"),
     },
     handler: async (args) => {
-      const { prompt, project_slug: slug, selected_model: modelOverride, selected_provider: providerOverride } = args as {
+      const { prompt, book_id: slug, selected_model: modelOverride, selected_provider: providerOverride } = args as {
         prompt: string;
-        project_slug: string;
+        book_id: string;
         selected_model?: string;
         selected_provider?: string;
       };
 
       // 1. Expand @s01 slot refs → actual asset slugs
       let expandedPrompt = prompt;
-      const timelineResult = await fs.metadata.projects.read<{ slots: Array<{ slug: string }> }>("timeline", slug);
-      if (timelineResult.ok && timelineResult.value.slots) {
-        expandedPrompt = fs.resolver.expandSlotRefs(prompt, timelineResult.value.slots);
-      }
+      expandedPrompt = fs.resolver.expandSlotRefs(prompt, timelineSlotSlugs(fs));
 
       // 2. Resolve @asset tags
-      const resolvedResult = await fs.resolver.resolveAll(expandedPrompt, slug);
+      const resolvedResult = await fs.resolver.resolveAll(expandedPrompt);
       if (!resolvedResult.ok) {
         return {
           isError: true as const,
@@ -54,7 +52,7 @@ export function previewImageGenDef(fs: Engine): ToolDef {
       // 3. Load prompt history from action log
       let historyEntries: ActionLogEntry[] = [];
       try {
-        const log = fs.history.actionLog(slug, { limit: 100 });
+        const log = fs.history.actionLog();
         historyEntries = log as ActionLogEntry[];
       } catch {
         // action log unavailable
@@ -62,7 +60,7 @@ export function previewImageGenDef(fs: Engine): ToolDef {
 
       // 3b. Build set of valid asset tags for the current project so
       //     historical slug references that no longer exist are stripped.
-      const allProjectAssets = fs.artifacts.list(slug);
+      const allProjectAssets = fs.artifacts.list();
       const projectAssetTags = new Set(allProjectAssets.map((a) => `@${a.slug}`));
 
       // 4. Build model options for all image models

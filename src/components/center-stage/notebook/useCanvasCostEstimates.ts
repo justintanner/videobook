@@ -19,7 +19,7 @@ interface DerivedCall {
 }
 
 interface LabelsState {
-  projectSlug: string
+  bookId: string
   labels: ReadonlyMap<string, string>
 }
 
@@ -31,7 +31,7 @@ function responseText(result: Awaited<ReturnType<UseMcpResult['callTool']>>): st
 /**
  * Turn a gen step into the estimate_cost call that Run would issue. Mirrors the
  * editor's derivation (NotebookStepEditor `mergedValues` + `effectiveToolName`):
- * prefilled_values ⊕ step values, mode-aware tool name, project_slug appended.
+ * prefilled_values ⊕ step values, mode-aware tool name, book_id appended.
  * Falls back to the category's default model when the step has none yet, so a
  * fresh cell costs out exactly as running it would. Exported for unit tests.
  */
@@ -39,7 +39,7 @@ export function deriveStepEstimateCall(
   definition: NotebookPlanDefinition,
   step: NotebookPlanStep,
   preview: FullPreviewResponse | null,
-  projectSlug: string,
+  bookId: string,
 ): DerivedCall | null {
   if (step.type === 'prompt' || step.type === 'asset' || !preview) return null
   const stepModel = typeof step.properties.model === 'string' ? step.properties.model : ''
@@ -59,7 +59,7 @@ export function deriveStepEstimateCall(
   const provider = storedProvider || option.selected_provider || preview.selected_provider || ''
   const input = {
     ...merged,
-    project_slug: projectSlug,
+    book_id: bookId,
     ...(provider ? { _provider: provider } : {}),
   }
   return { stepId: step.id, key: `${toolName} ${JSON.stringify(input)}`, toolName, input }
@@ -82,8 +82,8 @@ function stepTuple(step: NotebookPlanStep): StepTuple | null {
 // (category, model, provider) tuple — the same inputs useGenPreview passes for
 // the editor. Fetching per-category with no provider would resolve a different
 // tool than Run actually uses (e.g. a Kie default vs the cell's Google Flow).
-function tupleKey(tuple: StepTuple, projectSlug: string): string {
-  return `${projectSlug} ${tuple.category} ${tuple.model} ${tuple.provider}`
+function tupleKey(tuple: StepTuple, bookId: string): string {
+  return `${bookId} ${tuple.category} ${tuple.model} ${tuple.provider}`
 }
 
 /**
@@ -93,15 +93,15 @@ function tupleKey(tuple: StepTuple, projectSlug: string): string {
  * containing only cache-missing steps.
  */
 export function useCanvasCostEstimates(options: {
-  projectSlug: string
+  bookId: string
   callTool: UseMcpResult['callTool']
   definition: NotebookPlanDefinition | null
   enabled: boolean
 }): ReadonlyMap<string, string> {
-  const { projectSlug, callTool, definition, enabled } = options
-  const [labelsState, setLabelsState] = useState<LabelsState>({ projectSlug, labels: EMPTY_LABELS })
-  if (labelsState.projectSlug !== projectSlug) {
-    setLabelsState({ projectSlug, labels: EMPTY_LABELS })
+  const { bookId, callTool, definition, enabled } = options
+  const [labelsState, setLabelsState] = useState<LabelsState>({ bookId, labels: EMPTY_LABELS })
+  if (labelsState.bookId !== bookId) {
+    setLabelsState({ bookId, labels: EMPTY_LABELS })
   }
   const callToolRef = useRef(callTool)
   const previewsRef = useRef<Record<string, FullPreviewResponse | 'pending'>>({})
@@ -119,7 +119,7 @@ export function useCanvasCostEstimates(options: {
     previewsRef.current = {}
     cacheRef.current = new Map()
     requestIdRef.current += 1
-  }, [projectSlug])
+  }, [bookId])
 
   // Lazily fetch one preview per distinct (category, model, provider) the plan
   // uses — mirroring useGenPreview so the card resolves the exact tool Run will.
@@ -128,7 +128,7 @@ export function useCanvasCostEstimates(options: {
     const tuples = new Map<string, StepTuple>()
     for (const step of definition.sequence) {
       const tuple = stepTuple(step)
-      if (tuple) tuples.set(tupleKey(tuple, projectSlug), tuple)
+      if (tuple) tuples.set(tupleKey(tuple, bookId), tuple)
     }
     for (const [key, tuple] of tuples) {
       if (previewsRef.current[key]) continue
@@ -139,7 +139,7 @@ export function useCanvasCostEstimates(options: {
             tuple.category === 'image' ? 'prepare_image_generation' : 'prepare_video_generation',
             {
               prompt: '',
-              project_slug: projectSlug,
+              book_id: bookId,
               ...(tuple.model ? { selected_model: tuple.model } : {}),
               ...(tuple.provider ? { selected_provider: tuple.provider } : {}),
             },
@@ -152,7 +152,7 @@ export function useCanvasCostEstimates(options: {
         }
       })()
     }
-  }, [enabled, definition, projectSlug])
+  }, [enabled, definition, bookId])
 
   // Debounced estimate pass. The definition identity changes per keystroke in
   // the sidebar (only write_notebook is debounced, not the in-memory state), so the
@@ -167,12 +167,12 @@ export function useCanvasCostEstimates(options: {
         const missing: DerivedCall[] = []
         for (const step of definition.sequence) {
           const tuple = stepTuple(step)
-          const preview = tuple ? previewsRef.current[tupleKey(tuple, projectSlug)] : undefined
+          const preview = tuple ? previewsRef.current[tupleKey(tuple, bookId)] : undefined
           const derived = deriveStepEstimateCall(
             definition,
             step,
             preview && preview !== 'pending' ? preview : null,
-            projectSlug,
+            bookId,
           )
           if (!derived) continue
           const cached = cacheRef.current.get(derived.key)
@@ -204,16 +204,16 @@ export function useCanvasCostEstimates(options: {
         if (requestId !== requestIdRef.current) return
         setLabelsState((prev) => {
           if (
-            prev.projectSlug === projectSlug
+            prev.bookId === bookId
             && prev.labels.size === next.size
             && [...next].every(([id, label]) => prev.labels.get(id) === label)
           ) return prev
-          return { projectSlug, labels: next }
+          return { bookId, labels: next }
         })
       })()
     }, ESTIMATE_DEBOUNCE_MS)
     return () => clearTimeout(timer)
-  }, [enabled, definition, projectSlug, previewTick])
+  }, [enabled, definition, bookId, previewTick])
 
-  return labelsState.projectSlug === projectSlug ? labelsState.labels : EMPTY_LABELS
+  return labelsState.bookId === bookId ? labelsState.labels : EMPTY_LABELS
 }

@@ -9,16 +9,16 @@ export function updateScriptDef(fs: Engine): ToolDef {
     schema: {
       asset_id: z.string().describe("Asset ID of the script"),
       content: z.string().describe("New markdown content"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, content, project_slug } = args as {
+      const { asset_id, content, book_id: _book_id } = args as {
         asset_id: string;
         content: string;
-        project_slug: string;
+        book_id: string;
       };
 
-      const result = await fs.files.write(asset_id, "original.md", content, project_slug);
+      const result = await fs.files.write(asset_id, "original.md", content);
       if (!result.ok) {
         return {
           isError: true as const,

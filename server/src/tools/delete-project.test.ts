@@ -22,16 +22,16 @@ describe("delete_project tool", () => {
   it("deletes an existing project", async () => {
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "alpha" },
+      arguments: { book_id: "alpha" },
     });
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "beta" },
+      arguments: { book_id: "beta" },
     });
 
     const result = await client.callTool({
       name: "delete_project",
-      arguments: { project_slug: "alpha" },
+      arguments: { book_id: "alpha" },
     });
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
@@ -57,7 +57,7 @@ describe("delete_project tool", () => {
   it("returns error for nonexistent project", async () => {
     const result = await client.callTool({
       name: "delete_project",
-      arguments: { project_slug: "missing" },
+      arguments: { book_id: "missing" },
     });
     expect(result.isError).toBe(true);
   });

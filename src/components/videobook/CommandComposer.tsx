@@ -25,7 +25,7 @@ export interface PromptSession {
 interface CommandComposerProps {
   commands: ServerCommand[]
   assetSlugs: string[]
-  projectSlug: string
+  bookId: string
   callTool: UseMcpResult['callTool']
   disabled: boolean
   connectionLabel: string
@@ -76,7 +76,7 @@ function historyPayload(value: unknown): string[] {
 export function CommandComposer({
   commands,
   assetSlugs,
-  projectSlug,
+  bookId,
   callTool,
   disabled,
   connectionLabel,
@@ -124,13 +124,13 @@ export function CommandComposer({
   }
 
   const ensureHistory = async () => {
-    if (!projectSlug || loadedHistoryProjectRef.current === projectSlug) return
-    loadedHistoryProjectRef.current = projectSlug
+    if (!bookId || loadedHistoryProjectRef.current === bookId) return
+    loadedHistoryProjectRef.current = bookId
     historyRef.current = []
     historyCursorRef.current = -1
     try {
       const result = await callTool('list_prompt_history', {
-        project_slug: projectSlug,
+        book_id: bookId,
         surface: 'chat',
         limit: 100,
       })
@@ -148,9 +148,9 @@ export function CommandComposer({
   const recordHistory = (message: string) => {
     historyRef.current = [...historyRef.current, message]
     historyCursorRef.current = -1
-    if (!projectSlug) return
+    if (!bookId) return
     void callTool('record_prompt', {
-      project_slug: projectSlug,
+      book_id: bookId,
       surface: 'chat',
       prompt: message,
     }).catch(() => undefined)

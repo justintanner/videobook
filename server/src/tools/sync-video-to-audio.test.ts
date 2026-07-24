@@ -57,12 +57,12 @@ describe("sync_video_to_audio tool", () => {
     client = await createTestClient(tempDir);
     fs = createEngineForTest(tempDir);
     valueOf(await fs.projects.create(PROJECT));
-    const created = valueOf(await fs.artifacts.create("vid", "silent sync source", PROJECT));
+    const created = valueOf(await fs.artifacts.create("vid", "silent sync source"));
     silentAssetId = created.slug;
-    valueOf(await fs.files.write(silentAssetId, "original.mp4", await readFile(silentPath), PROJECT));
-    const audioCreated = valueOf(await fs.artifacts.create("vid", "audio sync source", PROJECT));
+    valueOf(await fs.files.write(silentAssetId, "original.mp4", await readFile(silentPath)));
+    const audioCreated = valueOf(await fs.artifacts.create("vid", "audio sync source"));
     audioAssetId = audioCreated.slug;
-    valueOf(await fs.files.write(audioAssetId, "original.mp4", await readFile(audioPath), PROJECT));
+    valueOf(await fs.files.write(audioAssetId, "original.mp4", await readFile(audioPath)));
   });
 
   afterAll(async () => {
@@ -82,7 +82,7 @@ describe("sync_video_to_audio tool", () => {
       name: "sync_video_to_audio",
       arguments: {
         asset_id: "vid-missing",
-        project_slug: PROJECT,
+        book_id: PROJECT,
         anchors: [{ video_seconds: 1, audio_seconds: 1.2 }],
       },
     });
@@ -94,7 +94,7 @@ describe("sync_video_to_audio tool", () => {
       name: "sync_video_to_audio",
       arguments: {
         asset_id: silentAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         anchors: [{ video_seconds: 1, audio_seconds: 1.2 }],
       },
     });
@@ -148,19 +148,19 @@ describe("sync_video_to_audio tool", () => {
       message: "between",
     },
   ])("rejects numeric $name without enqueueing", async ({ anchors, message }) => {
-    const jobCountBefore = await fs.jobs.queue.count(PROJECT);
+    const jobCountBefore = await fs.jobs.queue.count();
     const result = await client.callTool({
       name: "sync_video_to_audio",
       arguments: {
         asset_id: audioAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         anchors,
       },
     });
 
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain(message);
-    expect(fs.jobs.queue.count(PROJECT)).toBe(jobCountBefore);
+    expect(fs.jobs.queue.count()).toBe(jobCountBefore);
   });
 
   it.each([
@@ -196,19 +196,19 @@ describe("sync_video_to_audio tool", () => {
       message: "one source frame",
     },
   ])("rejects $name without enqueueing", async ({ anchors, message }) => {
-    const jobCountBefore = await fs.jobs.queue.count(PROJECT);
+    const jobCountBefore = await fs.jobs.queue.count();
     const result = await client.callTool({
       name: "sync_video_to_audio",
       arguments: {
         asset_id: audioAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         anchors,
       },
     });
 
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain(message);
-    expect(fs.jobs.queue.count(PROJECT)).toBe(jobCountBefore);
+    expect(fs.jobs.queue.count()).toBe(jobCountBefore);
   });
 
   it("enqueues a valid numeric anchor request", async () => {
@@ -216,7 +216,7 @@ describe("sync_video_to_audio tool", () => {
       name: "sync_video_to_audio",
       arguments: {
         asset_id: audioAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         anchors: [{ video_seconds: 0.5, audio_seconds: 0.6 }],
       },
     });
@@ -233,7 +233,7 @@ describe("sync_video_to_audio tool", () => {
       name: "sync_video_to_audio",
       arguments: {
         asset_id: silentAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         anchors: [{ video_seconds: 1, audio_seconds: 1.2, audio_cue: "hello" }],
       },
     });

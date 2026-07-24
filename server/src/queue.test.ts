@@ -29,7 +29,7 @@ describe("server queue (Dolt-native)", () => {
     const created = await cfs.projects.create("p");
     expect(created.ok).toBe(true);
 
-    const runner = (await cfs.jobs.queue.createRunner("p", {
+    const runner = (await cfs.jobs.queue.createRunner({
       concurrency: 2,
       pollIntervalMs: 25,
       resolveHandler: (type) =>
@@ -39,7 +39,7 @@ describe("server queue (Dolt-native)", () => {
     }))!;
     runner.start();
     try {
-      const enqueued = cfs.jobs.queue.enqueue("p", {
+      const enqueued = cfs.jobs.queue.enqueue({
         type: "noop",
         payload: { ref: "abc" },
         dedupeKey: "test-job-1",
@@ -61,7 +61,7 @@ describe("server queue (Dolt-native)", () => {
     await setEngineRoot(projectsDir, cfs);
     const created = await cfs.projects.create("p");
     expect(created.ok).toBe(true);
-    const asset = await cfs.artifacts.create("img", "handoff", "p");
+    const asset = await cfs.artifacts.create("img", "handoff");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
@@ -74,14 +74,11 @@ describe("server queue (Dolt-native)", () => {
         ctx,
         "generate",
         async (ownerId) => {
-          const written = await cfs.jobs.pending.write(
-            "p",
-            {
+          const written = await cfs.jobs.pending.write({
               artifactId: asset.value.artifactId,
               taskId,
               taskType: "fal_nano_banana",
-            },
-            ownerId,
+            }, ownerId
           );
           expect(written.ok).toBe(true);
           if (!written.ok) throw new Error(written.error.message);
@@ -95,14 +92,14 @@ describe("server queue (Dolt-native)", () => {
       "provider-handoff-probe",
       {
         type: "generate_provider_handoff_probe",
-        projectSlug: "p",
+        bookId: "p",
         imgAssetId: asset.value.slug,
       },
       5_000,
     );
 
     expect(result.ok).toBe(true);
-    const pending = await cfs.jobs.pending.read("p", asset.value.slug);
+    const pending = await cfs.jobs.pending.read(asset.value.slug);
     expect(pending.ok).toBe(true);
     expect(pending.ok ? pending.value?.taskId : null).toBe(taskId);
     await appQueue.stop();
@@ -114,7 +111,7 @@ describe("server queue (Dolt-native)", () => {
     await setEngineRoot(projectsDir, cfs);
     const created = await cfs.projects.create("p");
     expect(created.ok).toBe(true);
-    const asset = await cfs.artifacts.create("img", "sync", "p");
+    const asset = await cfs.artifacts.create("img", "sync");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
@@ -122,13 +119,13 @@ describe("server queue (Dolt-native)", () => {
     registerJobHandler("generate_sync_probe", async () => {
       await appQueue.enqueue("sync-child-probe", {
         type: "sync_child_probe",
-        projectSlug: "p",
+        bookId: "p",
         assetId: asset.value.slug,
       });
       return { ok: true };
     });
     registerJobHandler("sync_child_probe", async () => {
-      const row = await cfs.jobs.artifactWork.read("p", asset.value.slug);
+      const row = await cfs.jobs.artifactWork.read("p");
       childSawReady =
         row.ok &&
         row.value?.status === "ready" &&
@@ -140,7 +137,7 @@ describe("server queue (Dolt-native)", () => {
       "sync-parent-probe",
       {
         type: "generate_sync_probe",
-        projectSlug: "p",
+        bookId: "p",
         imgAssetId: asset.value.slug,
       },
       5_000,
@@ -171,7 +168,7 @@ describe("server queue (Dolt-native)", () => {
 
     await appQueue.enqueue("index-cleanup-probe", {
       type: "index_cleanup_probe",
-      projectSlug: "p",
+      bookId: "p",
     });
 
     // The getStatus call that first observes a terminal state also evicts the
@@ -209,6 +206,6 @@ describe("extractAssetId", () => {
   });
 
   it("returns null when no known asset id key is present", () => {
-    expect(extractAssetId({ type: "unknown_type", projectSlug: "p" })).toBeNull();
+    expect(extractAssetId({ type: "unknown_type", bookId: "p" })).toBeNull();
   });
 });

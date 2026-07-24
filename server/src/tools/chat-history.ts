@@ -8,19 +8,17 @@ export function pushChatHistoryDef(fs: Engine): ToolDef {
     description: "Append a message to the chat input history log.",
     schema: {
       message: z.string().describe("The chat message to store"),
-      project_slug: z
+      book_id: z
         .string()
         .describe("Project slug"),
     },
     handler: async (args) => {
-      const { message, project_slug: slug } = args as {
+      const { message } = args as {
         message: string;
-        project_slug: string;
       };
       const result = await fs.logs.append(
         "chat-input-history",
         { message, ts: Date.now() },
-        slug,
       );
       if (!result.ok) {
         return {
@@ -40,7 +38,7 @@ export function listChatHistoryDef(fs: Engine): ToolDef {
     name: "list_chat_history",
     description: "List recent chat input history entries.",
     schema: {
-      project_slug: z
+      book_id: z
         .string()
         .describe("Project slug"),
       limit: z
@@ -49,11 +47,10 @@ export function listChatHistoryDef(fs: Engine): ToolDef {
         .describe("Max entries to return (default 100)"),
     },
     handler: async (args) => {
-      const { project_slug: slug, limit } = args as {
-        project_slug: string;
+      const { limit } = args as {
         limit?: number;
       };
-      const entries = await fs.logs.read("chat-input-history", slug, {
+      const entries = fs.logs.read("chat-input-history", {
         limit: limit ?? 100,
       });
       const messages = entries

@@ -13,7 +13,7 @@ import type { ToolDef } from "./tool-def.js";
  * Writes a managed key into the repo-root .env file. Runs inline (no job
  * queue): it is sub-millisecond local file I/O, like rename_project.
  *
- * This tool intentionally has no project_slug argument, so withLogging never
+ * This tool intentionally has no book_id argument, so withLogging never
  * persists its args into git-versioned project activity logs — the secret
  * value must not leak there, and success/error results never echo it either.
  */

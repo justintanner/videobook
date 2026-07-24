@@ -47,12 +47,12 @@ export function readTranscriptDef(fs: Engine): ToolDef {
       "Read the transcript for a video or audio asset. Prefers timed ElevenLabs word-level cues (elevenlabs.json), falling back to plain text (.analysis.gpt4otrans.json). Returns kind='timed' with per-word start/end cues, kind='plain' with full text, kind='silence' if a transcript exists but contains no dialog, or kind='missing' if no transcript file exists.",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-my-clip)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
+      const { asset_id, book_id: _book_id } = args as { asset_id: string; book_id: string };
 
-      const elevenLabsResult = await fs.files.read(asset_id, "elevenlabs.json", project_slug);
+      const elevenLabsResult = await fs.files.read(asset_id, "elevenlabs.json");
       if (elevenLabsResult.ok) {
         try {
           const raw = JSON.parse(elevenLabsResult.value.toString()) as unknown;
@@ -90,7 +90,7 @@ export function readTranscriptDef(fs: Engine): ToolDef {
         }
       }
 
-      const plainResult = await fs.files.read(asset_id, ".analysis.gpt4otrans.json", project_slug);
+      const plainResult = await fs.files.read(asset_id, ".analysis.gpt4otrans.json");
       if (plainResult.ok) {
         try {
           const data = JSON.parse(plainResult.value.toString()) as { text?: string };

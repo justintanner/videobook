@@ -13,7 +13,7 @@ const SLUG = modelSlug("kie", "gemini-omni-video");
 const omniInput = GeminiOmniVideoRequestSchema.shape.input.shape;
 
 const generateGeminiOmniVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(omniInput.prompt, "Multimodal video generation prompt (max 20000 characters)", { required: true }),
   image_slugs: apicityStringArrayField(omniInput.image_urls, "Reference image @slugs (0-7, each ≤20MB, e.g., @img-style)"),
   video_slug: z.string().optional().describe("Reference video clip @slug (one clip, e.g., @vid-motion)"),
@@ -36,7 +36,7 @@ export function generateGeminiOmniVideoDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const raw = args as Args;
       const {
-        project_slug, prompt,
+        book_id, prompt,
         image_slugs, video_slug,
         video_clip_start, video_clip_ends,
         duration, aspect_ratio, resolution, seed,
@@ -75,20 +75,20 @@ export function generateGeminiOmniVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageSlug(fs, slug, project_slug);
+        const r = await resolveImageSlug(fs, slug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       let videoInput: RefInput | undefined;
       if (videoSlug !== undefined) {
-        const r = await resolveVideoSlug(fs, videoSlug, project_slug);
+        const r = await resolveVideoSlug(fs, videoSlug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInput = r.value;
       }
 
       const videoName = `${SLUG}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
@@ -102,7 +102,7 @@ export function generateGeminiOmniVideoDef(fs: Engine): ToolDef {
         type: "generate_gemini_omni_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         imageInputs,
         ...(videoInput ? { videoInput } : {}),
         sourceImageIds,

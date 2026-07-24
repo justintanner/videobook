@@ -1,15 +1,13 @@
-import { randomUUID } from "node:crypto";
-
+import { v7 as uuidv7 } from "uuid";
 import type {
-  BookActionPhase,
-  BookActionScope,
   Engine,
+  HistoryActionPhase,
+  HistoryActionScope,
 } from "videobook-engine";
 import { actionNameForTool, isBookToolActivity } from "./activity-policy.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
-const ARTIFACT_ID =
-  /^@?(?:img|vid|prm|char|scn|aud|scr|nb)-[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+const ARTIFACT_REFERENCE = /^@?(?:img|vid|aud|script|char|prompt|scn|final)-[a-zA-Z0-9._-]+$/;
 
 function toolResultValue(result: ToolResult): unknown {
   const text = result.content.find((item) => item.type === "text")?.text;
@@ -22,7 +20,7 @@ function toolResultValue(result: ToolResult): unknown {
 }
 
 function collectArtifactIds(value: unknown, found = new Set<string>()): Set<string> {
-  if (typeof value === "string" && ARTIFACT_ID.test(value)) {
+  if (typeof value === "string" && ARTIFACT_REFERENCE.test(value)) {
     found.add(value.replace(/^@/, ""));
     return found;
   }
@@ -39,56 +37,41 @@ function collectArtifactIds(value: unknown, found = new Set<string>()): Set<stri
 function boundedValue(value: unknown): unknown {
   const serialized = JSON.stringify(value);
   if (serialized.length <= 32_000) return value;
-  return {
-    truncated: true,
-    bytes: Buffer.byteLength(serialized),
-  };
+  return { truncated: true, bytes: Buffer.byteLength(serialized) };
 }
 
 function actionScope(
   toolName: string,
   inputs: string[],
   outputs: string[],
-): BookActionScope {
-  if (toolName.includes("project")) return "project";
-  if (
-    toolName.includes("post") ||
-    toolName.includes("publish") ||
-    toolName.includes("schedule")
-  ) {
+): HistoryActionScope {
+  if (toolName.includes("post") || toolName.includes("publish") || toolName.includes("schedule")) {
     return "external";
   }
-  if (inputs.length > 0 || outputs.length > 0) return "artifact";
-  return "project";
+  return inputs.length > 0 || outputs.length > 0 ? "artifact" : "book";
 }
 
 async function recordLifecycle(
-  fs: Engine,
+  engine: Engine,
   input: {
-    slug: string;
     actionId: string;
     actionName: string;
     toolName: string;
-    phase: BookActionPhase;
+    phase: HistoryActionPhase;
     args: Record<string, unknown>;
     value?: unknown;
   },
 ): Promise<void> {
   const inputArtifactIds = [...collectArtifactIds(input.args)];
-  const inputArtifactIdSet = new Set(inputArtifactIds);
+  const inputs = new Set(inputArtifactIds);
   const outputArtifactIds = [...collectArtifactIds(input.value)]
-    .filter((assetId) => !inputArtifactIdSet.has(assetId));
+    .filter((artifactId) => !inputs.has(artifactId));
   const targetArtifactId = outputArtifactIds[0] ?? inputArtifactIds[0];
-  const recorded = await fs.history.recordBookAction({
-    projectSlug: input.slug,
+  const result = await engine.history.recordAction({
     actionId: input.actionId,
     operation: input.actionName,
     phase: input.phase,
-    scope: actionScope(
-      input.toolName,
-      inputArtifactIds,
-      outputArtifactIds,
-    ),
+    scope: actionScope(input.toolName, inputArtifactIds, outputArtifactIds),
     actor: "mcp",
     lane: "mcp",
     inputArtifactIds,
@@ -100,103 +83,56 @@ async function recordLifecycle(
     details: {
       tool_name: input.toolName,
       arguments: boundedValue(input.args),
-      ...(input.value === undefined
-        ? {}
-        : { result: boundedValue(input.value) }),
+      ...(input.value === undefined ? {} : { result: boundedValue(input.value) }),
     },
   });
-  if (!recorded.ok) {
-    console.warn(
-      `[mcp] project-book record failed for ${input.actionName}: ${recorded.error.message}`,
-    );
-  }
+  if (!result.ok) console.warn(`[mcp] history record failed for ${input.actionName}: ${result.error.message}`);
 }
 
-function withLogging(def: ToolDef, fs: Engine): ToolDef {
+export function withLogging(def: ToolDef, engine: Engine): ToolDef {
   return {
     ...def,
     handler: async (args) => {
-      const start = performance.now();
-      const slug = args.project_slug as string | undefined;
-      const shouldRecord = Boolean(slug) && isBookToolActivity(def.name, args);
+      const startedAt = performance.now();
+      const shouldRecord = def.scope !== "global" && isBookToolActivity(def.name, args);
       const actionName = actionNameForTool(def.name);
-      const actionId = randomUUID();
-      if (shouldRecord && def.name !== "create_project") {
-        try {
-          await recordLifecycle(fs, {
-            slug: slug!,
-            actionId,
-            actionName,
-            toolName: def.name,
-            phase: "requested",
-            args,
-          });
-        } catch (error) {
-          console.warn(
-            `[mcp] project-book record failed for ${actionName}:`,
-            error,
-          );
-        }
+      const actionId = uuidv7();
+      if (shouldRecord) {
+        await recordLifecycle(engine, {
+          actionId,
+          actionName,
+          toolName: def.name,
+          phase: "requested",
+          args,
+        });
       }
-      let result: ToolResult;
       try {
-        result = await def.handler(args);
-      } catch (error) {
-        const ms = Math.round(performance.now() - start);
-        console.log(`[mcp] ${def.name} error ${ms}ms`);
-        if (shouldRecord && slug && def.name !== "delete_project") {
-          try {
-            await recordLifecycle(fs, {
-              slug,
-              actionId,
-              actionName,
-              toolName: def.name,
-              phase: "failed",
-              args,
-              value: {
-                error: error instanceof Error ? error.message : String(error),
-              },
-            });
-          } catch (recordError) {
-            console.warn(
-              `[mcp] project-book record failed for ${actionName}:`,
-              recordError,
-            );
-          }
-        }
-        throw error;
-      }
-      const ms = Math.round(performance.now() - start);
-
-      const status = result.isError ? "error" : "ok";
-      const suffix = result.isError
-        ? ` ${result.content[0]?.text.slice(0, 80)}`
-        : "";
-      console.log(`[mcp] ${def.name} ${status} ${ms}ms${suffix}`);
-
-      if (shouldRecord && slug && def.name !== "delete_project") {
-        const value = toolResultValue(result);
-        try {
-          await recordLifecycle(fs, {
-            slug,
+        const result = await def.handler(args);
+        console.log(`[mcp] ${def.name} ${result.isError ? "error" : "ok"} ${Math.round(performance.now() - startedAt)}ms`);
+        if (shouldRecord) {
+          await recordLifecycle(engine, {
             actionId,
             actionName,
             toolName: def.name,
             phase: result.isError ? "failed" : "completed",
             args,
-            value,
+            value: toolResultValue(result),
           });
-        } catch (error) {
-          console.warn(
-            `[mcp] project-book record failed for ${actionName}:`,
-            error,
-          );
         }
+        return result;
+      } catch (cause) {
+        if (shouldRecord) {
+          await recordLifecycle(engine, {
+            actionId,
+            actionName,
+            toolName: def.name,
+            phase: "failed",
+            args,
+            value: { error: cause instanceof Error ? cause.message : String(cause) },
+          });
+        }
+        throw cause;
       }
-
-      return result;
     },
   };
 }
-
-export { withLogging };

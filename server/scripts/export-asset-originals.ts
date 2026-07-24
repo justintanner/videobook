@@ -63,10 +63,10 @@ async function sha256OfFile(filePath: string): Promise<string> {
 async function exportAsset(
   exportsDir: string,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
 ): Promise<ProjectStats> {
   const stats = emptyStats();
-  const dirResult = await fs.workspaces.resolveArtifact(assetId, projectSlug);
+  const dirResult = await fs.workspaces.resolveArtifact(assetId, bookId);
   if (!dirResult.ok) {
     stats.failed += 1;
     return stats;

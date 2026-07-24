@@ -18,13 +18,13 @@ describe("assign_slot tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     // Upload an asset to use in slot assignments
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo.png", data },
+      arguments: { book_id: "test-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse(
       (uploadResult.content as TextContent)[0].text,
@@ -41,7 +41,7 @@ describe("assign_slot tool", () => {
     const result = await client.callTool({
       name: "assign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         asset_id: assetId,
         slot: "s01",
       },
@@ -57,7 +57,7 @@ describe("assign_slot tool", () => {
     const result = await client.callTool({
       name: "assign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         asset_id: assetId,
         slot: "s03",
       },
@@ -76,7 +76,7 @@ describe("assign_slot tool", () => {
     await client.callTool({
       name: "assign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         asset_id: assetId,
         slot: "s01",
       },
@@ -86,7 +86,7 @@ describe("assign_slot tool", () => {
     const data2 = Buffer.from("fake-png-data-2").toString("base64");
     const upload2 = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo2.png", data: data2 },
+      arguments: { book_id: "test-proj", filename: "photo2.png", data: data2 },
     });
     const asset2 = JSON.parse((upload2.content as TextContent)[0].text);
 
@@ -94,7 +94,7 @@ describe("assign_slot tool", () => {
     const result = await client.callTool({
       name: "assign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         asset_id: asset2.assetId,
         slot: "s02",
       },
@@ -110,7 +110,7 @@ describe("assign_slot tool", () => {
     const result = await client.callTool({
       name: "assign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         asset_id: assetId,
         slot: "slot1",
       },
@@ -125,7 +125,7 @@ describe("assign_slot tool", () => {
     const result = await client.callTool({
       name: "assign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         asset_id: "img-no-such-asset",
         slot: "s01",
       },
@@ -140,7 +140,7 @@ describe("assign_slot tool", () => {
     const result = await client.callTool({
       name: "assign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         asset_id: assetId,
         slot: "s00",
       },
@@ -153,7 +153,7 @@ describe("assign_slot tool", () => {
     const result = await client.callTool({
       name: "assign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         asset_id: assetId,
         slot: "s01",
       },
@@ -171,7 +171,7 @@ describe("assign_slot tool", () => {
     const result = await client.callTool({
       name: "assign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         asset_id: assetId,
         slot: "s01",
       },
@@ -193,7 +193,7 @@ describe("assign_slot lazy analysis trigger", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     savedKey = process.env.KIE_API_KEY;
     // "test-" prefix is rejected by api-key.ts so any accidentally-dequeued job
@@ -214,7 +214,7 @@ describe("assign_slot lazy analysis trigger", () => {
     const data = Buffer.from("fake-image-data").toString("base64");
     const result = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename, data },
+      arguments: { book_id: "test-proj", filename, data },
     });
     return JSON.parse((result.content as TextContent)[0].text).assetId;
   }
@@ -224,7 +224,7 @@ describe("assign_slot lazy analysis trigger", () => {
 
     const result = await client.callTool({
       name: "assign_slot",
-      arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
+      arguments: { book_id: "test-proj", asset_id: assetId, slot: "s01" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -239,7 +239,7 @@ describe("assign_slot lazy analysis trigger", () => {
 
     const result = await client.callTool({
       name: "assign_slot",
-      arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
+      arguments: { book_id: "test-proj", asset_id: assetId, slot: "s01" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -253,7 +253,7 @@ describe("assign_slot lazy analysis trigger", () => {
 
     const result = await client.callTool({
       name: "assign_slot",
-      arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
+      arguments: { book_id: "test-proj", asset_id: assetId, slot: "s01" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -266,17 +266,13 @@ describe("assign_slot lazy analysis trigger", () => {
 
     // Drop the analysis sidecar in place by hand to simulate prior run.
     const fs = createEngineForTest(tempDir);
-    const writeRes = await fs.files.write(
-      assetId,
-      ".original.analysis.json",
-      Buffer.from(JSON.stringify({ summary: "" })),
-      "test-proj",
+    const writeRes = await fs.files.write(assetId, ".original.analysis.json", Buffer.from(JSON.stringify({ summary: "" }))
     );
     if (!writeRes.ok) throw new Error(writeRes.error.message);
 
     const result = await client.callTool({
       name: "assign_slot",
-      arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
+      arguments: { book_id: "test-proj", asset_id: assetId, slot: "s01" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -286,14 +282,14 @@ describe("assign_slot lazy analysis trigger", () => {
 
   it("enqueues analyze_video for an unanalyzed vid- dropped into a slot", async () => {
     const fs = createEngineForTest(tempDir);
-    const created = await fs.artifacts.create("vid", "fake-clip", "test-proj");
+    const created = await fs.artifacts.create("vid", "fake-clip");
     if (!created.ok) throw new Error(created.error.message);
     const assetId = created.value.slug;
     await writeFile(join(created.value.path, "original.mp4"), "fake-video-data");
 
     const result = await client.callTool({
       name: "assign_slot",
-      arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
+      arguments: { book_id: "test-proj", asset_id: assetId, slot: "s01" },
     });
 
     expect(result.isError).toBeFalsy();

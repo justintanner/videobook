@@ -19,7 +19,7 @@ export function getWatermarkConfigDef(fs: Engine): ToolDef {
     schema: {},
     handler: async () => {
       const cached = await readWatermarkConfig(fs);
-      const live = await fetchAuthenticatedXHandle(fs);
+      const live = await fetchAuthenticatedXHandle();
       const authenticatedHandle = live !== null
         ? (await setAuthenticatedHandle(live, fs)).authenticatedHandle
         : cached.authenticatedHandle;

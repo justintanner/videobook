@@ -38,12 +38,12 @@ function parseCharacterMetadataForm(text: string, itemId: string): CharacterMeta
 
 export function CharacterFolderViewer({
   item,
-  projectSlug,
+  bookId,
   callTool,
   onClose
 }: {
   item: MediaItem
-  projectSlug: string | null
+  bookId: string | null
   callTool: UseMcpResult['callTool']
   onClose: () => void
 }) {
@@ -55,27 +55,27 @@ export function CharacterFolderViewer({
   const [isDragging, setIsDragging] = useState(false)
   const [draggedImg, setDraggedImg] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { publishCharacter, publishing } = usePublishGoogleFlowCharacter(projectSlug)
+  const { publishCharacter, publishing } = usePublishGoogleFlowCharacter(bookId)
 
   const readManifest = useCallback(async (): Promise<ManifestFile[] | null> => {
-    if (!projectSlug) return null
-    const res = await fetch(`/api/manifest/${encodeURIComponent(projectSlug)}/${encodeURIComponent(item.id)}`)
+    if (!bookId) return null
+    const res = await fetch(`/api/manifest/${encodeURIComponent(bookId)}/${encodeURIComponent(item.id)}`)
     if (!res.ok) return null
     const data = await res.json() as { files?: ManifestFile[] }
     return Array.isArray(data.files) ? data.files : []
-  }, [projectSlug, item.id])
+  }, [bookId, item.id])
 
   const readMetadata = useCallback(async (): Promise<CharacterMetadataForm | null> => {
-    if (!projectSlug) return null
+    if (!bookId) return null
     const res = await callTool('read_asset_metadata', {
-      project_slug: projectSlug,
+      book_id: bookId,
       asset_id: item.id,
       name: 'character',
     })
     if (res.isError) return parseCharacterMetadataForm('{}', item.id)
     const content = res.content as Array<{ type: string; text: string }>
     return parseCharacterMetadataForm(content[0]?.text || '{}', item.id)
-  }, [projectSlug, item.id, callTool])
+  }, [bookId, item.id, callTool])
 
   const applyMetadata = useCallback((next: CharacterMetadataForm) => {
     setDisplayName(next.displayName)
@@ -107,7 +107,7 @@ export function CharacterFolderViewer({
   }, [applyMetadata, readManifest, readMetadata])
 
   const handleSaveMetadata = async () => {
-    if (!projectSlug) return
+    if (!bookId) return
     setMetadataSaving(true)
     try {
       const name = displayName.trim()
@@ -117,7 +117,7 @@ export function CharacterFolderViewer({
       const payload = JSON.stringify(merged, null, 2)
 
       const res = await callTool('set_character_metadata', {
-        project_slug: projectSlug,
+        book_id: bookId,
         char_asset_id: item.id,
         metadata: payload,
       })
@@ -161,7 +161,7 @@ export function CharacterFolderViewer({
     setMetadataSaving(true)
     try {
       const res = await callTool('set_character_metadata', {
-        project_slug: projectSlug!,
+        book_id: bookId!,
         char_asset_id: item.id,
         metadata: payload,
       })
@@ -182,9 +182,9 @@ export function CharacterFolderViewer({
   }
 
   const handleFile = async (file: File) => {
-    if (!projectSlug) return
+    if (!bookId) return
     try {
-      await uploadProjectFile(projectSlug, file, file.name, item.id)
+      await uploadProjectFile(bookId, file, file.name, item.id)
       await fetchManifest()
     } catch (e) {
       console.error('Failed to upload file to character asset', e)
@@ -238,10 +238,10 @@ export function CharacterFolderViewer({
 
     setDraggedImg(null)
 
-    if (projectSlug) {
+    if (bookId) {
       const orderedFilenames = newOrder.map(f => f.name)
       await callTool('reorder_character_images', {
-        project_slug: projectSlug,
+        book_id: bookId,
         asset_id: item.id,
         ordered_filenames: orderedFilenames
       })
@@ -257,10 +257,10 @@ export function CharacterFolderViewer({
     const [moved] = newOrder.splice(sourceIdx, 1)
     newOrder.unshift(moved)
 
-    if (projectSlug) {
+    if (bookId) {
       const orderedFilenames = newOrder.map(f => f.name)
       await callTool('reorder_character_images', {
-        project_slug: projectSlug,
+        book_id: bookId,
         asset_id: item.id,
         ordered_filenames: orderedFilenames
       })
@@ -362,7 +362,7 @@ export function CharacterFolderViewer({
                     onDrop={(e) => void handleDropImg(e, f.name)}
                   >
                     <img
-                      src={`/files/${projectSlug}/${item.id}/${f.name}`}
+                      src={`/files/${bookId}/${item.id}/${f.name}`}
                       alt={f.name}
  className="size-full object-cover pointer-events-none"
                     />
@@ -396,7 +396,7 @@ export function CharacterFolderViewer({
                   <audio
                     controls
                     className="w-full h-8"
-                    src={`/files/${projectSlug}/${item.id}/${f.name}`}
+                    src={`/files/${bookId}/${item.id}/${f.name}`}
                   />
                 </div>
               ))}

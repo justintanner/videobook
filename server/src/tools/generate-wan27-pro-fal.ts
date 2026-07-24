@@ -10,7 +10,7 @@ import { apicityField, apicityStringField, apicityUnionEnumField } from "./schem
 const wan = FalWanV2p7TextToImageRequestSchema.shape;
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(wan.prompt, "Text prompt for image generation", { required: true }),
   negative_prompt: apicityStringField(wan.negative_prompt, "Negative prompt"),
   image_size: apicityUnionEnumField(wan.image_size, "Output size preset"),
@@ -26,13 +26,13 @@ export function generateWan27ProFalDef(fs: Engine): ToolDef {
     description: "Generate an image via fal.ai using Wan 2.7 Pro text-to-image (higher quality variant). Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, negative_prompt, image_size, max_images, seed } = args as Args;
+      const { book_id, prompt, negative_prompt, image_size, max_images, seed } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "wan/2-7-image-pro")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "wan/2-7-image-pro")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
@@ -42,7 +42,7 @@ export function generateWan27ProFalDef(fs: Engine): ToolDef {
         type: "generate_wan27_pro_fal",
         imgAssetId,
         imgAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         ...(negative_prompt !== undefined ? { negative_prompt } : {}),
         ...(image_size !== undefined ? { image_size } : {}),

@@ -10,7 +10,7 @@ type GenerateSeedreamTextImagePayload = {
   prompt: string;
   imgAssetId: string;
   imgAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   aspectRatio?: SeedreamTextToImageRequest["input"]["aspect_ratio"];
   quality?: SeedreamTextToImageRequest["input"]["quality"];
   nsfwChecker?: boolean;
@@ -19,7 +19,7 @@ type GenerateSeedreamTextImagePayload = {
 export function registerGenerateSeedreamTextImageJob(fs: Engine): void {
   registerJobHandler("generate_seedream_text_image", async (payload, ctx) => {
     const {
-      prompt, imgAssetId, imgAssetDir, projectSlug,
+      prompt, imgAssetId, imgAssetDir, bookId,
       aspectRatio, quality, nsfwChecker,
     } = payload as GenerateSeedreamTextImagePayload;
 
@@ -36,7 +36,7 @@ export function registerGenerateSeedreamTextImageJob(fs: Engine): void {
       taskType: "seedream_text_image",
       assetId: imgAssetId,
       assetDir: imgAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         sourceImageIds: [],
         prompt,

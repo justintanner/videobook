@@ -9,7 +9,7 @@ type Payload = {
   type: "generate_wan27_videoedit_fal";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   sourceVideo: { assetId: string; filename: string };
   refImage?: ImageInput;
@@ -27,13 +27,13 @@ type Payload = {
 export function registerGenerateWan27VideoeditFalJob(fs: Engine): void {
   registerJobHandler("generate_wan27_videoedit_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.projectSlug, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.bookId, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
-      const video_url = await uploadAssetToFal(fs, p.sourceVideo.assetId, p.sourceVideo.filename, p.projectSlug);
+      const video_url = await uploadAssetToFal(fs, p.sourceVideo.assetId, p.sourceVideo.filename, p.bookId);
       const reference_image_url = p.refImage
         ? "url" in p.refImage
           ? p.refImage.url
-          : await uploadAssetToFal(fs, p.refImage.assetId, p.refImage.filename, p.projectSlug)
+          : await uploadAssetToFal(fs, p.refImage.assetId, p.refImage.filename, p.bookId)
         : undefined;
   
       const input: Record<string, unknown> = {
@@ -51,7 +51,7 @@ export function registerGenerateWan27VideoeditFalJob(fs: Engine): void {
   
       const taskId = await submitFalJob({
         fs,
-        projectSlug: p.projectSlug,
+        bookId: p.bookId,
         assetId: p.vidAssetId,
         assetDir: p.vidAssetDir,
         endpointId: "fal-ai/wan/v2.7/edit-video",

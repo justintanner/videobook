@@ -34,7 +34,7 @@ function getDimensions(orientation: Orientation): { width: number; height: numbe
 export function computeTimelinePreview(
   timeline: TimelineConfig | undefined,
   mediaItems: MediaItem[],
-  projectSlug: string | null | undefined,
+  bookId: string | null | undefined,
   orientation: Orientation,
 ): TimelinePreviewData {
   const empty: TimelinePreviewData = {
@@ -50,7 +50,7 @@ export function computeTimelinePreview(
     missingRenders: [],
   };
 
-  if (!timeline || !projectSlug) return empty;
+  if (!timeline || !bookId) return empty;
 
   const { width, height } = getDimensions(orientation);
   const slots: TimelineSlotData[] = [];
@@ -82,7 +82,7 @@ export function computeTimelinePreview(
 
     const durationInFrames = Math.max(1, Math.round((item.duration ?? 0) * FPS));
     const file = hasRender ? `${orientation}.mp4` : 'original.mp4';
-    const src = `/files/${projectSlug}/${item.id}/${file}`;
+    const src = `/files/${bookId}/${item.id}/${file}`;
 
     slots.push({
       src,
@@ -101,7 +101,7 @@ export function computeTimelinePreview(
   for (const clip of timeline.audio ?? []) {
     const item = mediaItems.find((m) => m.id === clip.slug);
     if (!item) continue;
-    const src = item.filePath || `/files/${projectSlug}/${item.id}/original.mp3`;
+    const src = item.filePath || `/files/${bookId}/${item.id}/original.mp3`;
     audioClips.push({
       id: clip.id,
       src,
@@ -130,11 +130,11 @@ export function computeTimelinePreview(
 export function useTimelinePreview(
   timeline: TimelineConfig | undefined,
   mediaItems: MediaItem[],
-  projectSlug: string | null | undefined,
+  bookId: string | null | undefined,
   orientation: Orientation,
 ): TimelinePreviewData {
   return useMemo(
-    () => computeTimelinePreview(timeline, mediaItems, projectSlug, orientation),
-    [timeline, mediaItems, projectSlug, orientation],
+    () => computeTimelinePreview(timeline, mediaItems, bookId, orientation),
+    [timeline, mediaItems, bookId, orientation],
   );
 }

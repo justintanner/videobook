@@ -25,17 +25,13 @@ async function enrichCommitsWithRewrite(
   fs: Engine,
   commits: Revision[],
   artifact: string,
-  project: string,
+  _project: string,
 ): Promise<EnrichedCommit[]> {
   if (!artifact.startsWith("script-")) return commits;
   return Promise.all(
     commits.map(async (commit): Promise<EnrichedCommit> => {
       const result =
-        await fs.metadata.artifacts.readAtRevision<OriginalMetadata>(
-          artifact,
-          "original",
-          commit.hash,
-          project,
+        await fs.metadata.artifacts.readAtRevision<OriginalMetadata>(artifact, "original", commit.hash
         );
       if (!result.ok || result.value.origin !== "describe_image") {
         return commit;
@@ -65,21 +61,17 @@ export function assetHistoryDef(fs: Engine): ToolDef {
     description: "Get immutable Dolt revision history for an asset",
     schema: {
       asset_id: z.string().describe("Active artifact slug or stable UUID"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       limit: z.number().optional().describe("Maximum revisions (default 20)"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, limit } = args as {
+      const { asset_id, book_id, limit } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         limit?: number;
       };
       try {
-        const commits = fs.history.artifact(
-          asset_id,
-          project_slug,
-          limit ?? 20,
-        );
+        const commits = fs.history.artifact(asset_id, limit);
         return {
           content: [{
             type: "text" as const,
@@ -88,7 +80,7 @@ export function assetHistoryDef(fs: Engine): ToolDef {
                 fs,
                 commits,
                 asset_id,
-                project_slug,
+                book_id,
               ),
             ),
           }],

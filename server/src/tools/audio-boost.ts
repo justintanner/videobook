@@ -22,13 +22,13 @@ export function audioBoostDef(fs: Engine): ToolDef {
       "Boost audio volume of a video or audio asset using a linear multiplier (1.0–4.0). Operates in-place with git versioning.",
     schema: {
       asset_id: z.string().describe("Asset ID (vid-* or aud-*)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       boost: z.number().describe("Volume multiplier (1.0–4.0). >1 = louder."),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, boost } = args as {
+      const { asset_id, book_id, boost } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         boost: number;
       };
 
@@ -52,7 +52,7 @@ export function audioBoostDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -88,7 +88,7 @@ export function audioBoostDef(fs: Engine): ToolDef {
         isVideo,
         assetId: asset_id,
         assetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
       } as unknown as Record<string, unknown>);
 
       return {

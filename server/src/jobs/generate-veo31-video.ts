@@ -10,7 +10,7 @@ type GenerateVeo31VideoPayload = {
   veoModel: GoogleVeo31Model;
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   firstFrame?: RefInput;
   lastFrame?: RefInput;
   imageInputs: RefInput[];
@@ -21,8 +21,8 @@ type GenerateVeo31VideoPayload = {
   seed?: number;
 };
 
-async function uploadRef(provider: GoogleFlowProvider, fs: Engine, input: RefInput, projectSlug: string): Promise<string> {
-  return uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, projectSlug);
+async function uploadRef(provider: GoogleFlowProvider, fs: Engine, input: RefInput, bookId: string): Promise<string> {
+  return uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, bookId);
 }
 
 export function registerGenerateVeo31VideoJob(fs: Engine): void {
@@ -30,11 +30,11 @@ export function registerGenerateVeo31VideoJob(fs: Engine): void {
     const p = payload as GenerateVeo31VideoPayload;
     const provider = createGoogleFlowProvider();
 
-    const startImageId = p.firstFrame ? await uploadRef(provider, fs, p.firstFrame, p.projectSlug) : undefined;
-    const endImageId = p.lastFrame ? await uploadRef(provider, fs, p.lastFrame, p.projectSlug) : undefined;
+    const startImageId = p.firstFrame ? await uploadRef(provider, fs, p.firstFrame, p.bookId) : undefined;
+    const endImageId = p.lastFrame ? await uploadRef(provider, fs, p.lastFrame, p.bookId) : undefined;
     const referenceImageIds: string[] = [];
     for (const input of p.imageInputs) {
-      referenceImageIds.push(await uploadRef(provider, fs, input, p.projectSlug));
+      referenceImageIds.push(await uploadRef(provider, fs, input, p.bookId));
     }
 
     const request = buildVeo31VideoPayload(
@@ -56,7 +56,7 @@ export function registerGenerateVeo31VideoJob(fs: Engine): void {
       request,
       assetId: p.vidAssetId,
       assetDir: p.vidAssetDir,
-      projectSlug: p.projectSlug,
+      bookId: p.bookId,
       // The engine's TaskType union has no google literal; ride the shared
       // single-mp4 completion like veo3/gemini-omni do, with the real model
       // in meta.apiModel for provenance.

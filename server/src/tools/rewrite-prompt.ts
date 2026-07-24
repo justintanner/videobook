@@ -12,6 +12,7 @@ import type { OpenAiContentPart, OpenAiMessage } from "@apicity/openai";
 import { getCanonicalName } from "../generation-registry.js";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 import type { ToolDef } from "./tool-def.js";
+import { timelineSlotSlugs } from "../timeline-helpers.js";
 
 const REWRITE_MODEL = "gpt-5.2";
 
@@ -240,10 +241,10 @@ const ERROR_RECENCY_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function findPreviousErrorForPrompt(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   prompt: string,
 ): Promise<GenerationError | null> {
-  const result = await fs.jobs.failures.findAll(projectSlug);
+  const result = await fs.jobs.failures.findAll();
   if (!result.ok) return null;
   const normalized = normalizePromptForMatch(prompt);
   const cutoff = Date.now() - ERROR_RECENCY_MS;
@@ -371,20 +372,17 @@ function buildSceneResult(
 async function resolveImageDataUris(
   imageSlugs: string[],
   fs: Engine,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<string[]> {
   const tagText = imageSlugs.map((s) => `@${s.replace(/^@/, "")}`).join(" ");
-  const resolvedResult = await fs.resolver.resolveAll(tagText, projectSlug);
+  const resolvedResult = await fs.resolver.resolveAll(tagText);
   if (!resolvedResult.ok) return [];
   const { resolved } = resolvedResult.value;
 
   const dataUris: string[] = [];
   for (const asset of resolved) {
     if (!asset.filePath) continue;
-    const readResult = await fs.files.read(
-      asset.artifactId,
-      asset.filePath.split("/").pop()!,
-      projectSlug,
+    const readResult = await fs.files.read(asset.artifactId, asset.filePath.split("/").pop()!
     );
     if (!readResult.ok) continue;
     const buf = Buffer.from(readResult.value);
@@ -414,7 +412,7 @@ export function rewritePromptDef(fs: Engine): ToolDef {
         .array(z.string())
         .optional()
         .describe("Optional image asset slugs for visual context (e.g. ['img-sunset'])"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       asset_slug: z.string().optional().describe("Asset slug for scene-context rewrite (requires scene_index)"),
       scene_index: z.number().int().optional().describe("0-based scene index to rewrite (requires asset_slug)"),
       platform: z
@@ -446,13 +444,13 @@ export function rewritePromptDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const {
-        prompt, model, image_slugs, project_slug,
+        prompt, model, image_slugs, book_id,
         asset_slug, scene_index, platform, custom_prompt, provider_docs, previous_error,
       } = args as {
         prompt?: string;
         model: string;
         image_slugs?: string[];
-        project_slug: string;
+        book_id: string;
         asset_slug?: string;
         scene_index?: number;
         platform?: Platform;
@@ -471,7 +469,7 @@ export function rewritePromptDef(fs: Engine): ToolDef {
 
       // Scene rewrite mode
       if (asset_slug !== undefined && scene_index !== undefined) {
-        return handleSceneRewrite(fs, apiKey, asset_slug, scene_index, prompt, project_slug);
+        return handleSceneRewrite(fs, apiKey, asset_slug, scene_index, prompt, book_id);
       }
 
       // Standard rewrite mode — require prompt OR reference images
@@ -493,7 +491,7 @@ export function rewritePromptDef(fs: Engine): ToolDef {
       if (previous_error) {
         previousError = { message: previous_error };
       } else if (prompt) {
-        const found = await findPreviousErrorForPrompt(fs, project_slug, prompt);
+        const found = await findPreviousErrorForPrompt(fs, book_id, prompt);
         if (found) {
           previousError = {
             message: found.message,
@@ -505,16 +503,10 @@ export function rewritePromptDef(fs: Engine): ToolDef {
       // Expand @s01 slot refs → actual asset slugs
       let expandedPrompt = prompt ?? "";
       if (expandedPrompt) {
-        const timelineResult = await fs.metadata.projects.read<{ slots: Array<{ slug: string }> }>("timeline", project_slug);
-        if (timelineResult.ok && timelineResult.value.slots) {
-          expandedPrompt = fs.resolver.expandSlotRefs(
-            expandedPrompt,
-            timelineResult.value.slots,
-          );
-        }
+        expandedPrompt = fs.resolver.expandSlotRefs(expandedPrompt, timelineSlotSlugs(fs));
       }
 
-      return handleStandardRewrite(fs, apiKey, expandedPrompt, model, image_slugs, project_slug, platform, custom_prompt, provider_docs, previousError);
+      return handleStandardRewrite(fs, apiKey, expandedPrompt, model, image_slugs, book_id, platform, custom_prompt, provider_docs, previousError);
     },
   };
 }
@@ -525,7 +517,7 @@ async function handleStandardRewrite(
   prompt: string,
   model: string,
   imageSlugs: string[] | undefined,
-  projectSlug: string,
+  bookId: string,
   platform: Platform | undefined,
   customPrompt: string | undefined,
   providerDocs: boolean | undefined,
@@ -558,7 +550,7 @@ async function handleStandardRewrite(
 
   let messages: OpenAiMessage[];
   if (imageSlugs && imageSlugs.length > 0) {
-    const dataUris = await resolveImageDataUris(imageSlugs, fs, projectSlug);
+    const dataUris = await resolveImageDataUris(imageSlugs, fs, bookId);
     if (dataUris.length === 0) {
       return {
         isError: true as const,
@@ -591,11 +583,11 @@ async function handleSceneRewrite(
   assetSlug: string,
   sceneIndex: number,
   instruction: string | undefined,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
   const assetId = assetSlug.replace(/^@/, "");
 
-  const metaResult = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "tool.params", projectSlug);
+  const metaResult = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "tool.params");
   if (!metaResult.ok) {
     return {
       isError: true as const,

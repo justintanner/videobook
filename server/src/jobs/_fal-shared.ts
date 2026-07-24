@@ -5,7 +5,7 @@ export type FalTaskType = `fal_${string}`;
 
 export type FalSubmitArgs = {
   fs: Engine;
-  projectSlug: string;
+  bookId: string;
   assetId: string;
   assetDir: string;
   endpointId: string;
@@ -21,11 +21,7 @@ export async function submitFalJob(args: FalSubmitArgs): Promise<string> {
 
   const provider = createFal({ apiKey, timeout: 60_000 });
 
-  await args.fs.metadata.artifacts.write(
-    args.assetId,
-    "generation-payload",
-    { endpoint_id: args.endpointId, input: args.input },
-    args.projectSlug,
+  await args.fs.metadata.artifacts.write(args.assetId, "generation-payload", { endpoint_id: args.endpointId, input: args.input }
   );
 
   const submit = await provider.post.v1.queue.submit({
@@ -33,9 +29,7 @@ export async function submitFalJob(args: FalSubmitArgs): Promise<string> {
     input: args.input,
   });
 
-  const ptResult = await args.fs.jobs.pending.write(
-    args.projectSlug,
-    {
+  const ptResult = await args.fs.jobs.pending.write({
       taskId: submit.request_id,
       taskType: args.taskType,
       artifactId: args.assetId,
@@ -43,8 +37,7 @@ export async function submitFalJob(args: FalSubmitArgs): Promise<string> {
         ...args.meta,
         falEndpointId: args.endpointId,
       },
-    },
-    args.expectedOwnerId,
+    }, args.expectedOwnerId
   );
   if (!ptResult.ok) {
     throw new Error(`Failed to write pending-task for ${args.assetId}: ${ptResult.error.message}`);

@@ -37,7 +37,7 @@ type ResolvedAudioOverlay = {
 
 type RenderTimelinePayload = {
   type: "render_timeline";
-  projectSlug: string;
+  bookId: string;
   orientation: "landscape" | "portrait" | "square";
   resolvedSlots: ResolvedSlot[];
   resolvedAudio?: ResolvedAudioOverlay[];
@@ -305,20 +305,15 @@ export function registerRenderTimelineJob(fs: Engine): void {
   registerJobHandler("render_timeline", async (payload, ctx) => {
     ctx.signal.throwIfAborted();
     const {
-      projectSlug,
+      bookId,
       orientation,
       resolvedSlots,
       resolvedAudio = [],
     } = payload as RenderTimelinePayload;
 
-    const projectResult = await fs.projects.get(projectSlug);
-    if (!projectResult.ok) throw new Error(projectResult.error.message);
-    let finalResult = fs.artifacts.get(projectSlug, "final");
+    let finalResult = fs.artifacts.get("final");
     if (!finalResult.ok) {
-      const created = await fs.artifacts.create({
-        project: projectSlug,
-        kind: "final",
-        slug: "final",
+      const created = await fs.artifacts.create({kind: "final", slug: "final"
       });
       if (!created.ok) throw new Error(created.error.message);
       finalResult = created;
@@ -328,7 +323,7 @@ export function registerRenderTimelineJob(fs: Engine): void {
 
     return withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       "final",
       finalDir,
       ctx,
@@ -373,7 +368,7 @@ export function registerRenderTimelineJob(fs: Engine): void {
 
       if (plan.mode === "reencode") {
         console.warn(
-          `[render-timeline] ${projectSlug}: re-encoding video to ${plan.targetFps}fps CFR (${plan.reasons.join(", ")})`,
+          `[render-timeline] ${bookId}: re-encoding video to ${plan.targetFps}fps CFR (${plan.reasons.join(", ")})`,
         );
         await runFfmpeg(
           buildReencodeArgs({
@@ -404,7 +399,7 @@ export function registerRenderTimelineJob(fs: Engine): void {
 
       await ingestWorkspaceOutputs(
         fs,
-        projectSlug,
+        bookId,
         "final",
         [outputFilename, "original.jpg"],
         "render_timeline",
@@ -417,7 +412,7 @@ export function registerRenderTimelineJob(fs: Engine): void {
         output: outputFilename,
         renderedAt: new Date().toISOString(),
       };
-      await fs.metadata.artifacts.write("final", `${orientation}.render`, renderMeta, projectSlug);
+      await fs.metadata.artifacts.write("final", `${orientation}.render`, renderMeta);
 
       return { success: true, output: outputFilename };
       },

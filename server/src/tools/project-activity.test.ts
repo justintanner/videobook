@@ -15,7 +15,7 @@ interface ActivityEntry {
 async function readActivity(client: Client): Promise<ActivityEntry[]> {
   const result = await client.callTool({
     name: "project_activity",
-    arguments: { project_slug: "test-proj", limit: 100 },
+    arguments: { book_id: "test-proj", limit: 100 },
   });
   const content = result.content as Array<{ type: string; text: string }>;
   return JSON.parse(content[0].text) as ActivityEntry[];
@@ -42,7 +42,7 @@ describe("project_activity tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -55,13 +55,13 @@ describe("project_activity tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const upload = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo.png", data },
+      arguments: { book_id: "test-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse((upload.content as Array<{ type: string; text: string }>)[0].text) as { asset_id: string };
 
     await client.callTool({
       name: "asset_manifest",
-      arguments: { project_slug: "test-proj", asset_id: uploaded.asset_id },
+      arguments: { book_id: "test-proj", asset_id: uploaded.asset_id },
     });
 
     const entries = await waitForActivity(

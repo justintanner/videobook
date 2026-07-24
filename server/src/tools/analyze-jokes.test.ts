@@ -19,7 +19,7 @@ describe("analyze_jokes tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "jokes-proj" },
+      arguments: { book_id: "jokes-proj" },
     });
   });
 
@@ -36,7 +36,7 @@ describe("analyze_jokes tool", () => {
   it("returns error when OPENAI_API_KEY is not set", async () => {
     const result = await client.callTool({
       name: "analyze_jokes",
-      arguments: { asset_id: "vid-anything", project_slug: "jokes-proj" },
+      arguments: { asset_id: "vid-anything", book_id: "jokes-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -48,13 +48,13 @@ describe("analyze_jokes tool", () => {
     process.env.OPENAI_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("vid", "no-transcript", "jokes-proj");
+    const asset = await fs.artifacts.create("vid", "no-transcript");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "original.mp4", Buffer.from([0]), "jokes-proj");
+    await fs.files.write(asset.value.slug, "original.mp4", Buffer.from([0]));
 
     const result = await client.callTool({
       name: "analyze_jokes",
-      arguments: { asset_id: asset.value.slug, project_slug: "jokes-proj" },
+      arguments: { asset_id: asset.value.slug, book_id: "jokes-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -67,18 +67,14 @@ describe("analyze_jokes tool", () => {
     process.env.OPENAI_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("vid", "empty-words", "jokes-proj");
+    const asset = await fs.artifacts.create("vid", "empty-words");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(
-      asset.value.slug,
-      "elevenlabs.json",
-      JSON.stringify({ text: "", words: [] }),
-      "jokes-proj",
+    await fs.files.write(asset.value.slug, "elevenlabs.json", JSON.stringify({ text: "", words: [] })
     );
 
     const result = await client.callTool({
       name: "analyze_jokes",
-      arguments: { asset_id: asset.value.slug, project_slug: "jokes-proj" },
+      arguments: { asset_id: asset.value.slug, book_id: "jokes-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -90,12 +86,12 @@ describe("analyze_jokes tool", () => {
     process.env.OPENAI_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("vid", "prefixed", "jokes-proj");
+    const asset = await fs.artifacts.create("vid", "prefixed");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const result = await client.callTool({
       name: "analyze_jokes",
-      arguments: { asset_id: `@${asset.value.slug}`, project_slug: "jokes-proj" },
+      arguments: { asset_id: `@${asset.value.slug}`, book_id: "jokes-proj" },
     });
 
     expect(result.isError).toBe(true);

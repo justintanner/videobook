@@ -113,7 +113,7 @@ interface ChatInputProps {
   slotRefs?: SlotRef[];
   commands?: CommandDescriptor[];
   callTool?: UseMcpResult['callTool'];
-  projectSlug?: string;
+  bookId?: string;
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput(
@@ -128,7 +128,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     slotRefs = [],
     commands: commandsProp = [],
     callTool,
-    projectSlug,
+    bookId,
   },
   ref
 ) {
@@ -150,7 +150,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
   const [navigatingHistory, setNavigatingHistory] = useState(false);
 
   const { animatingText, isAnimating, startAnimation } = useAnimateType();
-  const history = usePromptHistory(callTool, 'chat', projectSlug);
+  const history = usePromptHistory(callTool, 'chat', bookId);
 
   const runResultSequence = useCallback(async (text: string) => {
     clearTimeout(resultTimeoutRef.current);

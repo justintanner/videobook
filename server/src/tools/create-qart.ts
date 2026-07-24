@@ -192,20 +192,20 @@ export async function buildQartPng(
 async function readCoverImage(
   fs: Engine,
   imageSlug: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<{ ok: true; assetId: string; buffer: Buffer } | { ok: false; error: string }> {
   const assetId = imageSlug.replace(/^@/, "");
   if (!assetId.startsWith("img-")) {
     return { ok: false, error: `image_slug must be an img-* asset, got: ${assetId}` };
   }
 
-  const manifestResult = await fs.files.manifest(assetId, projectSlug);
+  const manifestResult = await fs.files.manifest(assetId);
   if (!manifestResult.ok) return { ok: false, error: manifestResult.error.message };
 
   const imageFile = findImageFile(manifestResult.value.files);
   if (!imageFile) return { ok: false, error: `No image file found in asset ${assetId}` };
 
-  const readResult = await fs.files.read(assetId, imageFile.name, projectSlug);
+  const readResult = await fs.files.read(assetId, imageFile.name);
   if (!readResult.ok) return { ok: false, error: readResult.error.message };
 
   const buffer = Buffer.isBuffer(readResult.value)
@@ -216,29 +216,29 @@ async function readCoverImage(
 
 async function persistQartAsset(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   assetName: string,
   files: QartFiles,
   metadata: Record<string, unknown>,
 ): Promise<{ ok: true; assetId: string } | { ok: false; error: string }> {
-  const created = await fs.artifacts.create("img", assetName, projectSlug);
+  const created = await fs.artifacts.create("img", assetName);
   if (!created.ok) return { ok: false, error: `Failed to create image asset: ${created.error.message}` };
   const assetId = created.value.slug;
   const writes = await Promise.all([
-    fs.files.write(assetId, "original.png", files.original, projectSlug),
-    fs.files.write(assetId, "landscape.jpg", files.landscape, projectSlug),
-    fs.files.write(assetId, "portrait.jpg", files.portrait, projectSlug),
-    fs.files.write(assetId, "square.jpg", files.square, projectSlug),
+    fs.files.write(assetId, "original.png", files.original),
+    fs.files.write(assetId, "landscape.jpg", files.landscape),
+    fs.files.write(assetId, "portrait.jpg", files.portrait),
+    fs.files.write(assetId, "square.jpg", files.square),
   ]);
   const writeFailure = writes.find((result) => !result.ok);
   if (writeFailure && !writeFailure.ok) {
-    await fs.artifacts.delete(assetId, projectSlug).catch(() => undefined);
+    await fs.artifacts.delete(assetId).catch(() => undefined);
     return { ok: false, error: writeFailure.error.message };
   }
 
-  const metadataResult = await fs.metadata.artifacts.write(assetId, "original", metadata, projectSlug);
+  const metadataResult = await fs.metadata.artifacts.write(assetId, "original", metadata);
   if (!metadataResult.ok) {
-    await fs.artifacts.delete(assetId, projectSlug).catch(() => undefined);
+    await fs.artifacts.delete(assetId).catch(() => undefined);
     return { ok: false, error: metadataResult.error.message };
   }
   return { ok: true, assetId };
@@ -250,7 +250,7 @@ export function createQartDef(fs: Engine): ToolDef {
     description:
       "Create scan-safe color and monochrome QR mosaics from an img-* source image. The image is sampled per QR module with protected QR structures and white quiet zones.",
     schema: {
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       image_slug: z.string().describe("Source image asset (e.g. @img-photo or img-photo)"),
       value: z.string().min(1).describe("Text or URL encoded in the QR code"),
       size: z
@@ -268,14 +268,14 @@ export function createQartDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const {
-        project_slug,
+        book_id,
         image_slug,
         value,
         size,
         style,
         name,
       } = args as {
-        project_slug: string;
+        book_id: string;
         image_slug: string;
         value: string;
         size?: number;
@@ -287,7 +287,7 @@ export function createQartDef(fs: Engine): ToolDef {
       if (!resolvedValue) return error("value must be a non-empty string");
       const resolvedSize = size ?? DEFAULT_QART_SIZE;
       const stylesToBuild = style ? [style] : (["inverted", "monochrome"] as QartStyle[]);
-      const cover = await readCoverImage(fs, image_slug, project_slug);
+      const cover = await readCoverImage(fs, image_slug, book_id);
       if (!cover.ok) return error(cover.error);
 
       const qr = createQr(resolvedValue);
@@ -325,7 +325,7 @@ export function createQartDef(fs: Engine): ToolDef {
 
         const resultAsset = await persistQartAsset(
           fs,
-          project_slug,
+          book_id,
           `qart-${s}-${stem}-${stamp}`,
           buildFiles,
           { ...baseMeta, color_mode: s, module_pixels: buildFiles.modulePx },

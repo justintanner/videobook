@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { UseMcpResult } from 'use-mcp/react';
 
 interface UseDefaultProjectResult {
-  projectSlug: string | undefined;
+  bookId: string | undefined;
   setProjectSlug: React.Dispatch<React.SetStateAction<string | undefined>>;
   loading: boolean;
   error: string | undefined;
@@ -23,7 +23,7 @@ export function useDefaultProject(
   callTool: UseMcpResult['callTool'],
   state: UseMcpResult['state'],
 ): UseDefaultProjectResult {
-  const [projectSlug, setProjectSlug] = useState<string | undefined>();
+  const [bookId, setProjectSlug] = useState<string | undefined>();
   const [resolution, setResolution] = useState<DefaultProjectResolution>();
   const [connectionEpoch, setConnectionEpoch] = useState<ConnectionEpoch>({
     state,
@@ -73,5 +73,5 @@ export function useDefaultProject(
   const loading = state === 'ready' && currentResolution === undefined;
   const error = currentResolution?.error;
 
-  return { projectSlug, setProjectSlug, loading, error };
+  return { bookId, setProjectSlug, loading, error };
 }

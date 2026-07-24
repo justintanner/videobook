@@ -11,16 +11,16 @@ export function transcribeDef(fs: Engine): ToolDef {
     description: "Transcribe audio from a video or audio asset using ElevenLabs speech-to-text. Writes elevenlabs.json into the asset directory.",
     schema: {
       asset_id: z.string().describe("Asset ID (vid-* or aud-*)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       language_code: z.string().optional().describe("Language code (e.g. 'en'). Auto-detected if omitted."),
       tag_audio_events: z.boolean().optional().default(true).describe("Tag audio events like laughter, music, etc."),
       diarize: z.boolean().optional().default(true).describe("Enable speaker diarization"),
       wait: z.boolean().optional().default(false).describe("Wait for the transcription job to finish before returning (default: return as soon as the job is enqueued)"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, language_code, tag_audio_events, diarize, wait } = args as {
+      const { asset_id, book_id, language_code, tag_audio_events, diarize, wait } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         language_code?: string;
         tag_audio_events: boolean;
         diarize: boolean;
@@ -34,7 +34,7 @@ export function transcribeDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug, { includeDotfiles: true });
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -63,7 +63,7 @@ export function transcribeDef(fs: Engine): ToolDef {
         ...(language_code ? { languageCode: language_code } : {}),
         assetId: asset_id,
         assetDir: manifest.path,
-        projectSlug: project_slug,
+        bookId: book_id,
       } as unknown as Record<string, unknown>;
 
       if (wait) {

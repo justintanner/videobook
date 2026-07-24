@@ -105,7 +105,7 @@ async function waitForMetadata(
 ): Promise<Record<string, unknown>> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    const result = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original", PROJECT);
+    const result = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
     if (result.ok && result.value.origin === "audio_sync") return result.value;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
@@ -119,7 +119,7 @@ async function waitForAssetReady(
 ): Promise<void> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    const result = await fs.jobs.artifactWork.read(PROJECT, assetId);
+    const result = await fs.jobs.artifactWork.read(PROJECT);
     if (result.ok && result.value?.status === "ready" && result.value.ownerId === null) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
@@ -154,15 +154,15 @@ describe("sync_video_to_audio end to end", () => {
     client = await createTestClient(tempDir);
     fs = createEngineForTest(tempDir);
     valueOf(await fs.projects.create(PROJECT));
-    const created = valueOf(await fs.artifacts.create("vid", "audio sync source", PROJECT));
+    const created = valueOf(await fs.artifacts.create("vid", "audio sync source"));
     assetId = created.slug;
     assetDir = created.path;
-    valueOf(await fs.files.write(assetId, "original.mp4", await readFile(sourcePath), PROJECT));
-    valueOf(await fs.files.write(assetId, "original.mp3", sourceMp3, PROJECT));
-    valueOf(await fs.files.write(assetId, "elevenlabs.json", transcript, PROJECT));
-    valueOf(await fs.files.write(assetId, ".original.analysis.json", "{}", PROJECT));
-    valueOf(await fs.files.write(assetId, ".detect-scenes.json", "{}", PROJECT));
-    valueOf(await fs.files.write(assetId, "landscape.mp4", Buffer.from("stale"), PROJECT));
+    valueOf(await fs.files.write(assetId, "original.mp4", await readFile(sourcePath)));
+    valueOf(await fs.files.write(assetId, "original.mp3", sourceMp3));
+    valueOf(await fs.files.write(assetId, "elevenlabs.json", transcript));
+    valueOf(await fs.files.write(assetId, ".original.analysis.json", "{}"));
+    valueOf(await fs.files.write(assetId, ".detect-scenes.json", "{}"));
+    valueOf(await fs.files.write(assetId, "landscape.mp4", Buffer.from("stale")));
   }, 120_000);
 
   afterAll(async () => {
@@ -173,12 +173,12 @@ describe("sync_video_to_audio end to end", () => {
   });
 
   it("retimes in place through transcript cues while preserving audio and sidecars", async () => {
-    const initialCount = (await fs.artifacts.list(PROJECT)).length;
+    const initialCount = (await fs.artifacts.list()).length;
     const result = await client.callTool({
       name: "sync_video_to_audio",
       arguments: {
         asset_id: assetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         anchors: [
           { video_seconds: 1, audio_cue: "england" },
           { video_seconds: 2, audio_cue: "AMERICA?" },
@@ -194,7 +194,7 @@ describe("sync_video_to_audio end to end", () => {
     await waitForJob(String(response.job_id), 120_000);
     const metadata = await waitForMetadata(fs, assetId);
     await waitForAssetReady(fs, assetId);
-    const manifest = valueOf(await fs.files.manifest(assetId, PROJECT, { includeDotfiles: true }));
+    const manifest = valueOf(await fs.files.manifest(assetId, PROJECT));
     const videoFile = findVideoFile(manifest.files);
     expect(videoFile).not.toBeNull();
     const outputPath = join(assetDir, videoFile!.name);
@@ -217,13 +217,13 @@ describe("sync_video_to_audio end to end", () => {
     expect(Math.abs(blueTransitionSeconds - 2.2)).toBeLessThanOrEqual(outputFrameDuration);
 
     expect(await audioStreamHash(outputPath)).toBe(await audioStreamHash(sourcePath));
-    expect(valueOf(await fs.files.read(assetId, "original.mp3", PROJECT))).toEqual(sourceMp3);
-    expect(valueOf(await fs.files.read(assetId, "elevenlabs.json", PROJECT))).toEqual(transcript);
-    expect((await fs.files.read(assetId, ".original.analysis.json", PROJECT)).ok).toBe(false);
-    expect((await fs.files.read(assetId, ".detect-scenes.json", PROJECT)).ok).toBe(false);
-    expect((await fs.files.read(assetId, "landscape.mp4", PROJECT)).ok).toBe(false);
+    expect(valueOf(await fs.files.read(assetId, "original.mp3"))).toEqual(sourceMp3);
+    expect(valueOf(await fs.files.read(assetId, "elevenlabs.json"))).toEqual(transcript);
+    expect((await fs.files.read(assetId, ".original.analysis.json")).ok).toBe(false);
+    expect((await fs.files.read(assetId, ".detect-scenes.json")).ok).toBe(false);
+    expect((await fs.files.read(assetId, "landscape.mp4")).ok).toBe(false);
     expect(manifest.files.some((file) => file.name.startsWith(".sync-audio-"))).toBe(false);
-    expect((await fs.artifacts.list(PROJECT)).length).toBe(initialCount);
+    expect((await fs.artifacts.list()).length).toBe(initialCount);
 
     expect(metadata.requested_anchors).toEqual([
       { video_seconds: 1, audio_cue: "england" },
@@ -242,11 +242,11 @@ describe("sync_video_to_audio end to end", () => {
 
   it("restores media and derivatives while recording a failed job audit", async () => {
     const sourceBytes = await readFile(sourcePath);
-    const created = valueOf(await fs.artifacts.create("vid", "failed audio sync", PROJECT));
-    valueOf(await fs.files.write(created.slug, "original.mp4", sourceBytes, PROJECT));
-    valueOf(await fs.files.write(created.slug, "original.mp3", sourceMp3, PROJECT));
-    valueOf(await fs.files.write(created.slug, "elevenlabs.json", transcript, PROJECT));
-    valueOf(await fs.files.write(created.slug, ".original.analysis.json", "{}", PROJECT));
+    const created = valueOf(await fs.artifacts.create("vid", "failed audio sync"));
+    valueOf(await fs.files.write(created.slug, "original.mp4", sourceBytes));
+    valueOf(await fs.files.write(created.slug, "original.mp3", sourceMp3));
+    valueOf(await fs.files.write(created.slug, "elevenlabs.json", transcript));
+    valueOf(await fs.files.write(created.slug, ".original.analysis.json", "{}"));
     const historyCount = (await fs.history.artifact(created.slug, PROJECT)).length;
     const outputPath = join(created.path, "missing", ".sync-audio-failed.mp4");
 
@@ -257,13 +257,13 @@ describe("sync_video_to_audio end to end", () => {
       anchors: [{ videoSeconds: 1, audioSeconds: 1.2 }],
       assetId: created.slug,
       assetDir: created.path,
-      projectSlug: PROJECT,
+      bookId: PROJECT,
     } as unknown as Parameters<typeof queue.enqueueAndWait>[1])).rejects.toThrow("ffmpeg failed");
 
-    expect(valueOf(await fs.files.read(created.slug, "original.mp4", PROJECT))).toEqual(sourceBytes);
-    expect(valueOf(await fs.files.read(created.slug, "original.mp3", PROJECT))).toEqual(sourceMp3);
-    expect(valueOf(await fs.files.read(created.slug, "elevenlabs.json", PROJECT))).toEqual(transcript);
-    expect((await fs.files.read(created.slug, ".original.analysis.json", PROJECT)).ok).toBe(true);
+    expect(valueOf(await fs.files.read(created.slug, "original.mp4"))).toEqual(sourceBytes);
+    expect(valueOf(await fs.files.read(created.slug, "original.mp3"))).toEqual(sourceMp3);
+    expect(valueOf(await fs.files.read(created.slug, "elevenlabs.json"))).toEqual(transcript);
+    expect((await fs.files.read(created.slug, ".original.analysis.json")).ok).toBe(true);
     const historyAfter = await fs.history.artifact(created.slug, PROJECT);
     expect(historyAfter.length).toBeGreaterThan(historyCount);
     const operations = historyAfter.map(
@@ -272,7 +272,7 @@ describe("sync_video_to_audio end to end", () => {
     expect(operations).toContain("restore_artifact");
     expect(operations).toContain("job_failed");
     await expect(stat(outputPath)).rejects.toThrow();
-    const manifest = valueOf(await fs.files.manifest(created.slug, PROJECT, { includeDotfiles: true }));
+    const manifest = valueOf(await fs.files.manifest(created.slug, PROJECT));
     expect(manifest.files.some((file) => file.name.startsWith(".sync-audio-"))).toBe(false);
   }, 120_000);
 });

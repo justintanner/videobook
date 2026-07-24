@@ -11,7 +11,7 @@ const aspectRatioOptions = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const;
 
 const concatImagesSchema = {
   image_slugs: z.array(z.string().nullable()).min(1).max(9).describe("Image asset slugs to concatenate. For a two-slot sheet, pass one slug to leave the second slot empty or use null for an explicit empty slot."),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   layout: z.enum(layoutOptions).optional().describe("Cell layout. Defaults to horizontal for landscape two-slot sheets, vertical for portrait two-slot sheets, and grid for 3+ images."),
   aspect_ratio: z.enum(aspectRatioOptions).optional().describe("Output aspect ratio. Defaults to 16:9 for video generation."),
   name: z.string().optional().describe("Optional name for the generated img-* asset"),
@@ -68,14 +68,14 @@ export function concatImagesDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const {
         image_slugs,
-        project_slug,
+        book_id,
         layout,
         aspect_ratio,
         name,
         background,
       } = args as Args;
 
-      const sourceResult = await readSourceImages(fs, image_slugs, project_slug);
+      const sourceResult = await readSourceImages(fs, image_slugs, book_id);
       if (!sourceResult.ok) return error(sourceResult.error);
       if (!sourceResult.value.some((source) => source !== null)) {
         return error("At least one image asset is required");
@@ -100,13 +100,13 @@ export function concatImagesDef(fs: Engine): ToolDef {
       }
 
       const assetName = name ?? deriveAssetName(sourceImageIds);
-      const assetResult = await fs.artifacts.create("img", assetName, project_slug);
+      const assetResult = await fs.artifacts.create("img", assetName);
       if (!assetResult.ok) return error(`Failed to create image asset: ${assetResult.error.message}`);
 
       const imgAssetId = assetResult.value.slug;
-      const writeResult = await fs.files.write(imgAssetId, "original.png", output.buffer, project_slug);
+      const writeResult = await fs.files.write(imgAssetId, "original.png", output.buffer);
       if (!writeResult.ok) {
-        await fs.artifacts.delete(imgAssetId, project_slug).catch(() => undefined);
+        await fs.artifacts.delete(imgAssetId).catch(() => undefined);
         return error(writeResult.error.message);
       }
 
@@ -119,22 +119,22 @@ export function concatImagesDef(fs: Engine): ToolDef {
         aspect_ratio: resolvedAspectRatio,
         source_images: sourceImageIds,
       };
-      const metadataResult = await fs.metadata.artifacts.write(imgAssetId, "original", metadata, project_slug);
+      const metadataResult = await fs.metadata.artifacts.write(imgAssetId, "original", metadata);
       if (!metadataResult.ok) {
-        await fs.artifacts.delete(imgAssetId, project_slug).catch(() => undefined);
+        await fs.artifacts.delete(imgAssetId).catch(() => undefined);
         return error(metadataResult.error.message);
       }
 
       let variantsResult: Awaited<ReturnType<typeof writeImageVariants>>;
       try {
-        variantsResult = await writeImageVariants(fs, imgAssetId, output.buffer, project_slug);
+        variantsResult = await writeImageVariants(fs, imgAssetId, output.buffer, book_id);
       } catch (e) {
-        await fs.artifacts.delete(imgAssetId, project_slug).catch(() => undefined);
+        await fs.artifacts.delete(imgAssetId).catch(() => undefined);
         const message = e instanceof Error ? e.message : String(e);
         return error(`Failed to write image variants: ${message}`);
       }
       if (!variantsResult.ok) {
-        await fs.artifacts.delete(imgAssetId, project_slug).catch(() => undefined);
+        await fs.artifacts.delete(imgAssetId).catch(() => undefined);
         return error(variantsResult.error);
       }
 
@@ -161,7 +161,7 @@ export function concatImagesDef(fs: Engine): ToolDef {
 async function readSourceImages(
   fs: Engine,
   rawSlugs: readonly (string | null)[],
-  projectSlug: string,
+  _bookId: string,
 ): Promise<{ ok: true; value: SourceImageSlot[] } | { ok: false; error: string }> {
   const sources: SourceImageSlot[] = [];
   for (const rawSlug of rawSlugs) {
@@ -174,13 +174,13 @@ async function readSourceImages(
       return { ok: false, error: `image_slugs entries must be img-* assets, got: ${assetId}` };
     }
 
-    const manifestResult = await fs.files.manifest(assetId, projectSlug);
+    const manifestResult = await fs.files.manifest(assetId);
     if (!manifestResult.ok) return { ok: false, error: manifestResult.error.message };
 
     const imageFile = findImageFile(manifestResult.value.files);
     if (!imageFile) return { ok: false, error: `No image file found in asset ${assetId}` };
 
-    const readResult = await fs.files.read(assetId, imageFile.name, projectSlug);
+    const readResult = await fs.files.read(assetId, imageFile.name);
     if (!readResult.ok) return { ok: false, error: readResult.error.message };
 
     const buffer = Buffer.isBuffer(readResult.value)
@@ -278,7 +278,7 @@ export async function writeImageVariants(
   fs: Engine,
   assetId: string,
   buffer: Buffer,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const [landscape, portrait, square] = await Promise.all([
     cropToFill(buffer, 1920, 1080),
@@ -286,9 +286,9 @@ export async function writeImageVariants(
     cropToFill(buffer, 1080, 1080),
   ]);
   const results = await Promise.all([
-    fs.files.write(assetId, "landscape.jpg", landscape, projectSlug),
-    fs.files.write(assetId, "portrait.jpg", portrait, projectSlug),
-    fs.files.write(assetId, "square.jpg", square, projectSlug),
+    fs.files.write(assetId, "landscape.jpg", landscape),
+    fs.files.write(assetId, "portrait.jpg", portrait),
+    fs.files.write(assetId, "square.jpg", square),
   ]);
   const failure = results.find((result) => !result.ok);
   if (failure && !failure.ok) return { ok: false, error: failure.error.message };

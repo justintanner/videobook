@@ -13,13 +13,13 @@ export function padVideoDef(fs: Engine): ToolDef {
     description: "Append black video frames at the end to make a whole-second video tail. Retains original audio and makes the appended tail silent.",
     schema: {
       asset_id: z.string().describe("Source video asset ID"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       padding: z.string().describe("Padding duration (e.g. 2s)"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, padding } = args as {
+      const { asset_id, book_id, padding } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         padding: string;
       };
 
@@ -31,7 +31,7 @@ export function padVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -76,7 +76,7 @@ export function padVideoDef(fs: Engine): ToolDef {
         sourcePath,
         assetDir: manifest.path,
         sourceAssetId: asset_id,
-        projectSlug: project_slug,
+        bookId: book_id,
         targetSecs,
         hasAudio,
       });

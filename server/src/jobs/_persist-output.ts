@@ -5,19 +5,13 @@ import type { Engine } from "videobook-engine";
 
 export async function ingestWorkspaceOutputs(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   artifact: string,
   paths: string[],
   operation: string,
   details: Record<string, unknown> = {},
 ): Promise<string> {
-  const result = await fs.files.ingestWorkspace(
-    artifact,
-    paths,
-    projectSlug,
-    operation,
-    details,
-  );
+  const result = await fs.files.ingestWorkspace(artifact, paths, operation, details);
   if (!result.ok) {
     throw new Error(
       `Failed to ingest ${artifact} workspace output: ${result.error.message}`,
@@ -28,16 +22,12 @@ export async function ingestWorkspaceOutputs(
 
 export async function replaceArtifactFileFromPath(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   artifact: string,
   targetFilename: string,
   sourcePath: string,
 ): Promise<string> {
-  const result = await fs.files.writeFromPath(
-    artifact,
-    targetFilename,
-    sourcePath,
-    projectSlug,
+  const result = await fs.files.writeFromPath(artifact, targetFilename, sourcePath
   );
   if (!result.ok) {
     throw new Error(

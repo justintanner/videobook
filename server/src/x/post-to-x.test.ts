@@ -58,18 +58,14 @@ function makeStubFetch(plan: StubResponse[]): { fetch: typeof fetch; calls: Reco
 
 async function uploadFakeAsset(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   prefix: string,
   ext: string,
 ): Promise<string> {
-  const created = await fs.artifacts.create(prefix, `clip-${prefix}`, projectSlug);
+  const created = await fs.artifacts.create(prefix, `clip-${prefix}`);
   if (!created.ok) throw new Error(created.error.message);
   const assetId = created.value.slug;
-  const writeResult = await fs.files.write(
-    assetId,
-    `original${ext}`,
-    Buffer.from("fake-bytes-for-test"),
-    projectSlug,
+  const writeResult = await fs.files.write(assetId, `original${ext}`, Buffer.from("fake-bytes-for-test")
   );
   if (!writeResult.ok) throw new Error(writeResult.error.message);
   return assetId;
@@ -78,12 +74,12 @@ async function uploadFakeAsset(
 describe("postToX helper", () => {
   let fs: Engine;
   let tempDir: string;
-  const projectSlug = "post-test";
+  const bookId = "post-test";
 
   beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-postx-"));
     fs = createEngineForTest(tempDir);
-    const created = await fs.projects.create(projectSlug);
+    const created = await fs.projects.create(bookId);
     if (!created.ok) throw new Error(created.error.message);
   });
 
@@ -93,7 +89,7 @@ describe("postToX helper", () => {
   });
 
   it("posts an image asset: initialize, single append, finalize, tweet", async () => {
-    const assetId = await uploadFakeAsset(fs, projectSlug, "img", ".jpg");
+    const assetId = await uploadFakeAsset(fs, bookId, "img", ".jpg");
 
     const { fetch: stubFetch, calls } = makeStubFetch([
       { status: 200, body: { data: { id: "MEDIA_42", media_key: "k", expires_after_secs: 86400, size: 19 } } },
@@ -106,7 +102,7 @@ describe("postToX helper", () => {
     const result = await postToX({
       fs,
       assetId,
-      projectSlug,
+      bookId,
       text: "hi",
       x,
     });
@@ -126,7 +122,7 @@ describe("postToX helper", () => {
     expect(tweetBody.media.media_ids).toEqual(["MEDIA_42"]);
     expect(tweetBody.text).toBe("hi");
 
-    const meta = await readXPostMetadata(fs, assetId, projectSlug);
+    const meta = await readXPostMetadata(fs, assetId, bookId);
     expect(meta.version).toBe(1);
     expect(meta.asset_id).toBe(assetId);
     expect(meta.posts).toHaveLength(1);
@@ -142,7 +138,7 @@ describe("postToX helper", () => {
   });
 
   it("appends a second entry to .post.x.json on a follow-up post and records schedule provenance", async () => {
-    const assetId = await uploadFakeAsset(fs, projectSlug, "img", ".jpg");
+    const assetId = await uploadFakeAsset(fs, bookId, "img", ".jpg");
 
     const firstPlan = makeStubFetch([
       { status: 200, body: { data: { id: "M1", media_key: "k", expires_after_secs: 86400, size: 19 } } },
@@ -151,7 +147,7 @@ describe("postToX helper", () => {
       { status: 201, body: { data: { id: "T1", text: "" } } },
     ]);
     const x1 = createX({ accessToken: "tok", fetch: firstPlan.fetch });
-    await postToX({ fs, assetId, projectSlug, text: "first", x: x1 });
+    await postToX({ fs, assetId, bookId, text: "first", x: x1 });
 
     const secondPlan = makeStubFetch([
       { status: 200, body: { data: { id: "M2", media_key: "k", expires_after_secs: 86400, size: 19 } } },
@@ -164,14 +160,14 @@ describe("postToX helper", () => {
     await postToX({
       fs,
       assetId,
-      projectSlug,
+      bookId,
       text: "second",
       x: x2,
       scheduleId: "sched-abc",
       scheduledFor,
     });
 
-    const meta = await readXPostMetadata(fs, assetId, projectSlug);
+    const meta = await readXPostMetadata(fs, assetId, bookId);
     expect(meta.posts).toHaveLength(2);
     expect(meta.posts[0].tweet_id).toBe("T1");
     expect(meta.posts[1]).toMatchObject({
@@ -187,7 +183,7 @@ describe("postToX helper", () => {
   });
 
   it("polls processing_info until succeeded for video", async () => {
-    const assetId = await uploadFakeAsset(fs, projectSlug, "vid", ".mp4");
+    const assetId = await uploadFakeAsset(fs, bookId, "vid", ".mp4");
 
     const { fetch: stubFetch, calls } = makeStubFetch([
       { status: 200, body: { data: { id: "VID_1", media_key: "k", expires_after_secs: 86400, size: 19 } } },
@@ -214,7 +210,7 @@ describe("postToX helper", () => {
     ]);
     const x = createX({ accessToken: "test-token", fetch: stubFetch });
 
-    const result = await postToX({ fs, assetId, projectSlug, x });
+    const result = await postToX({ fs, assetId, bookId, x });
     expect(result.tweet_id).toBe("TWEET_VID");
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
       "POST https://api.x.com/2/media/upload/initialize",
@@ -226,29 +222,25 @@ describe("postToX helper", () => {
   });
 
   it("rejects unsupported file extensions", async () => {
-    const created = await fs.artifacts.create("aud", "song", projectSlug);
+    const created = await fs.artifacts.create("aud", "song");
     if (!created.ok) throw new Error(created.error.message);
-    await fs.files.write(
-      created.value.slug,
-      "original.mp3",
-      Buffer.from("audio"),
-      projectSlug,
+    await fs.files.write(created.value.slug, "original.mp3", Buffer.from("audio")
     );
 
     const x = createX({ accessToken: "test-token", fetch: makeStubFetch([]).fetch });
     await expect(
-      postToX({ fs, assetId: created.value.slug, projectSlug, x }),
+      postToX({ fs, assetId: created.value.slug, bookId, x }),
     ).rejects.toThrow(/unsupported media file/i);
   });
 
   it("surfaces X API error messages", async () => {
-    const assetId = await uploadFakeAsset(fs, projectSlug, "img", ".png");
+    const assetId = await uploadFakeAsset(fs, bookId, "img", ".png");
     const { fetch: stubFetch } = makeStubFetch([
       { status: 401, body: { title: "Unauthorized", detail: "Bad token", status: 401 } },
     ]);
     const x = createX({ accessToken: "test-token", fetch: stubFetch });
     await expect(
-      postToX({ fs, assetId, projectSlug, x, text: "x" }),
+      postToX({ fs, assetId, bookId, x, text: "x" }),
     ).rejects.toThrow(/Bad token/);
   });
 });

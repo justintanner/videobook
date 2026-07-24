@@ -10,7 +10,7 @@ import { apicityField, apicityStringArrayField, apicityStringField } from "./sch
 const base = FalXaiGrokImagineImageEditRequestSchema.shape;
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(base.prompt, "Edit instruction", { required: true }),
   image_slugs: apicityStringArrayField(base.image_urls, "1-3 @img-* slugs for reference images", { required: true }).min(1),
   num_images: apicityField(base.num_images, "Number of images to generate (1-4)"),
@@ -26,16 +26,16 @@ export function generateGrokImagineImageEditFalDef(fs: Engine): ToolDef {
     description: "Edit images via fal.ai using xAI Grok Imagine Image edit with 1-3 @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, image_slugs, num_images, resolution, output_format } = args as Args;
+      const { book_id, prompt, image_slugs, num_images, resolution, output_format } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const resolved = await resolveImageSlugs(fs, image_slugs, project_slug);
+      const resolved = await resolveImageSlugs(fs, image_slugs, book_id);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "grok-imagine/image-to-image")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "grok-imagine/image-to-image")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
@@ -45,7 +45,7 @@ export function generateGrokImagineImageEditFalDef(fs: Engine): ToolDef {
         type: "generate_grok_imagine_image_edit_fal",
         imgAssetId,
         imgAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         imageInputs: resolved.inputs,
         sourceImageIds: resolved.sourceImageIds,

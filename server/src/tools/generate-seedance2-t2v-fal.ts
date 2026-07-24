@@ -10,7 +10,7 @@ import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 const base = FalSeedance2p0TextToVideoRequestSchema.shape;
 
 const generateSeedance2T2vFalSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(base.prompt, "Video description", { required: true }),
   resolution: apicityField(base.resolution, "Output resolution"),
   duration: apicityField(base.duration, "Video duration in seconds"),
@@ -27,13 +27,13 @@ export function generateSeedance2T2vFalDef(fs: Engine): ToolDef {
     description: "Generate a video via fal.ai using ByteDance Seedance 2.0 from a text prompt only. Creates a new vid- asset and enqueues a background job.",
     schema: generateSeedance2T2vFalSchema,
     handler: async (args) => {
-      const { project_slug, prompt, resolution, duration, aspect_ratio, generate_audio, seed } = args as Args;
+      const { book_id, prompt, resolution, duration, aspect_ratio, generate_audio, seed } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "bytedance/seedance-2")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "bytedance/seedance-2")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
@@ -43,7 +43,7 @@ export function generateSeedance2T2vFalDef(fs: Engine): ToolDef {
         type: "generate_seedance2_t2v_fal",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         ...(resolution !== undefined ? { resolution } : {}),
         ...(duration !== undefined ? { duration } : {}),

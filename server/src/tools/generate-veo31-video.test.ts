@@ -27,7 +27,7 @@ describe("generate_veo31_video tools", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -44,14 +44,14 @@ describe("generate_veo31_video tools", () => {
 
   it("enqueues a fast-tier job with start frame and duration", async () => {
     const fs = createEngineForTest(tempDir);
-    const imageAsset = await fs.artifacts.create("img", "start-frame", "test-proj");
+    const imageAsset = await fs.artifacts.create("img", "start-frame");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
-    await fs.files.write(imageAsset.value.slug, "original.png", await makePng(), "test-proj");
+    await fs.files.write(imageAsset.value.slug, "original.png", await makePng());
 
     const result = await client.callTool({
       name: "generate_google_flow_veo_3_1_fast_video",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "a slow push through fog",
         first_frame_slug: `@${imageAsset.value.slug}`,
         aspect_ratio: "16:9",
@@ -70,7 +70,7 @@ describe("generate_veo31_video tools", () => {
     const result = await client.callTool({
       name: "generate_google_flow_veo_3_1_quality_video",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "a sunset",
         last_frame_slug: "@img-ending",
       },
@@ -83,7 +83,7 @@ describe("generate_veo31_video tools", () => {
     const result = await client.callTool({
       name: "generate_google_flow_veo_3_1_lite_low_priority_video",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "a fog bank rolling over hills",
         aspect_ratio: "16:9",
         duration: "4",
@@ -99,7 +99,7 @@ describe("generate_veo31_video tools", () => {
     const result = await client.callTool({
       name: "generate_google_flow_veo_3_1_lite_video",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "a sunset",
         first_frame_slug: "@img-start",
         image_slugs: ["@img-style"],

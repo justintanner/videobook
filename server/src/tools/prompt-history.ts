@@ -26,7 +26,7 @@ export function recordPromptDef(fs: Engine): ToolDef {
       SURFACE_LIST +
       ".",
     schema: {
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       surface: z
         .string()
         .describe(
@@ -41,8 +41,7 @@ export function recordPromptDef(fs: Engine): ToolDef {
         ),
     },
     handler: async (args) => {
-      const { project_slug: slug, surface, prompt, params } = args as {
-        project_slug: string;
+      const { surface, prompt, params } = args as {
         surface: string;
         prompt: string;
         params?: Record<string, unknown>;
@@ -55,10 +54,11 @@ export function recordPromptDef(fs: Engine): ToolDef {
           ],
         };
       }
-      const result = await fs.prompts.record(
-        slug,
-        { surface, prompt, context: params ?? {} },
-      );
+      const result = await fs.prompts.record({
+        surface,
+        prompt,
+        ...(params ? { context: params } : {}),
+      });
       if (!result.ok) {
         return {
           isError: true as const,
@@ -80,7 +80,7 @@ export function listPromptHistoryDef(fs: Engine): ToolDef {
     description:
       "List recent prompts for a given surface in the current project, newest-first.",
     schema: {
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       surface: z
         .string()
         .describe(
@@ -92,17 +92,16 @@ export function listPromptHistoryDef(fs: Engine): ToolDef {
         .describe("Max entries to return (default 100, capped at 1000)"),
     },
     handler: async (args) => {
-      const { project_slug: slug, surface, limit } = args as {
-        project_slug: string;
+      const { surface, limit } = args as {
         surface: string;
         limit?: number;
       };
       if (!isPromptSurface(surface)) return invalidSurface(surface);
 
-      const entries = fs.prompts.list(
-        slug,
-        { surface, limit: limit ?? 100 },
-      );
+      const entries = fs.prompts.list({
+        surface,
+        ...(typeof limit === "number" ? { limit } : {}),
+      });
       if (!entries.ok) {
         return {
           isError: true as const,

@@ -32,7 +32,7 @@ const GROK_IMAGE_TO_VIDEO_MODES = enumOptions(grokI2v.mode).filter((mode) => mod
 const generateGrokImagineVideoSchema = {
   image_slugs: apicityStringArrayField(grokI2v.image_urls, "1-7 reference image asset slugs (e.g., ['@img-sunset'])"),
   asset_id: z.string().optional().describe("Single image asset ID (must be img-*); back-compat alias for image_slugs[0]"),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(grokI2v.prompt, "Optional prompt to guide video generation (max 4096 chars)"),
   mode: z.enum(GROK_IMAGE_TO_VIDEO_MODES).optional().describe("Generation mode: fun / normal"),
   duration: apicityField(grokI2v.duration, "Video duration in seconds (6-30)"),
@@ -51,7 +51,7 @@ export function generateGrokImagineVideoDef(fs: Engine): ToolDef {
     description: "Generate a video from image asset(s) using Kie Grok Imagine Video 1.5. Creates a new vid- asset and enqueues a background job. Requires at least one of image_slugs or asset_id.",
     schema: generateGrokImagineVideoSchema,
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker, replace_audio_with, _provider } = args as Args;
+      const { asset_id: rawAssetId, image_slugs, book_id, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker, replace_audio_with, _provider } = args as Args;
 
       const isXai = _provider !== undefined && _provider.startsWith("xai");
       const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
@@ -78,7 +78,7 @@ export function generateGrokImagineVideoDef(fs: Engine): ToolDef {
           return toolError(`image asset must start with img-, got: ${assetId}`);
         }
 
-        const manifestResult = await fs.files.manifest(assetId, project_slug);
+        const manifestResult = await fs.files.manifest(assetId);
         if (!manifestResult.ok) {
           return toolError(manifestResult.error.message);
         }
@@ -93,7 +93,7 @@ export function generateGrokImagineVideoDef(fs: Engine): ToolDef {
 
       let replaceAudioWith: RefInput | undefined;
       if (replace_audio_with !== undefined && replace_audio_with.trim().length > 0) {
-        const resolvedAudio = await resolveAudioSlug(fs, replace_audio_with, project_slug);
+        const resolvedAudio = await resolveAudioSlug(fs, replace_audio_with, book_id);
         if (!resolvedAudio.ok) {
           return toolError(resolvedAudio.error);
         }
@@ -101,7 +101,7 @@ export function generateGrokImagineVideoDef(fs: Engine): ToolDef {
       }
 
       const videoName = deriveVideoName(assetIds[0]);
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return toolError(`Failed to create video asset: ${assetResult.error.message}`);
       }
@@ -116,7 +116,7 @@ export function generateGrokImagineVideoDef(fs: Engine): ToolDef {
         imageFilenames,
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         ...(prompt !== undefined ? { prompt } : {}),
         ...(mode !== undefined ? { mode } : {}),
         ...(duration !== undefined ? { duration } : {}),

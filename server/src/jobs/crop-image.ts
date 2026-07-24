@@ -28,26 +28,26 @@ type CropImagePayload = {
   rect: CropRect;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 export function registerCropImageJob(fs: Engine): void {
   registerJobHandler("crop_image", async (payload, ctx) => {
     const {
       inputFilename, ratio, rect,
-      assetId, assetDir, projectSlug,
+      assetId, assetDir, bookId,
     } = payload as unknown as CropImagePayload;
 
     const result = await withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       assetDir,
       ctx,
       "crop",
       { durationMs: LOCK_DURATION_MS, data: { state: "cropping", ratio } },
       async () => {
-        const readResult = await fs.files.read(assetId, inputFilename, projectSlug);
+        const readResult = await fs.files.read(assetId, inputFilename);
         if (!readResult.ok) {
           throw new Error(`Failed to read ${inputFilename}: ${readResult.error.message}`);
         }
@@ -83,14 +83,14 @@ export function registerCropImageJob(fs: Engine): void {
         }
 
         const finalFilename = "original.jpg";
-        const writeResult = await fs.files.write(assetId, finalFilename, cropped, projectSlug);
+        const writeResult = await fs.files.write(assetId, finalFilename, cropped);
         if (!writeResult.ok) {
           throw new Error(`Failed to write cropped image: ${writeResult.error.message}`);
         }
 
         // Drop the previous original when it was a different filename (e.g. original.png).
         if (inputFilename !== finalFilename) {
-          await fs.files.delete(assetId, inputFilename, projectSlug);
+          await fs.files.delete(assetId, inputFilename);
         }
 
         return { extension: ".jpg" as const };
@@ -101,7 +101,7 @@ export function registerCropImageJob(fs: Engine): void {
     await queue.enqueue(`process-image-${assetId}-${Date.now()}`, {
       type: "process_image",
       assetId,
-      projectSlug,
+      bookId,
       extension: result.extension,
       provenance: { origin: "crop", ratio, cropped_at: new Date().toISOString() },
     } as unknown as Record<string, unknown>);

@@ -128,13 +128,9 @@ describe("clean-video-audio job media mix", () => {
     const fs = createEngineForTest(projectsDir);
     const project = await fs.projects.create("in-place");
     if (!project.ok) throw new Error(project.error.message);
-    const asset = await fs.artifacts.create("vid", "source", "in-place");
+    const asset = await fs.artifacts.create("vid", "source");
     if (!asset.ok) throw new Error(asset.error.message);
-    const sourceWrite = await fs.files.write(
-      asset.value.slug,
-      "original.mp4",
-      await readFile(sourcePath),
-      "in-place",
+    const sourceWrite = await fs.files.write(asset.value.slug, "original.mp4", await readFile(sourcePath)
     );
     if (!sourceWrite.ok) throw new Error(sourceWrite.error.message);
     const historyBefore = await fs.history.artifact(asset.value.slug, "in-place");
@@ -147,7 +143,7 @@ describe("clean-video-audio job media mix", () => {
       "in-place",
     );
 
-    const stored = await fs.files.read(asset.value.slug, "original.mp4", "in-place");
+    const stored = await fs.files.read(asset.value.slug, "original.mp4");
     if (!stored.ok) throw new Error(stored.error.message);
     expect(stored.value.equals(await readFile(outputPath))).toBe(true);
     expect((await fs.history.artifact(asset.value.slug, "in-place")).length).toBeGreaterThan(historyBefore.length);

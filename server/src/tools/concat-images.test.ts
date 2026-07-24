@@ -62,7 +62,7 @@ describe("concat_images tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
   });
 
@@ -72,9 +72,9 @@ describe("concat_images tool", () => {
   });
 
   async function createImageAsset(name: string, buffer: Buffer): Promise<string> {
-    const asset = await fs.artifacts.create("img", name, PROJECT);
+    const asset = await fs.artifacts.create("img", name);
     if (!asset.ok) throw new Error(asset.error.message);
-    const write = await fs.files.write(asset.value.slug, "original.png", buffer, PROJECT);
+    const write = await fs.files.write(asset.value.slug, "original.png", buffer);
     if (!write.ok) throw new Error(write.error.message);
     return asset.value.slug;
   }
@@ -86,7 +86,7 @@ describe("concat_images tool", () => {
     const result = await client!.callTool({
       name: "concat_images",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         image_slugs: [`@${wide}`, `@${tall}`],
       },
     });
@@ -105,7 +105,7 @@ describe("concat_images tool", () => {
     expect(parsed.layout).toBe("horizontal");
     expect(parsed.aspect_ratio).toBe("16:9");
 
-    const manifest = await fs.files.manifest(parsed.img_asset_id, PROJECT, { includeDotfiles: true });
+    const manifest = await fs.files.manifest(parsed.img_asset_id, PROJECT);
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
     const fileNames = new Set(manifest.value.files.map((file) => file.name));
@@ -114,7 +114,7 @@ describe("concat_images tool", () => {
     expect(fileNames.has("portrait.jpg")).toBe(true);
     expect(fileNames.has("square.jpg")).toBe(true);
 
-    const read = await fs.files.read(parsed.img_asset_id, "original.png", PROJECT);
+    const read = await fs.files.read(parsed.img_asset_id, "original.png");
     expect(read.ok).toBe(true);
     if (!read.ok) return;
     const buffer = Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
@@ -135,7 +135,7 @@ describe("concat_images tool", () => {
     const result = await client!.callTool({
       name: "concat_images",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         image_slugs: [`@${red}`],
         aspect_ratio: "9:16",
       },
@@ -160,7 +160,7 @@ describe("concat_images tool", () => {
     expect(parsed.placements[0].asset_id).toBe(red);
     expect(parsed.placements[0].cell).toEqual({ x: 0, y: 0, width: 1080, height: 960 });
 
-    const read = await fs.files.read(parsed.img_asset_id, "original.png", PROJECT);
+    const read = await fs.files.read(parsed.img_asset_id, "original.png");
     expect(read.ok).toBe(true);
     if (!read.ok) return;
     const buffer = Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
@@ -175,7 +175,7 @@ describe("concat_images tool", () => {
     const result = await client!.callTool({
       name: "concat_images",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         image_slugs: [null, `@${blue}`],
         aspect_ratio: "16:9",
       },
@@ -192,7 +192,7 @@ describe("concat_images tool", () => {
     expect(parsed.placements[0].asset_id).toBe(blue);
     expect(parsed.placements[0].cell).toEqual({ x: 960, y: 0, width: 960, height: 1080 });
 
-    const read = await fs.files.read(parsed.img_asset_id, "original.png", PROJECT);
+    const read = await fs.files.read(parsed.img_asset_id, "original.png");
     expect(read.ok).toBe(true);
     if (!read.ok) return;
     const buffer = Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
@@ -202,15 +202,15 @@ describe("concat_images tool", () => {
   });
 
   it("returns an error when a referenced asset has no image file", async () => {
-    const asset = await fs.artifacts.create("img", "empty", PROJECT);
+    const asset = await fs.artifacts.create("img", "empty");
     if (!asset.ok) throw new Error(asset.error.message);
-    const write = await fs.files.write(asset.value.slug, "notes.txt", "hello", PROJECT);
+    const write = await fs.files.write(asset.value.slug, "notes.txt", "hello");
     if (!write.ok) throw new Error(write.error.message);
 
     const result = await client!.callTool({
       name: "concat_images",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         image_slugs: [`@${asset.value.slug}`, "@img-missing"],
       },
     });

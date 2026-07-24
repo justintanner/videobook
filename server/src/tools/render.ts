@@ -6,37 +6,13 @@ import { findVideoFile } from "videobook-engine";
 import { isValidHex } from "../remotion/util.js";
 import type { Orientation, OsgPosition } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
+import { timelineInput } from "../timeline-helpers.js";
 import {
   DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
   DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
 } from "../remotion/keyword-graphics.js";
 
 const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "svg"]);
-
-type TimelineSlot = {
-  slug: string;
-  volume?: number;
-  audioFadeIn?: number;
-  audioFadeOut?: number;
-};
-
-type ViewerSize = 'landscape' | 'portrait' | 'square' | 'original';
-
-type TimelineConfig = {
-  slots: TimelineSlot[];
-  render: Orientation;
-  currentOrientation?: ViewerSize;
-};
-
-function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
-  if (Array.isArray(raw)) return { slots: raw, render: "landscape" };
-  return {
-    ...raw,
-    render: Array.isArray(raw.render)
-      ? ((raw.render as unknown as string[])[0] ?? "landscape") as Orientation
-      : raw.render,
-  };
-}
 
 export function renderVideoDef(fs: Engine): ToolDef {
   return {
@@ -45,7 +21,7 @@ export function renderVideoDef(fs: Engine): ToolDef {
       "Render a vid- asset into landscape.mp4, portrait.mp4, or square.mp4. Renders all 3 orientations when orientation is omitted.",
     schema: {
       asset_id: z.string().describe("Asset ID (vid- prefix)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       orientation: z
         .enum(["landscape", "portrait", "square"])
         .optional()
@@ -177,7 +153,7 @@ export function renderVideoDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const {
         asset_id,
-        project_slug,
+        book_id,
         orientation: explicitOrientation,
         subtitles_enabled,
         subtitle_language = "original",
@@ -207,7 +183,7 @@ export function renderVideoDef(fs: Engine): ToolDef {
         shadow_opacity = 60,
       } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         orientation?: Orientation;
         subtitles_enabled?: boolean;
         subtitle_language?: string;
@@ -299,7 +275,7 @@ export function renderVideoDef(fs: Engine): ToolDef {
         ? [explicitOrientation]
         : ALL_ORIENTATIONS;
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -327,7 +303,7 @@ export function renderVideoDef(fs: Engine): ToolDef {
             content: [{ type: "text" as const, text: "osg_asset_id must start with img-" }],
           };
         }
-        const osgManifest = await fs.files.manifest(osg_asset_id, project_slug);
+        const osgManifest = await fs.files.manifest(osg_asset_id);
         if (!osgManifest.ok) {
           return {
             isError: true as const,
@@ -351,7 +327,7 @@ export function renderVideoDef(fs: Engine): ToolDef {
       // which beginAssetWork refuses to lease — and enqueue never resets it.
       // An explicit render is a retry: clear the stale failure first so the
       // new jobs can claim the asset.
-      const clearResult = await fs.jobs.failures.clear(project_slug, asset_id);
+      const clearResult = await fs.jobs.failures.clear(asset_id);
       if (!clearResult.ok) {
         console.warn(`[render] clearing stale generation error for ${asset_id} failed: ${clearResult.error.message}`);
       }
@@ -361,10 +337,7 @@ export function renderVideoDef(fs: Engine): ToolDef {
       const jobs: Array<{ job_id: string; orientation: Orientation }> = [];
 
       for (const orientation of orientations) {
-        const storedResult = await fs.metadata.artifacts.read<Record<string, unknown>>(
-          asset_id,
-          `${orientation}.render`,
-          project_slug,
+        const storedResult = await fs.metadata.artifacts.read<Record<string, unknown>>(asset_id, `${orientation}.render`
         );
         const stored = storedResult.ok ? storedResult.value : {};
         const storedMaxCount = stored.keywordGraphicsMaxCount;
@@ -388,7 +361,7 @@ export function renderVideoDef(fs: Engine): ToolDef {
         const jobId = `render-${asset_id}-${orientation}-${Date.now()}`;
         await queue.enqueue(jobId, {
           type: "render_project",
-          projectSlug: project_slug,
+          bookId: book_id,
           assetId: asset_id,
           orientation,
           assets: [{
@@ -433,20 +406,12 @@ export function renderVideoDef(fs: Engine): ToolDef {
       let savedOrientation: Orientation | undefined;
       if (explicitOrientation) {
         try {
-          const timelineResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
-          let config: TimelineConfig;
-          if (timelineResult.ok) {
-            config = normalizeConfig(timelineResult.value);
-          } else {
-            const err = (timelineResult as { ok: false; error: { code: string; message: string } }).error;
-            if (err.code === "NOT_FOUND") {
-              config = { slots: [], render: "landscape" };
-            } else {
-              throw new Error(err.message);
-            }
-          }
-          config.render = explicitOrientation;
-          await fs.metadata.projects.write("timeline", config, project_slug);
+          const timeline = fs.timeline.get();
+          const updated = await fs.timeline.set({
+            ...timelineInput(timeline),
+            render: explicitOrientation,
+          });
+          if (!updated.ok) throw new Error(updated.error.message);
           savedOrientation = explicitOrientation;
         } catch (err) {
           console.warn("Persisting timeline orientation failed (non-fatal):", err);

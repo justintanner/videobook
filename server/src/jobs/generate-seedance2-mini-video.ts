@@ -13,7 +13,7 @@ type GenerateSeedance2MiniVideoPayload = {
   type: "generate_seedance2_mini_video";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   imageInputs: RefInput[];
   videoInputs: RefInput[];
   audioInputs: RefInput[];
@@ -30,10 +30,10 @@ type GenerateSeedance2MiniVideoPayload = {
   replaceAudioWith?: RefInput;
 };
 
-async function uploadAll(fs: Engine, inputs: RefInput[], projectSlug: string): Promise<string[]> {
+async function uploadAll(fs: Engine, inputs: RefInput[], bookId: string): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename, projectSlug));
+    urls.push(await uploadAssetToKie(fs, assetId, filename, bookId));
   }
   return urls;
 }
@@ -41,7 +41,7 @@ async function uploadAll(fs: Engine, inputs: RefInput[], projectSlug: string): P
 export function registerGenerateSeedance2MiniVideoJob(fs: Engine): void {
   registerJobHandler("generate_seedance2_mini_video", async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug,
+      vidAssetId, vidAssetDir, bookId,
       imageInputs, videoInputs, audioInputs,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
       prompt, aspect_ratio, resolution, duration,
@@ -51,9 +51,9 @@ export function registerGenerateSeedance2MiniVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const referenceImageUrls = await uploadAll(fs, imageInputs, projectSlug);
-    const referenceVideoUrls = await uploadAll(fs, videoInputs, projectSlug);
-    const referenceAudioUrls = await uploadAll(fs, audioInputs, projectSlug);
+    const referenceImageUrls = await uploadAll(fs, imageInputs, bookId);
+    const referenceVideoUrls = await uploadAll(fs, videoInputs, bookId);
+    const referenceAudioUrls = await uploadAll(fs, audioInputs, bookId);
 
     const normalizedPrompt = prompt === undefined
       ? undefined
@@ -88,7 +88,7 @@ export function registerGenerateSeedance2MiniVideoJob(fs: Engine): void {
       taskType: "seedance2_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         mode: "mini",
         apiModel: "bytedance/seedance-2-mini",

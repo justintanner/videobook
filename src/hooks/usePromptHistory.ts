@@ -22,7 +22,7 @@ export interface UsePromptHistoryResult {
 export function usePromptHistory(
   callTool: UseMcpResult['callTool'] | undefined,
   surface: PromptSurface,
-  projectSlug: string | undefined,
+  bookId: string | undefined,
 ): UsePromptHistoryResult {
   const [entries, setEntries] = useState<string[]>([]);
   const [cursor, setCursor] = useState<number>(-1);
@@ -31,20 +31,20 @@ export function usePromptHistory(
   const draftRef = useRef<string>('');
   const loadedKeyRef = useRef<string | null>(null);
   const callToolRef = useRef(callTool);
-  const projectSlugRef = useRef(projectSlug);
+  const bookIdRef = useRef(bookId);
 
   useEffect(() => { callToolRef.current = callTool; });
-  useEffect(() => { projectSlugRef.current = projectSlug; });
+  useEffect(() => { bookIdRef.current = bookId; });
 
   // Load persisted history when project or surface changes (or once callTool
   // becomes available). loadedKeyRef is only committed on success so a failed
   // load retries on the next effect run.
   useEffect(() => {
-    if (!callTool || !projectSlug) return;
-    const key = `${projectSlug}::${surface}`;
+    if (!callTool || !bookId) return;
+    const key = `${bookId}::${surface}`;
     if (key === loadedKeyRef.current) return;
 
-    callTool('list_prompt_history', { project_slug: projectSlug, surface, limit: 100 })
+    callTool('list_prompt_history', { book_id: bookId, surface, limit: 100 })
       .then((result) => {
         if (result.isError) return;
         const content = result.content as Array<{ type: string; text: string }>;
@@ -58,7 +58,7 @@ export function usePromptHistory(
         setCursor(-1);
       })
       .catch(() => {});
-  }, [callTool, projectSlug, surface]);
+  }, [callTool, bookId, surface]);
 
   const push = useCallback((prompt: string, params?: Record<string, unknown>) => {
     if (!prompt.trim()) return;
@@ -68,11 +68,11 @@ export function usePromptHistory(
     setEntries(next);
     setCursor(-1);
 
-    const slug = projectSlugRef.current;
+    const slug = bookIdRef.current;
     const ct = callToolRef.current;
     if (slug && ct) {
       ct('record_prompt', {
-        project_slug: slug,
+        book_id: slug,
         surface,
         prompt,
         ...(params ? { params } : {}),

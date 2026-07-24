@@ -30,7 +30,7 @@ function isHttpUrl(s: string): boolean {
 export async function resolveImageSlugs(
   fs: Engine,
   rawSlugs: readonly string[],
-  projectSlug: string,
+  _bookId: string,
 ): Promise<SlugResolution> {
   const inputs: ImageInput[] = [];
   const sourceImageIds: string[] = [];
@@ -43,7 +43,7 @@ export async function resolveImageSlugs(
     if (!assetId.startsWith("img-")) {
       return { ok: false, error: `image_slugs entries must be img-* assets or http(s) URLs, got: ${assetId}` };
     }
-    const manifestResult = await fs.files.manifest(assetId, projectSlug);
+    const manifestResult = await fs.files.manifest(assetId);
     if (!manifestResult.ok) return { ok: false, error: manifestResult.error.message };
     const imageFile = findImageFile(manifestResult.value.files);
     if (!imageFile) return { ok: false, error: `No image file found in asset ${assetId}` };

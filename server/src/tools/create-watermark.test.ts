@@ -33,7 +33,7 @@ describe("create_watermark tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
   });
 
@@ -46,7 +46,7 @@ describe("create_watermark tool", () => {
   it("creates a ready img- asset holding the QR card", async () => {
     const result = await client!.callTool({
       name: "create_watermark_card",
-      arguments: { project_slug: PROJECT, handle: "@someone" },
+      arguments: { book_id: PROJECT, handle: "@someone" },
     });
 
     expect(result.isError).not.toBe(true);
@@ -59,7 +59,7 @@ describe("create_watermark tool", () => {
     expect(parsed.handle).toBe("someone");
     expect(parsed.url).toBe("https://x.com/someone");
 
-    const manifest = await fs.files.manifest(parsed.asset_id, PROJECT, { includeDotfiles: true });
+    const manifest = await fs.files.manifest(parsed.asset_id, PROJECT);
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
     const fileNames = new Set(manifest.value.files.map((file) => file.name));
@@ -68,7 +68,7 @@ describe("create_watermark tool", () => {
     expect(fileNames.has("portrait.jpg")).toBe(true);
     expect(fileNames.has("square.jpg")).toBe(true);
 
-    const read = await fs.files.read(parsed.asset_id, "original.png", PROJECT);
+    const read = await fs.files.read(parsed.asset_id, "original.png");
     expect(read.ok).toBe(true);
     if (!read.ok) return;
     const buffer = Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
@@ -82,7 +82,7 @@ describe("create_watermark tool", () => {
   it("defaults the handle and derives the X URL", async () => {
     const result = await client!.callTool({
       name: "create_watermark_card",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
 
     expect(result.isError).not.toBe(true);
@@ -94,11 +94,11 @@ describe("create_watermark tool", () => {
   it("remembers used handles and the saved default", async () => {
     await client!.callTool({
       name: "create_watermark_card",
-      arguments: { project_slug: PROJECT, handle: "alice", save_default: true },
+      arguments: { book_id: PROJECT, handle: "alice", save_default: true },
     });
     await client!.callTool({
       name: "create_watermark_card",
-      arguments: { project_slug: PROJECT, handle: "@bob" },
+      arguments: { book_id: PROJECT, handle: "@bob" },
     });
 
     // Most-recent-first; saved default stays pinned to the save_default handle.

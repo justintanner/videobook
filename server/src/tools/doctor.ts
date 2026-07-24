@@ -30,7 +30,7 @@ interface StuckAsset {
 }
 
 interface DoctorReport {
-  project_slug: string;
+  book_id: string;
   total: number;
   healthy: number;
   broken: BrokenAsset[];
@@ -45,17 +45,17 @@ interface DoctorReport {
  */
 async function diagnose(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   onlyAssetId?: string,
 ): Promise<DoctorReport> {
-  const all = await fs.artifacts.list(projectSlug);
+  const all = await fs.artifacts.list();
   const assets = onlyAssetId ? all.filter((a) => a.slug === onlyAssetId) : all;
 
-  const errorsRes = await fs.jobs.failures.findAll(projectSlug);
+  const errorsRes = await fs.jobs.failures.findAll();
   const errorByAsset = new Map<string, GenerationError>();
   if (errorsRes.ok) for (const e of errorsRes.value) errorByAsset.set(e.artifactSlug, e);
 
-  const workRes = await fs.jobs.artifactWork.list(projectSlug);
+  const workRes = await fs.jobs.artifactWork.list();
   const workByAsset = new Map<string, ArtifactView>();
   if (workRes.ok) for (const w of workRes.value) workByAsset.set(w.slug, w);
 
@@ -66,7 +66,7 @@ async function diagnose(
 
   await Promise.all(
     assets.map(async (a) => {
-      const statusRes = await fs.status.get(a.slug, projectSlug);
+      const statusRes = await fs.status.get(a.slug);
       const status = statusRes.ok ? statusRes.value : "error";
       const work = workByAsset.get(a.slug);
 
@@ -99,7 +99,7 @@ async function diagnose(
   );
 
   const report: DoctorReport = {
-    project_slug: projectSlug,
+    book_id: bookId,
     total: assets.length,
     healthy,
     broken,
@@ -123,7 +123,7 @@ export function doctorDef(fs: Engine): ToolDef {
       "lease when the media is intact, otherwise restores the asset from Dolt history. A bare " +
       "fix:true scan never bulk-fixes; it just reports.",
     schema: {
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       asset_id: z
         .string()
         .optional()
@@ -135,8 +135,8 @@ export function doctorDef(fs: Engine): ToolDef {
         .describe("Restore the given asset_id to its last usable state. Requires asset_id."),
     },
     handler: async (args) => {
-      const { project_slug, asset_id, fix } = args as {
-        project_slug: string;
+      const { book_id, asset_id, fix } = args as {
+        book_id: string;
         asset_id?: string;
         fix?: boolean;
       };
@@ -153,7 +153,7 @@ export function doctorDef(fs: Engine): ToolDef {
         try {
           const result = await queue.enqueueAndWait(jobId, {
             type: "doctor_fix",
-            projectSlug: project_slug,
+            bookId: book_id,
             assetId,
           });
           return ok(result);
@@ -164,7 +164,7 @@ export function doctorDef(fs: Engine): ToolDef {
         }
       }
 
-      return ok(await diagnose(fs, project_slug, assetId));
+      return ok(await diagnose(fs, book_id, assetId));
     },
   };
 }

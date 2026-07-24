@@ -32,13 +32,13 @@ import {
 
 // ── Video-specific components ──
 
-function ClipContent({ item, size, onRender, onSplitAtCursor, callTool, projectSlug, videoRef, cropMode, cropRatio, onCropApply, onCropCancel, osgMode, osgImageAssets, osgInitialAssetId, onOsgApply, onOsgRemove, onOsgCancel }: {
+function ClipContent({ item, size, onRender, onSplitAtCursor, callTool, bookId, videoRef, cropMode, cropRatio, onCropApply, onCropCancel, osgMode, osgImageAssets, osgInitialAssetId, onOsgApply, onOsgRemove, onOsgCancel }: {
   item: MediaItem;
   size: ViewerSize;
   onRender?: () => void;
   onSplitAtCursor?: (assetId: string, atSec: number) => void;
   callTool: UseMcpResult['callTool'];
-  projectSlug: string;
+  bookId: string;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   cropMode: boolean;
   cropRatio: CropRatio;
@@ -71,10 +71,10 @@ function ClipContent({ item, size, onRender, onSplitAtCursor, callTool, projectS
     if (!video) return;
     callTool('extract_frame', {
       asset_id: item.id,
-      project_slug: projectSlug,
+      book_id: bookId,
       timestamp: video.currentTime,
     });
-  }, [callTool, item.id, projectSlug, videoRef]);
+  }, [callTool, item.id, bookId, videoRef]);
 
   if (item.status === 'downloading') {
     return <DownloadingReadout asset={item} />;
@@ -266,9 +266,9 @@ function SettingsPane({ renderOrientation, onSizeChange, onRender, settings, onS
 
 const VIDEO_BACK_TABS: BackTab[] = ['settings', 'files', 'history'];
 
-export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, onSplitAtCursor, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, onClose, cropTarget, onCropConsumed, osgTarget, onOsgConsumed, onOsgApply, imageAssets }: {
+export function VideoViewer({ item, bookId, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, onSplitAtCursor, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, onClose, cropTarget, onCropConsumed, osgTarget, onOsgConsumed, onOsgApply, imageAssets }: {
   item: MediaItem;
-  projectSlug: string;
+  bookId: string;
   size: ViewerSize;
   onSizeChange: (s: ViewerSize) => void;
   flipped: boolean;
@@ -295,7 +295,7 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
   useMountKey('viewer');
 
   const bf = useViewerBackFace({
-    projectSlug,
+    bookId,
     itemId: item.id,
     callTool,
     flipped,
@@ -329,14 +329,14 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
     setCropMode(false);
     await callTool('crop_video', {
       asset_id: item.id,
-      project_slug: projectSlug,
+      book_id: bookId,
       ratio,
       x: rect.x,
       y: rect.y,
       w: rect.w,
       h: rect.h,
     });
-  }, [callTool, item.id, projectSlug]);
+  }, [callTool, item.id, bookId]);
 
   const handleCropCancel = useCallback(() => setCropMode(false), []);
 
@@ -464,14 +464,14 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
             )}>
               {size === 'portrait' ? (
                 <div className="aspect-[9/16] h-full max-w-full">
-                  <ClipContent item={item} size={size} onRender={onRender} onSplitAtCursor={onSplitAtCursor} callTool={callTool} projectSlug={projectSlug} videoRef={videoElRef} cropMode={cropMode} cropRatio={cropRatio} onCropApply={handleCropApply} onCropCancel={handleCropCancel} osgMode={osgMode} osgImageAssets={osgImageAssets} osgInitialAssetId={osgInitialAssetId} onOsgApply={handleOsgApplyLocal} onOsgRemove={handleOsgRemoveLocal} onOsgCancel={handleOsgCancel} />
+                  <ClipContent item={item} size={size} onRender={onRender} onSplitAtCursor={onSplitAtCursor} callTool={callTool} bookId={bookId} videoRef={videoElRef} cropMode={cropMode} cropRatio={cropRatio} onCropApply={handleCropApply} onCropCancel={handleCropCancel} osgMode={osgMode} osgImageAssets={osgImageAssets} osgInitialAssetId={osgInitialAssetId} onOsgApply={handleOsgApplyLocal} onOsgRemove={handleOsgRemoveLocal} onOsgCancel={handleOsgCancel} />
                 </div>
               ) : size === 'square' ? (
                 <div className="aspect-square h-full max-w-full">
-                  <ClipContent item={item} size={size} onRender={onRender} onSplitAtCursor={onSplitAtCursor} callTool={callTool} projectSlug={projectSlug} videoRef={videoElRef} cropMode={cropMode} cropRatio={cropRatio} onCropApply={handleCropApply} onCropCancel={handleCropCancel} osgMode={osgMode} osgImageAssets={osgImageAssets} osgInitialAssetId={osgInitialAssetId} onOsgApply={handleOsgApplyLocal} onOsgRemove={handleOsgRemoveLocal} onOsgCancel={handleOsgCancel} />
+                  <ClipContent item={item} size={size} onRender={onRender} onSplitAtCursor={onSplitAtCursor} callTool={callTool} bookId={bookId} videoRef={videoElRef} cropMode={cropMode} cropRatio={cropRatio} onCropApply={handleCropApply} onCropCancel={handleCropCancel} osgMode={osgMode} osgImageAssets={osgImageAssets} osgInitialAssetId={osgInitialAssetId} onOsgApply={handleOsgApplyLocal} onOsgRemove={handleOsgRemoveLocal} onOsgCancel={handleOsgCancel} />
                 </div>
               ) : (
-                <ClipContent item={item} size={size} onRender={onRender} onSplitAtCursor={onSplitAtCursor} callTool={callTool} projectSlug={projectSlug} videoRef={videoElRef} cropMode={cropMode} cropRatio={cropRatio} onCropApply={handleCropApply} onCropCancel={handleCropCancel} osgMode={osgMode} osgImageAssets={osgImageAssets} osgInitialAssetId={osgInitialAssetId} onOsgApply={handleOsgApplyLocal} onOsgRemove={handleOsgRemoveLocal} onOsgCancel={handleOsgCancel} />
+                <ClipContent item={item} size={size} onRender={onRender} onSplitAtCursor={onSplitAtCursor} callTool={callTool} bookId={bookId} videoRef={videoElRef} cropMode={cropMode} cropRatio={cropRatio} onCropApply={handleCropApply} onCropCancel={handleCropCancel} osgMode={osgMode} osgImageAssets={osgImageAssets} osgInitialAssetId={osgInitialAssetId} onOsgApply={handleOsgApplyLocal} onOsgRemove={handleOsgRemoveLocal} onOsgCancel={handleOsgCancel} />
               )}
             </div>
           </div>
@@ -520,7 +520,7 @@ export function VideoViewer({ item, projectSlug, size, onSizeChange, flipped, on
                 handleRestore={bf.handleRestore}
                 fetchHistory={bf.fetchHistory}
                 itemId={item.id}
-                projectSlug={projectSlug}
+                bookId={bookId}
               />
             )}
           </div>

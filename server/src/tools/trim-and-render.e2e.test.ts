@@ -41,13 +41,13 @@ async function generateTestVideo(outputPath: string): Promise<void> {
 
 async function uploadVideo(
   client: Client,
-  projectSlug: string,
+  bookId: string,
   videoPath: string,
 ): Promise<{ assetId: string; path: string }> {
   const data = (await readFile(videoPath)).toString("base64");
   const result = await client.callTool({
     name: "upload_file",
-    arguments: { project_slug: projectSlug, filename: "original.mp4", data },
+    arguments: { book_id: bookId, filename: "original.mp4", data },
   });
   return parse(result) as unknown as { assetId: string; path: string };
 }
@@ -61,10 +61,7 @@ async function pollForDuration(
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const result =
-      await fs.metadata.artifacts.read<Record<string, unknown>>(
-        assetId,
-        "original",
-        PROJECT,
+      await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original"
       );
     if (
       result.ok &&
@@ -99,7 +96,7 @@ describe("trim video in place and re-render e2e", () => {
     // Create project
     const createResult = await client.callTool({
       name: "create_project",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
     expect(createResult.isError).toBeFalsy();
 
@@ -126,7 +123,7 @@ describe("trim video in place and re-render e2e", () => {
       name: "trim_video",
       arguments: {
         asset_id: assetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         trim_start: 1,
         trim_end: 3,
       },
@@ -152,10 +149,7 @@ describe("trim video in place and re-render e2e", () => {
 
   it("metadata reflects new duration", async () => {
     const result =
-      await fs.metadata.artifacts.read<Record<string, unknown>>(
-        assetId,
-        "original",
-        PROJECT,
+      await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original"
       );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -169,7 +163,7 @@ describe("trim video in place and re-render e2e", () => {
       name: "render_video",
       arguments: {
         asset_id: assetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         orientation: "landscape",
         subtitles_enabled: false,
       },

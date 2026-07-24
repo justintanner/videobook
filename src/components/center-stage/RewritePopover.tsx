@@ -33,11 +33,11 @@ interface RewritePopoverProps {
   trigger: React.ReactNode;
   initial?: RewriteInitial | null;
   callTool?: UseMcpResult['callTool'];
-  projectSlug?: string;
+  bookId?: string;
 }
 
 export function RewritePopover(props: RewritePopoverProps) {
-  const history = usePromptHistory(props.callTool, 'script_rewrite', props.projectSlug);
+  const history = usePromptHistory(props.callTool, 'script_rewrite', props.bookId);
   const key = props.open ? 'open' : 'closed';
   return <RewritePopoverState key={key} {...props} history={history} />;
 }

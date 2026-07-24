@@ -26,7 +26,7 @@ describe("Videobook activity policy", () => {
     "storage_status",
   ])("does not log read-only tool %s", (toolName) => {
     expect(
-      isLoggedToolActivity(toolName, { project_slug: "studio" }, success),
+      isLoggedToolActivity(toolName, { book_id: "studio" }, success),
     ).toBe(false);
     expect(isExcludedAction(actionNameForTool(toolName))).toBe(true);
   });
@@ -39,7 +39,7 @@ describe("Videobook activity policy", () => {
     "run_notebook",
   ])("logs mutating tool %s", (toolName) => {
     expect(
-      isLoggedToolActivity(toolName, { project_slug: "studio" }, success),
+      isLoggedToolActivity(toolName, { book_id: "studio" }, success),
     ).toBe(true);
     expect(isExcludedAction(actionNameForTool(toolName))).toBe(false);
   });

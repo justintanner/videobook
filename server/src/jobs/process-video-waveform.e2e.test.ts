@@ -47,14 +47,14 @@ describe("process_video persists audio waveform via videobook-engine primitive",
 
     const createResult = await client.callTool({
       name: "create_project",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
     expect(createResult.isError).toBeFalsy();
 
     const data = (await readFile(videoPath)).toString("base64");
     const uploaded = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: PROJECT, filename: "original.mp4", data },
+      arguments: { book_id: PROJECT, filename: "original.mp4", data },
     });
     const parsed = parse(uploaded) as unknown as { assetId: string };
     assetId = parsed.assetId;
@@ -69,13 +69,13 @@ describe("process_video persists audio waveform via videobook-engine primitive",
   it("writes audio_waveforms in Dolt and emits no waveform sidecar", async () => {
     const fs = createEngineForTest(getEngineRoot());
 
-    const wave = await fs.metadata.waveforms.read(assetId, PROJECT);
+    const wave = await fs.metadata.waveforms.read(assetId);
     expect(wave.ok).toBe(true);
     if (!wave.ok) return;
     expect(Array.isArray(wave.value.peaks)).toBe(true);
     expect(wave.value.peaks.length).toBeGreaterThan(0);
 
-    const manifest = await fs.files.manifest(assetId, PROJECT, { includeDotfiles: true });
+    const manifest = await fs.files.manifest(assetId, PROJECT);
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
     expect(manifest.value.files.find((f) => f.name === "waveform.json")).toBeUndefined();

@@ -33,19 +33,19 @@ async function fileExists(p: string): Promise<boolean> {
   try { await stat(p); return true; } catch { return false; }
 }
 
-async function repairAsset(projectSlug: string, assetId: string): Promise<RepairOutcome> {
-  const manifestResult = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
+async function repairAsset(bookId: string, assetId: string): Promise<RepairOutcome> {
+  const manifestResult = await fs.files.manifest(assetId, bookId, { includeDotfiles: true });
   if (!manifestResult.ok) return { kind: "failed", assetId, reason: manifestResult.error.message };
 
   const fileNames = new Set(manifestResult.value.files.map((f) => f.name));
   if (!fileNames.has("original.png")) return { kind: "skipped", assetId, reason: "no original.png" };
   if (!fileNames.has("original.jpg")) return { kind: "skipped", assetId, reason: "no original.jpg (already clean)" };
 
-  const pngResult = await fs.files.read(assetId, "original.png", projectSlug);
+  const pngResult = await fs.files.read(assetId, "original.png", bookId);
   if (!pngResult.ok) return { kind: "failed", assetId, reason: `read original.png: ${pngResult.error.message}` };
   const pngBuffer = Buffer.isBuffer(pngResult.value) ? pngResult.value : Buffer.from(pngResult.value);
 
-  const jpgResult = await fs.files.read(assetId, "original.jpg", projectSlug);
+  const jpgResult = await fs.files.read(assetId, "original.jpg", bookId);
   if (!jpgResult.ok) return { kind: "failed", assetId, reason: `read original.jpg: ${jpgResult.error.message}` };
   const jpgBuffer = Buffer.isBuffer(jpgResult.value) ? jpgResult.value : Buffer.from(jpgResult.value);
 
@@ -59,7 +59,7 @@ async function repairAsset(projectSlug: string, assetId: string): Promise<Repair
   }
 
   // Preserve provenance fields if they exist; only overwrite width/height.
-  const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original", projectSlug);
+  const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original", bookId);
   const provenance: Record<string, unknown> = meta.ok ? { ...meta.value } : {};
   delete provenance.width;
   delete provenance.height;
@@ -70,47 +70,47 @@ async function repairAsset(projectSlug: string, assetId: string): Promise<Repair
     cropToFill(pngBuffer, 1080, 1080),
   ]);
 
-  await fs.files.delete(assetId, "original.jpg", projectSlug);
-  await fs.files.write(assetId, "landscape.jpg", landscape, projectSlug);
-  await fs.files.write(assetId, "portrait.jpg", portrait, projectSlug);
-  await fs.files.write(assetId, "square.jpg", square, projectSlug);
+  await fs.files.delete(assetId, "original.jpg", bookId);
+  await fs.files.write(assetId, "landscape.jpg", landscape, bookId);
+  await fs.files.write(assetId, "portrait.jpg", portrait, bookId);
+  await fs.files.write(assetId, "square.jpg", square, bookId);
   await fs.metadata.artifacts.write(
     assetId,
     "original",
     { ...provenance, width: pngDims.width, height: pngDims.height },
-    projectSlug,
+    bookId,
   );
 
   return { kind: "fixed", assetId, pngWidth: pngDims.width, pngHeight: pngDims.height };
 }
 
-async function listImgAssets(projectSlug: string): Promise<string[]> {
-  const projectDir = join(PROJECTS_DIR, projectSlug);
+async function listImgAssets(bookId: string): Promise<string[]> {
+  const projectDir = join(PROJECTS_DIR, bookId);
   const entries = await readdir(projectDir);
   return entries.filter((e) => e.startsWith("img-")).sort();
 }
 
 async function main(): Promise<void> {
-  const projectSlug = process.argv[2];
+  const bookId = process.argv[2];
   const assetIdArgs = process.argv.slice(3);
 
-  if (!projectSlug) {
+  if (!bookId) {
     console.error("usage: tsx server/scripts/fix-cropped-original-jpg.ts <project-slug> [assetId...]");
     process.exit(1);
   }
 
-  const projectDir = join(PROJECTS_DIR, projectSlug);
+  const projectDir = join(PROJECTS_DIR, bookId);
   if (!(await fileExists(projectDir))) {
     console.error(`project not found: ${projectDir}`);
     process.exit(1);
   }
 
-  const assetIds = assetIdArgs.length > 0 ? assetIdArgs : await listImgAssets(projectSlug);
-  console.log(`scanning ${assetIds.length} asset(s) in ${projectSlug}…`);
+  const assetIds = assetIdArgs.length > 0 ? assetIdArgs : await listImgAssets(bookId);
+  console.log(`scanning ${assetIds.length} asset(s) in ${bookId}…`);
 
   let fixed = 0, skipped = 0, failed = 0;
   for (const assetId of assetIds) {
-    const outcome = await repairAsset(projectSlug, assetId);
+    const outcome = await repairAsset(bookId, assetId);
     if (outcome.kind === "fixed") {
       fixed += 1;
       console.log(`  ✓ ${assetId}: rebuilt variants from original.png (${outcome.pngWidth}x${outcome.pngHeight})`);

@@ -29,12 +29,12 @@ export function changeVideoSpeedDef(fs: Engine): ToolDef {
     description: "Change video playback speed (speed up or slow down). Operates in-place with git versioning.",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-my-video)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       speed: z.number().optional().describe("Speed multiplier (0.25–4.0). >1 = faster, <1 = slower."),
       target_duration_seconds: z.number().optional().describe("Exact target output duration in seconds"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, speed: requestedSpeed, target_duration_seconds } = args as { asset_id: string; project_slug: string; speed?: number; target_duration_seconds?: number };
+      const { asset_id, book_id, speed: requestedSpeed, target_duration_seconds } = args as { asset_id: string; book_id: string; speed?: number; target_duration_seconds?: number };
       
       if ((requestedSpeed === undefined && target_duration_seconds === undefined) || (requestedSpeed !== undefined && target_duration_seconds !== undefined)) {
         return {
@@ -50,7 +50,7 @@ export function changeVideoSpeedDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -105,7 +105,7 @@ export function changeVideoSpeedDef(fs: Engine): ToolDef {
         hasAudio,
         assetId: asset_id,
         assetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
       } as unknown as Record<string, unknown>);
 
       return {

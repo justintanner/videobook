@@ -26,9 +26,9 @@ function emptyMetadata(assetId: string): XPostMetadata {
 async function readMetadata(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<XPostMetadata> {
-  const result = await fs.files.read(assetId, POST_METADATA_FILE, projectSlug);
+  const result = await fs.files.read(assetId, POST_METADATA_FILE);
   if (!result.ok) return emptyMetadata(assetId);
   try {
     const parsed = JSON.parse(result.value.toString("utf8")) as Partial<XPostMetadata>;
@@ -53,22 +53,18 @@ async function readMetadata(
 export async function appendXPostMetadata(args: {
   fs: Engine;
   assetId: string;
-  projectSlug: string;
+  bookId: string;
   entry: XPostEntry;
 }): Promise<void> {
-  const { fs, assetId, projectSlug, entry } = args;
-  const existing = await readMetadata(fs, assetId, projectSlug);
+  const { fs, assetId, bookId, entry } = args;
+  const existing = await readMetadata(fs, assetId, bookId);
   const next: XPostMetadata = {
     version: POST_METADATA_VERSION,
     asset_id: assetId,
     posts: [...existing.posts, entry],
   };
   const buffer = Buffer.from(JSON.stringify(next, null, 2), "utf8");
-  const writeResult = await fs.files.write(
-    assetId,
-    POST_METADATA_FILE,
-    buffer,
-    projectSlug,
+  const writeResult = await fs.files.write(assetId, POST_METADATA_FILE, buffer
   );
   if (!writeResult.ok) {
     throw new Error(
@@ -80,7 +76,7 @@ export async function appendXPostMetadata(args: {
 export async function readXPostMetadata(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
 ): Promise<XPostMetadata> {
-  return await readMetadata(fs, assetId, projectSlug);
+  return await readMetadata(fs, assetId, bookId);
 }

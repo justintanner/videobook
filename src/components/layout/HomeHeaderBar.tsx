@@ -6,7 +6,7 @@ import type { UseMcpResult } from 'use-mcp/react';
 
 interface HomeHeaderBarProps {
   pulseKey: number;
-  projectSlug: string | undefined;
+  bookId: string | undefined;
   assetCount: number | undefined;
   /** Number of assets currently rendering — shows a global rendering indicator. */
   renderingCount?: number;
@@ -24,7 +24,7 @@ interface HomeHeaderBarProps {
   onProjectsOpenChange?: (open: boolean) => void;
 }
 
-export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, renderingCount = 0, notebookCommand, callTool, onProjectChange, onStatusClick, onArchiveClick, onSettingsClick, onAnimateCommand, archiveActive = false, settingsActive = false, projectsOpen, onProjectsOpenChange }: HomeHeaderBarProps) {
+export function HomeHeaderBar({ pulseKey, bookId, assetCount, renderingCount = 0, notebookCommand, callTool, onProjectChange, onStatusClick, onArchiveClick, onSettingsClick, onAnimateCommand, archiveActive = false, settingsActive = false, projectsOpen, onProjectsOpenChange }: HomeHeaderBarProps) {
   const { toasts } = useToast();
   const hasOpenToast = toasts.some((toast) => toast.open);
   const isRendering = renderingCount > 0;
@@ -43,7 +43,7 @@ export function HomeHeaderBar({ pulseKey, projectSlug, assetCount, renderingCoun
 
         {/* Project selector */}
         <ProjectDropdown
-          projectSlug={projectSlug}
+          bookId={bookId}
           assetCount={assetCount}
           callTool={callTool}
           onProjectChange={onProjectChange}

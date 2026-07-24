@@ -8,7 +8,7 @@ import { probeVideo } from "../ffmpeg.js";
 type GenerateElevenlabsT2aPayload = {
   type: "generate_elevenlabs_t2a";
   audAssetId: string;
-  projectSlug: string;
+  bookId: string;
   voiceId: string;
   text: string;
   modelId: string;
@@ -19,7 +19,7 @@ export function registerGenerateElevenlabsT2aJob(fs: Engine): void {
   registerJobHandler("generate_elevenlabs_t2a", async (payload, ctx) => {
     const {
       audAssetId,
-      projectSlug,
+      bookId: _bookId,
       voiceId,
       text,
       modelId,
@@ -36,12 +36,12 @@ export function registerGenerateElevenlabsT2aJob(fs: Engine): void {
       output_format: outputFormat,
     });
 
-    const write = await fs.files.write(audAssetId, "original.mp3", Buffer.from(audio), projectSlug);
+    const write = await fs.files.write(audAssetId, "original.mp3", Buffer.from(audio));
     if (!write.ok) throw new Error(`Failed to write original.mp3: ${write.error.message}`);
 
     let duration: number | undefined;
     try {
-      const dir = await fs.workspaces.resolveArtifact(audAssetId, projectSlug);
+      const dir = await fs.workspaces.resolveArtifact(audAssetId);
       if (dir.ok) {
         const probe = await probeVideo(join(dir.value, "original.mp3"));
         if (Number.isFinite(probe.duration) && probe.duration > 0) {
@@ -60,7 +60,7 @@ export function registerGenerateElevenlabsT2aJob(fs: Engine): void {
       generated_at: new Date().toISOString(),
       ...(duration !== undefined ? { duration } : {}),
     };
-    const metaWrite = await fs.metadata.artifacts.write(audAssetId, "original", metadata, projectSlug);
+    const metaWrite = await fs.metadata.artifacts.write(audAssetId, "original", metadata);
     if (!metaWrite.ok) throw new Error(`Failed to write artifact metadata: ${metaWrite.error.message}`);
 
     return { success: true, provider: "elevenlabs" as const };

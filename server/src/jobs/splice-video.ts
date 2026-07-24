@@ -27,7 +27,7 @@ type SpliceVideoPayload = {
   secondAssetId: string;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
   targetWidth: number;
   targetHeight: number;
   firstFps: number;
@@ -241,7 +241,7 @@ export function registerSpliceVideoJob(fs: Engine): void {
     const {
       firstPath, secondPath, outputPath,
       firstAssetId, secondAssetId,
-      assetId, assetDir, projectSlug,
+      assetId, assetDir, bookId,
       targetWidth, targetHeight, firstFps, firstDuration,
       firstHasAudio, secondHasAudio,
       overlap,
@@ -249,7 +249,7 @@ export function registerSpliceVideoJob(fs: Engine): void {
 
     const result = await withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       assetDir,
       ctx,
@@ -285,13 +285,13 @@ export function registerSpliceVideoJob(fs: Engine): void {
       };
       await ingestWorkspaceOutputs(
         fs,
-        projectSlug,
+        bookId,
         assetId,
         [outputPath.split("/").pop()!],
         "splice_video",
         provenance,
       );
-      await fs.metadata.artifacts.write(assetId, "original", provenance, projectSlug);
+      await fs.metadata.artifacts.write(assetId, "original", provenance);
 
       return { provenance, timestamp: splice.timestamp, score: splice.score };
       },
@@ -304,7 +304,7 @@ export function registerSpliceVideoJob(fs: Engine): void {
       videoPath: outputPath,
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
       provenance: result.provenance,
     } as unknown as Record<string, unknown>);
 

@@ -199,7 +199,7 @@ export type TrimAudioPayload = {
   cutEnd?: number;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
   commitParams: Record<string, unknown>;
 };
 
@@ -207,26 +207,26 @@ export function registerTrimAudioJob(fs: Engine): void {
   registerJobHandler("trim_audio", async (payload, ctx) => {
     const {
       inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd,
-      assetId, assetDir, projectSlug, commitParams,
+      assetId, assetDir, bookId, commitParams,
     } = payload as TrimAudioPayload;
     const inputFilename = basename(inputPath);
 
     try {
       await withLockedLocalLease(
         fs,
-        projectSlug,
+        bookId,
         assetId,
         assetDir,
         ctx,
         "trim",
         { durationMs: LOCK_DURATION_MS, data: { state: "trimming-audio", ...commitParams } },
         async () => {
-          const original = await fs.files.read(assetId, inputFilename, projectSlug);
+          const original = await fs.files.read(assetId, inputFilename);
           if (!original.ok) throw new Error(original.error.message);
           await runTrimAudio(inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd);
           await replaceArtifactFileFromPath(
             fs,
-            projectSlug,
+            bookId,
             assetId,
             inputFilename,
             outputPath,
@@ -236,13 +236,9 @@ export function registerTrimAudioJob(fs: Engine): void {
             source_asset_id: assetId,
             ...commitParams,
             trimmed_at: new Date().toISOString(),
-          }, projectSlug);
+          });
           if (!provenanceResult.ok) {
-            const rollback = await fs.files.write(
-              assetId,
-              inputFilename,
-              original.value,
-              projectSlug,
+            const rollback = await fs.files.write(assetId, inputFilename, original.value
             );
             if (!rollback.ok) {
               throw new Error(

@@ -38,20 +38,20 @@ type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-async function resolveVideoSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveVideoSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slug must be a vid-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findVideoFile(manifest.value.files);
   if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-async function resolveImageSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveImageSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("img-")) return { ok: false, error: `image_slug must be an img-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
   if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
@@ -59,7 +59,7 @@ async function resolveImageSlug(fs: Engine, raw: string, projectSlug: string): P
 }
 
 const generateWan27VideoeditVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(Wan27VideoEditRequestSchema.shape.input.shape.prompt, "Edit description (max 5000 chars)"),
   negative_prompt: apicityStringField(Wan27VideoEditRequestSchema.shape.input.shape.negative_prompt, "Negative prompt — things to avoid (max 500 chars)"),
   video_slug: z.string().describe("Source video asset to edit (e.g., @vid-scene)"),
@@ -84,7 +84,7 @@ export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
     schema: generateWan27VideoeditVideoSchema,
     handler: async (args) => {
       const {
-        project_slug, prompt, negative_prompt,
+        book_id, prompt, negative_prompt,
         video_slug, image_slug,
         resolution, aspect_ratio, duration, audio_setting, prompt_extend, watermark, nsfw_checker, seed,
       } = args as Args;
@@ -103,7 +103,7 @@ export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const videoResult = await resolveVideoSlug(fs, video_slug, project_slug);
+      const videoResult = await resolveVideoSlug(fs, video_slug, book_id);
       if (!videoResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoResult.error }] };
       const videoInput = videoResult.value;
 
@@ -112,7 +112,7 @@ export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
       // second, so a 10s preset typically produces ~10.01s. Allow a small
       // tolerance before failing.
       const DURATION_TOLERANCE = 0.05;
-      const meta = await fs.metadata.artifacts.read<{ duration?: number }>(videoInput.assetId, "original", project_slug);
+      const meta = await fs.metadata.artifacts.read<{ duration?: number }>(videoInput.assetId, "original");
       if (meta.ok && typeof meta.value.duration === "number" && meta.value.duration > MAX_INPUT_DURATION + DURATION_TOLERANCE) {
         return {
           isError: true as const,
@@ -122,13 +122,13 @@ export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
 
       let imageInput: RefInput | undefined;
       if (image_slug) {
-        const r = await resolveImageSlug(fs, image_slug, project_slug);
+        const r = await resolveImageSlug(fs, image_slug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInput = r.value;
       }
 
       const videoName = `${modelSlug("kie", "wan/2-7-videoedit")}-${slugify(prompt ?? "") || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -147,7 +147,7 @@ export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
         type: "generate_wan27_videoedit_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         ...(prompt !== undefined ? { prompt } : {}),
         ...(negative_prompt !== undefined ? { negative_prompt } : {}),
         videoInput,

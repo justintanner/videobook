@@ -307,9 +307,9 @@ export async function uploadAssetToGoogleFlow(
   fs: Engine,
   assetId: string,
   filename: string,
-  projectSlug: string,
+  bookId: string,
 ): Promise<string> {
-  const { data, contentType } = await prepareAssetForUpload(fs, assetId, filename, projectSlug);
+  const { data, contentType } = await prepareAssetForUpload(fs, assetId, filename, bookId);
   return uploadBytesToGoogleFlow(provider, data, contentType, `${assetId}/${filename}`);
 }
 
@@ -336,7 +336,7 @@ type SubmitGoogleFlowVideoArgs = {
   request: GoogleFlowVideosRequest;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
   taskType: TaskType;
   meta: Record<string, unknown>;
 };
@@ -353,7 +353,7 @@ export async function submitGoogleFlowVideoTask(
 ): Promise<string> {
   const provider = createGoogleFlowProvider();
   const request = withGoogleFlowCaptchaDefaults(args.request as Record<string, unknown>) as GoogleFlowVideosRequest;
-  await fs.metadata.artifacts.write(args.assetId, "generation-payload", request, args.projectSlug);
+  await fs.metadata.artifacts.write(args.assetId, "generation-payload", request);
 
   let res: Record<string, unknown>;
   try {
@@ -384,7 +384,7 @@ export async function submitGoogleFlowVideoTask(
   const taskId = readJobId(res);
   if (!taskId) throw new Error("Google Flow video submit returned no job id");
 
-  const pendingResult = await fs.jobs.pending.write(args.projectSlug, {
+  const pendingResult = await fs.jobs.pending.write({
     taskId,
     taskType: args.taskType,
     artifactId: args.assetId,

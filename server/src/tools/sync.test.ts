@@ -14,8 +14,8 @@ async function writeNativeFile(
   data: Buffer | string,
 ): Promise<void> {
   const absoluteTarget = resolve(targetPath);
-  for (const project of fs.projects.list()) {
-    for (const artifact of fs.artifacts.list(project.projectId)) {
+  for (const _project of fs.projects.list()) {
+    for (const artifact of fs.artifacts.list()) {
       const filename = relative(artifact.path, absoluteTarget);
       if (
         filename.length === 0 ||
@@ -25,11 +25,7 @@ async function writeNativeFile(
       ) {
         continue;
       }
-      const written = await fs.files.write(
-        artifact.artifactId,
-        filename,
-        data,
-        project.projectId,
+      const written = await fs.files.write(artifact.artifactId, filename, data
       );
       if (!written.ok) throw new Error(written.error.message);
       return;
@@ -47,7 +43,7 @@ describe("sync tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -59,7 +55,7 @@ describe("sync tool", () => {
   it("sync on empty project returns empty arrays", async () => {
     const result = await client.callTool({
       name: "reconcile_project_work",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
@@ -76,12 +72,12 @@ describe("sync tool", () => {
     const imgData = Buffer.from("fake-png-data").toString("base64");
     await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo.png", data: imgData },
+      arguments: { book_id: "test-proj", filename: "photo.png", data: imgData },
     });
 
     const result = await client.callTool({
       name: "reconcile_project_work",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
@@ -116,12 +112,12 @@ describe("list_assets tool", () => {
     const slug = "list-empty";
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: slug },
+      arguments: { book_id: slug },
     });
 
     const result = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: slug },
+      arguments: { book_id: slug },
     });
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
@@ -140,18 +136,18 @@ describe("list_assets tool", () => {
     const slug = "list-populated";
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: slug },
+      arguments: { book_id: slug },
     });
 
     const imgData = Buffer.from("fake-png-data").toString("base64");
     await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: slug, filename: "photo.png", data: imgData },
+      arguments: { book_id: slug, filename: "photo.png", data: imgData },
     });
 
     const result = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: slug },
+      arguments: { book_id: slug },
     });
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
@@ -190,7 +186,7 @@ describe("buildAssetList", () => {
 
   it("returns assets with metadata after creating an asset", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("img", "test-asset", "test-proj");
+    const createResult = await fs.artifacts.create("img", "test-asset");
     expect(createResult.ok).toBe(true);
 
     const assets = await buildAssetList(fs, "test-proj");
@@ -206,7 +202,7 @@ describe("buildAssetList", () => {
 
   it("finds mp4 video as primary media file", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "video-test", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "video-test");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -219,7 +215,7 @@ describe("buildAssetList", () => {
 
   it("defers waveform extraction to a background job instead of blocking", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "wf-defer", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "wf-defer");
     if (!createResult.ok) throw new Error(createResult.error.message);
     await writeNativeFile(fs, join(createResult.value.path, "original.mp4"), "fake-video-data");
 
@@ -232,7 +228,7 @@ describe("buildAssetList", () => {
     // it has already run depends on whether a handler is registered.
     let wfJobs: Awaited<ReturnType<typeof fs.jobs.queue.list>> = [];
     for (let i = 0; i < 50 && wfJobs.length === 0; i++) {
-      const jobs = await fs.jobs.queue.list("test-proj", {
+      const jobs = await fs.jobs.queue.list({
         states: ["queued", "running", "completing", "done", "failed", "aborted"],
       });
       wfJobs = jobs.filter((j) => j.type === "extract_waveform");
@@ -243,7 +239,7 @@ describe("buildAssetList", () => {
 
   it("finds image as primary media file when no video present", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("img", "image-test", "test-proj");
+    const createResult = await fs.artifacts.create("img", "image-test");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -256,7 +252,7 @@ describe("buildAssetList", () => {
 
   it("finds audio as primary media file", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("aud", "audio-test", "test-proj");
+    const createResult = await fs.artifacts.create("aud", "audio-test");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -270,7 +266,7 @@ describe("buildAssetList", () => {
   it("backfills duration for audio assets missing metadata duration", async () => {
     const { buildAssetList } = await import("./sync.js");
     const { runFfmpeg } = await import("../ffmpeg.js");
-    const createResult = await fs.artifacts.create("aud", "audio-duration", "test-proj");
+    const createResult = await fs.artifacts.create("aud", "audio-duration");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
     const mp3Path = join(assetDir, "original.mp3");
@@ -288,11 +284,7 @@ describe("buildAssetList", () => {
       "test_fixture",
     );
     expect(ingested.ok).toBe(true);
-    const initialMetadata = await fs.metadata.artifacts.write(
-      createResult.value.artifactId,
-      "original",
-      { origin: "extract_audio", source_asset: "vid-source" },
-      "test-proj",
+    const initialMetadata = await fs.metadata.artifacts.write(createResult.value.artifactId, "original", { origin: "extract_audio", source_asset: "vid-source" }
     );
     expect(initialMetadata.ok).toBe(true);
 
@@ -305,7 +297,7 @@ describe("buildAssetList", () => {
     const meta = await fs.metadata.artifacts.read<{
       duration: number;
       origin: string;
-    }>(createResult.value.artifactId, "original", "test-proj");
+    }>(createResult.value.artifactId, "original");
     expect(meta.ok).toBe(true);
     if (!meta.ok) throw new Error(meta.error.message);
     expect(meta.value.duration).toBe(assets[0].duration);
@@ -314,7 +306,7 @@ describe("buildAssetList", () => {
 
   it("finds markdown as primary media file", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("script", "doc-test", "test-proj");
+    const createResult = await fs.artifacts.create("script", "doc-test");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -327,7 +319,7 @@ describe("buildAssetList", () => {
 
   it("detects thumbnail when frame file exists", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "thumb-test", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "thumb-test");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -341,7 +333,7 @@ describe("buildAssetList", () => {
 
   it("returns null thumbnail for video without frame files", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "no-thumb", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "no-thumb");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -354,7 +346,7 @@ describe("buildAssetList", () => {
 
   it("shows status processing for fresh video without original metadata", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "fresh-test", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "fresh-test");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -367,16 +359,12 @@ describe("buildAssetList", () => {
 
   it("shows status ready for processed video without analysis (analysis is lazy)", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "analyzing-test", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "analyzing-test");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
     await writeNativeFile(fs, join(assetDir, "original.mp4"), "fake-video-data");
-    await fs.metadata.artifacts.write(
-      createResult.value.artifactId,
-      "original",
-      { width: 1, height: 1, duration: 1 },
-      "test-proj",
+    await fs.metadata.artifacts.write(createResult.value.artifactId, "original", { width: 1, height: 1, duration: 1 }
     );
 
     const assets = await buildAssetList(fs, "test-proj");
@@ -386,16 +374,12 @@ describe("buildAssetList", () => {
 
   it("shows status ready for fully analyzed video", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "ready-analyzed-test", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "ready-analyzed-test");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
     await writeNativeFile(fs, join(assetDir, "original.mp4"), "fake-video-data");
-    await fs.metadata.artifacts.write(
-      createResult.value.artifactId,
-      "original",
-      { width: 1, height: 1, duration: 1 },
-      "test-proj",
+    await fs.metadata.artifacts.write(createResult.value.artifactId, "original", { width: 1, height: 1, duration: 1 }
     );
     await writeNativeFile(fs, join(assetDir, ".original.analysis.json"), JSON.stringify({ summary: "" }));
 
@@ -406,23 +390,15 @@ describe("buildAssetList", () => {
 
   it("shows status ready for video with render metadata", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "ready-test", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "ready-test");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
     await writeNativeFile(fs, join(assetDir, "original.mp4"), "fake-video-data");
-    await fs.metadata.artifacts.write(
-      createResult.value.artifactId,
-      "original",
-      { width: 1, height: 1, duration: 1 },
-      "test-proj",
+    await fs.metadata.artifacts.write(createResult.value.artifactId, "original", { width: 1, height: 1, duration: 1 }
     );
     await writeNativeFile(fs, join(assetDir, ".original.analysis.json"), JSON.stringify({ summary: "" }));
-    const renderMetadata = await fs.metadata.artifacts.write(
-      createResult.value.artifactId,
-      "landscape.render",
-      { renderedAt: new Date().toISOString() },
-      "test-proj",
+    const renderMetadata = await fs.metadata.artifacts.write(createResult.value.artifactId, "landscape.render", { renderedAt: new Date().toISOString() }
     );
     expect(renderMetadata.ok).toBe(true);
 
@@ -433,7 +409,7 @@ describe("buildAssetList", () => {
 
   it("surfaces lock state for video with active lock (no clamp)", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "locked-no-state", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "locked-no-state");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -451,7 +427,7 @@ describe("buildAssetList", () => {
 
   it("surfaces 'loading' for a freshly created video (createAsset→enqueue window)", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "fresh-vid", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "fresh-vid");
     if (!createResult.ok) throw new Error(createResult.error.message);
 
     // createAsset co-writes a pending assets row with a 5-minute deadline.
@@ -464,7 +440,7 @@ describe("buildAssetList", () => {
 
   it("surfaces 'error' for video with no media/lock/task once the pending deadline expires (orphaned)", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "empty-vid", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "empty-vid");
     if (!createResult.ok) throw new Error(createResult.error.message);
 
     // Empty asset directory — no media, no lock, no pending task — is an
@@ -483,7 +459,7 @@ describe("buildAssetList", () => {
 
   it("does not clamp non-video assets", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("img", "empty-img", "test-proj");
+    const createResult = await fs.artifacts.create("img", "empty-img");
     if (!createResult.ok) throw new Error(createResult.error.message);
 
     // Empty image asset past its pending deadline — no media, no lock, no
@@ -534,7 +510,7 @@ describe("performSync", () => {
     delete process.env.KIE_API_KEY;
 
     try {
-      const createResult = await fs.artifacts.create("vid", "sync-test", "test-proj");
+      const createResult = await fs.artifacts.create("vid", "sync-test");
       if (!createResult.ok) throw new Error(createResult.error.message);
 
       const result = await performSync(fs, "test-proj");
@@ -570,7 +546,7 @@ describe("buildAssetList — failed download detection (RC3)", () => {
 
   it("surfaces 'error' for video with .part file (failed download)", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "broken-download", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "broken-download");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -586,7 +562,7 @@ describe("buildAssetList — failed download detection (RC3)", () => {
 
   it("surfaces 'error' for video with .part + thumbnail (failed download)", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "broken-with-thumb", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "broken-with-thumb");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -602,7 +578,7 @@ describe("buildAssetList — failed download detection (RC3)", () => {
 
   it("does not show status 'error' when original.mp4 exists alongside .part file", async () => {
     const { buildAssetList } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "good-download", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "good-download");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -652,7 +628,7 @@ describe("performSync — never auto-renders from sync", () => {
 
   it("skips auto-render for dialog video without elevenlabs.json", async () => {
     const { performSync } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "dialog-no-elevenlabs", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "dialog-no-elevenlabs");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -670,7 +646,7 @@ describe("performSync — never auto-renders from sync", () => {
 
   it("does not auto-render dialog video even when elevenlabs.json exists", async () => {
     const { performSync } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "dialog-with-elevenlabs", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "dialog-with-elevenlabs");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -689,7 +665,7 @@ describe("performSync — never auto-renders from sync", () => {
 
   it("skips auto-render when gpt4otrans is missing for audio video", async () => {
     const { performSync } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "no-stt", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "no-stt");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -697,7 +673,7 @@ describe("performSync — never auto-renders from sync", () => {
     await writeNativeFile(fs, join(assetDir, ".original.analysis.json"), JSON.stringify({
       summary: "Video with audio",
     }));
-    await fs.metadata.artifacts.write(createResult.value.slug, "original", { hasAudio: true }, "test-proj");
+    await fs.metadata.artifacts.write(createResult.value.slug, "original", { hasAudio: true });
 
     const result = await performSync(fs, "test-proj");
     expect(result.auto_render.length).toBe(0);
@@ -705,7 +681,7 @@ describe("performSync — never auto-renders from sync", () => {
 
   it("does not auto-render no-audio video without gpt4otrans", async () => {
     const { performSync } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "silent-clip", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "silent-clip");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetId = createResult.value.slug;
     const assetDir = createResult.value.path;
@@ -714,7 +690,7 @@ describe("performSync — never auto-renders from sync", () => {
     await writeNativeFile(fs, join(assetDir, ".original.analysis.json"), JSON.stringify({
       summary: "Silent AI-generated clip",
     }));
-    await fs.metadata.artifacts.write(assetId, "original", { hasAudio: false }, "test-proj");
+    await fs.metadata.artifacts.write(assetId, "original", { hasAudio: false });
 
     const result = await performSync(fs, "test-proj");
     expect(result.auto_render.length).toBe(0);
@@ -722,7 +698,7 @@ describe("performSync — never auto-renders from sync", () => {
 
   it("skips auto-render when kie-task.json exists", async () => {
     const { performSync } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "transcribing-video", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "transcribing-video");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -743,7 +719,7 @@ describe("performSync — never auto-renders from sync", () => {
 
   it("does not auto-render non-dialog video without elevenlabs.json", async () => {
     const { performSync } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "music-video", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "music-video");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -793,7 +769,7 @@ describe("performSync — auto-transcribe", () => {
 
   it("auto-transcribes analyzed video with dialog and audio", async () => {
     const { performSync } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "transcribe-candidate", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "transcribe-candidate");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetId = createResult.value.slug;
     const assetDir = createResult.value.path;
@@ -814,7 +790,7 @@ describe("performSync — auto-transcribe", () => {
 
   it("skips auto-transcribe when elevenlabs.json already exists", async () => {
     const { performSync } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "already-transcribed", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "already-transcribed");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 
@@ -834,7 +810,7 @@ describe("performSync — auto-transcribe", () => {
 
   it("skips auto-transcribe when a prior transcription failed", async () => {
     const { performSync } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "prior-failure", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "prior-failure");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetId = createResult.value.slug;
     const assetDir = createResult.value.path;
@@ -847,7 +823,7 @@ describe("performSync — auto-transcribe", () => {
     await writeNativeFile(fs, join(assetDir, ".analysis.gpt4otrans.json"), JSON.stringify({
       text: "So money is infinite. Why do we have poor people then? Because we don't want people to all have money.",
     }));
-    const writeErr = await fs.jobs.failures.write("test-proj", assetId, {
+    const writeErr = await fs.jobs.failures.write(assetId, {
       message: "The upstream API service timed out and no results were returned, please try again.",
       failCode: "500",
     });
@@ -859,7 +835,7 @@ describe("performSync — auto-transcribe", () => {
 
   it("skips auto-transcribe when no dialog detected", async () => {
     const { performSync } = await import("./sync.js");
-    const createResult = await fs.artifacts.create("vid", "no-dialog", "test-proj");
+    const createResult = await fs.artifacts.create("vid", "no-dialog");
     if (!createResult.ok) throw new Error(createResult.error.message);
     const assetDir = createResult.value.path;
 

@@ -35,87 +35,87 @@ describe("enqueue status (no red-flash window)", () => {
   });
 
   it("vid- generation: status is 'generating' immediately after enqueue", async () => {
-    const asset = await fs.artifacts.create("vid", "gen-test", slug);
+    const asset = await fs.artifacts.create("vid", "gen-test");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
     await queue.enqueue(`gen-${Date.now()}`, {
       type: "generate_grok_imagine_video",
-      projectSlug: slug,
+      bookId: slug,
       vidAssetId: asset.value.slug,
       prompt: "ignored — handler is not registered",
     });
 
-    const status = await fs.status.get(asset.value.slug, slug);
+    const status = await fs.status.get(asset.value.slug);
     expect(status.ok).toBe(true);
     if (!status.ok) return;
     expect(status.value).toBe("generating");
   });
 
   it("render: status is 'render-queued-landscape' immediately after enqueue", async () => {
-    const asset = await fs.artifacts.create("vid", "ren-test", slug);
+    const asset = await fs.artifacts.create("vid", "ren-test");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
     await queue.enqueue(`ren-${Date.now()}`, {
       type: "render_project",
-      projectSlug: slug,
+      bookId: slug,
       assetId: asset.value.slug,
       orientation: "landscape",
     });
 
-    const status = await fs.status.get(asset.value.slug, slug);
+    const status = await fs.status.get(asset.value.slug);
     expect(status.ok).toBe(true);
     if (!status.ok) return;
     expect(status.value).toBe("render-queued-landscape");
   });
 
   it("render-portrait classifies orientation correctly", async () => {
-    const asset = await fs.artifacts.create("vid", "ren-port", slug);
+    const asset = await fs.artifacts.create("vid", "ren-port");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
     await queue.enqueue(`ren-p-${Date.now()}`, {
       type: "render_project",
-      projectSlug: slug,
+      bookId: slug,
       assetId: asset.value.slug,
       orientation: "portrait",
     });
 
-    const status = await fs.status.get(asset.value.slug, slug);
+    const status = await fs.status.get(asset.value.slug);
     expect(status.ok && status.value).toBe("render-queued-portrait");
   });
 
   it("QR outro render reports its queued orientation", async () => {
-    const asset = await fs.artifacts.create("vid", "qr-outro", slug);
+    const asset = await fs.artifacts.create("vid", "qr-outro");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
     await queue.enqueue(`qr-outro-${Date.now()}`, {
       type: "render_qr_outro",
-      projectSlug: slug,
+      bookId: slug,
       assetId: asset.value.slug,
       orientation: "landscape",
     });
 
-    const status = await fs.status.get(asset.value.slug, slug);
+    const status = await fs.status.get(asset.value.slug);
     expect(status.ok && status.value).toBe("render-queued-landscape");
   });
 
   it("trim: status is 'trimming' immediately after enqueue", async () => {
-    const asset = await fs.artifacts.create("vid", "trim-test", slug);
+    const asset = await fs.artifacts.create("vid", "trim-test");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
     await queue.enqueue(`trim-${Date.now()}`, {
       type: "trim_video",
-      projectSlug: slug,
+      bookId: slug,
       assetId: asset.value.slug,
       start: 0,
       end: 1,
     });
 
-    const status = await fs.status.get(asset.value.slug, slug);
+    const status = await fs.status.get(asset.value.slug);
     expect(status.ok && status.value).toBe("trimming");
   });
 
@@ -125,33 +125,33 @@ describe("enqueue status (no red-flash window)", () => {
     "analyze_jokes",
     "detect_scenes",
   ])("%s: status is 'analyzing' immediately after enqueue", async (type) => {
-    const asset = await fs.artifacts.create("vid", `an-${type}`, slug);
+    const asset = await fs.artifacts.create("vid", `an-${type}`);
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
     await queue.enqueue(`an-${type}-${Date.now()}`, {
       type,
-      projectSlug: slug,
+      bookId: slug,
       assetId: asset.value.slug,
     });
 
-    const status = await fs.status.get(asset.value.slug, slug);
+    const status = await fs.status.get(asset.value.slug);
     expect(status.ok && status.value).toBe("analyzing");
   });
 
   it("download: status is 'downloading' immediately after enqueue", async () => {
-    const asset = await fs.artifacts.create("vid", "dl-test", slug);
+    const asset = await fs.artifacts.create("vid", "dl-test");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
     await queue.enqueue(`dl-${Date.now()}`, {
       type: "download_video",
-      projectSlug: slug,
+      bookId: slug,
       assetId: asset.value.slug,
       url: "https://example.com/x.mp4",
     });
 
-    const status = await fs.status.get(asset.value.slug, slug);
+    const status = await fs.status.get(asset.value.slug);
     expect(status.ok && status.value).toBe("downloading");
   });
 });

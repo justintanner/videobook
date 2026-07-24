@@ -33,7 +33,7 @@ type RefImageInput = {
 
 const generateGrokImagineRefVideoSchema = {
   prompt: apicityStringField(XaiVideoGenerateRequestSchema.shape.prompt, "Text prompt for video generation", { required: true }),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   image_slugs: apicityStringArrayField(
     XaiVideoGenerateRequestSchema.shape.reference_images,
     "Optional reference image slugs (0-7, e.g., ['@img-sunset'])",
@@ -53,7 +53,7 @@ export function generateGrokImagineRefVideoDef(fs: Engine): ToolDef {
       "Generate a video using xAI Grok Imagine with optional reference images (0-7). Creates a new vid- asset and enqueues a background job.",
     schema: generateGrokImagineRefVideoSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, duration, resolution, aspect_ratio } = args as Args;
+      const { prompt, book_id, image_slugs, duration, resolution, aspect_ratio } = args as Args;
 
       if (!process.env.XAI_API_KEY) {
         return {
@@ -80,7 +80,7 @@ export function generateGrokImagineRefVideoDef(fs: Engine): ToolDef {
           };
         }
 
-        const manifestResult = await fs.files.manifest(assetId, project_slug);
+        const manifestResult = await fs.files.manifest(assetId);
         if (!manifestResult.ok) {
           return {
             isError: true as const,
@@ -100,7 +100,7 @@ export function generateGrokImagineRefVideoDef(fs: Engine): ToolDef {
       }
 
       const assetName = `${modelSlug("xai", "grok-imagine-video")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("vid", assetName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -117,7 +117,7 @@ export function generateGrokImagineRefVideoDef(fs: Engine): ToolDef {
         prompt,
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         refImages,
         ...(duration !== undefined ? { duration } : {}),
         ...(resolution !== undefined ? { resolution } : {}),

@@ -28,7 +28,7 @@ describe("isolate_vocals tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -47,7 +47,7 @@ describe("isolate_vocals tool", () => {
       name: "isolate_vocals",
       arguments: {
         asset_id: "vid-test",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -63,7 +63,7 @@ describe("isolate_vocals tool", () => {
       name: "isolate_vocals",
       arguments: {
         asset_id: "vid-does-not-exist",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -74,17 +74,17 @@ describe("isolate_vocals tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("vid", "no-audio", "test-proj");
+    const asset = await fs.artifacts.create("vid", "no-audio");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     // Write a non-audio file so the asset exists but has no audio
-    await fs.files.write(asset.value.slug, "notes.txt", "hello", "test-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "isolate_vocals",
       arguments: {
         asset_id: asset.value.slug,
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -97,17 +97,17 @@ describe("isolate_vocals tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("vid", "has-audio", "test-proj");
+    const asset = await fs.artifacts.create("vid", "has-audio");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     // Write a dummy audio_original.mp3 file
-    await fs.files.write(asset.value.slug, "audio_original.mp3", Buffer.from("fake-mp3-data"), "test-proj");
+    await fs.files.write(asset.value.slug, "audio_original.mp3", Buffer.from("fake-mp3-data"));
 
     const result = await client.callTool({
       name: "isolate_vocals",
       arguments: {
         asset_id: asset.value.slug,
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 

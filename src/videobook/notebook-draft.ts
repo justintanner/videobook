@@ -20,7 +20,7 @@ export interface NotebookCellData extends Record<string, unknown> {
   prompt?: string
   model?: string
   entityId?: string
-  outputAssetId?: string
+  outputArtifactId?: string
   inputs?: Record<string, unknown>
 }
 
@@ -42,9 +42,9 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
         ...(cell.prompt === undefined ? {} : { prompt: cell.prompt }),
         ...(cell.model === undefined ? {} : { model: cell.model }),
         ...(cell.entityId === undefined ? {} : { entityId: cell.entityId }),
-        ...(cell.outputAssetId === undefined
+        ...(cell.outputArtifactId === undefined
           ? {}
-          : { outputAssetId: cell.outputAssetId }),
+          : { outputArtifactId: cell.outputArtifactId }),
         ...(cell.inputs === undefined ? {} : { inputs: cell.inputs }),
       },
     }
@@ -71,9 +71,9 @@ function cellFromNode(node: Node<NotebookCellData>): NotebookCell {
     ...(node.data.entityId === undefined
       ? {}
       : { entityId: node.data.entityId }),
-    ...(node.data.outputAssetId === undefined
+    ...(node.data.outputArtifactId === undefined
       ? {}
-      : { outputAssetId: node.data.outputAssetId }),
+      : { outputArtifactId: node.data.outputArtifactId }),
     ...(node.data.inputs === undefined ? {} : { inputs: node.data.inputs }),
   }
 }
@@ -82,7 +82,6 @@ export function notebookDocument(
   base: NotebookDocument,
   nodes: Array<Node<NotebookCellData>>,
   edges: Edge[],
-  updatedAt: string,
 ): NotebookDocument {
   const normalizedNodes = normalizeNotebookGridNodes(nodes)
   return {
@@ -94,6 +93,5 @@ export function notebookDocument(
       target: edge.target,
       targetInput: edge.targetHandle ?? 'input',
     })),
-    updatedAt,
   }
 }

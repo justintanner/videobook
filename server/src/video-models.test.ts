@@ -25,12 +25,12 @@ describe("extractLastSettingsPerModel", () => {
     expect(result.size).toBe(0);
   });
 
-  it("extracts settings from a single kling30 log entry, stripping project_slug", () => {
+  it("extracts settings from a single kling30 log entry, stripping book_id", () => {
     const log: ActionLogEntry[] = [
       {
         hash: "abc123",
         action: "tool-generate-kling30-video",
-        payload: { project_slug: "my-proj", prompt: "sunset", mode: "pro", duration: "10" },
+        payload: { book_id: "my-proj", prompt: "sunset", mode: "pro", duration: "10" },
         date: "2026-03-08T00:00:00Z",
       },
     ];
@@ -96,7 +96,7 @@ describe("extractLastSettingsPerModel", () => {
       {
         hash: "s2",
         action: "tool-asset-manifest",
-        payload: { project_slug: "default" },
+        payload: { book_id: "default" },
         date: "2026-03-08T00:00:00Z",
       },
     ];
@@ -171,7 +171,7 @@ describe("extractLastUsedModel", () => {
       {
         hash: "h1",
         action: "tool-asset-manifest",
-        payload: { project_slug: "test" },
+        payload: { book_id: "test" },
         date: "2026-03-08T02:00:00Z",
       },
       {
@@ -994,7 +994,7 @@ describe("google flow video models", () => {
     const history: ActionLogEntry[] = [{
       hash: "abc123",
       action: "tool-generate-google-omni-video",
-      payload: { project_slug: "p", _provider: "google", prompt: "old", first_frame_slug: "@img-start" },
+      payload: { book_id: "p", _provider: "google", prompt: "old", first_frame_slug: "@img-start" },
       date: "2026-07-07T00:00:00Z",
     }];
 
@@ -1019,7 +1019,7 @@ describe("google flow video models", () => {
     const history: ActionLogEntry[] = [{
       hash: "abc456",
       action: "tool-generate-google-omni-video",
-      payload: { project_slug: "p", _provider: "google", prompt: "cast", character_refs: ["character:abc"] },
+      payload: { book_id: "p", _provider: "google", prompt: "cast", character_refs: ["character:abc"] },
       date: "2026-07-08T00:00:00Z",
     }];
     const option = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, [], history, "google");

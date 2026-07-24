@@ -12,16 +12,16 @@ export function readFileAtCommitDef(fs: Engine): ToolDef {
       asset_id: z.string().describe("Asset ID (e.g. script-desc-*)"),
       filename: z.string().describe("Filename within the asset directory (e.g. original.md)"),
       commit_hash: z.string().describe("DoltLite revision hash"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args): Promise<ToolResult> => {
-      const { asset_id, filename, commit_hash, project_slug } = args as {
+      const { asset_id: _asset_id, filename, commit_hash, book_id } = args as {
         asset_id: string;
         filename: string;
         commit_hash: string;
-        project_slug: string;
+        book_id: string;
       };
-      const artifact = fs.artifacts.get(project_slug, asset_id);
+      const artifact = fs.artifacts.get(book_id);
       if (!artifact.ok) {
         return {
           isError: true as const,

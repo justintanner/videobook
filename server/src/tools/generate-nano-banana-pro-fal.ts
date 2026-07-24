@@ -10,7 +10,7 @@ import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 const base = FalNanoBananaProTextToImageRequestSchema.shape;
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(base.prompt, "Text prompt for image generation", { required: true }),
   num_images: apicityField(base.num_images, "Number of images to generate (1-4)"),
   aspect_ratio: apicityField(base.aspect_ratio, "Aspect ratio"),
@@ -28,13 +28,13 @@ export function generateNanoBananaProFalDef(fs: Engine): ToolDef {
     description: "Generate an image via fal.ai using Google Nano Banana Pro from a text prompt. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, num_images, aspect_ratio, resolution, output_format, seed, enable_web_search } = args as Args;
+      const { book_id, prompt, num_images, aspect_ratio, resolution, output_format, seed, enable_web_search } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "nano-banana-pro")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "nano-banana-pro")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
@@ -44,7 +44,7 @@ export function generateNanoBananaProFalDef(fs: Engine): ToolDef {
         type: "generate_nano_banana_pro_fal",
         imgAssetId,
         imgAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         ...(num_images !== undefined ? { num_images } : {}),
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),

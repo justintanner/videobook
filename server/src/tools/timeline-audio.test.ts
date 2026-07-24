@@ -26,13 +26,13 @@ async function generateTestAudio(outputPath: string, durationSec: number): Promi
 
 async function uploadAudio(
   client: Client,
-  projectSlug: string,
+  bookId: string,
   audioPath: string,
 ): Promise<{ assetId: string }> {
   const data = (await readFile(audioPath)).toString("base64");
   const result = await client.callTool({
     name: "upload_file",
-    arguments: { project_slug: projectSlug, filename: "original.mp3", data },
+    arguments: { book_id: bookId, filename: "original.mp3", data },
   });
   return JSON.parse((result.content as TextContent)[0].text);
 }
@@ -57,7 +57,7 @@ describe("timeline audio tools", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "audio-proj" },
+      arguments: { book_id: "audio-proj" },
     });
   });
 
@@ -72,7 +72,7 @@ describe("timeline audio tools", () => {
     const result = await client.callTool({
       name: "add_timeline_audio",
       arguments: {
-        project_slug: "audio-proj",
+        book_id: "audio-proj",
         asset_id: assetId,
         start_frame: 60,
       },
@@ -92,7 +92,7 @@ describe("timeline audio tools", () => {
     const result = await client.callTool({
       name: "add_timeline_audio",
       arguments: {
-        project_slug: "audio-proj",
+        book_id: "audio-proj",
         asset_id: "vid-not-an-audio-asset",
         start_frame: 0,
       },
@@ -104,14 +104,14 @@ describe("timeline audio tools", () => {
     const { assetId } = await uploadAudio(client, "audio-proj", audioPath);
     const addResult = await client.callTool({
       name: "add_timeline_audio",
-      arguments: { project_slug: "audio-proj", asset_id: assetId, start_frame: 0 },
+      arguments: { book_id: "audio-proj", asset_id: assetId, start_frame: 0 },
     });
     const added = JSON.parse((addResult.content as TextContent)[0].text);
 
     const moveResult = await client.callTool({
       name: "move_timeline_audio",
       arguments: {
-        project_slug: "audio-proj",
+        book_id: "audio-proj",
         audio_id: added.clip.id,
         start_frame: 120,
       },
@@ -126,14 +126,14 @@ describe("timeline audio tools", () => {
     const { assetId } = await uploadAudio(client, "audio-proj", audioPath);
     const addResult = await client.callTool({
       name: "add_timeline_audio",
-      arguments: { project_slug: "audio-proj", asset_id: assetId, start_frame: 0 },
+      arguments: { book_id: "audio-proj", asset_id: assetId, start_frame: 0 },
     });
     const added = JSON.parse((addResult.content as TextContent)[0].text);
 
     const removeResult = await client.callTool({
       name: "remove_timeline_audio",
       arguments: {
-        project_slug: "audio-proj",
+        book_id: "audio-proj",
         audio_id: added.clip.id,
       },
     });
@@ -146,14 +146,14 @@ describe("timeline audio tools", () => {
     const { assetId } = await uploadAudio(client, "audio-proj", audioPath);
     const addResult = await client.callTool({
       name: "add_timeline_audio",
-      arguments: { project_slug: "audio-proj", asset_id: assetId, start_frame: 0 },
+      arguments: { book_id: "audio-proj", asset_id: assetId, start_frame: 0 },
     });
     const added = JSON.parse((addResult.content as TextContent)[0].text);
 
     const updateResult = await client.callTool({
       name: "update_timeline_audio",
       arguments: {
-        project_slug: "audio-proj",
+        book_id: "audio-proj",
         audio_id: added.clip.id,
         volume: 50,
         fade_in: 500,
@@ -169,7 +169,7 @@ describe("timeline audio tools", () => {
     // Confirm round-trip via get_timeline
     const getResult = await client.callTool({
       name: "get_timeline",
-      arguments: { project_slug: "audio-proj" },
+      arguments: { book_id: "audio-proj" },
     });
     const config = JSON.parse((getResult.content as TextContent)[0].text);
     expect(config.audio[0].volume).toBe(50);
@@ -181,13 +181,13 @@ describe("timeline audio tools", () => {
     const { assetId } = await uploadAudio(client, "audio-proj", audioPath);
     const addResult = await client.callTool({
       name: "add_timeline_audio",
-      arguments: { project_slug: "audio-proj", asset_id: assetId, start_frame: 0 },
+      arguments: { book_id: "audio-proj", asset_id: assetId, start_frame: 0 },
     });
     const added = JSON.parse((addResult.content as TextContent)[0].text);
 
     const result = await client.callTool({
       name: "update_timeline_audio",
-      arguments: { project_slug: "audio-proj", audio_id: added.clip.id },
+      arguments: { book_id: "audio-proj", audio_id: added.clip.id },
     });
     expect(result.isError).toBe(true);
   });
@@ -196,12 +196,12 @@ describe("timeline audio tools", () => {
     const { assetId } = await uploadAudio(client, "audio-proj", audioPath);
     await client.callTool({
       name: "add_timeline_audio",
-      arguments: { project_slug: "audio-proj", asset_id: assetId, start_frame: 30 },
+      arguments: { book_id: "audio-proj", asset_id: assetId, start_frame: 30 },
     });
 
     const result = await client.callTool({
       name: "get_timeline",
-      arguments: { project_slug: "audio-proj" },
+      arguments: { book_id: "audio-proj" },
     });
     expect(result.isError).toBeFalsy();
     const config = JSON.parse((result.content as TextContent)[0].text);

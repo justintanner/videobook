@@ -33,14 +33,14 @@ function normalizeAssetId(raw: string): string {
 async function resolveImageRef(
   fs: Engine,
   raw: string,
-  projectSlug: string,
+  bookId: string,
   field: string,
 ): Promise<RefResult> {
   const assetId = normalizeAssetId(raw);
   if (!assetId.startsWith("img-")) {
     return { ok: false, error: `${field} must be an img-* asset, got: ${assetId}` };
   }
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
   if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
@@ -50,7 +50,7 @@ async function resolveImageRef(
 async function resolveAudioRef(
   fs: Engine,
   raw: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<RefResult> {
   const assetId = normalizeAssetId(raw);
   if (!assetId.startsWith("aud-")) {
@@ -59,7 +59,7 @@ async function resolveAudioRef(
       error: `sound_effect_slug must be an aud-* asset, got: ${assetId}`,
     };
   }
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findAudioFile(manifest.value.files, assetId);
   if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
@@ -72,7 +72,7 @@ export function createQrOutroDef(fs: Engine): ToolDef {
     description:
       "Build a standalone animated outro from 1-4 QR image assets with configurable duration and optional impact audio.",
     schema: {
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       qr_image_slugs: z
         .array(z.string())
         .min(1)
@@ -99,14 +99,14 @@ export function createQrOutroDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const {
-        project_slug,
+        book_id,
         qr_image_slugs,
         sound_effect_slug,
         aspect_ratio = "16:9",
         duration_seconds,
         include_audio = true,
       } = args as {
-        project_slug: string;
+        book_id: string;
         qr_image_slugs: string[];
         sound_effect_slug?: string;
         aspect_ratio?: AspectRatio;
@@ -123,7 +123,7 @@ export function createQrOutroDef(fs: Engine): ToolDef {
         const resolved = await resolveImageRef(
           fs,
           raw,
-          project_slug,
+          book_id,
           "qr_image_slugs entry",
         );
         if (!resolved.ok) return toolError(resolved.error);
@@ -132,7 +132,7 @@ export function createQrOutroDef(fs: Engine): ToolDef {
 
       let soundEffect: QrOutroAssetRef | null = null;
       if (include_audio && sound_effect_slug) {
-        const resolved = await resolveAudioRef(fs, sound_effect_slug, project_slug);
+        const resolved = await resolveAudioRef(fs, sound_effect_slug, book_id);
         if (!resolved.ok) return toolError(resolved.error);
         soundEffect = resolved.value;
       }
@@ -143,10 +143,7 @@ export function createQrOutroDef(fs: Engine): ToolDef {
         duration_seconds,
       );
       const firstQrStem = qrImages[0].assetId.replace(/^img-/, "");
-      const created = await fs.artifacts.create(
-        "vid",
-        `qr-outro-${firstQrStem}`,
-        project_slug,
+      const created = await fs.artifacts.create("vid", `qr-outro-${firstQrStem}`
       );
       if (!created.ok) {
         return toolError(`Failed to create output asset: ${created.error.message}`);
@@ -157,7 +154,7 @@ export function createQrOutroDef(fs: Engine): ToolDef {
       try {
         await queue.enqueue(jobId, {
           type: "render_qr_outro",
-          projectSlug: project_slug,
+          bookId: book_id,
           assetId,
           orientation: orientationForAspectRatio(aspect_ratio),
           qrImages,
@@ -168,9 +165,9 @@ export function createQrOutroDef(fs: Engine): ToolDef {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        const deleted = await fs.artifacts.delete(assetId, project_slug);
+        const deleted = await fs.artifacts.delete(assetId);
         if (!deleted.ok) {
-          await fs.jobs.pending.forceFail(project_slug, assetId, {
+          await fs.jobs.pending.forceFail(assetId, {
             message: `Enqueue failed and rollback failed: ${deleted.error.message}`,
           });
         }

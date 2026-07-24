@@ -1,33 +1,18 @@
-/**
- * Dolt-native persistent queue.
- *
- * Every project's jobs, leases, provider tasks, and terminal audit rows live
- * in the engine's single catalog. Workspaces are scratch space only.
- */
-
 import {
-  type Engine,
   type ArtifactWorkKind,
+  type Engine,
   type Job,
   type JobHandler,
   type JobState,
   QueueRunner,
   createEngine,
 } from "videobook-engine";
-
-import { fs as defaultFs, DATA_DIR } from "./fs.js";
-import { dirname } from "node:path";
+import { activeBookEngine, withBookContext } from "./book-context.js";
+import { bookManager } from "./fs.js";
 import { runWithJobDeadline } from "./job-deadline.js";
 
 type JobPayload = Record<string, unknown>;
 
-/**
- * Lease token registered by a handler so the queue wrapper's catch can
- * CAS-fail the correct owner. Handlers that hold a local lease pass `owner`
- * (their beginAssetWork ownerId); handlers that observed a provider task pass
- * `task` (the task_id). A handler that dies before registering is in the
- * "queued-but-unclaimed" state, which the wrapper falls back to.
- */
 export type LeaseToken =
   | { kind: "owner"; ownerId: string }
   | { kind: "task"; taskId: string };
@@ -41,365 +26,19 @@ export interface JobHandlerContext {
 
 export type ServerJobHandler = (
   payload: Record<string, unknown>,
-  ctx: JobHandlerContext,
+  context: JobHandlerContext,
 ) => Promise<unknown>;
 
-const handlers = new Map<string, ServerJobHandler>();
-
-export function registerJobHandler(
-  type: string,
-  handler: ServerJobHandler,
-): void {
-  handlers.set(type, handler);
-}
-
-function extractProjectSlug(payload: Record<string, unknown>): string | null {
-  const a = payload.projectSlug;
-  if (typeof a === "string" && a.length > 0) return a;
-  return null;
-}
-
-export function extractAssetId(payload: Record<string, unknown>): string | null {
-  if (typeof payload.imgAssetId === "string") return payload.imgAssetId;
-  if (typeof payload.vidAssetId === "string") return payload.vidAssetId;
-  if (typeof payload.assetId === "string") return payload.assetId;
-  if (typeof payload.imageAssetId === "string") return payload.imageAssetId;
-  if (typeof payload.audioAssetId === "string") return payload.audioAssetId;
-  if (typeof payload.audAssetId === "string") return payload.audAssetId;
-
-  return null;
-}
-
-function extractType(payload: Record<string, unknown>): string {
-  const t = payload.type;
-  if (typeof t !== "string" || t.length === 0) {
-    throw new Error("queue.enqueue: payload.type is required");
-  }
-  return t;
-}
-
-let activeEngineRoot = dirname(DATA_DIR);
-const fsRef: { current: Engine } = { current: defaultFs };
-
 interface RunnerInfo {
-  slug: string;
+  bookId: string;
+  engine: Engine;
   runner: QueueRunner;
-}
-const runnerByProject = new Map<string, RunnerInfo>();
-
-const jobIdIndex = new Map<string, { slug: string; internalId: number }>();
-// Upper bound on retained jobId→internalId mappings. getStatus drops entries
-// once a job reaches a terminal state, but fire-and-forget jobs that are never
-// polled would otherwise accumulate forever; evict oldest insertion-order
-// entries past this cap as a backstop.
-const JOB_INDEX_MAX = 2000;
-const rewindingProjects = new Set<string>();
-
-type Orientation = "portrait" | "landscape" | "square";
-type ClassifiedJob = { kind: ArtifactWorkKind; orientation?: Orientation };
-
-/**
- * Maps a job type to the clean ArtifactWorkKind that the engine writes into
- * assets.meta.kind at enqueue time. Mirrors what the corresponding handler
- * later passes to beginAssetWork, so a single in-progress UI state is
- * derivable for the asset across the queued → working → ready lifecycle.
- *
- * Returns null for jobs that should not surface an asset state (e.g.
- * post_to_x — runs sub-second and the asset is already ready).
- */
-function jobTypeToAssetWorkKind(
-  jobType: string,
-  payload: JobPayload,
-): ClassifiedJob | null {
-  if (
-    jobType === "render_project" ||
-    jobType === "render_timeline" ||
-    jobType === "render_qr_outro"
-  ) {
-    const o = payload.orientation;
-    const orientation =
-      o === "portrait" || o === "landscape" || o === "square"
-        ? (o as Orientation)
-        : undefined;
-    const kind: ArtifactWorkKind =
-      jobType === "render_timeline" ? "final" : "render";
-    return orientation ? { kind, orientation } : { kind };
-  }
-  switch (jobType) {
-    case "process_video":
-    case "process_image":          return { kind: "process" };
-    case "analyze_video":
-    case "analyze_keyword_placement":
-    case "suggest_cuts":
-    case "suggest_sfx":
-    case "analyze_jokes":
-    case "detect_scenes":
-      return { kind: "analyze" };
-    case "transcribe":
-    case "transcribe_video_audio": return { kind: "transcribe" };
-    case "trim_video":             return { kind: "trim" };
-    case "split_video":            return { kind: "trim" };
-    case "crop_video":
-    case "crop_image":             return { kind: "crop" };
-    case "splice_video":
-    case "smooth_scene_concat":    return { kind: "splice" };
-    case "reverse_video":          return { kind: "reverse" };
-    case "inject_first_frame":     return { kind: "process" };
-    case "change_video_speed":
-    case "timewarp_video":         return { kind: "change_speed" };
-    case "sync_video_to_audio":    return { kind: "change_speed" };
-    case "replace_video_audio":
-    case "clean_video_audio":
-    case "remove_sound":
-    case "audio_mix":              return { kind: "replace_audio" };
-    case "apply_cuts":             return { kind: "apply_cuts" };
-    case "apply_sfx":              return { kind: "apply_sfx" };
-    case "extract_frame":
-    case "extract_audio":          return { kind: "extract" };
-    case "describe_image":         return { kind: "describe" };
-    case "rewrite_script":         return { kind: "rewrite_script" };
-    case "archive_clip":           return { kind: "archive" };
-    case "restore_archive_clip":   return { kind: "download" };
-    case "download_video":         return { kind: "download" };
-    case "complete_kie_task":      return { kind: "generate" };
-    case "post_to_x":              return null;
-  }
-  if (jobType === "isolate_vocals") return { kind: "isolate" };
-  if (
-    jobType.startsWith("generate_") ||
-    jobType.startsWith("extend_") ||
-    jobType.startsWith("upscale_")
-  ) {
-    return { kind: "generate" };
-  }
-  return null;
+  reaper: { stop: () => void };
 }
 
-/** Subset of jobTypeToAssetWorkKind used by the wrapper to decide whether to
- *  pre-claim a local lease before invoking the handler (Pattern A handoff).
- *  Only generation/extend/upscale/isolate_vocals follow this pattern. */
-function providerHandoffKindFor(jobType: string): ArtifactWorkKind | null {
-  if (jobType === "isolate_vocals") return "isolate";
-  if (
-    jobType.startsWith("generate_") ||
-    jobType.startsWith("extend_") ||
-    jobType.startsWith("upscale_")
-  ) {
-    return "generate";
-  }
-  return null;
-}
-
-function makeWrappedResolver(): (type: string) => JobHandler | null {
-  return (type) => {
-    const handler = handlers.get(type);
-    if (!handler) return null;
-    return async (job: Job) => runWithJobDeadline(type, async (signal) => {
-      // Ref-cell instead of `let lease`: setLease is captured in ctx and
-      // invoked via `ctx.setLease(...)` from inside this scope and via the
-      // handler. TypeScript's control-flow analysis doesn't widen a let
-      // variable's narrowing through object-method calls on a captured
-      // closure, so reads of `lease` after `ctx.setLease(...)` would be
-      // narrowed back to the initial `null` (and `lease?.kind === "owner"`
-      // would dead-narrow to `never`). A ref-cell sidesteps that — TS treats
-      // each `leaseRef.current` read as a fresh access at its declared type.
-      const leaseRef: { current: LeaseToken | null } = { current: null };
-      let assetFailureHandled = false;
-      let heartbeat: ReturnType<typeof setInterval> | null = null;
-      const providerKind = providerHandoffKindFor(type);
-      const ctx: JobHandlerContext = {
-        signal,
-        setLease(token) {
-          const current = leaseRef.current;
-          if (current !== null) {
-            // Allow re-registration of the same shape (idempotent), or
-            // allow owner→task transition (Pattern A handoff).
-            if (current.kind === token.kind) {
-              if (current.kind === "owner" && token.kind === "owner") {
-                if (current.ownerId !== token.ownerId) {
-                  throw new Error(
-                    `setLease: cannot replace existing owner lease`,
-                  );
-                }
-              } else if (current.kind === "task" && token.kind === "task") {
-                if (current.taskId !== token.taskId) {
-                  throw new Error(
-                    `setLease: cannot replace existing task lease`,
-                  );
-                }
-              }
-              return;
-            }
-            if (current.kind === "owner" && token.kind === "task") {
-              // Allowed: Pattern A handoff from local job lease to provider task lease.
-              leaseRef.current = token;
-              return;
-            }
-            throw new Error(
-              `setLease: invalid lease transition ${current.kind}→${token.kind}`,
-            );
-          }
-          leaseRef.current = token;
-        },
-        getOwnerId() {
-          const current = leaseRef.current;
-          if (current?.kind !== "owner") {
-            throw new Error("No active owner lease is registered");
-          }
-          return current.ownerId;
-        },
-        markAssetFailureHandled() {
-          assetFailureHandled = true;
-        },
-      };
-
-      try {
-        if (providerKind) {
-          const assetId = extractAssetId(job.payload);
-          const projectSlug = extractProjectSlug(job.payload);
-          if (!assetId || !projectSlug) {
-            throw new Error(
-              `Provider handoff job ${type} requires projectSlug and asset id`,
-            );
-          }
-          const claimed = await fsRef.current.jobs.artifactWork.begin(
-            projectSlug,
-            assetId,
-            {
-              kind: providerKind,
-              ownerKind: "job",
-              durationMs: 15 * 60_000,
-            },
-          );
-          if (!claimed) {
-            throw new Error(`Could not claim local lease for ${assetId}`);
-          }
-          ctx.setLease({ kind: "owner", ownerId: claimed.ownerId });
-          heartbeat = setInterval(() => {
-            // After a Pattern A owner→task handoff the owner lease is dead;
-            // stop renewing it.
-            if (leaseRef.current?.kind !== "owner") return;
-            try {
-              fsRef.current.jobs.artifactWork.renew(
-                projectSlug,
-                assetId,
-                claimed.ownerId,
-                60_000,
-              );
-            } catch (error) {
-              console.warn(`[heartbeat] renew failed for ${assetId}:`, error);
-            }
-          }, 20_000);
-        }
-        const result = await handler(job.payload, ctx);
-        const assetId = extractAssetId(job.payload);
-        const projectSlug = extractProjectSlug(job.payload);
-        const finalLease = leaseRef.current;
-        if (finalLease?.kind === "owner" && assetId && projectSlug) {
-          await fsRef.current.jobs.artifactWork.complete(
-            projectSlug,
-            assetId,
-            finalLease.ownerId,
-          );
-        }
-        return result;
-      } catch (error: unknown) {
-        const assetId = extractAssetId(job.payload);
-        const projectSlug = extractProjectSlug(job.payload);
-        const message =
-          error instanceof Error ? error.message : String(error);
-
-        if (assetId && projectSlug && !assetFailureHandled) {
-          const fsForCleanup = fsRef.current;
-          await dispatchFailure(
-            fsForCleanup,
-            projectSlug,
-            assetId,
-            leaseRef.current,
-            message,
-          );
-        }
-        if (assetFailureHandled) {
-          if (error instanceof Error) {
-            Object.assign(error, { preserveArtifactState: true });
-          } else {
-            const handled = new Error(message);
-            Object.assign(handled, { preserveArtifactState: true });
-            throw handled;
-          }
-        }
-        throw error;
-      } finally {
-        if (heartbeat) clearInterval(heartbeat);
-      }
-    });
-  };
-}
-
-async function dispatchFailure(
-  fs: Engine,
-  projectSlug: string,
-  assetId: string,
-  lease: LeaseToken | null,
-  message: string,
-): Promise<void> {
-  try {
-    if (lease?.kind === "owner") {
-      await fs.jobs.artifactWork.fail(projectSlug, assetId, lease.ownerId, {
-        message,
-      });
-      await fs
-        .history.logAction("job-error", { assetId, error: message }, projectSlug)
-        .catch(() => {});
-      return;
-    }
-    if (lease?.kind === "task") {
-      await fs.jobs.pending.fail(projectSlug, assetId, lease.taskId, {
-        message,
-      });
-      await fs
-        .history.logAction("job-error", { assetId, error: message }, projectSlug)
-        .catch(() => {});
-      return;
-    }
-    // No lease registered. Force-fail by asset_id to clear any pending row.
-    await fs.jobs.pending.forceFail(projectSlug, assetId, { message });
-    await fs
-      .history.logAction("job-error", { assetId, error: message }, projectSlug)
-      .catch(() => {});
-  } catch (secondary) {
-    // Best-effort: we couldn't mark the asset failed, so it may stay wedged
-    // in-progress until its lease expires. Surface it instead of swallowing —
-    // this is the diagnostic for "stuck asset" reports.
-    console.warn(
-      `[dispatchFailure] could not record failure for ${projectSlug}/${assetId}` +
-        ` (original error: ${message}):`,
-      secondary,
-    );
-  }
-}
-
-function ensureRunner(slug: string): RunnerInfo {
-  const cached = runnerByProject.get(slug);
-  if (cached) return cached;
-  const runner = fsRef.current.jobs.queue.createRunner(slug, {
-    concurrency: 5,
-    pollIntervalMs: 250,
-    resolveHandler: makeWrappedResolver(),
-  });
-  runner.start();
-  const info: RunnerInfo = { slug, runner };
-  runnerByProject.set(slug, info);
-  return info;
-}
-
-export async function reconcileQueueOnStartup(): Promise<void> {
-  await fsRef.current.ready;
-  const projects = fsRef.current.projects.list();
-  for (const project of projects) {
-    await fsRef.current.jobs.queue.reap(project.projectId);
-    ensureRunner(project.slug);
-  }
+interface QueueIndexEntry {
+  bookId: string;
+  internalId: number;
 }
 
 interface Queue {
@@ -417,6 +56,303 @@ interface Queue {
   stop(): Promise<void>;
 }
 
+const handlers = new Map<string, ServerJobHandler>();
+const runnerByBook = new Map<string, RunnerInfo>();
+const jobIdIndex = new Map<string, QueueIndexEntry>();
+const rewindingBooks = new Set<string>();
+const testEngines = new Map<string, Engine>();
+let activeTestRoot: string | null = null;
+
+const JOB_INDEX_MAX = 2_000;
+const ASSET_REAPER_INTERVAL_MS = 30_000;
+
+export function registerJobHandler(
+  type: string,
+  handler: ServerJobHandler,
+): void {
+  handlers.set(type, handler);
+}
+
+export function extractAssetId(payload: Record<string, unknown>): string | null {
+  for (const key of [
+    "imgAssetId",
+    "vidAssetId",
+    "assetId",
+    "imageAssetId",
+    "audioAssetId",
+    "audAssetId",
+  ]) {
+    const value = payload[key];
+    if (typeof value === "string") return value;
+  }
+  return null;
+}
+
+function extractBookId(payload: JobPayload): string {
+  const value = payload.bookId;
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error("queue payload requires bookId");
+  }
+  return value;
+}
+
+function extractType(payload: JobPayload): string {
+  const value = payload.type;
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error("queue payload requires type");
+  }
+  return value;
+}
+
+type Orientation = "portrait" | "landscape" | "square";
+type ClassifiedJob = { kind: ArtifactWorkKind; orientation?: Orientation };
+
+function jobTypeToAssetWorkKind(
+  jobType: string,
+  payload: JobPayload,
+): ClassifiedJob | null {
+  if (
+    jobType === "render_project"
+    || jobType === "render_timeline"
+    || jobType === "render_qr_outro"
+  ) {
+    const orientation = payload.orientation;
+    const normalized = orientation === "portrait" || orientation === "landscape" || orientation === "square"
+      ? orientation
+      : undefined;
+    const kind: ArtifactWorkKind = jobType === "render_timeline" ? "final" : "render";
+    return normalized ? { kind, orientation: normalized } : { kind };
+  }
+  switch (jobType) {
+    case "process_video":
+    case "process_image":
+    case "inject_first_frame":
+      return { kind: "process" };
+    case "analyze_video":
+    case "analyze_keyword_placement":
+    case "suggest_cuts":
+    case "suggest_sfx":
+    case "analyze_jokes":
+    case "detect_scenes":
+      return { kind: "analyze" };
+    case "transcribe":
+    case "transcribe_video_audio":
+      return { kind: "transcribe" };
+    case "trim_video":
+    case "split_video":
+      return { kind: "trim" };
+    case "crop_video":
+    case "crop_image":
+      return { kind: "crop" };
+    case "splice_video":
+    case "smooth_scene_concat":
+      return { kind: "splice" };
+    case "reverse_video":
+      return { kind: "reverse" };
+    case "change_video_speed":
+    case "timewarp_video":
+    case "sync_video_to_audio":
+      return { kind: "change_speed" };
+    case "replace_video_audio":
+    case "clean_video_audio":
+    case "remove_sound":
+    case "audio_mix":
+      return { kind: "replace_audio" };
+    case "apply_cuts":
+      return { kind: "apply_cuts" };
+    case "apply_sfx":
+      return { kind: "apply_sfx" };
+    case "extract_frame":
+    case "extract_audio":
+      return { kind: "extract" };
+    case "describe_image":
+      return { kind: "describe" };
+    case "rewrite_script":
+      return { kind: "rewrite_script" };
+    case "archive_clip":
+      return { kind: "archive" };
+    case "restore_archive_clip":
+      return { kind: "download" };
+    case "download_video":
+      return { kind: "download" };
+    case "complete_kie_task":
+      return { kind: "generate" };
+    case "isolate_vocals":
+      return { kind: "isolate" };
+    case "post_to_x":
+      return null;
+    default:
+      return jobType.startsWith("generate_")
+        || jobType.startsWith("extend_")
+        || jobType.startsWith("upscale_")
+        ? { kind: "generate" }
+        : null;
+  }
+}
+
+function providerHandoffKindFor(jobType: string): ArtifactWorkKind | null {
+  if (jobType === "isolate_vocals") return "isolate";
+  return jobType.startsWith("generate_")
+    || jobType.startsWith("extend_")
+    || jobType.startsWith("upscale_")
+    ? "generate"
+    : null;
+}
+
+async function resolveEngine(bookId: string): Promise<Engine> {
+  const testEngine = testEngines.get(bookId);
+  if (testEngine) return testEngine;
+  await bookManager.ready();
+  const book = bookManager.get(bookId);
+  if (!book.ok) throw new Error(book.error.message);
+  return book.value.engine;
+}
+
+function makeWrappedResolver(
+  bookId: string,
+  engine: Engine,
+): (type: string) => JobHandler | null {
+  return (type) => {
+    const handler = handlers.get(type);
+    if (!handler) return null;
+    return async (job: Job) => withBookContext(
+      { bookId, engine },
+      () => runWithJobDeadline(type, async (signal) => {
+        const lease: { current: LeaseToken | null } = { current: null };
+        let assetFailureHandled = false;
+        let heartbeat: ReturnType<typeof setInterval> | null = null;
+        const context: JobHandlerContext = {
+          signal,
+          setLease(next) {
+            const current = lease.current;
+            if (!current) {
+              lease.current = next;
+              return;
+            }
+            if (current.kind === next.kind) {
+              const currentId = current.kind === "owner" ? current.ownerId : current.taskId;
+              const nextId = next.kind === "owner" ? next.ownerId : next.taskId;
+              if (currentId !== nextId) throw new Error("Cannot replace an active lease");
+              return;
+            }
+            if (current.kind === "owner" && next.kind === "task") {
+              lease.current = next;
+              return;
+            }
+            throw new Error("Invalid lease transition");
+          },
+          getOwnerId() {
+            if (lease.current?.kind !== "owner") throw new Error("No active owner lease");
+            return lease.current.ownerId;
+          },
+          markAssetFailureHandled() {
+            assetFailureHandled = true;
+          },
+        };
+        const assetId = extractAssetId(job.payload);
+        try {
+          const providerKind = providerHandoffKindFor(type);
+          if (providerKind && assetId) {
+            const claimed = engine.jobs.artifactWork.begin(assetId, {
+              kind: providerKind,
+              ownerKind: "job",
+              durationMs: 15 * 60_000,
+            });
+            if (!claimed) throw new Error(`Could not claim local lease for ${assetId}`);
+            context.setLease({ kind: "owner", ownerId: claimed.ownerId });
+            heartbeat = setInterval(() => {
+              if (lease.current?.kind === "owner") {
+                engine.jobs.artifactWork.renew(assetId, claimed.ownerId, 60_000);
+              }
+            }, 20_000);
+          }
+          const result = await handler(job.payload, context);
+          if (assetId && lease.current?.kind === "owner") {
+            engine.jobs.artifactWork.complete(assetId, lease.current.ownerId);
+          }
+          return result;
+        } catch (cause) {
+          const message = cause instanceof Error ? cause.message : String(cause);
+          if (assetId && !assetFailureHandled) {
+            await dispatchFailure(engine, assetId, lease.current, message);
+          }
+          throw cause;
+        } finally {
+          if (heartbeat) clearInterval(heartbeat);
+        }
+      }),
+    );
+  };
+}
+
+async function dispatchFailure(
+  engine: Engine,
+  assetId: string,
+  lease: LeaseToken | null,
+  message: string,
+): Promise<void> {
+  if (lease?.kind === "owner") {
+    await engine.jobs.artifactWork.fail(assetId, lease.ownerId, { message });
+  } else if (lease?.kind === "task") {
+    await engine.jobs.pending.fail(assetId, lease.taskId, { message });
+  } else {
+    await engine.jobs.pending.forceFail(assetId, { message });
+  }
+  await engine.history.logAction("job-error", { assetId, error: message });
+}
+
+async function ensureRunner(bookId: string): Promise<RunnerInfo> {
+  const existing = runnerByBook.get(bookId);
+  if (existing) return existing;
+  const engine = await resolveEngine(bookId);
+  await engine.ready;
+  await engine.jobs.queue.reap();
+  const runner = engine.jobs.queue.createRunner({
+    concurrency: 5,
+    pollIntervalMs: 250,
+    resolveHandler: makeWrappedResolver(bookId, engine),
+  });
+  runner.start();
+  const reaper = engine.jobs.startReaper({ intervalMs: ASSET_REAPER_INTERVAL_MS });
+  const info = { bookId, engine, runner, reaper };
+  runnerByBook.set(bookId, info);
+  return info;
+}
+
+async function ensureBookReady(
+  jobId: string,
+  payload: JobPayload,
+): Promise<{ bookId: string; engine: Engine; runner: QueueRunner }> {
+  const bookId = extractBookId(payload);
+  if (rewindingBooks.has(bookId)) throw new Error(`Book is rewinding: ${bookId}`);
+  const info = await ensureRunner(bookId);
+  return { bookId, engine: info.engine, runner: info.runner };
+}
+
+function enqueueOptions(jobId: string, payload: JobPayload) {
+  const type = extractType(payload);
+  const assetId = extractAssetId(payload);
+  const classified = assetId ? jobTypeToAssetWorkKind(type, payload) : null;
+  return {
+    type,
+    artifactId: assetId,
+    payload,
+    dedupeKey: jobId,
+    maxAttempts: 1,
+    artifactWorkKind: classified?.kind ?? null,
+    artifactWorkOrientation: classified?.orientation ?? null,
+  };
+}
+
+function rememberJob(jobId: string, entry: QueueIndexEntry): void {
+  jobIdIndex.set(jobId, entry);
+  while (jobIdIndex.size > JOB_INDEX_MAX) {
+    const oldest = jobIdIndex.keys().next().value;
+    if (typeof oldest !== "string") return;
+    jobIdIndex.delete(oldest);
+  }
+}
+
 function mapState(state: JobState): "queued" | "running" | "completed" | "failed" {
   switch (state) {
     case "queued":
@@ -432,120 +368,83 @@ function mapState(state: JobState): "queued" | "running" | "completed" | "failed
   }
 }
 
-async function ensureProjectReady(
-  jobId: string,
-  payload: JobPayload,
-): Promise<{ slug: string }> {
-  const slug = extractProjectSlug(payload);
-  if (!slug) {
-    throw new Error(
-      `queue.enqueue requires payload.projectSlug; got jobId=${jobId} type=${String(payload.type)}`,
-    );
-  }
-  if (rewindingProjects.has(slug)) {
-    throw new Error(`queue.enqueue: project is rewinding: ${slug}`);
-  }
-  const project = fsRef.current.projects.get(slug);
-  if (!project.ok) {
-    throw new Error(
-      `queue.enqueue: project not found: ${slug} (jobId=${jobId})`,
-    );
-  }
-  ensureRunner(slug);
-  return { slug };
-}
-
-function buildEnqueueOptions(jobId: string, payload: JobPayload) {
-  const type = extractType(payload);
-  const assetId = extractAssetId(payload);
-  const classified = assetId ? jobTypeToAssetWorkKind(type, payload) : null;
-  return {
-    type,
-    artifactId: assetId,
-    payload,
-    dedupeKey: jobId,
-    maxAttempts: 1,
-    artifactWorkKind: classified?.kind ?? null,
-    artifactWorkOrientation: classified?.orientation ?? null,
-  };
-}
-
 export const queue: Queue = {
-  enqueue: async (jobId, payload) => {
-    const { slug } = await ensureProjectReady(jobId, payload);
-    const result = fsRef.current.jobs.queue.enqueue(
-      slug,
-      buildEnqueueOptions(jobId, payload),
-    );
-    jobIdIndex.set(jobId, { slug, internalId: result.job.id });
-    if (jobIdIndex.size > JOB_INDEX_MAX) {
-      const overflow = jobIdIndex.size - JOB_INDEX_MAX;
-      let removed = 0;
-      for (const key of jobIdIndex.keys()) {
-        jobIdIndex.delete(key);
-        if (++removed >= overflow) break;
-      }
-    }
+  async enqueue(jobId: string, payload: JobPayload) {
+    const { bookId, engine } = await ensureBookReady(jobId, payload);
+    const result = engine.jobs.queue.enqueue(enqueueOptions(jobId, payload));
+    rememberJob(jobId, { bookId, internalId: result.job.id });
   },
-
-  enqueueAndWait: async <T = unknown>(
+  async enqueueAndWait<T = unknown>(
     jobId: string,
     payload: JobPayload,
     timeoutMs = 300_000,
-  ): Promise<T> => {
-    const { slug } = await ensureProjectReady(jobId, payload);
-    const result = fsRef.current.jobs.queue.enqueue(
-      slug,
-      buildEnqueueOptions(jobId, payload),
-    );
-    const runner = ensureRunner(slug).runner;
-    return (await runner.waitFor(result.job.id, timeoutMs)) as T;
+  ): Promise<T> {
+    const { bookId, engine, runner } = await ensureBookReady(jobId, payload);
+    const result = engine.jobs.queue.enqueue(enqueueOptions(jobId, payload));
+    rememberJob(jobId, { bookId, internalId: result.job.id });
+    return await runner.waitFor(result.job.id, timeoutMs) as T;
   },
-
-  getStatus: async (jobId) => {
-    const ix = jobIdIndex.get(jobId);
-    if (!ix) return null;
-    const job = fsRef.current.jobs.queue.get(ix.slug, ix.internalId);
+  async getStatus(jobId: string) {
+    const entry = jobIdIndex.get(jobId);
+    if (!entry) return null;
+    const engine = await resolveEngine(entry.bookId);
+    const job = engine.jobs.queue.get(entry.internalId);
     if (!job) return null;
     const state = mapState(job.state);
-    // Once a job is terminal the mapping is no longer needed: every caller
-    // (waitForJob and the test pollers) reads the terminal state once and
-    // returns. Dropping it here keeps the index lean for polled jobs.
-    if (state === "completed" || state === "failed") {
-      jobIdIndex.delete(jobId);
-    }
+    if (state === "completed" || state === "failed") jobIdIndex.delete(jobId);
     return {
       state,
       ...(job.error ? { error: { message: job.error.message } } : {}),
     };
   },
-
-  start: async () => {},
-
-  stop: async () => {
-    const infos = Array.from(runnerByProject.values());
-    runnerByProject.clear();
+  async start() {
+    await reconcileQueueOnStartup();
+  },
+  async stop() {
+    const infos = [...runnerByBook.values()];
+    runnerByBook.clear();
     jobIdIndex.clear();
+    for (const info of infos) info.reaper.stop();
     await Promise.all(infos.map((info) => info.runner.stop()));
   },
 };
+
+export async function reconcileQueueOnStartup(): Promise<void> {
+  await bookManager.ready();
+  await Promise.all(bookManager.list().map((book) => ensureRunner(book.bookId)));
+}
+
+export async function stopBookQueue(bookId: string): Promise<void> {
+  const info = runnerByBook.get(bookId);
+  if (!info) return;
+  runnerByBook.delete(bookId);
+  info.reaper.stop();
+  await info.runner.stop();
+  const active = info.engine.jobs.queue.list({ states: ["queued", "running", "completing"] });
+  await Promise.all(active.map((job) => info.engine.jobs.queue.abort(job.id, "Book deleted")));
+  const pending = info.engine.jobs.pending.findAll();
+  if (pending.ok) {
+    await Promise.all(pending.value.map((task) => (
+      info.engine.jobs.pending.forceFail(task.artifactId, {
+        message: "Book deleted",
+        failCode: "book_deleted",
+      })
+    )));
+  }
+}
 
 export async function waitForJob(
   jobId: string,
   timeoutMs = 300_000,
 ): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
     const status = await queue.getStatus(jobId);
-    if (status) {
-      if (status.state === "completed") return;
-      if (status.state === "failed") {
-        throw new Error(
-          `Job ${jobId} failed: ${status.error?.message ?? "unknown"}`,
-        );
-      }
+    if (status?.state === "completed") return;
+    if (status?.state === "failed") {
+      throw new Error(`Job ${jobId} failed: ${status.error?.message ?? "unknown"}`);
     }
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
   }
   throw new Error(`Job ${jobId} timed out after ${timeoutMs}ms`);
 }
@@ -555,144 +454,61 @@ export interface RewindQueuePreparation {
   failedPendingTasks: number;
 }
 
-async function waitForRunnerStop(
-  runner: QueueRunner,
-  timeoutMs: number,
-): Promise<{ stopped: boolean; stopPromise: Promise<void> }> {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  // Keep a handle on the underlying stop() so the caller can defer any restart
-  // until it actually settles, rather than racing start() against an
-  // in-flight stop() when we time out.
-  const stopPromise = runner.stop();
-  const stopped = stopPromise.then(() => true);
-  const timedOut = new Promise<false>((resolve) => {
-    timer = setTimeout(() => resolve(false), timeoutMs);
-  });
-  const result = await Promise.race([stopped, timedOut]);
-  if (timer) clearTimeout(timer);
-  return { stopped: result, stopPromise };
-}
-
-async function restartRunnerIfProjectExists(projectSlug: string): Promise<void> {
-  try {
-    if (fsRef.current.projects.get(projectSlug).ok) {
-      ensureRunner(projectSlug);
-    }
-  } catch {
-    return;
-  }
-}
-
-export async function prepareProjectForRewind(
-  projectSlug: string,
-  timeoutMs = 15_000,
+export async function prepareBookForRewind(
+  bookId: string,
 ): Promise<RewindQueuePreparation> {
-  if (rewindingProjects.has(projectSlug)) {
-    throw new Error(`Project is already rewinding: ${projectSlug}`);
+  if (rewindingBooks.has(bookId)) throw new Error(`Book is already rewinding: ${bookId}`);
+  rewindingBooks.add(bookId);
+  const engine = await resolveEngine(bookId);
+  const info = runnerByBook.get(bookId);
+  if (info) {
+    runnerByBook.delete(bookId);
+    info.reaper.stop();
+    await info.runner.stop();
   }
-  rewindingProjects.add(projectSlug);
-  let stoppedRunner = false;
-  try {
-    const project = fsRef.current.projects.get(projectSlug);
-    if (!project.ok) throw new Error(project.error.message);
-    const info = runnerByProject.get(projectSlug);
-    if (info) {
-      const { stopped, stopPromise } = await waitForRunnerStop(
-        info.runner,
-        timeoutMs,
-      );
-      if (!stopped) {
-        // stop() is still in flight; restart only once it settles so a
-        // late-completing stop() can't race the fresh start() and leave the
-        // runner half-stopped. Guarded so a fire-and-forget rejection or a
-        // torn-down runner can't crash the process.
-        void stopPromise
-          .catch(() => {})
-          .then(() => {
-            try {
-              info.runner.start();
-            } catch {
-              /* runner torn down meanwhile — nothing to restart */
-            }
-          });
-        throw new Error(
-          `Timed out waiting for active jobs to stop before rewinding ${projectSlug}`,
-        );
-      }
-      runnerByProject.delete(projectSlug);
-      stoppedRunner = true;
+  const jobs = engine.jobs.queue.list({ states: ["queued", "running", "completing"] });
+  await Promise.all(jobs.map((job) => engine.jobs.queue.abort(job.id, "Aborted by book rewind")));
+  const pending = engine.jobs.pending.findAll();
+  let failedPendingTasks = 0;
+  if (pending.ok) {
+    for (const task of pending.value) {
+      const failed = await engine.jobs.pending.forceFail(task.artifactId, {
+        message: "Aborted by book rewind",
+        failCode: "rewind",
+      });
+      if (failed.ok) failedPendingTasks += 1;
     }
-
-    const states: JobState[] = ["queued", "running", "completing"];
-    const jobs = fsRef.current.jobs.queue.list(projectSlug, { states });
-    for (const job of jobs) {
-      await fsRef.current.jobs.queue.abort(
-        projectSlug,
-        job.id,
-        "Aborted by project rewind",
-      );
-    }
-
-    const pending = await fsRef.current.jobs.pending.findAll(projectSlug);
-    let failedPendingTasks = 0;
-    if (pending.ok) {
-      for (const task of pending.value) {
-        const failed = await fsRef.current.jobs.pending.forceFail(
-          projectSlug,
-          task.artifactId,
-          { message: "Aborted by project rewind", failCode: "rewind" },
-        );
-        if (failed.ok) failedPendingTasks += 1;
-      }
-    }
-
-    if (jobs.length > 0 || failedPendingTasks > 0) {
-      await fsRef.current
-        .history.logAction(
-          "rewind-abort-jobs",
-          { aborted_jobs: jobs.length, failed_pending_tasks: failedPendingTasks },
-          projectSlug,
-        )
-        .catch(() => {});
-    }
-
-    return { abortedJobs: jobs.length, failedPendingTasks };
-  } catch (error) {
-    rewindingProjects.delete(projectSlug);
-    if (stoppedRunner) await restartRunnerIfProjectExists(projectSlug);
-    throw error;
   }
+  return { abortedJobs: jobs.length, failedPendingTasks };
 }
 
-export async function resumeProjectAfterRewind(projectSlug: string): Promise<void> {
-  rewindingProjects.delete(projectSlug);
-  await restartRunnerIfProjectExists(projectSlug);
+export async function resumeBookAfterRewind(bookId: string): Promise<void> {
+  rewindingBooks.delete(bookId);
+  await ensureRunner(bookId);
 }
 
-/**
- * Test-only: redirect all queue operations to another engine root and tear
- * down runners bound to the previous engine.
- */
 export async function setEngineRoot(
-  dir: string,
-  nextFs?: Engine,
+  rootDir: string,
+  engine?: Engine,
 ): Promise<void> {
-  if (dir === activeEngineRoot && !nextFs) return;
-  const stale = Array.from(runnerByProject.values());
-  runnerByProject.clear();
-  jobIdIndex.clear();
-  await Promise.all(stale.map((info) => info.runner.stop().catch(() => {})));
-  const prior = fsRef.current;
-  if (prior !== defaultFs && prior !== nextFs) prior.close();
-  activeEngineRoot = dir;
-  fsRef.current = nextFs ?? createEngine({ rootDir: dir });
-  await fsRef.current.ready;
+  const previousRoot = activeTestRoot;
+  if (previousRoot && previousRoot !== rootDir) {
+    const previous = [...testEngines.entries()].find(([, value]) => value === testEngines.get(previousRoot));
+    if (previous) await stopBookQueue(previous[0]);
+  }
+  const next = engine ?? createEngine({ rootDir, initialBookSlug: "test-book" });
+  await next.ready;
+  const bookId = next.book.get().bookId;
+  testEngines.set(bookId, next);
+  activeTestRoot = rootDir;
+  await ensureRunner(bookId);
 }
 
 export function getEngineRoot(): string {
-  return activeEngineRoot;
+  if (!activeTestRoot) return bookManager.rootDir;
+  return activeTestRoot;
 }
 
 export function getActiveEngine(): Engine {
-  return fsRef.current;
+  return activeBookEngine();
 }

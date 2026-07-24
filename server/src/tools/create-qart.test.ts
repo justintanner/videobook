@@ -63,7 +63,7 @@ describe("create_qart tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
   });
 
@@ -73,15 +73,15 @@ describe("create_qart tool", () => {
   });
 
   async function createImageAsset(name: string, buffer: Buffer): Promise<string> {
-    const asset = await fs.artifacts.create("img", name, PROJECT);
+    const asset = await fs.artifacts.create("img", name);
     if (!asset.ok) throw new Error(asset.error.message);
-    const write = await fs.files.write(asset.value.slug, "original.png", buffer, PROJECT);
+    const write = await fs.files.write(asset.value.slug, "original.png", buffer);
     if (!write.ok) throw new Error(write.error.message);
     return asset.value.slug;
   }
 
   async function readAssetFile(assetId: string, name: string): Promise<Buffer> {
-    const read = await fs.files.read(assetId, name, PROJECT);
+    const read = await fs.files.read(assetId, name);
     if (!read.ok) throw new Error(read.error.message);
     return Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
   }
@@ -93,7 +93,7 @@ describe("create_qart tool", () => {
     const result = await client!.callTool({
       name: "create_qart",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         image_slug: `@${coverId}`,
         value,
         size,
@@ -118,7 +118,7 @@ describe("create_qart tool", () => {
     expect(parsed.qr_version).toBe(QART_MIN_VERSION);
 
     for (const assetId of [parsed.inverted_asset_id, parsed.monochrome_asset_id]) {
-      const manifest = await fs.files.manifest(assetId, PROJECT, { includeDotfiles: true });
+      const manifest = await fs.files.manifest(assetId, PROJECT);
       expect(manifest.ok).toBe(true);
       if (!manifest.ok) return;
       const fileNames = new Set(manifest.value.files.map((file) => file.name));
@@ -135,7 +135,7 @@ describe("create_qart tool", () => {
         expect(await decodeQr(await readAssetFile(assetId, filename))).toBe(value);
       }
 
-      const metadata = await fs.metadata.artifacts.read(assetId, "original", PROJECT);
+      const metadata = await fs.metadata.artifacts.read(assetId, "original");
       expect(metadata.ok).toBe(true);
       if (!metadata.ok) return;
       expect(metadata.value).toMatchObject({
@@ -202,7 +202,7 @@ describe("create_qart tool", () => {
     const result = await client!.callTool({
       name: "create_qart",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         image_slug: coverId,
         value: "https://example.com/color",
         style: "color",
@@ -230,7 +230,7 @@ describe("create_qart tool", () => {
     const result = await client!.callTool({
       name: "create_qart",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         image_slug: coverId,
         value: "https://example.com",
         size: 256,
@@ -244,7 +244,7 @@ describe("create_qart tool", () => {
     const result = await client!.callTool({
       name: "create_qart",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         image_slug: "vid-not-an-image",
         value: "https://example.com",
       },
@@ -256,7 +256,7 @@ describe("create_qart tool", () => {
     const result = await client!.callTool({
       name: "create_qart",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         image_slug: "@img-does-not-exist",
         value: "https://example.com",
       },

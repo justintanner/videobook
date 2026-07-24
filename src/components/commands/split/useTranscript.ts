@@ -33,7 +33,7 @@ export function useTranscript() {
 
   const fetchTranscript = useCallback(async (
     assetId: string,
-    projectSlug: string,
+    bookId: string,
     callTool: UseMcpResult['callTool'],
   ) => {
     const requestId = ++requestIdRef.current;
@@ -43,7 +43,7 @@ export function useTranscript() {
     try {
       const result = await callTool('read_transcript', {
         asset_id: assetId,
-        project_slug: projectSlug,
+        book_id: bookId,
       }) as ToolTextResult;
 
       if (requestIdRef.current !== requestId) return;
@@ -101,7 +101,7 @@ export function useTranscript() {
 
   const requestTimedTranscript = useCallback(async (
     assetId: string,
-    projectSlug: string,
+    bookId: string,
     callTool: UseMcpResult['callTool'],
   ) => {
     setTranscribing(true);
@@ -109,7 +109,7 @@ export function useTranscript() {
     try {
       const result = await callTool('transcribe', {
         asset_id: assetId,
-        project_slug: projectSlug,
+        book_id: bookId,
         wait: true,
       }) as ToolTextResult;
 
@@ -118,7 +118,7 @@ export function useTranscript() {
         return;
       }
 
-      await fetchTranscript(assetId, projectSlug, callTool);
+      await fetchTranscript(assetId, bookId, callTool);
     } catch (err) {
       setTranscribeError(err instanceof Error ? err.message : 'transcribe failed');
     } finally {

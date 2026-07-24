@@ -18,7 +18,7 @@ describe("duplicate_asset tool", () => {
     fs = createEngineForTest(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -31,7 +31,7 @@ describe("duplicate_asset tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo.png", data },
+      arguments: { book_id: "test-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse(
       (uploadResult.content as Array<{ type: string; text: string }>)[0].text
@@ -39,7 +39,7 @@ describe("duplicate_asset tool", () => {
 
     const result = await client.callTool({
       name: "duplicate_asset",
-      arguments: { asset_id: uploaded.assetId, project_slug: "test-proj" },
+      arguments: { asset_id: uploaded.assetId, book_id: "test-proj" },
     });
 
     const parsed = JSON.parse(
@@ -52,7 +52,7 @@ describe("duplicate_asset tool", () => {
     // Verify copy has the same file
     const manifest = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: parsed.new_asset_id, project_slug: "test-proj" },
+      arguments: { asset_id: parsed.new_asset_id, book_id: "test-proj" },
     });
     const manifestParsed = JSON.parse(
       (manifest.content as Array<{ type: string; text: string }>)[0].text
@@ -64,7 +64,7 @@ describe("duplicate_asset tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo.png", data },
+      arguments: { book_id: "test-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse(
       (uploadResult.content as Array<{ type: string; text: string }>)[0].text
@@ -74,7 +74,7 @@ describe("duplicate_asset tool", () => {
       name: "duplicate_asset",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         new_name: "my custom copy",
       },
     });
@@ -88,22 +88,22 @@ describe("duplicate_asset tool", () => {
   it("returns error for nonexistent asset", async () => {
     const result = await client.callTool({
       name: "duplicate_asset",
-      arguments: { asset_id: "img-no-such-asset", project_slug: "test-proj" },
+      arguments: { asset_id: "img-no-such-asset", book_id: "test-proj" },
     });
     expect(result.isError).toBe(true);
   });
 
   it("video duplicate skips in-flight job markers", async () => {
-    const created = await fs.artifacts.create("vid", "in-flight-source", "test-proj");
+    const created = await fs.artifacts.create("vid", "in-flight-source");
     if (!created.ok) throw new Error(created.error.message);
     const sourceId = created.value.slug;
-    await fs.files.write(sourceId, "original.mp4", "fake", "test-proj");
-    await fs.files.write(sourceId, ".kie-task.json", "{}", "test-proj");
-    await fs.files.write(sourceId, ".generation-error.json", "{}", "test-proj");
+    await fs.files.write(sourceId, "original.mp4", "fake");
+    await fs.files.write(sourceId, ".kie-task.json", "{}");
+    await fs.files.write(sourceId, ".generation-error.json", "{}");
 
     const result = await client.callTool({
       name: "duplicate_asset",
-      arguments: { asset_id: sourceId, project_slug: "test-proj" },
+      arguments: { asset_id: sourceId, book_id: "test-proj" },
     });
     const parsed = JSON.parse(
       (result.content as Array<{ type: string; text: string }>)[0].text,

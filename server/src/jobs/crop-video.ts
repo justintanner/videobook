@@ -50,19 +50,19 @@ type CropVideoPayload = {
   rect: CropRect;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 export function registerCropVideoJob(fs: Engine): void {
   registerJobHandler("crop_video", async (payload, ctx) => {
     const {
       inputPath, outputPath, ratio, rect,
-      assetId, assetDir, projectSlug,
+      assetId, assetDir, bookId,
     } = payload as unknown as CropVideoPayload;
 
     const result = await withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       assetDir,
       ctx,
@@ -126,7 +126,7 @@ export function registerCropVideoJob(fs: Engine): void {
         const inputFilename = basename(inputPath);
         await replaceArtifactFileFromPath(
           fs,
-          projectSlug,
+          bookId,
           assetId,
           inputFilename,
           outputPath,
@@ -137,7 +137,7 @@ export function registerCropVideoJob(fs: Engine): void {
           ".analysis.gpt4otrans.json",
           "elevenlabs.json",
         ]) {
-          await fs.files.delete(assetId, stale, projectSlug);
+          await fs.files.delete(assetId, stale);
         }
 
         const videoPath = join(assetDir, inputFilename);
@@ -151,7 +151,7 @@ export function registerCropVideoJob(fs: Engine): void {
       videoPath: result.videoPath,
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
       provenance: { origin: "crop", ratio, cropped_at: new Date().toISOString() },
       force: true,
     } as unknown as Record<string, unknown>);

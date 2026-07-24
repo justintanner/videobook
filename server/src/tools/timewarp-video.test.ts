@@ -40,12 +40,12 @@ describe("timewarp_video tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "timewarp-tool" },
+      arguments: { book_id: "timewarp-tool" },
     });
     const upload = await client.callTool({
       name: "upload_file",
       arguments: {
-        project_slug: "timewarp-tool",
+        book_id: "timewarp-tool",
         filename: "original.mp4",
         data: (await readFile(sourcePath)).toString("base64"),
       },
@@ -75,7 +75,7 @@ describe("timewarp_video tool", () => {
       name: "timewarp_video",
       arguments: {
         asset_id: assetId,
-        project_slug: "timewarp-tool",
+        book_id: "timewarp-tool",
         start_seconds: request.start_seconds,
         end_seconds: request.end_seconds,
         stretch_factor: request.stretch_factor,
@@ -91,7 +91,7 @@ describe("timewarp_video tool", () => {
       name: "timewarp_video",
       arguments: {
         asset_id: "vid-missing",
-        project_slug: "timewarp-tool",
+        book_id: "timewarp-tool",
         start_seconds: 0,
         end_seconds: 1,
         stretch_factor: 1.5,
@@ -106,7 +106,7 @@ describe("timewarp_video tool", () => {
       name: "timewarp_video",
       arguments: {
         asset_id: assetId,
-        project_slug: "timewarp-tool",
+        book_id: "timewarp-tool",
         start_seconds: 0,
         end_seconds: 0.5,
         stretch_factor: 1.5,

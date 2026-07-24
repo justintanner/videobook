@@ -74,11 +74,11 @@ export async function queueVideocityDownload(url: string): Promise<QueueDownload
       name: "get_default_project",
       arguments: {},
     });
-    const projectSlug = parseDefaultProjectSlug(readTextResult(projectResult));
+    const bookId = parseDefaultProjectSlug(readTextResult(projectResult));
 
     const downloadResult = await client.callTool({
       name: "download_video",
-      arguments: buildDownloadVideoArguments(url, projectSlug),
+      arguments: buildDownloadVideoArguments(url, bookId),
     });
     return parseDownloadResult(readTextResult(downloadResult));
   } finally {

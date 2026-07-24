@@ -22,14 +22,14 @@ export function spliceVideoDef(fs: Engine): ToolDef {
       first_asset_id: z.string().describe("Base video asset ID (e.g. vid-clip-a). The match point is searched within this video."),
       second_asset_id: z.string().describe("Continuation video asset ID (e.g. vid-clip-b). Its first frame is the search target."),
       overlap: z.number().min(0).describe("Possible overlap in seconds. Use 0 to concatenate both videos without trimming either one."),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { first_asset_id, second_asset_id, overlap, project_slug } = args as {
+      const { first_asset_id, second_asset_id, overlap, book_id } = args as {
         first_asset_id: string;
         second_asset_id: string;
         overlap: number;
-        project_slug: string;
+        book_id: string;
       };
 
       if (first_asset_id === second_asset_id) {
@@ -40,8 +40,8 @@ export function spliceVideoDef(fs: Engine): ToolDef {
       }
 
       const [firstManifestRes, secondManifestRes] = await Promise.all([
-        fs.files.manifest(first_asset_id, project_slug),
-        fs.files.manifest(second_asset_id, project_slug),
+        fs.files.manifest(first_asset_id),
+        fs.files.manifest(second_asset_id),
       ]);
       if (!firstManifestRes.ok) {
         return {
@@ -87,7 +87,7 @@ export function spliceVideoDef(fs: Engine): ToolDef {
       }
 
       const spliceName = deriveSpliceName(first_asset_id, second_asset_id);
-      const assetResult = await fs.artifacts.create("vid", spliceName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", spliceName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -108,7 +108,7 @@ export function spliceVideoDef(fs: Engine): ToolDef {
         secondAssetId: second_asset_id,
         assetId,
         assetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         targetWidth: firstProbe.width,
         targetHeight: firstProbe.height,
         firstFps: firstProbe.fps,

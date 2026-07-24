@@ -43,7 +43,7 @@ export type RestoreResponse = {
 }
 
 type ArchiveBrowserProps = {
-  projectSlug: string | undefined
+  bookId: string | undefined
   callTool: UseMcpResult['callTool']
   callState: UseMcpResult['state']
   initialResponse?: ArchiveSearchResponse | null
@@ -86,7 +86,7 @@ function isAudioContent(contentType: string): boolean {
   return contentType.toLowerCase().startsWith('audio/')
 }
 
-export function ArchiveBrowser({ projectSlug, callTool, callState, initialResponse, initialError, initialLoading = false, initialQuery = '', onClose, onRestoreComplete }: ArchiveBrowserProps) {
+export function ArchiveBrowser({ bookId, callTool, callState, initialResponse, initialError, initialLoading = false, initialQuery = '', onClose, onRestoreComplete }: ArchiveBrowserProps) {
   const [query, setQuery] = useState(initialQuery)
   const [results, setResults] = useState<ArchiveResult[]>(initialResponse?.results ?? [])
   const [total, setTotal] = useState(initialResponse?.total ?? 0)
@@ -196,7 +196,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
   }, [results, visibleSelected])
 
   const handleRestore = useCallback(async () => {
-    if (!projectSlug) {
+    if (!bookId) {
       setError('No current project')
       return
     }
@@ -211,7 +211,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
     setNotice(null)
     try {
       const result = await callTool('restore_archive_clips', {
-        project_slug: projectSlug,
+        book_id: bookId,
         archive_ids: archiveIds,
         skip_existing: true,
       })
@@ -229,7 +229,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
     } finally {
       setRestoring(false)
     }
-  }, [callState, callTool, onRestoreComplete, projectSlug, selectedIds])
+  }, [callState, callTool, onRestoreComplete, bookId, selectedIds])
 
   return (
     <div className="flex-1 min-h-0 overflow-hidden border border-border/60 bg-zinc-950/70">
@@ -419,7 +419,7 @@ export function ArchiveBrowser({ projectSlug, callTool, callState, initialRespon
           </div>
           <button
             type="button"
-            disabled={selectedCount === 0 || initialLoading || restoring || !projectSlug || callState !== 'ready'}
+            disabled={selectedCount === 0 || initialLoading || restoring || !bookId || callState !== 'ready'}
             onClick={handleRestore}
             className="flex h-9 items-center gap-2 border border-emerald-400/40 bg-emerald-500/10 px-3 font-mono text-xs font-bold uppercase tracking-widest text-emerald-200 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >

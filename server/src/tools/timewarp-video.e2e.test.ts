@@ -90,7 +90,7 @@ async function waitForTimewarpMetadata(
 ): Promise<Record<string, unknown>> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    const result = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original", PROJECT);
+    const result = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original");
     if (result.ok && result.value.origin === "timewarp") return result.value;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
@@ -104,7 +104,7 @@ async function waitForAssetReady(
 ): Promise<void> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    const result = await fs.jobs.artifactWork.read(PROJECT, assetId);
+    const result = await fs.jobs.artifactWork.read(PROJECT);
     if (result.ok && result.value?.status === "ready" && result.value.ownerId === null) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
@@ -119,7 +119,7 @@ async function waitForAssetFile(
 ): Promise<Buffer> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
-    const result = await fs.files.read(assetId, filename, PROJECT);
+    const result = await fs.files.read(assetId, filename);
     if (result.ok) return result.value;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
@@ -155,18 +155,18 @@ describe("timewarp_video end to end", () => {
     client = await createTestClient(tempDir);
     fs = createEngineForTest(tempDir);
     valueOf(await fs.projects.create(PROJECT));
-    const created = valueOf(await fs.artifacts.create("vid", "canonical timewarp", PROJECT));
+    const created = valueOf(await fs.artifacts.create("vid", "canonical timewarp"));
     assetId = created.slug;
     assetDir = created.path;
-    valueOf(await fs.files.write(assetId, "original.mp4", sourceBytes, PROJECT));
-    valueOf(await fs.files.write(assetId, "original.mp3", originalMp3, PROJECT));
-    valueOf(await fs.files.write(assetId, ".analysis.gpt4otrans.json", transcript, PROJECT));
-    valueOf(await fs.files.write(assetId, "elevenlabs.json", timedTranscript, PROJECT));
-    valueOf(await fs.files.write(assetId, ".original.analysis.json", "{}", PROJECT));
-    valueOf(await fs.files.write(assetId, ".detect-scenes.json", "{}", PROJECT));
-    valueOf(await fs.files.write(assetId, "landscape.mp4", Buffer.from("stale"), PROJECT));
-    valueOf(await fs.metadata.waveforms.write(assetId, [0.1, 0.5, 0.1], PROJECT));
-    initialAssetCount = (await fs.artifacts.list(PROJECT)).length;
+    valueOf(await fs.files.write(assetId, "original.mp4", sourceBytes));
+    valueOf(await fs.files.write(assetId, "original.mp3", originalMp3));
+    valueOf(await fs.files.write(assetId, ".analysis.gpt4otrans.json", transcript));
+    valueOf(await fs.files.write(assetId, "elevenlabs.json", timedTranscript));
+    valueOf(await fs.files.write(assetId, ".original.analysis.json", "{}"));
+    valueOf(await fs.files.write(assetId, ".detect-scenes.json", "{}"));
+    valueOf(await fs.files.write(assetId, "landscape.mp4", Buffer.from("stale")));
+    valueOf(await fs.metadata.waveforms.write(assetId, [0.1, 0.5, 0.1]));
+    initialAssetCount = (await fs.artifacts.list()).length;
     initialHistoryCount = (await fs.history.artifact(assetId, PROJECT)).length;
   }, 120_000);
 
@@ -182,7 +182,7 @@ describe("timewarp_video end to end", () => {
       name: "timewarp_video",
       arguments: {
         asset_id: assetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         start_seconds: 0,
         end_seconds: 4.2,
         stretch_factor: 1.5,
@@ -198,7 +198,7 @@ describe("timewarp_video end to end", () => {
     await waitForJob(String(response.job_id), 120_000);
     const metadata = await waitForTimewarpMetadata(fs, assetId);
     await waitForAssetReady(fs, assetId);
-    const manifest = valueOf(await fs.files.manifest(assetId, PROJECT, { includeDotfiles: true }));
+    const manifest = valueOf(await fs.files.manifest(assetId, PROJECT));
     const videoFile = findVideoFile(manifest.files);
     expect(videoFile).not.toBeNull();
     const outputPath = join(assetDir, videoFile!.name);
@@ -211,14 +211,14 @@ describe("timewarp_video end to end", () => {
     expect(afterBoundary[2]).toBeGreaterThan(afterBoundary[0]);
     expect(await audioStreamHash(outputPath)).toBe(await audioStreamHash(sourcePath));
 
-    expect(valueOf(await fs.files.read(assetId, "original.mp3", PROJECT))).toEqual(originalMp3);
-    expect(valueOf(await fs.files.read(assetId, ".analysis.gpt4otrans.json", PROJECT))).toEqual(transcript);
-    expect(valueOf(await fs.files.read(assetId, "elevenlabs.json", PROJECT))).toEqual(timedTranscript);
-    expect((await fs.files.read(assetId, ".original.analysis.json", PROJECT)).ok).toBe(false);
-    expect((await fs.files.read(assetId, ".detect-scenes.json", PROJECT)).ok).toBe(false);
-    expect((await fs.files.read(assetId, "landscape.mp4", PROJECT)).ok).toBe(false);
+    expect(valueOf(await fs.files.read(assetId, "original.mp3"))).toEqual(originalMp3);
+    expect(valueOf(await fs.files.read(assetId, ".analysis.gpt4otrans.json"))).toEqual(transcript);
+    expect(valueOf(await fs.files.read(assetId, "elevenlabs.json"))).toEqual(timedTranscript);
+    expect((await fs.files.read(assetId, ".original.analysis.json")).ok).toBe(false);
+    expect((await fs.files.read(assetId, ".detect-scenes.json")).ok).toBe(false);
+    expect((await fs.files.read(assetId, "landscape.mp4")).ok).toBe(false);
     expect(manifest.files.some((file) => file.name.startsWith(".timewarp-"))).toBe(false);
-    expect((await fs.artifacts.list(PROJECT)).length).toBe(initialAssetCount);
+    expect((await fs.artifacts.list()).length).toBe(initialAssetCount);
     expect((await fs.history.artifact(assetId, PROJECT)).length).toBeGreaterThan(initialHistoryCount);
 
     expect(metadata.start_seconds).toBe(0);
@@ -230,15 +230,15 @@ describe("timewarp_video end to end", () => {
   }, 120_000);
 
   it("saves an original audio sidecar when the asset does not have one", async () => {
-    const created = valueOf(await fs.artifacts.create("vid", "timewarp missing audio sidecar", PROJECT));
-    valueOf(await fs.files.write(created.slug, "original.mp4", sourceBytes, PROJECT));
-    valueOf(await fs.files.write(created.slug, ".analysis.gpt4otrans.json", transcript, PROJECT));
+    const created = valueOf(await fs.artifacts.create("vid", "timewarp missing audio sidecar"));
+    valueOf(await fs.files.write(created.slug, "original.mp4", sourceBytes));
+    valueOf(await fs.files.write(created.slug, ".analysis.gpt4otrans.json", transcript));
 
     const result = await client.callTool({
       name: "timewarp_video",
       arguments: {
         asset_id: created.slug,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         start_seconds: 0,
         end_seconds: 4.2,
         stretch_factor: 1.5,
@@ -252,14 +252,14 @@ describe("timewarp_video end to end", () => {
 
     const savedAudio = await waitForAssetFile(fs, created.slug, "original.mp3");
     expect(savedAudio.length).toBeGreaterThan(0);
-    expect(valueOf(await fs.files.read(created.slug, ".analysis.gpt4otrans.json", PROJECT))).toEqual(transcript);
+    expect(valueOf(await fs.files.read(created.slug, ".analysis.gpt4otrans.json"))).toEqual(transcript);
     expect(await audioStreamHash(join(created.path, "original.mp4"))).toBe(await audioStreamHash(sourcePath));
   }, 120_000);
 
   it("leaves the canonical asset untouched when rendering fails", async () => {
-    const created = valueOf(await fs.artifacts.create("vid", "failed timewarp", PROJECT));
-    valueOf(await fs.files.write(created.slug, "original.mp4", sourceBytes, PROJECT));
-    valueOf(await fs.files.write(created.slug, ".analysis.gpt4otrans.json", transcript, PROJECT));
+    const created = valueOf(await fs.artifacts.create("vid", "failed timewarp"));
+    valueOf(await fs.files.write(created.slug, "original.mp4", sourceBytes));
+    valueOf(await fs.files.write(created.slug, ".analysis.gpt4otrans.json", transcript));
     const outputPath = join(created.path, "missing", ".timewarp-failed.mp4");
 
     await expect(queue.enqueueAndWait(`timewarp-render-failure-${created.slug}`, {
@@ -271,26 +271,26 @@ describe("timewarp_video end to end", () => {
       stretchFactor: 1.5,
       assetId: created.slug,
       assetDir: created.path,
-      projectSlug: PROJECT,
+      bookId: PROJECT,
     } as unknown as Parameters<typeof queue.enqueueAndWait>[1])).rejects.toThrow("ffmpeg failed");
 
-    expect(valueOf(await fs.files.read(created.slug, "original.mp4", PROJECT))).toEqual(sourceBytes);
-    expect(valueOf(await fs.files.read(created.slug, ".analysis.gpt4otrans.json", PROJECT))).toEqual(transcript);
+    expect(valueOf(await fs.files.read(created.slug, "original.mp4"))).toEqual(sourceBytes);
+    expect(valueOf(await fs.files.read(created.slug, ".analysis.gpt4otrans.json"))).toEqual(transcript);
     await expect(stat(outputPath)).rejects.toThrow();
-    const manifest = valueOf(await fs.files.manifest(created.slug, PROJECT, { includeDotfiles: true }));
+    const manifest = valueOf(await fs.files.manifest(created.slug, PROJECT));
     expect(manifest.files.some((file) => file.name.startsWith(".timewarp-"))).toBe(false);
   }, 120_000);
 
   it("returns a structured probe error without changing invalid media", async () => {
-    const created = valueOf(await fs.artifacts.create("vid", "invalid media", PROJECT));
+    const created = valueOf(await fs.artifacts.create("vid", "invalid media"));
     const invalid = Buffer.from("not an mp4");
-    valueOf(await fs.files.write(created.slug, "original.mp4", invalid, PROJECT));
+    valueOf(await fs.files.write(created.slug, "original.mp4", invalid));
 
     const result = await client.callTool({
       name: "timewarp_video",
       arguments: {
         asset_id: created.slug,
-        project_slug: PROJECT,
+        book_id: PROJECT,
         start_seconds: 0,
         end_seconds: 1,
         stretch_factor: 1.5,
@@ -299,8 +299,8 @@ describe("timewarp_video end to end", () => {
 
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("ffprobe failed");
-    expect(valueOf(await fs.files.read(created.slug, "original.mp4", PROJECT))).toEqual(invalid);
-    const manifest = valueOf(await fs.files.manifest(created.slug, PROJECT, { includeDotfiles: true }));
+    expect(valueOf(await fs.files.read(created.slug, "original.mp4"))).toEqual(invalid);
+    const manifest = valueOf(await fs.files.manifest(created.slug, PROJECT));
     expect(manifest.files.some((file) => file.name.startsWith(".timewarp-"))).toBe(false);
   });
 });

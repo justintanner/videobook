@@ -14,7 +14,7 @@ type AnalyzeVideoPayload = {
   type: "analyze_video";
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
   hasTranscription: boolean;
 };
 
@@ -56,18 +56,17 @@ function sampleFrames(frames: string[]): string[] {
 export function registerAnalyzeVideoJob(fs: Engine): void {
   registerJobHandler("analyze_video", async (payload, ctx) => {
     const {
-      assetId, assetDir, projectSlug, hasTranscription,
+      assetId, assetDir, bookId, hasTranscription,
     } = payload as AnalyzeVideoPayload;
 
-    const result = await withLocalLease(fs, projectSlug, assetId, ctx, "analyze", async () => {
+    const result = await withLocalLease(fs, bookId, assetId, ctx, "analyze", async () => {
     {
 
-    const metaResult = await fs.metadata.artifacts.read<{ width: number; height: number; duration: number }>(
-      assetId, "original", projectSlug
+    const metaResult = await fs.metadata.artifacts.read<{ width: number; height: number; duration: number }>(assetId, "original"
     );
     const metadata = metaResult.ok ? metaResult.value : null;
 
-    const listResult = await fs.files.listSubdir(assetId, "original_frames", projectSlug);
+    const listResult = await fs.files.listSubdir(assetId, "original_frames");
     const frameFiles = listResult.ok
       ? listResult.value
           .filter((f) => f.endsWith(".jpg"))
@@ -86,7 +85,7 @@ export function registerAnalyzeVideoJob(fs: Engine): void {
 
     let transcriptionText = "";
     if (hasTranscription) {
-      const transResult = await fs.files.read(assetId, ".analysis.gpt4otrans.json", projectSlug);
+      const transResult = await fs.files.read(assetId, ".analysis.gpt4otrans.json");
       if (transResult.ok) {
         try {
           const parsed = JSON.parse(
@@ -139,19 +138,19 @@ export function registerAnalyzeVideoJob(fs: Engine): void {
     }
 
     const jsonString = JSON.stringify(analysis, null, 2);
-    await fs.files.write(assetId, ".original.analysis.json", jsonString, projectSlug);
+    await fs.files.write(assetId, ".original.analysis.json", jsonString);
 
     // Auto-transcribe trigger (replaces the whitelist-tool gate). Run only if
     // the analysis says there's real dialog, ElevenLabs/Kie is configured, no
     // prior failure or in-progress task, and we haven't already transcribed.
-    await maybeEnqueueAutoTranscribe(fs, assetId, assetDir, projectSlug);
+    await maybeEnqueueAutoTranscribe(fs, assetId, assetDir, bookId);
 
     return { success: true, fallback: analysis === FALLBACK_ANALYSIS, analysis };
 
     }
     });
     try {
-      await enqueueLazyTimelineRender(fs, projectSlug, assetId);
+      await enqueueLazyTimelineRender(fs, bookId, assetId);
     } catch (err) {
       void err;
     }
@@ -163,21 +162,21 @@ async function maybeEnqueueAutoTranscribe(
   fs: Engine,
   assetId: string,
   assetDir: string,
-  projectSlug: string,
+  bookId: string,
 ): Promise<void> {
   if (!getApiKey("ELEVENLABS_API_KEY")) return;
 
-  const manifestResult = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
+  const manifestResult = await fs.files.manifest(assetId);
   if (!manifestResult.ok) return;
   const manifest = manifestResult.value;
   const fileNames = new Set(manifest.files.map((f) => f.name));
 
   if (fileNames.has("elevenlabs.json")) return;
 
-  const errorRow = await fs.jobs.failures.read(projectSlug, assetId);
+  const errorRow = await fs.jobs.failures.read(assetId);
   if (errorRow.ok && errorRow.value !== null) return;
 
-  const dialog = await readAndAssessDialog(fs, assetId, projectSlug);
+  const dialog = await readAndAssessDialog(fs, assetId, bookId);
   if (!dialog.hasDialog) return;
 
   const audioFile = findAudioFile(manifest.files, assetId);
@@ -195,6 +194,6 @@ async function maybeEnqueueAutoTranscribe(
     diarize: true,
     assetId,
     assetDir,
-    projectSlug,
+    bookId,
   } as unknown as Record<string, unknown>);
 }

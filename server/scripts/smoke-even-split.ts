@@ -37,8 +37,8 @@ async function probeFormatDuration(filePath: string): Promise<string> {
 }
 
 async function main(): Promise<void> {
-  const [, , projectSlug, assetId, ...targetArgs] = process.argv;
-  if (!projectSlug || !assetId) {
+  const [, , bookId, assetId, ...targetArgs] = process.argv;
+  if (!bookId || !assetId) {
     console.error("Usage: tsx scripts/smoke-even-split.ts <project-slug> <asset-id> [target_secs...]");
     process.exit(2);
   }
@@ -52,12 +52,12 @@ async function main(): Promise<void> {
   await client.connect(clientTransport);
   try {
     const targetsLabel = targetArgs.length > 0 ? targetArgs.join(" ") : "10 (default)";
-    console.log(`/even-split @${assetId} ${targetsLabel} (project: ${projectSlug})`);
+    console.log(`/even-split @${assetId} ${targetsLabel} (project: ${bookId})`);
     const result = await client.callTool({
       name: "even_split",
       arguments: {
         asset_id: assetId,
-        project_slug: projectSlug,
+        book_id: bookId,
         ...(targetArgs.length > 0 ? { target_secs: targetArgs } : {}),
       },
     });
@@ -84,7 +84,7 @@ async function main(): Promise<void> {
       const c: ParsedChunk = parsed.chunks[i];
       const m = await client.callTool({
         name: "asset_manifest",
-        arguments: { asset_id: c.asset_id, project_slug: projectSlug },
+        arguments: { asset_id: c.asset_id, book_id: bookId },
       });
       const manifest = JSON.parse((m.content as TextContent)[0].text);
       const path = `${manifest.path}/original.mp4`;

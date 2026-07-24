@@ -26,7 +26,7 @@ function deriveImageName(imageAssetId: string): string {
 const generateGrokImagineImageSchema = {
   asset_id: z.string().optional().describe("Image asset ID (must be img-*)"),
   image_slugs: apicityStringArrayField(GrokImageToImageRequestSchema.shape.input.shape.image_urls, "Exactly one image slug (e.g., ['@img-sunset']). Used as fallback when asset_id is not provided."),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(GrokImageToImageRequestSchema.shape.input.shape.prompt, "Optional prompt to guide image transformation"),
   nsfw_checker: apicityField(GrokImageToImageRequestSchema.shape.input.shape.nsfw_checker, "Enable NSFW content safety filter"),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
@@ -40,7 +40,7 @@ export function generateGrokImagineImageDef(fs: Engine): ToolDef {
     description: "Generate an image from an image asset using Grok Imagine image-to-image. Creates a new img- asset and enqueues a background job. Requires at least one of asset_id or image_slugs.",
     schema: generateGrokImagineImageSchema,
     handler: async (args) => {
-      const { asset_id: rawAssetId, image_slugs, project_slug, prompt, _provider } = args as Args;
+      const { asset_id: rawAssetId, image_slugs, book_id, prompt, _provider } = args as Args;
 
       const isXai = _provider !== undefined && _provider.startsWith("xai");
       const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
@@ -64,7 +64,7 @@ export function generateGrokImagineImageDef(fs: Engine): ToolDef {
         return toolError(`asset_id must start with img-, got: ${asset_id}`);
       }
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return toolError(manifestResult.error.message);
       }
@@ -77,7 +77,7 @@ export function generateGrokImagineImageDef(fs: Engine): ToolDef {
 
       const imagePath = join(manifest.path, imageFile.name);
       const imgName = deriveImageName(asset_id);
-      const assetResult = await fs.artifacts.create("img", imgName, project_slug);
+      const assetResult = await fs.artifacts.create("img", imgName);
       if (!assetResult.ok) {
         return toolError(`Failed to create image asset: ${assetResult.error.message}`);
       }
@@ -93,7 +93,7 @@ export function generateGrokImagineImageDef(fs: Engine): ToolDef {
         imgAssetId,
         imgAssetDir,
         sourceImageId: asset_id,
-        projectSlug: project_slug,
+        bookId: book_id,
         ...(prompt !== undefined ? { prompt } : {}),
         ...(_provider !== undefined ? { _provider } : {}),
       } as unknown as Record<string, unknown>);

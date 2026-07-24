@@ -28,7 +28,7 @@ export interface ListAsset {
 }
 
 interface UseListAssetsResult {
-  listAssets: (projectSlug: string, sort?: "newest" | "oldest") => Promise<ListAsset[] | null>;
+  listAssets: (bookId: string, sort?: "newest" | "oldest") => Promise<ListAsset[] | null>;
   assets: ListAsset[] | undefined;
   clearAssets: () => void;
   removeAsset: (assetId: string) => void;
@@ -53,11 +53,11 @@ export function useListAssets(callTool: UseMcpResult["callTool"]): UseListAssets
   const requestSeqRef = useRef(0);
   const activeProjectRef = useRef<string | null>(null);
 
-  const listAssets = useCallback(async (projectSlug: string, sort?: "newest" | "oldest"): Promise<ListAsset[] | null> => {
+  const listAssets = useCallback(async (bookId: string, sort?: "newest" | "oldest"): Promise<ListAsset[] | null> => {
     const requestSeq = ++requestSeqRef.current;
-    activeProjectRef.current = projectSlug;
+    activeProjectRef.current = bookId;
     try {
-      const result = await callToolRef.current("list_assets", { project_slug: projectSlug, sort });
+      const result = await callToolRef.current("list_assets", { book_id: bookId, sort });
       if (result.isError) return null;
       const content = result.content as Array<{ type: string; text: string }>;
       const json = content[0].text;
@@ -65,7 +65,7 @@ export function useListAssets(callTool: UseMcpResult["callTool"]): UseListAssets
       if (!shouldApplyListAssetsResult(
         requestSeq,
         requestSeqRef.current,
-        projectSlug,
+        bookId,
         activeProjectRef.current,
       )) {
         return parsed.assets;

@@ -14,14 +14,14 @@ type MediaInput = { assetId: string; filename: string };
 async function resolveVideoSlugs(
   fs: Engine,
   rawSlugs: readonly string[],
-  projectSlug: string,
+  _bookId: string,
 ): Promise<{ ok: true; inputs: MediaInput[]; sourceVideoIds: string[] } | { ok: false; error: string }> {
   const inputs: MediaInput[] = [];
   const sourceVideoIds: string[] = [];
   for (const raw of rawSlugs) {
     const assetId = raw.replace(/^@/, "");
     if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slugs entries must be vid-* assets, got: ${assetId}` };
-    const manifest = await fs.files.manifest(assetId, projectSlug);
+    const manifest = await fs.files.manifest(assetId);
     if (!manifest.ok) return { ok: false, error: manifest.error.message };
     const file = findVideoFile(manifest.value.files);
     if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
@@ -34,14 +34,14 @@ async function resolveVideoSlugs(
 async function resolveAudioSlugs(
   fs: Engine,
   rawSlugs: readonly string[],
-  projectSlug: string,
+  _bookId: string,
 ): Promise<{ ok: true; inputs: MediaInput[]; sourceAudioIds: string[] } | { ok: false; error: string }> {
   const inputs: MediaInput[] = [];
   const sourceAudioIds: string[] = [];
   for (const raw of rawSlugs) {
     const assetId = raw.replace(/^@/, "");
     if (!assetId.startsWith("aud-")) return { ok: false, error: `audio_slugs entries must be aud-* assets, got: ${assetId}` };
-    const manifest = await fs.files.manifest(assetId, projectSlug);
+    const manifest = await fs.files.manifest(assetId);
     if (!manifest.ok) return { ok: false, error: manifest.error.message };
     const file = findAudioFile(manifest.value.files, assetId);
     if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
@@ -54,7 +54,7 @@ async function resolveAudioSlugs(
 const base = FalSeedance2p0ReferenceToVideoRequestSchema.shape;
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(base.prompt, "Video description (reference items can be mentioned as @Image1, @Video1, @Audio1, etc.)", { required: true }),
   image_slugs: apicityStringArrayField(base.image_urls, "0-9 reference image @slugs"),
   video_slugs: apicityStringArrayField(base.video_urls, "0-3 reference video @slugs (combined 2-15s)"),
@@ -75,7 +75,7 @@ export function generateSeedance2R2vFalDef(fs: Engine): ToolDef {
     schema,
     handler: async (args) => {
       const {
-        project_slug, prompt,
+        book_id, prompt,
         image_slugs, video_slugs, audio_slugs,
         resolution, duration, aspect_ratio, generate_audio, seed,
       } = args as Args;
@@ -102,16 +102,16 @@ export function generateSeedance2R2vFalDef(fs: Engine): ToolDef {
         return toolError("Total reference files across all modalities must not exceed 12");
       }
 
-      const resolvedImages = await resolveImageSlugs(fs, imgSlugs, project_slug);
+      const resolvedImages = await resolveImageSlugs(fs, imgSlugs, book_id);
       if (!resolvedImages.ok) return toolError(resolvedImages.error);
 
-      const resolvedVideos = await resolveVideoSlugs(fs, vidSlugs, project_slug);
+      const resolvedVideos = await resolveVideoSlugs(fs, vidSlugs, book_id);
       if (!resolvedVideos.ok) return toolError(resolvedVideos.error);
 
-      const resolvedAudios = await resolveAudioSlugs(fs, audSlugs, project_slug);
+      const resolvedAudios = await resolveAudioSlugs(fs, audSlugs, book_id);
       if (!resolvedAudios.ok) return toolError(resolvedAudios.error);
 
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "bytedance/seedance-2")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "bytedance/seedance-2")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return toolError(`Failed to create video asset: ${assetResult.error.message}`);
 
       const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
@@ -121,7 +121,7 @@ export function generateSeedance2R2vFalDef(fs: Engine): ToolDef {
         type: "generate_seedance2_r2v_fal",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         imageInputs: resolvedImages.inputs,
         videoInputs: resolvedVideos.inputs,

@@ -16,7 +16,7 @@ describe("insert_timeline_slot tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -32,7 +32,7 @@ describe("insert_timeline_slot tool", () => {
     await client.callTool({
       name: "set_timeline",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slots: [
           { slug: "vid-intro", volume: 75 },
           { slug: "vid-outro", audioFadeIn: 200 },
@@ -45,7 +45,7 @@ describe("insert_timeline_slot tool", () => {
 
     const result = await client.callTool({
       name: "insert_timeline_slot",
-      arguments: { project_slug: "test-proj", slot: "s02", position: "before" },
+      arguments: { book_id: "test-proj", slot: "s02", position: "before" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -64,14 +64,14 @@ describe("insert_timeline_slot tool", () => {
     await client.callTool({
       name: "set_timeline",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slots: [{ slug: "vid-a" }, { slug: "vid-b" }, { slug: "vid-c" }],
       },
     });
 
     const result = await client.callTool({
       name: "insert_timeline_slot",
-      arguments: { project_slug: "test-proj", slot: "s02", position: "after" },
+      arguments: { book_id: "test-proj", slot: "s02", position: "after" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -87,12 +87,12 @@ describe("insert_timeline_slot tool", () => {
   it("pads through a displayed virtual slot before inserting", async () => {
     await client.callTool({
       name: "set_timeline",
-      arguments: { project_slug: "test-proj", slots: [{ slug: "vid-a" }] },
+      arguments: { book_id: "test-proj", slots: [{ slug: "vid-a" }] },
     });
 
     const result = await client.callTool({
       name: "insert_timeline_slot",
-      arguments: { project_slug: "test-proj", slot: "s03", position: "after" },
+      arguments: { book_id: "test-proj", slot: "s03", position: "after" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -108,7 +108,7 @@ describe("insert_timeline_slot tool", () => {
   it.each(["slot2", "s00"])("rejects invalid slot identifier %s", async (slot) => {
     const result = await client.callTool({
       name: "insert_timeline_slot",
-      arguments: { project_slug: "test-proj", slot, position: "before" },
+      arguments: { book_id: "test-proj", slot, position: "before" },
     });
 
     expect(result.isError).toBe(true);
@@ -118,7 +118,7 @@ describe("insert_timeline_slot tool", () => {
   it("returns an error for a nonexistent project", async () => {
     const result = await client.callTool({
       name: "insert_timeline_slot",
-      arguments: { project_slug: "missing", slot: "s01", position: "after" },
+      arguments: { book_id: "missing", slot: "s01", position: "after" },
     });
 
     expect(result.isError).toBe(true);

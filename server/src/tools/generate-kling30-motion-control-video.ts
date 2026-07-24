@@ -31,7 +31,7 @@ type RefInput = { assetId: string; filename: string };
 const motionControlInput = KlingMotionControlRequestSchema.shape.input.shape;
 
 const generateKling30MotionControlVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(motionControlInput.prompt, "Optional motion description"),
   character_image_slugs: apicityStringArrayField(motionControlInput.input_urls, "Character image @slugs (input_urls)", { required: true }),
   motion_video_slugs: apicityStringArrayField(motionControlInput.video_urls, "Motion reference video @slugs (video_urls)", { required: true }),
@@ -50,7 +50,7 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
     schema: generateKling30MotionControlVideoSchema,
     handler: async (args) => {
       const {
-        project_slug, prompt,
+        book_id, prompt,
         character_image_slugs, motion_video_slugs,
         mode, character_orientation, background_source,
       } = args as Args;
@@ -68,7 +68,7 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
         if (!assetId.startsWith("img-") && !assetId.startsWith("char-")) {
           return { isError: true as const, content: [{ type: "text" as const, text: `character_image_slugs entries must be img-* or char-* assets, got: ${assetId}` }] };
         }
-        const manifest = await fs.files.manifest(assetId, project_slug);
+        const manifest = await fs.files.manifest(assetId);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
         const images = getImagesFromManifest(manifest.value.files);
         if (images.length === 0) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
@@ -85,7 +85,7 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
         if (!assetId.startsWith("vid-")) {
           return { isError: true as const, content: [{ type: "text" as const, text: `motion_video_slugs entries must be vid-* assets, got: ${assetId}` }] };
         }
-        const manifest = await fs.files.manifest(assetId, project_slug);
+        const manifest = await fs.files.manifest(assetId);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
         const file = findVideoFile(manifest.value.files);
         if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${assetId}` }] };
@@ -94,7 +94,7 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
 
       const baseName = prompt ? slugify(prompt) : imageInputs[0].assetId.replace(/^img-/, "");
       const videoName = `${modelSlug("kie", "kling-3.0/motion-control")}-${baseName || Date.now()}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
@@ -109,7 +109,7 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
         type: "generate_kling30_motion_control_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         imageInputs,
         videoInputs,
         sourceImageIds,

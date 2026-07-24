@@ -11,7 +11,7 @@ const klingTurboI2v = KlingV3TurboImageToVideoRequestSchema.shape.input.shape;
 const klingTurboT2v = KlingV3TurboTextToVideoRequestSchema.shape.input.shape;
 
 const generateKling30TurboVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(klingTurboT2v.prompt, "Video description", { required: true }),
   image_slugs: apicityStringArrayField(klingTurboI2v.image_urls, "0-1 reference image @slugs (optional)"),
   duration: apicityField(klingTurboT2v.duration, "Video duration: 3s-15s (default '5')"),
@@ -27,7 +27,7 @@ export function generateKling30TurboVideoDef(fs: Engine): ToolDef {
     description: "Generate a video using Kling 3.0 Turbo tier via KIE (text-to-video or image-to-video). Creates a new vid- asset and enqueues a background job.",
     schema: generateKling30TurboVideoSchema,
     handler: async (args) => {
-      const { project_slug, prompt, image_slugs, duration, resolution, aspect_ratio } = args as Args;
+      const { book_id, prompt, image_slugs, duration, resolution, aspect_ratio } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }] };
@@ -39,7 +39,7 @@ export function generateKling30TurboVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageSlug(fs, slug, project_slug);
+        const r = await resolveImageSlug(fs, slug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `image_slugs: ${r.error}` }] };
         imageInputs.push(r.value);
       }
@@ -48,7 +48,7 @@ export function generateKling30TurboVideoDef(fs: Engine): ToolDef {
       const model = isI2V ? "kling/v3-turbo-image-to-video" : "kling/v3-turbo-text-to-video";
 
       const videoName = `${modelSlug("kie", model)}-${slugify(prompt) || Date.now().toString(36)}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
@@ -61,7 +61,7 @@ export function generateKling30TurboVideoDef(fs: Engine): ToolDef {
         type: "generate_kling30_turbo_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         imageInputs,
         sourceImageIds,
         prompt,

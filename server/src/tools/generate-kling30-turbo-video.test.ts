@@ -26,7 +26,7 @@ describe("generate_kling30_turbo_video tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -45,7 +45,7 @@ describe("generate_kling30_turbo_video tool", () => {
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_turbo_video",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "a futuristic city",
       },
     });
@@ -57,7 +57,7 @@ describe("generate_kling30_turbo_video tool", () => {
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_turbo_video",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "a futuristic city",
         duration: "5",
         resolution: "720p",
@@ -75,14 +75,14 @@ describe("generate_kling30_turbo_video tool", () => {
 
   it("enqueues kling30_turbo job (image-to-video)", async () => {
     const fs = createEngineForTest(tempDir);
-    const imageAsset = await fs.artifacts.create("img", "source-img", "test-proj");
+    const imageAsset = await fs.artifacts.create("img", "source-img");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
-    await fs.files.write(imageAsset.value.slug, "original.png", await makePng(), "test-proj");
+    await fs.files.write(imageAsset.value.slug, "original.png", await makePng());
 
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_turbo_video",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "animate this image",
         image_slugs: [`@${imageAsset.value.slug}`],
       },

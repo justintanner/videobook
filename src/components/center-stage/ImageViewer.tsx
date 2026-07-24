@@ -75,9 +75,9 @@ function ImageContent({
 
 const IMAGE_BACK_TABS: BackTab[] = ['files', 'history']
 
-export function ImageViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, callTool, onClose, cropTarget, onCropConsumed }: {
+export function ImageViewer({ item, bookId, size, onSizeChange, flipped, onFlippedChange, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, callTool, onClose, cropTarget, onCropConsumed }: {
   item: MediaItem
-  projectSlug: string
+  bookId: string
   size: ViewerSize
   onSizeChange: (s: ViewerSize) => void
   flipped: boolean
@@ -105,7 +105,7 @@ export function ImageViewer({ item, projectSlug, size, onSizeChange, flipped, on
   }, [item, flipped, onFlippedChange])
 
   const bf = useViewerBackFace({
-    projectSlug,
+    bookId,
     itemId: item.id,
     callTool,
     flipped,
@@ -137,14 +137,14 @@ export function ImageViewer({ item, projectSlug, size, onSizeChange, flipped, on
     setCropMode(false)
     await callTool('crop_image', {
       asset_id: item.id,
-      project_slug: projectSlug,
+      book_id: bookId,
       ratio,
       x: rect.x,
       y: rect.y,
       w: rect.w,
       h: rect.h,
     })
-  }, [callTool, item.id, projectSlug])
+  }, [callTool, item.id, bookId])
 
   const handleCropCancel = useCallback(() => setCropMode(false), [])
 
@@ -274,7 +274,7 @@ export function ImageViewer({ item, projectSlug, size, onSizeChange, flipped, on
                 handleRestore={bf.handleRestore}
                 fetchHistory={bf.fetchHistory}
                 itemId={item.id}
-                projectSlug={projectSlug}
+                bookId={bookId}
               />
             )}
           </div>

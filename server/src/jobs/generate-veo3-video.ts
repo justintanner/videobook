@@ -13,7 +13,7 @@ type GenerateVeo3VideoPayload = {
   veoModel: VeoModel;
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   imageInputs: RefInput[];
   sourceImageIds: string[];
   prompt: string;
@@ -21,10 +21,10 @@ type GenerateVeo3VideoPayload = {
   seed?: number;
 };
 
-async function uploadAll(fs: Engine, inputs: RefInput[], projectSlug: string): Promise<string[]> {
+async function uploadAll(fs: Engine, inputs: RefInput[], bookId: string): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename, projectSlug));
+    urls.push(await uploadAssetToKie(fs, assetId, filename, bookId));
   }
   return urls;
 }
@@ -33,14 +33,14 @@ export function registerGenerateVeo3VideoJob(fs: Engine): void {
   registerJobHandler("generate_veo3_video", async (payload, ctx) => {
     const {
       veoModel,
-      vidAssetId, vidAssetDir, projectSlug,
+      vidAssetId, vidAssetDir, bookId,
       imageInputs, sourceImageIds,
       prompt, aspect_ratio, seed,
     } = payload as unknown as GenerateVeo3VideoPayload;
 
     requireApiKey("KIE_API_KEY");
 
-    const imageUrls = await uploadAll(fs, imageInputs, projectSlug);
+    const imageUrls = await uploadAll(fs, imageInputs, bookId);
 
     const request = buildVeo3VideoPayload(
       veoModel,
@@ -55,7 +55,7 @@ export function registerGenerateVeo3VideoJob(fs: Engine): void {
       taskType: "seedance2_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         apiModel: veoModel,
         sourceImageIds,

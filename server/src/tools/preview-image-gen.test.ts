@@ -16,7 +16,7 @@ describe("preview_image tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -29,12 +29,12 @@ describe("preview_image tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "sunset.png", data },
+      arguments: { book_id: "test-proj", filename: "sunset.png", data },
     });
 
     const result = await client.callTool({
       name: "prepare_image_generation",
-      arguments: { prompt: "edit @img-sunset to be colorful", project_slug: "test-proj" },
+      arguments: { prompt: "edit @img-sunset to be colorful", book_id: "test-proj" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -55,7 +55,7 @@ describe("preview_image tool", () => {
   it("returns preview with empty resolved_assets when prompt has no @tags", async () => {
     const result = await client.callTool({
       name: "prepare_image_generation",
-      arguments: { prompt: "a sunset landscape", project_slug: "test-proj" },
+      arguments: { prompt: "a sunset landscape", book_id: "test-proj" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -71,7 +71,7 @@ describe("preview_image tool", () => {
   it("includes unresolved @tag warnings in the preview", async () => {
     const result = await client.callTool({
       name: "prepare_image_generation",
-      arguments: { prompt: "transform @img-nonexistent", project_slug: "test-proj" },
+      arguments: { prompt: "transform @img-nonexistent", book_id: "test-proj" },
     });
 
     expect(result.isError).toBeFalsy();

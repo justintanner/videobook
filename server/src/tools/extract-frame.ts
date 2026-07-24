@@ -44,12 +44,12 @@ async function probeVideo(filePath: string): Promise<ProbeResult> {
 
 async function extractFrame(
   videoAssetId: string,
-  projectSlug: string,
+  bookId: string,
   mode: "first" | "last" | "custom",
   fs: Engine,
   customTimestamp?: number,
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
-  const manifestResult = await fs.files.manifest(videoAssetId, projectSlug);
+  const manifestResult = await fs.files.manifest(videoAssetId);
   if (!manifestResult.ok) {
     return {
       isError: true,
@@ -88,7 +88,7 @@ async function extractFrame(
     ? `${baseName}-frame-${String(Math.round((customTimestamp ?? 0) * 100) / 100).replace(".", "-")}s`
     : `${baseName}-${mode}-frame`;
 
-  const assetResult = await fs.artifacts.create("img", imageName, projectSlug);
+  const assetResult = await fs.artifacts.create("img", imageName);
   if (!assetResult.ok) {
     return {
       isError: true,
@@ -107,7 +107,7 @@ async function extractFrame(
     imageAssetId,
     imageAssetDir,
     sourceVideoId: videoAssetId,
-    projectSlug,
+    bookId,
     width: probe.width,
     height: probe.height,
     mode,
@@ -123,7 +123,7 @@ async function extractFrame(
 
 const extractFrameSchema = {
   asset_id: z.string().describe("Video asset ID (e.g. vid-my-video)"),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
 };
 
 export function extractFrameDefs(fs: Engine): ToolDef[] {
@@ -133,8 +133,8 @@ export function extractFrameDefs(fs: Engine): ToolDef[] {
       description: "Extract the first frame of a video asset as a new image asset (JPEG). Uses 0.1s offset to avoid black frames.",
       schema: extractFrameSchema,
       handler: async (args) => {
-        const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
-        return extractFrame(asset_id, project_slug, "first", fs);
+        const { asset_id, book_id } = args as { asset_id: string; book_id: string };
+        return extractFrame(asset_id, book_id, "first", fs);
       },
     },
     {
@@ -142,8 +142,8 @@ export function extractFrameDefs(fs: Engine): ToolDef[] {
       description: "Extract the last frame of a video asset as a new image asset (JPEG). Uses duration-0.1s to avoid fade-out.",
       schema: extractFrameSchema,
       handler: async (args) => {
-        const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
-        return extractFrame(asset_id, project_slug, "last", fs);
+        const { asset_id, book_id } = args as { asset_id: string; book_id: string };
+        return extractFrame(asset_id, book_id, "last", fs);
       },
     },
     {
@@ -151,16 +151,16 @@ export function extractFrameDefs(fs: Engine): ToolDef[] {
       description: "Extract a frame at a specific timestamp from a video asset as a new image asset (JPEG).",
       schema: {
         asset_id: z.string().describe("Video asset ID (e.g. vid-my-video)"),
-        project_slug: z.string().describe("Project slug"),
+        book_id: z.string().describe("Project slug"),
         timestamp: z.number().describe("Timestamp in seconds to extract the frame from"),
       },
       handler: async (args) => {
-        const { asset_id, project_slug, timestamp } = args as {
+        const { asset_id, book_id, timestamp } = args as {
           asset_id: string;
-          project_slug: string;
+          book_id: string;
           timestamp: number;
         };
-        return extractFrame(asset_id, project_slug, "custom", fs, timestamp);
+        return extractFrame(asset_id, book_id, "custom", fs, timestamp);
       },
     },
   ];

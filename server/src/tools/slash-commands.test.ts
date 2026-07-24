@@ -41,7 +41,7 @@ describe("slash_commands tool", () => {
   it("returns all hardcoded commands", async () => {
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
 
     const result = await client.callTool({
@@ -145,41 +145,41 @@ describe("slash_commands tool", () => {
 
     const timewarp = commands.find((c) => c.command === "/timewarp")!;
     expect(timewarp.mcpTool?.tool).toBe("timewarp_video");
-    expect(timewarp.mcpTool?.autoInject).toContain("project_slug");
+    expect(timewarp.mcpTool?.autoInject).toContain("book_id");
     expect(timewarp.params.map((p) => p.name)).toEqual(["asset_id", "range", "factor"]);
 
     const insertSlot = commands.find((c) => c.command === "/insert-slot")!;
     expect(insertSlot.mcpTool?.tool).toBe("insert_timeline_slot");
-    expect(insertSlot.mcpTool?.autoInject).toContain("project_slug");
+    expect(insertSlot.mcpTool?.autoInject).toContain("book_id");
     expect(insertSlot.params.map((p) => p.name)).toEqual(["slot", "position"]);
 
     const removeSlot = commands.find((c) => c.command === "/remove-slot")!;
     expect(removeSlot.mcpTool?.tool).toBe("remove_timeline_slot");
-    expect(removeSlot.mcpTool?.autoInject).toContain("project_slug");
+    expect(removeSlot.mcpTool?.autoInject).toContain("book_id");
     expect(removeSlot.params.map((p) => p.name)).toEqual(["slot"]);
 
     const syncAudio = commands.find((c) => c.command === "/sync-audio")!;
     expect(syncAudio.mcpTool?.tool).toBe("sync_video_to_audio");
-    expect(syncAudio.mcpTool?.autoInject).toContain("project_slug");
+    expect(syncAudio.mcpTool?.autoInject).toContain("book_id");
     expect(syncAudio.params.map((p) => p.name)).toEqual(["asset_id", "mappings"]);
 
     const qart = commands.find((c) => c.command === "/qart")!;
     expect(qart.mcpTool?.tool).toBe("create_qart");
-    expect(qart.mcpTool?.autoInject).toContain("project_slug");
+    expect(qart.mcpTool?.autoInject).toContain("book_id");
     expect(qart.params.map((p) => p.name)).toEqual(["image_slug", "value"]);
 
     expect(commandNames).toContain("/qrbtf");
 
     const qrbtf = commands.find((c) => c.command === "/qrbtf")!;
     expect(qrbtf.mcpTool?.tool).toBe("create_qrbtf");
-    expect(qrbtf.mcpTool?.autoInject).toContain("project_slug");
+    expect(qrbtf.mcpTool?.autoInject).toContain("book_id");
     expect(qrbtf.params.map((p) => p.name)).toEqual(["value", "style"]);
 
     expect(commandNames).not.toContain("/qr-outro");
     expect(commandNames).toContain("/outroqr");
     const qrOutro = commands.find((c) => c.command === "/outroqr")!;
     expect(qrOutro.mcpTool?.tool).toBe("create_qr_outro");
-    expect(qrOutro.mcpTool?.autoInject).toContain("project_slug");
+    expect(qrOutro.mcpTool?.autoInject).toContain("book_id");
     expect(qrOutro.mcpTool?.injectParams).toEqual({
       duration_seconds: 10,
       include_audio: true,
@@ -190,7 +190,7 @@ describe("slash_commands tool", () => {
 
     const cleanAudio = commands.find((c) => c.command === "/clean-audio")!;
     expect(cleanAudio.mcpTool?.tool).toBe("clean_video_audio");
-    expect(cleanAudio.mcpTool?.autoInject).toContain("project_slug");
+    expect(cleanAudio.mcpTool?.autoInject).toContain("book_id");
     expect(cleanAudio.params.map((p) => p.name)).toEqual([
       "asset_id",
       "add_light_music",
@@ -198,7 +198,7 @@ describe("slash_commands tool", () => {
 
     const applySfx = commands.find((c) => c.command === "/apply-sfx")!;
     expect(applySfx.mcpTool?.tool).toBe("apply_sfx");
-    expect(applySfx.mcpTool?.autoInject).toContain("project_slug");
+    expect(applySfx.mcpTool?.autoInject).toContain("book_id");
     expect(applySfx.params.map((p) => p.name)).toEqual([
       "asset_id",
       "timestamp",
@@ -208,7 +208,7 @@ describe("slash_commands tool", () => {
 
     const audioMix = commands.find((c) => c.command === "/audio-mix")!;
     expect(audioMix.mcpTool?.tool).toBe("audio_mix");
-    expect(audioMix.mcpTool?.autoInject).toContain("project_slug");
+    expect(audioMix.mcpTool?.autoInject).toContain("book_id");
     expect(audioMix.params.map((p) => p.name)).toEqual([
       "target_asset_id",
       "layer_asset_id",
@@ -217,7 +217,7 @@ describe("slash_commands tool", () => {
 
     const splice = commands.find((c) => c.command === "/splice")!;
     expect(splice.mcpTool?.tool).toBe("splice_video");
-    expect(splice.mcpTool?.autoInject).toContain("project_slug");
+    expect(splice.mcpTool?.autoInject).toContain("book_id");
     expect(splice.params.map((p) => p.name)).toEqual([
       "first_asset_id",
       "second_asset_id",
@@ -227,7 +227,7 @@ describe("slash_commands tool", () => {
 
     const sceneConcat = commands.find((c) => c.command === "/scene-concat")!;
     expect(sceneConcat.mcpTool?.tool).toBe("smooth_scene_concat");
-    expect(sceneConcat.mcpTool?.autoInject).toContain("project_slug");
+    expect(sceneConcat.mcpTool?.autoInject).toContain("book_id");
     expect(sceneConcat.params.map((p) => p.name)).toEqual([
       "first_asset_id",
       "second_asset_id",
@@ -237,7 +237,7 @@ describe("slash_commands tool", () => {
 
     const extendAudio = commands.find((c) => c.command === "/extend-audio")!;
     expect(extendAudio.mcpTool?.tool).toBe("extend_audio_asset");
-    expect(extendAudio.mcpTool?.autoInject).toContain("project_slug");
+    expect(extendAudio.mcpTool?.autoInject).toContain("book_id");
     expect(extendAudio.params.map((p) => p.name)).toEqual([
       "asset_id",
       "target_duration_seconds",
@@ -246,7 +246,7 @@ describe("slash_commands tool", () => {
 
     const removeSound = commands.find((c) => c.command === "/remove-sound")!;
     expect(removeSound.mcpTool?.tool).toBe("remove_sound");
-    expect(removeSound.mcpTool?.autoInject).toContain("project_slug");
+    expect(removeSound.mcpTool?.autoInject).toContain("book_id");
     expect(removeSound.params.map((p) => p.name)).toEqual([
       "asset_id",
       "sound",
@@ -254,7 +254,7 @@ describe("slash_commands tool", () => {
 
     const injectFirstFrame = commands.find((c) => c.command === "/inject-first-frame")!;
     expect(injectFirstFrame.mcpTool?.tool).toBe("inject_first_frame");
-    expect(injectFirstFrame.mcpTool?.autoInject).toContain("project_slug");
+    expect(injectFirstFrame.mcpTool?.autoInject).toContain("book_id");
     expect(injectFirstFrame.params.map((p) => p.name)).toEqual([
       "target_asset_id",
       "image_asset_id",
@@ -286,7 +286,7 @@ describe("slash_commands tool", () => {
     const archive = commands.find((c) => c.command === "/archive")!;
     expect(archive.category).toBe("context_menu");
     expect(archive.mcpTool?.tool).toBe("archive_clip");
-    expect(archive.mcpTool?.autoInject).toContain("project_slug");
+    expect(archive.mcpTool?.autoInject).toContain("book_id");
 
     expect(commands.find((c) => c.command === "/trim-video")?.aliases).toContain("/trim");
     expect(commands.find((c) => c.command === "/render-video")?.aliases).toContain("/render");
@@ -297,7 +297,7 @@ describe("slash_commands tool", () => {
   it("does not return duplicate command names", async () => {
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
 
     const result = await client.callTool({
@@ -315,11 +315,11 @@ describe("slash_commands tool", () => {
   it("includes dynamic project commands", async () => {
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "alpha" },
+      arguments: { book_id: "alpha" },
     });
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "beta" },
+      arguments: { book_id: "beta" },
     });
 
     const result = await client.callTool({
@@ -342,7 +342,7 @@ describe("slash_commands tool", () => {
   it("every command has required fields", async () => {
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
 
     const result = await client.callTool({
@@ -368,7 +368,7 @@ describe("slash_commands tool", () => {
   it("mcpTool references point to registered tools", async () => {
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
 
     const result = await client.callTool({
@@ -403,7 +403,7 @@ describe("slash_commands tool", () => {
   it("canonical fields reference valid slash commands", async () => {
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
 
     const result = await client.callTool({
@@ -430,7 +430,7 @@ describe("slash_commands tool", () => {
   it("every command has either mcpTool, uiAction, or falls through to chat", async () => {
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
 
     const result = await client.callTool({
@@ -452,7 +452,7 @@ describe("slash_commands tool", () => {
   it("viewer commands have onMount=['viewer']", async () => {
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
 
     const result = await client.callTool({
@@ -489,7 +489,7 @@ describe("slash_commands tool", () => {
   it("skips dynamic project commands that collide with hardcoded names", async () => {
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "play" },
+      arguments: { book_id: "play" },
     });
 
     const result = await client.callTool({

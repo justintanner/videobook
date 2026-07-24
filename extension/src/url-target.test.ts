@@ -30,7 +30,7 @@ describe("extension URL targeting", () => {
   it("builds full-source download_video arguments", () => {
     expect(buildDownloadVideoArguments("https://example.com/video", "project-one")).toEqual({
       url: "https://example.com/video",
-      project_slug: "project-one",
+      book_id: "project-one",
       full: true,
       export_videos: false,
     });

@@ -13,10 +13,10 @@ export function suggestCutsDef(fs: Engine): ToolDef {
       "Requires a transcript — run /transcribe first if missing. Use /apply-cuts to splice the result.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-* or @vid-slug)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
+      const { asset_id, book_id } = args as { asset_id: string; book_id: string };
       const assetId = asset_id.replace(/^@/, "");
 
       if (!process.env.KIE_API_KEY) {
@@ -26,7 +26,7 @@ export function suggestCutsDef(fs: Engine): ToolDef {
         };
       }
 
-      const loaded = await loadAssetForAnalysis(fs, assetId, project_slug);
+      const loaded = await loadAssetForAnalysis(fs, assetId, book_id);
       if (!loaded.ok) {
         return {
           isError: true as const,
@@ -39,7 +39,7 @@ export function suggestCutsDef(fs: Engine): ToolDef {
         type: "suggest_cuts",
         assetId,
         assetDir: loaded.value.manifest.path,
-        projectSlug: project_slug,
+        bookId: book_id,
       });
 
       return {

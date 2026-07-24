@@ -33,7 +33,7 @@ describe("upload_file tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -47,7 +47,7 @@ describe("upload_file tool", () => {
     const result = await client.callTool({
       name: "upload_file",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         filename: "photo.png",
         data,
       },
@@ -57,7 +57,7 @@ describe("upload_file tool", () => {
     expect(parsed.assetId).toMatch(/^img-/);
     expect(parsed.filename).toBe("original.png");
 
-    const written = await fs.files.read(parsed.assetId, "original.png", "test-proj");
+    const written = await fs.files.read(parsed.assetId, "original.png");
     expect(written.ok && written.value.equals(MINIMAL_PNG)).toBe(true);
   });
 
@@ -66,7 +66,7 @@ describe("upload_file tool", () => {
     const result = await client.callTool({
       name: "upload_file",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         filename: "photo.png",
         data,
       },
@@ -77,7 +77,7 @@ describe("upload_file tool", () => {
     const origin = await fs.metadata.artifacts.read<{
       origin: string;
       processed_at: string;
-    }>(parsed.assetId, "original", "test-proj");
+    }>(parsed.assetId, "original");
     expect(origin.ok && origin.value.origin).toBe("upload");
     expect(origin.ok && origin.value.processed_at).toBeDefined();
   });
@@ -87,7 +87,7 @@ describe("upload_file tool", () => {
     const result = await client.callTool({
       name: "upload_file",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         filename: "script.md",
         data,
       },
@@ -102,7 +102,7 @@ describe("upload_file tool", () => {
     const result = await client.callTool({
       name: "upload_file",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         filename: "notes.txt",
         data,
       },
@@ -117,7 +117,7 @@ describe("upload_file tool", () => {
     const result = await client.callTool({
       name: "upload_file",
       arguments: {
-        project_slug: "no-such-project",
+        book_id: "no-such-project",
         filename: "photo.png",
         data,
       },

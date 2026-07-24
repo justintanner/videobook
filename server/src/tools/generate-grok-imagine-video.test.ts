@@ -29,7 +29,7 @@ describe("generate_grok_imagine_video tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -48,7 +48,7 @@ describe("generate_grok_imagine_video tool", () => {
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
         asset_id: "img-test",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -64,7 +64,7 @@ describe("generate_grok_imagine_video tool", () => {
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
         asset_id: "vid-something",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -80,7 +80,7 @@ describe("generate_grok_imagine_video tool", () => {
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
         asset_id: "img-does-not-exist",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -91,16 +91,16 @@ describe("generate_grok_imagine_video tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "empty-img", "test-proj");
+    const asset = await fs.artifacts.create("img", "empty-img");
     if (!asset.ok) throw new Error("Failed to create asset");
 
-    await fs.files.write(asset.value.slug, "notes.txt", "hello", "test-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
         asset_id: asset.value.slug,
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -113,19 +113,19 @@ describe("generate_grok_imagine_video tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "source-img", "test-proj");
+    const asset = await fs.artifacts.create("img", "source-img");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png);
 
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
         asset_id: asset.value.slug,
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -141,19 +141,19 @@ describe("generate_grok_imagine_video tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "str-dur", "test-proj");
+    const asset = await fs.artifacts.create("img", "str-dur");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 0, g: 255, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png);
 
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
         asset_id: asset.value.slug,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         duration: "6",
         mode: "fun",
         resolution: "720p",
@@ -171,12 +171,12 @@ describe("generate_grok_imagine_video tool", () => {
     const fs = createEngineForTest(tempDir);
     const ids: string[] = [];
     for (let i = 0; i < 7; i++) {
-      const a = await fs.artifacts.create("img", `ref-${i}`, "test-proj");
+      const a = await fs.artifacts.create("img", `ref-${i}`);
       if (!a.ok) throw new Error("Failed to create asset");
       const png = await sharp({
         create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
       }).png().toBuffer();
-      await fs.files.write(a.value.slug, "original.png", png, "test-proj");
+      await fs.files.write(a.value.slug, "original.png", png);
       ids.push(a.value.slug);
     }
 
@@ -184,7 +184,7 @@ describe("generate_grok_imagine_video tool", () => {
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
         image_slugs: ids,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         duration: 12,
       },
     });
@@ -201,12 +201,12 @@ describe("generate_grok_imagine_video tool", () => {
     const fs = createEngineForTest(tempDir);
     const ids: string[] = [];
     for (let i = 0; i < 8; i++) {
-      const a = await fs.artifacts.create("img", `over-${i}`, "test-proj");
+      const a = await fs.artifacts.create("img", `over-${i}`);
       if (!a.ok) throw new Error("Failed to create asset");
       const png = await sharp({
         create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
       }).png().toBuffer();
-      await fs.files.write(a.value.slug, "original.png", png, "test-proj");
+      await fs.files.write(a.value.slug, "original.png", png);
       ids.push(a.value.slug);
     }
 
@@ -214,7 +214,7 @@ describe("generate_grok_imagine_video tool", () => {
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
         image_slugs: ids,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         duration: 12,
       },
     });
@@ -228,18 +228,18 @@ describe("generate_grok_imagine_video tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "anchor-img", "test-proj");
+    const asset = await fs.artifacts.create("img", "anchor-img");
     if (!asset.ok) throw new Error("Failed to create asset");
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png);
 
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
         image_slugs: [asset.value.slug],
-        project_slug: "test-proj",
+        book_id: "test-proj",
         replace_audio_with: "@nb-1/s1.mp3",
       },
     });
@@ -252,18 +252,18 @@ describe("generate_grok_imagine_video tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "anchor2-img", "test-proj");
+    const asset = await fs.artifacts.create("img", "anchor2-img");
     if (!asset.ok) throw new Error("Failed to create asset");
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png);
 
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
         image_slugs: [asset.value.slug],
-        project_slug: "test-proj",
+        book_id: "test-proj",
         replace_audio_with: "vid-not-audio",
       },
     });
@@ -279,7 +279,7 @@ describe("generate_grok_imagine_video tool", () => {
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 

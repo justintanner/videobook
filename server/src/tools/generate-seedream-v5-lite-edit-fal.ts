@@ -10,7 +10,7 @@ import { apicityField, apicityStringArrayField, apicityStringField } from "./sch
 const seedream = FalSeedreamV5LiteEditRequestSchema.shape;
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(seedream.prompt, "Edit instruction", { required: true }),
   image_slugs: apicityStringArrayField(seedream.image_urls, "1-10 @img-* slugs for reference images", { required: true }),
   image_size: apicityField(seedream.image_size, "Output size preset"),
@@ -27,17 +27,17 @@ export function generateSeedreamV5LiteEditFalDef(fs: Engine): ToolDef {
     description: "Edit or compose images via fal.ai using ByteDance Seedream V5 Lite with one or more @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, image_slugs, image_size, auto_4K, num_images, max_images } = args as Args;
+      const { book_id, prompt, image_slugs, image_size, auto_4K, num_images, max_images } = args as Args;
       const prefix = "img";
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const resolved = await resolveImageSlugs(fs, image_slugs, project_slug);
+      const resolved = await resolveImageSlugs(fs, image_slugs, book_id);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.artifacts.create(prefix, `${modelSlug("kie", "seedream/5-lite-image-to-image")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create(prefix, `${modelSlug("kie", "seedream/5-lite-image-to-image")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
@@ -47,7 +47,7 @@ export function generateSeedreamV5LiteEditFalDef(fs: Engine): ToolDef {
         type: "generate_seedream_v5_lite_edit_fal",
         imgAssetId,
         imgAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         imageInputs: resolved.inputs,
         sourceImageIds: resolved.sourceImageIds,

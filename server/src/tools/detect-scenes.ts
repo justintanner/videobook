@@ -15,16 +15,16 @@ export function detectScenesDef(fs: Engine): ToolDef {
       ".detect-scenes.json and is useful as a standalone read-only diagnostic.",
     schema: {
       source_asset_id: z.string().describe("Video asset id (vid-*) inside the project"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args): Promise<ToolResult> => {
-      const { source_asset_id, project_slug } = args as {
+      const { source_asset_id, book_id } = args as {
         source_asset_id: string;
-        project_slug: string;
+        book_id: string;
       };
       const sourceAssetId = source_asset_id.replace(/^@/, "");
 
-      const manifestResult = await fs.files.manifest(sourceAssetId, project_slug, { includeDotfiles: false });
+      const manifestResult = await fs.files.manifest(sourceAssetId);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -44,7 +44,7 @@ export function detectScenesDef(fs: Engine): ToolDef {
         type: "detect_scenes",
         assetId: sourceAssetId,
         assetDir: manifestResult.value.path,
-        projectSlug: project_slug,
+        bookId: book_id,
       });
 
       return {

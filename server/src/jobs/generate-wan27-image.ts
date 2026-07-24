@@ -13,7 +13,7 @@ type GenerateWan27ImagePayload = {
   imgAssetId: string;
   imgAssetDir: string;
   sourceImageIds: string[];
-  projectSlug: string;
+  bookId: string;
   aspectRatio?: Wan27ImageRequest["input"]["aspect_ratio"];
   resolution?: Wan27ImageRequest["input"]["resolution"];
   seed?: number;
@@ -24,14 +24,14 @@ export function registerGenerateWan27ImageJob(fs: Engine): void {
   registerJobHandler("generate_wan27_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,
-      sourceImageIds, projectSlug, aspectRatio, resolution, seed, nsfwChecker,
+      sourceImageIds, bookId, aspectRatio, resolution, seed, nsfwChecker,
     } = payload as GenerateWan27ImagePayload;
 
     requireApiKey("KIE_API_KEY");
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetToKie(fs, srcAssetId, filename, projectSlug));
+      uploadedUrls.push(await uploadAssetToKie(fs, srcAssetId, filename, bookId));
     }
 
     const request = buildWan27ImagePayload(
@@ -43,7 +43,7 @@ export function registerGenerateWan27ImageJob(fs: Engine): void {
       taskType: "wan27_image",
       assetId: imgAssetId,
       assetDir: imgAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         sourceImageIds,
         prompt,

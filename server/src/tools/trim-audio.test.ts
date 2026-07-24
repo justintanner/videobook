@@ -59,7 +59,7 @@ describe("trim_audio tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -73,7 +73,7 @@ describe("trim_audio tool", () => {
       name: "trim_audio",
       arguments: {
         asset_id: "aud-test",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         trim_start: 1,
         cut_start: 2,
         cut_end: 3,
@@ -90,7 +90,7 @@ describe("trim_audio tool", () => {
       name: "trim_audio",
       arguments: {
         asset_id: "aud-does-not-exist",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         trim_start: 1,
       },
     });
@@ -100,15 +100,15 @@ describe("trim_audio tool", () => {
 
   it("returns error when asset has no audio file", async () => {
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("aud", "empty", "test-proj");
+    const asset = await fs.artifacts.create("aud", "empty");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.files.write(asset.value.slug, "notes.txt", "hello", "test-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "trim_audio",
       arguments: {
         asset_id: asset.value.slug,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         trim_start: 1,
       },
     });
@@ -120,14 +120,14 @@ describe("trim_audio tool", () => {
 
   it("rejects vid-* assets and directs callers to trim_video", async () => {
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("vid", "video-clip", "test-proj");
+    const asset = await fs.artifacts.create("vid", "video-clip");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const result = await client.callTool({
       name: "trim_audio",
       arguments: {
         asset_id: asset.value.slug,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         trim_start: 0.5,
       },
     });
@@ -140,19 +140,19 @@ describe("trim_audio tool", () => {
 
   it("trims real aud-* MP3 in keep mode", async () => {
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("aud", "music-clip", "test-proj");
+    const asset = await fs.artifacts.create("aud", "music-clip");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const genPath = join(tempDir, "temp-sine.mp3");
     await generateTestMp3(genPath, 3.0);
     const audioData = await readFile(genPath);
-    await fs.files.write(asset.value.slug, "original.mp3", audioData, "test-proj");
+    await fs.files.write(asset.value.slug, "original.mp3", audioData);
 
     const result = await client.callTool({
       name: "trim_audio",
       arguments: {
         asset_id: asset.value.slug,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         trim_start: 0.5,
         trim_end: 2.0,
       },
@@ -163,7 +163,7 @@ describe("trim_audio tool", () => {
     }
     expect(result.isError).toBeFalsy();
 
-    const manifestResult = await fs.files.manifest(asset.value.slug, "test-proj");
+    const manifestResult = await fs.files.manifest(asset.value.slug);
     expect(manifestResult.ok).toBe(true);
     if (!manifestResult.ok) return;
 
@@ -171,10 +171,7 @@ describe("trim_audio tool", () => {
     const duration = await probeAudioDuration(trimmedPath);
     expect(duration).toBeGreaterThan(1.3);
     expect(duration).toBeLessThan(1.7);
-    const provenance = await fs.metadata.artifacts.read<Record<string, unknown>>(
-      asset.value.slug,
-      "original",
-      "test-proj",
+    const provenance = await fs.metadata.artifacts.read<Record<string, unknown>>(asset.value.slug, "original"
     );
     expect(provenance.ok).toBe(true);
     if (provenance.ok) {
@@ -190,19 +187,19 @@ describe("trim_audio tool", () => {
 
   it("trims real aud-* MP3 in cut mode", async () => {
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("aud", "podcast-clip", "test-proj");
+    const asset = await fs.artifacts.create("aud", "podcast-clip");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const genPath = join(tempDir, "temp-sine.mp3");
     await generateTestMp3(genPath, 3.0);
     const audioData = await readFile(genPath);
-    await fs.files.write(asset.value.slug, "original.mp3", audioData, "test-proj");
+    await fs.files.write(asset.value.slug, "original.mp3", audioData);
 
     const result = await client.callTool({
       name: "trim_audio",
       arguments: {
         asset_id: asset.value.slug,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         cut_start: 1.0,
         cut_end: 2.0,
       },
@@ -210,7 +207,7 @@ describe("trim_audio tool", () => {
 
     expect(result.isError).toBeFalsy();
 
-    const manifestResult = await fs.files.manifest(asset.value.slug, "test-proj");
+    const manifestResult = await fs.files.manifest(asset.value.slug);
     expect(manifestResult.ok).toBe(true);
     if (!manifestResult.ok) return;
 
@@ -222,26 +219,26 @@ describe("trim_audio tool", () => {
 
   it("leaves the original intact when the requested range exceeds duration", async () => {
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("aud", "rollback-clip", "test-proj");
+    const asset = await fs.artifacts.create("aud", "rollback-clip");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const genPath = join(tempDir, "temp-sine.mp3");
     await generateTestMp3(genPath, 2.0);
     const originalData = await readFile(genPath);
-    await fs.files.write(asset.value.slug, "original.mp3", originalData, "test-proj");
+    await fs.files.write(asset.value.slug, "original.mp3", originalData);
 
     const result = await client.callTool({
       name: "trim_audio",
       arguments: {
         asset_id: asset.value.slug,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         trim_start: 0.5,
         trim_end: 8,
       },
     });
 
     expect(result.isError).toBe(true);
-    const restored = await fs.files.read(asset.value.slug, "original.mp3", "test-proj");
+    const restored = await fs.files.read(asset.value.slug, "original.mp3");
     expect(restored.ok).toBe(true);
     if (!restored.ok) return;
     expect(restored.value.equals(originalData)).toBe(true);

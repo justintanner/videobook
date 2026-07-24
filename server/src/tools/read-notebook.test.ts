@@ -33,7 +33,7 @@ describe("read_notebook tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -46,7 +46,7 @@ describe("read_notebook tool", () => {
     const written = await client.callTool({
       name: "write_notebook",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         name: "Storyboard",
         definition: NOTEBOOK_DEFINITION,
       },
@@ -56,7 +56,7 @@ describe("read_notebook tool", () => {
     const result = await client.callTool({
       name: "read_notebook",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         notebook_id: notebookId,
       },
     });
@@ -72,7 +72,7 @@ describe("read_notebook tool", () => {
     const result = await client.callTool({
       name: "read_notebook",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         notebook_id: "01900000-0000-7000-8000-000000000000",
       },
     });
@@ -88,7 +88,7 @@ describe("read_notebook tool", () => {
     const result = await client.callTool({
       name: "read_notebook",
       arguments: {
-        project_slug: "no-such-project",
+        book_id: "no-such-project",
         notebook_id: "01900000-0000-7000-8000-000000000000",
       },
     });

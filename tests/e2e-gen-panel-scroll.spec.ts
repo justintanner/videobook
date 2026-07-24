@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "playwright/test";
 
 const BASE = "http://localhost:5174";
-const PROJECT_SLUG = "happy-koala-71";
+const BOOK_ID = "happy-koala-71";
 
 test.setTimeout(120_000);
 
@@ -47,8 +47,8 @@ test.describe("gen panel scroll", () => {
     await page.waitForTimeout(3000);
 
     const headerText = await page.locator('button', { hasText: 'projects/' }).textContent();
-    if (!headerText?.includes(PROJECT_SLUG)) {
-      await switchProject(page, PROJECT_SLUG);
+    if (!headerText?.includes(BOOK_ID)) {
+      await switchProject(page, BOOK_ID);
     } else {
       await waitForAssetsLoaded(page);
     }

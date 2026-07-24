@@ -139,10 +139,10 @@ export function verifyXMentionsDef(): ToolDef {
     description: "Verify that @-mentions in post text are real X (Twitter) accounts using xAI live X search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.",
     schema: {
       text: z.string().min(1).max(MAX_TEXT_CHARS).describe("Post text containing @handles to verify"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { text } = args as { text: string; project_slug: string };
+      const { text } = args as { text: string; book_id: string };
 
       if (!process.env.XAI_API_KEY) {
         return toolError("XAI_API_KEY environment variable is not set");

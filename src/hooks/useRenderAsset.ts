@@ -9,18 +9,18 @@ interface RenderOutcome {
 }
 
 interface UseRenderAssetResult {
-  renderAsset: (assetId: string, projectSlug: string, orientation?: Orientation, settings?: RenderSettings) => Promise<RenderOutcome>;
+  renderAsset: (assetId: string, bookId: string, orientation?: Orientation, settings?: RenderSettings) => Promise<RenderOutcome>;
 }
 
 export function useRenderAsset(callTool: UseMcpResult["callTool"]): UseRenderAssetResult {
   const callToolRef = useRef(callTool);
   useEffect(() => { callToolRef.current = callTool; }, [callTool]);
 
-  const renderAsset = useCallback(async (assetId: string, projectSlug: string, orientation?: Orientation, settings?: RenderSettings): Promise<RenderOutcome> => {
+  const renderAsset = useCallback(async (assetId: string, bookId: string, orientation?: Orientation, settings?: RenderSettings): Promise<RenderOutcome> => {
     try {
       const args: Record<string, string | number | boolean> = {
         asset_id: assetId,
-        project_slug: projectSlug,
+        book_id: bookId,
       };
 
       if (orientation) {

@@ -25,12 +25,12 @@ export function describeImageDef(fs: Engine): ToolDef {
       "Analyze an image asset with vision and create a new script-* asset containing a reproduction-ready prompt (index.md). Returns immediately after enqueueing; reconcile_project_work reports status=\"generating\" until the markdown is written.",
     schema: {
       asset_id: z.string().describe("Image asset ID (img-*)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug } = args as {
+      const { asset_id, book_id } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
       };
 
       if (!asset_id.startsWith("img-")) {
@@ -41,7 +41,7 @@ export function describeImageDef(fs: Engine): ToolDef {
         return error("KIE_API_KEY is not set");
       }
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return error(manifestResult.error.message);
       }
@@ -52,7 +52,7 @@ export function describeImageDef(fs: Engine): ToolDef {
       }
 
       const scriptName = `desc ${asset_id.replace(/^img-/, "")}`;
-      const createResult = await fs.artifacts.create("script", scriptName, project_slug);
+      const createResult = await fs.artifacts.create("script", scriptName);
       if (!createResult.ok) {
         return error(`Failed to create script asset: ${createResult.error.message}`);
       }
@@ -64,7 +64,7 @@ export function describeImageDef(fs: Engine): ToolDef {
         sourceAssetId: asset_id,
         sourceImageFilename: imageFile.name,
         assetId: scriptAssetId,
-        projectSlug: project_slug,
+        bookId: book_id,
       } as unknown as Record<string, unknown>);
 
       return {

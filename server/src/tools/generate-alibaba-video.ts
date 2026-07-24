@@ -35,10 +35,10 @@ type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-async function resolveImageSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveImageSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("img-")) return { ok: false, error: `Frame slugs must be img-* assets, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
   if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
@@ -50,7 +50,7 @@ async function resolveImageSlug(fs: Engine, raw: string, projectSlug: string): P
 async function resolveSlashedSlug(
   fs: Engine,
   raw: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<ResolveOk | ResolveErr | null> {
   const stripped = raw.replace(/^@/, "");
   const slashIdx = stripped.indexOf("/");
@@ -58,31 +58,31 @@ async function resolveSlashedSlug(
   const assetId = stripped.slice(0, slashIdx);
   const filename = stripped.slice(slashIdx + 1);
   if (!assetId || !filename) return { ok: false, error: `Invalid slashed slug: ${raw}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = manifest.value.files.find((f) => f.name === filename);
   if (!file) return { ok: false, error: `File ${filename} not found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename } };
 }
 
-async function resolveVideoSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
-  const slashed = await resolveSlashedSlug(fs, raw, projectSlug);
+async function resolveVideoSlug(fs: Engine, raw: string, bookId: string): Promise<ResolveOk | ResolveErr> {
+  const slashed = await resolveSlashedSlug(fs, raw, bookId);
   if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("vid-")) return { ok: false, error: `Video slugs must be vid-* assets, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findVideoFile(manifest.value.files);
   if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-async function resolveAudioSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
-  const slashed = await resolveSlashedSlug(fs, raw, projectSlug);
+async function resolveAudioSlug(fs: Engine, raw: string, bookId: string): Promise<ResolveOk | ResolveErr> {
+  const slashed = await resolveSlashedSlug(fs, raw, bookId);
   if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("aud-")) return { ok: false, error: `Audio slugs must be aud-* assets, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findAudioFile(manifest.value.files, assetId);
   if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
@@ -90,7 +90,7 @@ async function resolveAudioSlug(fs: Engine, raw: string, projectSlug: string): P
 }
 
 const generateAlibabaVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(AlibabaVideoSynthesisInputSchema.shape.prompt, "Video description", { required: true }),
   negative_prompt: apicityStringField(AlibabaVideoSynthesisInputSchema.shape.negative_prompt, "Negative prompt — things to avoid"),
   model: apicityField(AlibabaVideoSynthesisModelSchema, "DashScope video model name ('wan2.7-i2v' or 'wan2.7-videoedit')", { required: true }),
@@ -117,7 +117,7 @@ export function generateAlibabaVideoDef(fs: Engine): ToolDef {
     schema: generateAlibabaVideoSchema,
     handler: async (args) => {
       const {
-        project_slug, prompt, negative_prompt, model,
+        book_id, prompt, negative_prompt, model,
         first_frame_slug, last_frame_slug, first_clip_slug, driving_audio_slug, video_slug,
         resolution, duration, prompt_extend, watermark, audio_setting, seed,
       } = args as Args;
@@ -138,41 +138,41 @@ export function generateAlibabaVideoDef(fs: Engine): ToolDef {
 
       let firstFrame: RefInput | undefined;
       if (first_frame_slug) {
-        const r = await resolveImageSlug(fs, first_frame_slug, project_slug);
+        const r = await resolveImageSlug(fs, first_frame_slug, book_id);
         if (!r.ok) return toolError(r.error);
         firstFrame = r.value;
       }
 
       let lastFrame: RefInput | undefined;
       if (last_frame_slug) {
-        const r = await resolveImageSlug(fs, last_frame_slug, project_slug);
+        const r = await resolveImageSlug(fs, last_frame_slug, book_id);
         if (!r.ok) return toolError(r.error);
         lastFrame = r.value;
       }
 
       let firstClip: RefInput | undefined;
       if (first_clip_slug) {
-        const r = await resolveVideoSlug(fs, first_clip_slug, project_slug);
+        const r = await resolveVideoSlug(fs, first_clip_slug, book_id);
         if (!r.ok) return toolError(r.error);
         firstClip = r.value;
       }
 
       let drivingAudio: RefInput | undefined;
       if (driving_audio_slug) {
-        const r = await resolveAudioSlug(fs, driving_audio_slug, project_slug);
+        const r = await resolveAudioSlug(fs, driving_audio_slug, book_id);
         if (!r.ok) return toolError(r.error);
         drivingAudio = r.value;
       }
 
       let videoRef: RefInput | undefined;
       if (video_slug) {
-        const r = await resolveVideoSlug(fs, video_slug, project_slug);
+        const r = await resolveVideoSlug(fs, video_slug, book_id);
         if (!r.ok) return toolError(r.error);
         videoRef = r.value;
       }
 
       const videoName = `alibaba-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return toolError(`Failed to create video asset: ${assetResult.error.message}`);
       }
@@ -188,7 +188,7 @@ export function generateAlibabaVideoDef(fs: Engine): ToolDef {
         type: "generate_alibaba_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         ...(negative_prompt !== undefined ? { negative_prompt } : {}),
         model: resolvedModel,

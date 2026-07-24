@@ -23,7 +23,7 @@ export function setVideoOverlayDef(fs: Engine): ToolDef {
       "Set or clear the on-screen graphic overlay on a video asset. Persists to the asset's render metadata for all orientations without rendering. Pass osg_asset_id=null to clear.",
     schema: {
       asset_id: z.string().describe("Video asset ID (e.g. vid-my-clip)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       osg_asset_id: z
         .string()
         .nullable()
@@ -58,7 +58,7 @@ export function setVideoOverlayDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const {
         asset_id,
-        project_slug,
+        book_id: _book_id,
         osg_asset_id,
         osg_position,
         osg_size,
@@ -68,7 +68,7 @@ export function setVideoOverlayDef(fs: Engine): ToolDef {
         osg_tail_seconds,
       } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         osg_asset_id: string | null;
         osg_position: (typeof OSG_POSITIONS)[number];
         osg_size: "small" | "medium" | "large";
@@ -81,10 +81,7 @@ export function setVideoOverlayDef(fs: Engine): ToolDef {
       const clearing = osg_asset_id == null;
 
       for (const orient of RENDER_ORIENTATIONS) {
-        const existing = await fs.metadata.artifacts.read<Record<string, unknown>>(
-          asset_id,
-          `${orient}.render`,
-          project_slug,
+        const existing = await fs.metadata.artifacts.read<Record<string, unknown>>(asset_id, `${orient}.render`
         );
         const base = existing.ok ? existing.value : {};
         const merged: Record<string, unknown> = {
@@ -114,7 +111,7 @@ export function setVideoOverlayDef(fs: Engine): ToolDef {
         } else if (clearing || windowProvided) {
           merged.osgTailSeconds = null;
         }
-        await fs.metadata.artifacts.write(asset_id, `${orient}.render`, merged, project_slug);
+        await fs.metadata.artifacts.write(asset_id, `${orient}.render`, merged);
       }
 
       return {

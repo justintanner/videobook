@@ -1,4 +1,4 @@
-import type { Engine } from "videobook-engine";
+import { bookManager } from "../fs.js";
 import type { ToolDef } from "./tool-def.js";
 import {
   VIDEO_EDITING_COMMANDS,
@@ -36,7 +36,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "args", type: "string[]", required: true, description: "Name of the character OR one or more image asset slugs" },
     ],
-    mcpTool: { tool: "create_character", autoInject: ["project_slug"] },
+    mcpTool: { tool: "create_character", autoInject: ["book_id"] },
   },
   {
     command: "/gf-characters",
@@ -77,7 +77,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Image asset to invert" },
     ],
-    mcpTool: { tool: "invert_image", autoInject: ["project_slug"] },
+    mcpTool: { tool: "invert_image", autoInject: ["book_id"] },
   },
   {
     command: "/pad",
@@ -92,7 +92,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Video asset to pad" },
       { name: "padding", type: "string", required: true, description: "Padding duration (e.g. 2s)" },
     ],
-    mcpTool: { tool: "pad_video", autoInject: ["project_slug"] },
+    mcpTool: { tool: "pad_video", autoInject: ["book_id"] },
   },
   {
     command: "/keywords",
@@ -107,7 +107,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Video asset with a timed transcript" },
       { name: "inputs", type: "string[]", required: false, description: "Exact transcript words, or: on [max] [linger] | off" },
     ],
-    mcpTool: { tool: "animate_keywords", adapter: "keywords", autoInject: ["project_slug"] },
+    mcpTool: { tool: "animate_keywords", adapter: "keywords", autoInject: ["book_id"] },
   },
   {
     command: "/download",
@@ -124,7 +124,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "end_time", type: "string", required: false, description: "Requested end time metadata (e.g. '60', '2:00', '3m')" },
       { name: "full", type: "boolean", required: false, description: "Deprecated; downloads are always full" },
     ],
-    mcpTool: { tool: "download_video", autoInject: ["project_slug"] },
+    mcpTool: { tool: "download_video", autoInject: ["book_id"] },
   },
   {
     command: "/upload",
@@ -189,7 +189,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to open folder for" },
     ],
-    mcpTool: { tool: "show_folder", autoInject: ["project_slug"] },
+    mcpTool: { tool: "show_folder", autoInject: ["book_id"] },
   },
   {
     command: "/describe",
@@ -203,7 +203,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Image asset to describe" },
     ],
-    mcpTool: { tool: "describe_image", autoInject: ["project_slug"] },
+    mcpTool: { tool: "describe_image", autoInject: ["book_id"] },
   },
   {
     command: "/suggest-cuts",
@@ -217,7 +217,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Video asset to analyze" },
     ],
-    mcpTool: { tool: "suggest_cuts", autoInject: ["project_slug"] },
+    mcpTool: { tool: "suggest_cuts", autoInject: ["book_id"] },
   },
   {
     command: "/recover",
@@ -231,7 +231,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Failed asset to recover" },
     ],
-    mcpTool: { tool: "recover_asset", autoInject: ["project_slug"] },
+    mcpTool: { tool: "recover_asset", autoInject: ["book_id"] },
   },
   {
     command: "/doctor",
@@ -246,7 +246,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: false, description: "Asset to diagnose; required to fix (e.g. @vid-florida). Omit for a full project scan." },
       { name: "fix", type: "boolean", required: false, description: "Restore the asset to its last usable state before the current error. Requires asset_id." },
     ],
-    mcpTool: { tool: "doctor", autoInject: ["project_slug"] },
+    mcpTool: { tool: "doctor", autoInject: ["book_id"] },
   },
   {
     command: "/analyze-jokes",
@@ -260,7 +260,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Video asset with an ElevenLabs transcript to analyze" },
     ],
-    mcpTool: { tool: "analyze_jokes", autoInject: ["project_slug"] },
+    mcpTool: { tool: "analyze_jokes", autoInject: ["book_id"] },
   },
   {
     command: "/suggest-sfx",
@@ -274,7 +274,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Video asset to analyze" },
     ],
-    mcpTool: { tool: "suggest_sfx", autoInject: ["project_slug"] },
+    mcpTool: { tool: "suggest_sfx", autoInject: ["book_id"] },
   },
   {
     command: "/apply-sfx",
@@ -291,7 +291,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "type", type: "string", required: true, description: "Short effect type such as whoosh, impact, or ding" },
       { name: "description", type: "string", required: true, description: "Description of the sound effect to generate" },
     ],
-    mcpTool: { tool: "apply_sfx", adapter: "apply_sfx", autoInject: ["project_slug"] },
+    mcpTool: { tool: "apply_sfx", adapter: "apply_sfx", autoInject: ["book_id"] },
   },
   {
     command: "/notebook",
@@ -317,7 +317,7 @@ const CANONICAL_COMMANDS: Command[] = [
     variant: "emerald",
     chevron: "down",
     params: [],
-    mcpTool: { tool: "list_notebooks", autoInject: ["project_slug"] },
+    mcpTool: { tool: "list_notebooks", autoInject: ["book_id"] },
   },
   {
     command: "/save",
@@ -358,7 +358,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "name", type: "string", required: true, description: "Prompt entity name" },
       { name: "prompt", type: "string", required: false, description: "Reusable prompt text" },
     ],
-    mcpTool: { tool: "create_prompt", autoInject: ["project_slug"] },
+    mcpTool: { tool: "create_prompt", autoInject: ["book_id"] },
   },
   {
     command: "/character-new",
@@ -373,7 +373,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "name", type: "string", required: true, description: "Character entity name" },
       { name: "prompt", type: "string", required: false, description: "Reusable character prompt" },
     ],
-    mcpTool: { tool: "create_character_entity", autoInject: ["project_slug"] },
+    mcpTool: { tool: "create_character_entity", autoInject: ["book_id"] },
   },
   {
     command: "/scene-new",
@@ -388,7 +388,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "name", type: "string", required: true, description: "Scene entity name" },
       { name: "prompt", type: "string", required: false, description: "Reusable scene prompt" },
     ],
-    mcpTool: { tool: "create_scene", autoInject: ["project_slug"] },
+    mcpTool: { tool: "create_scene", autoInject: ["book_id"] },
   },
   {
     command: "/entities",
@@ -486,7 +486,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "source_asset_id", type: "string", required: true, description: "Video asset id (vid-*) inside the project" },
     ],
-    mcpTool: { tool: "detect_scenes", autoInject: ["project_slug"] },
+    mcpTool: { tool: "detect_scenes", autoInject: ["book_id"] },
   },
   {
     command: "/rename-all",
@@ -529,7 +529,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "image_slug", type: "string", required: true, description: "Cover image asset (@img-*)" },
       { name: "value", type: "string", required: true, description: "URL or text to encode in the QR" },
     ],
-    mcpTool: { tool: "create_qart", autoInject: ["project_slug"] },
+    mcpTool: { tool: "create_qart", autoInject: ["book_id"] },
   },
   {
     command: "/qrbtf",
@@ -544,7 +544,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "value", type: "string", required: true, description: "URL or text to encode in the QR" },
       { name: "style", type: "string", required: false, description: "QR style: normal, line, dsj, bubble, or func (default: normal)" },
     ],
-    mcpTool: { tool: "create_qrbtf", autoInject: ["project_slug"] },
+    mcpTool: { tool: "create_qrbtf", autoInject: ["book_id"] },
   },
   {
     command: "/outroqr",
@@ -561,7 +561,7 @@ const CANONICAL_COMMANDS: Command[] = [
     mcpTool: {
       tool: "create_qr_outro",
       adapter: "qr_outro",
-      autoInject: ["project_slug"],
+      autoInject: ["book_id"],
       injectParams: { duration_seconds: 10, include_audio: true },
     },
   },
@@ -577,7 +577,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "image_slugs", type: "string[]", required: true, description: "One or two image assets (@img-*); one asset leaves the second slot empty" },
     ],
-    mcpTool: { tool: "concat_images", autoInject: ["project_slug"] },
+    mcpTool: { tool: "concat_images", autoInject: ["book_id"] },
   },
   {
     command: "/grok-upscale",
@@ -591,7 +591,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Grok-Imagine video asset to upscale" },
     ],
-    mcpTool: { tool: "upscale_kie_grok_imagine_video", autoInject: ["project_slug"] },
+    mcpTool: { tool: "upscale_kie_grok_imagine_video", autoInject: ["book_id"] },
   },
   {
     command: "/rewrite-script",
@@ -607,7 +607,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "platform", type: "string", required: false, description: "Platform preset: ig | tiktok | youtube" },
       { name: "custom_prompt", type: "string", required: false, description: "Optional transformation instruction" },
     ],
-    mcpTool: { tool: "rewrite_script", autoInject: ["project_slug"], injectParams: { variant: "full" } },
+    mcpTool: { tool: "rewrite_script", autoInject: ["book_id"], injectParams: { variant: "full" } },
   },
   {
     command: "/tldr",
@@ -623,7 +623,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "platform", type: "string", required: false, description: "Platform preset: ig | tiktok | youtube" },
       { name: "custom_prompt", type: "string", required: false, description: "Optional transformation instruction" },
     ],
-    mcpTool: { tool: "rewrite_script", autoInject: ["project_slug"], injectParams: { variant: "tldr" } },
+    mcpTool: { tool: "rewrite_script", autoInject: ["book_id"], injectParams: { variant: "tldr" } },
   },
   {
     command: "/copy-media",
@@ -637,7 +637,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to copy to clipboard" },
     ],
-    mcpTool: { tool: "copy_file_to_clipboard", autoInject: ["project_slug"] },
+    mcpTool: { tool: "copy_file_to_clipboard", autoInject: ["book_id"] },
     aliases: ["/copy-video"],
   },
   {
@@ -652,7 +652,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to export" },
     ],
-    mcpTool: { tool: "export_to_downloads", autoInject: ["project_slug"] },
+    mcpTool: { tool: "export_to_downloads", autoInject: ["book_id"] },
   },
   {
     command: "/duplicate",
@@ -667,7 +667,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Asset to duplicate" },
       { name: "new_name", type: "string", required: false, description: "Optional name for the copy" },
     ],
-    mcpTool: { tool: "duplicate_asset", autoInject: ["project_slug"] },
+    mcpTool: { tool: "duplicate_asset", autoInject: ["book_id"] },
   },
   {
     command: "/history",
@@ -709,7 +709,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to delete" },
     ],
-    mcpTool: { tool: "delete_asset", autoInject: ["project_slug"] },
+    mcpTool: { tool: "delete_asset", autoInject: ["book_id"] },
   },
   {
     command: "/rename",
@@ -724,7 +724,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Asset to rename" },
       { name: "new_name", type: "string", required: true, description: "New slug name" },
     ],
-    mcpTool: { tool: "rename_asset", autoInject: ["project_slug"] },
+    mcpTool: { tool: "rename_asset", autoInject: ["book_id"] },
   },
   {
     command: "/inject-first-frame",
@@ -740,7 +740,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "image_asset_id", type: "string", required: true, description: "Source img-* asset" },
       { name: "orientation", type: "string", required: false, description: "For final: landscape, portrait, or square" },
     ],
-    mcpTool: { tool: "inject_first_frame", autoInject: ["project_slug"] },
+    mcpTool: { tool: "inject_first_frame", autoInject: ["book_id"] },
   },
   {
     command: "/extract-first-frame",
@@ -754,7 +754,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Video asset to extract from" },
     ],
-    mcpTool: { tool: "extract_first_frame", autoInject: ["project_slug"] },
+    mcpTool: { tool: "extract_first_frame", autoInject: ["book_id"] },
   },
   {
     command: "/extract-last-frame",
@@ -768,7 +768,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Video asset to extract from" },
     ],
-    mcpTool: { tool: "extract_last_frame", autoInject: ["project_slug"] },
+    mcpTool: { tool: "extract_last_frame", autoInject: ["book_id"] },
   },
   {
     command: "/extract-audio",
@@ -782,7 +782,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Video asset to extract from" },
     ],
-    mcpTool: { tool: "extract_audio", autoInject: ["project_slug"] },
+    mcpTool: { tool: "extract_audio", autoInject: ["book_id"] },
   },
   {
     command: "/archive",
@@ -797,7 +797,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Video or audio asset to archive" },
       { name: "topics", type: "string[]", required: false, description: "Optional search topic tokens to attach" },
     ],
-    mcpTool: { tool: "archive_clip", autoInject: ["project_slug"] },
+    mcpTool: { tool: "archive_clip", autoInject: ["book_id"] },
   },
   {
     command: "/extend-audio",
@@ -813,7 +813,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "target_duration_seconds", type: "number", required: true, description: "Requested total duration in seconds" },
       { name: "continuation_prompt", type: "string", required: false, description: "Optional free-text direction for the continuation, e.g. add outro music" },
     ],
-    mcpTool: { tool: "extend_audio_asset", autoInject: ["project_slug"] },
+    mcpTool: { tool: "extend_audio_asset", autoInject: ["book_id"] },
   },
   {
     command: "/remove-sound",
@@ -828,7 +828,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Asset to edit in-place (vid-* or aud-*)" },
       { name: "sound", type: "string", required: true, description: "Sound to remove, e.g. horse neighing" },
     ],
-    mcpTool: { tool: "remove_sound", autoInject: ["project_slug"] },
+    mcpTool: { tool: "remove_sound", autoInject: ["book_id"] },
   },
   {
     command: "/audio-boost",
@@ -843,7 +843,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Asset to boost (vid-* or aud-*)" },
       { name: "boost", type: "number", required: true, description: "Volume multiplier (1.0–4.0). >1 = louder." },
     ],
-    mcpTool: { tool: "audio_boost", autoInject: ["project_slug"] },
+    mcpTool: { tool: "audio_boost", autoInject: ["book_id"] },
   },
   {
     command: "/audio-mix",
@@ -859,7 +859,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "layer_asset_id", type: "string", required: true, description: "Asset whose audio is layered on (vid-* or aud-*)" },
       { name: "volume", type: "number", required: true, description: "Layer volume percentage (0-100)" },
     ],
-    mcpTool: { tool: "audio_mix", autoInject: ["project_slug"] },
+    mcpTool: { tool: "audio_mix", autoInject: ["book_id"] },
   },
   {
     command: "/replace-audio",
@@ -874,7 +874,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Video asset whose audio is being replaced" },
       { name: "audio_asset_id", type: "string", required: true, description: "Audio asset providing the new audio track" },
     ],
-    mcpTool: { tool: "replace_video_audio", autoInject: ["project_slug"] },
+    mcpTool: { tool: "replace_video_audio", autoInject: ["book_id"] },
   },
   {
     command: "/splice",
@@ -890,7 +890,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "second_asset_id", type: "string", required: true, description: "Continuation video — its first frame is the search target" },
       { name: "overlap", type: "number", required: true, description: "Possible overlap in seconds; 0 means plain concatenation" },
     ],
-    mcpTool: { tool: "splice_video", autoInject: ["project_slug"] },
+    mcpTool: { tool: "splice_video", autoInject: ["book_id"] },
   },
   {
     command: "/scene-concat",
@@ -906,7 +906,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "second_asset_id", type: "string", required: true, description: "Second video in playback order" },
       { name: "transition_seconds", type: "number", required: false, description: "Optional fixed crossfade duration; omit for automatic audio alignment" },
     ],
-    mcpTool: { tool: "smooth_scene_concat", autoInject: ["project_slug"] },
+    mcpTool: { tool: "smooth_scene_concat", autoInject: ["book_id"] },
   },
   {
     command: "/assign",
@@ -921,7 +921,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Asset to assign" },
       { name: "slot", type: "string", required: true, description: "Timeline slot (e.g. @s01)" },
     ],
-    mcpTool: { tool: "assign_slot", autoInject: ["project_slug"] },
+    mcpTool: { tool: "assign_slot", autoInject: ["book_id"] },
   },
   {
     command: "/unassign",
@@ -935,7 +935,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "slot", type: "string", required: true, description: "Timeline slot (e.g. @s01)" },
     ],
-    mcpTool: { tool: "unassign_slot", autoInject: ["project_slug"] },
+    mcpTool: { tool: "unassign_slot", autoInject: ["book_id"] },
   },
   {
     command: "/insert-slot",
@@ -950,7 +950,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "slot", type: "string", required: true, description: "Timeline slot (e.g. @s01)" },
       { name: "position", type: "string", required: true, description: "Insert before or after the selected slot" },
     ],
-    mcpTool: { tool: "insert_timeline_slot", autoInject: ["project_slug"] },
+    mcpTool: { tool: "insert_timeline_slot", autoInject: ["book_id"] },
   },
   {
     command: "/remove-slot",
@@ -964,7 +964,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "slot", type: "string", required: true, description: "Stored timeline slot (e.g. @s01)" },
     ],
-    mcpTool: { tool: "remove_timeline_slot", autoInject: ["project_slug"] },
+    mcpTool: { tool: "remove_timeline_slot", autoInject: ["book_id"] },
   },
   {
     command: "/rewrite",
@@ -978,7 +978,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "prompt", type: "string", required: true, description: "The prompt to rewrite" },
     ],
-    mcpTool: { tool: "rewrite_prompt", autoInject: ["project_slug"] },
+    mcpTool: { tool: "rewrite_prompt", autoInject: ["book_id"] },
   },
   {
     command: "/clean-audio",
@@ -993,7 +993,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Video asset to clean in place (@vid-*)" },
       { name: "add_light_music", type: "boolean", required: false, description: "Set true to add a light instrumental music bed" },
     ],
-    mcpTool: { tool: "clean_video_audio", autoInject: ["project_slug"] },
+    mcpTool: { tool: "clean_video_audio", autoInject: ["book_id"] },
   },
   {
     command: "/vocals",
@@ -1007,7 +1007,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Asset to isolate vocals from" },
     ],
-    mcpTool: { tool: "isolate_vocals", autoInject: ["project_slug"] },
+    mcpTool: { tool: "isolate_vocals", autoInject: ["book_id"] },
   },
   {
     command: "/transcribe",
@@ -1021,7 +1021,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Video or audio asset to transcribe" },
     ],
-    mcpTool: { tool: "transcribe", autoInject: ["project_slug"] },
+    mcpTool: { tool: "transcribe", autoInject: ["book_id"] },
   },
   {
     command: "/subs",
@@ -1166,11 +1166,11 @@ const CANONICAL_COMMANDS: Command[] = [
     uiAction: "viewer_focus_file",
     onMount: ["viewer"],
   },
-  // ── Project management commands ──
+  // ── Book management commands ──
   {
-    command: "/projects",
-    description: "Open the project selector dropdown",
-    example: "/projects",
+    command: "/books",
+    description: "Open the book selector dropdown",
+    example: "/books",
     category: "project",
     icon: "FolderOpen",
     size: "default",
@@ -1178,48 +1178,6 @@ const CANONICAL_COMMANDS: Command[] = [
     chevron: "down",
     params: [],
     uiAction: "open_projects",
-  },
-  {
-    command: "/project-new",
-    description: "Create a new project and switch to it",
-    example: "/project-new summer-promo",
-    category: "project",
-    icon: "FolderPlus",
-    size: "default",
-    variant: "zinc",
-    chevron: "right",
-    params: [
-      { name: "project_slug", type: "string", required: true, description: "New project slug" },
-    ],
-    uiAction: "create_project",
-  },
-  {
-    command: "/project-rename",
-    description: "Rename the current project",
-    example: "/project-rename summer-promo-v2",
-    category: "project",
-    icon: "Pencil",
-    size: "default",
-    variant: "zinc",
-    chevron: "right",
-    params: [
-      { name: "new_slug", type: "string", required: true, description: "New slug for the current project" },
-    ],
-    uiAction: "rename_project",
-  },
-  {
-    command: "/project-delete",
-    description: "Delete a project (asks for confirmation; defaults to the current project)",
-    example: "/project-delete old-experiment",
-    category: "project",
-    icon: "Trash2",
-    size: "default",
-    variant: "zinc",
-    chevron: "right",
-    params: [
-      { name: "project_slug", type: "string", required: false, description: "Project to delete (default: current)" },
-    ],
-    uiAction: "delete_project",
   },
   // ── Layout / navigation commands ──
   {
@@ -1377,7 +1335,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "asset_id", type: "string", required: true, description: "Video asset to reverse" },
     ],
-    mcpTool: { tool: "reverse_video", autoInject: ["project_slug"] },
+    mcpTool: { tool: "reverse_video", autoInject: ["book_id"] },
   },
   {
     command: "/speed",
@@ -1392,7 +1350,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Video asset to retime" },
       { name: "speed", type: "string", required: true, description: "Speed multiplier (2) or target duration (8.32s)" },
     ],
-    mcpTool: { tool: "change_video_speed", adapter: "change_speed", autoInject: ["project_slug"] },
+    mcpTool: { tool: "change_video_speed", adapter: "change_speed", autoInject: ["book_id"] },
   },
   {
     command: "/timewarp",
@@ -1408,7 +1366,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "range", type: "string", required: true, description: "Selected range as start-end" },
       { name: "factor", type: "string", required: true, description: "Duration multiplier from 0.25x to 4x" },
     ],
-    mcpTool: { tool: "timewarp_video", adapter: "timewarp", autoInject: ["project_slug"] },
+    mcpTool: { tool: "timewarp_video", adapter: "timewarp", autoInject: ["book_id"] },
   },
   {
     command: "/sync-audio",
@@ -1423,7 +1381,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "asset_id", type: "string", required: true, description: "Video asset to synchronize" },
       { name: "mappings", type: "string", required: true, description: "Semicolon-separated video-time=audio-cue-or-time anchors" },
     ],
-    mcpTool: { tool: "sync_video_to_audio", adapter: "sync_audio", autoInject: ["project_slug"] },
+    mcpTool: { tool: "sync_video_to_audio", adapter: "sync_audio", autoInject: ["book_id"] },
   },
   {
     command: "/split",
@@ -1454,7 +1412,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "target_project", type: "string", required: true, description: "Target project slug" },
       { name: "new_name", type: "string", required: false, description: "Optional name for the exported asset" },
     ],
-    mcpTool: { tool: "export_asset_to_project", autoInject: ["project_slug"] },
+    mcpTool: { tool: "export_asset_to_project", autoInject: ["book_id"] },
   },
   {
     command: "/skeleton",
@@ -1482,7 +1440,7 @@ const CANONICAL_COMMANDS: Command[] = [
     params: [
       { name: "archive_ids", type: "string[]", required: true, description: "One or more archive IDs to restore" },
     ],
-    mcpTool: { tool: "restore_archive_clips", autoInject: ["project_slug"] },
+    mcpTool: { tool: "restore_archive_clips", autoInject: ["book_id"] },
   },
   // ── Activity commands ──
   {
@@ -1509,7 +1467,7 @@ const CANONICAL_COMMANDS: Command[] = [
     variant: "zinc",
     chevron: "right",
     params: [],
-    mcpTool: { tool: "clean_failed_assets", autoInject: ["project_slug"] },
+    mcpTool: { tool: "clean_failed_assets", autoInject: ["book_id"] },
   },
   // ── Character / voice commands ──
 
@@ -1539,7 +1497,7 @@ const CANONICAL_COMMANDS: Command[] = [
       { name: "voice_id", type: "string", required: true, description: "ElevenLabs voice ID" },
       { name: "text", type: "string", required: true, description: "Text to synthesize" },
     ],
-    mcpTool: { tool: "generate_elevenlabs_text_to_audio", autoInject: ["project_slug"] },
+    mcpTool: { tool: "generate_elevenlabs_text_to_audio", autoInject: ["book_id"] },
   },
   // ── X connect command ──
   {
@@ -1575,27 +1533,28 @@ export function getCanonicalCommands(): Command[] {
   return canonicalizeCommands(CANONICAL_COMMANDS);
 }
 
-export function commandsDef(fs: Engine): ToolDef {
+export function commandsDef(): ToolDef {
   return {
     name: "slash_commands",
     description: "List all available UI commands with scope metadata",
+    scope: "global",
     schema: {},
     handler: async () => {
       const commands: Command[] = [...CANONICAL_COMMANDS];
       const reserved = new Set(commands.flatMap((command) => [command.command, ...(command.aliases ?? [])]));
-      const projects = await fs.projects.list();
-      for (const p of projects) {
-        if (reserved.has(`/${p.slug}`)) continue;
+      await bookManager.ready();
+      for (const book of bookManager.list()) {
+        if (reserved.has(`/${book.slug}`)) continue;
         commands.push({
-          command: `/${p.slug}`,
-          description: `Switch to project ${p.slug}`,
+          command: `/${book.slug}`,
+          description: `Switch to book ${book.slug}`,
           category: "project",
           icon: "FolderOpen",
           size: "default",
           variant: "default",
           chevron: "down",
           params: [],
-          uiAction: "switch_project",
+          uiAction: "switch_book",
         });
       }
 

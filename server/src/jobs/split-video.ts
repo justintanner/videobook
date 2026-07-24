@@ -16,7 +16,7 @@ type SplitVideoPayload = {
   assetIdB: string;
   assetDirB: string;
   outputPathB: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 async function buildChunk(
@@ -27,11 +27,11 @@ async function buildChunk(
     start: number | undefined;
     end: number | undefined;
     assetId: string;
-    projectSlug: string;
+    bookId: string;
     provenance: Record<string, unknown>;
   },
 ): Promise<void> {
-  const { sourcePath, outputPath, start, end, assetId, projectSlug, provenance } = args;
+  const { sourcePath, outputPath, start, end, assetId, bookId, provenance } = args;
   try {
     await trimRange(sourcePath, outputPath, start, end);
     await assertSaneTrimOutput(sourcePath, outputPath);
@@ -41,13 +41,13 @@ async function buildChunk(
   }
   await ingestWorkspaceOutputs(
     fs,
-    projectSlug,
+    bookId,
     assetId,
     [outputPath.split("/").pop()!],
     "split_video",
     provenance,
   );
-  await fs.metadata.artifacts.write(assetId, "original", provenance, projectSlug);
+  await fs.metadata.artifacts.write(assetId, "original", provenance);
 }
 
 export function registerSplitVideoJob(fs: Engine): void {
@@ -59,7 +59,7 @@ export function registerSplitVideoJob(fs: Engine): void {
       chunkAEnd, chunkBStart,
       assetIdA, assetDirA, outputPathA,
       assetIdB, assetDirB, outputPathB,
-      projectSlug,
+      bookId,
     } = payload as SplitVideoPayload;
 
     const overlapSec = Math.max(0, chunkAEnd - chunkBStart);
@@ -91,13 +91,13 @@ export function registerSplitVideoJob(fs: Engine): void {
       buildChunk(fs, {
         sourcePath, outputPath: outputPathA,
         start: undefined, end: chunkAEnd,
-        assetId: assetIdA, projectSlug,
+        assetId: assetIdA, bookId,
         provenance: provenanceA,
       }),
       buildChunk(fs, {
         sourcePath, outputPath: outputPathB,
         start: chunkBStart, end: undefined,
-        assetId: assetIdB, projectSlug,
+        assetId: assetIdB, bookId,
         provenance: provenanceB,
       }),
     ]);
@@ -133,7 +133,7 @@ export function registerSplitVideoJob(fs: Engine): void {
           videoPath: c.videoPath,
           assetId: c.assetId,
           assetDir: c.assetDir,
-          projectSlug,
+          bookId,
           provenance: c.provenance,
         } as unknown as Record<string, unknown>),
       ),
@@ -145,7 +145,7 @@ export function registerSplitVideoJob(fs: Engine): void {
       if (r.status === "rejected") {
         const c = chunks[i];
         const reason = r.reason instanceof Error ? r.reason.message : String(r.reason);
-        await fs.jobs.failures.write(projectSlug, c.assetId, {
+        await fs.jobs.failures.write(c.assetId, {
           message: `split chunk ${c.label} was built but could not be queued for processing: ${reason}`,
           failCode: "split_enqueue_failed",
         });

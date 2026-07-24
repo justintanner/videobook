@@ -27,7 +27,7 @@ interface AssetMenuProps {
 
 interface ProjectExportPickerProps {
   assetId: string | null
-  projectSlug?: string
+  bookId?: string
   projects?: { slug: string }[]
   callTool?: UseMcpResult['callTool']
   onClose: () => void
@@ -171,14 +171,14 @@ async function copyPromptToClipboard(prompt: string) {
 
 export function ProjectExportPicker({
   assetId,
-  projectSlug,
+  bookId,
   projects,
   callTool,
   onClose,
   onAfterExport,
 }: ProjectExportPickerProps) {
   const [exportingTarget, setExportingTarget] = useState<string | null>(null)
-  const targetProjects = (projects ?? []).filter((p) => p.slug !== projectSlug)
+  const targetProjects = (projects ?? []).filter((p) => p.slug !== bookId)
 
   useEffect(() => {
     if (!assetId) return
@@ -192,12 +192,12 @@ export function ProjectExportPicker({
   if (!assetId) return null
 
   const exportToProject = async (target: string) => {
-    if (!callTool || !projectSlug) return
+    if (!callTool || !bookId) return
     setExportingTarget(target)
     try {
       const result = await callTool('export_asset_to_project', {
         asset_id: assetId,
-        project_slug: projectSlug,
+        book_id: bookId,
         target_project: target,
       })
       const isError = (result as { isError?: boolean }).isError === true

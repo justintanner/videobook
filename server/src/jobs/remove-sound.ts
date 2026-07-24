@@ -52,7 +52,7 @@ export type RemoveSoundPayload = {
   assetDir: string;
   filename: string;
   sound: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 export type RemoveSoundResult = {
@@ -297,7 +297,7 @@ export async function removeSoundWithElevenLabs(
     throw new Error(`Could not determine a valid duration for ${payload.assetId}`);
   }
 
-  const source = await fs.files.read(payload.assetId, payload.filename, payload.projectSlug);
+  const source = await fs.files.read(payload.assetId, payload.filename);
   if (!source.ok) throw new Error(`Failed to read ${payload.assetId}: ${source.error.message}`);
   const sourceBytes = new Uint8Array(source.value);
   const transcript = await provider.v1.speechToText({
@@ -328,14 +328,14 @@ export async function removeSoundWithElevenLabs(
     const outputPath = join(tempDir, `removed${extension}`);
     await renderSoundRemoval(inputPath, outputPath, payload.assetKind, segments, signal);
     const output = await readFile(outputPath);
-    const written = await fs.files.write(payload.assetId, payload.filename, output, payload.projectSlug);
+    const written = await fs.files.write(payload.assetId, payload.filename, output);
     if (!written.ok) throw new Error(`Failed to replace ${payload.filename}: ${written.error.message}`);
   } finally {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   }
 
   for (const filename of STALE_DERIVATIVES) {
-    const result = await fs.files.delete(payload.assetId, filename, payload.projectSlug);
+    const result = await fs.files.delete(payload.assetId, filename);
     if (!result.ok && result.error.code !== "NOT_FOUND") {
       throw new Error(`Failed to delete stale ${filename}: ${result.error.message}`);
     }
@@ -343,7 +343,7 @@ export async function removeSoundWithElevenLabs(
 
   if (payload.assetKind === "audio") {
     const peaks = await extractWaveform(inputPath);
-    const waveform = await fs.metadata.waveforms.write(payload.assetId, peaks, payload.projectSlug);
+    const waveform = await fs.metadata.waveforms.write(payload.assetId, peaks);
     if (!waveform.ok) throw new Error(`Failed to update audio waveform: ${waveform.error.message}`);
   }
 
@@ -368,7 +368,7 @@ export function registerRemoveSoundJob(fs: Engine): void {
 
     const result = await withLockedLocalLease(
       fs,
-      payload.projectSlug,
+      payload.bookId,
       payload.assetId,
       payload.assetDir,
       ctx,
@@ -384,7 +384,7 @@ export function registerRemoveSoundJob(fs: Engine): void {
         videoPath: join(payload.assetDir, payload.filename),
         assetId: payload.assetId,
         assetDir: payload.assetDir,
-        projectSlug: payload.projectSlug,
+        bookId: payload.bookId,
         provenance: {
           origin: "remove_sound",
           provider: "elevenlabs",

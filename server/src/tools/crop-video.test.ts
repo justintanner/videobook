@@ -30,14 +30,14 @@ async function generateTestVideo(outputPath: string): Promise<void> {
 
 async function uploadVideo(
   client: Client,
-  projectSlug: string,
+  bookId: string,
   videoPath: string,
 ): Promise<{ assetId: string; path: string }> {
   const { readFile } = await import("node:fs/promises");
   const data = (await readFile(videoPath)).toString("base64");
   const result = await client.callTool({
     name: "upload_file",
-    arguments: { project_slug: projectSlug, filename: "original.mp4", data },
+    arguments: { book_id: bookId, filename: "original.mp4", data },
   });
   return JSON.parse((result.content as TextContent)[0].text);
 }
@@ -85,7 +85,7 @@ describe("crop_video tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "crop-proj" },
+      arguments: { book_id: "crop-proj" },
     });
   });
 
@@ -106,7 +106,7 @@ describe("crop_video tool", () => {
 
     const result = await client.callTool({
       name: "crop_video",
-      arguments: { asset_id: uploaded.assetId, project_slug: "crop-proj", ratio: "9:16", x, y, w, h },
+      arguments: { asset_id: uploaded.assetId, book_id: "crop-proj", ratio: "9:16", x, y, w, h },
     });
 
     expect(result.isError).toBeFalsy();
@@ -131,7 +131,7 @@ describe("crop_video tool", () => {
 
     const result = await client.callTool({
       name: "crop_video",
-      arguments: { asset_id: uploaded.assetId, project_slug: "crop-proj", ratio: "1:1", x, y, w, h },
+      arguments: { asset_id: uploaded.assetId, book_id: "crop-proj", ratio: "1:1", x, y, w, h },
     });
 
     expect(result.isError).toBeFalsy();
@@ -151,7 +151,7 @@ describe("crop_video tool", () => {
 
     const result = await client.callTool({
       name: "crop_video",
-      arguments: { asset_id: uploaded.assetId, project_slug: "crop-proj", ratio: "16:9", x, y, w, h },
+      arguments: { asset_id: uploaded.assetId, book_id: "crop-proj", ratio: "16:9", x, y, w, h },
     });
 
     expect(result.isError).toBeFalsy();
@@ -165,7 +165,7 @@ describe("crop_video tool", () => {
 
     const result = await client.callTool({
       name: "crop_video",
-      arguments: { asset_id: uploaded.assetId, project_slug: "crop-proj", ratio: "1:1", x: 0.5, y: 0, w: 0.7, h: 1.0 },
+      arguments: { asset_id: uploaded.assetId, book_id: "crop-proj", ratio: "1:1", x: 0.5, y: 0, w: 0.7, h: 1.0 },
     });
 
     expect(result.isError).toBe(true);
@@ -180,7 +180,7 @@ describe("crop_video tool", () => {
     // Use a non-16:9 fraction (0.3 x 0.5 → 576x540 ≈ 1.067) against ratio "16:9".
     const result = await client.callTool({
       name: "crop_video",
-      arguments: { asset_id: uploaded.assetId, project_slug: "crop-proj", ratio: "16:9", x: 0.1, y: 0.1, w: 0.3, h: 0.5 },
+      arguments: { asset_id: uploaded.assetId, book_id: "crop-proj", ratio: "16:9", x: 0.1, y: 0.1, w: 0.3, h: 0.5 },
     });
 
     expect(result.isError).toBe(true);
@@ -191,7 +191,7 @@ describe("crop_video tool", () => {
   it("returns error for nonexistent asset", async () => {
     const result = await client.callTool({
       name: "crop_video",
-      arguments: { asset_id: "vid-does-not-exist", project_slug: "crop-proj", ratio: "1:1", x: 0, y: 0, w: 0.5, h: 0.5 },
+      arguments: { asset_id: "vid-does-not-exist", book_id: "crop-proj", ratio: "1:1", x: 0, y: 0, w: 0.5, h: 0.5 },
     });
 
     expect(result.isError).toBe(true);
@@ -201,13 +201,13 @@ describe("crop_video tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "crop-proj", filename: "photo.png", data },
+      arguments: { book_id: "crop-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse((uploadResult.content as TextContent)[0].text);
 
     const result = await client.callTool({
       name: "crop_video",
-      arguments: { asset_id: uploaded.assetId, project_slug: "crop-proj", ratio: "1:1", x: 0.1, y: 0.1, w: 0.5, h: 0.5 },
+      arguments: { asset_id: uploaded.assetId, book_id: "crop-proj", ratio: "1:1", x: 0.1, y: 0.1, w: 0.5, h: 0.5 },
     });
 
     expect(result.isError).toBe(true);

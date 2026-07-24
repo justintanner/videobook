@@ -14,20 +14,20 @@ type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-async function resolveVideoSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveVideoSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slug must be a vid-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findVideoFile(manifest.value.files);
   if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-async function resolveAudioSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveAudioSlug(fs: Engine, raw: string, _bookId: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("aud-")) return { ok: false, error: `audio_slug must be an aud-* asset, got: ${assetId}` };
-  const manifest = await fs.files.manifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findAudioFile(manifest.value.files, assetId);
   if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
@@ -35,7 +35,7 @@ async function resolveAudioSlug(fs: Engine, raw: string, projectSlug: string): P
 }
 
 const generateVolcengineLipsyncVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   video_slug: apicityStringField(volcengineLipSync.video_url, "Source video asset to lip-sync (e.g., @vid-scene)", { required: true }),
   audio_slug: apicityStringField(volcengineLipSync.audio_url, "Driving audio asset whose speech drives the lips (e.g., @aud-voice)", { required: true }),
   mode: apicityField(volcengineLipSync.mode, "Quality mode: lite (faster) or basic", { required: true }),
@@ -56,7 +56,7 @@ export function generateVolcengineLipsyncVideoDef(fs: Engine): ToolDef {
     schema: generateVolcengineLipsyncVideoSchema,
     handler: async (args) => {
       const {
-        project_slug, video_slug, audio_slug,
+        book_id, video_slug, audio_slug,
         mode, separate_vocal, open_scenedet, align_audio, align_audio_reverse, templ_start_seconds,
       } = args as Args;
 
@@ -74,16 +74,16 @@ export function generateVolcengineLipsyncVideoDef(fs: Engine): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "Volcengine lip-sync requires audio_slug" }] };
       }
 
-      const videoResult = await resolveVideoSlug(fs, video_slug, project_slug);
+      const videoResult = await resolveVideoSlug(fs, video_slug, book_id);
       if (!videoResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoResult.error }] };
       const videoInput = videoResult.value;
 
-      const audioResult = await resolveAudioSlug(fs, audio_slug, project_slug);
+      const audioResult = await resolveAudioSlug(fs, audio_slug, book_id);
       if (!audioResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: audioResult.error }] };
       const audioInput = audioResult.value;
 
       const videoName = `${SLUG}-${String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -101,7 +101,7 @@ export function generateVolcengineLipsyncVideoDef(fs: Engine): ToolDef {
         type: "generate_volcengine_lipsync_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         videoInput,
         audioInput,
         sourceVideoIds,

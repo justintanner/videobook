@@ -13,7 +13,7 @@ type GenerateWan27VideoeditVideoPayload = {
   type: "generate_wan27_videoedit_video";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt?: string;
   negative_prompt?: string;
   videoInput: RefInput;
@@ -34,15 +34,15 @@ type GenerateWan27VideoeditVideoPayload = {
 async function uploadSingle(
   fs: Engine,
   input: RefInput,
-  projectSlug: string,
+  bookId: string,
 ): Promise<string> {
-  return uploadAssetToKie(fs, input.assetId, input.filename, projectSlug);
+  return uploadAssetToKie(fs, input.assetId, input.filename, bookId);
 }
 
 export function registerGenerateWan27VideoeditVideoJob(fs: Engine): void {
   registerJobHandler("generate_wan27_videoedit_video", async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,
+      vidAssetId, vidAssetDir, bookId, prompt, negative_prompt,
       videoInput, imageInput,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
       resolution, aspect_ratio, duration, audio_setting, prompt_extend, watermark, nsfw_checker, seed,
@@ -50,8 +50,8 @@ export function registerGenerateWan27VideoeditVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const videoUrl = await uploadSingle(fs, videoInput, projectSlug);
-    const referenceImageUrl = imageInput ? await uploadSingle(fs, imageInput, projectSlug) : undefined;
+    const videoUrl = await uploadSingle(fs, videoInput, bookId);
+    const referenceImageUrl = imageInput ? await uploadSingle(fs, imageInput, bookId) : undefined;
 
     // Free-form edit prompt — rewrite confirmed @vid-*/@img-* to natural refs.
     const normalizedPrompt = prompt === undefined
@@ -82,7 +82,7 @@ export function registerGenerateWan27VideoeditVideoJob(fs: Engine): void {
       taskType: "wan27_videoedit_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         prompt: prompt ?? "",
         mode: "videoedit",

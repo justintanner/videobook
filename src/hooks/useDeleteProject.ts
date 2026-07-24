@@ -4,7 +4,7 @@ import type { UseMcpResult } from 'use-mcp/react'
 export interface DeleteProjectResult {
   slug: string
   deleted_at: string
-  default_project_slug: string | null
+  default_book_id: string | null
 }
 
 export type DeleteProjectResponse =
@@ -14,7 +14,7 @@ export type DeleteProjectResponse =
 export function useDeleteProject(callTool: UseMcpResult['callTool']) {
   const deleteProject = useCallback(
     async (slug: string): Promise<DeleteProjectResponse> => {
-      const result = await callTool('delete_project', { project_slug: slug })
+      const result = await callTool('delete_project', { book_id: slug })
       const content = result.content as Array<{ type: string; text: string }>
       if (result.isError) {
         return { ok: false, error: content[0]?.text ?? 'Delete project failed' }

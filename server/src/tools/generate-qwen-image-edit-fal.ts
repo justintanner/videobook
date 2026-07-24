@@ -40,7 +40,7 @@ function normalizeImageSize(value: string | undefined): FalImageSize | undefined
 }
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(base.prompt, "Edit instruction", { required: true }),
   image_slugs: apicityStringArrayField(base.image_url, "Exactly one @img-* slug for the reference image", { required: true }),
   image_size: z.enum(ACCEPTED_IMAGE_SIZES).optional().describe("Output size — Fal enum (square_hd, landscape_16_9, ...) or aspect-ratio shorthand (1:1, 16:9, 9:16, 4:3, 3:4, ...)"),
@@ -63,7 +63,7 @@ export function generateQwenImageEditFalDef(fs: Engine): ToolDef {
     description: "Edit an image via fal.ai using Alibaba Qwen Image edit with one @img-* reference input. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, image_slugs, image_size, num_inference_steps, guidance_scale, num_images, output_format, negative_prompt, acceleration, enable_safety_checker, seed } = args as Args;
+      const { book_id, prompt, image_slugs, image_size, num_inference_steps, guidance_scale, num_images, output_format, negative_prompt, acceleration, enable_safety_checker, seed } = args as Args;
       const prefix = "img";
 
       if (!process.env.FAL_API_KEY) {
@@ -71,13 +71,13 @@ export function generateQwenImageEditFalDef(fs: Engine): ToolDef {
       }
 
       const [firstSlug] = image_slugs;
-      const resolved = await resolveImageSlugs(fs, [firstSlug], project_slug);
+      const resolved = await resolveImageSlugs(fs, [firstSlug], book_id);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [refImage] = resolved.inputs;
       const normalizedSize = normalizeImageSize(image_size);
 
-      const assetResult = await fs.artifacts.create(prefix, `${modelSlug("kie", "qwen2/image-edit")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create(prefix, `${modelSlug("kie", "qwen2/image-edit")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
@@ -87,7 +87,7 @@ export function generateQwenImageEditFalDef(fs: Engine): ToolDef {
         type: "generate_qwen_image_edit_fal",
         imgAssetId,
         imgAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         refImage,
         sourceImageIds: resolved.sourceImageIds,

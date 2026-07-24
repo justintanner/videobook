@@ -55,14 +55,14 @@ export function splitVideoDef(fs: Engine): ToolDef {
       "Split a video asset into two new assets at chunk_a_end / chunk_b_start. Setting chunk_b_start < chunk_a_end produces an overlap window; equal values produce a clean split. The original asset is preserved.",
     schema: {
       asset_id: z.string().describe("Source video asset ID (e.g. vid-my-clip)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       chunk_a_end: z.number().describe("End of the first chunk in seconds"),
       chunk_b_start: z.number().optional().describe("Start of the second chunk in seconds (<= chunk_a_end for overlap, equal for clean split; defaults to chunk_a_end)"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, chunk_a_end, chunk_b_start } = args as {
+      const { asset_id, book_id, chunk_a_end, chunk_b_start } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         chunk_a_end: number;
         chunk_b_start?: number;
       };
@@ -75,7 +75,7 @@ export function splitVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -131,14 +131,14 @@ export function splitVideoDef(fs: Engine): ToolDef {
       const nameA = deriveChunkName(asset_id, "1");
       const nameB = deriveChunkName(asset_id, "2");
 
-      const createA = await fs.artifacts.create(prefix, nameA, project_slug);
+      const createA = await fs.artifacts.create(prefix, nameA);
       if (!createA.ok) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: `Failed to create chunk A asset: ${createA.error.message}` }],
         };
       }
-      const createB = await fs.artifacts.create(prefix, nameB, project_slug);
+      const createB = await fs.artifacts.create(prefix, nameB);
       if (!createB.ok) {
         return {
           isError: true as const,
@@ -167,7 +167,7 @@ export function splitVideoDef(fs: Engine): ToolDef {
           assetIdB,
           assetDirB,
           outputPathB,
-          projectSlug: project_slug,
+          bookId: book_id,
         });
       } catch (err) {
         return {

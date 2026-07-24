@@ -17,13 +17,13 @@ describe("clear_slot tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     // Upload an asset and assign to slot 1
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo.png", data },
+      arguments: { book_id: "test-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse(
       (uploadResult.content as TextContent)[0].text,
@@ -32,7 +32,7 @@ describe("clear_slot tool", () => {
     await client.callTool({
       name: "assign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         asset_id: assetId,
         slot: "s01",
       },
@@ -48,7 +48,7 @@ describe("clear_slot tool", () => {
     const result = await client.callTool({
       name: "unassign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slot: "s01",
       },
     });
@@ -63,13 +63,13 @@ describe("clear_slot tool", () => {
     const data2 = Buffer.from("fake-png-data-2").toString("base64");
     const upload2 = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo2.png", data: data2 },
+      arguments: { book_id: "test-proj", filename: "photo2.png", data: data2 },
     });
     const asset2 = JSON.parse((upload2.content as TextContent)[0].text);
     await client.callTool({
       name: "assign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         asset_id: asset2.assetId,
         slot: "s02",
       },
@@ -79,7 +79,7 @@ describe("clear_slot tool", () => {
     const result = await client.callTool({
       name: "unassign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slot: "s01",
       },
     });
@@ -94,7 +94,7 @@ describe("clear_slot tool", () => {
     const result = await client.callTool({
       name: "unassign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slot: "invalid",
       },
     });
@@ -108,13 +108,13 @@ describe("clear_slot tool", () => {
     // Create a fresh project with no timeline slots
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "empty-proj" },
+      arguments: { book_id: "empty-proj" },
     });
 
     const result = await client.callTool({
       name: "unassign_slot",
       arguments: {
-        project_slug: "empty-proj",
+        book_id: "empty-proj",
         slot: "s01",
       },
     });
@@ -130,7 +130,7 @@ describe("clear_slot tool", () => {
     const result = await client.callTool({
       name: "unassign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slot: "s05",
       },
     });
@@ -144,7 +144,7 @@ describe("clear_slot tool", () => {
     const result = await client.callTool({
       name: "unassign_slot",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slot: "s00",
       },
     });
@@ -156,13 +156,13 @@ describe("clear_slot tool", () => {
     // Clear slot 1 first
     await client.callTool({
       name: "unassign_slot",
-      arguments: { project_slug: "test-proj", slot: "s01" },
+      arguments: { book_id: "test-proj", slot: "s01" },
     });
 
     // Clear it again (already empty)
     const result = await client.callTool({
       name: "unassign_slot",
-      arguments: { project_slug: "test-proj", slot: "s01" },
+      arguments: { book_id: "test-proj", slot: "s01" },
     });
 
     expect(result.isError).toBeFalsy();

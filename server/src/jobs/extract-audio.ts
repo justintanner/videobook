@@ -13,7 +13,7 @@ type ExtractAudioPayload = {
   audioAssetId: string;
   audioAssetDir: string;
   sourceVideoId: string;
-  projectSlug: string;
+  bookId: string;
   /**
    * When set, the mp3 is being written as a sibling file inside an existing
    * shared asset (e.g. `plan/`). Skip per-asset metadata (it would clobber
@@ -33,11 +33,11 @@ export function registerExtractAudioJob(fs: Engine): void {
   registerJobHandler("extract_audio", async (payload, ctx) => {
     const {
       inputPath, outputPath,
-      audioAssetId, audioAssetDir, sourceVideoId, projectSlug, destination, range,
+      audioAssetId, audioAssetDir, sourceVideoId, bookId, destination, range,
     } = payload as ExtractAudioPayload;
     const destinationMode = destination !== undefined;
 
-    return withLocalLease(fs, projectSlug, audioAssetId, ctx, "extract", async () => {
+    return withLocalLease(fs, bookId, audioAssetId, ctx, "extract", async () => {
       const lockResult = await fs.jobs.locks.acquire(audioAssetDir, { durationMs: LOCK_DURATION_MS });
       if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
@@ -64,7 +64,7 @@ export function registerExtractAudioJob(fs: Engine): void {
         const outputFilename = outputPath.split("/").pop()!;
         await ingestWorkspaceOutputs(
           fs,
-          projectSlug,
+          bookId,
           audioAssetId,
           [outputFilename],
           "extract_audio",
@@ -84,7 +84,7 @@ export function registerExtractAudioJob(fs: Engine): void {
             source_asset: sourceVideoId,
             ...(duration !== undefined ? { duration } : {}),
           };
-          await fs.metadata.artifacts.write(audioAssetId, "original", origin, projectSlug);
+          await fs.metadata.artifacts.write(audioAssetId, "original", origin);
         }
 
         return { success: true };

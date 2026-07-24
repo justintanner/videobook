@@ -8,7 +8,7 @@ const LOCK_DURATION_MS = 10 * 60_000;
 
 type RestoreArchiveClipPayload = {
   type: "restore_archive_clip";
-  projectSlug: string;
+  bookId: string;
   assetId: string;
   assetDir: string;
   archiveId: string;
@@ -38,7 +38,7 @@ export function registerRestoreArchiveClipJob(fs: Engine): void {
     const p = payload as RestoreArchiveClipPayload;
     return withLockedLocalLease(
       fs,
-      p.projectSlug,
+      p.bookId,
       p.assetId,
       p.assetDir,
       ctx,
@@ -48,7 +48,7 @@ export function registerRestoreArchiveClipJob(fs: Engine): void {
         const store = getArchiveStore();
         const body = await store.getBytes(p.mediaKey);
         if (!body) throw new Error(`Archive media not found: ${p.mediaKey}`);
-        const write = await fs.files.write(p.assetId, p.filename, Buffer.from(body), p.projectSlug);
+        const write = await fs.files.write(p.assetId, p.filename, Buffer.from(body));
         if (!write.ok) throw new Error(write.error.message);
 
         const meta = provenance(p);
@@ -59,7 +59,7 @@ export function registerRestoreArchiveClipJob(fs: Engine): void {
             videoPath: join(p.assetDir, p.filename),
             assetId: p.assetId,
             assetDir: p.assetDir,
-            projectSlug: p.projectSlug,
+            bookId: p.bookId,
             provenance: meta,
           } as unknown as Record<string, unknown>);
           return { success: true, archive_id: p.archiveId, asset_id: p.assetId, job_id: processJobId };
@@ -69,7 +69,7 @@ export function registerRestoreArchiveClipJob(fs: Engine): void {
           ...meta,
           content_type: p.contentType,
           duration: typeof p.duration === "number" ? p.duration : null,
-        }, p.projectSlug);
+        });
         if (!writeMeta.ok) throw new Error(writeMeta.error.message);
         return { success: true, archive_id: p.archiveId, asset_id: p.assetId };
       },

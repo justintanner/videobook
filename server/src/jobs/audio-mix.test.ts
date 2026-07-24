@@ -11,7 +11,7 @@ import { resolveAudioMixAsset } from "../tools/audio-mix.js";
 import { buildAudioMixFilter, mixAudioMedia } from "./audio-mix.js";
 
 const execFileAsync = promisify(execFile);
-const PROJECT_SLUG = "audio-mix-test";
+const BOOK_ID = "audio-mix-test";
 
 async function createAssetWithFile(
   fs: Engine,
@@ -19,13 +19,9 @@ async function createAssetWithFile(
   name: string,
   filename: string,
 ): Promise<string> {
-  const created = await fs.artifacts.create(prefix, name, PROJECT_SLUG);
+  const created = await fs.artifacts.create(prefix, name);
   if (!created.ok) throw new Error(created.error.message);
-  const written = await fs.files.write(
-    created.value.slug,
-    filename,
-    Buffer.from(`fixture-${name}`),
-    PROJECT_SLUG,
+  const written = await fs.files.write(created.value.slug, filename, Buffer.from(`fixture-${name}`)
   );
   if (!written.ok) throw new Error(written.error.message);
   return created.value.slug;
@@ -55,7 +51,7 @@ describe("audio mix", () => {
   beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-audio-mix-"));
     fs = createEngineForTest(join(tempDir, "projects"));
-    const project = await fs.projects.create(PROJECT_SLUG);
+    const project = await fs.projects.create(BOOK_ID);
     if (!project.ok) throw new Error(project.error.message);
     videoTargetId = await createAssetWithFile(fs, "vid", "video target", "original.mp4");
     videoLayerId = await createAssetWithFile(fs, "vid", "video layer", "original.mkv");
@@ -77,8 +73,8 @@ describe("audio mix", () => {
     const targetId = targetKind === "video" ? videoTargetId : audioTargetId;
     const layerId = layerKind === "video" ? videoLayerId : audioLayerId;
     const [target, layer] = await Promise.all([
-      resolveAudioMixAsset(fs, targetId, PROJECT_SLUG),
-      resolveAudioMixAsset(fs, layerId, PROJECT_SLUG),
+      resolveAudioMixAsset(fs, targetId, BOOK_ID),
+      resolveAudioMixAsset(fs, layerId, BOOK_ID),
     ]);
     expect(target.kind).toBe(targetKind);
     expect(layer.kind).toBe(layerKind);

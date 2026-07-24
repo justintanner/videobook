@@ -747,7 +747,7 @@ function imageActionNameToToolName(action: string): string | null {
   return config?.tool_name ?? canonicalName;
 }
 
-const NON_PARAM_KEYS = new Set(["project_slug"]);
+const NON_PARAM_KEYS = new Set(["book_id"]);
 
 class SettingsMap extends Map<string, Record<string, unknown>> {
   override get(key: string): Record<string, unknown> | undefined {

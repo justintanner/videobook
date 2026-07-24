@@ -42,7 +42,7 @@ describe("freeform chat commands", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     // Clear API key so we can test up to the routing boundary
     delete process.env.KIE_API_KEY;
@@ -84,7 +84,7 @@ describe("freeform chat commands", () => {
       it(`routes "${prompt}" past asset resolution to API key check`, async () => {
         const result = await client.callTool({
           name: "chat",
-          arguments: { prompt, project_slug: "test-proj" },
+          arguments: { prompt, book_id: "test-proj" },
         });
         // No @tags to resolve, so should reach the API key check
         expect(result.isError).toBe(true);
@@ -104,7 +104,7 @@ describe("freeform chat commands", () => {
       const data = Buffer.from("fake-png-data").toString("base64");
       const upload = await client.callTool({
         name: "upload_file",
-        arguments: { project_slug: "test-proj", filename: "sunset.png", data },
+        arguments: { book_id: "test-proj", filename: "sunset.png", data },
       });
       const parsed = JSON.parse(resultText(upload));
       assetId = parsed.assetId;
@@ -115,7 +115,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: `trim @${assetId} from 0 to 5`,
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       // Asset resolved successfully, hits API key check
@@ -129,7 +129,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: `reverse @${assetId}`,
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -142,7 +142,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: `extract audio from @${assetId}`,
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -154,7 +154,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: `speed up @${assetId} 2x`,
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -166,7 +166,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: `transcribe @${assetId}`,
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -178,7 +178,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: `show files for @${assetId}`,
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -196,7 +196,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: "trim @nonexistent-video from 5 to 10",
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -209,7 +209,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: "reverse @fake-clip",
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -221,7 +221,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: "combine @alpha-clip and @beta-clip",
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -233,7 +233,7 @@ describe("freeform chat commands", () => {
       const data = Buffer.from("fake-png-data").toString("base64");
       const upload = await client.callTool({
         name: "upload_file",
-        arguments: { project_slug: "test-proj", filename: "real.png", data },
+        arguments: { book_id: "test-proj", filename: "real.png", data },
       });
       const parsed = JSON.parse(resultText(upload));
 
@@ -241,7 +241,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: `merge @${parsed.assetId} and @fake-asset`,
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -263,13 +263,13 @@ describe("freeform chat commands", () => {
       const data = Buffer.from("fake-png-data").toString("base64");
       const upload = await client.callTool({
         name: "upload_file",
-        arguments: { project_slug: "test-proj", filename: "clip.png", data },
+        arguments: { book_id: "test-proj", filename: "clip.png", data },
       });
       assetId = JSON.parse(resultText(upload)).assetId;
 
       await client.callTool({
         name: "assign_slot",
-        arguments: { project_slug: "test-proj", asset_id: assetId, slot: "s01" },
+        arguments: { book_id: "test-proj", asset_id: assetId, slot: "s01" },
       });
     });
 
@@ -278,7 +278,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: "trim @s01 from 5 to 10",
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       // @s01 → @asset-id → resolves → hits API check
@@ -292,7 +292,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: "reverse @s01",
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -305,7 +305,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: "trim @s02 from 0 to 5",
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       // @s02 stays as @s02 (no slot at index 2), asset resolver may or may not find it
@@ -321,7 +321,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: "extract first frame of @s01",
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -338,7 +338,7 @@ describe("freeform chat commands", () => {
     it("handles empty-ish prompt (whitespace only)", async () => {
       const result = await client.callTool({
         name: "chat",
-        arguments: { prompt: "   ", project_slug: "test-proj" },
+        arguments: { prompt: "   ", book_id: "test-proj" },
       });
       // Empty prompt should still reach API key check (no assets to resolve)
       expect(result.isError).toBe(true);
@@ -350,7 +350,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -362,7 +362,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: 'generate "a cinematic sunset" with (golden hour) & lens flare!',
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -374,7 +374,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: "send to user@example.com",
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       // "@example" doesn't match TAG_PATTERN /@([a-zA-Z0-9]+-[a-zA-Z0-9_-]+)/
@@ -389,7 +389,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: "use @singleword in the video",
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       // TAG_PATTERN requires a hyphen: /@([a-zA-Z0-9]+-[a-zA-Z0-9_-]+)/
@@ -403,7 +403,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: "download https://example.com/video from 1:30 to 2:45",
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -417,7 +417,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: "/generate a cool video of mountains",
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -430,7 +430,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: longPrompt,
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -450,11 +450,11 @@ describe("freeform chat commands", () => {
       const data = Buffer.from("fake-data").toString("base64");
       const u1 = await client.callTool({
         name: "upload_file",
-        arguments: { project_slug: "test-proj", filename: "clip-a.png", data },
+        arguments: { book_id: "test-proj", filename: "clip-a.png", data },
       });
       const u2 = await client.callTool({
         name: "upload_file",
-        arguments: { project_slug: "test-proj", filename: "clip-b.png", data },
+        arguments: { book_id: "test-proj", filename: "clip-b.png", data },
       });
       asset1 = JSON.parse(resultText(u1)).assetId;
       asset2 = JSON.parse(resultText(u2)).assetId;
@@ -465,7 +465,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: `combine @${asset1} and @${asset2}`,
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -478,7 +478,7 @@ describe("freeform chat commands", () => {
         name: "chat",
         arguments: {
           prompt: `merge @${asset1} with @nonexistent-clip`,
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       expect(result.isError).toBe(true);
@@ -494,15 +494,15 @@ describe("freeform chat commands", () => {
   describe("script asset in freeform prompts", () => {
     it("resolves @script-tag for generation prompts", async () => {
       const fs = createEngineForTest(tempDir);
-      const scriptResult = await fs.artifacts.create("script", "my-scene", "test-proj");
+      const scriptResult = await fs.artifacts.create("script", "my-scene");
       if (!scriptResult.ok) throw new Error("Failed to create script asset");
-      await fs.files.write(scriptResult.value.slug, "original.md", "A beautiful sunset over the ocean", "test-proj");
+      await fs.files.write(scriptResult.value.slug, "original.md", "A beautiful sunset over the ocean");
 
       const result = await client.callTool({
         name: "chat",
         arguments: {
           prompt: `generate a video from @${scriptResult.value.slug}`,
-          project_slug: "test-proj",
+          book_id: "test-proj",
         },
       });
       // Script resolved, hits API key check

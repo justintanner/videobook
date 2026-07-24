@@ -14,7 +14,7 @@ describe("render tool", () => {
   let client: Client;
   let fs: Engine;
   let tempDir: string;
-  const projectSlug = "test-proj";
+  const bookId = "test-proj";
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-render-tool-test-"));
@@ -22,7 +22,7 @@ describe("render tool", () => {
     fs = createEngineForTest(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: projectSlug },
+      arguments: { book_id: bookId },
     });
   });
 
@@ -33,9 +33,9 @@ describe("render tool", () => {
   });
 
   async function createVideoAsset(): Promise<string> {
-    const created = await fs.artifacts.create("vid", "clip", projectSlug);
+    const created = await fs.artifacts.create("vid", "clip");
     if (!created.ok) throw new Error(created.error.message);
-    const write = await fs.files.write(created.value.slug, "original.mp4", Buffer.from("fake-video"), projectSlug);
+    const write = await fs.files.write(created.value.slug, "original.mp4", Buffer.from("fake-video"));
     if (!write.ok) throw new Error(write.error.message);
     return created.value.slug;
   }
@@ -46,7 +46,7 @@ describe("render tool", () => {
 
     const result = await client.callTool({
       name: "render_video",
-      arguments: { asset_id: assetId, project_slug: projectSlug },
+      arguments: { asset_id: assetId, book_id: bookId },
     });
 
     expect(result.isError).toBeFalsy();
@@ -69,7 +69,7 @@ describe("render tool", () => {
       name: "render_video",
       arguments: {
         asset_id: assetId,
-        project_slug: projectSlug,
+        book_id: bookId,
         orientation: "portrait",
         subtitles_enabled: true,
         audio_volume: 75,
@@ -92,14 +92,14 @@ describe("render tool", () => {
     const assetId = await createVideoAsset();
     // Wedge the asset the way a failed job does: status='error' rows are
     // refused by beginAssetWork and never reset by enqueue.
-    const lease = await fs.jobs.artifactWork.begin(projectSlug, assetId, {
+    const lease = await fs.jobs.artifactWork.begin(assetId, {
       kind: "render",
       ownerKind: "job",
       durationMs: 60_000,
     });
     if (!lease) throw new Error("test setup: could not begin lease");
-    await fs.jobs.artifactWork.fail(projectSlug, assetId, lease.ownerId, { message: "boom" });
-    const blocked = await fs.jobs.artifactWork.begin(projectSlug, assetId, {
+    await fs.jobs.artifactWork.fail(assetId, lease.ownerId, { message: "boom" });
+    const blocked = await fs.jobs.artifactWork.begin(assetId, {
       kind: "render",
       ownerKind: "job",
       durationMs: 60_000,
@@ -108,21 +108,21 @@ describe("render tool", () => {
 
     const result = await client.callTool({
       name: "render_video",
-      arguments: { asset_id: assetId, project_slug: projectSlug, orientation: "landscape", subtitles_enabled: false },
+      arguments: { asset_id: assetId, book_id: bookId, orientation: "landscape", subtitles_enabled: false },
     });
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    const errorRow = await fs.jobs.failures.read(projectSlug, assetId);
+    const errorRow = await fs.jobs.failures.read(assetId);
     if (!errorRow.ok) throw new Error(errorRow.error.message);
     expect(errorRow.value).toBeNull();
-    const reclaimed = await fs.jobs.artifactWork.begin(projectSlug, assetId, {
+    const reclaimed = await fs.jobs.artifactWork.begin(assetId, {
       kind: "render",
       ownerKind: "job",
       durationMs: 60_000,
     });
     expect(reclaimed).not.toBeNull();
-    if (reclaimed) await fs.jobs.artifactWork.complete(projectSlug, assetId, reclaimed.ownerId);
+    if (reclaimed) await fs.jobs.artifactWork.complete(assetId, reclaimed.ownerId);
   });
 });

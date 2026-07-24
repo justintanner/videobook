@@ -22,8 +22,8 @@ describe("schema parity between pickers and tool definitions", () => {
       const pickerKeys = new Set(Object.keys(pickerSchema?.properties ?? {}));
       const executionKeys = new Set(Object.keys(executionShape));
 
-      // Internal fields injected during execution: project_slug, _provider
-      const internalFields = new Set(["project_slug", "_provider", "asset_id"]);
+      // Internal fields injected during execution: book_id, _provider
+      const internalFields = new Set(["book_id", "_provider", "asset_id"]);
 
       for (const pKey of pickerKeys) {
         if (!internalFields.has(pKey)) {
@@ -46,7 +46,7 @@ describe("schema parity between pickers and tool definitions", () => {
       const pickerKeys = new Set(Object.keys(pickerSchema?.properties ?? {}));
       const executionKeys = new Set(Object.keys(executionShape));
 
-      const internalFields = new Set(["project_slug", "_provider"]);
+      const internalFields = new Set(["book_id", "_provider"]);
 
       for (const pKey of pickerKeys) {
         if (!internalFields.has(pKey)) {

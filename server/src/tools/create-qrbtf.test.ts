@@ -45,7 +45,7 @@ describe("create_qrbtf tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
   });
 
@@ -55,7 +55,7 @@ describe("create_qrbtf tool", () => {
   });
 
   async function readAssetFile(assetId: string, name: string): Promise<Buffer> {
-    const read = await fs.files.read(assetId, name, PROJECT);
+    const read = await fs.files.read(assetId, name);
     if (!read.ok) throw new Error(read.error.message);
     return Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
   }
@@ -68,7 +68,7 @@ describe("create_qrbtf tool", () => {
       const result = await client!.callTool({
         name: "create_qrbtf",
         arguments: {
-          project_slug: PROJECT,
+          book_id: PROJECT,
           value,
           style,
         },
@@ -89,7 +89,7 @@ describe("create_qrbtf tool", () => {
       expect(parsed.size).toBe(DEFAULT_QRBTF_SIZE);
       expect(parsed.bg_color).toBe("#000000");
 
-      const manifest = await fs.files.manifest(parsed.asset_id, PROJECT, { includeDotfiles: true });
+      const manifest = await fs.files.manifest(parsed.asset_id, PROJECT);
       expect(manifest.ok).toBe(true);
       if (!manifest.ok) return;
       const fileNames = new Set(manifest.value.files.map((f) => f.name));
@@ -102,7 +102,7 @@ describe("create_qrbtf tool", () => {
         expect(fileNames.has(filename)).toBe(true);
       }
 
-      const metadata = await fs.metadata.artifacts.read(parsed.asset_id, "original", PROJECT);
+      const metadata = await fs.metadata.artifacts.read(parsed.asset_id, "original");
       expect(metadata.ok).toBe(true);
       if (!metadata.ok) return;
       expect(metadata.value).toMatchObject({
@@ -170,7 +170,7 @@ describe("create_qrbtf tool", () => {
     const result = await client!.callTool({
       name: "create_qrbtf",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         value: "https://example.com/default",
       },
     });
@@ -183,7 +183,7 @@ describe("create_qrbtf tool", () => {
     const result = await client!.callTool({
       name: "create_qrbtf",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         value: "https://example.com/custom-colors",
         style: "normal",
         other_color: "#00FF00",
@@ -195,7 +195,7 @@ describe("create_qrbtf tool", () => {
     const parsed = JSON.parse(resultText(result)) as { asset_id: string; bg_color: string };
     expect(parsed.bg_color).toBe("#1A1A2E");
 
-    const metadata = await fs.metadata.artifacts.read(parsed.asset_id, "original", PROJECT);
+    const metadata = await fs.metadata.artifacts.read(parsed.asset_id, "original");
     expect(metadata.ok).toBe(true);
     if (!metadata.ok) return;
     expect(metadata.value).toMatchObject({
@@ -217,7 +217,7 @@ describe("create_qrbtf tool", () => {
     const result = await client!.callTool({
       name: "create_qrbtf",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         value: "  ",
       },
     });
@@ -228,7 +228,7 @@ describe("create_qrbtf tool", () => {
     const result = await client!.callTool({
       name: "create_qrbtf",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         value: "https://example.com",
         size: 128,
       },

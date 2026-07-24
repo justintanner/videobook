@@ -14,7 +14,7 @@ import {
 const qwen = FalQwenImageRequestSchema.shape;
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(qwen.prompt, "Text prompt for image generation", { required: true }),
   image_size: apicityUnionEnumField(qwen.image_size, "Output size preset"),
   num_inference_steps: apicityField(qwen.num_inference_steps, "Inference steps (2-250)"),
@@ -36,13 +36,13 @@ export function generateQwenImageFalDef(fs: Engine): ToolDef {
     description: "Generate an image via fal.ai using Alibaba Qwen Image from a text prompt. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, image_size, num_inference_steps, guidance_scale, num_images, output_format, negative_prompt, acceleration, enable_safety_checker, use_turbo, seed } = args as Args;
+      const { book_id, prompt, image_size, num_inference_steps, guidance_scale, num_images, output_format, negative_prompt, acceleration, enable_safety_checker, use_turbo, seed } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "qwen2/text-to-image")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "qwen2/text-to-image")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
@@ -52,7 +52,7 @@ export function generateQwenImageFalDef(fs: Engine): ToolDef {
         type: "generate_qwen_image_fal",
         imgAssetId,
         imgAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         ...(image_size !== undefined ? { image_size } : {}),
         ...(num_inference_steps !== undefined ? { num_inference_steps } : {}),

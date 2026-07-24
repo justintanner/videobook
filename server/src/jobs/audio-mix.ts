@@ -26,7 +26,7 @@ type AudioMixPayload = {
   volume: number;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 function decimal(value: number): string {
@@ -163,9 +163,9 @@ async function deleteIfPresent(
   fs: Engine,
   assetId: string,
   filename: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<void> {
-  const result = await fs.files.delete(assetId, filename, projectSlug);
+  const result = await fs.files.delete(assetId, filename);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
     throw new Error(`Failed to delete ${filename}: ${result.error.message}`);
   }
@@ -176,10 +176,10 @@ async function replaceMixedMedia(
   assetId: string,
   targetFilename: string,
   outputPath: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<void> {
   const output = await readFile(outputPath);
-  const writeResult = await fs.files.write(assetId, targetFilename, output, projectSlug);
+  const writeResult = await fs.files.write(assetId, targetFilename, output);
   if (!writeResult.ok) {
     throw new Error(`Failed to replace ${targetFilename}: ${writeResult.error.message}`);
   }
@@ -196,12 +196,12 @@ export function registerAudioMixJob(fs: Engine): void {
       volume,
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
     } = payload as AudioMixPayload;
 
     const result = await withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       assetDir,
       ctx,
@@ -220,19 +220,19 @@ export function registerAudioMixJob(fs: Engine): void {
             volume,
             ctx.signal,
           );
-          await replaceMixedMedia(fs, assetId, targetFilename, outputPath, projectSlug);
+          await replaceMixedMedia(fs, assetId, targetFilename, outputPath, bookId);
         } finally {
           await rm(tempDir, { recursive: true, force: true });
         }
 
         for (const filename of STALE_DERIVATIVES) {
-          await deleteIfPresent(fs, assetId, filename, projectSlug);
+          await deleteIfPresent(fs, assetId, filename, bookId);
         }
 
         const mediaPath = join(assetDir, targetFilename);
         if (targetKind === "audio") {
           const peaks = await extractWaveform(mediaPath);
-          const waveformResult = await fs.metadata.waveforms.write(assetId, peaks, projectSlug);
+          const waveformResult = await fs.metadata.waveforms.write(assetId, peaks);
           if (!waveformResult.ok) {
             throw new Error(`Failed to update audio waveform: ${waveformResult.error.message}`);
           }
@@ -249,7 +249,7 @@ export function registerAudioMixJob(fs: Engine): void {
         videoPath: result.mediaPath,
         assetId,
         assetDir,
-        projectSlug,
+        bookId,
         provenance: {
           origin: "audio_mix",
           source_audio_asset: layerAssetId,

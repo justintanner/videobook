@@ -19,7 +19,7 @@ type GenerateVolcengineLipsyncVideoPayload = {
   type: "generate_volcengine_lipsync_video";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   videoInput: RefInput;
   audioInput: RefInput;
   sourceVideoIds: string[];
@@ -35,23 +35,23 @@ type GenerateVolcengineLipsyncVideoPayload = {
 async function uploadSingle(
   fs: Engine,
   input: RefInput,
-  projectSlug: string,
+  bookId: string,
 ): Promise<string> {
-  return uploadAssetToKie(fs, input.assetId, input.filename, projectSlug);
+  return uploadAssetToKie(fs, input.assetId, input.filename, bookId);
 }
 
 export function registerGenerateVolcengineLipsyncVideoJob(fs: Engine): void {
   registerJobHandler("generate_volcengine_lipsync_video", async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug,
+      vidAssetId, vidAssetDir, bookId,
       videoInput, audioInput, sourceVideoIds, sourceAudioIds,
       mode, separate_vocal, open_scenedet, align_audio, align_audio_reverse, templ_start_seconds,
     } = payload as GenerateVolcengineLipsyncVideoPayload;
 
     requireApiKey("KIE_API_KEY");
 
-    const videoUrl = await uploadSingle(fs, videoInput, projectSlug);
-    const audioUrl = await uploadSingle(fs, audioInput, projectSlug);
+    const videoUrl = await uploadSingle(fs, videoInput, bookId);
+    const audioUrl = await uploadSingle(fs, audioInput, bookId);
 
     const request = buildVolcengineLipSyncPayload(
       { mode, separate_vocal, open_scenedet, align_audio, align_audio_reverse, templ_start_seconds },
@@ -59,8 +59,7 @@ export function registerGenerateVolcengineLipsyncVideoJob(fs: Engine): void {
     );
 
     // volcengine lip-sync bills per second of source video; schema has no duration.
-    const videoMeta = await fs.metadata.artifacts.read<{ duration?: number }>(
-      videoInput.assetId, "original", projectSlug,
+    const videoMeta = await fs.metadata.artifacts.read<{ duration?: number }>(videoInput.assetId, "original"
     );
     const durationHint =
       videoMeta.ok && typeof videoMeta.value?.duration === "number" && videoMeta.value.duration > 0
@@ -72,7 +71,7 @@ export function registerGenerateVolcengineLipsyncVideoJob(fs: Engine): void {
       taskType: VOLCENGINE_LIPSYNC_TASK_TYPE,
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         mode: "lipsync",
         sourceImageIds: [],

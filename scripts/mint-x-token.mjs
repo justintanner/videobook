@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Mint an X (Twitter) OAuth 2.0 user-context access token + refresh token,
- * and write them to the main Dolt database so the running server picks them
+ * and write them to the application state file so the running server picks them
  * up automatically and refreshes on its own.
  *
  * Adapted from @apicity/x README. Run once after configuring your X app:
@@ -17,10 +17,10 @@
  */
 import http from "node:http";
 import crypto from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createXOAuth } from "@apicity/x";
-import { createEngine } from "videobook-engine";
 
 const CLIENT_ID = process.env.X_CLIENT_ID;
 const CLIENT_SECRET = process.env.X_CLIENT_SECRET;
@@ -39,11 +39,24 @@ if (!CLIENT_ID || !CLIENT_SECRET) {
 }
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const engine = createEngine({
-  dataDir: process.env.VIDEOBOOK_DATA_DIR?.trim() || join(root, "data"),
-  workspaceDir:
-    process.env.VIDEOBOOK_WORKSPACE_DIR?.trim() || join(root, "workspaces"),
-});
+const statePath = process.env.VIDEOBOOK_APP_STATE_PATH?.trim()
+  || join(root, "runtime", "app-state.json");
+
+async function writeTokens(next) {
+  let state = { values: {} };
+  try {
+    const raw = await readFile(statePath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && parsed.values && typeof parsed.values === "object") {
+      state = parsed;
+    }
+  } catch {}
+  state.values["x.oauth.tokens"] = next;
+  await mkdir(dirname(statePath), { recursive: true });
+  const temporary = `${statePath}.${crypto.randomUUID()}.tmp`;
+  await writeFile(temporary, JSON.stringify(state), "utf8");
+  await rename(temporary, statePath);
+}
 
 const verifier = crypto.randomBytes(32).toString("base64url");
 const challenge = crypto
@@ -98,18 +111,17 @@ const server = http.createServer(async (req, res) => {
     refresh_token: tok.refresh_token,
     expires_at: new Date(Date.now() + tok.expires_in * 1000).toISOString(),
   };
-  const written = engine.settings.set("x.oauth.tokens", next);
-  if (!written.ok) {
+  try {
+    await writeTokens(next);
+  } catch (err) {
     res.writeHead(500).end("token persistence failed");
-    console.error(`Token persistence failed: ${written.error.message}`);
-    engine.close();
+    console.error(`Token persistence failed: ${err.message}`);
     server.close();
     process.exit(1);
   }
   res.writeHead(200).end("Authorized — token saved. You can close this tab.");
-  console.log("Wrote tokens to the main Dolt database.");
+  console.log("Wrote tokens to the application state file.");
   console.log(`Access token expires at ${next.expires_at}.`);
-  engine.close();
   server.close();
 });
 

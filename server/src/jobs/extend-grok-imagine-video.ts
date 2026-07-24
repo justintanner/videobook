@@ -9,7 +9,7 @@ type ExtendGrokImagineVideoPayload = {
   sourceVideoFilename: string;
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   extend_at?: number;
   extend_times?: GrokVideoExtendRequest["input"]["extend_times"];
@@ -19,12 +19,12 @@ export function registerExtendGrokImagineVideoJob(fs: Engine): void {
   registerJobHandler("extend_grok_imagine_video", async (payload, ctx) => {
     const {
       sourceVideoId, vidAssetId, vidAssetDir,
-      projectSlug, prompt, extend_at, extend_times,
+      bookId, prompt, extend_at, extend_times,
     } = payload as ExtendGrokImagineVideoPayload;
 
     requireApiKey("KIE_API_KEY");
 
-    const kieTaskIdResult = await fs.metadata.artifacts.read<{ taskId: string }>(sourceVideoId, "kie-task-id", projectSlug);
+    const kieTaskIdResult = await fs.metadata.artifacts.read<{ taskId: string }>(sourceVideoId, "kie-task-id");
     if (!kieTaskIdResult.ok) {
       throw new Error(`No Kie taskId found for source video ${sourceVideoId}. The source video must have been generated via Kie.`);
     }
@@ -38,8 +38,7 @@ export function registerExtendGrokImagineVideoJob(fs: Engine): void {
     // resolution as a top-level hint (mirrors veo3's top-level `duration` hint;
     // kie's createTask ignores unknown top-level fields), defaulting to the
     // grok-imagine default when the source predates resolution metadata.
-    const sourcePayloadResult = await fs.metadata.artifacts.read<{ input?: { resolution?: GrokImagineResolution } }>(
-      sourceVideoId, "generation-payload", projectSlug,
+    const sourcePayloadResult = await fs.metadata.artifacts.read<{ input?: { resolution?: GrokImagineResolution } }>(sourceVideoId, "generation-payload"
     );
     const resolution: GrokImagineResolution =
       (sourcePayloadResult.ok && sourcePayloadResult.value?.input?.resolution) || "480p";
@@ -60,7 +59,7 @@ export function registerExtendGrokImagineVideoJob(fs: Engine): void {
       taskType: "grok_imagine_extend_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         sourceVideoId,
         prompt,

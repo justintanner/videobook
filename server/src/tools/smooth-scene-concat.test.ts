@@ -36,13 +36,9 @@ async function createVideoAsset(
   name: string,
   sourcePath: string,
 ): Promise<string> {
-  const created = await fs.artifacts.create("vid", name, PROJECT);
+  const created = await fs.artifacts.create("vid", name);
   if (!created.ok) throw created.error;
-  const written = await fs.files.write(
-    created.value.slug,
-    "original.mp4",
-    await readFile(sourcePath),
-    PROJECT,
+  const written = await fs.files.write(created.value.slug, "original.mp4", await readFile(sourcePath)
   );
   if (!written.ok) throw written.error;
   return created.value.slug;
@@ -69,7 +65,7 @@ describe("smooth_scene_concat tool", () => {
     client = await createTestClient(projectsDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
     fs = createEngineForTest(projectsDir);
     firstAssetId = await createVideoAsset(fs, "first", firstPath);
@@ -92,7 +88,7 @@ describe("smooth_scene_concat tool", () => {
       arguments: {
         first_asset_id: firstAssetId,
         second_asset_id: firstAssetId,
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(sameAsset.isError).toBe(true);
@@ -103,7 +99,7 @@ describe("smooth_scene_concat tool", () => {
         first_asset_id: firstAssetId,
         second_asset_id: secondAssetId,
         transition_seconds: 1,
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(tooLong.isError).toBe(true);
@@ -114,7 +110,7 @@ describe("smooth_scene_concat tool", () => {
         first_asset_id: firstAssetId,
         second_asset_id: secondAssetId,
         transition_seconds: 0.2,
-        project_slug: PROJECT,
+        book_id: PROJECT,
       },
     });
     expect(result.isError).toBeFalsy();
@@ -129,7 +125,7 @@ describe("smooth_scene_concat tool", () => {
     expect(parsed.alignment_mode).toBe("fixed");
 
     await waitForJob(parsed.job_id, 60_000);
-    const metadata = await fs.metadata.artifacts.read(parsed.asset_id, "original", PROJECT);
+    const metadata = await fs.metadata.artifacts.read(parsed.asset_id, "original");
     if (!metadata.ok) throw metadata.error;
     expect(metadata.value).toMatchObject({
       origin: "smooth_scene_concat",

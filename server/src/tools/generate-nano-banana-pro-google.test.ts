@@ -27,7 +27,7 @@ describe("generate_nano_banana_pro_google tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -46,7 +46,7 @@ describe("generate_nano_banana_pro_google tool", () => {
     const result = await client.callTool({
       name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "a clean product photo",
         aspect_ratio: "1:1",
       },
@@ -62,14 +62,14 @@ describe("generate_nano_banana_pro_google tool", () => {
 
   it("enqueues with reference images resolved to asset inputs", async () => {
     const fs = createEngineForTest(tempDir);
-    const imageAsset = await fs.artifacts.create("img", "style-ref", "test-proj");
+    const imageAsset = await fs.artifacts.create("img", "style-ref");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
-    await fs.files.write(imageAsset.value.slug, "original.png", await makePng(), "test-proj");
+    await fs.files.write(imageAsset.value.slug, "original.png", await makePng());
 
     const result = await client.callTool({
       name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "same style, new scene",
         image_slugs: [`@${imageAsset.value.slug}`],
         aspect_ratio: "auto",
@@ -86,7 +86,7 @@ describe("generate_nano_banana_pro_google tool", () => {
     const result = await client.callTool({
       name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "a sunset",
         aspect_ratio: "auto",
       },
@@ -99,7 +99,7 @@ describe("generate_nano_banana_pro_google tool", () => {
     const result = await client.callTool({
       name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "@character_1 eating an apple",
         character_refs: ["character:a-imgs:1", "character:a-imgs:2", "character:b"],
       },
@@ -113,7 +113,7 @@ describe("generate_nano_banana_pro_google tool", () => {
     const result = await client.callTool({
       name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "@character_1 and @character_2",
         character_refs: ["character:a-imgs:1", "character:b"],
       },
@@ -127,14 +127,14 @@ describe("generate_nano_banana_pro_google tool", () => {
 
   it("rejects when combined reference count exceeds 10 slots", async () => {
     const fs = createEngineForTest(tempDir);
-    const imageAsset = await fs.artifacts.create("img", "style-ref", "test-proj");
+    const imageAsset = await fs.artifacts.create("img", "style-ref");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
-    await fs.files.write(imageAsset.value.slug, "original.png", await makePng(), "test-proj");
+    await fs.files.write(imageAsset.value.slug, "original.png", await makePng());
 
     const result = await client.callTool({
       name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "too many refs",
         image_slugs: [`@${imageAsset.value.slug}`],
         character_refs: ["character:a-imgs:5", "character:b-imgs:5"],

@@ -35,7 +35,7 @@ describe("scheduled-posts persistence", () => {
     const result = await schedulePost(
       {
         asset_id: "vid-test",
-        project_slug: "p1",
+        book_id: "p1",
         platform: "x",
         text: "hello",
       },
@@ -57,7 +57,7 @@ describe("scheduled-posts persistence", () => {
   it("cancels a pending scheduled post", async () => {
     const future = new Date(Date.now() + 60 * 60_000).toISOString();
     const { schedule_id } = await schedulePost(
-      { asset_id: "img-test", project_slug: "p1", platform: "x" },
+      { asset_id: "img-test", book_id: "p1", platform: "x" },
       future,
     );
 
@@ -71,7 +71,7 @@ describe("scheduled-posts persistence", () => {
   it("rejects invalid scheduled_for", async () => {
     await expect(
       schedulePost(
-        { asset_id: "vid-x", project_slug: "p1", platform: "x" },
+        { asset_id: "vid-x", book_id: "p1", platform: "x" },
         "not-a-date",
       ),
     ).rejects.toThrow(/Invalid scheduled_for/);
@@ -84,7 +84,7 @@ describe("scheduled-posts persistence", () => {
   it("loadAndArmAll re-arms pending entries from Dolt", async () => {
     const future = new Date(Date.now() + 60 * 60_000).toISOString();
     await schedulePost(
-      { asset_id: "vid-survive", project_slug: "p1", platform: "x" },
+      { asset_id: "vid-survive", book_id: "p1", platform: "x" },
       future,
     );
     stopScheduler(); // simulate restart by clearing in-memory timers

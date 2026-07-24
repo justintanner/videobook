@@ -34,22 +34,22 @@ export function rewriteScriptDef(fs: Engine): ToolDef {
         .describe("Platform preset — tunes authentic-capture cues for the target feed"),
       custom_prompt: z.string().max(CUSTOM_PROMPT_MAX).optional()
         .describe("Optional transformation instruction, e.g. 'replace the pig with a man in a blue suit'"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, variant, platform, custom_prompt, project_slug } = args as {
+      const { asset_id, variant, platform, custom_prompt, book_id } = args as {
         asset_id: string;
         variant: RewriteVariant;
         platform?: RewritePlatform;
         custom_prompt?: string;
-        project_slug: string;
+        book_id: string;
       };
 
       if (!asset_id.startsWith("script-")) {
         return error(`rewrite_script only accepts script-* assets, got: ${asset_id}`);
       }
 
-      const originalResult = await fs.metadata.artifacts.read<OriginalMeta>(asset_id, "original", project_slug);
+      const originalResult = await fs.metadata.artifacts.read<OriginalMeta>(asset_id, "original");
       if (!originalResult.ok) {
         return error(`Script ${asset_id} has no native original metadata — cannot determine origin`);
       }
@@ -64,7 +64,7 @@ export function rewriteScriptDef(fs: Engine): ToolDef {
         return error("KIE_API_KEY is not set");
       }
 
-      const scriptManifest = await fs.files.manifest(asset_id, project_slug);
+      const scriptManifest = await fs.files.manifest(asset_id);
       if (!scriptManifest.ok) {
         return error(scriptManifest.error.message);
       }
@@ -74,7 +74,7 @@ export function rewriteScriptDef(fs: Engine): ToolDef {
         type: "rewrite_script",
         assetId: asset_id,
         sourceAssetId,
-        projectSlug: project_slug,
+        bookId: book_id,
         tldr: variant === "tldr",
         platform: platform ?? null,
         customPrompt: custom_prompt ?? null,

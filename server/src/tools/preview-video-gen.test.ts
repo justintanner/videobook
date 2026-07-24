@@ -18,7 +18,7 @@ describe("preview_video tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -35,7 +35,7 @@ describe("preview_video tool", () => {
     delete process.env.OPENAI_API_KEY;
     const result = await client.callTool({
       name: "prepare_video_generation",
-      arguments: { prompt: "a sunset video", project_slug: "test-proj" },
+      arguments: { prompt: "a sunset video", book_id: "test-proj" },
     });
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
@@ -46,7 +46,7 @@ describe("preview_video tool", () => {
     delete process.env.OPENAI_API_KEY;
     const result = await client.callTool({
       name: "prepare_video_generation",
-      arguments: { prompt: "generate a sunset video", project_slug: "test-proj" },
+      arguments: { prompt: "generate a sunset video", book_id: "test-proj" },
     });
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
@@ -57,12 +57,12 @@ describe("preview_video tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "sunset.png", data },
+      arguments: { book_id: "test-proj", filename: "sunset.png", data },
     });
 
     const result = await client.callTool({
       name: "prepare_video_generation",
-      arguments: { prompt: "animate @img-sunset into a video", project_slug: "test-proj", selected_model: "kling30" },
+      arguments: { prompt: "animate @img-sunset into a video", book_id: "test-proj", selected_model: "kling30" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -81,7 +81,7 @@ describe("preview_video tool", () => {
   it("returns preview with empty resolved_assets when prompt has no @tags and model selection skips routing", async () => {
     const result = await client.callTool({
       name: "prepare_video_generation",
-      arguments: { prompt: "create an epic sunrise video", project_slug: "test-proj", selected_model: "kling30" },
+      arguments: { prompt: "create an epic sunrise video", book_id: "test-proj", selected_model: "kling30" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -97,7 +97,7 @@ describe("preview_video tool", () => {
   it("includes unresolved @tag warnings in the preview", async () => {
     const result = await client.callTool({
       name: "prepare_video_generation",
-      arguments: { prompt: "animate @img-nonexistent", project_slug: "test-proj", selected_model: "kling30" },
+      arguments: { prompt: "animate @img-nonexistent", book_id: "test-proj", selected_model: "kling30" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -114,7 +114,7 @@ describe("preview_video tool", () => {
       name: "prepare_video_generation",
       arguments: {
         prompt: "generate with omni",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         selected_model: "gemini_omni",
         selected_provider: "google",
       },

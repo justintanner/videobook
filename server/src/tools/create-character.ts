@@ -9,11 +9,11 @@ export function createCharacterDef(fs: Engine): ToolDef {
     name: "create_character",
     description: "Create a new character folder (char-*), optionally seeded from existing image assets",
     schema: {
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       args: z.array(z.string()).describe("Name of the character, OR one or more image asset slugs"),
     },
     handler: async (payload) => {
-      const { project_slug, args } = payload as { project_slug: string; args: string[] };
+      const { book_id: _book_id, args } = payload as { book_id: string; args: string[] };
 
       const imageSources: string[] = [];
       const nameParts: string[] = [];
@@ -49,7 +49,7 @@ export function createCharacterDef(fs: Engine): ToolDef {
         };
       }
 
-      const assetResult = await fs.artifacts.create("char", displayName, project_slug);
+      const assetResult = await fs.artifacts.create("char", displayName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -60,7 +60,7 @@ export function createCharacterDef(fs: Engine): ToolDef {
 
       for (let i = 0; i < imageSources.length; i++) {
         const sourceId = imageSources[i];
-        const manifestResult = await fs.files.manifest(sourceId, project_slug);
+        const manifestResult = await fs.files.manifest(sourceId);
         if (!manifestResult.ok) {
           return {
             isError: true as const,
@@ -78,7 +78,7 @@ export function createCharacterDef(fs: Engine): ToolDef {
 
         const ext = primaryFile.name.split(".").pop();
         const destFilename = `source-${String(i + 1).padStart(2, "0")}.${ext}`;
-        const copyResult = await fs.files.copy(sourceId, primaryFile.name, asset_id, destFilename, project_slug);
+        const copyResult = await fs.files.copy(sourceId, primaryFile.name, asset_id, destFilename);
         if (!copyResult.ok) {
           return {
             isError: true as const,
@@ -87,11 +87,7 @@ export function createCharacterDef(fs: Engine): ToolDef {
         }
       }
 
-      const metaResult = await fs.metadata.artifacts.write(
-        asset_id,
-        "character",
-        { display_name: displayName },
-        project_slug,
+      const metaResult = await fs.metadata.artifacts.write(asset_id, "character", { display_name: displayName }
       );
       if (!metaResult.ok) {
         return {

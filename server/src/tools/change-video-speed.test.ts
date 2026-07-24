@@ -28,14 +28,14 @@ async function generateTestVideo(outputPath: string): Promise<void> {
 
 async function uploadVideo(
   client: Client,
-  projectSlug: string,
+  bookId: string,
   videoPath: string,
   filename = "original.mp4",
 ): Promise<{ assetId: string; path: string }> {
   const data = (await readFile(videoPath)).toString("base64");
   const result = await client.callTool({
     name: "upload_file",
-    arguments: { project_slug: projectSlug, filename, data },
+    arguments: { book_id: bookId, filename, data },
   });
   return JSON.parse((result.content as TextContent)[0].text);
 }
@@ -61,7 +61,7 @@ describe("change_video_speed tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "speed-proj" },
+      arguments: { book_id: "speed-proj" },
     });
     const uploaded = await uploadVideo(client, "speed-proj", videoPath);
     sharedVideoAssetId = uploaded.assetId;
@@ -86,7 +86,7 @@ describe("change_video_speed tool", () => {
       name: "change_video_speed",
       arguments: {
         asset_id: sharedVideoAssetId,
-        project_slug: "speed-proj",
+        book_id: "speed-proj",
         speed: 1.0,
       },
     });
@@ -101,7 +101,7 @@ describe("change_video_speed tool", () => {
       name: "change_video_speed",
       arguments: {
         asset_id: sharedVideoAssetId,
-        project_slug: "speed-proj",
+        book_id: "speed-proj",
         speed: 0.1,
       },
     });
@@ -117,7 +117,7 @@ describe("change_video_speed tool", () => {
       name: "change_video_speed",
       arguments: {
         asset_id: sharedVideoAssetId,
-        project_slug: "speed-proj",
+        book_id: "speed-proj",
         speed: 5.0,
       },
     });
@@ -133,7 +133,7 @@ describe("change_video_speed tool", () => {
       name: "change_video_speed",
       arguments: {
         asset_id: "vid-does-not-exist",
-        project_slug: "speed-proj",
+        book_id: "speed-proj",
         speed: 2.0,
       },
     });
@@ -145,7 +145,7 @@ describe("change_video_speed tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "speed-proj", filename: "photo.png", data },
+      arguments: { book_id: "speed-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse((uploadResult.content as TextContent)[0].text);
 
@@ -153,7 +153,7 @@ describe("change_video_speed tool", () => {
       name: "change_video_speed",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "speed-proj",
+        book_id: "speed-proj",
         speed: 2.0,
       },
     });
@@ -168,7 +168,7 @@ describe("change_video_speed tool", () => {
       name: "change_video_speed",
       arguments: {
         asset_id: sharedVideoAssetId,
-        project_slug: "speed-proj",
+        book_id: "speed-proj",
         speed: 2.0,
       },
     });
@@ -185,7 +185,7 @@ describe("change_video_speed tool", () => {
       name: "change_video_speed",
       arguments: {
         asset_id: targetDurationVideoAssetId,
-        project_slug: "speed-proj",
+        book_id: "speed-proj",
         target_duration_seconds: 0.5,
       },
     });
@@ -202,7 +202,7 @@ describe("change_video_speed tool", () => {
       name: "change_video_speed",
       arguments: {
         asset_id: sharedVideoAssetId,
-        project_slug: "speed-proj",
+        book_id: "speed-proj",
         speed: 2.0,
         target_duration_seconds: 0.5,
       },

@@ -18,7 +18,7 @@ type RewriteScriptPayload = {
   type: "rewrite_script";
   assetId: string;
   sourceAssetId: string;
-  projectSlug: string;
+  bookId: string;
   tldr?: boolean;
   platform?: Platform | null;
   customPrompt?: string | null;
@@ -151,16 +151,16 @@ export function registerRewriteScriptJob(fs: Engine): void {
     const {
       assetId: scriptAssetId,
       sourceAssetId,
-      projectSlug,
+      bookId,
       tldr,
       platform,
       customPrompt,
     } = payload as RewriteScriptPayload;
 
-    return withLocalLease(fs, projectSlug, scriptAssetId, ctx, "rewrite_script", async () => {
+    return withLocalLease(fs, bookId, scriptAssetId, ctx, "rewrite_script", async () => {
       const responses = buildResponses(requireApiKey("KIE_API_KEY"));
 
-      const readResult = await fs.files.read(scriptAssetId, SCRIPT_FILENAME, projectSlug);
+      const readResult = await fs.files.read(scriptAssetId, SCRIPT_FILENAME);
       if (!readResult.ok) {
         throw new Error(`Failed to read ${SCRIPT_FILENAME} from ${scriptAssetId}: ${readResult.error.message}`);
       }
@@ -177,15 +177,12 @@ export function registerRewriteScriptJob(fs: Engine): void {
       });
 
       const markdown = tldr ? formatTldrMarkdown(rewritten) : formatMarkdown(rewritten);
-      const writeResult = await fs.files.write(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);
+      const writeResult = await fs.files.write(scriptAssetId, SCRIPT_FILENAME, markdown);
       if (!writeResult.ok) {
         throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
       }
 
-      await fs.metadata.artifacts.write(
-        scriptAssetId,
-        "original",
-        {
+      await fs.metadata.artifacts.write(scriptAssetId, "original", {
           origin: "describe_image",
           sourceAssetId,
           model: VISION_MODEL,
@@ -193,8 +190,7 @@ export function registerRewriteScriptJob(fs: Engine): void {
           variant: tldr ? "tldr" : "full",
           ...(platform ? { platform } : {}),
           ...(customPrompt ? { customPrompt } : {}),
-        },
-        projectSlug,
+        }
       );
 
       return { success: true, scriptAssetId, prompt: rewritten.prompt };

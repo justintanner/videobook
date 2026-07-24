@@ -37,7 +37,7 @@ export function extractAudioDef(fs: Engine): ToolDef {
     description: "Extract the audio track from a video asset as MP3. By default creates a new aud-* asset with original.mp3; pass `destination` to instead write the mp3 as a sibling file inside an existing asset (e.g. plan/s1.mp3). Pass `range` to clip a specific time window (e.g. one scene's audio from a longer source).",
     schema: {
       asset_id: z.string().describe("Video asset ID (e.g. vid-my-video)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       destination: z
         .object({
           asset_id: z.string().describe("Existing asset to write the mp3 into (e.g. \"plan\")"),
@@ -58,13 +58,13 @@ export function extractAudioDef(fs: Engine): ToolDef {
         ),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, destination, range } = args as {
+      const { asset_id, book_id, destination, range } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         destination?: { asset_id: string; filename: string };
         range?: { start_s: number; duration_s: number };
       };
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -107,7 +107,7 @@ export function extractAudioDef(fs: Engine): ToolDef {
       const destinationMode = destination !== undefined;
 
       if (destination !== undefined) {
-        const destManifest = await fs.files.manifest(destination.asset_id, project_slug, { includeDotfiles: true });
+        const destManifest = await fs.files.manifest(destination.asset_id);
         if (!destManifest.ok) {
           return {
             isError: true as const,
@@ -129,7 +129,7 @@ export function extractAudioDef(fs: Engine): ToolDef {
         outputPath = join(audioAssetDir, destination.filename);
       } else {
         const audioName = deriveAudioName(asset_id);
-        const assetResult = await fs.artifacts.create("aud", audioName, project_slug);
+        const assetResult = await fs.artifacts.create("aud", audioName);
         if (!assetResult.ok) {
           return {
             isError: true as const,
@@ -149,7 +149,7 @@ export function extractAudioDef(fs: Engine): ToolDef {
         audioAssetId,
         audioAssetDir,
         sourceVideoId: asset_id,
-        projectSlug: project_slug,
+        bookId: book_id,
         destination: destinationMode ? { filename: destination!.filename } : undefined,
         range,
       } as unknown as Record<string, unknown>;

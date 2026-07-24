@@ -41,7 +41,7 @@ function uploadShapeFor(type: ArtifactKind): { mediaType: UploadMediaType; exten
 
 export async function findUnprocessedUploads(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   assets: Artifact[],
 ): Promise<UnprocessedUpload[]> {
   const results = await Promise.all(
@@ -53,10 +53,10 @@ export async function findUnprocessedUploads(
       // Parallelize the independent disk/db reads — each was ~5-20ms serially,
       // multiplied by every asset on every sync.
       const [manifest, originResult, locked, work] = await Promise.all([
-        fs.files.manifest(asset.slug, projectSlug),
-        fs.metadata.artifacts.read(asset.slug, "original", projectSlug),
+        fs.files.manifest(asset.slug),
+        fs.metadata.artifacts.read(asset.slug, "original"),
         fs.jobs.locks.isLocked(asset.path),
-        fs.jobs.artifactWork.read(projectSlug, asset.slug),
+        fs.jobs.artifactWork.read(bookId),
       ]);
       if (!manifest.ok) return null;
       if (originResult.ok) return null;
@@ -122,15 +122,15 @@ export async function findUnprocessedUploads(
 export async function processExternalUpload(
   fs: Engine,
   upload: UnprocessedUpload,
-  projectSlug: string,
+  bookId: string,
 ): Promise<void> {
   const targetFilename = `original${upload.extension}`;
 
   if (upload.mediaFilename !== targetFilename) {
-    await fs.files.rename(upload.assetId, upload.mediaFilename, targetFilename, projectSlug);
+    await fs.files.rename(upload.assetId, upload.mediaFilename, targetFilename);
   }
 
-  await fs.jobs.failures.clear(projectSlug, upload.assetId);
+  await fs.jobs.failures.clear(upload.assetId);
 
   const provenance = { origin: "external", processed_at: new Date().toISOString() };
   if (upload.mediaType === "video") {
@@ -141,7 +141,7 @@ export async function processExternalUpload(
       videoPath,
       assetId: upload.assetId,
       assetDir: upload.assetDir,
-      projectSlug,
+      bookId,
       provenance,
     } as unknown as Record<string, unknown>);
   } else if (upload.mediaType === "image") {
@@ -149,7 +149,7 @@ export async function processExternalUpload(
     await queue.enqueue(jobId, {
       type: "process_image",
       assetId: upload.assetId,
-      projectSlug,
+      bookId,
       extension: upload.extension,
       provenance,
     } as unknown as Record<string, unknown>);
@@ -162,13 +162,9 @@ export async function processExternalUpload(
         duration = probe.duration;
       }
     } catch { /* non-fatal — list_assets backfill can recover */ }
-    await fs.metadata.artifacts.write(
-      upload.assetId,
-      "original",
-      { ...provenance, ...(duration !== undefined ? { duration } : {}) },
-      projectSlug,
+    await fs.metadata.artifacts.write(upload.assetId, "original", { ...provenance, ...(duration !== undefined ? { duration } : {}) }
     );
   } else {
-    await fs.metadata.artifacts.write(upload.assetId, "original", provenance, projectSlug);
+    await fs.metadata.artifacts.write(upload.assetId, "original", provenance);
   }
 }

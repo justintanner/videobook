@@ -26,7 +26,7 @@ export function generateElevenlabsT2aDef(fs: Engine): ToolDef {
     name: "generate_elevenlabs_text_to_audio",
     description: "Generate an aud-* text-to-audio asset using an ElevenLabs voice.",
     schema: {
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       voice_id: z.string().describe("ElevenLabs voice ID"),
       text: apicityStringField(elevenLabsTts.text, "Text to synthesize", { required: true }),
       asset_name: z.string().optional().describe("Optional output audio asset name"),
@@ -35,14 +35,14 @@ export function generateElevenlabsT2aDef(fs: Engine): ToolDef {
     },
     handler: async (args) => {
       const {
-        project_slug,
+        book_id,
         voice_id,
         text,
         asset_name,
         model_id,
         output_format,
       } = args as {
-        project_slug: string;
+        book_id: string;
         voice_id: string;
         text: string;
         asset_name?: string;
@@ -60,7 +60,7 @@ export function generateElevenlabsT2aDef(fs: Engine): ToolDef {
       const voiceId = voice_id.trim();
 
       const name = asset_name?.trim() || `elevenlabs-${slugify(text) || Date.now()}`;
-      const assetResult = await fs.artifacts.create("aud", name, project_slug);
+      const assetResult = await fs.artifacts.create("aud", name);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -74,7 +74,7 @@ export function generateElevenlabsT2aDef(fs: Engine): ToolDef {
         type: "generate_elevenlabs_t2a",
         audAssetId,
         audAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         voiceId,
         text,
         modelId: model_id?.trim() || DEFAULT_MODEL_ID,

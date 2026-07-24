@@ -15,7 +15,7 @@ type GenerateGrokImagineVideoPayload = {
   imageFilenames: string[];
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt?: string;
   mode?: Exclude<NonNullable<GrokImageToVideoRequest["input"]["mode"]>, "spicy">;
   duration?: number;
@@ -30,7 +30,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
   registerJobHandler("generate_grok_imagine_video", async (payload, ctx) => {
     const {
       sourceImageIds, imageFilenames, vidAssetId, vidAssetDir,
-      projectSlug, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker, replaceAudioWith, _provider,
+      bookId, prompt, mode, duration, resolution, aspect_ratio, nsfw_checker, replaceAudioWith, _provider,
     } = payload as GenerateGrokImagineVideoPayload;
 
     if (sourceImageIds.length === 0) {
@@ -48,7 +48,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
 
       const imageUrls: string[] = [];
       for (let i = 0; i < sourceImageIds.length; i++) {
-        imageUrls.push(await uploadAssetFile(fs, sourceImageIds[i], imageFilenames[i], projectSlug));
+        imageUrls.push(await uploadAssetFile(fs, sourceImageIds[i], imageFilenames[i], bookId));
       }
 
       const provider = createXaiPaygatedProvider(apiKey, 120_000);
@@ -56,7 +56,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
         { prompt, duration, resolution, aspect_ratio, nsfw_checker },
         imageUrls,
       );
-      await fs.metadata.artifacts.write(vidAssetId, "generation-payload", request, projectSlug);
+      await fs.metadata.artifacts.write(vidAssetId, "generation-payload", request);
       const { request_id } = await callXaiPaid<XaiVideoGenerateRequest, XaiVideoAsyncResponse>(
         provider.post.v1.videos.generations,
         XAI_VIDEO_GENERATIONS_DOT_PATH,
@@ -64,7 +64,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
       );
 
       {
-        const _ptResult = await fs.jobs.pending.write(projectSlug, {
+        const _ptResult = await fs.jobs.pending.write({
           taskId: request_id,
           taskType: "xai_grok_imagine_video",
           artifactId: vidAssetId,
@@ -89,7 +89,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
 
     const downloadUrls: string[] = [];
     for (let i = 0; i < sourceImageIds.length; i++) {
-      downloadUrls.push(await uploadAssetToKie(fs, sourceImageIds[i], imageFilenames[i], projectSlug));
+      downloadUrls.push(await uploadAssetToKie(fs, sourceImageIds[i], imageFilenames[i], bookId));
     }
 
     const request = buildGrokImagineVideoPayload(
@@ -111,7 +111,7 @@ export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
       taskType: "grok_imagine_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         sourceImageIds,
         ...(prompt !== undefined ? { prompt } : {}),

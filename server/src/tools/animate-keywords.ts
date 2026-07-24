@@ -38,17 +38,14 @@ import { RENDER_ORIENTATIONS } from "./sync.js";
 async function persistSettings(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   enabled: boolean,
   maxCount: number,
   lingerSeconds: number,
   keywords: string[] | null,
 ): Promise<void> {
   for (const orientation of RENDER_ORIENTATIONS) {
-    const existing = await fs.metadata.artifacts.read<Record<string, unknown>>(
-      assetId,
-      `${orientation}.render`,
-      projectSlug,
+    const existing = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orientation}.render`
     );
     const write = await fs.metadata.artifacts.write(assetId, `${orientation}.render`, {
       ...(existing.ok ? existing.value : {}),
@@ -56,7 +53,7 @@ async function persistSettings(
       keywordGraphicsMaxCount: maxCount,
       keywordGraphicsLingerSeconds: lingerSeconds,
       keywordGraphicsKeywords: keywords,
-    }, projectSlug);
+    });
     if (!write.ok) throw new Error(`Failed to persist ${orientation} keyword settings: ${write.error.message}`);
   }
 }
@@ -76,16 +73,13 @@ function isFontSize(value: unknown): value is FontSizePreset {
 async function placementSummary(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   graphics: KeywordGraphic[],
   analysis: KeywordPlacementAnalysis,
 ): Promise<Record<Orientation, Record<string, unknown>>> {
   const summaries = {} as Record<Orientation, Record<string, unknown>>;
   for (const orientation of RENDER_ORIENTATIONS) {
-    const storedResult = await fs.metadata.artifacts.read<Record<string, unknown>>(
-      assetId,
-      `${orientation}.render`,
-      projectSlug,
+    const storedResult = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orientation}.render`
     );
     const stored = storedResult.ok ? storedResult.value : {};
     const settings: KeywordPlacementSettings = {
@@ -122,7 +116,7 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
       "Configure transcript-timed keyword graphics for a video. Extracts exact word-time frames and waits for vision-guided placement that avoids faces, subtitles, and existing text or graphics. Pass keywords for exact transcript words, or omit them for automatic selection. Renders cinematic white serif over-the-shoulder titles. Use enabled=false to turn them off.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid- prefix)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       enabled: z.boolean().optional().describe("Enable keyword graphics (default true)"),
       max_keywords: z
         .number()
@@ -147,14 +141,14 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const {
         asset_id,
-        project_slug,
+        book_id,
         enabled = true,
         max_keywords = DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
         linger_seconds = DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
         keywords,
       } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         enabled?: boolean;
         max_keywords?: number;
         linger_seconds?: number;
@@ -165,14 +159,14 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
         return errorResult("invalid_asset", "asset_id must start with vid-");
       }
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug, { includeDotfiles: true });
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return errorResult("asset_not_found", manifestResult.error.message);
       }
 
       if (!enabled) {
         try {
-          await persistSettings(fs, asset_id, project_slug, false, max_keywords, linger_seconds, null);
+          await persistSettings(fs, asset_id, book_id, false, max_keywords, linger_seconds, null);
         } catch (error) {
           return errorResult("settings_write_failed", error instanceof Error ? error.message : String(error));
         }
@@ -184,7 +178,7 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
         };
       }
 
-      const transcriptResult = await fs.files.read(asset_id, "elevenlabs.json", project_slug);
+      const transcriptResult = await fs.files.read(asset_id, "elevenlabs.json");
       if (!transcriptResult.ok) {
         return errorResult(
           "missing_transcript",
@@ -227,11 +221,11 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
       }
 
       const fingerprint = keywordPlacementFingerprint(videoFile, transcriptResult.value, graphics);
-      let analysis = await readKeywordPlacementAnalysis(fs, asset_id, project_slug);
+      let analysis = await readKeywordPlacementAnalysis(fs, asset_id, book_id);
       let cached = await isKeywordPlacementCacheValid(
         fs,
         asset_id,
-        project_slug,
+        book_id,
         analysis,
         fingerprint,
         graphics,
@@ -244,7 +238,7 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
             "KIE_API_KEY is required to verify face-safe keyword placement.",
           );
         }
-        const clear = await fs.jobs.failures.clear(project_slug, asset_id);
+        const clear = await fs.jobs.failures.clear(asset_id);
         if (!clear.ok) {
           return errorResult("placement_analysis_failed", clear.error.message);
         }
@@ -254,7 +248,7 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
             type: "analyze_keyword_placement",
             assetId: asset_id,
             assetDir: manifestResult.value.path,
-            projectSlug: project_slug,
+            bookId: book_id,
             videoPath: join(manifestResult.value.path, videoFile.name),
             fingerprint,
             graphics,
@@ -274,7 +268,7 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
 
       let placements: Record<Orientation, Record<string, unknown>>;
       try {
-        placements = await placementSummary(fs, asset_id, project_slug, graphics, analysis);
+        placements = await placementSummary(fs, asset_id, book_id, graphics, analysis);
       } catch (error) {
         return errorResult(
           "placement_analysis_failed",
@@ -287,7 +281,7 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
         await persistSettings(
           fs,
           asset_id,
-          project_slug,
+          book_id,
           true,
           max_keywords,
           linger_seconds,

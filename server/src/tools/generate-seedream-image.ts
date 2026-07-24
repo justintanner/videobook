@@ -21,7 +21,7 @@ const seedreamInputSchema = SeedreamImageToImageRequestSchema.shape.input.shape;
 
 const generateSeedreamImageSchema = {
   prompt: apicityStringField(seedreamInputSchema.prompt, "Modification prompt (3-3000 chars)", { required: true }),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   image_slugs: apicityStringArrayField(seedreamInputSchema.image_urls, "1-14 @img-* slugs for reference images", { required: true }),
   aspect_ratio: apicityField(seedreamInputSchema.aspect_ratio, "Output aspect ratio (default 16:9)"),
   quality: apicityField(seedreamInputSchema.quality, "Output quality (basic=2K, high=4K)", { required: true }),
@@ -38,7 +38,7 @@ export function generateSeedreamImageDef(fs: Engine): ToolDef {
     description: "Edit or compose images using ByteDance Seedream 5 Lite via Kie with 1-14 @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
     schema: generateSeedreamImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, aspect_ratio, quality, nsfw_checker } = args as Args;
+      const { prompt, book_id, image_slugs, aspect_ratio, quality, nsfw_checker } = args as Args;
       const prefix = "img";
 
       if (!process.env.KIE_API_KEY) {
@@ -64,14 +64,14 @@ export function generateSeedreamImageDef(fs: Engine): ToolDef {
       });
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
-      const resolved = await resolveImageSlugs(fs, rawSlugs, project_slug);
+      const resolved = await resolveImageSlugs(fs, rawSlugs, book_id);
       if (!resolved.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
       }
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
       const assetName = `${modelSlug("kie", "seedream/5-lite-image-to-image")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create(prefix, assetName, project_slug);
+      const assetResult = await fs.artifacts.create(prefix, assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -90,7 +90,7 @@ export function generateSeedreamImageDef(fs: Engine): ToolDef {
         imgAssetId,
         imgAssetDir,
         sourceImageIds,
-        projectSlug: project_slug,
+        bookId: book_id,
         ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
         ...(quality !== undefined ? { quality } : {}),
         ...(nsfw_checker !== undefined ? { nsfwChecker: nsfw_checker } : {}),

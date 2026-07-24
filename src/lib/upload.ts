@@ -5,12 +5,12 @@ export interface UploadResult {
 }
 
 export async function uploadProjectFile(
-  projectSlug: string,
+  bookId: string,
   data: Blob,
   filename: string,
   targetAssetId?: string,
 ): Promise<UploadResult> {
-  const url = new URL(`/api/upload/${encodeURIComponent(projectSlug)}`, window.location.origin)
+  const url = new URL(`/api/upload/${encodeURIComponent(bookId)}`, window.location.origin)
   url.searchParams.set('filename', filename)
   if (targetAssetId) {
     url.searchParams.set('targetAssetId', targetAssetId)

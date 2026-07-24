@@ -12,7 +12,7 @@ type GenerateAlibabaImagePayload = {
   imgAssetId: string;
   imgAssetDir: string;
   sourceImageIds: string[];
-  projectSlug: string;
+  bookId: string;
   model: AlibabaImageGenerationRequest["model"];
   size?: string;
   n?: number;
@@ -25,14 +25,14 @@ export function registerGenerateAlibabaImageJob(fs: Engine): void {
   registerJobHandler("generate_alibaba_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId,
-      sourceImageIds, projectSlug, model, size, n, watermark, thinkingMode, seed,
+      sourceImageIds, bookId, model, size, n, watermark, thinkingMode, seed,
     } = payload as GenerateAlibabaImagePayload;
 
     const apiKey = requireApiKey("DASHSCOPE_API_KEY");
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, projectSlug, model));
+      uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, bookId, model));
     }
 
     const provider = createAlibaba({ apiKey, timeout: 120_000 });
@@ -41,11 +41,11 @@ export function registerGenerateAlibabaImageJob(fs: Engine): void {
       { prompt, model, size, n, watermark, thinking_mode: thinkingMode, seed },
       uploadedUrls,
     );
-    await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request, projectSlug);
+    await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request);
     const submitResult = await provider.post.api.v1.services.aigc.imageGeneration.generation(request);
     const taskId = submitResult.output.task_id;
     {
-      const _ptResult = await fs.jobs.pending.write(projectSlug, {
+      const _ptResult = await fs.jobs.pending.write({
         taskId,
         taskType: "alibaba_image",
         artifactId: imgAssetId,
@@ -72,14 +72,14 @@ export function registerGenerateAlibabaImageProJob(fs: Engine): void {
   registerJobHandler("generate_alibaba_image_pro", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId,
-      sourceImageIds, projectSlug, size, n, watermark, thinkingMode, seed,
+      sourceImageIds, bookId, size, n, watermark, thinkingMode, seed,
     } = payload as GenerateAlibabaImagePayload;
 
     const apiKey = requireApiKey("DASHSCOPE_API_KEY");
 
     const uploadedUrls: string[] = [];
     for (const { assetId: srcAssetId, filename } of imageInputs) {
-      uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, projectSlug, "wan2.7-image-pro"));
+      uploadedUrls.push(await uploadAssetToAlibaba(fs, srcAssetId, filename, bookId, "wan2.7-image-pro"));
     }
 
     const provider = createAlibaba({ apiKey, timeout: 120_000 });
@@ -88,11 +88,11 @@ export function registerGenerateAlibabaImageProJob(fs: Engine): void {
       { prompt, model: "wan2.7-image-pro", size, n, watermark, thinking_mode: thinkingMode, seed },
       uploadedUrls,
     );
-    await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request, projectSlug);
+    await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request);
     const submitResult = await provider.post.api.v1.services.aigc.imageGeneration.generation(request);
     const taskId = submitResult.output.task_id;
     {
-      const _ptResult = await fs.jobs.pending.write(projectSlug, {
+      const _ptResult = await fs.jobs.pending.write({
         taskId,
         taskType: "alibaba_image_pro",
         artifactId: imgAssetId,

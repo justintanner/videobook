@@ -19,7 +19,7 @@ const gptImageTextInputSchema = GptImage2TextToImageRequestSchema.shape.input.sh
 
 const generateGptImageTextSchema = {
   prompt: apicityStringField(gptImageTextInputSchema.prompt, "Text prompt for image generation (1-20000 chars)", { required: true }),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   aspect_ratio: apicityField(gptImageTextInputSchema.aspect_ratio, "Aspect ratio"),
   resolution: apicityField(gptImageTextInputSchema.resolution, "Output resolution. 1:1 cannot upscale to 4K; auto/unset aspect_ratio is 1K only."),
   nsfw_checker: apicityField(gptImageTextInputSchema.nsfw_checker, "Enable NSFW content filter"),
@@ -34,7 +34,7 @@ export function generateGptImageTextDef(fs: Engine): ToolDef {
     description: "Generate an image using GPT Image 2.0 text-to-image. Creates a new img- asset and enqueues a background job.",
     schema: generateGptImageTextSchema,
     handler: async (args) => {
-      const { prompt, project_slug, aspect_ratio, resolution, nsfw_checker } = args as Args;
+      const { prompt, book_id, aspect_ratio, resolution, nsfw_checker } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return {
@@ -55,7 +55,7 @@ export function generateGptImageTextDef(fs: Engine): ToolDef {
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
       const assetName = slugify(prompt);
-      const assetResult = await fs.artifacts.create("img", assetName, project_slug);
+      const assetResult = await fs.artifacts.create("img", assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -72,7 +72,7 @@ export function generateGptImageTextDef(fs: Engine): ToolDef {
         prompt,
         imgAssetId,
         imgAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
         ...(resolution !== undefined ? { resolution } : {}),
         ...(nsfw_checker !== undefined ? { nsfwChecker: nsfw_checker } : {}),

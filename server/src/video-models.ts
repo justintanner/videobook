@@ -1892,7 +1892,7 @@ const VIDEO_TOOL_NAMES = Object.values(VIDEO_MODELS).map((m) => m.tool_name);
 function buildVideoRoutingPrompt(): string {
   const toolLines: string[] = [];
   for (const model of Object.values(VIDEO_MODELS)) {
-    const paramStr = model.params.filter((p) => p !== "project_slug").join(", ");
+    const paramStr = model.params.filter((p) => p !== "book_id").join(", ");
     const defaults = getVideoToolSchema(model.tool_name)?.defaults ?? {};
     const defaultStr = Object.entries(defaults).map(([k, v]) => `${k}=${String(v)}`).join(", ");
     toolLines.push(`- ${model.tool_name}: ${model.description}`);
@@ -1943,7 +1943,7 @@ KEY CONSTRAINTS:
 - For generate_kie_omnihuman_1_5_video: REQUIRES image_slug (portrait) and audio_slug (driving audio ≤60s); output_resolution "720"/"1080", pe_fast_mode boolean, optional prompt
 
 PROMPT FIELD: Do NOT include "prompt" in params. Only return tool selection and non-prompt parameters.
-DO NOT include project_slug in params.
+DO NOT include book_id in params.
 
 If the user's intent doesn't match a video generation tool, respond with:
 {"tool": null, "params": {}, "error": "Query does not match a video generation tool"}
@@ -1972,7 +1972,7 @@ function actionNameToToolName(action: string): string | null {
   return null;
 }
 
-const NON_PARAM_KEYS = new Set(["project_slug"]);
+const NON_PARAM_KEYS = new Set(["book_id"]);
 
 function buildProvidersForModel(info: VideoModelInfo): ProviderRoute[] {
   if (!info.falToolNames && !info.googleToolName) return info.providers;

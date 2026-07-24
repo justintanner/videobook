@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "playwright/test";
 
 const BASE = "http://localhost:5174";
-const PROJECT_SLUG = "dancing-banana-62";
+const BOOK_ID = "dancing-banana-62";
 
 test.setTimeout(120_000);
 
@@ -43,8 +43,8 @@ test.describe("refetch on model/provider switch", () => {
     await page.waitForTimeout(3000);
 
     const headerText = await page.locator('button', { hasText: 'projects/' }).textContent();
-    if (!headerText?.includes(PROJECT_SLUG)) {
-      await switchProject(page, PROJECT_SLUG);
+    if (!headerText?.includes(BOOK_ID)) {
+      await switchProject(page, BOOK_ID);
     } else {
       await waitForAssetsLoaded(page);
     }

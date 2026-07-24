@@ -14,7 +14,7 @@ type GenerateGptImagePayload = {
   imgAssetId: string;
   imgAssetDir: string;
   sourceImageIds: string[];
-  projectSlug: string;
+  bookId: string;
   aspectRatio?: GptImage2ImageToImageRequest["input"]["aspect_ratio"];
   resolution?: GptImage2ImageToImageRequest["input"]["resolution"];
   nsfwChecker?: boolean;
@@ -24,7 +24,7 @@ export function registerGenerateGptImageJob(fs: Engine): void {
   registerJobHandler("generate_gpt_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,
-      sourceImageIds, projectSlug, aspectRatio, resolution, nsfwChecker,
+      sourceImageIds, bookId, aspectRatio, resolution, nsfwChecker,
     } = payload as GenerateGptImagePayload;
 
     requireApiKey("KIE_API_KEY");
@@ -34,7 +34,7 @@ export function registerGenerateGptImageJob(fs: Engine): void {
       uploadedUrls.push(
         "url" in input
           ? input.url
-          : await uploadAssetToKie(fs, input.assetId, input.filename, projectSlug),
+          : await uploadAssetToKie(fs, input.assetId, input.filename, bookId),
       );
     }
 
@@ -47,7 +47,7 @@ export function registerGenerateGptImageJob(fs: Engine): void {
       taskType: "gpt_image",
       assetId: imgAssetId,
       assetDir: imgAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         sourceImageIds,
         prompt,

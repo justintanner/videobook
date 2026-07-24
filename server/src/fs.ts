@@ -1,11 +1,12 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createEngine } from "videobook-engine";
+import { BookManager } from "./book-manager.js";
+import { scopedBookEngine } from "./book-context.js";
 import { contentStoreFromEnvironment } from "./content-store.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_WORKSPACE_DIR = resolve(__dirname, "../../workspaces");
-const DEFAULT_DATA_DIR = resolve(__dirname, "../../data");
+const DEFAULT_LIBRARY_DIR = resolve(__dirname, "../../books");
 
 export function environmentValue(
   value: string | undefined,
@@ -15,35 +16,48 @@ export function environmentValue(
   return normalized ? normalized : fallback;
 }
 
-export const WORKSPACE_DIR = environmentValue(
-  process.env.VIDEOBOOK_WORKSPACE_DIR,
-  DEFAULT_WORKSPACE_DIR,
+function catalogBackupTemplate(): string | undefined {
+  const legacy = process.env.VIDEOBOOK_CATALOG_BACKUP_URL?.trim();
+  const template = process.env.VIDEOBOOK_CATALOG_BACKUP_URL_TEMPLATE?.trim();
+  if (legacy && !template) {
+    throw new Error(
+      "VIDEOBOOK_CATALOG_BACKUP_URL is not supported for multi-book storage; use VIDEOBOOK_CATALOG_BACKUP_URL_TEMPLATE with {bookId}",
+    );
+  }
+  if (template && !template.includes("{bookId}")) {
+    throw new Error(
+      "VIDEOBOOK_CATALOG_BACKUP_URL_TEMPLATE must include {bookId}",
+    );
+  }
+  return template || undefined;
+}
+
+export const BOOK_LIBRARY_DIR = environmentValue(
+  process.env.VIDEOBOOK_LIBRARY_DIR,
+  DEFAULT_LIBRARY_DIR,
 );
-export const DATA_DIR = environmentValue(
-  process.env.VIDEOBOOK_DATA_DIR,
-  DEFAULT_DATA_DIR,
-);
+export const DATA_DIR = BOOK_LIBRARY_DIR;
+export const WORKSPACE_DIR = BOOK_LIBRARY_DIR;
+
 const objectStore = contentStoreFromEnvironment();
-export const fs = createEngine({
-  dataDir: DATA_DIR,
-  workspaceDir: WORKSPACE_DIR,
+
+export const bookManager = new BookManager({
+  libraryDir: BOOK_LIBRARY_DIR,
   ...(objectStore ? { remoteObjects: objectStore } : {}),
   objectPrefix: environmentValue(
     process.env.VIDEOBOOK_OBJECT_PREFIX,
     "superlzy-media/videobook/sha256",
   ),
-  ...(process.env.VIDEOBOOK_CATALOG_BACKUP_URL?.trim()
-    ? {
-        catalogBackup: {
-          name: environmentValue(
-            process.env.VIDEOBOOK_CATALOG_BACKUP_NAME,
-            "backup",
-          ),
-          url: process.env.VIDEOBOOK_CATALOG_BACKUP_URL.trim(),
-        },
-      }
+  catalogBackupName: environmentValue(
+    process.env.VIDEOBOOK_CATALOG_BACKUP_NAME,
+    "backup",
+  ),
+  ...(catalogBackupTemplate()
+    ? { catalogBackupUrlTemplate: catalogBackupTemplate() }
     : {}),
 });
+
+export const fs = scopedBookEngine;
 
 const testEngines = new Map<string, ReturnType<typeof createEngine>>();
 
@@ -51,7 +65,10 @@ export function createEngineForTest(rootDir: string) {
   const normalizedRoot = resolve(rootDir);
   const existing = testEngines.get(normalizedRoot);
   if (existing) return existing;
-  const engine = createEngine({ rootDir: normalizedRoot });
+  const engine = createEngine({
+    rootDir: normalizedRoot,
+    initialBookSlug: "test-book",
+  });
   testEngines.set(normalizedRoot, engine);
   return engine;
 }

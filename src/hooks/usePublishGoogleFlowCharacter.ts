@@ -6,7 +6,7 @@ import { parseCharacterMetadataObject } from '@/lib/character-name'
 import { useMcpConnection } from './useMcpConnection'
 
 export function usePublishGoogleFlowCharacter(
-  projectSlug: string | null
+  bookId: string | null
 ) {
   const { callTool, state } = useMcpConnection()
   const [publishing, setPublishing] = useState(false)
@@ -22,7 +22,7 @@ export function usePublishGoogleFlowCharacter(
       existingMetadata?: string
     },
   ) => {
-    if (state !== 'ready' || !projectSlug) return null
+    if (state !== 'ready' || !bookId) return null
 
     const meta = parseCharacterMetadataObject(options?.existingMetadata)
     const resolvedName = displayName.trim()
@@ -45,7 +45,7 @@ export function usePublishGoogleFlowCharacter(
         })()
 
       const result = await callTool('create_google_flow_character', {
-        project_slug: projectSlug,
+        book_id: bookId,
         image_slugs: [`@${assetId}`],
         display_name: resolvedName,
         ...(personalityNotes ? { personality_notes: personalityNotes } : {}),
@@ -80,7 +80,7 @@ export function usePublishGoogleFlowCharacter(
           google_flow_published_at: new Date().toISOString(),
         }
         const metaResult = await callTool('set_character_metadata', {
-          project_slug: projectSlug,
+          book_id: bookId,
           char_asset_id: charId,
           metadata: JSON.stringify(merged),
         })
@@ -111,7 +111,7 @@ export function usePublishGoogleFlowCharacter(
     } finally {
       setPublishing(false)
     }
-  }, [callTool, state, projectSlug, refresh])
+  }, [callTool, state, bookId, refresh])
 
   return { publishCharacter, publishing }
 }

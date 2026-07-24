@@ -16,7 +16,7 @@ describe("remove_timeline_slot tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -32,7 +32,7 @@ describe("remove_timeline_slot tool", () => {
     await client.callTool({
       name: "set_timeline",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slots: [
           { slug: "vid-a", volume: 75 },
           { slug: "vid-b", audioFadeIn: 200 },
@@ -46,7 +46,7 @@ describe("remove_timeline_slot tool", () => {
 
     const result = await client.callTool({
       name: "remove_timeline_slot",
-      arguments: { project_slug: "test-proj", slot: "s02" },
+      arguments: { book_id: "test-proj", slot: "s02" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -67,7 +67,7 @@ describe("remove_timeline_slot tool", () => {
     await client.callTool({
       name: "set_timeline",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slots: [
           { slug: "vid-a" },
           { slug: "" },
@@ -80,7 +80,7 @@ describe("remove_timeline_slot tool", () => {
 
     const result = await client.callTool({
       name: "remove_timeline_slot",
-      arguments: { project_slug: "test-proj", slot: "s02" },
+      arguments: { book_id: "test-proj", slot: "s02" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -94,7 +94,7 @@ describe("remove_timeline_slot tool", () => {
     await client.callTool({
       name: "set_timeline",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slots: [
           { slug: "vid-a" },
           { slug: "" },
@@ -107,7 +107,7 @@ describe("remove_timeline_slot tool", () => {
 
     const result = await client.callTool({
       name: "remove_timeline_slot",
-      arguments: { project_slug: "test-proj", slot: "s03" },
+      arguments: { book_id: "test-proj", slot: "s03" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -120,14 +120,14 @@ describe("remove_timeline_slot tool", () => {
     await client.callTool({
       name: "set_timeline",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slots: [{ slug: "vid-a" }],
       },
     });
 
     const result = await client.callTool({
       name: "remove_timeline_slot",
-      arguments: { project_slug: "test-proj", slot: "s01" },
+      arguments: { book_id: "test-proj", slot: "s01" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -138,7 +138,7 @@ describe("remove_timeline_slot tool", () => {
   it.each(["slot2", "s00"])("rejects invalid slot identifier %s", async (slot) => {
     const result = await client.callTool({
       name: "remove_timeline_slot",
-      arguments: { project_slug: "test-proj", slot },
+      arguments: { book_id: "test-proj", slot },
     });
 
     expect(result.isError).toBe(true);
@@ -149,21 +149,21 @@ describe("remove_timeline_slot tool", () => {
     await client.callTool({
       name: "set_timeline",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         slots: [{ slug: "vid-a" }],
       },
     });
 
     const virtual = await client.callTool({
       name: "remove_timeline_slot",
-      arguments: { project_slug: "test-proj", slot: "s02" },
+      arguments: { book_id: "test-proj", slot: "s02" },
     });
     expect(virtual.isError).toBe(true);
     expect((virtual.content as TextContent)[0].text).toContain("stored slots");
 
     const missing = await client.callTool({
       name: "remove_timeline_slot",
-      arguments: { project_slug: "missing", slot: "s01" },
+      arguments: { book_id: "missing", slot: "s01" },
     });
     expect(missing.isError).toBe(true);
   });

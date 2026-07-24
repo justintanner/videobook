@@ -12,7 +12,7 @@ type GenerateWan27R2vVideoPayload = {
   type: "generate_wan27_r2v_video";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   negative_prompt?: string;
   imageInputs: RefInput[];
@@ -34,11 +34,11 @@ type GenerateWan27R2vVideoPayload = {
 async function uploadInputs(
   fs: Engine,
   inputs: RefInput[],
-  projectSlug: string,
+  bookId: string,
 ): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename, projectSlug));
+    urls.push(await uploadAssetToKie(fs, assetId, filename, bookId));
   }
   return urls;
 }
@@ -46,15 +46,15 @@ async function uploadInputs(
 async function uploadSingle(
   fs: Engine,
   input: RefInput,
-  projectSlug: string,
+  bookId: string,
 ): Promise<string> {
-  return uploadAssetToKie(fs, input.assetId, input.filename, projectSlug);
+  return uploadAssetToKie(fs, input.assetId, input.filename, bookId);
 }
 
 export function registerGenerateWan27R2vVideoJob(fs: Engine): void {
   registerJobHandler("generate_wan27_r2v_video", async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,
+      vidAssetId, vidAssetDir, bookId, prompt, negative_prompt,
       imageInputs, videoInputs, firstFrame, voiceRef,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
       resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed,
@@ -62,10 +62,10 @@ export function registerGenerateWan27R2vVideoJob(fs: Engine): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const referenceImageUrls = await uploadInputs(fs, imageInputs, projectSlug);
-    const referenceVideoUrls = await uploadInputs(fs, videoInputs, projectSlug);
-    const firstFrameUrl = firstFrame ? await uploadSingle(fs, firstFrame, projectSlug) : undefined;
-    const referenceVoiceUrl = voiceRef ? await uploadSingle(fs, voiceRef, projectSlug) : undefined;
+    const referenceImageUrls = await uploadInputs(fs, imageInputs, bookId);
+    const referenceVideoUrls = await uploadInputs(fs, videoInputs, bookId);
+    const firstFrameUrl = firstFrame ? await uploadSingle(fs, firstFrame, bookId) : undefined;
+    const referenceVoiceUrl = voiceRef ? await uploadSingle(fs, voiceRef, bookId) : undefined;
 
     const request = buildWan27ReferenceVideoPayload(
       { prompt, negative_prompt, resolution, aspect_ratio, duration, prompt_extend, watermark, nsfw_checker, seed },
@@ -76,7 +76,7 @@ export function registerGenerateWan27R2vVideoJob(fs: Engine): void {
       taskType: "wan27_r2v_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         prompt,
         mode: "reference",

@@ -392,7 +392,7 @@ describe("rename_all tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -407,7 +407,7 @@ describe("rename_all tool", () => {
     delete process.env.OPENAI_API_KEY;
     const result = await client.callTool({
       name: "rename_all",
-      arguments: { project_slug: "test-proj", dry_run: true },
+      arguments: { book_id: "test-proj", dry_run: true },
     });
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
@@ -418,7 +418,7 @@ describe("rename_all tool", () => {
     process.env.OPENAI_API_KEY = "test-key-for-validation";
     const result = await client.callTool({
       name: "rename_all",
-      arguments: { project_slug: "test-proj", dry_run: true },
+      arguments: { book_id: "test-proj", dry_run: true },
     });
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
@@ -429,7 +429,7 @@ describe("rename_all tool", () => {
   it("apply requires a non-empty renames array", async () => {
     const result = await client.callTool({
       name: "rename_all",
-      arguments: { project_slug: "test-proj", dry_run: false },
+      arguments: { book_id: "test-proj", dry_run: false },
     });
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
@@ -440,7 +440,7 @@ describe("rename_all tool", () => {
     const result = await client.callTool({
       name: "rename_all",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         dry_run: false,
         renames: [{ asset_id: "vid-nonexistent", suggested_name: "whatever" }],
       },
@@ -453,7 +453,7 @@ describe("rename_all tool", () => {
     const result = await client.callTool({
       name: "rename_all",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         dry_run: true,
         renames: [{ asset_id: "vid-nope", suggested_name: "anything" }],
       },
@@ -469,7 +469,7 @@ describe("rename_all tool", () => {
     const data = Buffer.from("fake-png").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo.png", data },
+      arguments: { book_id: "test-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse((uploadResult.content as TextContent)[0].text);
 
@@ -479,7 +479,7 @@ describe("rename_all tool", () => {
     while (Date.now() < deadline) {
       const beforeList = await client.callTool({
         name: "list_assets",
-        arguments: { project_slug: "test-proj" },
+        arguments: { book_id: "test-proj" },
       });
       const beforeAssets = JSON.parse((beforeList.content as TextContent)[0].text).assets;
       const found = beforeAssets.find((a: { id: string }) => a.id === assetId);
@@ -490,7 +490,7 @@ describe("rename_all tool", () => {
     const result = await client.callTool({
       name: "rename_all",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         dry_run: true,
         renames: [{ asset_id: assetId, suggested_name: "sunset beach" }],
       },
@@ -504,7 +504,7 @@ describe("rename_all tool", () => {
     // The original asset must still exist unchanged.
     const afterList = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     const afterAssets = JSON.parse((afterList.content as TextContent)[0].text).assets;
     expect(afterAssets.some((a: { id: string }) => a.id === assetId)).toBe(true);
@@ -515,7 +515,7 @@ describe("rename_all tool", () => {
     const data = Buffer.from("fake-png").toString("base64");
     const upload1 = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "a.png", data },
+      arguments: { book_id: "test-proj", filename: "a.png", data },
     });
     const id1 = JSON.parse((upload1.content as TextContent)[0].text).assetId as string;
 
@@ -524,7 +524,7 @@ describe("rename_all tool", () => {
     while (Date.now() < deadline) {
       const list = await client.callTool({
         name: "list_assets",
-        arguments: { project_slug: "test-proj" },
+        arguments: { book_id: "test-proj" },
       });
       const assets = JSON.parse((list.content as TextContent)[0].text).assets;
       const found = assets.find((a: { id: string }) => a.id === id1);
@@ -535,7 +535,7 @@ describe("rename_all tool", () => {
     const result = await client.callTool({
       name: "rename_all",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         dry_run: false,
         renames: [{ asset_id: id1, suggested_name: "sunset beach" }],
       },
@@ -549,7 +549,7 @@ describe("rename_all tool", () => {
     // Old id gone, new id present.
     const afterList = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     const afterAssets = JSON.parse((afterList.content as TextContent)[0].text).assets;
     expect(afterAssets.some((a: { id: string }) => a.id === id1)).toBe(false);
@@ -560,7 +560,7 @@ describe("rename_all tool", () => {
     const data = Buffer.from("fake-png").toString("base64");
     const upload = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "t.png", data },
+      arguments: { book_id: "test-proj", filename: "t.png", data },
     });
     const id = JSON.parse((upload.content as TextContent)[0].text).assetId as string;
 
@@ -569,7 +569,7 @@ describe("rename_all tool", () => {
     while (Date.now() < deadline) {
       const list = await client.callTool({
         name: "list_assets",
-        arguments: { project_slug: "test-proj" },
+        arguments: { book_id: "test-proj" },
       });
       const assets = JSON.parse((list.content as TextContent)[0].text).assets;
       const found = assets.find((a: { id: string }) => a.id === id);
@@ -580,13 +580,13 @@ describe("rename_all tool", () => {
     // Assign the asset to a timeline slot, then rename it.
     await client.callTool({
       name: "assign_slot",
-      arguments: { project_slug: "test-proj", slot: "s01", asset_id: id },
+      arguments: { book_id: "test-proj", slot: "s01", asset_id: id },
     });
 
     const result = await client.callTool({
       name: "rename_all",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         dry_run: false,
         renames: [{ asset_id: id, suggested_name: "sunset beach" }],
       },
@@ -599,7 +599,7 @@ describe("rename_all tool", () => {
     // Timeline should now reference the new id.
     const timelineResult = await client.callTool({
       name: "get_timeline",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
     const timeline = JSON.parse((timelineResult.content as TextContent)[0].text);
     const slots = timeline.slots ?? [];
@@ -610,7 +610,7 @@ describe("rename_all tool", () => {
     const data = Buffer.from("fake-png").toString("base64");
     const upload = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "plan.png", data },
+      arguments: { book_id: "test-proj", filename: "plan.png", data },
     });
     const assetId = JSON.parse((upload.content as TextContent)[0].text).assetId as string;
 
@@ -618,7 +618,7 @@ describe("rename_all tool", () => {
     while (Date.now() < deadline) {
       const list = await client.callTool({
         name: "list_assets",
-        arguments: { project_slug: "test-proj" },
+        arguments: { book_id: "test-proj" },
       });
       const assets = JSON.parse((list.content as TextContent)[0].text).assets;
       const found = assets.find((asset: { id: string; status: string }) => asset.id === assetId);
@@ -627,7 +627,7 @@ describe("rename_all tool", () => {
     }
 
     const fsObj = createEngineForTest(tempDir);
-    const notebook = await fsObj.notebooks.create("Main", "test-proj");
+    const notebook = await fsObj.notebooks.create("Main");
     expect(notebook.ok).toBe(true);
     if (!notebook.ok) return;
     const saved = await fsObj.notebooks.write({
@@ -660,13 +660,13 @@ describe("rename_all tool", () => {
         target: "image-1",
         targetInput: "input-0",
       }],
-    }, "test-proj");
+    });
     expect(saved.ok).toBe(true);
 
     const result = await client.callTool({
       name: "rename_all",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         dry_run: false,
         renames: [{ asset_id: assetId, suggested_name: "sunset beach" }],
       },
@@ -674,7 +674,7 @@ describe("rename_all tool", () => {
 
     expect(result.isError).toBeFalsy();
     const renamed = "img-sunset-beach";
-    const updated = fsObj.notebooks.read(notebook.value.id, "test-proj");
+    const updated = fsObj.notebooks.read(notebook.value.id);
     expect(updated.ok).toBe(true);
     if (!updated.ok) return;
     const imageInputs = updated.value.cells[0].inputs as {

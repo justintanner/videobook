@@ -27,7 +27,7 @@ describe("generate_gemini_omni_video tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -44,18 +44,18 @@ describe("generate_gemini_omni_video tool", () => {
 
   it("enqueues with image and video slugs before provider upload", async () => {
     const fs = createEngineForTest(tempDir);
-    const imageAsset = await fs.artifacts.create("img", "source-img", "test-proj");
-    const videoAsset = await fs.artifacts.create("vid", "source-video", "test-proj");
+    const imageAsset = await fs.artifacts.create("img", "source-img");
+    const videoAsset = await fs.artifacts.create("vid", "source-video");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
     if (!videoAsset.ok) throw new Error("Failed to create video asset");
 
-    await fs.files.write(imageAsset.value.slug, "original.png", await makePng(), "test-proj");
-    await fs.files.write(videoAsset.value.slug, "original.mp4", Buffer.from("fake mp4"), "test-proj");
+    await fs.files.write(imageAsset.value.slug, "original.png", await makePng());
+    await fs.files.write(videoAsset.value.slug, "original.mp4", Buffer.from("fake mp4"));
 
     const result = await client.callTool({
       name: "generate_kie_gemini_omni_video",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "char swap",
         image_slugs: [`@${imageAsset.value.slug}`],
         video_slug: `@${videoAsset.value.slug}`,

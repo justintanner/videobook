@@ -25,14 +25,14 @@ async function createTestPng(width: number, height: number): Promise<Buffer> {
 
 async function uploadImage(
   client: Client,
-  projectSlug: string,
+  bookId: string,
   buffer: Buffer,
   filename = "photo.png",
 ): Promise<{ assetId: string; path: string }> {
   const data = buffer.toString("base64");
   const result = await client.callTool({
     name: "upload_file",
-    arguments: { project_slug: projectSlug, filename, data },
+    arguments: { book_id: bookId, filename, data },
   });
   return JSON.parse((result.content as TextContent)[0].text);
 }
@@ -72,7 +72,7 @@ describe("crop_image tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "crop-img-proj" },
+      arguments: { book_id: "crop-img-proj" },
     });
   });
 
@@ -95,7 +95,7 @@ describe("crop_image tool", () => {
       name: "crop_image",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "crop-img-proj",
+        book_id: "crop-img-proj",
         ratio: "9:16",
         x, y, w, h,
       },
@@ -125,7 +125,7 @@ describe("crop_image tool", () => {
       name: "crop_image",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "crop-img-proj",
+        book_id: "crop-img-proj",
         ratio: "1:1",
         x, y, w, h,
       },
@@ -146,7 +146,7 @@ describe("crop_image tool", () => {
       name: "crop_image",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "crop-img-proj",
+        book_id: "crop-img-proj",
         ratio: "16:9",
         x: 0.1,
         y: 0.1,
@@ -170,7 +170,7 @@ describe("crop_image tool", () => {
       name: "crop_image",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "crop-img-proj",
+        book_id: "crop-img-proj",
         ratio: "1:1",
         x: 0.5,
         y: 0,
@@ -192,7 +192,7 @@ describe("crop_image tool", () => {
       name: "crop_image",
       arguments: {
         asset_id: uploaded.assetId,
-        project_slug: "crop-img-proj",
+        book_id: "crop-img-proj",
         ratio: "16:9",
         x: 0.1,
         y: 0.1,
@@ -211,7 +211,7 @@ describe("crop_image tool", () => {
       name: "crop_image",
       arguments: {
         asset_id: "img-does-not-exist",
-        project_slug: "crop-img-proj",
+        book_id: "crop-img-proj",
         ratio: "1:1",
         x: 0,
         y: 0,
@@ -228,7 +228,7 @@ describe("crop_image tool", () => {
     const data = Buffer.from("not-an-image").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "crop-img-proj", filename: "clip.mp4", data },
+      arguments: { book_id: "crop-img-proj", filename: "clip.mp4", data },
     });
     // Processing may fail for invalid bytes, but the asset should still be created.
     const text = (uploadResult.content as TextContent)[0]?.text ?? "";
@@ -245,7 +245,7 @@ describe("crop_image tool", () => {
       name: "crop_image",
       arguments: {
         asset_id: assetId,
-        project_slug: "crop-img-proj",
+        book_id: "crop-img-proj",
         ratio: "1:1",
         x: 0.1,
         y: 0.1,

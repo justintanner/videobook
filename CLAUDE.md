@@ -21,7 +21,7 @@ React 19 + TypeScript + Vite 7 SPA using MCP (Model Context Protocol) as the API
 
 **MCP Server:** `server/src/index.ts` — Express app exposing `POST /mcp` with `StreamableHTTPServerTransport` (stateless). Tools are registered in `server/src/tools/`. The server is also accessible to external MCP clients (Claude Desktop, etc.) at `http://localhost:3001/mcp`.
 
-**Domain/storage layer:** `videobook-engine` — npm dependency providing the Dolt-native project, artifact, file/CAS, metadata, history, and runtime-job APIs. The single authoritative catalog is `VIDEOBOOK_DATA_DIR/videobook.db`; UUID-addressed workspaces are disposable materializations.
+**Domain/storage layer:** `videobook-engine` 2.0.1 — each book has an isolated UUIDv7 root under `VIDEOBOOK_LIBRARY_DIR`, with its own Dolt-native catalog, files/CAS, metadata, history, notebooks, timeline, and runtime jobs. Application-wide settings live at `VIDEOBOOK_APP_STATE_PATH`.
 
 ## TypeScript
 
@@ -33,7 +33,7 @@ Flat ESLint config (`eslint.config.js`) with typescript-eslint, react-hooks, and
 
 ## Filesystem Operations
 
-IMPORTANT: All project, artifact, and managed-file operations MUST use a namespaced `Engine` from `createEngine()` in `videobook-engine`. Direct `node:fs` is only for explicit scratch paths returned by the engine or unrelated application configuration. Persist completed scratch outputs with `engine.files.writeFromPath()` or `engine.files.ingestWorkspace()`.
+IMPORTANT: All book, artifact, and managed-file operations MUST use a scoped `Engine` from `createEngine()` in `videobook-engine`. Direct `node:fs` is only for explicit scratch paths returned by the engine or unrelated application configuration. Persist completed scratch outputs with `engine.files.writeFromPath()` or `engine.files.ingestWorkspace()`.
 
 ## External API Calls
 

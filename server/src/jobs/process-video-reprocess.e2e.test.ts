@@ -80,14 +80,14 @@ describe("process_video force re-process tolerates byte-identical original.mp3",
 
     const createResult = await client.callTool({
       name: "create_project",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
     expect(createResult.isError).toBeFalsy();
 
     const data = (await readFile(videoPath)).toString("base64");
     const uploaded = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: PROJECT, filename: "original.mp4", data },
+      arguments: { book_id: PROJECT, filename: "original.mp4", data },
     });
     const parsed = parse(uploaded) as unknown as {
       assetId: string;
@@ -115,7 +115,7 @@ describe("process_video force re-process tolerates byte-identical original.mp3",
       videoPath: join(assetDir, "original.mp4"),
       assetId,
       assetDir,
-      projectSlug: PROJECT,
+      bookId: PROJECT,
       provenance: { origin: "test-reprocess" },
       force: true,
       skipDownstreamJobs: true,
@@ -129,7 +129,7 @@ describe("process_video force re-process tolerates byte-identical original.mp3",
     expect(after.equals(before)).toBe(true);
 
     const fs = createEngineForTest(getEngineRoot());
-    const read = await fs.files.read(assetId, "original.mp3", PROJECT);
+    const read = await fs.files.read(assetId, "original.mp3");
     expect(read.ok).toBe(true);
   });
 
@@ -138,15 +138,11 @@ describe("process_video force re-process tolerates byte-identical original.mp3",
     await generateAudioOnlyMp4(audioOnlyPath);
 
     const fs = createEngineForTest(getEngineRoot());
-    const created = await fs.artifacts.create("vid", "audio-only", PROJECT);
+    const created = await fs.artifacts.create("vid", "audio-only");
     expect(created.ok).toBe(true);
     if (!created.ok) return;
 
-    const written = await fs.files.write(
-      created.value.slug,
-      "original.mp4",
-      await readFile(audioOnlyPath),
-      PROJECT,
+    const written = await fs.files.write(created.value.slug, "original.mp4", await readFile(audioOnlyPath)
     );
     expect(written.ok).toBe(true);
     if (!written.ok) return;
@@ -158,7 +154,7 @@ describe("process_video force re-process tolerates byte-identical original.mp3",
         videoPath: join(created.value.path, "original.mp4"),
         assetId: created.value.slug,
         assetDir: created.value.path,
-        projectSlug: PROJECT,
+        bookId: PROJECT,
         provenance: { origin: "test-audio-only" },
         skipDownstreamJobs: true,
       } as unknown as Parameters<typeof queue.enqueueAndWait>[1],

@@ -28,7 +28,7 @@ export function extendAudioDef(fs: Engine): ToolDef {
       target_duration_seconds: z.number().positive().describe("Requested total output duration in seconds"),
       continuation_prompt: z.string().min(1).max(MAX_SOUND_GENERATION_PROMPT_CHARS).optional().describe('Optional direction for what should follow the source audio, e.g. "add outro music"'),
       asset_name: z.string().min(1).optional().describe("Optional name for the new aud-* asset"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
       const {
@@ -36,13 +36,13 @@ export function extendAudioDef(fs: Engine): ToolDef {
         target_duration_seconds,
         continuation_prompt,
         asset_name,
-        project_slug,
+        book_id,
       } = args as {
         asset_id: string;
         target_duration_seconds: number;
         continuation_prompt?: string;
         asset_name?: string;
-        project_slug: string;
+        book_id: string;
       };
 
       if (!process.env.ELEVENLABS_API_KEY) {
@@ -59,7 +59,7 @@ export function extendAudioDef(fs: Engine): ToolDef {
         return toolError(`continuation_prompt supports at most ${MAX_CONTINUATION_DIRECTION_CHARS} characters of direction`);
       }
 
-      const manifest = await fs.files.manifest(sourceAssetId, project_slug, { includeDotfiles: true });
+      const manifest = await fs.files.manifest(sourceAssetId);
       if (!manifest.ok) return toolError(manifest.error.message);
       const audioFile = findAudioFile(manifest.value.files, sourceAssetId);
       if (!audioFile) return toolError(`No audio file found in asset ${sourceAssetId}`);
@@ -89,7 +89,7 @@ export function extendAudioDef(fs: Engine): ToolDef {
       }
 
       const name = asset_name?.trim() || defaultExtendedName(sourceAssetId, target_duration_seconds);
-      const created = await fs.artifacts.create("aud", name, project_slug);
+      const created = await fs.artifacts.create("aud", name);
       if (!created.ok) return toolError(`Failed to create audio asset: ${created.error.message}`);
 
       const jobId = `extend-audio-${created.value.slug}-${Date.now()}`;
@@ -101,7 +101,7 @@ export function extendAudioDef(fs: Engine): ToolDef {
         sourceDurationMs,
         targetDurationMs,
         continuationPrompt,
-        projectSlug: project_slug,
+        bookId: book_id,
       } as unknown as Record<string, unknown>);
 
       return {

@@ -31,7 +31,7 @@ describe("download_video tool", () => {
     registerJobHandler("download_video", async () => ({ stubbed: true }));
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -45,7 +45,7 @@ describe("download_video tool", () => {
       name: "download_video",
       arguments: {
         url: "https://example.com/video",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         start_time: "not-a-time",
       },
     });
@@ -60,7 +60,7 @@ describe("download_video tool", () => {
       name: "download_video",
       arguments: {
         url: "https://example.com/video",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         start_time: "30",
         full: true,
       },
@@ -82,7 +82,7 @@ describe("download_video tool", () => {
       name: "download_video",
       arguments: {
         url: "https://example.com/video",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         start_time: "10",
         end_time: "30",
       },
@@ -105,7 +105,7 @@ describe("download_video tool", () => {
       name: "download_video",
       arguments: {
         url: "https://example.com/video",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         start_time: "60",
         end_time: "30",
       },
@@ -121,7 +121,7 @@ describe("download_video tool", () => {
       name: "download_video",
       arguments: {
         url: "http://127.0.0.1:9/not-a-real-video-url-12345",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -138,7 +138,7 @@ describe("download_video tool", () => {
       name: "download_video",
       arguments: {
         url: "https://example.com/video",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         start_time: "30",
         end_time: "30",
       },
@@ -154,7 +154,7 @@ describe("download_video tool", () => {
       name: "download_video",
       arguments: {
         url: "https://example.com/video",
-        project_slug: "test-proj",
+        book_id: "test-proj",
         end_time: "60",
         full: true,
       },

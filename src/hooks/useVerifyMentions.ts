@@ -23,15 +23,15 @@ const IDLE: VerifyMentionsState = { status: 'idle', verdicts: [], error: null };
 
 export function useVerifyMentions(
   callTool: UseMcpResult['callTool'],
-  projectSlug: string | undefined,
+  bookId: string | undefined,
 ) {
   const [state, setState] = useState<VerifyMentionsState>(IDLE);
 
   const verify = useCallback(async (text: string) => {
-    if (!projectSlug) return;
+    if (!bookId) return;
     setState({ status: 'checking', verdicts: [], error: null });
     try {
-      const res = await callTool('verify_x_mentions', { text, project_slug: projectSlug }) as ToolTextResult;
+      const res = await callTool('verify_x_mentions', { text, book_id: bookId }) as ToolTextResult;
       const raw = Array.isArray(res.content) && res.content[0]?.text ? res.content[0].text : null;
       if (res.isError || !raw) {
         setState({ status: 'error', verdicts: [], error: raw ?? 'Mention verification failed' });
@@ -42,7 +42,7 @@ export function useVerifyMentions(
     } catch (err) {
       setState({ status: 'error', verdicts: [], error: err instanceof Error ? err.message : String(err) });
     }
-  }, [callTool, projectSlug]);
+  }, [callTool, bookId]);
 
   const reset = useCallback(() => setState(IDLE), []);
 

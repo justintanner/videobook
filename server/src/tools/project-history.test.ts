@@ -14,7 +14,7 @@ describe("project_history tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -27,12 +27,12 @@ describe("project_history tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo.png", data },
+      arguments: { book_id: "test-proj", filename: "photo.png", data },
     });
 
     const result = await client.callTool({
       name: "project_history",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
 
     const commits = JSON.parse(
@@ -49,16 +49,16 @@ describe("project_history tool", () => {
     const data = Buffer.from("fake-data").toString("base64");
     await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "a.png", data },
+      arguments: { book_id: "test-proj", filename: "a.png", data },
     });
     await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "b.png", data },
+      arguments: { book_id: "test-proj", filename: "b.png", data },
     });
 
     const result = await client.callTool({
       name: "project_history",
-      arguments: { project_slug: "test-proj", limit: 1 },
+      arguments: { book_id: "test-proj", limit: 1 },
     });
 
     const commits = JSON.parse(
@@ -70,7 +70,7 @@ describe("project_history tool", () => {
   it("returns an error for a nonexistent project slug", async () => {
     const result = await client.callTool({
       name: "project_history",
-      arguments: { project_slug: "nonexistent-project" },
+      arguments: { book_id: "nonexistent-project" },
     });
     expect(result.isError).toBe(true);
   });

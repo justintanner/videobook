@@ -19,7 +19,7 @@ const grokTextToImageInputSchema = GrokTextToImageRequestSchema.shape.input.shap
 
 const generateGrokImagineTextImageSchema = {
   prompt: apicityStringField(grokTextToImageInputSchema.prompt, "Text prompt for image generation", { required: true }),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   aspect_ratio: apicityField(grokTextToImageInputSchema.aspect_ratio, "Aspect ratio"),
   enable_pro: apicityField(grokTextToImageInputSchema.enable_pro, "Quality mode when true, speed mode when false"),
   nsfw_checker: apicityField(grokTextToImageInputSchema.nsfw_checker, "Enable NSFW content safety filter (default false)"),
@@ -35,7 +35,7 @@ export function generateGrokImagineTextImageDef(fs: Engine): ToolDef {
       "Generate an image from a text prompt using Grok Imagine. Creates a new img- asset and enqueues a background job. No reference images needed.",
     schema: generateGrokImagineTextImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, aspect_ratio, enable_pro, nsfw_checker, _provider } = args as Args;
+      const { prompt, book_id, aspect_ratio, enable_pro, nsfw_checker, _provider } = args as Args;
 
       const isXai = _provider !== undefined && _provider.startsWith("xai");
       const requiredKey = isXai ? "XAI_API_KEY" : "KIE_API_KEY";
@@ -47,7 +47,7 @@ export function generateGrokImagineTextImageDef(fs: Engine): ToolDef {
       }
 
       const assetName = `${modelSlug("kie", "grok-imagine/text-to-image")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("img", assetName, project_slug);
+      const assetResult = await fs.artifacts.create("img", assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -64,7 +64,7 @@ export function generateGrokImagineTextImageDef(fs: Engine): ToolDef {
         prompt,
         imgAssetId,
         imgAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
         ...(enable_pro !== undefined ? { enablePro: enable_pro } : {}),
         ...(nsfw_checker !== undefined ? { nsfwChecker: nsfw_checker } : {}),

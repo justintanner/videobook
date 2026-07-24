@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 import type { UseMcpResult } from 'use-mcp/react'
 
 interface ProjectDropdownProps {
-  projectSlug: string | undefined
+  bookId: string | undefined
   assetCount: number | undefined
   callTool: UseMcpResult['callTool']
   onProjectChange: (slug: string) => void
@@ -23,7 +23,7 @@ function formatAssetCount(count: number): string {
   return count === 1 ? '1 asset' : `${count} assets`
 }
 
-export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectChange, open: controlledOpen, onOpenChange }: ProjectDropdownProps) {
+export function ProjectDropdown({ bookId, assetCount, callTool, onProjectChange, open: controlledOpen, onOpenChange }: ProjectDropdownProps) {
   const [internalOpen, setInternalOpen] = useState(false)
   const open = controlledOpen ?? internalOpen
   const setOpen = onOpenChange ?? setInternalOpen
@@ -31,7 +31,7 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
   const [editValue, setEditValue] = useState('')
   const [creatingNew, setCreatingNew] = useState(false)
   const [newSlugValue, setNewSlugValue] = useState('')
-  const [snapshotSlug, setSnapshotSlug] = useState(projectSlug)
+  const [snapshotSlug, setSnapshotSlug] = useState(bookId)
   const [confirmingDeleteSlug, setConfirmingDeleteSlug] = useState<string | null>(null)
   const [deletingSlug, setDeletingSlug] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -44,7 +44,7 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
   const { createProject } = useCreateProject(callTool)
   const { deleteProject } = useDeleteProject(callTool)
 
-  const activeProject = projects.find((project) => project.slug === projectSlug)
+  const activeProject = projects.find((project) => project.slug === bookId)
   const displayedAssetCount = assetCount ?? activeProject?.asset_count
 
   // Snapshot the active project whenever the popover opens, including
@@ -52,7 +52,7 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
   const [prevOpen, setPrevOpen] = useState(open)
   if (open !== prevOpen) {
     setPrevOpen(open)
-    if (open) setSnapshotSlug(projectSlug)
+    if (open) setSnapshotSlug(bookId)
   }
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
@@ -110,7 +110,7 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
     }
     const ok = await renameProject(editingSlug, editValue.trim())
     if (ok) {
-      if (editingSlug === projectSlug) onProjectChange(editValue.trim())
+      if (editingSlug === bookId) onProjectChange(editValue.trim())
       cancelEdit()
       refresh()
     }
@@ -140,10 +140,10 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
       return
     }
 
-    const nextSlug = result.value.default_project_slug ?? projects.find((project) => project.slug !== slug)?.slug
+    const nextSlug = result.value.default_book_id ?? projects.find((project) => project.slug !== slug)?.slug
     cancelDelete()
     refresh()
-    if (slug === projectSlug && nextSlug) {
+    if (slug === bookId && nextSlug) {
       onProjectChange(nextSlug)
       setOpen(false)
     }
@@ -152,7 +152,7 @@ export function ProjectDropdown({ projectSlug, assetCount, callTool, onProjectCh
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <ProjectButton projectSlug={projectSlug} assetCount={displayedAssetCount} />
+        <ProjectButton bookId={bookId} assetCount={displayedAssetCount} />
       </PopoverTrigger>
       <PopoverContent
         align="start"

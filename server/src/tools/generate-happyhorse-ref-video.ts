@@ -36,7 +36,7 @@ function slugify(text: string): string {
 type RefInput = { assetId: string; filename: string };
 
 const generateHappyhorseRefVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.prompt, "Video description (max 5000 chars / 2500 Chinese chars)", { required: true }),
   image_slugs: apicityStringArrayField(HappyHorse11ReferenceToVideoRequestSchema.shape.input.shape.reference_image, "1-9 reference image @slugs (order defines character1, character2, ...)", { required: true }),
   resolution: apicityField(HappyHorseResolutionSchema, "Output resolution: 720p / 1080p (default 1080p)"),
@@ -53,7 +53,7 @@ export function generateHappyhorseRefVideoDef(fs: Engine): ToolDef {
     description: "Generate a multi-character video using HappyHorse reference-to-video (1-9 reference images, order defines character1/character2/...). Creates a new vid- asset and enqueues a background job.",
     schema: generateHappyhorseRefVideoSchema,
     handler: async (args) => {
-      const { project_slug, prompt, image_slugs, resolution, aspect_ratio, duration } = args as Args;
+      const { book_id, prompt, image_slugs, resolution, aspect_ratio, duration } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }] };
@@ -65,7 +65,7 @@ export function generateHappyhorseRefVideoDef(fs: Engine): ToolDef {
         if (!assetId.startsWith("img-")) {
           return { isError: true as const, content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${assetId}` }] };
         }
-        const manifest = await fs.files.manifest(assetId, project_slug);
+        const manifest = await fs.files.manifest(assetId);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
         const file = findImageFile(manifest.value.files);
         if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
@@ -73,7 +73,7 @@ export function generateHappyhorseRefVideoDef(fs: Engine): ToolDef {
       }
 
       const videoName = `${SLUG}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
@@ -86,7 +86,7 @@ export function generateHappyhorseRefVideoDef(fs: Engine): ToolDef {
         type: "generate_happyhorse_ref_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         imageInputs,
         sourceImageIds,

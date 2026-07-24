@@ -57,15 +57,15 @@ export function trimAudioDef(fs: Engine): ToolDef {
     description: "Trim an aud-* asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for vid-* assets so picture and sound remain synchronized. Operates in-place with git versioning.",
     schema: {
       asset_id: z.string().describe("Audio asset ID (aud-* prefix)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       trim_start: z.number().optional().describe("Start of range to keep (seconds)"),
       trim_end: z.number().optional().describe("End of range to keep (seconds)"),
       cut_start: z.number().optional().describe("Start of chunk to remove (seconds)"),
       cut_end: z.number().optional().describe("End of chunk to remove (seconds)"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, trim_start, trim_end, cut_start, cut_end } = args as {
-        asset_id: string; project_slug: string;
+      const { asset_id, book_id, trim_start, trim_end, cut_start, cut_end } = args as {
+        asset_id: string; book_id: string;
         trim_start?: number; trim_end?: number; cut_start?: number; cut_end?: number;
       };
       const validated = validateTrimParams(trim_start, trim_end, cut_start, cut_end);
@@ -84,7 +84,7 @@ export function trimAudioDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(assetId, project_slug);
+      const manifestResult = await fs.files.manifest(assetId);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -115,7 +115,7 @@ export function trimAudioDef(fs: Engine): ToolDef {
         mode: validated.mode,
         assetId,
         assetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         commitParams: { trim_start, trim_end, cut_start, cut_end, mode: validated.mode },
       };
       if (validated.mode === "keep") {

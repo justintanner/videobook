@@ -82,7 +82,7 @@ export function isBookToolActivity(
   toolName: string,
   args: Record<string, unknown>,
 ): boolean {
-  return typeof args.project_slug === "string" &&
+  return typeof args.book_id === "string" &&
     !EXCLUDED_TOOLS.has(toolName) &&
     !READ_ONLY_PREFIXES.some((prefix) => toolName.startsWith(prefix));
 }

@@ -13,7 +13,7 @@ type RefInput = { assetId: string; filename: string };
 export type Seedance2JobPayload = {
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   apiModel: Seedance2Model;
   firstFrame?: RefInput;
@@ -36,11 +36,11 @@ export type Seedance2JobPayload = {
 async function uploadAll(
   fs: Engine,
   inputs: RefInput[],
-  projectSlug: string,
+  bookId: string,
 ): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
-    urls.push(await uploadAssetToKie(fs, assetId, filename, projectSlug));
+    urls.push(await uploadAssetToKie(fs, assetId, filename, bookId));
   }
   return urls;
 }
@@ -48,7 +48,7 @@ async function uploadAll(
 export function registerSeedance2Job(fs: Engine, jobType: string): void {
   registerJobHandler(jobType, async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug, prompt, apiModel,
+      vidAssetId, vidAssetDir, bookId, prompt, apiModel,
       firstFrame, lastFrame,
       imageInputs, videoInputs, audioInputs,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
@@ -60,14 +60,14 @@ export function registerSeedance2Job(fs: Engine, jobType: string): void {
     requireApiKey("KIE_API_KEY");
 
     const firstFrameUrl = firstFrame
-      ? await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename, projectSlug)
+      ? await uploadAssetToKie(fs, firstFrame.assetId, firstFrame.filename, bookId)
       : undefined;
     const lastFrameUrl = lastFrame
-      ? await uploadAssetToKie(fs, lastFrame.assetId, lastFrame.filename, projectSlug)
+      ? await uploadAssetToKie(fs, lastFrame.assetId, lastFrame.filename, bookId)
       : undefined;
-    const referenceImageUrls = await uploadAll(fs, imageInputs, projectSlug);
-    const referenceVideoUrls = await uploadAll(fs, videoInputs, projectSlug);
-    const referenceAudioUrls = await uploadAll(fs, audioInputs, projectSlug);
+    const referenceImageUrls = await uploadAll(fs, imageInputs, bookId);
+    const referenceVideoUrls = await uploadAll(fs, videoInputs, bookId);
+    const referenceAudioUrls = await uploadAll(fs, audioInputs, bookId);
 
     // Seedance r2v markers are @ImageN/@VideoN/@AudioN. First/last frames ride
     // body fields only — strip confirmed frame @slugs after rewriting refs.
@@ -108,7 +108,7 @@ export function registerSeedance2Job(fs: Engine, jobType: string): void {
       taskType: "seedance2_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         prompt,
         mode: "all",

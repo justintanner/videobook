@@ -9,12 +9,11 @@ export function renameAssetDef(fs: Engine): ToolDef {
     schema: {
       asset_id: z.string().describe("Asset ID to rename (e.g. img-cute-cat)"),
       new_name: z.string().describe("New name for slug generation (e.g. sunset beach)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, new_name, project_slug } = args as { asset_id: string; new_name: string; project_slug: string };
+      const { asset_id, new_name } = args as { asset_id: string; new_name: string };
       const result = await fs.artifacts.rename({
-        project: project_slug,
         artifact: asset_id,
         name: new_name,
       });

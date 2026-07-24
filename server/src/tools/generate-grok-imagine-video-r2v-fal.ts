@@ -10,7 +10,7 @@ import { apicityField, apicityStringArrayField, apicityStringField } from "./sch
 const base = FalXaiGrokImagineVideoReferenceToVideoRequestSchema.shape;
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(base.prompt, "Video description", { required: true }),
   image_slugs: apicityStringArrayField(base.reference_image_urls, "1-7 reference image @slugs", { required: true }).min(1),
   duration: apicityField(base.duration, "Video duration in seconds (1-10)"),
@@ -26,16 +26,16 @@ export function generateGrokImagineVideoR2vFalDef(fs: Engine): ToolDef {
     description: "Generate a video via fal.ai using xAI Grok Imagine Video reference-to-video guided by 1-7 reference images. Creates a new vid- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, image_slugs, duration, aspect_ratio, resolution } = args as Args;
+      const { book_id, prompt, image_slugs, duration, aspect_ratio, resolution } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const resolved = await resolveImageSlugs(fs, image_slugs, project_slug);
+      const resolved = await resolveImageSlugs(fs, image_slugs, book_id);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "grok-imagine/image-to-video")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "grok-imagine/image-to-video")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
@@ -45,7 +45,7 @@ export function generateGrokImagineVideoR2vFalDef(fs: Engine): ToolDef {
         type: "generate_grok_imagine_video_r2v_fal",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         imageInputs: resolved.inputs,
         sourceImageIds: resolved.sourceImageIds,

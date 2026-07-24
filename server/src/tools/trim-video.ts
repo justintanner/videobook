@@ -57,15 +57,15 @@ export function trimVideoDef(fs: Engine): ToolDef {
     description: "Trim a video asset: keep a time range (trim_start/trim_end) or cut out a middle section (cut_start/cut_end). Operates in-place with git versioning.",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. vid-my-video)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       trim_start: z.number().optional().describe("Start of range to keep (seconds)"),
       trim_end: z.number().optional().describe("End of range to keep (seconds)"),
       cut_start: z.number().optional().describe("Start of chunk to remove (seconds)"),
       cut_end: z.number().optional().describe("End of chunk to remove (seconds)"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, trim_start, trim_end, cut_start, cut_end } = args as {
-        asset_id: string; project_slug: string;
+      const { asset_id, book_id, trim_start, trim_end, cut_start, cut_end } = args as {
+        asset_id: string; book_id: string;
         trim_start?: number; trim_end?: number; cut_start?: number; cut_end?: number;
       };
       const validated = validateTrimParams(trim_start, trim_end, cut_start, cut_end);
@@ -76,7 +76,7 @@ export function trimVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -105,7 +105,7 @@ export function trimVideoDef(fs: Engine): ToolDef {
         mode: validated.mode,
         assetId: asset_id,
         assetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         commitParams: { trim_start, trim_end, cut_start, cut_end, mode: validated.mode },
       };
       if (validated.mode === "keep") {

@@ -128,7 +128,7 @@ interface ActivityLogDrawerProps {
   loading: boolean;
   assetSlugs: string[];
   callTool: UseMcpResult['callTool'];
-  projectSlug: string | undefined;
+  bookId: string | undefined;
   onRewound?: () => void | Promise<void>;
 }
 
@@ -139,7 +139,7 @@ export function ActivityLogDrawer({
   loading,
   assetSlugs,
   callTool,
-  projectSlug,
+  bookId,
   onRewound,
 }: ActivityLogDrawerProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -209,14 +209,14 @@ export function ActivityLogDrawer({
   };
 
   const handleRewind = useCallback(async (entry: ActionLogEntry) => {
-    if (!projectSlug || rewindingHash) return;
+    if (!bookId || rewindingHash) return;
     const ok = window.confirm(`Rewind project to #${shortHash(entry.hash)}? Active jobs for this project will be stopped.`);
     if (!ok) return;
     setRewindingHash(entry.hash);
     setRewindError(null);
     try {
       const result = await callTool('rewind_project', {
-        project_slug: projectSlug,
+        book_id: bookId,
         commit_hash: entry.hash,
       });
       if (result.isError) {
@@ -230,7 +230,7 @@ export function ActivityLogDrawer({
     } finally {
       setRewindingHash(null);
     }
-  }, [callTool, onRewound, projectSlug, rewindingHash]);
+  }, [callTool, onRewound, bookId, rewindingHash]);
 
   if (!open) return null;
 
@@ -294,7 +294,7 @@ export function ActivityLogDrawer({
                 const isFail = cat === 'fail';
                 const isExpanded = expanded.has(entry.hash);
                 const isRewinding = rewindingHash === entry.hash;
-                const canRewind = entry.rewindable !== false && projectSlug !== undefined;
+                const canRewind = entry.rewindable !== false && bookId !== undefined;
                 const title = entry.title ?? shortAction(entry.action);
                 const delay = Math.min(i, 20) * 20;
                 return (
@@ -386,7 +386,7 @@ export function ActivityLogDrawer({
             commands={mergedCommands}
             onSend={handleStatusSend}
             callTool={callTool}
-            projectSlug={projectSlug}
+            bookId={bookId}
             placeholder="type /close to exit..."
           />
         </div>

@@ -84,7 +84,7 @@ export function createWatermarkCardDef(fs: Engine): ToolDef {
     description:
       "Generate a black-and-white QR + 'X: <handle>' watermark card and store it as an img- asset. Apply it via the on-screen graphic (OSG) settings during render.",
     schema: {
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       handle: z.string().optional().describe(`X handle without @ (default: ${DEFAULT_HANDLE})`),
       url: z.string().optional().describe("URL the QR code resolves to (default: https://x.com/<handle>)"),
       save_default: z
@@ -93,8 +93,8 @@ export function createWatermarkCardDef(fs: Engine): ToolDef {
         .describe("Remember this handle as the default for future watermarks"),
     },
     handler: async (args) => {
-      const { project_slug, handle, url, save_default } = args as {
-        project_slug: string; handle?: string; url?: string; save_default?: boolean;
+      const { book_id, handle, url, save_default } = args as {
+        book_id: string; handle?: string; url?: string; save_default?: boolean;
       };
 
       const resolvedHandle = (handle ?? DEFAULT_HANDLE).replace(/^@/, "").trim();
@@ -117,7 +117,7 @@ export function createWatermarkCardDef(fs: Engine): ToolDef {
       }
 
       const assetName = `watermark-${resolvedHandle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36)}`;
-      const created = await fs.artifacts.create("img", assetName, project_slug);
+      const created = await fs.artifacts.create("img", assetName);
       if (!created.ok) {
         return {
           isError: true as const,
@@ -126,39 +126,35 @@ export function createWatermarkCardDef(fs: Engine): ToolDef {
       }
       const assetId = created.value.slug;
 
-      const writeResult = await fs.files.write(assetId, "original.png", buffer, project_slug);
+      const writeResult = await fs.files.write(assetId, "original.png", buffer);
       if (!writeResult.ok) {
-        await fs.artifacts.delete(assetId, project_slug).catch(() => undefined);
+        await fs.artifacts.delete(assetId).catch(() => undefined);
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: writeResult.error.message }],
         };
       }
 
-      const metadataResult = await fs.metadata.artifacts.write(
-        assetId,
-        "original",
-        {
+      const metadataResult = await fs.metadata.artifacts.write(assetId, "original", {
           origin: "watermark",
           created_at: new Date().toISOString(),
           handle: resolvedHandle,
           url: resolvedUrl,
           width: CARD_WIDTH,
           height: CARD_HEIGHT,
-        },
-        project_slug,
+        }
       );
       if (!metadataResult.ok) {
-        await fs.artifacts.delete(assetId, project_slug).catch(() => undefined);
+        await fs.artifacts.delete(assetId).catch(() => undefined);
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: metadataResult.error.message }],
         };
       }
 
-      const variantsResult = await writeImageVariants(fs, assetId, buffer, project_slug);
+      const variantsResult = await writeImageVariants(fs, assetId, buffer, book_id);
       if (!variantsResult.ok) {
-        await fs.artifacts.delete(assetId, project_slug).catch(() => undefined);
+        await fs.artifacts.delete(assetId).catch(() => undefined);
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: variantsResult.error }],

@@ -43,7 +43,7 @@ const klingVideo = KlingVideoRequestSchema.shape.input.shape;
 const multiShotPrompt = MultiShotPromptSchema.shape;
 
 const generateKling30VideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(klingVideo.prompt, "Video description"),
   image_slugs: apicityStringArrayField(klingVideo.image_urls, "0-2 reference image @slugs (e.g., @img-sunset)"),
   mode: apicityField(klingVideo.mode, "Resolution mode: std (standard) / pro (professional) / 4K", { required: true }),
@@ -76,7 +76,7 @@ export function generateKling30VideoDef(fs: Engine): ToolDef {
     schema: generateKling30VideoSchema,
     handler: async (args) => {
       const {
-        project_slug, prompt, image_slugs, mode, duration, sound,
+        book_id, prompt, image_slugs, mode, duration, sound,
         aspect_ratio, multi_shots, multi_prompt,
         element1_slugs, element1_name, element1_desc,
         element2_slugs, element2_name, element2_desc,
@@ -102,7 +102,7 @@ export function generateKling30VideoDef(fs: Engine): ToolDef {
             content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${assetId}` }],
           };
         }
-        const manifestResult = await fs.files.manifest(assetId, project_slug);
+        const manifestResult = await fs.files.manifest(assetId);
         if (!manifestResult.ok) {
           return {
             isError: true as const,
@@ -146,7 +146,7 @@ export function generateKling30VideoDef(fs: Engine): ToolDef {
           }
           if (isVideo) hasVideo = true;
 
-          const manifestResult = await fs.files.manifest(assetId, project_slug);
+          const manifestResult = await fs.files.manifest(assetId);
           if (!manifestResult.ok) {
             return {
               isError: true as const,
@@ -173,7 +173,7 @@ export function generateKling30VideoDef(fs: Engine): ToolDef {
 
       // Create output video asset
       const videoName = prompt ? `${modelSlug("kie", "kling-3.0/video")}-${slugify(prompt)}` : `${modelSlug("kie", "kling-3.0/video")}-${Date.now()}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -192,7 +192,7 @@ export function generateKling30VideoDef(fs: Engine): ToolDef {
         sourceImageIds,
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         ...(prompt !== undefined ? { prompt } : {}),
         mode,
         duration,

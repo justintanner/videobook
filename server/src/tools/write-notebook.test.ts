@@ -83,7 +83,7 @@ describe("write_notebook tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj", name: "testnb" },
+      arguments: { book_id: "test-proj", name: "testnb" },
     });
   });
 
@@ -95,7 +95,7 @@ describe("write_notebook tool", () => {
   it("writes a ready normalized notebook and round-trips through read_notebook", async () => {
     const result = await client.callTool({
       name: "write_notebook",
-      arguments: { project_slug: "test-proj", name: "testnb", definition: NOTEBOOK_DEFINITION },
+      arguments: { book_id: "test-proj", name: "testnb", definition: NOTEBOOK_DEFINITION },
     });
 
     if (result.isError) { console.error("WRITE ERROR:", resultText(result)); }
@@ -124,7 +124,7 @@ describe("write_notebook tool", () => {
 
     const assetsResult = await client.callTool({
       name: "list_assets",
-      arguments: { project_slug: "test-proj", name: "testnb" },
+      arguments: { book_id: "test-proj", name: "testnb" },
     });
     const assets = JSON.parse(resultText(assetsResult)) as {
       assets: Array<{ id: string; type: string; status: string }>;
@@ -137,7 +137,7 @@ describe("write_notebook tool", () => {
 
     const readResult = await client.callTool({
       name: "read_notebook",
-      arguments: { project_slug: "test-proj", notebook_id: resultObj.notebook_id },
+      arguments: { book_id: "test-proj", notebook_id: resultObj.notebook_id },
     });
     expect(JSON.parse(resultText(readResult))).toEqual({
       exists: true,
@@ -148,13 +148,13 @@ describe("write_notebook tool", () => {
   it("succeeds when replacing a notebook with an identical definition", async () => {
     const first = await client.callTool({
       name: "write_notebook",
-      arguments: { project_slug: "test-proj", definition: NOTEBOOK_DEFINITION },
+      arguments: { book_id: "test-proj", definition: NOTEBOOK_DEFINITION },
     });
     const notebookId = JSON.parse(resultText(first)).notebook_id;
     const second = await client.callTool({
       name: "write_notebook",
       arguments: {
-        project_slug: "test-proj",
+        book_id: "test-proj",
         notebook_id: notebookId,
         definition: NOTEBOOK_DEFINITION,
       },
@@ -181,11 +181,11 @@ describe("write_notebook tool", () => {
 
     const duplicateResult = await client.callTool({
       name: "write_notebook",
-      arguments: { project_slug: "test-proj", definition: duplicateIds },
+      arguments: { book_id: "test-proj", definition: duplicateIds },
     });
     const typeResult = await client.callTool({
       name: "write_notebook",
-      arguments: { project_slug: "test-proj", definition: invalidType },
+      arguments: { book_id: "test-proj", definition: invalidType },
     });
 
     expect(duplicateResult.isError).toBe(true);
@@ -194,10 +194,10 @@ describe("write_notebook tool", () => {
 
   it("rejects a notebook id that is not a normalized notebook", async () => {
     const fsObj = createEngineForTest(tempDir);
-    const asset = await fsObj.artifacts.create("nb", "legacy", "test-proj");
+    const asset = await fsObj.artifacts.create("nb", "legacy");
     const result = await client.callTool({
       name: "write_notebook",
-      arguments: { project_slug: "test-proj", notebook_id: asset.value.slug, definition: NOTEBOOK_DEFINITION },
+      arguments: { book_id: "test-proj", notebook_id: asset.value.slug, definition: NOTEBOOK_DEFINITION },
     });
     expect(result.isError).toBe(true);
   });

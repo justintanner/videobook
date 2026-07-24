@@ -10,7 +10,7 @@ type GenerateGptImageTextPayload = {
   prompt: string;
   imgAssetId: string;
   imgAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   aspectRatio?: GptImage2TextToImageRequest["input"]["aspect_ratio"];
   resolution?: GptImage2TextToImageRequest["input"]["resolution"];
   nsfwChecker?: boolean;
@@ -19,7 +19,7 @@ type GenerateGptImageTextPayload = {
 export function registerGenerateGptImageTextJob(fs: Engine): void {
   registerJobHandler("generate_gpt_image_text", async (payload, ctx) => {
     const {
-      prompt, imgAssetId, imgAssetDir, projectSlug, aspectRatio, resolution, nsfwChecker,
+      prompt, imgAssetId, imgAssetDir, bookId, aspectRatio, resolution, nsfwChecker,
     } = payload as GenerateGptImageTextPayload;
 
     requireApiKey("KIE_API_KEY");
@@ -35,7 +35,7 @@ export function registerGenerateGptImageTextJob(fs: Engine): void {
       taskType: "gpt_image_text",
       assetId: imgAssetId,
       assetDir: imgAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         sourceImageIds: [],
         prompt,

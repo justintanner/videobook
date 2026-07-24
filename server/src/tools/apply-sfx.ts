@@ -79,7 +79,7 @@ export function applySfxDef(fs: Engine): ToolDef {
       + "Re-runs process_video downstream. Pair with /suggest-sfx to source entries.",
     schema: {
       asset_id: z.string().describe("Video asset ID (vid-*)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       sfx: z
         .array(
           z.object({
@@ -103,14 +103,14 @@ export function applySfxDef(fs: Engine): ToolDef {
         };
       }
 
-      const { asset_id, project_slug, sfx } = args as {
+      const { asset_id, book_id, sfx } = args as {
         asset_id: string;
-        project_slug: string;
+        book_id: string;
         sfx: SfxInput[];
       };
       const assetId = asset_id.replace(/^@/, "");
 
-      const manifestResult = await fs.files.manifest(assetId, project_slug);
+      const manifestResult = await fs.files.manifest(assetId);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -126,8 +126,7 @@ export function applySfxDef(fs: Engine): ToolDef {
         };
       }
 
-      const metaResult = await fs.metadata.artifacts.read<{ duration?: number }>(
-        assetId, "original", project_slug,
+      const metaResult = await fs.metadata.artifacts.read<{ duration?: number }>(assetId, "original"
       );
       const duration = metaResult.ok && typeof metaResult.value.duration === "number"
         ? metaResult.value.duration
@@ -145,7 +144,7 @@ export function applySfxDef(fs: Engine): ToolDef {
         };
       }
 
-      const cleared = await fs.jobs.failures.clear(project_slug, assetId);
+      const cleared = await fs.jobs.failures.clear(assetId);
       if (!cleared.ok) {
         return {
           isError: true as const,
@@ -169,7 +168,7 @@ export function applySfxDef(fs: Engine): ToolDef {
           sfx: resolved,
           assetId,
           assetDir,
-          projectSlug: project_slug,
+          bookId: book_id,
         }, 1_800_000);
       } catch (err) {
         return {

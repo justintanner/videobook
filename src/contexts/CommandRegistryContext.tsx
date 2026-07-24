@@ -18,14 +18,14 @@ const CommandRegistryContext = createContext<CommandRegistryContextValue | null>
 export function CommandRegistryProvider({
   callTool,
   state,
-  projectSlug,
+  bookId,
   uiActions,
   onAfterDispatch,
   children,
 }: {
   callTool: UseMcpResult['callTool'];
   state: string;
-  projectSlug: string | undefined;
+  bookId: string | undefined;
   uiActions: UiActionMap;
   onAfterDispatch?: (toolName: string, toolArgs: CommandToolArgs) => void;
   children: React.ReactNode;
@@ -48,7 +48,7 @@ export function CommandRegistryProvider({
       }
     })();
     return () => { cancelled = true; };
-  }, [callTool, state, projectSlug]);
+  }, [callTool, state, bookId]);
 
   const commands = useMemo(
     () => filterCommandsByMountKeys(allCommands, mountKeys),
@@ -87,8 +87,8 @@ export function CommandRegistryProvider({
           // mcpTool dispatch
           if (cmd.mcpTool) {
             let toolArgs: CommandToolArgs = { ...args };
-            if (cmd.mcpTool.autoInject?.includes('project_slug') && projectSlug) {
-              toolArgs.project_slug = projectSlug;
+            if (cmd.mcpTool.autoInject?.includes('book_id') && bookId) {
+              toolArgs.book_id = bookId;
             }
             if (cmd.mcpTool.injectParams) {
               Object.assign(toolArgs, cmd.mcpTool.injectParams);
@@ -100,8 +100,8 @@ export function CommandRegistryProvider({
           }
 
           // Chat fallback for commands with no mcpTool or uiAction
-          if (projectSlug) {
-            const result = await callTool('chat', { prompt: `${commandStr} ${rest}`.trim(), project_slug: projectSlug });
+          if (bookId) {
+            const result = await callTool('chat', { prompt: `${commandStr} ${rest}`.trim(), book_id: bookId });
             return !result.isError;
           }
           return false;
@@ -111,8 +111,8 @@ export function CommandRegistryProvider({
       // General chat fallback — handles both natural language and bare commands
       // like "download URL". The chat router (GPT) parses intent reliably;
       // no need for a fragile positional-arg shortcut here.
-      if (projectSlug) {
-        const result = await callTool('chat', { prompt: trimmed, project_slug: projectSlug });
+      if (bookId) {
+        const result = await callTool('chat', { prompt: trimmed, book_id: bookId });
         return !result.isError;
       }
     } catch {
@@ -120,7 +120,7 @@ export function CommandRegistryProvider({
       return false;
     }
     return false;
-  }, [allCommands, callTool, projectSlug, uiActions, onAfterDispatch]);
+  }, [allCommands, callTool, bookId, uiActions, onAfterDispatch]);
 
   const value = useMemo(
     () => ({ commands, allCommands, dispatch, uiActions }),

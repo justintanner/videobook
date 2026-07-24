@@ -15,9 +15,9 @@ import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle';
 
 // ── AssetViewer Dispatcher ──
 
-export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, onSplitAtCursor, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, callState, onClose, imageAssets, mediaItems, onOpenAsset, cropTarget, onCropConsumed, osgTarget, onOsgConsumed, onOsgApply, onGenerationLifecycle, onManageCharacters }: {
+export function AssetViewer({ item, bookId, size, onSizeChange, flipped, onFlippedChange, renderOrientation, onRender, onSplitAtCursor, pendingFilePosition, onClearPendingFilePosition, pendingBackTab, onClearPendingBackTab, settings, onSettingsChange, transcript, callTool, callState, onClose, imageAssets, mediaItems, onOpenAsset, cropTarget, onCropConsumed, osgTarget, onOsgConsumed, onOsgApply, onGenerationLifecycle, onManageCharacters }: {
   item: MediaItem;
-  projectSlug: string;
+  bookId: string;
   size: ViewerSize;
   onSizeChange: (s: ViewerSize) => void;
   flipped: boolean;
@@ -55,7 +55,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     return (
       <VideoViewer
         item={item}
-        projectSlug={projectSlug}
+        bookId={bookId}
         size={size}
         onSizeChange={onSizeChange}
         flipped={flipped}
@@ -86,7 +86,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     return (
       <Notebook
         notebookId={item.id}
-        projectSlug={projectSlug}
+        bookId={bookId}
         callTool={callTool}
         mcpState={callState}
         mediaItems={mediaItems}
@@ -102,7 +102,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     return (
       <ScriptViewer
         item={item}
-        projectSlug={projectSlug}
+        bookId={bookId}
         flipped={flipped}
         onFlippedChange={onFlippedChange}
         pendingFilePosition={pendingFilePosition}
@@ -120,7 +120,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     return (
       <AudioViewer
         item={item}
-        projectSlug={projectSlug}
+        bookId={bookId}
         flipped={flipped}
         onFlippedChange={onFlippedChange}
         pendingFilePosition={pendingFilePosition}
@@ -137,7 +137,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
     return (
       <CharacterFolderViewer
         item={item}
-        projectSlug={projectSlug}
+        bookId={bookId}
         callTool={callTool}
         onClose={onClose}
       />
@@ -147,7 +147,7 @@ export function AssetViewer({ item, projectSlug, size, onSizeChange, flipped, on
   return (
     <ImageViewer
       item={item}
-      projectSlug={projectSlug}
+      bookId={bookId}
       size={size}
       onSizeChange={onSizeChange}
       flipped={flipped}

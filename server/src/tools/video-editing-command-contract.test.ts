@@ -82,7 +82,7 @@ describe("video editing command contract", () => {
       expect(commandToken).toBe(command.command);
       const parsed: Record<string, unknown> = parseCommandArgs(tokens.join(" "), command.params);
       for (const key of command.mcpTool.autoInject ?? []) {
-        if (key === "project_slug") parsed[key] = "test-project";
+        if (key === "book_id") parsed[key] = "test-project";
       }
       Object.assign(parsed, command.mcpTool.injectParams ?? {});
       const adapted = adaptCommandArgs(command.mcpTool.adapter, command.mcpTool.tool, parsed);

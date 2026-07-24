@@ -10,7 +10,7 @@ import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 const base = FalWanV2p7TextToVideoRequestSchema.shape;
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(base.prompt, "Video description", { required: true }),
   aspect_ratio: apicityField(base.aspect_ratio, "Output aspect ratio"),
   resolution: apicityField(base.resolution, "Output resolution"),
@@ -29,13 +29,13 @@ export function generateWan27T2vFalDef(fs: Engine): ToolDef {
     description: "Generate a video via fal.ai using Alibaba Wan v2.7 from a text prompt only. Creates a new vid- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, aspect_ratio, resolution, duration, negative_prompt, enable_prompt_expansion, enable_safety_checker, seed } = args as Args;
+      const { book_id, prompt, aspect_ratio, resolution, duration, negative_prompt, enable_prompt_expansion, enable_safety_checker, seed } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "wan/2-7-text-to-video")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "wan/2-7-text-to-video")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
@@ -45,7 +45,7 @@ export function generateWan27T2vFalDef(fs: Engine): ToolDef {
         type: "generate_wan27_t2v_fal",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         ...(aspect_ratio !== undefined ? { aspect_ratio } : {}),
         ...(resolution !== undefined ? { resolution } : {}),

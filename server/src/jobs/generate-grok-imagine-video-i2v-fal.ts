@@ -10,7 +10,7 @@ type Payload = {
   type: "generate_grok_imagine_video_i2v_fal";
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   firstFrame: FrameInput;
   sourceImageIds: string[];
@@ -22,9 +22,9 @@ type Payload = {
 export function registerGenerateGrokImagineVideoI2vFalJob(fs: Engine): void {
   registerJobHandler("generate_grok_imagine_video_i2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.projectSlug, p.vidAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.bookId, p.vidAssetId, ctx, "generate", async (ownerId) => {
   
-      const image_url = await uploadAssetToFal(fs, p.firstFrame.assetId, p.firstFrame.filename, p.projectSlug);
+      const image_url = await uploadAssetToFal(fs, p.firstFrame.assetId, p.firstFrame.filename, p.bookId);
   
       const input: Record<string, unknown> = {
         prompt: p.prompt,
@@ -36,7 +36,7 @@ export function registerGenerateGrokImagineVideoI2vFalJob(fs: Engine): void {
   
       const taskId = await submitFalJob({
         fs,
-        projectSlug: p.projectSlug,
+        bookId: p.bookId,
         assetId: p.vidAssetId,
         assetDir: p.vidAssetDir,
         endpointId: "xai/grok-imagine-video/image-to-video",

@@ -16,7 +16,7 @@ type GenerateNanoBananaProGooglePayload = {
   type: "generate_nano_banana_pro_google";
   imgAssetId: string;
   imgAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   imageInputs: ImageInput[];
   sourceImageIds: string[];
@@ -62,7 +62,7 @@ export function registerGenerateNanoBananaProGoogleJob(fs: Engine): void {
       referenceIds.push(
         "url" in input
           ? await uploadUrlToGoogleFlow(provider, input.url)
-          : await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, p.projectSlug),
+          : await uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, p.bookId),
       );
     }
 
@@ -77,7 +77,7 @@ export function registerGenerateNanoBananaProGoogleJob(fs: Engine): void {
         p.character_refs,
       ) as Record<string, unknown>,
     ) as GoogleFlowImagesRequest;
-    await fs.metadata.artifacts.write(p.imgAssetId, "generation-payload", request, p.projectSlug);
+    await fs.metadata.artifacts.write(p.imgAssetId, "generation-payload", request);
 
     const res = await callGoogleFlowWithCaptchaRetry(
       (body) => provider.v1.images(body as GoogleFlowImagesRequest),
@@ -92,7 +92,7 @@ export function registerGenerateNanoBananaProGoogleJob(fs: Engine): void {
     }
     const ext = extensionForContentType(download.headers.get("content-type"));
     const buffer = Buffer.from(await download.arrayBuffer());
-    await fs.files.write(p.imgAssetId, `original.${ext}`, buffer, p.projectSlug);
+    await fs.files.write(p.imgAssetId, `original.${ext}`, buffer);
 
     const provenance = {
       source_assets: p.sourceImageIds,
@@ -107,7 +107,7 @@ export function registerGenerateNanoBananaProGoogleJob(fs: Engine): void {
     await queue.enqueue(`process-image-${p.imgAssetId}-${Date.now()}`, {
       type: "process_image",
       assetId: p.imgAssetId,
-      projectSlug: p.projectSlug,
+      bookId: p.bookId,
       extension: `.${ext}`,
       provenance,
     } as unknown as Record<string, unknown>);

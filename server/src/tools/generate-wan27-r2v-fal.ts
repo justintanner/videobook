@@ -14,14 +14,14 @@ type VideoInput = { assetId: string; filename: string };
 async function resolveVideoSlugs(
   fs: Engine,
   rawSlugs: readonly string[],
-  projectSlug: string,
+  _bookId: string,
 ): Promise<{ ok: true; inputs: VideoInput[]; sourceVideoIds: string[] } | { ok: false; error: string }> {
   const inputs: VideoInput[] = [];
   const sourceVideoIds: string[] = [];
   for (const raw of rawSlugs) {
     const assetId = raw.replace(/^@/, "");
     if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slugs entries must be vid-* assets, got: ${assetId}` };
-    const manifest = await fs.files.manifest(assetId, projectSlug);
+    const manifest = await fs.files.manifest(assetId);
     if (!manifest.ok) return { ok: false, error: manifest.error.message };
     const file = findVideoFile(manifest.value.files);
     if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
@@ -34,7 +34,7 @@ async function resolveVideoSlugs(
 const base = FalWanV2p7ReferenceToVideoRequestSchema.shape;
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(base.prompt, "Video description", { required: true }),
   image_slugs: apicityStringArrayField(base.reference_image_urls, "Reference image @slugs (optional)"),
   video_slugs: apicityStringArrayField(base.reference_video_urls, "Reference video @slugs (optional)"),
@@ -56,7 +56,7 @@ export function generateWan27R2vFalDef(fs: Engine): ToolDef {
     schema,
     handler: async (args) => {
       const {
-        project_slug, prompt,
+        book_id, prompt,
         image_slugs, video_slugs,
         aspect_ratio, resolution, duration, multi_shots,
         negative_prompt, enable_safety_checker, seed,
@@ -75,13 +75,13 @@ export function generateWan27R2vFalDef(fs: Engine): ToolDef {
       const imgSlugs = image_slugs ?? [];
       const vidSlugs = video_slugs ?? [];
 
-      const resolvedImages = await resolveImageSlugs(fs, imgSlugs, project_slug);
+      const resolvedImages = await resolveImageSlugs(fs, imgSlugs, book_id);
       if (!resolvedImages.ok) return toolError(resolvedImages.error);
 
-      const resolvedVideos = await resolveVideoSlugs(fs, vidSlugs, project_slug);
+      const resolvedVideos = await resolveVideoSlugs(fs, vidSlugs, book_id);
       if (!resolvedVideos.ok) return toolError(resolvedVideos.error);
 
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "wan/2-7-r2v")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "wan/2-7-r2v")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return toolError(`Failed to create video asset: ${assetResult.error.message}`);
 
       const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
@@ -91,7 +91,7 @@ export function generateWan27R2vFalDef(fs: Engine): ToolDef {
         type: "generate_wan27_r2v_fal",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         imageInputs: resolvedImages.inputs,
         videoInputs: resolvedVideos.inputs,

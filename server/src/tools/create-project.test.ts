@@ -22,7 +22,7 @@ describe("create_project tool", () => {
     client = await createTestClient(tempDir);
     const result = await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "my-project" },
+      arguments: { book_id: "my-project" },
     });
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
@@ -34,13 +34,13 @@ describe("create_project tool", () => {
     client = await createTestClient(tempDir);
     const created = await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "seeded" },
+      arguments: { book_id: "seeded" },
     });
     expect(created.isError).toBeFalsy();
 
     const timeline = await client.callTool({
       name: "get_timeline",
-      arguments: { project_slug: "seeded" },
+      arguments: { book_id: "seeded" },
     });
     expect(timeline.isError).toBeFalsy();
     const content = timeline.content as Array<{ type: string; text: string }>;
@@ -53,11 +53,11 @@ describe("create_project tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "dup" },
+      arguments: { book_id: "dup" },
     });
     const result = await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "dup" },
+      arguments: { book_id: "dup" },
     });
     expect(result.isError).toBe(true);
   });

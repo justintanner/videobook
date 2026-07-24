@@ -67,7 +67,7 @@ type AssetDescriptor = {
 
 type RenderProjectPayload = {
   type: "render_project";
-  projectSlug: string;
+  bookId: string;
   orientation: Orientation;
   assets: AssetDescriptor[];
   subtitlesEnabled: boolean;
@@ -105,7 +105,7 @@ type RenderProjectPayload = {
 // a render must never fail because translation did.
 async function resolveSubtitleSegments(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   assetId: string,
   raw: unknown,
   subtitleLanguage: string,
@@ -117,7 +117,7 @@ async function resolveSubtitleSegments(
   }
 
   const sidecarFilename = translatedTranscriptFilename(subtitleLanguage);
-  const existing = await fs.files.read(assetId, sidecarFilename, projectSlug);
+  const existing = await fs.files.read(assetId, sidecarFilename);
   if (existing.ok) {
     try {
       const sidecar = JSON.parse(existing.value.toString()) as unknown;
@@ -132,11 +132,7 @@ async function resolveSubtitleSegments(
   try {
     const responses = buildResponses(requireApiKey("KIE_API_KEY"));
     const sidecar = await translateTranscript(raw, subtitleLanguage, responses);
-    const writeResult = await fs.files.write(
-      assetId,
-      sidecarFilename,
-      JSON.stringify(sidecar, null, 2),
-      projectSlug,
+    const writeResult = await fs.files.write(assetId, sidecarFilename, JSON.stringify(sidecar, null, 2)
     );
     if (!writeResult.ok) {
       console.warn(`[render] failed to cache ${sidecarFilename} for ${assetId}: ${writeResult.error.message}`);
@@ -155,7 +151,7 @@ export function registerRenderProjectJob(fs: Engine): void {
   registerJobHandler("render_project", async (payload, ctx) => {
     ctx.signal.throwIfAborted();
     const {
-      projectSlug,
+      bookId,
       orientation,
       assets,
       subtitlesEnabled,
@@ -216,7 +212,7 @@ export function registerRenderProjectJob(fs: Engine): void {
           ctx.signal.throwIfAborted();
           const claim = await claimLockedLease(
             fs,
-            projectSlug,
+            bookId,
             asset.assetId,
             asset.assetDir,
             "render",
@@ -230,11 +226,7 @@ export function registerRenderProjectJob(fs: Engine): void {
           const lease = { ownerId: claim.ownerId };
           const heartbeat = setInterval(() => {
             try {
-              fs.jobs.artifactWork.renew(
-                projectSlug,
-                asset.assetId,
-                lease.ownerId,
-                60_000,
+              fs.jobs.artifactWork.renew(asset.assetId, lease.ownerId, 60_000
               );
             } catch (error) {
               console.warn(
@@ -257,13 +249,13 @@ export function registerRenderProjectJob(fs: Engine): void {
             // transcribe inline under this asset's render lease.
             let allSegments = null;
             let rawTranscript: unknown = null;
-            if ((subtitlesEnabled || keywordGraphicsEnabled) && !(await fs.files.read(asset.assetId, "elevenlabs.json", projectSlug)).ok) {
-              await ensureElevenLabsTranscript(fs, projectSlug, asset.assetId);
+            if ((subtitlesEnabled || keywordGraphicsEnabled) && !(await fs.files.read(asset.assetId, "elevenlabs.json")).ok) {
+              await ensureElevenLabsTranscript(fs, bookId, asset.assetId);
             }
-            const elevenlabsResult = await fs.files.read(asset.assetId, "elevenlabs.json", projectSlug);
+            const elevenlabsResult = await fs.files.read(asset.assetId, "elevenlabs.json");
             if (elevenlabsResult.ok) {
               rawTranscript = JSON.parse(elevenlabsResult.value.toString()) as unknown;
-              allSegments = await resolveSubtitleSegments(fs, projectSlug, asset.assetId, rawTranscript, subtitleLanguage);
+              allSegments = await resolveSubtitleSegments(fs, bookId, asset.assetId, rawTranscript, subtitleLanguage);
             }
 
             let chunks: Chunk[] = [];
@@ -285,7 +277,7 @@ export function registerRenderProjectJob(fs: Engine): void {
             let keywordGraphicsSkipped: string[] = [];
             let keywordGraphicsPlacementFingerprint: string | null = null;
             if (keywordGraphicsEnabled && rawTranscript && elevenlabsResult.ok) {
-              const manifestResult = await fs.files.manifest(asset.assetId, projectSlug, { includeDotfiles: true });
+              const manifestResult = await fs.files.manifest(asset.assetId);
               if (!manifestResult.ok) throw new Error(manifestResult.error.message);
               const sourceVideoFile = findVideoFile(manifestResult.value.files);
               if (!sourceVideoFile) throw new Error(`No source video found for ${asset.assetId}`);
@@ -294,11 +286,11 @@ export function registerRenderProjectJob(fs: Engine): void {
                 elevenlabsResult.value,
                 selectedKeywordGraphics,
               );
-              const analysis = await readKeywordPlacementAnalysis(fs, asset.assetId, projectSlug);
+              const analysis = await readKeywordPlacementAnalysis(fs, asset.assetId, bookId);
               const valid = await isKeywordPlacementCacheValid(
                 fs,
                 asset.assetId,
-                projectSlug,
+                bookId,
                 analysis,
                 fingerprint,
                 selectedKeywordGraphics,
@@ -432,7 +424,7 @@ export function registerRenderProjectJob(fs: Engine): void {
               }
               await ingestWorkspaceOutputs(
                 fs,
-                projectSlug,
+                bookId,
                 asset.assetId,
                 renderedPaths,
                 "render",
@@ -472,7 +464,7 @@ export function registerRenderProjectJob(fs: Engine): void {
                 renderedAt: new Date().toISOString(),
                 outputs: [outputFilename, jpgFilename, orientFramesDirName],
               };
-              await fs.metadata.artifacts.write(asset.assetId, `${orientation}.render`, renderSettings, projectSlug);
+              await fs.metadata.artifacts.write(asset.assetId, `${orientation}.render`, renderSettings);
 
               rendered.push(asset.assetId);
               renderSucceeded = true;
@@ -482,9 +474,9 @@ export function registerRenderProjectJob(fs: Engine): void {
           } finally {
             clearInterval(heartbeat);
             if (renderSucceeded) {
-              await fs.jobs.artifactWork.complete(projectSlug, asset.assetId, lease.ownerId);
+              await fs.jobs.artifactWork.complete(asset.assetId, lease.ownerId);
             } else {
-              await fs.jobs.artifactWork.fail(projectSlug, asset.assetId, lease.ownerId, {
+              await fs.jobs.artifactWork.fail(asset.assetId, lease.ownerId, {
                 message: "render failed",
               });
             }

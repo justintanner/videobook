@@ -8,14 +8,14 @@ export function uploadFileDef(fs: Engine): ToolDef {
     name: "upload_file",
     description: "Upload a media or markdown file into a videocity project as an asset",
     schema: {
-      project_slug: z.string().describe("Project slug to upload into"),
+      book_id: z.string().describe("Project slug to upload into"),
       filename: z.string().describe("Original filename with extension"),
       data: z.string().describe("Base64-encoded file contents"),
     },
     handler: async (args) => {
-      const { project_slug, filename, data } = args as { project_slug: string; filename: string; data: string };
+      const { book_id, filename, data } = args as { book_id: string; filename: string; data: string };
       const result = await uploadLocalBytes(fs, {
-        projectSlug: project_slug,
+        bookId: book_id,
         filename,
         data: Buffer.from(data, "base64"),
         waitForProcessing: true,

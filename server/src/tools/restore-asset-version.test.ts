@@ -14,7 +14,7 @@ describe("restore_asset_version tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -28,21 +28,21 @@ describe("restore_asset_version tool", () => {
     const data1 = Buffer.from("version-one").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo.png", data: data1 },
+      arguments: { book_id: "test-proj", filename: "photo.png", data: data1 },
     });
     const uploaded = JSON.parse(
       (uploadResult.content as Array<{ type: string; text: string }>)[0].text
     );
     const { createEngineForTest } = await import("../fs.js");
     const fs = createEngineForTest(tempDir);
-    const artifact = fs.artifacts.get("test-proj", uploaded.assetId);
+    const artifact = fs.artifacts.get("test-proj");
     if (!artifact.ok) throw new Error(artifact.error.message);
     const stableArtifactId = artifact.value.artifactId;
 
     // Get the commit hash for the initial version
     const historyResult = await client.callTool({
       name: "asset_history",
-      arguments: { asset_id: uploaded.assetId, project_slug: "test-proj" },
+      arguments: { asset_id: uploaded.assetId, book_id: "test-proj" },
     });
     const commits = JSON.parse(
       (historyResult.content as Array<{ type: string; text: string }>)[0].text
@@ -52,7 +52,7 @@ describe("restore_asset_version tool", () => {
     // Delete the asset to create a different state
     await client.callTool({
       name: "delete_asset",
-      arguments: { asset_id: uploaded.assetId, project_slug: "test-proj" },
+      arguments: { asset_id: uploaded.assetId, book_id: "test-proj" },
     });
 
     // Restore to the first version
@@ -61,7 +61,7 @@ describe("restore_asset_version tool", () => {
       arguments: {
         asset_id: stableArtifactId,
         commit_hash: firstCommit,
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -78,7 +78,7 @@ describe("restore_asset_version tool", () => {
       arguments: {
         asset_id: stableArtifactId,
         commit_hash: firstCommit,
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
     expect(repeatResult.isError).toBeFalsy();
@@ -97,7 +97,7 @@ describe("restore_asset_version tool", () => {
       arguments: {
         asset_id: "img-nonexistent",
         commit_hash: "0000000000000000000000000000000000000000",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
     expect(result.isError).toBe(true);

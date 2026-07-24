@@ -29,13 +29,13 @@ async function generateTestVideo(outputPath: string, width = 1920, height = 1080
 
 async function uploadVideo(
   client: Client,
-  projectSlug: string,
+  bookId: string,
   videoPath: string,
 ): Promise<{ assetId: string; path: string }> {
   const data = (await readFile(videoPath)).toString("base64");
   const result = await client.callTool({
     name: "upload_file",
-    arguments: { project_slug: projectSlug, filename: "original.mp4", data },
+    arguments: { book_id: bookId, filename: "original.mp4", data },
   });
   return JSON.parse((result.content as TextContent)[0].text);
 }
@@ -60,7 +60,7 @@ describe("render_timeline tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "timeline-proj" },
+      arguments: { book_id: "timeline-proj" },
     });
   });
 
@@ -73,7 +73,7 @@ describe("render_timeline tool", () => {
     const result = await client.callTool({
       name: "render_timeline",
       arguments: {
-        project_slug: "timeline-proj",
+        book_id: "timeline-proj",
       },
     });
 
@@ -85,12 +85,12 @@ describe("render_timeline tool", () => {
   it("returns error when timeline has no slots with assets", async () => {
     const fs = createEngineForTest(tempDir);
     // Write an empty slots array as timeline data (render_timeline expects an array)
-    await fs.metadata.projects.write("timeline", { slots: [{ slug: "" }, { slug: "" }], render: "landscape" }, "timeline-proj");
+    await fs.metadata.book.write("timeline", { slots: [{ slug: "" }, { slug: "" }], render: "landscape" });
 
     const result = await client.callTool({
       name: "render_timeline",
       arguments: {
-        project_slug: "timeline-proj",
+        book_id: "timeline-proj",
       },
     });
 
@@ -101,16 +101,13 @@ describe("render_timeline tool", () => {
 
   it("returns error when slot references nonexistent asset", async () => {
     const fs = createEngineForTest(tempDir);
-    await fs.metadata.projects.write(
-      "timeline",
-      { slots: [{ slug: "vid-nonexistent" }], render: "landscape" },
-      "timeline-proj",
+    await fs.metadata.book.write("timeline", { slots: [{ slug: "vid-nonexistent" }], render: "landscape" }
     );
 
     const result = await client.callTool({
       name: "render_timeline",
       arguments: {
-        project_slug: "timeline-proj",
+        book_id: "timeline-proj",
       },
     });
 
@@ -125,16 +122,13 @@ describe("render_timeline tool", () => {
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
 
     const fs = createEngineForTest(tempDir);
-    await fs.metadata.projects.write(
-      "timeline",
-      { slots: [{ slug: uploaded.assetId }], render: "landscape" },
-      "timeline-proj",
+    await fs.metadata.book.write("timeline", { slots: [{ slug: uploaded.assetId }], render: "landscape" }
     );
 
     const result = await client.callTool({
       name: "render_timeline",
       arguments: {
-        project_slug: "timeline-proj",
+        book_id: "timeline-proj",
       },
     });
 
@@ -149,21 +143,14 @@ describe("render_timeline tool", () => {
   it("uses explicit orientation arg over timeline fields", async () => {
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
     const fs = createEngineForTest(tempDir);
-    expect((await fs.files.writeFromPath(
-      uploaded.assetId,
-      "portrait.mp4",
-      videoPath,
-      "timeline-proj",
+    expect((await fs.files.writeFromPath(uploaded.assetId, "portrait.mp4", videoPath
     )).ok).toBe(true);
-    await fs.metadata.projects.write(
-      "timeline",
-      { slots: [{ slug: uploaded.assetId }], render: "landscape", currentOrientation: "square" },
-      "timeline-proj",
+    await fs.metadata.book.write("timeline", { slots: [{ slug: uploaded.assetId }], render: "landscape", currentOrientation: "square" }
     );
 
     const result = await client.callTool({
       name: "render_timeline",
-      arguments: { project_slug: "timeline-proj", orientation: "portrait" },
+      arguments: { book_id: "timeline-proj", orientation: "portrait" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -174,21 +161,14 @@ describe("render_timeline tool", () => {
   it("falls back to currentOrientation when no orientation arg given", async () => {
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
     const fs = createEngineForTest(tempDir);
-    expect((await fs.files.writeFromPath(
-      uploaded.assetId,
-      "portrait.mp4",
-      videoPath,
-      "timeline-proj",
+    expect((await fs.files.writeFromPath(uploaded.assetId, "portrait.mp4", videoPath
     )).ok).toBe(true);
-    await fs.metadata.projects.write(
-      "timeline",
-      { slots: [{ slug: uploaded.assetId }], render: "landscape", currentOrientation: "portrait" },
-      "timeline-proj",
+    await fs.metadata.book.write("timeline", { slots: [{ slug: uploaded.assetId }], render: "landscape", currentOrientation: "portrait" }
     );
 
     const result = await client.callTool({
       name: "render_timeline",
-      arguments: { project_slug: "timeline-proj" },
+      arguments: { book_id: "timeline-proj" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -199,21 +179,14 @@ describe("render_timeline tool", () => {
   it("falls back to render field when currentOrientation is unset or 'original'", async () => {
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
     const fs = createEngineForTest(tempDir);
-    expect((await fs.files.writeFromPath(
-      uploaded.assetId,
-      "square.mp4",
-      videoPath,
-      "timeline-proj",
+    expect((await fs.files.writeFromPath(uploaded.assetId, "square.mp4", videoPath
     )).ok).toBe(true);
-    await fs.metadata.projects.write(
-      "timeline",
-      { slots: [{ slug: uploaded.assetId }], render: "square", currentOrientation: "original" },
-      "timeline-proj",
+    await fs.metadata.book.write("timeline", { slots: [{ slug: uploaded.assetId }], render: "square", currentOrientation: "original" }
     );
 
     const result = await client.callTool({
       name: "render_timeline",
-      arguments: { project_slug: "timeline-proj" },
+      arguments: { book_id: "timeline-proj" },
     });
 
     expect(result.isError).toBeFalsy();
@@ -226,22 +199,15 @@ describe("render_timeline tool", () => {
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
 
     const fs = createEngineForTest(tempDir);
-    expect((await fs.files.writeFromPath(
-      uploaded.assetId,
-      "landscape.mp4",
-      videoPath,
-      "timeline-proj",
+    expect((await fs.files.writeFromPath(uploaded.assetId, "landscape.mp4", videoPath
     )).ok).toBe(true);
-    await fs.metadata.projects.write(
-      "timeline",
-      { slots: [{ slug: uploaded.assetId }], render: "landscape" },
-      "timeline-proj",
+    await fs.metadata.book.write("timeline", { slots: [{ slug: uploaded.assetId }], render: "landscape" }
     );
 
     const result = await client.callTool({
       name: "render_timeline",
       arguments: {
-        project_slug: "timeline-proj",
+        book_id: "timeline-proj",
       },
     });
 

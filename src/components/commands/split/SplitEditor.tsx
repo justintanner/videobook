@@ -41,7 +41,7 @@ interface SplitEditorProps {
   onComplete?: () => void
   assetSlugs: string[]
   callTool: UseMcpResult['callTool']
-  projectSlug: string | undefined
+  bookId: string | undefined
 }
 
 export function SplitEditor({
@@ -53,7 +53,7 @@ export function SplitEditor({
   onComplete,
   assetSlugs,
   callTool,
-  projectSlug,
+  bookId,
 }: SplitEditorProps) {
   const [execState, setExecState] = useState<ExecuteButtonState | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
@@ -84,7 +84,7 @@ export function SplitEditor({
     initialSec: initialAtSec ?? null,
   })
 
-  const markers = useSceneMarkers(open, assetId, projectSlug)
+  const markers = useSceneMarkers(open, assetId, bookId)
 
   const {
     state: transcriptState,
@@ -103,16 +103,16 @@ export function SplitEditor({
   )
 
   const loadTranscript = useCallback(() => {
-    if (assetId && projectSlug) {
-      void fetchTranscript(assetId, projectSlug, callTool)
+    if (assetId && bookId) {
+      void fetchTranscript(assetId, bookId, callTool)
     }
-  }, [assetId, projectSlug, callTool, fetchTranscript])
+  }, [assetId, bookId, callTool, fetchTranscript])
 
   const handleRequestTimed = useCallback(() => {
-    if (assetId && projectSlug) {
-      void requestTimedTranscript(assetId, projectSlug, callTool)
+    if (assetId && bookId) {
+      void requestTimedTranscript(assetId, bookId, callTool)
     }
-  }, [assetId, projectSlug, callTool, requestTimedTranscript])
+  }, [assetId, bookId, callTool, requestTimedTranscript])
 
   const handleOpenChange = useCallback((newOpen: boolean) => {
     if (!newOpen) onClose()
@@ -146,7 +146,7 @@ export function SplitEditor({
   }, [onComplete, onClose])
 
   const runManualSplit = useCallback(async () => {
-    if (execState || !assetId || !projectSlug || splitSec === null || duration <= 0) return
+    if (execState || !assetId || !bookId || splitSec === null || duration <= 0) return
     if (chunkADur < MIN_CHUNK_SEC || chunkBDur < MIN_CHUNK_SEC) {
       setError(`Chunks too short (min ${MIN_CHUNK_SEC}s each). Move the split line away from the ends.`)
       return
@@ -158,7 +158,7 @@ export function SplitEditor({
     try {
       const result = await callTool('split_video', {
         asset_id: assetId,
-        project_slug: projectSlug,
+        book_id: bookId,
         chunk_a_end: splitSec,
         chunk_b_start: splitSec,
       })
@@ -175,7 +175,7 @@ export function SplitEditor({
       setError(err instanceof Error ? err.message : 'split_video failed')
       setExecState(undefined)
     }
-  }, [execState, assetId, projectSlug, splitSec, duration, chunkADur, chunkBDur, callTool, finishSuccess])
+  }, [execState, assetId, bookId, splitSec, duration, chunkADur, chunkBDur, callTool, finishSuccess])
 
   const { dispatch: contextDispatch, commands: contextCommands } = useCommandDispatch()
 
@@ -350,7 +350,7 @@ export function SplitEditor({
             commands={contextCommands}
             onSend={handleSend}
             callTool={callTool}
-            projectSlug={projectSlug}
+            bookId={bookId}
             placeholder="drag the line or /frame +1 · /split here when perfect"
           />
         </div>

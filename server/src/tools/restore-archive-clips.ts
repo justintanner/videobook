@@ -109,14 +109,14 @@ function archiveMetadata(index: ArchiveIndex): Record<string, unknown> {
 
 async function existingArchiveAssets(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   archiveIds: string[],
 ): Promise<Map<string, string>> {
   const wanted = new Set(archiveIds);
   const out = new Map<string, string>();
-  const assets = await fs.artifacts.list(projectSlug);
+  const assets = await fs.artifacts.list();
   await Promise.all(assets.map(async (asset) => {
-    const meta = await fs.metadata.artifacts.read<ArchiveMetadata>(asset.slug, "archive", projectSlug);
+    const meta = await fs.metadata.artifacts.read<ArchiveMetadata>(asset.slug, "archive");
     if (!meta.ok) return;
     const archiveId = meta.value.archive_id;
     if (typeof archiveId === "string" && wanted.has(archiveId)) {
@@ -131,13 +131,13 @@ export function restoreArchiveClipsDef(fs: Engine): ToolDef {
     name: "restore_archive_clips",
     description: "Restore selected archived video/audio clips into the current videocity project as new assets.",
     schema: {
-      project_slug: z.string().describe("Project slug to restore clips into"),
+      book_id: z.string().describe("Project slug to restore clips into"),
       archive_ids: z.array(z.string()).min(1).max(MAX_RESTORE_IDS).describe("Archive IDs to restore"),
       skip_existing: z.boolean().optional().default(true).describe("Skip archive IDs already restored into this project"),
     },
     handler: async (args) => {
-      const { project_slug, archive_ids, skip_existing } = args as {
-        project_slug: string;
+      const { book_id, archive_ids, skip_existing } = args as {
+        book_id: string;
         archive_ids: string[];
         skip_existing: boolean;
       };
@@ -148,9 +148,6 @@ export function restoreArchiveClipsDef(fs: Engine): ToolDef {
       const invalid = archiveIds.filter((id) => !ARCHIVE_ID_RE.test(id));
       if (invalid.length > 0) return toolError(`Invalid archive_id: ${invalid.join(", ")}`);
 
-      const project = await fs.projects.get(project_slug);
-      if (!project.ok) return toolError(project.error.message);
-
       const store = getArchiveStore();
       const indices: ArchiveIndex[] = [];
       for (const archiveId of archiveIds) {
@@ -160,7 +157,7 @@ export function restoreArchiveClipsDef(fs: Engine): ToolDef {
       }
 
       const existing = skip_existing
-        ? await existingArchiveAssets(fs, project_slug, indices.map((index) => index.archive_id))
+        ? await existingArchiveAssets(fs, book_id, indices.map((index) => index.archive_id))
         : new Map<string, string>();
       const restored: Array<{ archive_id: string; asset_id: string; job_id: string }> = [];
       const skipped: Array<{ archive_id: string; asset_id: string; reason: string }> = [];
@@ -175,12 +172,12 @@ export function restoreArchiveClipsDef(fs: Engine): ToolDef {
         const target = archiveMediaTarget(index);
         if (!target) return toolError(`Archive media type is not supported: ${index.media.filename}`);
 
-        const created = await fs.artifacts.create(target.prefix, archiveAssetName(index), project_slug);
+        const created = await fs.artifacts.create(target.prefix, archiveAssetName(index));
         if (!created.ok) return toolError(created.error.message);
 
-        const writeArchive = await fs.metadata.artifacts.write(created.value.slug, "archive", archiveMetadata(index), project_slug);
+        const writeArchive = await fs.metadata.artifacts.write(created.value.slug, "archive", archiveMetadata(index));
         if (!writeArchive.ok) {
-          await fs.artifacts.delete(created.value.slug, project_slug).catch(() => undefined);
+          await fs.artifacts.delete(created.value.slug).catch(() => undefined);
           return toolError(writeArchive.error.message);
         }
 
@@ -188,7 +185,7 @@ export function restoreArchiveClipsDef(fs: Engine): ToolDef {
         try {
           await queue.enqueue(jobId, {
             type: "restore_archive_clip",
-            projectSlug: project_slug,
+            bookId: book_id,
             assetId: created.value.slug,
             assetDir: created.value.path,
             archiveId: index.archive_id,
@@ -202,7 +199,7 @@ export function restoreArchiveClipsDef(fs: Engine): ToolDef {
             people: tagLabels(index.people),
           } as unknown as Record<string, unknown>);
         } catch (error) {
-          await fs.artifacts.delete(created.value.slug, project_slug).catch(() => undefined);
+          await fs.artifacts.delete(created.value.slug).catch(() => undefined);
           return toolError(error instanceof Error ? error.message : String(error));
         }
 

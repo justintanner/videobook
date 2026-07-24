@@ -10,7 +10,7 @@ import { transformNotebookSubmitArgs } from './transform-submit-args'
 import type { NotebookPlanDefinition, NotebookPlanStep } from './types'
 
 interface UseNotebookRunOptions {
-  projectSlug: string
+  bookId: string
   callTool: UseMcpResult['callTool']
   definition: NotebookPlanDefinition | null
   replaceDefinition: (definition: NotebookPlanDefinition, stepId: string) => Promise<void>
@@ -36,7 +36,7 @@ export interface NotebookRunSubmitArgs {
   option: ModelOption
   provider: string
   values: Record<string, unknown>
-  projectSlug: string
+  bookId: string
   callTool: UseMcpResult['callTool']
   getDefinition: () => NotebookPlanDefinition | null
   replaceDefinition: (definition: NotebookPlanDefinition, stepId: string) => Promise<void>
@@ -57,7 +57,7 @@ export async function submitNotebookGeneration(
     option,
     provider,
     values,
-    projectSlug,
+    bookId,
     callTool,
     getDefinition,
     replaceDefinition,
@@ -98,7 +98,7 @@ export async function submitNotebookGeneration(
       onGenerationLifecycle?.({ phase: 'started', requestId: `char_${slug}`, category: 'image', prompt: `Creating character for ${slug}` })
       try {
         const charResult = await callTool('create_google_flow_character', {
-          project_slug: projectSlug,
+          book_id: bookId,
           display_name: slug,
           image_slugs: [slug],
         })
@@ -151,7 +151,7 @@ export async function submitNotebookGeneration(
   try {
     const result = await callTool(toolName, {
       ...submitValues,
-      project_slug: projectSlug,
+      book_id: bookId,
       _provider: provider || undefined,
     })
     if (result.isError) throw new Error(responseText(result) || 'Generation failed')
@@ -174,7 +174,7 @@ export async function submitNotebookGeneration(
 }
 
 export function useNotebookRun({
-  projectSlug,
+  bookId,
   callTool,
   definition,
   replaceDefinition,
@@ -213,7 +213,7 @@ export function useNotebookRun({
         option,
         provider,
         values,
-        projectSlug,
+        bookId,
         callTool,
         getDefinition: () => definitionRef.current,
         replaceDefinition,
@@ -231,7 +231,7 @@ export function useNotebookRun({
         return next
       })
     }
-  }, [callTool, onGenerationLifecycle, projectSlug, replaceDefinition])
+  }, [callTool, onGenerationLifecycle, bookId, replaceDefinition])
 
   return { run, runningStepIds, errors }
 }

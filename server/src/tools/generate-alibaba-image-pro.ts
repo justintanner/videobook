@@ -32,7 +32,7 @@ function slugify(text: string): string {
 
 const generateAlibabaImageProSchema = {
   prompt: apicityStringField(AlibabaImageTextContentSchema.shape.text, "Text prompt for image generation (max 5000 chars)", { required: true }),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   image_slugs: apicityStringArrayField(AlibabaImageReferenceSlotsSchema, "0-9 @img-* slugs for reference images"),
   size: apicityStringField(AlibabaImageGenerationParametersSchema.shape.size, "Output size (e.g., '1024*1024', '720*1280', '1280*720')"),
   n: apicityField(AlibabaImageGenerationParametersSchema.shape.n, "Number of images to generate (1-12)"),
@@ -50,7 +50,7 @@ export function generateAlibabaImageProDef(fs: Engine): ToolDef {
     description: "Generate a pro image using Alibaba Cloud Wan 2.7 Image Pro. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).",
     schema: generateAlibabaImageProSchema,
     handler: async (args) => {
-      const { prompt, project_slug, image_slugs, size, n, watermark, thinking_mode, seed } = args as Args;
+      const { prompt, book_id, image_slugs, size, n, watermark, thinking_mode, seed } = args as Args;
 
       const ids = (image_slugs ?? []).map((s) => s.replace(/^@/, ""));
 
@@ -80,7 +80,7 @@ export function generateAlibabaImageProDef(fs: Engine): ToolDef {
             };
           }
 
-          const manifestResult = await fs.files.manifest(id, project_slug);
+          const manifestResult = await fs.files.manifest(id);
           if (!manifestResult.ok) {
             return {
               isError: true as const,
@@ -103,7 +103,7 @@ export function generateAlibabaImageProDef(fs: Engine): ToolDef {
       }
 
       const assetName = `${modelSlug("alibaba", "wan2.7-image-pro")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("img", assetName, project_slug);
+      const assetResult = await fs.artifacts.create("img", assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -122,7 +122,7 @@ export function generateAlibabaImageProDef(fs: Engine): ToolDef {
         imgAssetId,
         imgAssetDir,
         sourceImageIds,
-        projectSlug: project_slug,
+        bookId: book_id,
         model: "wan2.7-image-pro",
         ...(size !== undefined ? { size } : {}),
         ...(n !== undefined ? { n } : {}),

@@ -10,7 +10,7 @@ import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 const seedream = FalSeedreamV5LiteTextToImageRequestSchema.shape;
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(seedream.prompt, "Text prompt for image generation", { required: true }),
   image_size: apicityField(seedream.image_size, "Output size preset"),
   auto_4K: apicityField(seedream.auto_4K, "Upscale output to 4K"),
@@ -26,13 +26,13 @@ export function generateSeedreamV5LiteFalDef(fs: Engine): ToolDef {
     description: "Generate an image via fal.ai using ByteDance Seedream V5 Lite from a text prompt. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, image_size, auto_4K, num_images, max_images } = args as Args;
+      const { book_id, prompt, image_size, auto_4K, num_images, max_images } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "seedream/5-lite-text-to-image")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "seedream/5-lite-text-to-image")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
@@ -42,7 +42,7 @@ export function generateSeedreamV5LiteFalDef(fs: Engine): ToolDef {
         type: "generate_seedream_v5_lite_fal",
         imgAssetId,
         imgAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         ...(image_size !== undefined ? { image_size } : {}),
         ...(auto_4K !== undefined ? { auto_4K } : {}),

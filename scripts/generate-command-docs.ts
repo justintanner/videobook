@@ -4,15 +4,15 @@ import { join, resolve } from "node:path";
 import { createEngine } from "videobook-engine";
 
 const temporaryRoot = mkdtempSync(join(tmpdir(), "videobook-command-reference-"));
-process.env.VIDEOBOOK_DATA_DIR = join(temporaryRoot, "global-data");
-process.env.VIDEOBOOK_WORKSPACE_DIR = join(temporaryRoot, "global-workspaces");
+process.env.VIDEOBOOK_LIBRARY_DIR = join(temporaryRoot, "books");
+process.env.VIDEOBOOK_APP_STATE_PATH = join(temporaryRoot, "runtime", "app-state.json");
 
 const [
   { renderCommandReference, renderGenerationNamingManifest },
   { GENERATION_ACTIONS },
   { getCanonicalCommands },
   { getAllToolDefs },
-  { fs: defaultFs },
+  { bookManager },
 ] = await Promise.all([
   import("../server/src/command-reference.js"),
   import("../server/src/generation-registry.js"),
@@ -21,8 +21,9 @@ const [
   import("../server/src/fs.js"),
 ]);
 
-const projectFs = createEngine({
+const bookEngine = createEngine({
   rootDir: join(temporaryRoot, "reference-engine"),
+  initialBookSlug: "reference",
 });
 const root = resolve(import.meta.dirname, "..");
 
@@ -30,7 +31,7 @@ try {
   writeFileSync(
     resolve(root, "docs/command-reference.md"),
     renderCommandReference(
-      getAllToolDefs(projectFs),
+      getAllToolDefs(bookEngine),
       getCanonicalCommands(),
       GENERATION_ACTIONS,
     ),
@@ -40,7 +41,7 @@ try {
     renderGenerationNamingManifest(GENERATION_ACTIONS),
   );
 } finally {
-  projectFs.close();
-  defaultFs.close();
+  bookEngine.close();
+  await bookManager.close();
   rmSync(temporaryRoot, { recursive: true, force: true });
 }

@@ -29,7 +29,7 @@ describe("animate_keywords tool", () => {
   let client: Client;
   let fs: Engine;
   let tempDir: string;
-  const projectSlug = "test-proj";
+  const bookId = "test-proj";
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-animate-keywords-test-"));
@@ -37,7 +37,7 @@ describe("animate_keywords tool", () => {
     fs = createEngineForTest(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: projectSlug },
+      arguments: { book_id: bookId },
     });
   });
 
@@ -48,9 +48,9 @@ describe("animate_keywords tool", () => {
   });
 
   async function createVideo(withTranscript: boolean): Promise<string> {
-    const created = await fs.artifacts.create("vid", "interview", projectSlug);
+    const created = await fs.artifacts.create("vid", "interview");
     if (!created.ok) throw new Error(created.error.message);
-    const video = await fs.files.write(created.value.slug, "original.mp4", Buffer.from("video"), projectSlug);
+    const video = await fs.files.write(created.value.slug, "original.mp4", Buffer.from("video"));
     if (!video.ok) throw new Error(video.error.message);
     if (withTranscript) {
       const transcript = {
@@ -62,11 +62,7 @@ describe("animate_keywords tool", () => {
           { text: "forever", start: 11, end: 11.4, type: "word" },
         ],
       };
-      const written = await fs.files.write(
-        created.value.slug,
-        "elevenlabs.json",
-        JSON.stringify(transcript),
-        projectSlug,
+      const written = await fs.files.write(created.value.slug, "elevenlabs.json", JSON.stringify(transcript)
       );
       if (!written.ok) throw new Error(written.error.message);
     }
@@ -74,25 +70,21 @@ describe("animate_keywords tool", () => {
   }
 
   async function seedPlacementCache(assetId: string, keywords?: string[]): Promise<void> {
-    const transcript = await fs.files.read(assetId, "elevenlabs.json", projectSlug);
+    const transcript = await fs.files.read(assetId, "elevenlabs.json");
     if (!transcript.ok) throw new Error(transcript.error.message);
     const segments = parseKeywordTranscript(JSON.parse(transcript.value.toString()) as unknown);
     const graphics = keywords
       ? selectRequestedKeywordGraphics(segments, keywords).graphics
       : selectKeywordGraphics(segments);
-    const manifest = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
+    const manifest = await fs.files.manifest(assetId);
     if (!manifest.ok) throw new Error(manifest.error.message);
     const videoFile = findVideoFile(manifest.value.files);
     if (!videoFile) throw new Error("test video missing");
     const fingerprint = keywordPlacementFingerprint(videoFile, transcript.value, graphics);
-    const frameCache = await fs.files.write(
-      assetId,
-      KEYWORD_FRAME_CACHE_FILENAME,
-      Buffer.from("cached-frame-sheet"),
-      projectSlug,
+    const frameCache = await fs.files.write(assetId, KEYWORD_FRAME_CACHE_FILENAME, Buffer.from("cached-frame-sheet")
     );
     if (!frameCache.ok) throw new Error(frameCache.error.message);
-    await writeKeywordPlacementAnalysis(fs, assetId, projectSlug, {
+    await writeKeywordPlacementAnalysis(fs, assetId, bookId, {
       version: KEYWORD_PLACEMENT_VERSION,
       fingerprint,
       sourceWidth: 1920,
@@ -114,7 +106,7 @@ describe("animate_keywords tool", () => {
 
     const result = await client.callTool({
       name: "animate_keywords",
-      arguments: { asset_id: assetId, project_slug: projectSlug },
+      arguments: { asset_id: assetId, book_id: bookId },
     });
 
     expect(result.isError).toBeFalsy();
@@ -127,10 +119,7 @@ describe("animate_keywords tool", () => {
     expect(response.keywords).toHaveLength(4);
 
     for (const orientation of ORIENTATIONS) {
-      const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
-        assetId,
-        `${orientation}.render`,
-        projectSlug,
+      const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orientation}.render`
       );
       if (!metadata.ok) throw new Error(metadata.error.message);
       expect(metadata.value.keywordGraphicsEnabled).toBe(true);
@@ -144,15 +133,12 @@ describe("animate_keywords tool", () => {
 
     const result = await client.callTool({
       name: "animate_keywords",
-      arguments: { asset_id: assetId, project_slug: projectSlug, enabled: false },
+      arguments: { asset_id: assetId, book_id: bookId, enabled: false },
     });
 
     expect(result.isError).toBeFalsy();
     for (const orientation of ORIENTATIONS) {
-      const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
-        assetId,
-        `${orientation}.render`,
-        projectSlug,
+      const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orientation}.render`
       );
       if (!metadata.ok) throw new Error(metadata.error.message);
       expect(metadata.value.keywordGraphicsEnabled).toBe(false);
@@ -167,7 +153,7 @@ describe("animate_keywords tool", () => {
       name: "animate_keywords",
       arguments: {
         asset_id: assetId,
-        project_slug: projectSlug,
+        book_id: bookId,
         keywords: ["Everything", "Cinema"],
       },
     });
@@ -177,10 +163,7 @@ describe("animate_keywords tool", () => {
     expect(response.mode).toBe("explicit");
     expect(response.requested_keywords).toEqual(["Cinema", "Everything"]);
     for (const orientation of ORIENTATIONS) {
-      const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
-        assetId,
-        `${orientation}.render`,
-        projectSlug,
+      const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orientation}.render`
       );
       if (!metadata.ok) throw new Error(metadata.error.message);
       expect(metadata.value.keywordGraphicsKeywords).toEqual(["Cinema", "Everything"]);
@@ -194,7 +177,7 @@ describe("animate_keywords tool", () => {
       name: "animate_keywords",
       arguments: {
         asset_id: assetId,
-        project_slug: projectSlug,
+        book_id: bookId,
         keywords: ["Cinema", "Vengeance"],
       },
     });
@@ -211,17 +194,14 @@ describe("animate_keywords tool", () => {
 
     const result = await client.callTool({
       name: "animate_keywords",
-      arguments: { asset_id: assetId, project_slug: projectSlug },
+      arguments: { asset_id: assetId, book_id: bookId },
     });
 
     expect(result.isError).toBe(true);
     const response = JSON.parse((result.content as TextContent)[0].text) as Record<string, unknown>;
     expect(response.status).toBe("missing_vision_provider");
     for (const orientation of ORIENTATIONS) {
-      const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
-        assetId,
-        `${orientation}.render`,
-        projectSlug,
+      const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orientation}.render`
       );
       expect(metadata.ok).toBe(false);
     }
@@ -232,7 +212,7 @@ describe("animate_keywords tool", () => {
 
     const result = await client.callTool({
       name: "animate_keywords",
-      arguments: { asset_id: assetId, project_slug: projectSlug },
+      arguments: { asset_id: assetId, book_id: bookId },
     });
 
     expect(result.isError).toBe(true);
@@ -252,7 +232,7 @@ describe("animate_keywords tool", () => {
     expect(command?.mcpTool).toEqual({
       tool: "animate_keywords",
       adapter: "keywords",
-      autoInject: ["project_slug"],
+      autoInject: ["book_id"],
     });
   });
 });

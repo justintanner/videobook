@@ -8,47 +8,37 @@ import {
 import { notebookGridPosition } from './notebook-grid'
 
 const source: NotebookDocument = {
-  id: 'nb-story',
+  id: '018f7cf5-0d31-7d96-8c0f-800000000001',
   name: 'Story',
-  version: 2,
-  cells: [
-    {
-      id: 'prompt-1',
-      type: 'prompt',
-      title: 'Opening',
-      position: { x: 10, y: 20 },
-      prompt: 'A moon garden',
-      model: 'nano-banana',
-      entityId: 'prm-opening',
-      inputs: { reference: 'img-moon' },
-      outputAssetId: 'img-opening',
-    },
-  ],
+  cells: [{
+    id: '018f7cf5-0d31-7d96-8c0f-800000000002',
+    type: 'image',
+    title: 'Opening',
+    position: { x: 10, y: 20 },
+    prompt: 'A moon garden',
+    model: 'generate_kie_gpt_image_2_text_to_image',
+    entityId: '018f7cf5-0d31-7d96-8c0f-800000000003',
+    inputs: { reference: 'img-moon' },
+    outputArtifactId: '018f7cf5-0d31-7d96-8c0f-800000000004',
+  }],
   edges: [],
   createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-02T00:00:00.000Z',
 }
 
 describe('notebook draft conversion', () => {
-  it('preserves notebook identity and cell fields across a flow round trip', () => {
+  it('preserves real v2 notebook identity and cell fields across a flow round trip', () => {
     const nodes = notebookNodes(source)
     nodes[0] = {
       ...nodes[0],
       position: { x: 30, y: 40 },
       data: { ...nodes[0]!.data, prompt: 'A silver moon garden' },
     }
-    const result = notebookDocument(
-      source,
-      nodes,
-      notebookEdges(source),
-      '2026-01-03T00:00:00.000Z',
-    )
+    const result = notebookDocument(source, nodes, notebookEdges(source))
+
     expect(result).toMatchObject({
-      id: 'nb-story',
+      id: source.id,
       name: 'Story',
-      version: 2,
       createdAt: source.createdAt,
-      updatedAt: '2026-01-03T00:00:00.000Z',
     })
     expect(result.cells[0]).toEqual({
       ...source.cells[0],
@@ -64,8 +54,8 @@ describe('notebook draft conversion', () => {
         source.cells[0]!,
         {
           ...source.cells[0]!,
-          id: 'image-1',
-          type: 'image',
+          id: '018f7cf5-0d31-7d96-8c0f-800000000005',
+          type: 'video',
           position: { x: 30, y: 40 },
         },
       ],

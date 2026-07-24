@@ -1,12 +1,9 @@
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 
-// How far back through an asset's immutable revisions to look for a usable state.
-const HISTORY_LIMIT = 25;
-
 interface DoctorFixPayload {
   type: "doctor_fix";
-  projectSlug: string;
+  bookId: string;
   assetId: string;
 }
 
@@ -25,10 +22,10 @@ export type DoctorFixResult =
 
 async function statusOf(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   assetId: string,
 ): Promise<string> {
-  const res = await fs.status.get(assetId, projectSlug);
+  const res = await fs.status.get(assetId);
   return res.ok ? res.value : "error";
 }
 
@@ -51,11 +48,11 @@ async function statusOf(
  */
 async function fixAsset(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   assetId: string,
 ): Promise<DoctorFixResult> {
   // Refuse to touch an asset a job is actively working (live, unexpired lease).
-  const work = await fs.jobs.artifactWork.read(projectSlug, assetId);
+  const work = await fs.jobs.artifactWork.read(bookId);
   if (
     work.ok &&
     work.value &&
@@ -66,20 +63,20 @@ async function fixAsset(
     return { status: "busy", asset_id: assetId, reason: "asset has an active job lease" };
   }
 
-  const before = await statusOf(fs, projectSlug, assetId);
+  const before = await statusOf(fs, bookId, assetId);
 
   // Tier 1 — clear durable failure signals, then re-derive from disk.
-  await fs.jobs.failures.clear(projectSlug, assetId);
-  const pending = await fs.jobs.pending.read(projectSlug, assetId);
+  await fs.jobs.failures.clear(assetId);
+  const pending = await fs.jobs.pending.read(assetId);
   if (pending.ok && pending.value) {
     // delete (not forceFail) so we don't write a fresh generation error.
-    await fs.jobs.pending.delete(projectSlug, assetId);
+    await fs.jobs.pending.delete(assetId);
   }
-  const dirRes = await fs.workspaces.resolveArtifact(assetId, projectSlug);
+  const dirRes = await fs.workspaces.resolveArtifact(assetId);
   if (dirRes.ok) await fs.jobs.locks.cleanStale(dirRes.value);
-  await fs.jobs.recoverArtifact(projectSlug, assetId);
+  await fs.jobs.recoverArtifact(bookId);
 
-  const afterTier1 = await statusOf(fs, projectSlug, assetId);
+  const afterTier1 = await statusOf(fs, bookId, assetId);
   if (afterTier1 === "ready") {
     return {
       status: before === "ready" ? "already_healthy" : "recovered_in_place",
@@ -89,7 +86,7 @@ async function fixAsset(
   }
 
   // Tier 2 — restore from immutable Dolt history using stable identity.
-  const artifact = fs.artifacts.get(projectSlug, assetId);
+  const artifact = fs.artifacts.get(bookId);
   if (!artifact.ok) {
     return {
       status: "unfixable",
@@ -98,21 +95,16 @@ async function fixAsset(
       asset_status: afterTier1,
     };
   }
-  const history = fs.history.artifact(
-    artifact.value.artifactId,
-    projectSlug,
-    HISTORY_LIMIT,
-  );
+  const history = fs.history.artifact(artifact.value.artifactId);
   for (const commit of history) {
     const restored = await fs.history.restoreArtifact(
       artifact.value.artifactId,
       commit.hash,
-      projectSlug,
     );
     if (!restored.ok) continue;
     // restoreAsset re-derives the row; clear any error it carried forward.
-    await fs.jobs.failures.clear(projectSlug, assetId);
-    const status = await statusOf(fs, projectSlug, assetId);
+    await fs.jobs.failures.clear(assetId);
+    const status = await statusOf(fs, bookId, assetId);
     if (status === "ready") {
       return {
         status: "restored",
@@ -128,13 +120,13 @@ async function fixAsset(
     status: "unfixable",
     asset_id: assetId,
     scanned: history.length,
-    asset_status: await statusOf(fs, projectSlug, assetId),
+    asset_status: await statusOf(fs, bookId, assetId),
   };
 }
 
 export function registerDoctorFixJob(fs: Engine): void {
   registerJobHandler("doctor_fix", async (payload) => {
-    const { projectSlug, assetId } = payload as unknown as DoctorFixPayload;
-    return fixAsset(fs, projectSlug, assetId);
+    const { bookId, assetId } = payload as unknown as DoctorFixPayload;
+    return fixAsset(fs, bookId, assetId);
   });
 }

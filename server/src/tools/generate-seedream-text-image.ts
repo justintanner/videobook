@@ -20,7 +20,7 @@ const seedreamInputSchema = SeedreamTextToImageRequestSchema.shape.input.shape;
 
 const generateSeedreamTextImageSchema = {
   prompt: apicityStringField(seedreamInputSchema.prompt, "Text description of the image to generate (3-3000 chars)", { required: true }),
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   aspect_ratio: apicityField(seedreamInputSchema.aspect_ratio, "Output aspect ratio (default 16:9)"),
   quality: apicityField(seedreamInputSchema.quality, "Output quality (basic=2K, high=4K)", { required: true }),
   nsfw_checker: apicityField(seedreamInputSchema.nsfw_checker, "Content safety filter"),
@@ -35,7 +35,7 @@ export function generateSeedreamTextImageDef(fs: Engine): ToolDef {
     description: "Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new img- asset and enqueues a background job.",
     schema: generateSeedreamTextImageSchema,
     handler: async (args) => {
-      const { prompt, project_slug, aspect_ratio, quality, nsfw_checker } = args as Args;
+      const { prompt, book_id, aspect_ratio, quality, nsfw_checker } = args as Args;
 
       if (!process.env.KIE_API_KEY) {
         return {
@@ -56,7 +56,7 @@ export function generateSeedreamTextImageDef(fs: Engine): ToolDef {
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
       const assetName = `${modelSlug("kie", "seedream/5-lite-text-to-image")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("img", assetName, project_slug);
+      const assetResult = await fs.artifacts.create("img", assetName);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -73,7 +73,7 @@ export function generateSeedreamTextImageDef(fs: Engine): ToolDef {
         prompt,
         imgAssetId,
         imgAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         ...(aspect_ratio !== undefined ? { aspectRatio: aspect_ratio } : {}),
         ...(quality !== undefined ? { quality } : {}),
         ...(nsfw_checker !== undefined ? { nsfwChecker: nsfw_checker } : {}),

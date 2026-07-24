@@ -54,24 +54,20 @@ async function createImage(
   height: number,
   color: string,
 ): Promise<string> {
-  const asset = await fs.artifacts.create("img", name, PROJECT);
+  const asset = await fs.artifacts.create("img", name);
   if (!asset.ok) throw new Error(asset.error.message);
   const image = await sharp({
     create: { width, height, channels: 3, background: color },
   }).png().toBuffer();
-  const written = await fs.files.write(asset.value.slug, "original.png", image, PROJECT);
+  const written = await fs.files.write(asset.value.slug, "original.png", image);
   if (!written.ok) throw new Error(written.error.message);
   return asset.value.slug;
 }
 
 async function createAudio(fs: Engine): Promise<string> {
-  const asset = await fs.artifacts.create("aud", "impact", PROJECT);
+  const asset = await fs.artifacts.create("aud", "impact");
   if (!asset.ok) throw new Error(asset.error.message);
-  const written = await fs.files.write(
-    asset.value.slug,
-    "original.wav",
-    createImpactWav(),
-    PROJECT,
+  const written = await fs.files.write(asset.value.slug, "original.wav", createImpactWav()
   );
   if (!written.ok) throw new Error(written.error.message);
   return asset.value.slug;
@@ -132,7 +128,7 @@ describe("create_qr_outro e2e", () => {
     const result = await client.callTool({
       name: "create_qr_outro",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         qr_image_slugs: [`@${qrOne}`, `@${qrTwo}`],
         sound_effect_slug: `@${sound}`,
         aspect_ratio: "16:9",
@@ -143,14 +139,14 @@ describe("create_qr_outro e2e", () => {
     outputAssetId = String(data.asset_id);
     await waitForJob(String(data.job_id), 600_000);
 
-    const manifest = await fs.files.manifest(outputAssetId, PROJECT);
+    const manifest = await fs.files.manifest(outputAssetId);
     if (!manifest.ok) throw new Error(manifest.error.message);
     outputPath = join(manifest.value.path, "original.mp4");
 
     const defaultSoundResult = await client.callTool({
       name: "create_qr_outro",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         qr_image_slugs: [qrOne],
         aspect_ratio: "1:1",
       },
@@ -160,14 +156,14 @@ describe("create_qr_outro e2e", () => {
     expect(defaultSoundData.sound_effect_source).toBe("bundled_default");
     defaultSoundOutputAssetId = String(defaultSoundData.asset_id);
     await waitForJob(String(defaultSoundData.job_id), 600_000);
-    const defaultSoundManifest = await fs.files.manifest(defaultSoundOutputAssetId, PROJECT);
+    const defaultSoundManifest = await fs.files.manifest(defaultSoundOutputAssetId);
     if (!defaultSoundManifest.ok) throw new Error(defaultSoundManifest.error.message);
     defaultSoundOutputPath = join(defaultSoundManifest.value.path, "original.mp4");
 
     const silentResult = await client.callTool({
       name: "create_qr_outro",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         qr_image_slugs: [qrOne],
         aspect_ratio: "16:9",
         duration_seconds: 10,
@@ -183,7 +179,7 @@ describe("create_qr_outro e2e", () => {
     });
     silentOutputAssetId = String(silentData.asset_id);
     await waitForJob(String(silentData.job_id), 600_000);
-    const silentManifest = await fs.files.manifest(silentOutputAssetId, PROJECT);
+    const silentManifest = await fs.files.manifest(silentOutputAssetId);
     if (!silentManifest.ok) throw new Error(silentManifest.error.message);
     silentOutputPath = join(silentManifest.value.path, "original.mp4");
   }, 900_000);
@@ -206,20 +202,17 @@ describe("create_qr_outro e2e", () => {
     expect(probe.duration).toBeLessThanOrEqual(3.15);
     expect(probe.hasAudio).toBe(true);
 
-    const manifest = await fs.files.manifest(outputAssetId, PROJECT);
+    const manifest = await fs.files.manifest(outputAssetId);
     if (!manifest.ok) throw new Error(manifest.error.message);
     expect(manifest.value.files.map((file) => file.name)).toEqual(
       expect.arrayContaining(["original.mp4", "original.mp3", "original.jpg"]),
     );
-    const status = await fs.status.get(outputAssetId, PROJECT);
+    const status = await fs.status.get(outputAssetId);
     expect(status.ok && status.value).toBe("ready");
   });
 
   it("persists complete source and timing provenance", async () => {
-    const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
-      outputAssetId,
-      "qr-outro",
-      PROJECT,
+    const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(outputAssetId, "qr-outro"
     );
     if (!metadata.ok) throw new Error(metadata.error.message);
     expect(metadata.value).toMatchObject({
@@ -233,10 +226,7 @@ describe("create_qr_outro e2e", () => {
       impact_frames: [12, 24],
     });
 
-    const original = await fs.metadata.artifacts.read<Record<string, unknown>>(
-      outputAssetId,
-      "original",
-      PROJECT,
+    const original = await fs.metadata.artifacts.read<Record<string, unknown>>(outputAssetId, "original"
     );
     if (!original.ok) throw new Error(original.error.message);
     expect(original.value).toMatchObject({
@@ -253,10 +243,7 @@ describe("create_qr_outro e2e", () => {
     expect(probe.width).toBe(1080);
     expect(probe.height).toBe(1080);
     expect(probe.hasAudio).toBe(true);
-    const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
-      defaultSoundOutputAssetId,
-      "qr-outro",
-      PROJECT,
+    const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(defaultSoundOutputAssetId, "qr-outro"
     );
     if (!metadata.ok) throw new Error(metadata.error.message);
     expect(metadata.value).toMatchObject({
@@ -277,7 +264,7 @@ describe("create_qr_outro e2e", () => {
     const pcm = await readFile(pcmPath);
     expect(rmsAt(pcm, 0.42, 0.52)).toBeGreaterThan(0.01);
     expect(rmsAt(pcm, 1.4, 1.5)).toBeLessThan(0.005);
-    const status = await fs.status.get(defaultSoundOutputAssetId, PROJECT);
+    const status = await fs.status.get(defaultSoundOutputAssetId);
     expect(status.ok && status.value).toBe("ready");
   });
 
@@ -289,14 +276,11 @@ describe("create_qr_outro e2e", () => {
     expect(probe.duration).toBeLessThanOrEqual(10.15);
     expect(probe.hasAudio).toBe(false);
 
-    const manifest = await fs.files.manifest(silentOutputAssetId, PROJECT);
+    const manifest = await fs.files.manifest(silentOutputAssetId);
     if (!manifest.ok) throw new Error(manifest.error.message);
     expect(manifest.value.files.map((file) => file.name)).not.toContain("original.mp3");
 
-    const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
-      silentOutputAssetId,
-      "qr-outro",
-      PROJECT,
+    const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(silentOutputAssetId, "qr-outro"
     );
     if (!metadata.ok) throw new Error(metadata.error.message);
     expect(metadata.value).toMatchObject({
@@ -389,25 +373,25 @@ describe("create_qr_outro e2e", () => {
   });
 
   it("rejects invalid MCP inputs without creating output assets", async () => {
-    const before = await fs.artifacts.list(PROJECT);
+    const before = await fs.artifacts.list();
     const noQr = await client.callTool({
       name: "create_qr_outro",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         qr_image_slugs: [],
       },
     });
     const tooMany = await client.callTool({
       name: "create_qr_outro",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         qr_image_slugs: [qrOne, qrOne, qrOne, qrOne, qrOne],
       },
     });
     const invalidRatio = await client.callTool({
       name: "create_qr_outro",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         qr_image_slugs: [qrOne],
         aspect_ratio: "4:3",
       },
@@ -415,7 +399,7 @@ describe("create_qr_outro e2e", () => {
     const invalidAudio = await client.callTool({
       name: "create_qr_outro",
       arguments: {
-        project_slug: PROJECT,
+        book_id: PROJECT,
         qr_image_slugs: [qrOne],
         sound_effect_slug: qrTwo,
       },
@@ -425,16 +409,16 @@ describe("create_qr_outro e2e", () => {
     expect(tooMany.isError).toBe(true);
     expect(invalidRatio.isError).toBe(true);
     expect(invalidAudio.isError).toBe(true);
-    expect(await fs.artifacts.list(PROJECT)).toHaveLength(before.length);
+    expect(await fs.artifacts.list()).toHaveLength(before.length);
   });
 
   it("marks a failed render asset as error", async () => {
-    const output = await fs.artifacts.create("vid", "broken-qr-outro", PROJECT);
+    const output = await fs.artifacts.create("vid", "broken-qr-outro");
     if (!output.ok) throw new Error(output.error.message);
     const jobId = `broken-qr-outro-${Date.now()}`;
     await queue.enqueue(jobId, {
       type: "render_qr_outro",
-      projectSlug: PROJECT,
+      bookId: PROJECT,
       assetId: output.value.slug,
       orientation: "landscape",
       qrImages: [{ assetId: "img-missing", filename: "original.png" }],
@@ -443,14 +427,14 @@ describe("create_qr_outro e2e", () => {
     });
 
     await expect(waitForJob(jobId, 60_000)).rejects.toThrow("Failed to read");
-    const status = await fs.status.get(output.value.slug, PROJECT);
+    const status = await fs.status.get(output.value.slug);
     expect(status.ok && status.value).toBe("error");
   });
 
   it("does not alter timeline slots", async () => {
     const result = await client.callTool({
       name: "get_timeline",
-      arguments: { project_slug: PROJECT },
+      arguments: { book_id: PROJECT },
     });
     expect(result.isError).toBeFalsy();
     expect(parseResult(result).slots).toEqual([]);

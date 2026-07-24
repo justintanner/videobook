@@ -21,7 +21,7 @@ type DescribeImagePayload = {
   // is written. Used by the auto-on-upload flow (`process_image`), which only
   // needs the cached JSON, not a user-visible script asset.
   assetId?: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 export type DescribeImageResult = {
@@ -208,17 +208,17 @@ export function registerDescribeImageJob(fs: Engine): void {
       sourceAssetId,
       sourceImageFilename,
       assetId: scriptAssetId,
-      projectSlug,
+      bookId,
     } = payload as DescribeImagePayload;
 
     // When scriptAssetId is set, the queue wrote a pending row on it; claim
     // the lease so the wrapper finalizes it (ready/error). Analysis-only
     // mode runs on the source asset, which already exists at status='ready'.
     const targetAssetId = scriptAssetId ?? sourceAssetId;
-    return withLocalLease(fs, projectSlug, targetAssetId, ctx, "describe", async () => {
+    return withLocalLease(fs, bookId, targetAssetId, ctx, "describe", async () => {
       const responses = buildResponses(requireApiKey("KIE_API_KEY"));
 
-      const readResult = await fs.files.read(sourceAssetId, sourceImageFilename, projectSlug);
+      const readResult = await fs.files.read(sourceAssetId, sourceImageFilename);
       if (!readResult.ok) {
         throw new Error(`Failed to read image ${sourceImageFilename} for ${sourceAssetId}: ${readResult.error.message}`);
       }
@@ -228,7 +228,7 @@ export function registerDescribeImageJob(fs: Engine): void {
       const parsed = await describeImageBytes(buffer, mime, responses);
 
       const analysisJson = JSON.stringify(parsed, null, 2);
-      const cacheResult = await fs.files.write(sourceAssetId, ANALYSIS_FILENAME, analysisJson, projectSlug);
+      const cacheResult = await fs.files.write(sourceAssetId, ANALYSIS_FILENAME, analysisJson);
       if (!cacheResult.ok) {
         if (cacheResult.error.code === "NOT_FOUND") {
           return { success: false, sourceAssetId, scriptAssetId, reason: "source_deleted" };
@@ -240,22 +240,18 @@ export function registerDescribeImageJob(fs: Engine): void {
 
       if (scriptAssetId) {
         const markdown = formatMarkdown(parsed);
-        const writeResult = await fs.files.write(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);
+        const writeResult = await fs.files.write(scriptAssetId, SCRIPT_FILENAME, markdown);
         if (!writeResult.ok) {
           throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
         }
 
-        await fs.metadata.artifacts.write(
-          scriptAssetId,
-          "original",
-          {
+        await fs.metadata.artifacts.write(scriptAssetId, "original", {
             origin: "describe_image",
             sourceAssetId,
             model: VISION_MODEL,
             processed_at: new Date().toISOString(),
             variant: "full",
-          },
-          projectSlug,
+          }
         );
       }
 

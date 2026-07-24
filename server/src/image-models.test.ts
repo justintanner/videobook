@@ -19,12 +19,12 @@ describe("extractLastImageSettingsPerModel", () => {
     expect(result.size).toBe(0);
   });
 
-  it("extracts settings from a single nano_banana log entry, stripping project_slug", () => {
+  it("extracts settings from a single nano_banana log entry, stripping book_id", () => {
     const log: ActionLogEntry[] = [
       {
         hash: "abc123",
         action: "tool-generate-nano-banana-image",
-        payload: { project_slug: "my-proj", prompt: "sunset", aspect_ratio: "16:9", resolution: "2K" },
+        payload: { book_id: "my-proj", prompt: "sunset", aspect_ratio: "16:9", resolution: "2K" },
         date: "2026-03-08T00:00:00Z",
       },
     ];
@@ -163,7 +163,7 @@ describe("extractLastUsedImageModel", () => {
       {
         hash: "h1",
         action: "tool-asset-manifest",
-        payload: { project_slug: "test" },
+        payload: { book_id: "test" },
         date: "2026-03-08T02:00:00Z",
       },
       {

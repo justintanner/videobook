@@ -74,12 +74,9 @@ export function parseKeywordPlacementAnalysis(raw: unknown): KeywordPlacementAna
 export async function readKeywordPlacementAnalysis(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<KeywordPlacementAnalysis | null> {
-  const result = await fs.metadata.artifacts.read<unknown>(
-    assetId,
-    KEYWORD_PLACEMENT_METADATA_KEY,
-    projectSlug,
+  const result = await fs.metadata.artifacts.read<unknown>(assetId, KEYWORD_PLACEMENT_METADATA_KEY
   );
   if (!result.ok) return null;
   const parsed = analysisSchema.safeParse(result.value);
@@ -89,15 +86,11 @@ export async function readKeywordPlacementAnalysis(
 export async function writeKeywordPlacementAnalysis(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   analysis: KeywordPlacementAnalysis,
 ): Promise<void> {
   const parsed = parseKeywordPlacementAnalysis(analysis);
-  const result = await fs.metadata.artifacts.write(
-    assetId,
-    KEYWORD_PLACEMENT_METADATA_KEY,
-    parsed,
-    projectSlug,
+  const result = await fs.metadata.artifacts.write(assetId, KEYWORD_PLACEMENT_METADATA_KEY, parsed
   );
   if (!result.ok) throw new Error(`Failed to persist keyword placement analysis: ${result.error.message}`);
 }
@@ -105,7 +98,7 @@ export async function writeKeywordPlacementAnalysis(
 export async function isKeywordPlacementCacheValid(
   fs: Engine,
   assetId: string,
-  projectSlug: string,
+  bookId: string,
   analysis: KeywordPlacementAnalysis | null,
   fingerprint: string,
   graphics: KeywordGraphic[],
@@ -115,6 +108,6 @@ export async function isKeywordPlacementCacheValid(
   const cachedCueIds = analysis.cues.map((cue: KeywordPlacementCueAnalysis) => cue.cueId);
   if (expectedCueIds.length !== cachedCueIds.length) return false;
   if (expectedCueIds.some((cueId, index) => cueId !== cachedCueIds[index])) return false;
-  const frameCache = await fs.files.read(assetId, KEYWORD_FRAME_CACHE_FILENAME, projectSlug);
+  const frameCache = await fs.files.read(assetId, KEYWORD_FRAME_CACHE_FILENAME);
   return frameCache.ok;
 }

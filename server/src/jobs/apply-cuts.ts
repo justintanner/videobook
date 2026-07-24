@@ -25,7 +25,7 @@ type ApplyCutsPayload = {
   hasAudio: boolean;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 function buildKeepSegments(cuts: Cut[], duration: number): Array<[number, number]> {
@@ -61,12 +61,12 @@ export function registerApplyCutsJob(fs: Engine): void {
   registerJobHandler("apply_cuts", async (payload, ctx) => {
     const {
       inputPath, outputPath, cuts, duration, hasAudio,
-      assetId, assetDir, projectSlug,
+      assetId, assetDir, bookId,
     } = payload as ApplyCutsPayload;
 
     const result = await withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       assetDir,
       ctx,
@@ -94,14 +94,14 @@ export function registerApplyCutsJob(fs: Engine): void {
       const inputFilename = basename(inputPath);
       await replaceArtifactFileFromPath(
         fs,
-        projectSlug,
+        bookId,
         assetId,
         inputFilename,
         outputPath,
       );
 
       for (const stale of STALE_DERIVATIVES) {
-        await fs.files.delete(assetId, stale, projectSlug);
+        await fs.files.delete(assetId, stale);
       }
 
       const newVideoPath = join(assetDir, inputFilename);
@@ -115,7 +115,7 @@ export function registerApplyCutsJob(fs: Engine): void {
       videoPath: result.newVideoPath,
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
       provenance: {
         origin: "apply_cuts",
         cuts,

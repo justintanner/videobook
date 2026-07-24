@@ -99,21 +99,21 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
   {
     name: "list_assets",
     actualTool: "list_assets",
-    description: "List all assets in the current project",
+    description: "List all assets in the current book",
     params: ["sort"],
     category: "action",
   },
   {
-    name: "list_projects",
-    actualTool: "list_projects",
-    description: "List all projects",
+    name: "list_books",
+    actualTool: "list_books",
+    description: "List all books",
     params: ["sort"],
     category: "action",
   },
   {
     name: "render_timeline",
     actualTool: "render_timeline",
-    description: "Concatenate rendered timeline slots into the final project video (use for /final and 'render the timeline' requests)",
+    description: "Concatenate rendered timeline slots into the final book video (use for /final and 'render the timeline' requests)",
     params: [],
     category: "action",
   },
@@ -176,7 +176,7 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
   {
     name: "restore_archive_clips",
     actualTool: "restore_archive_clips",
-    description: "Restore archived clips into the current project by archive ID",
+    description: "Restore archived clips into the current book by archive ID",
     params: ["archive_ids"],
     category: "action",
   },
@@ -189,16 +189,16 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
     category: "action",
   },
   {
-    name: "create_project",
-    actualTool: "create_project",
-    description: "Create a new project",
-    params: ["project_slug"],
+    name: "create_book",
+    actualTool: "create_book",
+    description: "Create a new book with a Main notebook",
+    params: ["slug"],
     category: "action",
   },
   {
     name: "list_notebooks",
     actualTool: "list_notebooks",
-    description: "List first-class notebooks in the current Videobook project",
+    description: "List first-class notebooks in the current book",
     params: [],
     category: "action",
   },
@@ -282,14 +282,14 @@ const ROUTABLE_TOOLS: RoutableToolInfo[] = [
   {
     name: "list_jobs",
     actualTool: "list_jobs",
-    description: "List persistent jobs for the current project",
+    description: "List persistent jobs for the current book",
     params: [],
     category: "action",
   },
   {
     name: "revision_history",
     actualTool: "revision_history",
-    description: "List forward-only project revisions",
+    description: "List forward-only book revisions",
     params: ["limit"],
     category: "action",
   },
@@ -397,7 +397,7 @@ function buildChatRoutingPrompt(slug: string, historyContext?: string): string {
 Available tools:
 ${toolLines}
 
-Current project: ${slug}
+Current book: ${slug}
 ${historyBlock}
 Given a user query (possibly with @asset references), determine:
 1. tool: Which tool to use
@@ -417,7 +417,7 @@ Parameter guidelines:
 - For create_qr_outro: use when the user asks for an animated QR outro video from one to four QR images. Pass every referenced QR image in order through qr_image_slugs (array of img- IDs), plus sound_effect_slug only for an explicit aud-* override and aspect_ratio ("16:9", "9:16", or "1:1"). Without an audio override, the bundled impact sound is used. This creates a vid-* asset, it is NOT generate_video or create_watermark_card.
 - For concat_images: use image_slugs for the referenced @img-* assets; one slug leaves the second two-slot cell empty, and null explicitly leaves a slot empty. Use aspect_ratio 16:9 or 9:16; layout is automatic unless overridden
 - Timeline audio positions (start_frame, duration_frames) are in frames at 30 fps — convert seconds to frames (e.g., "at 5 seconds" → start_frame: 150)
-- Do NOT include project_slug in params — it is injected automatically
+- Do NOT include book_id in params — it is injected automatically
 - When @script- tags are referenced, use the script content as the prompt for generation tools
 
 Respond with JSON only (strict JSON: double-quoted keys/strings, no trailing commas, no comments):

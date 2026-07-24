@@ -10,7 +10,7 @@ import { apicityField, apicityStringArrayField, apicityStringField } from "./sch
 const base = FalNanoBanana2EditRequestSchema.shape;
 
 const schema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(base.prompt, "Edit instruction", { required: true }),
   // Apicity edit image_urls still unbounded; keep Fal's 14-ref cap locally (§24).
   image_slugs: apicityStringArrayField(base.image_urls, "1-14 @img-* slugs for reference images", { required: true }).min(1).max(14),
@@ -32,16 +32,16 @@ export function generateNanoBanana2EditFalDef(fs: Engine): ToolDef {
     description: "Edit images via fal.ai using Google Nano Banana 2 with one or more @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
     schema,
     handler: async (args) => {
-      const { project_slug, prompt, image_slugs, num_images, aspect_ratio, resolution, output_format, safety_tolerance, thinking_level, enable_web_search, seed } = args as Args;
+      const { book_id, prompt, image_slugs, num_images, aspect_ratio, resolution, output_format, safety_tolerance, thinking_level, enable_web_search, seed } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const resolved = await resolveImageSlugs(fs, image_slugs, project_slug);
+      const resolved = await resolveImageSlugs(fs, image_slugs, book_id);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "nano-banana-2")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "nano-banana-2")}-${slugify(prompt) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
       const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
@@ -51,7 +51,7 @@ export function generateNanoBanana2EditFalDef(fs: Engine): ToolDef {
         type: "generate_nano_banana_2_edit_fal",
         imgAssetId,
         imgAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         prompt,
         imageInputs: resolved.inputs,
         sourceImageIds: resolved.sourceImageIds,

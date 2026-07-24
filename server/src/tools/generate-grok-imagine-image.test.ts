@@ -29,7 +29,7 @@ describe("generate_grok_imagine_image tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -48,7 +48,7 @@ describe("generate_grok_imagine_image tool", () => {
       name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
         asset_id: "img-test",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -64,7 +64,7 @@ describe("generate_grok_imagine_image tool", () => {
       name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
         asset_id: "vid-something",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -80,7 +80,7 @@ describe("generate_grok_imagine_image tool", () => {
       name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
         asset_id: "img-does-not-exist",
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -91,16 +91,16 @@ describe("generate_grok_imagine_image tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "empty-img", "test-proj");
+    const asset = await fs.artifacts.create("img", "empty-img");
     if (!asset.ok) throw new Error("Failed to create asset");
 
-    await fs.files.write(asset.value.slug, "notes.txt", "hello", "test-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
         asset_id: asset.value.slug,
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 
@@ -113,19 +113,19 @@ describe("generate_grok_imagine_image tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "source-img", "test-proj");
+    const asset = await fs.artifacts.create("img", "source-img");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png);
 
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_image",
       arguments: {
         asset_id: asset.value.slug,
-        project_slug: "test-proj",
+        book_id: "test-proj",
       },
     });
 

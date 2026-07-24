@@ -10,14 +10,14 @@ export async function uploadAssetToAlibaba(
   fs: Engine,
   assetId: string,
   filename: string,
-  projectSlug: string,
+  bookId: string,
   model: string,
 ): Promise<string> {
   const { data, hashedFilename, contentType } = await prepareAssetForUpload(
     fs,
     assetId,
     filename,
-    projectSlug,
+    bookId,
   );
 
   const apiKey = getApiKey("DASHSCOPE_API_KEY");

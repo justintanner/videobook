@@ -13,16 +13,16 @@ interface AnalysisJson {
 export function useSceneMarkers(
   open: boolean,
   assetId: string | null,
-  projectSlug: string | undefined,
+  bookId: string | undefined,
 ): SceneMarker[] {
   const [markers, setMarkers] = useState<SceneMarker[]>([]);
 
   useEffect(() => {
-    if (!open || !assetId || !projectSlug) {
+    if (!open || !assetId || !bookId) {
       return () => setMarkers([]);
     }
     let cancelled = false;
-    fetch(`/files/${projectSlug}/${assetId}/.original.analysis.json`)
+    fetch(`/files/${bookId}/${assetId}/.original.analysis.json`)
       .then((res) => {
         if (!res.ok) throw new Error('no analysis');
         return res.json() as Promise<AnalysisJson>;
@@ -38,7 +38,7 @@ export function useSceneMarkers(
         if (!cancelled) setMarkers([]);
       });
     return () => { cancelled = true; };
-  }, [open, assetId, projectSlug]);
+  }, [open, assetId, bookId]);
 
   return markers;
 }

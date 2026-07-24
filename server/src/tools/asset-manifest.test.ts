@@ -17,7 +17,7 @@ describe("asset_manifest tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -30,7 +30,7 @@ describe("asset_manifest tool", () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const uploadResult = await client.callTool({
       name: "upload_file",
-      arguments: { project_slug: "test-proj", filename: "photo.png", data },
+      arguments: { book_id: "test-proj", filename: "photo.png", data },
     });
     const uploaded = JSON.parse(
       (uploadResult.content as Array<{ type: string; text: string }>)[0].text
@@ -38,7 +38,7 @@ describe("asset_manifest tool", () => {
 
     const result = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: uploaded.assetId, project_slug: "test-proj" },
+      arguments: { asset_id: uploaded.assetId, book_id: "test-proj" },
     });
 
     const parsed = JSON.parse(
@@ -52,7 +52,7 @@ describe("asset_manifest tool", () => {
   it("returns error for nonexistent asset", async () => {
     const result = await client.callTool({
       name: "asset_manifest",
-      arguments: { asset_id: "img-no-such-asset", project_slug: "test-proj" },
+      arguments: { asset_id: "img-no-such-asset", book_id: "test-proj" },
     });
     expect(result.isError).toBe(true);
   });

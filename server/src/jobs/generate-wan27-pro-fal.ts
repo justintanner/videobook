@@ -7,7 +7,7 @@ type Payload = {
   type: "generate_wan27_pro_fal";
   imgAssetId: string;
   imgAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt: string;
   negative_prompt?: string;
   image_size?: string;
@@ -18,7 +18,7 @@ type Payload = {
 export function registerGenerateWan27ProFalJob(fs: Engine): void {
   registerJobHandler("generate_wan27_pro_fal", async (payload, ctx) => {
     const p = payload as Payload;
-    return withProviderHandoff(fs, p.projectSlug, p.imgAssetId, ctx, "generate", async (ownerId) => {
+    return withProviderHandoff(fs, p.bookId, p.imgAssetId, ctx, "generate", async (ownerId) => {
   
       const input: Record<string, unknown> = {
         prompt: p.prompt,
@@ -30,7 +30,7 @@ export function registerGenerateWan27ProFalJob(fs: Engine): void {
   
       const taskId = await submitFalJob({
         fs,
-        projectSlug: p.projectSlug,
+        bookId: p.bookId,
         assetId: p.imgAssetId,
         assetDir: p.imgAssetDir,
         endpointId: "fal-ai/wan/v2.7/pro/text-to-image",

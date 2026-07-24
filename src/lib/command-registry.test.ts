@@ -749,11 +749,11 @@ describe("adaptCommandArgs", () => {
     const res = adaptCommandArgs("apply_cuts", "apply_cuts", {
       asset_id: "@vid-clip",
       cuts: ["0-5", "0:10-0:15"],
-      project_slug: "test-proj",
+      book_id: "test-proj",
     });
     expect(res).toEqual({
       asset_id: "vid-clip",
-      project_slug: "test-proj",
+      book_id: "test-proj",
       cuts: [
         { cut_start: 0, cut_end: 5 },
         { cut_start: 10, cut_end: 15 },

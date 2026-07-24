@@ -32,7 +32,7 @@ type TimewarpVideoPayload = {
   stretchFactor: number;
   assetId: string;
   assetDir: string;
-  projectSlug: string;
+  bookId: string;
 };
 
 function outputArgs(
@@ -112,9 +112,9 @@ async function deleteIfPresent(
   fs: Engine,
   assetId: string,
   filename: string,
-  projectSlug: string,
+  _bookId: string,
 ): Promise<void> {
-  const result = await fs.files.delete(assetId, filename, projectSlug);
+  const result = await fs.files.delete(assetId, filename);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
     throw new Error(`Failed to delete ${filename}: ${result.error.message}`);
   }
@@ -136,12 +136,12 @@ export function registerTimewarpVideoJob(fs: Engine): void {
       stretchFactor,
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
     } = payload as TimewarpVideoPayload;
 
     const result = await withLockedLocalLease(
       fs,
-      projectSlug,
+      bookId,
       assetId,
       assetDir,
       ctx,
@@ -171,22 +171,22 @@ export function registerTimewarpVideoJob(fs: Engine): void {
           throw error;
         }
 
-        const history = await fs.history.artifact(assetId, projectSlug, 1);
+        const history = fs.history.artifact(assetId);
         const restoreCommit = history[0]?.hash;
         try {
           const inputFilename = basename(inputPath);
           await replaceArtifactFileFromPath(
             fs,
-            projectSlug,
+            bookId,
             assetId,
             inputFilename,
             outputPath,
           );
           for (const filename of STALE_VISUAL_DERIVATIVES) {
-            await deleteIfPresent(fs, assetId, filename, projectSlug);
+            await deleteIfPresent(fs, assetId, filename, bookId);
           }
         } catch (error) {
-          if (restoreCommit) await fs.history.restoreArtifact(assetId, restoreCommit, projectSlug);
+          if (restoreCommit) await fs.history.restoreArtifact(assetId, restoreCommit, bookId);
           throw error;
         }
 
@@ -204,7 +204,7 @@ export function registerTimewarpVideoJob(fs: Engine): void {
       videoPath: result.videoPath,
       assetId,
       assetDir,
-      projectSlug,
+      bookId,
       provenance: {
         origin: "timewarp",
         start_seconds: result.plan.startSeconds,

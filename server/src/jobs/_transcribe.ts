@@ -45,31 +45,31 @@ function inferAudioMime(filename: string): string {
  */
 export async function transcribeAssetToElevenLabsJson(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   assetId: string,
   audioFilename: string,
   options: TranscribeOptions,
 ): Promise<void> {
   const response = await requestElevenLabsTranscript(
     fs,
-    projectSlug,
+    bookId,
     assetId,
     audioFilename,
     options,
   );
-  await writeElevenLabsTranscript(fs, projectSlug, assetId, response, options);
+  await writeElevenLabsTranscript(fs, bookId, assetId, response, options);
 }
 
 export async function requestElevenLabsTranscript(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   assetId: string,
   audioFilename: string,
   options: TranscribeOptions,
 ): Promise<ElevenLabsSpeechToTextResponse> {
   const apiKey = requireApiKey("ELEVENLABS_API_KEY");
 
-  const readResult = await fs.files.read(assetId, audioFilename, projectSlug);
+  const readResult = await fs.files.read(assetId, audioFilename);
   if (!readResult.ok) {
     throw new Error(`Failed to read audio for ${assetId}: ${readResult.error.message}`);
   }
@@ -89,29 +89,21 @@ export async function requestElevenLabsTranscript(
 
 export async function writeElevenLabsTranscript(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   assetId: string,
   response: ElevenLabsSpeechToTextResponse,
   options: TranscribeOptions,
 ): Promise<void> {
   const transcriptionStr = JSON.stringify(response, null, 2);
-  const writeResult = await fs.files.write(
-    assetId,
-    "elevenlabs.json",
-    transcriptionStr,
-    projectSlug,
+  const writeResult = await fs.files.write(assetId, "elevenlabs.json", transcriptionStr
   );
   if (!writeResult.ok) {
     throw new Error(`Failed to write transcription: ${writeResult.error.message}`);
   }
 
-  await fs.history.recordOperation(
-    "transcribe",
-    assetId,
-    {
+  await fs.history.recordOperation("transcribe", assetId, {
       ...(options.languageCode ? { language_code: options.languageCode } : {}),
-    },
-    projectSlug,
+    }
   );
 }
 
@@ -124,15 +116,15 @@ export async function writeElevenLabsTranscript(
  */
 export async function ensureElevenLabsTranscript(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   assetId: string,
 ): Promise<void> {
-  if ((await fs.files.read(assetId, "elevenlabs.json", projectSlug)).ok) return;
-  const manifest = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
+  if ((await fs.files.read(assetId, "elevenlabs.json")).ok) return;
+  const manifest = await fs.files.manifest(assetId);
   if (!manifest.ok) throw new Error(`auto-transcribe failed: ${manifest.error.message}`);
   const audioFile = findAudioFile(manifest.value.files, assetId);
   if (!audioFile) throw new Error(`auto-transcribe failed: no audio file found in asset ${assetId}`);
-  await transcribeAssetToElevenLabsJson(fs, projectSlug, assetId, audioFile.name, {
+  await transcribeAssetToElevenLabsJson(fs, bookId, assetId, audioFile.name, {
     tagAudioEvents: true,
     diarize: true,
   });

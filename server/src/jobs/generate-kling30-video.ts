@@ -22,7 +22,7 @@ type GenerateKling30VideoPayload = {
   sourceImageIds: string[];
   vidAssetId: string;
   vidAssetDir: string;
-  projectSlug: string;
+  bookId: string;
   prompt?: string;
   mode: KlingVideoRequest["input"]["mode"];
   duration: KlingVideoRequest["input"]["duration"];
@@ -36,7 +36,7 @@ export function registerGenerateKling30VideoJob(fs: Engine): void {
   registerJobHandler("generate_kling30_video", async (payload, ctx) => {
     const {
       imageInputs, elementInputs, sourceImageIds,
-      vidAssetId, vidAssetDir, projectSlug,
+      vidAssetId, vidAssetDir, bookId,
       prompt, mode, duration, sound, aspect_ratio,
       multi_shots, multi_prompt,
     } = payload as GenerateKling30VideoPayload;
@@ -46,7 +46,7 @@ export function registerGenerateKling30VideoJob(fs: Engine): void {
     // Upload reference images
     const imageUrls: string[] = [];
     for (const { assetId, filename } of imageInputs) {
-      imageUrls.push(await uploadAssetToKie(fs, assetId, filename, projectSlug));
+      imageUrls.push(await uploadAssetToKie(fs, assetId, filename, bookId));
     }
 
     // Upload element media and build KlingElement array
@@ -54,7 +54,7 @@ export function registerGenerateKling30VideoJob(fs: Engine): void {
     for (const elem of elementInputs) {
       const urls: string[] = [];
       for (const { assetId, filename } of elem.inputs) {
-        urls.push(await uploadAssetToKie(fs, assetId, filename, projectSlug));
+        urls.push(await uploadAssetToKie(fs, assetId, filename, bookId));
       }
 
       const element: KlingElement = {
@@ -86,7 +86,7 @@ export function registerGenerateKling30VideoJob(fs: Engine): void {
       taskType: "kling30_video",
       assetId: vidAssetId,
       assetDir: vidAssetDir,
-      projectSlug,
+      bookId,
       meta: {
         sourceImageIds,
         ...(prompt !== undefined ? { prompt } : {}),

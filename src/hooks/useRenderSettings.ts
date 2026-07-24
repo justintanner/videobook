@@ -13,12 +13,12 @@ export function useRenderSettings(callTool: UseMcpResult["callTool"]) {
 
   const fetchRenderSettings = useCallback(async (
     assetId: string,
-    projectSlug: string,
+    bookId: string,
   ): Promise<RenderSettingsResponse | null> => {
     try {
       const result = await callToolRef.current("get_render_settings", {
         asset_id: assetId,
-        project_slug: projectSlug,
+        book_id: bookId,
       });
       if (result.isError) return null;
       const content = result.content as Array<{ type: string; text: string }>;

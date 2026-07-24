@@ -11,16 +11,16 @@ export function restoreAssetVersionDef(fs: Engine): ToolDef {
         .string()
         .describe("Stable artifact UUID, or the slug of an active artifact"),
       commit_hash: z.string().describe("DoltLite revision hash to restore from"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
     },
     handler: async (args) => {
-      const { asset_id, commit_hash, project_slug } = args as { asset_id: string; commit_hash: string; project_slug: string };
-      const artifact = fs.artifacts.get(project_slug, asset_id);
+      const { asset_id, commit_hash, book_id } = args as { asset_id: string; commit_hash: string; book_id: string };
+      const artifact = fs.artifacts.get(book_id);
       const artifactId = artifact.ok ? artifact.value.artifactId : asset_id;
       const restored = await fs.history.restoreArtifact(
         artifactId,
         commit_hash,
-        project_slug,
+        book_id,
       );
       if (!restored.ok) {
         return {

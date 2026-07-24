@@ -28,7 +28,7 @@ const miniInput = Seedance2MiniInputSchema.shape;
 // Seedance 2 Mini has no first/last frame and an optional prompt; it accepts a
 // pure prompt and/or reference images, videos (≤3), and audio (≤3).
 const generateSeedance2MiniVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(miniInput.prompt, "Video description (optional, max 20000 characters)"),
   image_slugs: apicityStringArrayField(miniInput.reference_image_urls, "Reference image @slugs (e.g., @img-style)"),
   video_slugs: apicityStringArrayField(miniInput.reference_video_urls, "Reference video @slugs (0-3, total ≤15s, e.g., @vid-motion)"),
@@ -53,7 +53,7 @@ export function generateSeedance2MiniVideoDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const raw = args as Args;
       const {
-        project_slug, prompt,
+        book_id, prompt,
         image_slugs, video_slugs, audio_slugs,
         aspect_ratio, resolution, duration,
         generate_audio, web_search, nsfw_checker,
@@ -86,34 +86,34 @@ export function generateSeedance2MiniVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageSlug(fs, slug, project_slug);
+        const r = await resolveImageSlug(fs, slug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       const videoInputs: RefInput[] = [];
       for (const slug of vids) {
-        const r = await resolveVideoSlug(fs, slug, project_slug);
+        const r = await resolveVideoSlug(fs, slug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInputs.push(r.value);
       }
 
       const audioInputs: RefInput[] = [];
       for (const slug of auds) {
-        const r = await resolveAudioSlug(fs, slug, project_slug);
+        const r = await resolveAudioSlug(fs, slug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         audioInputs.push(r.value);
       }
 
       let replaceAudioWith: RefInput | undefined;
       if (replace_audio_with !== undefined) {
-        const r = await resolveAudioSlug(fs, replace_audio_with, project_slug);
+        const r = await resolveAudioSlug(fs, replace_audio_with, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: `replace_audio_with: ${r.error}` }] };
         replaceAudioWith = r.value;
       }
 
       const videoName = `${SLUG}-${slugify(prompt ?? "") || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
@@ -128,7 +128,7 @@ export function generateSeedance2MiniVideoDef(fs: Engine): ToolDef {
         type: "generate_seedance2_mini_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         imageInputs,
         videoInputs,
         audioInputs,

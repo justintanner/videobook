@@ -48,7 +48,7 @@ export function cropImageDef(fs: Engine): ToolDef {
       "Crop an image asset to a 16:9, 9:16, or 1:1 region. Coordinates are normalized fractions of the source image (0..1). Replaces original in place with canonical dims (1920x1080 / 1080x1920 / 1080x1080) and regenerates derived crops with git versioning.",
     schema: {
       asset_id: z.string().describe("Asset ID (e.g. img-my-photo)"),
-      project_slug: z.string().describe("Project slug"),
+      book_id: z.string().describe("Project slug"),
       ratio: z.enum(["16:9", "9:16", "1:1"]).describe("Target aspect ratio"),
       x: z.number().min(0).max(1).describe("Crop origin X as fraction of source width (0..1)"),
       y: z.number().min(0).max(1).describe("Crop origin Y as fraction of source height (0..1)"),
@@ -56,8 +56,8 @@ export function cropImageDef(fs: Engine): ToolDef {
       h: z.number().min(0).max(1).describe("Crop height as fraction of source height (0..1)"),
     },
     handler: async (args) => {
-      const { asset_id, project_slug, ratio, x, y, w, h } = args as {
-        asset_id: string; project_slug: string;
+      const { asset_id, book_id, ratio, x, y, w, h } = args as {
+        asset_id: string; book_id: string;
         ratio: "16:9" | "9:16" | "1:1";
         x: number; y: number; w: number; h: number;
       };
@@ -70,7 +70,7 @@ export function cropImageDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -106,7 +106,7 @@ export function cropImageDef(fs: Engine): ToolDef {
         rect: { x, y, w, h },
         assetId: asset_id,
         assetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
       };
 
       try {

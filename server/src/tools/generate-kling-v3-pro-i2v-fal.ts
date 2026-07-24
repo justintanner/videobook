@@ -10,7 +10,7 @@ import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 const kling = FalKlingVideoV3ProImageToVideoRequestSchema.shape;
 
 const generateKlingV3ProI2vFalSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(kling.prompt, "Video description (max 2500 chars)"),
   first_frame_slug: apicityStringField(kling.start_image_url, "First frame image asset (e.g., @img-start)", { required: true }),
   end_frame_slug: apicityStringField(kling.end_image_url, "Optional end frame image asset"),
@@ -28,19 +28,19 @@ export function generateKlingV3ProI2vFalDef(fs: Engine): ToolDef {
     description: "Generate a video via fal.ai using Kling Video v3 Pro image-to-video. Requires a first-frame image; optional end frame for transition control. Creates a new vid- asset and enqueues a background job.",
     schema: generateKlingV3ProI2vFalSchema,
     handler: async (args) => {
-      const { project_slug, prompt, first_frame_slug, end_frame_slug, duration, generate_audio, negative_prompt, cfg_scale } = args as Args;
+      const { book_id, prompt, first_frame_slug, end_frame_slug, duration, generate_audio, negative_prompt, cfg_scale } = args as Args;
 
       if (!process.env.FAL_API_KEY) {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
       const slugs = end_frame_slug ? [first_frame_slug, end_frame_slug] : [first_frame_slug];
-      const resolved = await resolveImageSlugs(fs, slugs, project_slug);
+      const resolved = await resolveImageSlugs(fs, slugs, book_id);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [firstFrame, endFrame] = resolved.inputs;
       const nameSource = prompt ?? first_frame_slug;
-      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "kling-3.0/video/pro")}-${slugify(nameSource) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "kling-3.0/video/pro")}-${slugify(nameSource) || String(Date.now())}`);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
       const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
@@ -50,7 +50,7 @@ export function generateKlingV3ProI2vFalDef(fs: Engine): ToolDef {
         type: "generate_kling_v3_pro_i2v_fal",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         firstFrame,
         ...(endFrame ? { endFrame } : {}),
         sourceImageIds: resolved.sourceImageIds,

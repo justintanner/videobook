@@ -52,7 +52,7 @@ const GOOGLE_OMNI_ASPECT_RATIOS = ["16:9", "9:16"] as const;
 //   - trimStart / trimEnd — removed from the videos type in 0.7.2; omni trims
 //     via startFrameIndex_1 / endFrameIndex_1 (derived from the clip timecodes).
 const generateGoogleOmniVideoSchema = {
-  project_slug: z.string().describe("Project slug"),
+  book_id: z.string().describe("Project slug"),
   prompt: z.string().max(20000).describe("Multimodal video generation prompt (max 20000 characters). Inline mentions must use the positional markers @referenceImage_1..7 / @character_1..7 / @referenceAudio_1..5 (matching the body param order); @<image-slug> mentions are rewritten to @referenceImage_N automatically, and reference clips cannot be mentioned inline"),
   first_frame_slug: z.string().optional().describe("First-frame image asset for image-to-video (e.g., @img-start); not combinable with image_slugs or video_slug"),
   image_slugs: z.array(z.string()).max(7).optional().describe("Reference image @slugs (0-7, or 0-5 with a reference clip, e.g., @img-style); not combinable with first_frame_slug"),
@@ -77,7 +77,7 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
     handler: async (args) => {
       const raw = args as Args;
       const {
-        project_slug, prompt,
+        book_id, prompt,
         first_frame_slug, image_slugs, video_slug,
         video_clip_start, video_clip_ends,
         duration, aspect_ratio, seed,
@@ -155,21 +155,21 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
 
       const imageInputs: RefInput[] = [];
       for (const slug of imgs) {
-        const r = await resolveImageSlug(fs, slug, project_slug);
+        const r = await resolveImageSlug(fs, slug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         imageInputs.push(r.value);
       }
 
       let firstFrame: RefInput | undefined;
       if (firstFrameSlug !== undefined) {
-        const r = await resolveImageSlug(fs, firstFrameSlug, project_slug);
+        const r = await resolveImageSlug(fs, firstFrameSlug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         firstFrame = r.value;
       }
 
       let videoInput: RefInput | undefined;
       if (videoSlug !== undefined) {
-        const r = await resolveVideoSlug(fs, videoSlug, project_slug);
+        const r = await resolveVideoSlug(fs, videoSlug, book_id);
         if (!r.ok) return { isError: true as const, content: [{ type: "text" as const, text: r.error }] };
         videoInput = r.value;
       }
@@ -188,7 +188,7 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
       );
 
       const videoName = `${SLUG}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
@@ -203,7 +203,7 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
         type: "generate_google_omni_video",
         vidAssetId,
         vidAssetDir,
-        projectSlug: project_slug,
+        bookId: book_id,
         ...(firstFrame ? { firstFrame } : {}),
         imageInputs,
         ...(videoInput ? { videoInput } : {}),
@@ -221,7 +221,7 @@ export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
 
       // Persist the exact enqueued payload so retry_generation can replay it
       // after a failure without re-resolving inputs.
-      await fs.metadata.artifacts.write(vidAssetId, "generation-request", jobPayload, project_slug);
+      await fs.metadata.artifacts.write(vidAssetId, "generation-request", jobPayload);
 
       await queue.enqueue(jobId, jobPayload);
 

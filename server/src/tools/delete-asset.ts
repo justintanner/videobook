@@ -1,105 +1,65 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
+import { timelineFailure, timelineInput } from "../timeline-helpers.js";
 import type { ToolDef } from "./tool-def.js";
 
-type TimelineSlot = {
-  slug: string;
-  volume?: number;
-  audioFadeIn?: number;
-  audioFadeOut?: number;
-};
-
-type TimelineAudioClip = {
-  id: string;
-  slug: string;
-  startFrame: number;
-  durationFrames: number;
-  volume?: number;
-  fadeIn?: number;
-  fadeOut?: number;
-};
-
-type TimelineConfig = {
-  slots: TimelineSlot[];
-  audio?: TimelineAudioClip[];
-  render: "landscape" | "portrait" | "square";
-  currentOrientation?: "landscape" | "portrait" | "square" | "original";
-};
-
-function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
-  if (Array.isArray(raw)) return { slots: raw, render: "landscape" };
-  return raw;
-}
-
 async function removeFromTimeline(
-  fs: Engine,
-  assetId: string,
-  projectSlug: string,
+  engine: Engine,
+  artifactId: string,
 ): Promise<{ updated: boolean; error?: string }> {
-  const readResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", projectSlug);
-  if (!readResult.ok) {
-    const error = (readResult as { ok: false; error: { code: string; message: string } }).error;
-    if (error.code === "NOT_FOUND") return { updated: false };
-    return { updated: false, error: error.message };
+  const timeline = engine.timeline.get();
+  const slots = timeline.slots.filter((slot) => slot.artifactId !== artifactId);
+  const audio = timeline.audio.filter((clip) => clip.artifactId !== artifactId);
+  if (slots.length === timeline.slots.length && audio.length === timeline.audio.length) {
+    return { updated: false };
   }
-
-  const config = normalizeConfig(readResult.value);
-  let updated = false;
-  const slots = config.slots.map((slot) => {
-    if (slot.slug !== assetId) return slot;
-    updated = true;
-    return { slug: "" };
+  const result = await engine.timeline.set({
+    ...timelineInput(timeline),
+    slots: slots.map((slot) => ({
+      id: slot.id,
+      artifactId: slot.artifactId,
+      ...(slot.volume === undefined ? {} : { volume: slot.volume }),
+      ...(slot.audioFadeIn === undefined ? {} : { audioFadeIn: slot.audioFadeIn }),
+      ...(slot.audioFadeOut === undefined ? {} : { audioFadeOut: slot.audioFadeOut }),
+    })),
+    audio: audio.map((clip) => ({
+      id: clip.id,
+      artifactId: clip.artifactId,
+      startFrame: clip.startFrame,
+      durationFrames: clip.durationFrames,
+      ...(clip.volume === undefined ? {} : { volume: clip.volume }),
+      ...(clip.fadeIn === undefined ? {} : { fadeIn: clip.fadeIn }),
+      ...(clip.fadeOut === undefined ? {} : { fadeOut: clip.fadeOut }),
+    })),
   });
-  const audio = (config.audio ?? []).filter((clip) => {
-    const keep = clip.slug !== assetId;
-    if (!keep) updated = true;
-    return keep;
-  });
-
-  if (!updated) return { updated: false };
-
-  const nextConfig: TimelineConfig = {
-    ...config,
-    slots,
-    ...(audio.length > 0 ? { audio } : {}),
-  };
-  if ((config.audio ?? []).length > 0 && audio.length === 0) {
-    nextConfig.audio = [];
-  }
-  const writeResult = await fs.metadata.projects.write("timeline", nextConfig, projectSlug);
-  if (!writeResult.ok) {
-    const error = (writeResult as { ok: false; error: { message: string } }).error;
-    return { updated: false, error: error.message };
-  }
-  return { updated: true };
+  return result.ok ? { updated: true } : { updated: false, error: result.error.message };
 }
 
-export function deleteAssetDef(fs: Engine): ToolDef {
+export function deleteAssetDef(engine: Engine): ToolDef {
   return {
     name: "delete_asset",
-    description: "Delete an asset directory",
+    description: "Delete an artifact and remove its stable timeline references",
     schema: {
-      asset_id: z.string().describe("Asset ID to delete (e.g. img-cute-cat)"),
-      project_slug: z.string().describe("Project slug"),
+      asset_id: z.string(),
+      book_id: z.string().uuid(),
     },
     handler: async (args) => {
-      const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
-      const result = await fs.artifacts.delete(asset_id, project_slug);
-      if (!result.ok) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: result.error.message }],
-        };
-      }
-
+      const assetId = String(args.asset_id);
+      const artifact = engine.artifacts.get(assetId);
+      if (!artifact.ok) return timelineFailure(artifact.error.message);
+      const timeline = await removeFromTimeline(engine, artifact.value.artifactId);
+      if (timeline.error) return timelineFailure(timeline.error);
+      const result = await engine.artifacts.delete(artifact.value.artifactId);
+      if (!result.ok) return timelineFailure(result.error.message);
       return {
         content: [{
-          type: "text" as const,
+          type: "text",
           text: JSON.stringify({
             status: "deleted",
-            asset_id,
-            deleted_at: result.value.deletedAt,
-            timeline: await removeFromTimeline(fs, asset_id, project_slug),
+            artifact_id: artifact.value.artifactId,
+            slug: artifact.value.slug,
+            deleted_at: new Date().toISOString(),
+            timeline,
           }),
         }],
       };

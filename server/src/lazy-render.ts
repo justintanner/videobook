@@ -16,32 +16,6 @@ import {
   DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
 } from "./remotion/keyword-graphics.js";
 
-type TimelineSlot = {
-  slug: string;
-  volume?: number;
-  audioFadeIn?: number;
-  audioFadeOut?: number;
-};
-
-type TimelineAudioClip = {
-  id: string;
-  slug: string;
-  startFrame: number;
-  durationFrames: number;
-  volume?: number;
-  fadeIn?: number;
-  fadeOut?: number;
-};
-
-type ViewerSize = "landscape" | "portrait" | "square" | "original";
-
-type TimelineConfig = {
-  slots: TimelineSlot[];
-  audio?: TimelineAudioClip[];
-  render: Orientation;
-  currentOrientation?: ViewerSize;
-};
-
 type AssetWorkState = {
   status: string;
   meta?: {
@@ -57,21 +31,6 @@ type LazyRenderResult = {
 type LazyAnalysisResult = {
   jobId: string;
 };
-
-function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
-  if (Array.isArray(raw)) return { slots: raw, render: "landscape" };
-  const render = Array.isArray(raw.render)
-    ? (raw.render as unknown as string[])[0]
-    : raw.render;
-  return {
-    ...raw,
-    render: isOrientation(render) ? render : "landscape",
-  };
-}
-
-function isOrientation(value: unknown): value is Orientation {
-  return value === "landscape" || value === "portrait" || value === "square";
-}
 
 function isSubtitleStyle(value: unknown): value is SubtitleStyle {
   return value === "impact" || value === "highlight";
@@ -129,7 +88,7 @@ function stringArrayOrNull(value: unknown): string[] | null {
  */
 export async function enqueueLazyAnalysisIfSlotted(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   assetId: string,
 ): Promise<LazyAnalysisResult | null> {
   if (!assetId.startsWith("vid-")) return null;
@@ -138,12 +97,12 @@ export async function enqueueLazyAnalysisIfSlotted(
   // defense lives at the API call inside analyze-video.
   if (!process.env.KIE_API_KEY) return null;
 
-  const timelineResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", projectSlug);
-  if (!timelineResult.ok) return null;
-  const config = normalizeConfig(timelineResult.value);
-  if (!config.slots.some((slot) => slot.slug === assetId)) return null;
+  const asset = fs.artifacts.get(assetId);
+  if (!asset.ok) return null;
+  const timeline = fs.timeline.get();
+  if (!timeline.slots.some((slot) => slot.artifactId === asset.value.artifactId)) return null;
 
-  const manifestResult = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
+  const manifestResult = await fs.files.manifest(assetId);
   if (!manifestResult.ok) return null;
   const fileNames = new Set(manifestResult.value.files.map((f) => f.name));
   if (fileNames.has(".original.analysis.json")) return null;
@@ -154,7 +113,7 @@ export async function enqueueLazyAnalysisIfSlotted(
     type: "analyze_video",
     assetId,
     assetDir: manifestResult.value.path,
-    projectSlug,
+    bookId,
     hasTranscription: fileNames.has(".analysis.gpt4otrans.json"),
   });
   return { jobId };
@@ -162,11 +121,10 @@ export async function enqueueLazyAnalysisIfSlotted(
 
 async function isRenderAlreadyQueued(
   fs: Engine,
-  projectSlug: string,
   assetId: string,
   orientation: Orientation,
 ): Promise<boolean> {
-  const work = await fs.jobs.artifactWork.read(projectSlug, assetId);
+  const work = await fs.jobs.artifactWork.read(assetId);
   if (!work.ok || !work.value) return false;
   const state = work.value as AssetWorkState;
   return state.status !== "ready"
@@ -176,31 +134,30 @@ async function isRenderAlreadyQueued(
 
 export async function enqueueLazyTimelineRender(
   fs: Engine,
-  projectSlug: string,
+  bookId: string,
   assetId: string,
   knownAsset?: Artifact,
 ): Promise<LazyRenderResult | null> {
   if (!assetId.startsWith("vid-")) return null;
 
-  const timelineResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", projectSlug);
-  if (!timelineResult.ok) return null;
+  const resolved = fs.artifacts.get(assetId);
+  if (!resolved.ok) return null;
+  const timeline = fs.timeline.get();
+  if (!timeline.slots.some((slot) => slot.artifactId === resolved.value.artifactId)) return null;
 
-  const config = normalizeConfig(timelineResult.value);
-  if (!config.slots.some((slot) => slot.slug === assetId)) return null;
-
-  const orientation = config.render;
-  if (await isRenderAlreadyQueued(fs, projectSlug, assetId, orientation)) return null;
+  const orientation = timeline.render;
+  if (await isRenderAlreadyQueued(fs, assetId, orientation)) return null;
 
   const asset =
     knownAsset ??
-    fs.artifacts.list(projectSlug).find((entry) => entry.slug === assetId);
+    fs.artifacts.list().find((entry) => entry.slug === assetId);
   if (!asset) return null;
 
-  const renderActions = await findAutoRenderActions(fs, projectSlug, [asset], orientation);
+  const renderActions = await findAutoRenderActions(fs, bookId, [asset], orientation);
   if (renderActions.length === 0) return null;
 
   const action = renderActions[0];
-  const stored = await readStoredRenderDefaults(fs, assetId, projectSlug, orientation);
+  const stored = await readStoredRenderDefaults(fs, assetId, bookId, orientation);
   const subtitlesEnabled = action.hasElevenlabs && stored.subtitlesEnabled === true;
   // Stable dedupe key: concurrent triggers (job-completion hooks racing a
   // sync poll) collapse onto one queued render instead of double-rendering.
@@ -208,7 +165,7 @@ export async function enqueueLazyTimelineRender(
 
   await queue.enqueue(jobId, {
     type: "render_project",
-    projectSlug,
+    bookId,
     assetId: action.assetId,
     orientation,
     assets: [{

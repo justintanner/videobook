@@ -42,7 +42,7 @@ describe("generate_kling30_video tool", () => {
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
-      arguments: { project_slug: "test-proj" },
+      arguments: { book_id: "test-proj" },
     });
   });
 
@@ -61,7 +61,7 @@ describe("generate_kling30_video tool", () => {
       name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "a dog skateboarding",
       },
     });
@@ -78,7 +78,7 @@ describe("generate_kling30_video tool", () => {
       name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "a dog skateboarding",
       },
     });
@@ -95,17 +95,17 @@ describe("generate_kling30_video tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "source-img", "test-proj");
+    const asset = await fs.artifacts.create("img", "source-img");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const png = await makePng();
-    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png);
 
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "animate this image",
         image_slugs: [`@${asset.value.slug}`],
       },
@@ -125,7 +125,7 @@ describe("generate_kling30_video tool", () => {
       name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "test",
         image_slugs: ["@vid-something"],
       },
@@ -143,7 +143,7 @@ describe("generate_kling30_video tool", () => {
       name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "test",
         image_slugs: ["@img-does-not-exist"],
       },
@@ -156,16 +156,16 @@ describe("generate_kling30_video tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "empty-img", "test-proj");
+    const asset = await fs.artifacts.create("img", "empty-img");
     if (!asset.ok) throw new Error("Failed to create asset");
 
-    await fs.files.write(asset.value.slug, "notes.txt", "hello", "test-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello");
 
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "test",
         image_slugs: [`@${asset.value.slug}`],
       },
@@ -180,17 +180,17 @@ describe("generate_kling30_video tool", () => {
     process.env.KIE_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
-    const asset = await fs.artifacts.create("img", "face", "test-proj");
+    const asset = await fs.artifacts.create("img", "face");
     if (!asset.ok) throw new Error(asset.error.message);
 
     const png = await makePng();
-    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png);
 
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "character walks down the street",
         element1_slugs: [`@${asset.value.slug}`],
         element1_name: "hero",
@@ -211,7 +211,7 @@ describe("generate_kling30_video tool", () => {
       name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "test",
         element1_slugs: ["@img-nonexistent"],
         element1_name: "test",
@@ -229,7 +229,7 @@ describe("generate_kling30_video tool", () => {
       name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "a sunset timelapse",
         mode: "pro",
         duration: "10",
@@ -250,7 +250,7 @@ describe("generate_kling30_video tool", () => {
       name: "generate_kie_kling_3_0_video",
       arguments: {
         ...requiredKlingArgs,
-        project_slug: "test-proj",
+        book_id: "test-proj",
         prompt: "a story",
         multi_shots: true,
         multi_prompt: [

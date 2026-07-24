@@ -60,7 +60,7 @@ import './notebook.css'
 
 interface NotebookProps {
   notebookId: string
-  projectSlug: string
+  bookId: string
   callTool: UseMcpResult['callTool']
   mcpState: UseMcpResult['state']
   mediaItems: MediaItem[]
@@ -325,7 +325,7 @@ function NotebookCanvas({
 
 export function Notebook({
   notebookId,
-  projectSlug,
+  bookId,
   callTool,
   mcpState,
   mediaItems,
@@ -335,7 +335,7 @@ export function Notebook({
   onManageCharacters,
 }: NotebookProps) {
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null)
-  const plan = useNotebookPlan({ notebookId, projectSlug, callTool, mcpState })
+  const plan = useNotebookPlan({ notebookId, bookId, callTool, mcpState })
   const history = useDefinitionHistory(plan.setDefinition)
   const resetHistory = history.reset
   useEffect(() => {
@@ -354,7 +354,7 @@ export function Notebook({
   }, [onClose])
   const definition = plan.definition
   const run = useNotebookRun({
-    projectSlug,
+    bookId,
     callTool,
     definition,
     replaceDefinition: async (next, stepId) => {
@@ -364,7 +364,7 @@ export function Notebook({
     onGenerationLifecycle,
   })
   const stepCosts = useCanvasCostEstimates({
-    projectSlug,
+    bookId,
     callTool,
     definition,
     enabled: mcpState === 'ready',
@@ -482,7 +482,7 @@ export function Notebook({
               onAutoLayout={handleAutoLayout}
             />
             <NotebookSidebar
-              projectSlug={projectSlug}
+              bookId={bookId}
               callTool={callTool}
               mcpState={mcpState}
               definition={definition}

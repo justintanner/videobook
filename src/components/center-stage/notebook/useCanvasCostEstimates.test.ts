@@ -55,12 +55,12 @@ describe('deriveStepEstimateCall', () => {
     expect(deriveStepEstimateCall(definition(imageStep), imageStep, preview('nano', [option({ key: 'nano', tool_name: 't' })]), 'proj')).toBeNull()
   })
 
-  it('merges prefilled_values under step values and appends project_slug', () => {
+  it('merges prefilled_values under step values and appends book_id', () => {
     const opt = option({ key: 'nano', tool_name: 'generate_nano', prefilled_values: { aspect_ratio: '1:1', quality: 'high' } })
     const imageStep = step({ id: 'i1', type: 'image', properties: { model: 'nano', values: { aspect_ratio: '16:9' } } })
     const derived = deriveStepEstimateCall(definition(imageStep), imageStep, preview('nano', [opt]), 'proj-a')
     expect(derived?.toolName).toBe('generate_nano')
-    expect(derived?.input).toEqual({ aspect_ratio: '16:9', quality: 'high', project_slug: 'proj-a' })
+    expect(derived?.input).toEqual({ aspect_ratio: '16:9', quality: 'high', book_id: 'proj-a' })
     expect(derived?.stepId).toBe('i1')
   })
 
@@ -75,7 +75,7 @@ describe('deriveStepEstimateCall', () => {
     const opt = option({ key: 'grok', tool_name: 'generate_grok', selected_provider: 'xai' })
     const imageStep = step({ id: 'i1', type: 'image', properties: { model: 'grok', values: {} } })
     const derived = deriveStepEstimateCall(definition(imageStep), imageStep, preview('grok', [opt]), 'proj')
-    expect(derived?.input).toEqual({ project_slug: 'proj', _provider: 'xai' })
+    expect(derived?.input).toEqual({ book_id: 'proj', _provider: 'xai' })
   })
 
   it('resolves the mode-specific tool name for moded options', () => {

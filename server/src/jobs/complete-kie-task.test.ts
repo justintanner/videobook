@@ -65,11 +65,11 @@ describe("complete_kie_task fal_qwen branches", () => {
     await setEngineRoot(projectsDir, cfs);
     const created = await cfs.projects.create("p");
     expect(created.ok).toBe(true);
-    const asset = await cfs.artifacts.create("img", "qwen-out", "p");
+    const asset = await cfs.artifacts.create("img", "qwen-out");
     expect(asset.ok).toBe(true);
     if (!asset.ok) throw new Error(asset.error.message);
 
-    const lease = await cfs.jobs.artifactWork.begin("p", asset.value.slug, {
+    const lease = await cfs.jobs.artifactWork.begin(asset.value.slug, {
       kind: "generate",
       ownerKind: "job",
       durationMs: 60_000,
@@ -77,15 +77,12 @@ describe("complete_kie_task fal_qwen branches", () => {
     if (!lease) throw new Error("assetWork.begin failed");
 
     const taskId = `fal-qwen-task-${taskType}`;
-    const written = await cfs.jobs.pending.write(
-      "p",
-      {
+    const written = await cfs.jobs.pending.write({
         artifactId: asset.value.artifactId,
         taskId,
         taskType,
         meta: { prompt: "a cat", sourceImageIds: [] },
-      },
-      lease.ownerId,
+      }, lease.ownerId
     );
     expect(written.ok).toBe(true);
     if (!written.ok) throw new Error(written.error.message);
@@ -112,7 +109,7 @@ describe("complete_kie_task fal_qwen branches", () => {
         taskType: "fal_qwen_image_edit",
         assetId,
         assetDir,
-        projectSlug: "p",
+        bookId: "p",
         meta: { prompt: "a cat", sourceImageIds: [] },
         resultUrls: [],
         resultObject: { images: [{ url: imageUrl }] },
@@ -122,7 +119,7 @@ describe("complete_kie_task fal_qwen branches", () => {
 
     expect(result.success).toBe(true);
 
-    const original = await cfs.files.read(assetId, "original.png", "p");
+    const original = await cfs.files.read(assetId, "original.png");
     expect(original.ok).toBe(true);
     if (original.ok) {
       const buf = typeof original.value === "string"
@@ -131,7 +128,7 @@ describe("complete_kie_task fal_qwen branches", () => {
       expect(buf.equals(TINY_PNG)).toBe(true);
     }
 
-    const pending = await cfs.jobs.pending.read("p", assetId);
+    const pending = await cfs.jobs.pending.read(assetId);
     expect(pending.ok).toBe(true);
     expect(pending.ok ? pending.value : "fail").toBeNull();
 
@@ -151,7 +148,7 @@ describe("complete_kie_task fal_qwen branches", () => {
         taskType: "fal_qwen_image",
         assetId,
         assetDir,
-        projectSlug: "p",
+        bookId: "p",
         meta: { prompt: "a dog", sourceImageIds: [] },
         resultUrls: [],
         resultObject: { images: [{ url: imageUrl }] },
@@ -161,7 +158,7 @@ describe("complete_kie_task fal_qwen branches", () => {
 
     expect(result.success).toBe(true);
 
-    const original = await cfs.files.read(assetId, "original.png", "p");
+    const original = await cfs.files.read(assetId, "original.png");
     expect(original.ok).toBe(true);
 
     cfs.close();
@@ -180,7 +177,7 @@ describe("complete_kie_task fal_qwen branches", () => {
           taskType: "fal_qwen_image_edit",
           assetId,
           assetDir,
-          projectSlug: "p",
+          bookId: "p",
           meta: { prompt: "a cat", sourceImageIds: [] },
           resultUrls: [],
           resultObject: { images: [] },
@@ -190,7 +187,7 @@ describe("complete_kie_task fal_qwen branches", () => {
     ).rejects.toThrow(/No image URL in result/i);
 
     // Regression: prior bug deleted the pending task and left the asset empty.
-    const original = await cfs.files.read(assetId, "original.png", "p");
+    const original = await cfs.files.read(assetId, "original.png");
     expect(original.ok).toBe(false);
 
     cfs.close();

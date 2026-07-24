@@ -1,8 +1,8 @@
 import http from "node:http";
 import crypto from "node:crypto";
 import { createXOAuth, type XOAuthTokenResponse } from "@apicity/x";
-import type { Engine } from "videobook-engine";
-import { readTokens, writeTokens } from "./x-tokens.js";
+import { appState } from "../app-state.js";
+import { readTokens, writeTokens, type XTokenStore } from "./x-tokens.js";
 
 const REDIRECT = "http://127.0.0.1:8765/callback";
 const PORT = 8765;
@@ -68,7 +68,7 @@ async function exchangeCodeForTokens(
 }
 
 export async function startOAuthFlow(
-  fs: Engine,
+  store: XTokenStore = appState,
 ): Promise<{ authorize_url: string }> {
   const clientId = process.env.X_CLIENT_ID;
   const clientSecret = process.env.X_CLIENT_SECRET;
@@ -160,7 +160,7 @@ export async function startOAuthFlow(
           refresh_token: tok.refresh_token,
           expires_at: new Date(Date.now() + tok.expires_in * 1000).toISOString(),
         },
-        fs,
+        store,
       );
       flow.status = "succeeded";
       res
@@ -207,9 +207,9 @@ export interface OAuthFlowStatus {
 }
 
 export async function getOAuthFlowStatus(
-  fs: Engine,
+  store: XTokenStore = appState,
 ): Promise<OAuthFlowStatus> {
-  const tokens = await readTokens(fs);
+  const tokens = await readTokens(store);
   const connected = tokens !== null;
   const pending = activeFlow?.status === "pending";
   const error

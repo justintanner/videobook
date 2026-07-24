@@ -4,7 +4,7 @@ import type { FullPreviewResponse } from '@/components/gen/types'
 
 interface UseGenPreviewOptions {
   category: 'image' | 'video'
-  projectSlug: string
+  bookId: string
   callTool: UseMcpResult['callTool']
   model: string
   provider: string
@@ -33,7 +33,7 @@ function responseText(result: Awaited<ReturnType<UseMcpResult['callTool']>>): st
   return content[0]?.text ?? ''
 }
 
-export function useGenPreview({ category, projectSlug, callTool, model, provider }: UseGenPreviewOptions) {
+export function useGenPreview({ category, bookId, callTool, model, provider }: UseGenPreviewOptions) {
   const [previewState, setPreviewState] = useState<PreviewState>({ key: '', preview: null, error: null })
   const [selection, setSelection] = useState<SelectionState>({
     sourceModel: model,
@@ -60,7 +60,7 @@ export function useGenPreview({ category, projectSlug, callTool, model, provider
     })
   }
 
-  const requestKey = JSON.stringify([category, projectSlug, selectedModel, selectedProvider, selectionVersion])
+  const requestKey = JSON.stringify([category, bookId, selectedModel, selectedProvider, selectionVersion])
 
   useEffect(() => {
     callToolRef.current = callTool
@@ -73,7 +73,7 @@ export function useGenPreview({ category, projectSlug, callTool, model, provider
         // prompt is a required arg on the preview router tools; the notebook
         // only wants the catalog/schema, so an empty prompt is correct here.
         prompt: '',
-        project_slug: projectSlug,
+        book_id: bookId,
         ...(next.model ? { selected_model: next.model } : {}),
         ...(next.provider ? { selected_provider: next.provider } : {}),
       })
@@ -89,7 +89,7 @@ export function useGenPreview({ category, projectSlug, callTool, model, provider
         error: cause instanceof Error ? cause.message : 'Unable to load generation form',
       }))
     }
-  }, [category, projectSlug])
+  }, [category, bookId])
 
   useEffect(() => {
     void refresh({ model: selectedModel, provider: selectedProvider }, requestKey)

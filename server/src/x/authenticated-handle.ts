@@ -6,19 +6,14 @@
  * "unknown" and fall back to a cached value or prompt the user.
  */
 
-import type { Engine } from "videobook-engine";
 import { createX } from "@apicity/x";
 import { getValidAccessToken } from "./x-tokens.js";
 import { normalizeHandle } from "../watermark-config.js";
 
-export async function fetchAuthenticatedXHandle(
-  fs?: Engine,
-): Promise<string | null> {
+export async function fetchAuthenticatedXHandle(): Promise<string | null> {
   let accessToken: string;
   try {
-    accessToken = await getValidAccessToken(
-      fs ? { engine: fs } : {},
-    );
+    accessToken = await getValidAccessToken();
   } catch {
     return null;
   }

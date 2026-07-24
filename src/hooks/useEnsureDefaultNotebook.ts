@@ -3,7 +3,7 @@ import type { UseMcpResult } from 'use-mcp/react'
 
 interface UseEnsureDefaultNotebookProps {
   state: UseMcpResult['state']
-  projectSlug: string | undefined
+  bookId: string | undefined
   assetList: unknown[] | undefined
   hasNotebook: boolean
   createNotebook: (name: string) => Promise<string | null>
@@ -11,7 +11,7 @@ interface UseEnsureDefaultNotebookProps {
 
 export function useEnsureDefaultNotebook({
   state,
-  projectSlug,
+  bookId,
   assetList,
   hasNotebook,
   createNotebook,
@@ -19,13 +19,13 @@ export function useEnsureDefaultNotebook({
   const attemptedRef = useRef<Record<string, boolean>>({})
 
   useEffect(() => {
-    if (state !== 'ready' || !projectSlug || assetList === undefined) return
+    if (state !== 'ready' || !bookId || assetList === undefined) return
 
-    if (attemptedRef.current[projectSlug]) return
-    attemptedRef.current[projectSlug] = true
+    if (attemptedRef.current[bookId]) return
+    attemptedRef.current[bookId] = true
 
     if (!hasNotebook) {
       void createNotebook('scratch')
     }
-  }, [state, projectSlug, assetList, hasNotebook, createNotebook])
+  }, [state, bookId, assetList, hasNotebook, createNotebook])
 }
