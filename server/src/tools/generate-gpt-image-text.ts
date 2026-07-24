@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { GptImage2TextToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -28,7 +28,7 @@ const generateGptImageTextSchema = {
 
 type Args = SchemaArgs<typeof generateGptImageTextSchema>;
 
-export function generateGptImageTextDef(fs: VideocityFs): ToolDef {
+export function generateGptImageTextDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_gpt_image_2_text_to_image",
     description: "Generate an image using GPT Image 2.0 text-to-image. Creates a new img- asset and enqueues a background job.",
@@ -55,7 +55,7 @@ export function generateGptImageTextDef(fs: VideocityFs): ToolDef {
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
       const assetName = slugify(prompt);
-      const assetResult = await fs.createAsset("img", assetName, project_slug);
+      const assetResult = await fs.artifacts.create("img", assetName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -63,7 +63,7 @@ export function generateGptImageTextDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `gpt-image-text-${imgAssetId}-${Date.now()}`;
 

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { buildGoogleOmniVideoPayload, type GoogleOmniVideoArgs } from "../payload-builders.js";
 import { createGoogleFlowProvider, submitGoogleFlowVideoTask, uploadAssetToGoogleFlow } from "./_google-flow.js";
@@ -24,7 +24,7 @@ type GenerateGoogleOmniVideoPayload = {
   character_refs?: string[];
 };
 
-export function registerGenerateGoogleOmniVideoJob(fs: VideocityFs): void {
+export function registerGenerateGoogleOmniVideoJob(fs: Engine): void {
   registerJobHandler("generate_google_omni_video", async (payload, ctx) => {
     const p = payload as GenerateGoogleOmniVideoPayload;
     const provider = createGoogleFlowProvider();

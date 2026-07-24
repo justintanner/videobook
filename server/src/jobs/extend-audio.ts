@@ -5,7 +5,7 @@ import {
   createElevenLabs,
   type ElevenLabsProvider,
 } from "@apicity/elevenlabs";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import {
   audioCrossfadeMs,
   buildSoundContinuationPrompt,
@@ -215,7 +215,7 @@ async function generateAudibleContinuation(
 }
 
 export async function extendAudioWithElevenLabs(
-  fs: VideocityFs,
+  fs: Engine,
   payload: ExtendAudioPayload,
   provider: ElevenLabsProvider,
   signal?: AbortSignal,
@@ -225,7 +225,7 @@ export async function extendAudioWithElevenLabs(
   generationAttempts: number;
   loopFilled: boolean;
 }> {
-  const source = await fs.readFile(payload.sourceAssetId, payload.sourceFilename, payload.projectSlug);
+  const source = await fs.files.read(payload.sourceAssetId, payload.sourceFilename, payload.projectSlug);
   if (!source.ok) throw new Error(`Failed to read source audio: ${source.error.message}`);
 
   const sourceBytes = new Uint8Array(source.value);
@@ -260,10 +260,10 @@ export async function extendAudioWithElevenLabs(
     crossfadeMs,
     signal,
   );
-  const write = await fs.writeFile(payload.audAssetId, "original.mp3", output, payload.projectSlug);
+  const write = await fs.files.write(payload.audAssetId, "original.mp3", output, payload.projectSlug);
   if (!write.ok) throw new Error(`Failed to write extended audio: ${write.error.message}`);
 
-  const assetDir = await fs.resolveAssetDir(payload.audAssetId, payload.projectSlug);
+  const assetDir = await fs.workspaces.resolveArtifact(payload.audAssetId, payload.projectSlug);
   if (!assetDir.ok) throw new Error(`Failed to resolve extended audio: ${assetDir.error.message}`);
   const probe = await probeVideo(join(assetDir.value, "original.mp3"));
   const duration = probe.audioDuration ?? probe.duration;
@@ -272,7 +272,7 @@ export async function extendAudioWithElevenLabs(
     throw new Error(`Extended audio is ${duration.toFixed(3)}s, expected ${targetSeconds.toFixed(3)}s`);
   }
 
-  const metadata = await fs.writeMetadata(payload.audAssetId, "original", {
+  const metadata = await fs.metadata.artifacts.write(payload.audAssetId, "original", {
     origin: "elevenlabs_sound_generation_extend",
     provider: "elevenlabs",
     transcription_model: ELEVENLABS_SCRIBE_MODEL,
@@ -301,7 +301,7 @@ export async function extendAudioWithElevenLabs(
   };
 }
 
-export function registerExtendAudioJob(fs: VideocityFs): void {
+export function registerExtendAudioJob(fs: Engine): void {
   registerJobHandler("extend_audio", async (rawPayload, ctx) => {
     const payload = rawPayload as ExtendAudioPayload;
     ctx.getOwnerId();

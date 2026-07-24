@@ -1,5 +1,5 @@
 import { modelSlug } from "@apicity/cost";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { GrokVideoExtendRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -21,7 +21,7 @@ const extendGrokImagineVideoSchema = {
 
 type Args = SchemaArgs<typeof extendGrokImagineVideoSchema>;
 
-export function extendGrokImagineVideoDef(fs: VideocityFs): ToolDef {
+export function extendGrokImagineVideoDef(fs: Engine): ToolDef {
   return {
     name: "extend_kie_grok_imagine_video",
     description: "Extend an existing video asset using Kie's grok-imagine/extend. Creates a new vid- asset and enqueues a background job. Requires at least one of asset_id or video_slug.",
@@ -48,7 +48,7 @@ export function extendGrokImagineVideoDef(fs: VideocityFs): ToolDef {
         return toolError(`asset_id must start with vid-, got: ${asset_id}`);
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return toolError(manifestResult.error.message);
       }
@@ -59,7 +59,7 @@ export function extendGrokImagineVideoDef(fs: VideocityFs): ToolDef {
         return toolError(`No video file found in asset ${asset_id}`);
       }
 
-      const generationPayloadResult = await fs.readMetadata<{ model?: string }>(asset_id, "generation-payload", project_slug);
+      const generationPayloadResult = await fs.metadata.artifacts.read<{ model?: string }>(asset_id, "generation-payload", project_slug);
       if (generationPayloadResult.ok) {
         const model = generationPayloadResult.value.model;
         if (model && !model.includes("grok-imagine")) {
@@ -69,12 +69,12 @@ export function extendGrokImagineVideoDef(fs: VideocityFs): ToolDef {
 
       const baseName = asset_id.startsWith("vid-") ? asset_id.slice(4) : asset_id;
       const videoName = `extend-${baseName}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return toolError(`Failed to create video asset: ${assetResult.error.message}`);
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("kie", "grok-imagine/extend")}-extend-${vidAssetId}-${Date.now()}`;
 

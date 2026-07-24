@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import type { GoogleFlowProvider } from "@apicity/googleflow";
 import { registerJobHandler } from "../queue.js";
 import { buildVeo31VideoPayload, type GoogleVeo31Model, type Veo31VideoArgs } from "../payload-builders.js";
@@ -21,11 +21,11 @@ type GenerateVeo31VideoPayload = {
   seed?: number;
 };
 
-async function uploadRef(provider: GoogleFlowProvider, fs: VideocityFs, input: RefInput, projectSlug: string): Promise<string> {
+async function uploadRef(provider: GoogleFlowProvider, fs: Engine, input: RefInput, projectSlug: string): Promise<string> {
   return uploadAssetToGoogleFlow(provider, fs, input.assetId, input.filename, projectSlug);
 }
 
-export function registerGenerateVeo31VideoJob(fs: VideocityFs): void {
+export function registerGenerateVeo31VideoJob(fs: Engine): void {
   registerJobHandler("generate_veo31_video", async (payload, ctx) => {
     const p = payload as GenerateVeo31VideoPayload;
     const provider = createGoogleFlowProvider();

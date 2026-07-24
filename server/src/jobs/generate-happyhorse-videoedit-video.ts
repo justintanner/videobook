@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import type { HappyHorseVideoEditRequest, MediaGenerationRequest } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -29,7 +29,7 @@ type GenerateHappyhorseVideoeditPayload = {
   seed?: number;
 };
 
-export function registerGenerateHappyhorseVideoeditVideoJob(fs: VideocityFs): void {
+export function registerGenerateHappyhorseVideoeditVideoJob(fs: Engine): void {
   registerJobHandler("generate_happyhorse_videoedit_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt,
@@ -71,7 +71,7 @@ export function registerGenerateHappyhorseVideoeditVideoJob(fs: VideocityFs): vo
       referenceImages,
     );
 
-    const sourceMeta = await fs.readMetadata<{ duration?: number }>(
+    const sourceMeta = await fs.metadata.artifacts.read<{ duration?: number }>(
       sourceVideo.assetId, "original", projectSlug,
     );
     const durationHint =

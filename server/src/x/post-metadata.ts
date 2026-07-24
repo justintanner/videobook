@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 
 export const POST_METADATA_FILE = ".post.x.json";
 const POST_METADATA_VERSION = 1;
@@ -24,11 +24,11 @@ function emptyMetadata(assetId: string): XPostMetadata {
 }
 
 async function readMetadata(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<XPostMetadata> {
-  const result = await fs.readFile(assetId, POST_METADATA_FILE, projectSlug);
+  const result = await fs.files.read(assetId, POST_METADATA_FILE, projectSlug);
   if (!result.ok) return emptyMetadata(assetId);
   try {
     const parsed = JSON.parse(result.value.toString("utf8")) as Partial<XPostMetadata>;
@@ -51,7 +51,7 @@ async function readMetadata(
 }
 
 export async function appendXPostMetadata(args: {
-  fs: VideocityFs;
+  fs: Engine;
   assetId: string;
   projectSlug: string;
   entry: XPostEntry;
@@ -64,7 +64,7 @@ export async function appendXPostMetadata(args: {
     posts: [...existing.posts, entry],
   };
   const buffer = Buffer.from(JSON.stringify(next, null, 2), "utf8");
-  const writeResult = await fs.writeFile(
+  const writeResult = await fs.files.write(
     assetId,
     POST_METADATA_FILE,
     buffer,
@@ -78,7 +78,7 @@ export async function appendXPostMetadata(args: {
 }
 
 export async function readXPostMetadata(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<XPostMetadata> {

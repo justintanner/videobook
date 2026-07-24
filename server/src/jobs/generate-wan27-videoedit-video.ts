@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import type { Wan27Resolution, Wan27VideoEditRequest } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -32,14 +32,14 @@ type GenerateWan27VideoeditVideoPayload = {
 };
 
 async function uploadSingle(
-  fs: VideocityFs,
+  fs: Engine,
   input: RefInput,
   projectSlug: string,
 ): Promise<string> {
   return uploadAssetToKie(fs, input.assetId, input.filename, projectSlug);
 }
 
-export function registerGenerateWan27VideoeditVideoJob(fs: VideocityFs): void {
+export function registerGenerateWan27VideoeditVideoJob(fs: Engine): void {
   registerJobHandler("generate_wan27_videoedit_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,

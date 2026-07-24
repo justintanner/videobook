@@ -1,10 +1,10 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
-import { createFs } from "videobook-engine";
 import sharp from "sharp";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
@@ -92,21 +92,21 @@ describe("generate_qwen2_image_edit tool", () => {
   it("accepts local @img slug without Invalid URL (enqueues job)", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("img", "nbp-scene-reference-2-3", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("img", "nbp-scene-reference-2-3", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
 
     const result = await client.callTool({
       name: "generate_kie_qwen_2_0_edit_image",
       arguments: {
         prompt: "exactly the same remove game",
         project_slug: "test-proj",
-        image_slugs: [`@${asset.value.assetId}`],
+        image_slugs: [`@${asset.value.slug}`],
         image_size: "16:9",
         output_format: "png",
       },

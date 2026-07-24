@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { extname } from "node:path";
 import { modelSlug } from "@apicity/cost";
@@ -13,7 +13,7 @@ const omnihuman = Omnihuman15RequestSchema.shape.input.shape;
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
+function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -25,22 +25,22 @@ type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-async function resolveImageSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveImageSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("img-")) {
     return { ok: false, error: `image_slug must be an img-* asset, got: ${assetId}` };
   }
-  const manifest = await fs.getManifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
   if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveAudioSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("aud-")) return { ok: false, error: `audio_slug must be an aud-* asset, got: ${assetId}` };
-  const manifest = await fs.getManifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findAudioFile(manifest.value.files, assetId);
   if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
@@ -60,7 +60,7 @@ const generateOmnihumanVideoSchema = {
 
 type Args = SchemaArgs<typeof generateOmnihumanVideoSchema>;
 
-export function generateOmnihumanVideoDef(fs: VideocityFs): ToolDef {
+export function generateOmnihumanVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_omnihuman_1_5_video",
     description: "Animate a portrait image with a driving audio track into a talking/singing avatar video using ByteDance OmniHuman 1.5 (kie). Creates a new vid- asset and enqueues a background job.",
@@ -94,7 +94,7 @@ export function generateOmnihumanVideoDef(fs: VideocityFs): ToolDef {
       const audioInput = audioResult.value;
 
       const videoName = `${SLUG}-${imageInput.assetId.replace(/^(img|char)-/, "")}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -102,7 +102,7 @@ export function generateOmnihumanVideoDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = [imageInput.assetId];
       const sourceAudioIds = [audioInput.assetId];
 

@@ -1,41 +1,26 @@
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import * as os from 'node:os';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
 
-import { createFs, type VideocityFs } from 'videobook-engine';
-
-const execFileAsync = promisify(execFile);
+import { createEngine, type Engine } from "videobook-engine";
 
 export interface Sandbox {
   dir: string;
-  projectsDir: string;
-  fs: VideocityFs;
+  engine: Engine;
   cleanup: () => Promise<void>;
 }
 
 export async function createSandbox(): Promise<Sandbox> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'videocity-test-'));
-  const projectsDir = path.join(dir, 'projects');
-  await fs.mkdir(projectsDir, { recursive: true });
-
-  // Configure git for test environment
-  await execFileAsync('git', ['config', '--global', 'user.email', 'test@videocity.test'], {
-    env: { ...process.env, HOME: dir },
-  }).catch(() => {});
-  await execFileAsync('git', ['config', '--global', 'user.name', 'Test User'], {
-    env: { ...process.env, HOME: dir },
-  }).catch(() => {});
-
-  const instance = createFs({ projectsDir });
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "videobook-test-"));
+  const engine = createEngine({ rootDir: dir });
+  await engine.ready;
 
   return {
     dir,
-    projectsDir,
-    fs: instance,
+    engine,
     cleanup: async () => {
-      await fs.rm(dir, { recursive: true, force: true });
+      engine.close();
+      await fs.rm(dir, { recursive: true, force: true, maxRetries: 3 });
     },
   };
 }

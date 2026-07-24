@@ -5,21 +5,21 @@ import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { createFsForTest } from "../fs.js";
-import type { VideocityFs } from "videobook-engine";
+import { createEngineForTest } from "../fs.js";
+import type { Engine } from "videobook-engine";
 
 const PROJECT = "e2e-rename-resolve";
 
 describe("rename and resolve e2e", () => {
   let client: Client;
   let tempDir: string;
-  let fs: VideocityFs;
+  let fs: Engine;
 
   beforeAll(async () => {
     await queue.start();
     tempDir = await mkdtemp(join(tmpdir(), "videocity-e2e-rename-"));
     client = await createTestClient(tempDir);
-    fs = createFsForTest(tempDir);
+    fs = createEngineForTest(tempDir);
 
     const createResult = await client.callTool({
       name: "create_project",
@@ -34,16 +34,14 @@ describe("rename and resolve e2e", () => {
     if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("can resolve a renamed asset directory", async () => {
-    // Create an asset
-    const assetRes = await fs.createAsset("img", "original-name", PROJECT);
+  it("keeps stable identity while replacing the active slug", async () => {
+    const assetRes = await fs.artifacts.create("img", "original-name", PROJECT);
     expect(assetRes.ok).toBe(true);
-    const originalId = assetRes.ok ? assetRes.value.assetId : "";
+    const originalId = assetRes.ok ? assetRes.value.slug : "";
+    const artifactId = assetRes.ok ? assetRes.value.artifactId : "";
 
-    // Write a dummy file
-    await fs.writeFile(originalId, "original.png", Buffer.from("fake data"), PROJECT);
+    await fs.files.write(originalId, "original.png", Buffer.from("fake data"), PROJECT);
 
-    // Rename it via tool
     const renameRes = await client.callTool({
       name: "rename_asset",
       arguments: {
@@ -57,15 +55,16 @@ describe("rename and resolve e2e", () => {
     const newId = parsed.new_asset_id;
     expect(newId).not.toBe(originalId);
 
-    // Now try to read the file using the ORIGINAL id.
-    // The engine's resolveAssetDir should transparently follow the alias.
-    const readRes = await fs.readFile(originalId, "original.png", PROJECT);
-    if (!readRes.ok) console.error(readRes.error);
+    expect(fs.artifacts.resolveSlug(PROJECT, originalId).ok).toBe(false);
+    const renamed = fs.artifacts.get(PROJECT, artifactId);
+    expect(renamed.ok).toBe(true);
+    expect(renamed.ok && renamed.value.slug).toBe(newId);
+
+    const readRes = await fs.files.read(artifactId, "original.png", PROJECT);
     expect(readRes.ok).toBe(true);
     expect(readRes.ok && readRes.value.toString()).toBe("fake data");
-    
-    // Also check getManifest
-    const manifest = await fs.getManifest(originalId, PROJECT);
+
+    const manifest = await fs.files.manifest(artifactId, PROJECT);
     expect(manifest.ok).toBe(true);
   });
 });

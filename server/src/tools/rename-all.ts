@@ -6,7 +6,7 @@
  * then revalidates user edits and finally applies via fs.renameAsset +
  * first-class reference updates.
  */
-import type { VideocityFs } from "videobook-engine";
+import type { Artifact, Engine, NotebookDocument } from "videobook-engine";
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -28,7 +28,6 @@ import {
   type EditedRename,
 } from "../rename-helpers.js";
 import { RENDER_ORIENTATIONS } from "./sync.js";
-import { isNotebookSidecar, renderNotebookMarkdown } from "../notebook-store.js";
 import type { ToolDef } from "./tool-def.js";
 
 const MODEL = "gpt-5.5";
@@ -57,7 +56,7 @@ const schema = {
     ),
 };
 
-export function renameAllDef(fs: VideocityFs): ToolDef {
+export function renameAllDef(fs: Engine): ToolDef {
   return {
     name: "rename_all",
     description:
@@ -72,8 +71,8 @@ export function renameAllDef(fs: VideocityFs): ToolDef {
         renames?: RenamePayload[];
       };
 
-      const assets = await fs.listAssets(project_slug);
-      const allAssetIds = assets.map((a) => a.id);
+      const assets = await fs.artifacts.list(project_slug);
+      const allAssetIds = assets.map((a) => a.slug);
 
       if (dry_run) {
         return renames && renames.length > 0
@@ -97,8 +96,8 @@ export function renameAllDef(fs: VideocityFs): ToolDef {
 }
 
 async function handleDryRunSuggest(
-  fs: VideocityFs,
-  assets: { id: string; type: string }[],
+  fs: Engine,
+  assets: Artifact[],
   projectSlug: string,
   allAssetIds: string[],
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
@@ -113,7 +112,7 @@ async function handleDryRunSuggest(
     };
   }
 
-  const candidates = assets.filter((a) => isRenamable(a.id));
+  const candidates = assets.filter((a) => isRenamable(a.slug));
   if (candidates.length === 0) {
     return {
       content: [{
@@ -129,11 +128,11 @@ async function handleDryRunSuggest(
 
   const contexts: AssetContext[] = [];
   for (const a of candidates) {
-    const ctx = await loadAssetContext(fs, a.id, a.type, projectSlug);
+    const ctx = await loadAssetContext(fs, a.slug, a.kind, projectSlug);
     contexts.push(
       ctx ?? {
-        asset_id: a.id,
-        type: a.id.startsWith("vid-") ? "video" : "image",
+        asset_id: a.slug,
+        type: a.slug.startsWith("vid-") ? "video" : "image",
         context_text: "",
       },
     );
@@ -181,7 +180,7 @@ async function handleDryRunRevalidation(
 }
 
 async function handleApply(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   renames: RenamePayload[],
   allAssetIds: string[],
@@ -213,7 +212,7 @@ async function handleApply(
   const idMap = new Map<string, string>();
 
   for (const row of toApply) {
-    const result = await fs.renameAsset(row.asset_id, row.suggested_name, projectSlug);
+    const result = await fs.artifacts.rename(row.asset_id, row.suggested_name, projectSlug);
     if (!result.ok) {
       applied.push({
         asset_id: row.asset_id,
@@ -224,11 +223,11 @@ async function handleApply(
       });
       continue;
     }
-    idMap.set(row.asset_id, result.value.new_asset_id);
+    idMap.set(row.asset_id, result.value.slug);
     applied.push({
       asset_id: row.asset_id,
       target_asset_id: row.target_asset_id,
-      new_asset_id: result.value.new_asset_id,
+      new_asset_id: result.value.slug,
       renamed: true,
     });
   }
@@ -250,7 +249,7 @@ async function handleApply(
  *  Images: analysis, generation prompt, and parent-video context for
  *  extracted frames. Returns null when no useful text is available. */
 async function loadAssetContext(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   type: string,
   projectSlug: string,
@@ -270,12 +269,12 @@ function decodeJsonBuffer(value: string | Buffer): string {
 
 /** Pull summary / subjects / setting / tags from `.original.analysis.json`. */
 async function readAnalysisParts(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<string[]> {
   const parts: string[] = [];
-  const analysisRead = await fs.readFile(assetId, ".original.analysis.json", projectSlug);
+  const analysisRead = await fs.files.read(assetId, ".original.analysis.json", projectSlug);
   if (!analysisRead.ok) return parts;
   try {
     const analysis = JSON.parse(decodeJsonBuffer(analysisRead.value)) as Record<string, unknown>;
@@ -297,7 +296,7 @@ async function readAnalysisParts(
 }
 
 async function loadVideoContext(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<AssetContext | null> {
@@ -306,7 +305,7 @@ async function loadVideoContext(
   parts.push(...(await readAnalysisParts(fs, assetId, projectSlug)));
 
   // Generation prompt is often the richest description when analysis is missing.
-  const meta = await fs.readMetadata<Record<string, unknown>>(assetId, "original", projectSlug);
+  const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original", projectSlug);
   if (meta.ok) {
     const prompt = typeof meta.value.prompt === "string" ? meta.value.prompt.trim() : "";
     if (prompt) {
@@ -322,7 +321,7 @@ async function loadVideoContext(
 
   // Transcript is secondary — cap length so it doesn't drown out visuals.
   for (const transFile of [".analysis.gpt4otrans.json", "elevenlabs.json"]) {
-    const transRead = await fs.readFile(assetId, transFile, projectSlug);
+    const transRead = await fs.files.read(assetId, transFile, projectSlug);
     if (!transRead.ok) continue;
     try {
       const parsed = JSON.parse(decodeJsonBuffer(transRead.value)) as { text?: string };
@@ -341,14 +340,14 @@ async function loadVideoContext(
 }
 
 async function loadImageContext(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<AssetContext | null> {
   const parts: string[] = [];
   parts.push(...(await readAnalysisParts(fs, assetId, projectSlug)));
 
-  const meta = await fs.readMetadata<Record<string, unknown>>(assetId, "original", projectSlug);
+  const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original", projectSlug);
   if (meta.ok) {
     const origin = typeof meta.value.origin === "string" ? meta.value.origin : "";
     const prompt = typeof meta.value.prompt === "string" ? meta.value.prompt.trim() : "";
@@ -377,7 +376,7 @@ async function loadImageContext(
           if (srcAnalysis.length > 0) {
             parts.push(`source ${src}: ${srcAnalysis.join(" ").slice(0, 200)}`);
           } else {
-            const srcMeta = await fs.readMetadata<Record<string, unknown>>(
+            const srcMeta = await fs.metadata.artifacts.read<Record<string, unknown>>(
               src,
               "original",
               projectSlug,
@@ -433,7 +432,7 @@ const PREVIEW_CANDIDATES = [
 
 /** Prefer first/last original_frames for videos; fall back to poster jpg. */
 async function loadPreviewStills(
-  fs: VideocityFs,
+  fs: Engine,
   contexts: AssetContext[],
   projectSlug: string,
 ): Promise<AssetPreview[]> {
@@ -449,7 +448,7 @@ async function loadPreviewStills(
 }
 
 async function loadVideoPreviewParts(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<OpenAiContentPart[]> {
@@ -459,13 +458,13 @@ async function loadVideoPreviewParts(
 }
 
 /** Read first + last jpg from original_frames via the asset dir on disk.
- *  Nested frame paths are not readable through fs.readFile (filename safety). */
+ *  Nested frame paths are not readable through fs.files.read(filename safety). */
 async function loadEndFrameParts(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<OpenAiContentPart[]> {
-  const manifest = await fs.getManifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId, projectSlug);
   if (!manifest.ok) return [];
   const frames = manifest.value.directories?.original_frames
     ?? manifest.value.directories?.landscape_frames
@@ -498,12 +497,12 @@ async function loadEndFrameParts(
 }
 
 async function loadImagePreviewParts(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<OpenAiContentPart[]> {
   for (const filename of PREVIEW_CANDIDATES) {
-    const read = await fs.readFile(assetId, filename, projectSlug);
+    const read = await fs.files.read(assetId, filename, projectSlug);
     if (!read.ok) continue;
     const buf = Buffer.isBuffer(read.value)
       ? read.value
@@ -552,7 +551,7 @@ function buildMultimodalContent(
 /** Rewrite first-class references after a batch rename: timeline slots/audio,
  *  per-asset OSG render metadata (osgAssetId), and plan/.plan.json ids. */
 async function updateReferences(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   idMap: Map<string, string>,
 ): Promise<void> {
@@ -562,11 +561,11 @@ async function updateReferences(
 }
 
 async function updateTimelineReferences(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   idMap: Map<string, string>,
 ): Promise<void> {
-  const read = await fs.readProjectMeta<unknown>("timeline", projectSlug);
+  const read = await fs.metadata.projects.read<unknown>("timeline", projectSlug);
   if (!read.ok) return;
   const config = read.value as {
     slots?: Array<{ slug?: string }>;
@@ -575,23 +574,23 @@ async function updateTimelineReferences(
   const before = JSON.stringify(config);
   rewriteTimelineReferences(config, idMap);
   if (JSON.stringify(config) !== before) {
-    await fs.writeProjectMeta("timeline", config, projectSlug);
+    await fs.metadata.projects.write("timeline", config, projectSlug);
   }
 }
 
 async function updateOsgReferences(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   idMap: Map<string, string>,
 ): Promise<void> {
-  const assets = await fs.listAssets(projectSlug);
+  const assets = await fs.artifacts.list(projectSlug);
   for (const asset of assets) {
-    if (!asset.id.startsWith("vid-")) continue;
+    if (!asset.slug.startsWith("vid-")) continue;
     let changed = false;
     for (const orient of RENDER_ORIENTATIONS) {
       const metaKey = `${orient}.render`;
-      const read = await fs.readMetadata<Record<string, unknown>>(
-        asset.id,
+      const read = await fs.metadata.artifacts.read<Record<string, unknown>>(
+        asset.slug,
         metaKey,
         projectSlug,
       );
@@ -600,7 +599,7 @@ async function updateOsgReferences(
       if (typeof osgId === "string" && idMap.has(osgId)) {
         read.value.osgAssetId = idMap.get(osgId);
         changed = true;
-        await fs.writeMetadata(asset.id, metaKey, read.value, projectSlug);
+        await fs.metadata.artifacts.write(asset.slug, metaKey, read.value, projectSlug);
       }
     }
     void changed;
@@ -608,37 +607,27 @@ async function updateOsgReferences(
 }
 
 async function updateNotebookReferences(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   idMap: Map<string, string>,
 ): Promise<void> {
-  const assets = await fs.listAssets(projectSlug);
-  const notebooks = assets.filter(a => a.id.startsWith("nb-"));
-  
-  for (const nb of notebooks) {
-    const nbRead = await fs.readFile(nb.id, ".notebook.json", projectSlug);
-    if (!nbRead.ok) continue;
-    let plan: unknown;
-    try {
-      plan = JSON.parse(
-        typeof nbRead.value === "string"
-          ? nbRead.value
-          : new TextDecoder().decode(nbRead.value),
-      );
-    } catch {
-      continue;
-    }
-    const before = JSON.stringify(plan);
+  for (const notebook of fs.notebooks.list(projectSlug)) {
+    const before = JSON.stringify(notebook);
     const planIdMap = new Map(idMap);
     for (const [oldId, newId] of idMap) {
       planIdMap.set(`@${oldId}`, `@${newId}`);
     }
-    plan = rewriteDeep(plan, planIdMap);
-    plan = rewriteInlineMentions(plan, idMap);
-    if (JSON.stringify(plan) !== before) {
-      await fs.writeFile(nb.id, ".notebook.json", JSON.stringify(plan, null, 2), projectSlug);
-      if (isNotebookSidecar(plan)) {
-        await fs.writeFile(nb.id, "index.md", renderNotebookMarkdown(plan.definition), projectSlug);
+    let rewritten = rewriteDeep(
+      structuredClone(notebook),
+      planIdMap,
+    ) as NotebookDocument;
+    rewritten = rewriteInlineMentions(rewritten, idMap);
+    if (JSON.stringify(rewritten) !== before) {
+      const result = await fs.notebooks.write(rewritten, projectSlug);
+      if (!result.ok) {
+        throw new Error(
+          `Failed to update notebook ${notebook.id}: ${result.error.message}`,
+        );
       }
     }
   }

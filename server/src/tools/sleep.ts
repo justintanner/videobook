@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { syncDef } from "./sync.js";
 import type { ToolDef } from "./tool-def.js";
@@ -7,7 +7,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function sleepDef(fs: VideocityFs): ToolDef {
+export function sleepDef(fs: Engine): ToolDef {
   return {
     name: "wait_for_asset_ready",
     description:
@@ -32,7 +32,7 @@ export function sleepDef(fs: VideocityFs): ToolDef {
       };
 
       // Verify asset exists
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -93,8 +93,8 @@ export function sleepDef(fs: VideocityFs): ToolDef {
           };
         }
 
-        const jobs = await fs.queue.list(project_slug, {
-          assetId: asset_id,
+        const jobs = fs.jobs.queue.list(project_slug, {
+          artifactId: asset_id,
           limit: 20,
         });
         const failedJob = jobs.find((job) => job.state === "failed");
@@ -124,11 +124,26 @@ export function sleepDef(fs: VideocityFs): ToolDef {
             job.state === "running" ||
             job.state === "completing",
         );
-        const ptRead = await fs.pendingTasks.read(project_slug, asset_id);
+        const ptRead = await fs.jobs.pending.read(project_slug, asset_id);
         const pendingTask = ptRead.ok ? ptRead.value : null;
-        const locked = await fs.isLocked(assetDir);
+        const locked = await fs.jobs.locks.isLocked(assetDir);
+        const workRead = await fs.jobs.artifactWork.read(
+          project_slug,
+          asset_id,
+        );
+        const activeWork =
+          workRead.ok &&
+          workRead.value !== null &&
+          (workRead.value.status === "working" ||
+            (workRead.value.status === "pending" &&
+              typeof workRead.value.meta.kind === "string"));
 
-        if (pendingTask === null && !locked && !activeJob) {
+        if (
+          pendingTask === null &&
+          !locked &&
+          !activeJob &&
+          !activeWork
+        ) {
           return {
             content: [
               {

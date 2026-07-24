@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { createElevenLabs } from "@apicity/elevenlabs";
 import { extname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -20,7 +20,6 @@ const STALE_DERIVATIVES = [
   ".original.analysis.json",
   ".analysis.gpt4otrans.json",
   "elevenlabs.json",
-  ".kie-task.json",
   ".suggest-sfx.json",
 ];
 
@@ -173,30 +172,30 @@ export async function renderCleanVideoAudio(
 }
 
 async function deleteIfPresent(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   filename: string,
   projectSlug: string,
 ): Promise<void> {
-  const result = await fs.deleteFile(assetId, filename, projectSlug);
+  const result = await fs.files.delete(assetId, filename, projectSlug);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
     throw new Error(`Failed to delete stale ${filename}: ${result.error.message}`);
   }
 }
 
 export async function replaceVideoAssetInPlace(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   videoFilename: string,
   renderedPath: string,
   projectSlug: string,
 ): Promise<void> {
   const outputBytes = await readFile(renderedPath);
-  const written = await fs.writeFile(assetId, videoFilename, outputBytes, projectSlug);
+  const written = await fs.files.write(assetId, videoFilename, outputBytes, projectSlug);
   if (!written.ok) throw new Error(`Failed to replace ${videoFilename}: ${written.error.message}`);
 }
 
-export function registerCleanVideoAudioJob(fs: VideocityFs): void {
+export function registerCleanVideoAudioJob(fs: Engine): void {
   registerJobHandler("clean_video_audio", async (payload, ctx) => {
     const {
       assetId,
@@ -227,7 +226,7 @@ export function registerCleanVideoAudioJob(fs: VideocityFs): void {
           throw new Error(`ElevenLabs Voice Isolator requires a video between 0 and ${MAX_ISOLATION_DURATION_SECONDS} seconds; got ${probe.duration}`);
         }
 
-        const sourceResult = await fs.readFile(assetId, videoFilename, projectSlug);
+        const sourceResult = await fs.files.read(assetId, videoFilename, projectSlug);
         if (!sourceResult.ok) throw new Error(sourceResult.error.message);
         if (sourceResult.value.byteLength > MAX_ISOLATION_BYTES) {
           throw new Error(`ElevenLabs Voice Isolator supports files up to ${MAX_ISOLATION_BYTES} bytes`);

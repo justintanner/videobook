@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
@@ -46,11 +46,11 @@ export function parseCharacterMetadata(
   }
 }
 
-export function setCharacterMetadataDef(fs: VideocityFs): ToolDef {
+export function setCharacterMetadataDef(fs: Engine): ToolDef {
   return {
     name: "set_character_metadata",
     description:
-      "Write free-form metadata to a character's .character.json sidecar. " +
+      "Write free-form native metadata for a character. " +
       "Accepts a JSON object, a JSON-stringified object, or plain-text notes " +
       "(stored as { notes: \"...\" }).",
     schema: {
@@ -85,11 +85,11 @@ export function setCharacterMetadataDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const writeResult = await fs.writeMetadata(id, "character", parsed.value, project_slug);
+      const writeResult = await fs.metadata.artifacts.write(id, "character", parsed.value, project_slug);
       if (!writeResult.ok) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: `Failed to write .character.json: ${writeResult.error.message}` }],
+          content: [{ type: "text" as const, text: `Failed to write character metadata: ${writeResult.error.message}` }],
         };
       }
 

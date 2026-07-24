@@ -45,7 +45,8 @@ describe("switch_project tool", () => {
     });
     const defaultContent = defaultResult.content as Array<{ type: string; text: string }>;
     const defaultData = JSON.parse(defaultContent[0].text);
-    expect(defaultData.metadata.slug).toBe("alpha");
+    expect(defaultData.slug).toBe("alpha");
+    expect(defaultData.isDefault).toBe(true);
   });
 
   it("returns error for nonexistent project", async () => {

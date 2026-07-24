@@ -61,7 +61,7 @@ import type { UiActionMap } from '@/lib/ui-actions';
 import type { CommandToolArgs } from '@/lib/command-registry';
 import type { GenerationLifecycleEvent } from '@/lib/generation-lifecycle';
 import { runOptimisticRenderRequest } from '@/lib/render-request';
-import type { MediaItem, AssetType, ClipState, PendingState, OsgInfo } from '@/components/sidebar/types';
+import type { MediaItem, ArtifactKind, ClipState, PendingState, OsgInfo } from '@/components/sidebar/types';
 import { DEFAULT_RENDER_SETTINGS, getDefaultRenderSettings, isOsgPosition, isSubtitleLanguage, parseOsgPosition, storedToRenderSettings, type TranscriptInfo } from '@/components/center-stage/render-settings-types';
 import type { RenderSettings } from '@/components/center-stage/render-settings-types';
 import type { OsgApplyValue } from '@/components/center-stage/OsgOverlay';
@@ -368,7 +368,7 @@ export function HomePage() {
       const prompt = asset.prompt ?? pending?.prompt ?? failed?.prompt ?? null;
       return {
         id: asset.id,
-        type: asset.type as AssetType,
+        type: asset.type as ArtifactKind,
         slug: `@${asset.id}`,
         title: humanizeId(asset.id),
         filePath: asset.media_url ?? '',

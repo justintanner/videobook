@@ -177,9 +177,11 @@ function desiredEdges(
   
   return definition.sequence.flatMap((target) => {
     if (target.type !== 'image' && target.type !== 'video') return []
-    const pin = typeof target.properties.first_frame_source === 'string'
-      ? target.properties.first_frame_source
-      : null
+    const inputRoutes = typeof target.properties.input_routes === 'object'
+      && target.properties.input_routes !== null
+      && !Array.isArray(target.properties.input_routes)
+      ? target.properties.input_routes as Record<string, unknown>
+      : {}
     const inputs = Array.isArray(target.properties.inputs)
       ? target.properties.inputs.filter((input): input is string => typeof input === 'string')
       : []
@@ -192,7 +194,7 @@ function desiredEdges(
       const groupAssignment = trunkGroups.get(id)
       const data: TrunkEdgeData = {
         kind: steps.get(source)?.type === 'prompt' ? 'prompt' : 'ref',
-        pinned: pin === source,
+        pinned: inputRoutes[source] === 'first_frame_slug',
         groupId: groupAssignment?.groupId ?? '',
         groupKind: groupAssignment?.groupKind ?? 'fan-in',
         groupSize: groupAssignment?.groupSize ?? 1,

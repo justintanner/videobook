@@ -1,8 +1,8 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createFs } from "videobook-engine";
 import sharp from "sharp";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { createTestClient } from "../test-client.js";
@@ -74,17 +74,17 @@ describe("generate_kling30_turbo_video tool", () => {
   });
 
   it("enqueues kling30_turbo job (image-to-video)", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const imageAsset = await fs.createAsset("img", "source-img", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const imageAsset = await fs.artifacts.create("img", "source-img", "test-proj");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
-    await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
+    await fs.files.write(imageAsset.value.slug, "original.png", await makePng(), "test-proj");
 
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_turbo_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "animate this image",
-        image_slugs: [`@${imageAsset.value.assetId}`],
+        image_slugs: [`@${imageAsset.value.slug}`],
       },
     });
 
@@ -92,7 +92,7 @@ describe("generate_kling30_turbo_video tool", () => {
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
     expect(parsed.vid_asset_id).toMatch(/^vid-/);
-    expect(parsed.source_images).toEqual([imageAsset.value.assetId]);
+    expect(parsed.source_images).toEqual([imageAsset.value.slug]);
     expect(parsed.job_id).toBeDefined();
   });
 });

@@ -2,20 +2,20 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { VideocityFs } from "videobook-engine";
-import { createFsForTest } from "./fs.js";
+import type { Engine } from "videobook-engine";
+import { createEngineForTest } from "./fs.js";
 import { enqueueLazyAnalysisIfSlotted, enqueueLazyTimelineRender } from "./lazy-render.js";
 import { queue } from "./queue.js";
 
 describe("enqueueLazyTimelineRender", () => {
-  let fs: VideocityFs;
+  let fs: Engine;
   let tempDir: string;
   const projectSlug = "test-proj";
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-lazy-render-test-"));
-    fs = createFsForTest(tempDir);
-    const project = await fs.createProject(projectSlug);
+    fs = createEngineForTest(tempDir);
+    const project = await fs.projects.create(projectSlug);
     if (!project.ok) throw new Error(project.error.message);
   });
 
@@ -25,14 +25,14 @@ describe("enqueueLazyTimelineRender", () => {
   });
 
   async function createVideoAsset(): Promise<string> {
-    const created = await fs.createAsset("vid", "clip", projectSlug);
+    const created = await fs.artifacts.create("vid", "clip", projectSlug);
     if (!created.ok) throw new Error(created.error.message);
-    const assetId = created.value.assetId;
+    const assetId = created.value.slug;
     const writes = await Promise.all([
-      fs.writeFile(assetId, "original.mp4", Buffer.from("fake-video"), projectSlug),
-      fs.writeFile(assetId, ".original.analysis.json", Buffer.from(JSON.stringify({ burnedInSubtitles: null })), projectSlug),
-      fs.writeFile(assetId, ".analysis.gpt4otrans.json", Buffer.from(JSON.stringify({ text: "real spoken words" })), projectSlug),
-      fs.writeFile(assetId, "elevenlabs.json", Buffer.from(JSON.stringify({ words: [] })), projectSlug),
+      fs.files.write(assetId, "original.mp4", Buffer.from("fake-video"), projectSlug),
+      fs.files.write(assetId, ".original.analysis.json", Buffer.from(JSON.stringify({ burnedInSubtitles: null })), projectSlug),
+      fs.files.write(assetId, ".analysis.gpt4otrans.json", Buffer.from(JSON.stringify({ text: "real spoken words" })), projectSlug),
+      fs.files.write(assetId, "elevenlabs.json", Buffer.from(JSON.stringify({ words: [] })), projectSlug),
     ]);
     for (const write of writes) {
       if (!write.ok) throw new Error(write.error.message);
@@ -43,7 +43,7 @@ describe("enqueueLazyTimelineRender", () => {
   it("enqueues assigned video renders with clean audio and subtitles off by default", async () => {
     const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
     const assetId = await createVideoAsset();
-    const timeline = await fs.writeProjectMeta("timeline", {
+    const timeline = await fs.metadata.projects.write("timeline", {
       slots: [{ slug: assetId }],
       render: "portrait",
     }, projectSlug);
@@ -70,13 +70,13 @@ describe("enqueueLazyTimelineRender", () => {
   it("carries stored subtitle and audio overrides through to the render payload", async () => {
     const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
     const assetId = await createVideoAsset();
-    await fs.writeMetadata(assetId, "landscape.render", {
+    await fs.metadata.artifacts.write(assetId, "landscape.render", {
       subtitlesEnabled: true,
       audioVolume: 70,
       audioFadeIn: 200,
       audioFadeOut: 300,
     }, projectSlug);
-    await fs.writeProjectMeta("timeline", {
+    await fs.metadata.projects.write("timeline", {
       slots: [{ slug: assetId }],
       render: "portrait",
     }, projectSlug);
@@ -96,8 +96,8 @@ describe("enqueueLazyTimelineRender", () => {
     const assetId = await createVideoAsset();
     // Settings live on another orientation: target-orientation metadata would
     // mark the clip already rendered, and readStoredRenderDefaults falls back.
-    await fs.writeMetadata(assetId, "landscape.render", { subtitleLanguage: "en" }, projectSlug);
-    await fs.writeProjectMeta("timeline", {
+    await fs.metadata.artifacts.write(assetId, "landscape.render", { subtitleLanguage: "en" }, projectSlug);
+    await fs.metadata.projects.write("timeline", {
       slots: [{ slug: assetId }],
       render: "portrait",
     }, projectSlug);
@@ -111,8 +111,8 @@ describe("enqueueLazyTimelineRender", () => {
   it("normalizes an invalid stored subtitleLanguage to 'original'", async () => {
     const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
     const assetId = await createVideoAsset();
-    await fs.writeMetadata(assetId, "landscape.render", { subtitleLanguage: "english!!" }, projectSlug);
-    await fs.writeProjectMeta("timeline", {
+    await fs.metadata.artifacts.write(assetId, "landscape.render", { subtitleLanguage: "english!!" }, projectSlug);
+    await fs.metadata.projects.write("timeline", {
       slots: [{ slug: assetId }],
       render: "portrait",
     }, projectSlug);
@@ -135,15 +135,15 @@ describe("enqueueLazyTimelineRender", () => {
 });
 
 describe("enqueueLazyAnalysisIfSlotted", () => {
-  let fs: VideocityFs;
+  let fs: Engine;
   let tempDir: string;
   const projectSlug = "test-proj";
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-lazy-analysis-test-"));
-    fs = createFsForTest(tempDir);
+    fs = createEngineForTest(tempDir);
     vi.stubEnv("KIE_API_KEY", "test-key");
-    const project = await fs.createProject(projectSlug);
+    const project = await fs.projects.create(projectSlug);
     if (!project.ok) throw new Error(project.error.message);
   });
 
@@ -156,12 +156,12 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
   // Mirrors the state a trim leaves behind: video re-processed (frames and
   // speech-to-text fresh) but the vision analysis sidecar deleted.
   async function createTrimmedVideoAsset(): Promise<string> {
-    const created = await fs.createAsset("vid", "clip", projectSlug);
+    const created = await fs.artifacts.create("vid", "clip", projectSlug);
     if (!created.ok) throw new Error(created.error.message);
-    const assetId = created.value.assetId;
+    const assetId = created.value.slug;
     const writes = await Promise.all([
-      fs.writeFile(assetId, "original.mp4", Buffer.from("fake-video"), projectSlug),
-      fs.writeFile(assetId, ".analysis.gpt4otrans.json", Buffer.from(JSON.stringify({ text: "real spoken words" })), projectSlug),
+      fs.files.write(assetId, "original.mp4", Buffer.from("fake-video"), projectSlug),
+      fs.files.write(assetId, ".analysis.gpt4otrans.json", Buffer.from(JSON.stringify({ text: "real spoken words" })), projectSlug),
     ]);
     for (const write of writes) {
       if (!write.ok) throw new Error(write.error.message);
@@ -170,7 +170,7 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
   }
 
   async function assignToTimeline(assetId: string): Promise<void> {
-    const timeline = await fs.writeProjectMeta("timeline", {
+    const timeline = await fs.metadata.projects.write("timeline", {
       slots: [{ slug: assetId }],
       render: "landscape",
     }, projectSlug);
@@ -198,7 +198,7 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
   it("does not enqueue when the analysis already exists", async () => {
     const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
     const assetId = await createTrimmedVideoAsset();
-    const written = await fs.writeFile(
+    const written = await fs.files.write(
       assetId, ".original.analysis.json",
       Buffer.from(JSON.stringify({ burnedInSubtitles: null })), projectSlug,
     );

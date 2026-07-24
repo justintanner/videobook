@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import {
@@ -13,7 +13,7 @@ import { apicityField, apicityStringArrayField, apicityStringField } from "./sch
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
+function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -44,7 +44,7 @@ const generateAlibabaImageProSchema = {
 
 type Args = SchemaArgs<typeof generateAlibabaImageProSchema>;
 
-export function generateAlibabaImageProDef(fs: VideocityFs): ToolDef {
+export function generateAlibabaImageProDef(fs: Engine): ToolDef {
   return {
     name: "generate_alibaba_wan_2_7_pro_text_to_image",
     description: "Generate a pro image using Alibaba Cloud Wan 2.7 Image Pro. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).",
@@ -80,7 +80,7 @@ export function generateAlibabaImageProDef(fs: VideocityFs): ToolDef {
             };
           }
 
-          const manifestResult = await fs.getManifest(id, project_slug);
+          const manifestResult = await fs.files.manifest(id, project_slug);
           if (!manifestResult.ok) {
             return {
               isError: true as const,
@@ -103,7 +103,7 @@ export function generateAlibabaImageProDef(fs: VideocityFs): ToolDef {
       }
 
       const assetName = `${modelSlug("alibaba", "wan2.7-image-pro")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset("img", assetName, project_slug);
+      const assetResult = await fs.artifacts.create("img", assetName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -111,7 +111,7 @@ export function generateAlibabaImageProDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `alibaba-${modelSlug("alibaba", "wan2.7-image-pro")}-${imgAssetId}-${Date.now()}`;
 

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { join, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
@@ -202,7 +202,7 @@ export async function describeImageBytes(
   return parsed;
 }
 
-export function registerDescribeImageJob(fs: VideocityFs): void {
+export function registerDescribeImageJob(fs: Engine): void {
   registerJobHandler("describe_image", async (payload, ctx) => {
     const {
       sourceAssetId,
@@ -218,7 +218,7 @@ export function registerDescribeImageJob(fs: VideocityFs): void {
     return withLocalLease(fs, projectSlug, targetAssetId, ctx, "describe", async () => {
       const responses = buildResponses(requireApiKey("KIE_API_KEY"));
 
-      const readResult = await fs.readFile(sourceAssetId, sourceImageFilename, projectSlug);
+      const readResult = await fs.files.read(sourceAssetId, sourceImageFilename, projectSlug);
       if (!readResult.ok) {
         throw new Error(`Failed to read image ${sourceImageFilename} for ${sourceAssetId}: ${readResult.error.message}`);
       }
@@ -228,7 +228,7 @@ export function registerDescribeImageJob(fs: VideocityFs): void {
       const parsed = await describeImageBytes(buffer, mime, responses);
 
       const analysisJson = JSON.stringify(parsed, null, 2);
-      const cacheResult = await fs.writeFile(sourceAssetId, ANALYSIS_FILENAME, analysisJson, projectSlug);
+      const cacheResult = await fs.files.write(sourceAssetId, ANALYSIS_FILENAME, analysisJson, projectSlug);
       if (!cacheResult.ok) {
         if (cacheResult.error.code === "NOT_FOUND") {
           return { success: false, sourceAssetId, scriptAssetId, reason: "source_deleted" };
@@ -240,12 +240,12 @@ export function registerDescribeImageJob(fs: VideocityFs): void {
 
       if (scriptAssetId) {
         const markdown = formatMarkdown(parsed);
-        const writeResult = await fs.writeFile(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);
+        const writeResult = await fs.files.write(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);
         if (!writeResult.ok) {
           throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
         }
 
-        await fs.writeMetadata(
+        await fs.metadata.artifacts.write(
           scriptAssetId,
           "original",
           {

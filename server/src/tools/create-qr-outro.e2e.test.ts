@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videobook-engine";
-import { createFsForTest } from "../fs.js";
+import type { Engine } from "videobook-engine";
+import { createEngineForTest } from "../fs.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { queue, waitForJob } from "../queue.js";
 import { buildOutroSpec } from "../remotion/qr-outro-spec.js";
@@ -48,33 +48,33 @@ function createImpactWav(): Buffer {
 }
 
 async function createImage(
-  fs: VideocityFs,
+  fs: Engine,
   name: string,
   width: number,
   height: number,
   color: string,
 ): Promise<string> {
-  const asset = await fs.createAsset("img", name, PROJECT);
+  const asset = await fs.artifacts.create("img", name, PROJECT);
   if (!asset.ok) throw new Error(asset.error.message);
   const image = await sharp({
     create: { width, height, channels: 3, background: color },
   }).png().toBuffer();
-  const written = await fs.writeFile(asset.value.assetId, "original.png", image, PROJECT);
+  const written = await fs.files.write(asset.value.slug, "original.png", image, PROJECT);
   if (!written.ok) throw new Error(written.error.message);
-  return asset.value.assetId;
+  return asset.value.slug;
 }
 
-async function createAudio(fs: VideocityFs): Promise<string> {
-  const asset = await fs.createAsset("aud", "impact", PROJECT);
+async function createAudio(fs: Engine): Promise<string> {
+  const asset = await fs.artifacts.create("aud", "impact", PROJECT);
   if (!asset.ok) throw new Error(asset.error.message);
-  const written = await fs.writeFile(
-    asset.value.assetId,
+  const written = await fs.files.write(
+    asset.value.slug,
     "original.wav",
     createImpactWav(),
     PROJECT,
   );
   if (!written.ok) throw new Error(written.error.message);
-  return asset.value.assetId;
+  return asset.value.slug;
 }
 
 async function extractFrame(videoPath: string, seconds: number, outputPath: string): Promise<void> {
@@ -107,7 +107,7 @@ function rmsAt(pcm: Buffer, startSeconds: number, endSeconds: number): number {
 
 describe("create_qr_outro e2e", () => {
   let client: Client;
-  let fs: VideocityFs;
+  let fs: Engine;
   let tempDir: string;
   let outputAssetId: string;
   let outputPath: string;
@@ -121,8 +121,8 @@ describe("create_qr_outro e2e", () => {
   beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-qr-outro-e2e-"));
     client = await createTestClient(tempDir);
-    fs = createFsForTest(tempDir);
-    const project = await fs.createProject(PROJECT);
+    fs = createEngineForTest(tempDir);
+    const project = await fs.projects.create(PROJECT);
     if (!project.ok) throw new Error(project.error.message);
 
     qrOne = await createImage(fs, "red-qr", 512, 512, "#ef2020");
@@ -143,7 +143,7 @@ describe("create_qr_outro e2e", () => {
     outputAssetId = String(data.asset_id);
     await waitForJob(String(data.job_id), 600_000);
 
-    const manifest = await fs.getManifest(outputAssetId, PROJECT);
+    const manifest = await fs.files.manifest(outputAssetId, PROJECT);
     if (!manifest.ok) throw new Error(manifest.error.message);
     outputPath = join(manifest.value.path, "original.mp4");
 
@@ -160,7 +160,7 @@ describe("create_qr_outro e2e", () => {
     expect(defaultSoundData.sound_effect_source).toBe("bundled_default");
     defaultSoundOutputAssetId = String(defaultSoundData.asset_id);
     await waitForJob(String(defaultSoundData.job_id), 600_000);
-    const defaultSoundManifest = await fs.getManifest(defaultSoundOutputAssetId, PROJECT);
+    const defaultSoundManifest = await fs.files.manifest(defaultSoundOutputAssetId, PROJECT);
     if (!defaultSoundManifest.ok) throw new Error(defaultSoundManifest.error.message);
     defaultSoundOutputPath = join(defaultSoundManifest.value.path, "original.mp4");
 
@@ -183,7 +183,7 @@ describe("create_qr_outro e2e", () => {
     });
     silentOutputAssetId = String(silentData.asset_id);
     await waitForJob(String(silentData.job_id), 600_000);
-    const silentManifest = await fs.getManifest(silentOutputAssetId, PROJECT);
+    const silentManifest = await fs.files.manifest(silentOutputAssetId, PROJECT);
     if (!silentManifest.ok) throw new Error(silentManifest.error.message);
     silentOutputPath = join(silentManifest.value.path, "original.mp4");
   }, 900_000);
@@ -206,17 +206,17 @@ describe("create_qr_outro e2e", () => {
     expect(probe.duration).toBeLessThanOrEqual(3.15);
     expect(probe.hasAudio).toBe(true);
 
-    const manifest = await fs.getManifest(outputAssetId, PROJECT);
+    const manifest = await fs.files.manifest(outputAssetId, PROJECT);
     if (!manifest.ok) throw new Error(manifest.error.message);
     expect(manifest.value.files.map((file) => file.name)).toEqual(
       expect.arrayContaining(["original.mp4", "original.mp3", "original.jpg"]),
     );
-    const status = await fs.getAssetStatus(outputAssetId, PROJECT);
+    const status = await fs.status.get(outputAssetId, PROJECT);
     expect(status.ok && status.value).toBe("ready");
   });
 
   it("persists complete source and timing provenance", async () => {
-    const metadata = await fs.readMetadata<Record<string, unknown>>(
+    const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
       outputAssetId,
       "qr-outro",
       PROJECT,
@@ -233,7 +233,7 @@ describe("create_qr_outro e2e", () => {
       impact_frames: [12, 24],
     });
 
-    const original = await fs.readMetadata<Record<string, unknown>>(
+    const original = await fs.metadata.artifacts.read<Record<string, unknown>>(
       outputAssetId,
       "original",
       PROJECT,
@@ -253,7 +253,7 @@ describe("create_qr_outro e2e", () => {
     expect(probe.width).toBe(1080);
     expect(probe.height).toBe(1080);
     expect(probe.hasAudio).toBe(true);
-    const metadata = await fs.readMetadata<Record<string, unknown>>(
+    const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
       defaultSoundOutputAssetId,
       "qr-outro",
       PROJECT,
@@ -277,7 +277,7 @@ describe("create_qr_outro e2e", () => {
     const pcm = await readFile(pcmPath);
     expect(rmsAt(pcm, 0.42, 0.52)).toBeGreaterThan(0.01);
     expect(rmsAt(pcm, 1.4, 1.5)).toBeLessThan(0.005);
-    const status = await fs.getAssetStatus(defaultSoundOutputAssetId, PROJECT);
+    const status = await fs.status.get(defaultSoundOutputAssetId, PROJECT);
     expect(status.ok && status.value).toBe("ready");
   });
 
@@ -289,11 +289,11 @@ describe("create_qr_outro e2e", () => {
     expect(probe.duration).toBeLessThanOrEqual(10.15);
     expect(probe.hasAudio).toBe(false);
 
-    const manifest = await fs.getManifest(silentOutputAssetId, PROJECT);
+    const manifest = await fs.files.manifest(silentOutputAssetId, PROJECT);
     if (!manifest.ok) throw new Error(manifest.error.message);
     expect(manifest.value.files.map((file) => file.name)).not.toContain("original.mp3");
 
-    const metadata = await fs.readMetadata<Record<string, unknown>>(
+    const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
       silentOutputAssetId,
       "qr-outro",
       PROJECT,
@@ -389,7 +389,7 @@ describe("create_qr_outro e2e", () => {
   });
 
   it("rejects invalid MCP inputs without creating output assets", async () => {
-    const before = await fs.listAssets(PROJECT);
+    const before = await fs.artifacts.list(PROJECT);
     const noQr = await client.callTool({
       name: "create_qr_outro",
       arguments: {
@@ -425,17 +425,17 @@ describe("create_qr_outro e2e", () => {
     expect(tooMany.isError).toBe(true);
     expect(invalidRatio.isError).toBe(true);
     expect(invalidAudio.isError).toBe(true);
-    expect(await fs.listAssets(PROJECT)).toHaveLength(before.length);
+    expect(await fs.artifacts.list(PROJECT)).toHaveLength(before.length);
   });
 
   it("marks a failed render asset as error", async () => {
-    const output = await fs.createAsset("vid", "broken-qr-outro", PROJECT);
+    const output = await fs.artifacts.create("vid", "broken-qr-outro", PROJECT);
     if (!output.ok) throw new Error(output.error.message);
     const jobId = `broken-qr-outro-${Date.now()}`;
     await queue.enqueue(jobId, {
       type: "render_qr_outro",
       projectSlug: PROJECT,
-      assetId: output.value.assetId,
+      assetId: output.value.slug,
       orientation: "landscape",
       qrImages: [{ assetId: "img-missing", filename: "original.png" }],
       soundEffect: null,
@@ -443,7 +443,7 @@ describe("create_qr_outro e2e", () => {
     });
 
     await expect(waitForJob(jobId, 60_000)).rejects.toThrow("Failed to read");
-    const status = await fs.getAssetStatus(output.value.assetId, PROJECT);
+    const status = await fs.status.get(output.value.slug, PROJECT);
     expect(status.ok && status.value).toBe("error");
   });
 

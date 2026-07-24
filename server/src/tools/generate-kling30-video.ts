@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { KlingVideoRequestSchema, MultiShotPromptSchema } from "@apicity/kie/zod";
@@ -10,7 +10,7 @@ import { apicityField, apicityStringArrayField, apicityStringField } from "./sch
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
+function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -18,7 +18,7 @@ function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
   return images.find((f) => f.name.startsWith("original")) ?? images[0] ?? null;
 }
 
-function findMediaFile(files: AssetManifestFile[], assetType: "image" | "video"): AssetManifestFile | null {
+function findMediaFile(files: ArtifactManifestFile[], assetType: "image" | "video"): ArtifactManifestFile | null {
   if (assetType === "video") return findVideoFile(files);
   return findImageFile(files);
 }
@@ -69,7 +69,7 @@ const generateKling30VideoSchema = {
 
 type Args = SchemaArgs<typeof generateKling30VideoSchema>;
 
-export function generateKling30VideoDef(fs: VideocityFs): ToolDef {
+export function generateKling30VideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_kling_3_0_video",
     description: "Generate a video using Kling 3.0 with optional reference images, character elements, and multi-shot mode. Creates a new vid- asset and enqueues a background job.",
@@ -102,7 +102,7 @@ export function generateKling30VideoDef(fs: VideocityFs): ToolDef {
             content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${assetId}` }],
           };
         }
-        const manifestResult = await fs.getManifest(assetId, project_slug);
+        const manifestResult = await fs.files.manifest(assetId, project_slug);
         if (!manifestResult.ok) {
           return {
             isError: true as const,
@@ -146,7 +146,7 @@ export function generateKling30VideoDef(fs: VideocityFs): ToolDef {
           }
           if (isVideo) hasVideo = true;
 
-          const manifestResult = await fs.getManifest(assetId, project_slug);
+          const manifestResult = await fs.files.manifest(assetId, project_slug);
           if (!manifestResult.ok) {
             return {
               isError: true as const,
@@ -173,7 +173,7 @@ export function generateKling30VideoDef(fs: VideocityFs): ToolDef {
 
       // Create output video asset
       const videoName = prompt ? `${modelSlug("kie", "kling-3.0/video")}-${slugify(prompt)}` : `${modelSlug("kie", "kling-3.0/video")}-${Date.now()}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -181,7 +181,7 @@ export function generateKling30VideoDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("kie", "kling-3.0/video")}-${vidAssetId}-${Date.now()}`;
 

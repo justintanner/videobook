@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AssetManifestFile } from "videobook-engine";
+import type { ArtifactManifestFile } from "videobook-engine";
 import {
   keywordPlacementFingerprint,
   parseKeywordPlacementAnalysis,
@@ -10,7 +10,7 @@ import {
 } from "./remotion/keyword-placement.js";
 import type { KeywordGraphic } from "./remotion/subtitles/types.js";
 
-const VIDEO_FILE: AssetManifestFile = {
+const VIDEO_FILE: ArtifactManifestFile = {
   name: "original.mp4",
   size_bytes: 100,
   extension: "mp4",

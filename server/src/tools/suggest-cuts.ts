@@ -1,10 +1,10 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 import { loadAssetForAnalysis } from "./_suggest-shared.js";
 
-export function suggestCutsDef(fs: VideocityFs): ToolDef {
+export function suggestCutsDef(fs: Engine): ToolDef {
   return {
     name: "suggest_cuts",
     description:

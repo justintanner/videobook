@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import type { GeminiOmniVideoDuration, GeminiOmniVideoAspectRatio, GeminiOmniVideoResolution } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -27,7 +27,7 @@ type GenerateGeminiOmniVideoPayload = {
   video_clip_ends?: number;
 };
 
-export function registerGenerateGeminiOmniVideoJob(fs: VideocityFs): void {
+export function registerGenerateGeminiOmniVideoJob(fs: Engine): void {
   registerJobHandler("generate_gemini_omni_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug,

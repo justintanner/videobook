@@ -1,7 +1,7 @@
+import { fs } from "../fs.js";
 import { describe, it, expect } from "vitest";
 import { GENERATION_ACTIONS, getCanonicalName, getActionSpec } from "../generation-registry.js";
 import { getAllToolDefs } from "./index.js";
-import { createFs } from "videobook-engine";
 
 describe("support generation actions contract", () => {
   it("verifies all workflow support actions have intent-based canonical names", () => {
@@ -27,7 +27,6 @@ describe("support generation actions contract", () => {
   });
 
   it("registers canonical support actions without exposing historical aliases", () => {
-    const fs = createFs({ projectsDir: "/tmp/test-support-projects" });
     const tools = getAllToolDefs(fs);
     const registeredNames = new Set(tools.map((t) => t.name));
 

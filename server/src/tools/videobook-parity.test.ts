@@ -2,8 +2,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createFs } from "videobook-engine";
 import { afterEach, describe, expect, it } from "vitest";
+import { createEngine } from "videobook-engine";
 
 import { getAllToolDefs } from "./index.js";
 
@@ -16,10 +16,7 @@ describe("Videobook MCP parity", () => {
 
   it("preserves all 211 fork endpoints and adds notebook-native tools", async () => {
     root = await mkdtemp(join(tmpdir(), "videobook-parity-"));
-    const fs = createFs({
-      projectsDir: join(root, "projects"),
-      dataDir: join(root, "data"),
-    });
+    const fs = createEngine({ rootDir: root });
     const names = getAllToolDefs(fs).map((definition) => definition.name);
     fs.close();
 

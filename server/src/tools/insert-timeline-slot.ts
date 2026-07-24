@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -50,7 +50,7 @@ function slotIndex(slot: string): number | null {
   return index >= 0 ? index : null;
 }
 
-export function insertTimelineSlotDef(fs: VideocityFs): ToolDef {
+export function insertTimelineSlotDef(fs: Engine): ToolDef {
   return {
     name: "insert_timeline_slot",
     description: "Insert an empty timeline slot before or after a slot identifier",
@@ -71,7 +71,7 @@ export function insertTimelineSlotDef(fs: VideocityFs): ToolDef {
         return toolError(`Invalid slot format: "${slot}". Expected format like "s01", "s02", etc.`);
       }
 
-      const readResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
+      const readResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
       let config: TimelineConfig;
       if (readResult.ok) {
         config = normalizeConfig(readResult.value);
@@ -87,7 +87,7 @@ export function insertTimelineSlotDef(fs: VideocityFs): ToolDef {
       const insertionIndex = position === "before" ? index : index + 1;
       config.slots.splice(insertionIndex, 0, { slug: "" });
 
-      const writeResult = await fs.writeProjectMeta("timeline", config, project_slug);
+      const writeResult = await fs.metadata.projects.write("timeline", config, project_slug);
       if (!writeResult.ok) return toolError(writeResult.error.message);
       return {
         content: [{ type: "text", text: JSON.stringify(config) }],

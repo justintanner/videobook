@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalSeedreamV5LiteTextToImageRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
@@ -20,7 +20,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateSeedreamV5LiteFalDef(fs: VideocityFs): ToolDef {
+export function generateSeedreamV5LiteFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_seedream_v5_lite_text_to_image",
     description: "Generate an image via fal.ai using ByteDance Seedream V5 Lite from a text prompt. Creates a new img- asset and enqueues a background job.",
@@ -32,10 +32,10 @@ export function generateSeedreamV5LiteFalDef(fs: VideocityFs): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.createAsset("img", `${modelSlug("kie", "seedream/5-lite-text-to-image")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "seedream/5-lite-text-to-image")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "seedream/5-lite-text-to-image")}-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

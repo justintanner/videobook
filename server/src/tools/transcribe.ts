@@ -1,11 +1,11 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
 import { findAudioFile } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 
-export function transcribeDef(fs: VideocityFs): ToolDef {
+export function transcribeDef(fs: Engine): ToolDef {
   return {
     name: "transcribe",
     description: "Transcribe audio from a video or audio asset using ElevenLabs speech-to-text. Writes elevenlabs.json into the asset directory.",
@@ -34,7 +34,7 @@ export function transcribeDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug, { includeDotfiles: true });
+      const manifestResult = await fs.files.manifest(asset_id, project_slug, { includeDotfiles: true });
       if (!manifestResult.ok) {
         return {
           isError: true as const,

@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import type { Engine } from "videobook-engine";
+import { closeEngineForTest, createEngineForTest } from "./fs.js";
+import { queue, setEngineRoot } from "./queue.js";
 import {
   schedulePost,
   cancelScheduledPost,
@@ -12,21 +15,22 @@ import {
 
 describe("scheduled-posts persistence", () => {
   let tempDir: string;
-  let stateFile: string;
+  let engine: Engine;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-sched-"));
-    stateFile = join(tempDir, "scheduled-posts.json");
-    process.env.SCHEDULED_POSTS_PATH = stateFile;
+    engine = createEngineForTest(tempDir);
+    await setEngineRoot(tempDir, engine);
   });
 
   afterEach(async () => {
     stopScheduler();
-    delete process.env.SCHEDULED_POSTS_PATH;
+    await queue.stop();
+    closeEngineForTest(tempDir, engine);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("persists a scheduled post to disk and lists it", async () => {
+  it("persists a scheduled post in the main Dolt database and lists it", async () => {
     const future = new Date(Date.now() + 60 * 60_000).toISOString();
     const result = await schedulePost(
       {
@@ -41,19 +45,13 @@ describe("scheduled-posts persistence", () => {
     expect(result.schedule_id).toMatch(/^[0-9a-f-]{36}$/);
     expect(result.scheduled_for).toBe(new Date(future).toISOString());
 
-    const fileContent = JSON.parse(await readFile(stateFile, "utf8")) as Array<{
-      schedule_id: string;
-      status: string;
-      payload: { asset_id: string };
-    }>;
-    expect(fileContent).toHaveLength(1);
-    expect(fileContent[0].schedule_id).toBe(result.schedule_id);
-    expect(fileContent[0].status).toBe("pending");
-    expect(fileContent[0].payload.asset_id).toBe("vid-test");
+    await expect(stat(join(tempDir, "data", "videobook.db"))).resolves.toBeDefined();
 
     const listed = await listScheduledPosts();
     expect(listed).toHaveLength(1);
     expect(listed[0].schedule_id).toBe(result.schedule_id);
+    expect(listed[0].status).toBe("pending");
+    expect(listed[0].payload.asset_id).toBe("vid-test");
   });
 
   it("cancels a pending scheduled post", async () => {
@@ -83,7 +81,7 @@ describe("scheduled-posts persistence", () => {
     await expect(loadAndArmAll()).resolves.toBeUndefined();
   });
 
-  it("loadAndArmAll re-arms pending entries from disk", async () => {
+  it("loadAndArmAll re-arms pending entries from Dolt", async () => {
     const future = new Date(Date.now() + 60 * 60_000).toISOString();
     await schedulePost(
       { asset_id: "vid-survive", project_slug: "p1", platform: "x" },

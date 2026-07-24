@@ -1,8 +1,9 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
 const LOCK_DURATION_MS = 300_000;
 
@@ -10,7 +11,6 @@ const STALE_ANALYSIS_FILES = [
   ".original.analysis.json",
   ".analysis.gpt4otrans.json",
   "elevenlabs.json",
-  ".kie-task.json",
 ];
 
 type ReplaceVideoAudioPayload = {
@@ -28,7 +28,7 @@ type ReplaceVideoAudioPayload = {
   extraProvenance?: Record<string, unknown>;
 };
 
-export function registerReplaceVideoAudioJob(fs: VideocityFs): void {
+export function registerReplaceVideoAudioJob(fs: Engine): void {
   registerJobHandler("replace_video_audio", async (payload, ctx) => {
     const {
       inputPath, audioPath, outputPath,
@@ -59,12 +59,16 @@ export function registerReplaceVideoAudioJob(fs: VideocityFs): void {
       ]);
 
       const inputFilename = basename(inputPath);
-      const outputFilename = basename(outputPath);
-      await fs.deleteFile(assetId, inputFilename, projectSlug);
-      await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
+      await replaceArtifactFileFromPath(
+        fs,
+        projectSlug,
+        assetId,
+        inputFilename,
+        outputPath,
+      );
 
       for (const stale of STALE_ANALYSIS_FILES) {
-        await fs.deleteFile(assetId, stale, projectSlug);
+        await fs.files.delete(assetId, stale, projectSlug);
       }
 
       const videoPath = join(assetDir, inputFilename);

@@ -1,7 +1,8 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { rm } from "node:fs/promises";
 import { registerJobHandler, queue } from "../queue.js";
 import { trimRange, assertSaneTrimOutput } from "./trim-video.js";
+import { ingestWorkspaceOutputs } from "./_persist-output.js";
 
 type SplitVideoPayload = {
   type: "split_video";
@@ -19,7 +20,7 @@ type SplitVideoPayload = {
 };
 
 async function buildChunk(
-  fs: VideocityFs,
+  fs: Engine,
   args: {
     sourcePath: string;
     outputPath: string;
@@ -38,10 +39,18 @@ async function buildChunk(
     await rm(outputPath, { force: true });
     throw err;
   }
-  await fs.writeMetadata(assetId, "original", provenance, projectSlug);
+  await ingestWorkspaceOutputs(
+    fs,
+    projectSlug,
+    assetId,
+    [outputPath.split("/").pop()!],
+    "split_video",
+    provenance,
+  );
+  await fs.metadata.artifacts.write(assetId, "original", provenance, projectSlug);
 }
 
-export function registerSplitVideoJob(fs: VideocityFs): void {
+export function registerSplitVideoJob(fs: Engine): void {
   // The destination assets are brand-new, so no other job can hold a lease on
   // them; we run the two chunks in parallel against the read-only source.
   registerJobHandler("split_video", async (payload) => {
@@ -136,7 +145,7 @@ export function registerSplitVideoJob(fs: VideocityFs): void {
       if (r.status === "rejected") {
         const c = chunks[i];
         const reason = r.reason instanceof Error ? r.reason.message : String(r.reason);
-        await fs.generationErrors.write(projectSlug, c.assetId, {
+        await fs.jobs.failures.write(projectSlug, c.assetId, {
           message: `split chunk ${c.label} was built but could not be queued for processing: ${reason}`,
           failCode: "split_enqueue_failed",
         });

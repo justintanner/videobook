@@ -16,7 +16,7 @@ import { CommandButton } from '@/components/commands';
 import type { UseMcpResult } from 'use-mcp/react';
 import { useAssetHistory } from '@/hooks/useAssetHistory';
 import { HistoryListPane, HistoryDetailPane, HistoryEmptyState } from './HistoryPanel';
-import type { GitCommit, RewriteMeta } from '@/hooks/useAssetHistory';
+import type { Revision, RewriteMeta } from '@/hooks/useAssetHistory';
 import { JsonNode } from '@/components/ui/JsonNode';
 import {
   type ViewerSize,
@@ -405,7 +405,7 @@ export function FilesBackPane({ manifest, manifestLoading, selectedFile, fileCon
 }
 
 export function HistoryBackPane({ commits, historyLoading, selectedCommitHash, setSelectedCommitHash, handleRestore, fetchHistory, itemId, projectSlug, onReusePrompt }: {
-  commits: GitCommit[];
+  commits: Revision[];
   historyLoading: boolean;
   selectedCommitHash: string | null;
   setSelectedCommitHash: (hash: string | null) => void;
@@ -464,7 +464,8 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
   const [backTab, setBackTab] = useState<BackTab>(defaultBackTab);
   const [manifest, setManifest] = useState<ManifestFile[] | null>(null);
   const [manifestLoading, setManifestLoading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState('.original.json');
+  const [selectedFile, setSelectedFile] = useState('');
+  const selectedFileRef = useRef('');
   const [fileContent, setFileContent] = useState<string | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
 
@@ -482,6 +483,10 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
   });
   const fileRequestIdRef = useRef(0);
   const manifestRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    selectedFileRef.current = selectedFile;
+  }, [selectedFile]);
 
   const fileUrl = useMemo(
     () => `/files/${projectSlug}/${itemId}/${selectedFile}`,
@@ -525,6 +530,13 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
     requestFileContent(fileName);
   }, [requestFileContent]);
 
+  const handleSelectFile = useCallback((fileName: string) => {
+    selectedFileRef.current = fileName;
+    setSelectedFile(fileName);
+    setFileContent(null);
+    fetchFileContent(fileName);
+  }, [fetchFileContent]);
+
   const requestManifest = useCallback(() => {
     const requestId = ++manifestRequestIdRef.current;
     void fetch(`/api/manifest/${projectSlug}/${itemId}`)
@@ -534,7 +546,14 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
         return data.files;
       })
       .then((files) => {
-        if (requestId === manifestRequestIdRef.current) setManifest(files);
+        if (requestId !== manifestRequestIdRef.current) return;
+        setManifest(files);
+        if (
+          files.length > 0
+          && !files.some((file) => file.name === selectedFileRef.current)
+        ) {
+          handleSelectFile(files[0].name);
+        }
       })
       .catch(() => {
         if (requestId === manifestRequestIdRef.current) setManifest([]);
@@ -542,7 +561,7 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
       .finally(() => {
         if (requestId === manifestRequestIdRef.current) setManifestLoading(false);
       });
-  }, [projectSlug, itemId]);
+  }, [projectSlug, itemId, handleSelectFile]);
 
   const fetchManifest = useCallback(() => {
     setManifestLoading(true);
@@ -557,7 +576,11 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
   useEffect(() => {
     if (flipped && backTab === 'files') {
       requestManifest();
-      if (!filesSession.skipFileRequest && !isBinaryFile(filesSession.fileName)) {
+      if (
+        filesSession.fileName
+        && !filesSession.skipFileRequest
+        && !isBinaryFile(filesSession.fileName)
+      ) {
         requestFileContent(filesSession.fileName);
       }
     }
@@ -609,12 +632,6 @@ export function useViewerBackFace({ projectSlug, itemId, callTool, flipped, onFl
     if (pendingBackTab == null) return;
     onClearPendingBackTab?.();
   }, [pendingBackTab, onClearPendingBackTab]);
-
-  const handleSelectFile = useCallback((fileName: string) => {
-    setSelectedFile(fileName);
-    setFileContent(null);
-    fetchFileContent(fileName);
-  }, [fetchFileContent]);
 
   const handleFileKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (!manifest || manifest.length === 0) return;

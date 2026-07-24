@@ -1,5 +1,5 @@
 import { modelSlug } from "@apicity/cost";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { NanoBananaProRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -32,7 +32,7 @@ const generateNanoBananaImageSchema = {
 
 type Args = SchemaArgs<typeof generateNanoBananaImageSchema>;
 
-export function generateNanoBananaImageDef(fs: VideocityFs): ToolDef {
+export function generateNanoBananaImageDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_nano_banana_pro_text_to_image",
     description: "Generate an image using the nano-banana-pro model. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional.",
@@ -70,7 +70,7 @@ export function generateNanoBananaImageDef(fs: VideocityFs): ToolDef {
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
       const assetName = `${modelSlug("kie", "nano-banana-pro")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset(prefix, assetName, project_slug);
+      const assetResult = await fs.artifacts.create(prefix, assetName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -78,7 +78,7 @@ export function generateNanoBananaImageDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("kie", "nano-banana-pro")}-${imgAssetId}-${Date.now()}`;
 

@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { XaiVideoGenerateRequestSchema } from "@apicity/xai/zod";
@@ -9,7 +9,7 @@ import { apicityField, apicityStringArrayField, apicityStringField, apicityStrin
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
+function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -46,7 +46,7 @@ const generateGrokImagineRefVideoSchema = {
 
 type Args = SchemaArgs<typeof generateGrokImagineRefVideoSchema>;
 
-export function generateGrokImagineRefVideoDef(fs: VideocityFs): ToolDef {
+export function generateGrokImagineRefVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_xai_grok_imagine_video",
     description:
@@ -80,7 +80,7 @@ export function generateGrokImagineRefVideoDef(fs: VideocityFs): ToolDef {
           };
         }
 
-        const manifestResult = await fs.getManifest(assetId, project_slug);
+        const manifestResult = await fs.files.manifest(assetId, project_slug);
         if (!manifestResult.ok) {
           return {
             isError: true as const,
@@ -100,7 +100,7 @@ export function generateGrokImagineRefVideoDef(fs: VideocityFs): ToolDef {
       }
 
       const assetName = `${modelSlug("xai", "grok-imagine-video")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset("vid", assetName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", assetName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -108,7 +108,7 @@ export function generateGrokImagineRefVideoDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("xai", "grok-imagine-video")}-${vidAssetId}-${Date.now()}`;
 

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { writeFile, unlink, readFile as readFsFile } from "node:fs/promises";
@@ -21,7 +21,7 @@ type CompleteKieTaskPayload = {
   resultObject?: Record<string, unknown>;
 };
 
-export function registerCompleteKieTaskJob(fs: VideocityFs): void {
+export function registerCompleteKieTaskJob(fs: Engine): void {
   registerJobHandler("complete_kie_task", async (payload, ctx) => {
     const {
       taskId, taskType, assetId, projectSlug, meta,
@@ -31,7 +31,7 @@ export function registerCompleteKieTaskJob(fs: VideocityFs): void {
     // Pattern C: inherit the provider lease via getOwner, abort if the row
     // already terminated, and register the lease so the wrapper's catch path
     // CAS-fails by task_id (unaffected by a fresh retry on the same asset).
-    const ownerId = await fs.pendingTasks.getOwner(projectSlug, assetId, taskId);
+    const ownerId = await fs.jobs.pending.getOwner(projectSlug, assetId, taskId);
     if (!ownerId) {
       // The row was already removed by a fail/delete or a stale duplicate
       // dispatch. Either way the task is no longer ours to complete.
@@ -40,19 +40,19 @@ export function registerCompleteKieTaskJob(fs: VideocityFs): void {
     ctx.setLease({ kind: "task", taskId });
 
     // Resolve the asset directory at runtime so renames don't break completion.
-    const assetDirResult = await fs.resolveAssetDir(assetId, projectSlug);
+    const assetDirResult = await fs.workspaces.resolveArtifact(assetId, projectSlug);
     if (!assetDirResult.ok) {
-      await fs.pendingTasks.delete(projectSlug, assetId, taskId);
+      await fs.jobs.pending.delete(projectSlug, assetId, taskId);
       return { success: true, skipped: true };
     }
     const assetDir = assetDirResult.value;
 
     const lockState = taskType === "isolate_vocals" ? "isolating" : "generating";
-    const lockResult = await fs.acquireLock(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: lockState } });
+    const lockResult = await fs.jobs.locks.acquire(assetDir, { durationMs: LOCK_DURATION_MS, data: { state: lockState } });
     if (!lockResult.ok) {
       // LOCKED means another completion job for this same asset is already
       // running (sync can enqueue duplicates between polls because
-      // .kie-task.json isn't cleared until the completion job finishes).
+      // the provider task remains pending until the completion job finishes).
       // Treat as a no-op — the other job will finish the work.
       if (lockResult.error.code === "LOCKED") {
         return { success: true, skipped: true };
@@ -62,9 +62,11 @@ export function registerCompleteKieTaskJob(fs: VideocityFs): void {
 
     // Renew the provider lease while we work — covers downloads + processing.
     const heartbeat = setInterval(() => {
-      void fs.assetWork
-        .renew(projectSlug, assetId, ownerId, 60_000)
-        .catch((e) => console.warn(`[heartbeat] renew failed for ${assetId}:`, e));
+      try {
+        fs.jobs.artifactWork.renew(projectSlug, assetId, ownerId, 60_000);
+      } catch (error) {
+        console.warn(`[heartbeat] renew failed for ${assetId}:`, error);
+      }
     }, 20_000);
 
     try {
@@ -142,11 +144,11 @@ export function registerCompleteKieTaskJob(fs: VideocityFs): void {
         }
       }
 
-      await fs.pendingTasks.delete(projectSlug, assetId, taskId);
+      await fs.jobs.pending.delete(projectSlug, assetId, taskId);
       return { success: true };
     } finally {
       clearInterval(heartbeat);
-      await fs.releaseLock(assetDir);
+      await fs.jobs.locks.release(assetDir);
     }
   });
 }
@@ -176,7 +178,7 @@ function extractFalUrls(taskType: string, resultObject?: Record<string, unknown>
 }
 
 async function completeSeedreamImage(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -212,7 +214,7 @@ async function completeSeedreamImage(
 }
 
 async function completeSeedreamV5LiteImage(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -245,7 +247,7 @@ async function completeSeedreamV5LiteImage(
 }
 
 async function completeNanoBananaImage(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -291,7 +293,7 @@ async function completeNanoBananaImage(
 }
 
 async function completeWan27Image(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -325,7 +327,7 @@ async function completeWan27Image(
 }
 
 async function completeQwen2ImageEdit(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -363,7 +365,7 @@ async function completeQwen2ImageEdit(
 }
 
 async function completeKling30Video(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   assetDir: string,
   projectSlug: string,
@@ -404,7 +406,7 @@ async function completeKling30Video(
 }
 
 async function completeSeedance2Video(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   assetDir: string,
   projectSlug: string,
@@ -422,7 +424,7 @@ async function completeSeedance2Video(
     const frameResponse = await fetch(resultUrls[1]);
     if (frameResponse.ok) {
       const frameBuffer = Buffer.from(await frameResponse.arrayBuffer());
-      await fs.writeFile(assetId, "last_frame.png", frameBuffer, projectSlug);
+      await fs.files.write(assetId, "last_frame.png", frameBuffer, projectSlug);
     }
   }
 
@@ -444,7 +446,7 @@ async function completeSeedance2Video(
 
   // Persist Kie taskId for future operations
   if (taskId !== undefined) {
-    await fs.writeMetadata(assetId, "kie-task-id", { taskId }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId }, projectSlug);
   }
 
   // When the caller asked us to splice a specific audio over the seedance
@@ -455,7 +457,7 @@ async function completeSeedance2Video(
   // VIDEO and seedance completion can no longer drop the audio replacement.
   const replaceAudioWith = meta.replaceAudioWith as { assetId: string; filename: string } | undefined;
   if (replaceAudioWith) {
-    const audioManifest = await fs.getManifest(replaceAudioWith.assetId, projectSlug, { includeDotfiles: true });
+    const audioManifest = await fs.files.manifest(replaceAudioWith.assetId, projectSlug, { includeDotfiles: true });
     if (!audioManifest.ok) {
       throw new Error(`replaceAudioWith asset not found: ${audioManifest.error.message}`);
     }
@@ -487,7 +489,7 @@ async function completeSeedance2Video(
 }
 
 async function completeWan27Video(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   assetDir: string,
   projectSlug: string,
@@ -519,7 +521,7 @@ async function completeWan27Video(
   const videoPath = join(assetDir, "original.mp4");
 
   if (taskId !== undefined) {
-    await fs.writeMetadata(assetId, "kie-task-id", { taskId }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId }, projectSlug);
   }
 
   const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -534,7 +536,7 @@ async function completeWan27Video(
 }
 
 async function completeVolcengineLipSyncVideo(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   assetDir: string,
   projectSlug: string,
@@ -560,7 +562,7 @@ async function completeVolcengineLipSyncVideo(
   const videoPath = join(assetDir, "original.mp4");
 
   if (taskId !== undefined) {
-    await fs.writeMetadata(assetId, "kie-task-id", { taskId }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId }, projectSlug);
   }
 
   const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -575,7 +577,7 @@ async function completeVolcengineLipSyncVideo(
 }
 
 async function completeOmnihumanVideo(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   assetDir: string,
   projectSlug: string,
@@ -602,7 +604,7 @@ async function completeOmnihumanVideo(
   const videoPath = join(assetDir, "original.mp4");
 
   if (taskId !== undefined) {
-    await fs.writeMetadata(assetId, "kie-task-id", { taskId }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId }, projectSlug);
   }
 
   const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -617,7 +619,7 @@ async function completeOmnihumanVideo(
 }
 
 async function completeGrokImagineVideo(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   assetDir: string,
   projectSlug: string,
@@ -655,12 +657,12 @@ async function completeGrokImagineVideo(
 
   // Persist Kie taskId for future extend operations
   if (taskId !== undefined && !taskType.startsWith("xai_")) {
-    await fs.writeMetadata(assetId, "kie-task-id", { taskId }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId }, projectSlug);
   }
 
   const replaceAudioWith = meta.replaceAudioWith as { assetId: string; filename: string } | undefined;
   if (replaceAudioWith) {
-    const audioManifest = await fs.getManifest(replaceAudioWith.assetId, projectSlug, { includeDotfiles: true });
+    const audioManifest = await fs.files.manifest(replaceAudioWith.assetId, projectSlug, { includeDotfiles: true });
     if (!audioManifest.ok) {
       throw new Error(`replaceAudioWith asset not found: ${audioManifest.error.message}`);
     }
@@ -692,7 +694,7 @@ async function completeGrokImagineVideo(
 }
 
 async function completeGrokImagineImage(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -722,7 +724,7 @@ async function completeGrokImagineImage(
 }
 
 async function completeGptImage(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -755,7 +757,7 @@ async function completeGptImage(
 }
 
 async function completeIsolateVocals(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -788,12 +790,12 @@ async function completeIsolateVocals(
 
   if (isAudioAsset) {
     // Audio assets: write mix.mp3 and .mix.json
-    await fs.writeFile(assetId, "mix.mp3", vocalsBuffer, projectSlug);
+    await fs.files.write(assetId, "mix.mp3", vocalsBuffer, projectSlug);
     const mixSettings = { volume: 100, fadeIn: 0, fadeOut: 0 };
-    await fs.writeFile(assetId, ".mix.json", JSON.stringify(mixSettings, null, 2), projectSlug);
+    await fs.files.write(assetId, ".mix.json", JSON.stringify(mixSettings, null, 2), projectSlug);
   } else {
     // Video assets: write audio_vocals.mp3
-    await fs.writeFile(assetId, "audio_vocals.mp3", vocalsBuffer, projectSlug);
+    await fs.files.write(assetId, "audio_vocals.mp3", vocalsBuffer, projectSlug);
 
     // Optionally write background audio if a second URL exists
     if (resultUrls[1]) {
@@ -812,12 +814,12 @@ async function completeIsolateVocals(
             await unlink(tmpBgOut).catch(() => {});
           }
         }
-        await fs.writeFile(assetId, "audio_background.mp3", bgBuffer, projectSlug);
+        await fs.files.write(assetId, "audio_background.mp3", bgBuffer, projectSlug);
       }
     }
   }
 
-  await fs.commitOperation("isolate_vocals", assetId, { mode: "cloud" }, projectSlug);
+  await fs.history.recordOperation("isolate_vocals", assetId, { mode: "cloud" }, projectSlug);
 }
 
 function extensionFromUrl(url: string, fallback: string): string {
@@ -832,17 +834,17 @@ function extensionFromUrl(url: string, fallback: string): string {
 }
 
 async function readPayloadModel(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<string | undefined> {
-  const result = await fs.readMetadata<{ model?: string }>(assetId, "generation-payload", projectSlug);
+  const result = await fs.metadata.artifacts.read<{ model?: string }>(assetId, "generation-payload", projectSlug);
   if (!result.ok) return undefined;
   return typeof result.value.model === "string" ? result.value.model : undefined;
 }
 
 async function completeAlibabaVideo(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   assetDir: string,
   projectSlug: string,
@@ -869,7 +871,7 @@ async function completeAlibabaVideo(
   };
 
   if (taskId !== undefined) {
-    await fs.writeMetadata(assetId, "alibaba-task-id", { taskId }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "alibaba-task-id", { taskId }, projectSlug);
   }
 
   const videoPath = join(assetDir, "original.mp4");
@@ -885,7 +887,7 @@ async function completeAlibabaVideo(
 }
 
 async function completeAlibabaQwenImage(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,
@@ -930,7 +932,7 @@ async function completeAlibabaQwenImage(
 }
 
 async function completeHappyHorseVideo(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   assetDir: string,
   projectSlug: string,
@@ -966,7 +968,7 @@ async function completeHappyHorseVideo(
   const videoPath = join(assetDir, "original.mp4");
 
   if (taskId !== undefined) {
-    await fs.writeMetadata(assetId, "kie-task-id", { taskId }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "kie-task-id", { taskId }, projectSlug);
   }
 
   const jobId = `process-video-${assetId}-${Date.now()}`;
@@ -981,7 +983,7 @@ async function completeHappyHorseVideo(
 }
 
 async function completeAlibabaImage(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   meta: Record<string, unknown>,

@@ -1,7 +1,7 @@
 /**
  * Video model registry, schemas, validation, and routing prompt.
  */
-import type { ResolvedAsset } from "videobook-engine";
+import type { ResolvedArtifact } from "videobook-engine";
 import {
   GrokImageToVideoRequestSchema,
   GrokTextToVideoRequestSchema,
@@ -2089,7 +2089,7 @@ function buildModelOption(
   modelKey: string,
   modelInfo: VideoModelInfo,
   baseParams: Record<string, unknown>,
-  resolvedAssets: ResolvedAsset[],
+  resolvedAssets: ResolvedArtifact[],
   historyEntries?: ActionLogEntry[],
   providerOverride?: string,
   projectAssetTags?: Set<string>,
@@ -2125,7 +2125,7 @@ function buildModelOption(
   if (selectedProvider === "fal") {
     const imageSlugCount = Array.isArray(baseParams.image_slugs)
       ? (baseParams.image_slugs as unknown[]).length
-      : resolvedAssets.filter((a) => a.asset_type === "image" && a.file_path).length
+      : resolvedAssets.filter((a) => a.artifactType === "image" && a.filePath).length
         || (typeof baseParams.first_frame_slug === "string" && baseParams.first_frame_slug !== "" ? 1 : 0);
     const falName = resolveFalVideoToolName(modelInfo, imageSlugCount);
     if (falName) effectiveToolName = falName;
@@ -2149,7 +2149,7 @@ function buildModelOption(
 
   // Fill image_slugs from resolved assets
   const imageTags = resolvedAssets
-    .filter((a) => a.asset_type === "image" && a.file_path)
+    .filter((a) => a.artifactType === "image" && a.filePath)
     .map((a) => a.tag);
   params.image_slugs = imageTags.length > 0 ? imageTags : [];
 
@@ -2178,7 +2178,7 @@ function buildModelOption(
     || toolName === "generate_kie_gemini_omni_video"
     || canonicalToolName === "generate_kie_gemini_omni_video"
   ) {
-    const videoAssets = resolvedAssets.filter((a) => a.asset_type === "video");
+    const videoAssets = resolvedAssets.filter((a) => a.artifactType === "video");
     if (videoAssets.length > 0) {
       params.video_slug = videoAssets[0].tag;
     }
@@ -2186,7 +2186,7 @@ function buildModelOption(
 
   // For Alibaba video, prefill first_frame_slug from image assets
   if (toolName === "generate_alibaba_wan_2_7_video" || canonicalToolName === "generate_alibaba_wan_2_7_video") {
-    const imageAssets = resolvedAssets.filter((a) => a.asset_type === "image" && a.file_path);
+    const imageAssets = resolvedAssets.filter((a) => a.artifactType === "image" && a.filePath);
     if (imageAssets.length > 0) {
       params.first_frame_slug ??= imageAssets[0].tag;
     }
@@ -2195,11 +2195,11 @@ function buildModelOption(
   // For OmniHuman, prefill the portrait from image assets and the driving
   // track from audio assets so the panel is immediately runnable.
   if (toolName === "generate_kie_omnihuman_1_5_video" || canonicalToolName === "generate_kie_omnihuman_1_5_video") {
-    const imageAssets = resolvedAssets.filter((a) => a.asset_type === "image" && a.file_path);
+    const imageAssets = resolvedAssets.filter((a) => a.artifactType === "image" && a.filePath);
     if (imageAssets.length > 0) {
       params.image_slug ??= imageAssets[0].tag;
     }
-    const audioAssets = resolvedAssets.filter((a) => a.asset_type === "audio");
+    const audioAssets = resolvedAssets.filter((a) => a.artifactType === "audio");
     if (audioAssets.length > 0) {
       params.audio_slug ??= audioAssets[0].tag;
     }

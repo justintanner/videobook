@@ -1,6 +1,6 @@
 import type { OsgPosition } from '@/components/center-stage/render-settings-types';
 
-export type AssetType = 'video' | 'image' | 'script' | 'audio' | 'notebook' | 'final' | 'character';
+export type ArtifactKind = 'video' | 'image' | 'script' | 'audio' | 'notebook' | 'final' | 'character';
 
 /** Resolved on-screen graphic overlay summary for a video/final asset. `src` is
  *  the overlay image's displayable URL, resolved client-side from `assetId`. */
@@ -45,11 +45,11 @@ export type ClipState =
   | 'ready';
 
 // Compile-time guard that this client mirror stays in sync with the engine's
-// `AssetStatus` union. The fs package is server-only at runtime (pulls
+// `ArtifactStatus` union. The fs package is server-only at runtime (pulls
 // better-sqlite3), but `import type` is erased by the bundler so the client
 // build is unaffected. If a status is added on either side without the other,
 // one of these assignments fails to compile.
-import type { AssetStatus as EngineAssetStatus } from 'videobook-engine';
+import type { ArtifactStatus as EngineAssetStatus } from 'videobook-engine';
 const _clientToEngine: EngineAssetStatus = '' as ClipState;
 const _engineToClient: ClipState = '' as EngineAssetStatus;
 void _clientToEngine;
@@ -57,7 +57,7 @@ void _engineToClient;
 
 export interface MediaItem {
   id: string;
-  type: AssetType;
+  type: ArtifactKind;
   slug: string;
   title: string;
   status?: ClipState;

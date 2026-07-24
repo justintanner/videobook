@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
@@ -38,7 +38,7 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   };
 }
 
-export function renderVideoDef(fs: VideocityFs): ToolDef {
+export function renderVideoDef(fs: Engine): ToolDef {
   return {
     name: "render_video",
     description:
@@ -299,7 +299,7 @@ export function renderVideoDef(fs: VideocityFs): ToolDef {
         ? [explicitOrientation]
         : ALL_ORIENTATIONS;
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -327,7 +327,7 @@ export function renderVideoDef(fs: VideocityFs): ToolDef {
             content: [{ type: "text" as const, text: "osg_asset_id must start with img-" }],
           };
         }
-        const osgManifest = await fs.getManifest(osg_asset_id, project_slug);
+        const osgManifest = await fs.files.manifest(osg_asset_id, project_slug);
         if (!osgManifest.ok) {
           return {
             isError: true as const,
@@ -351,7 +351,7 @@ export function renderVideoDef(fs: VideocityFs): ToolDef {
       // which beginAssetWork refuses to lease — and enqueue never resets it.
       // An explicit render is a retry: clear the stale failure first so the
       // new jobs can claim the asset.
-      const clearResult = await fs.generationErrors.clear(project_slug, asset_id);
+      const clearResult = await fs.jobs.failures.clear(project_slug, asset_id);
       if (!clearResult.ok) {
         console.warn(`[render] clearing stale generation error for ${asset_id} failed: ${clearResult.error.message}`);
       }
@@ -361,7 +361,7 @@ export function renderVideoDef(fs: VideocityFs): ToolDef {
       const jobs: Array<{ job_id: string; orientation: Orientation }> = [];
 
       for (const orientation of orientations) {
-        const storedResult = await fs.readMetadata<Record<string, unknown>>(
+        const storedResult = await fs.metadata.artifacts.read<Record<string, unknown>>(
           asset_id,
           `${orientation}.render`,
           project_slug,
@@ -433,7 +433,7 @@ export function renderVideoDef(fs: VideocityFs): ToolDef {
       let savedOrientation: Orientation | undefined;
       if (explicitOrientation) {
         try {
-          const timelineResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
+          const timelineResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
           let config: TimelineConfig;
           if (timelineResult.ok) {
             config = normalizeConfig(timelineResult.value);
@@ -446,7 +446,7 @@ export function renderVideoDef(fs: VideocityFs): ToolDef {
             }
           }
           config.render = explicitOrientation;
-          await fs.writeProjectMeta("timeline", config, project_slug);
+          await fs.metadata.projects.write("timeline", config, project_slug);
           savedOrientation = explicitOrientation;
         } catch (err) {
           console.warn("Persisting timeline orientation failed (non-fatal):", err);

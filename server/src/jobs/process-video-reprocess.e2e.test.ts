@@ -6,8 +6,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
-import { queue, getProjectsDir } from "../queue.js";
-import { createFsForTest } from "../fs.js";
+import { queue, getEngineRoot } from "../queue.js";
+import { createEngineForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -89,9 +89,12 @@ describe("process_video force re-process tolerates byte-identical original.mp3",
       name: "upload_file",
       arguments: { project_slug: PROJECT, filename: "original.mp4", data },
     });
-    const parsed = parse(uploaded) as unknown as { assetId: string };
+    const parsed = parse(uploaded) as unknown as {
+      assetId: string;
+      path: string;
+    };
     assetId = parsed.assetId;
-    assetDir = join(tempDir, PROJECT, assetId);
+    assetDir = parsed.path;
 
     // First process_video (via upload) writes + commits original.mp3.
     await pollForFile(join(assetDir, "original.mp3"), 60_000);
@@ -125,8 +128,8 @@ describe("process_video force re-process tolerates byte-identical original.mp3",
     const after = await readFile(join(assetDir, "original.mp3"));
     expect(after.equals(before)).toBe(true);
 
-    const fs = createFsForTest(getProjectsDir());
-    const read = await fs.readFile(assetId, "original.mp3", PROJECT);
+    const fs = createEngineForTest(getEngineRoot());
+    const read = await fs.files.read(assetId, "original.mp3", PROJECT);
     expect(read.ok).toBe(true);
   });
 
@@ -134,13 +137,13 @@ describe("process_video force re-process tolerates byte-identical original.mp3",
     const audioOnlyPath = join(tempDir, "audio-only.mp4");
     await generateAudioOnlyMp4(audioOnlyPath);
 
-    const fs = createFsForTest(getProjectsDir());
-    const created = await fs.createAsset("vid", "audio-only", PROJECT);
+    const fs = createEngineForTest(getEngineRoot());
+    const created = await fs.artifacts.create("vid", "audio-only", PROJECT);
     expect(created.ok).toBe(true);
     if (!created.ok) return;
 
-    const written = await fs.writeFile(
-      created.value.assetId,
+    const written = await fs.files.write(
+      created.value.slug,
       "original.mp4",
       await readFile(audioOnlyPath),
       PROJECT,
@@ -149,16 +152,16 @@ describe("process_video force re-process tolerates byte-identical original.mp3",
     if (!written.ok) return;
 
     await expect(queue.enqueueAndWait(
-      `process-video-audio-only-${created.value.assetId}`,
+      `process-video-audio-only-${created.value.slug}`,
       {
         type: "process_video",
         videoPath: join(created.value.path, "original.mp4"),
-        assetId: created.value.assetId,
+        assetId: created.value.slug,
         assetDir: created.value.path,
         projectSlug: PROJECT,
         provenance: { origin: "test-audio-only" },
         skipDownstreamJobs: true,
       } as unknown as Parameters<typeof queue.enqueueAndWait>[1],
-    )).rejects.toThrow(`process_video requires a video stream: ${created.value.assetId}`);
+    )).rejects.toThrow(`process_video requires a video stream: ${created.value.slug}`);
   });
 });

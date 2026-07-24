@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import type { GrokImagineResolution, GrokVideoExtendRequest, MediaGenerationRequest } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { registerJobHandler } from "../queue.js";
@@ -15,7 +15,7 @@ type ExtendGrokImagineVideoPayload = {
   extend_times?: GrokVideoExtendRequest["input"]["extend_times"];
 };
 
-export function registerExtendGrokImagineVideoJob(fs: VideocityFs): void {
+export function registerExtendGrokImagineVideoJob(fs: Engine): void {
   registerJobHandler("extend_grok_imagine_video", async (payload, ctx) => {
     const {
       sourceVideoId, vidAssetId, vidAssetDir,
@@ -24,7 +24,7 @@ export function registerExtendGrokImagineVideoJob(fs: VideocityFs): void {
 
     requireApiKey("KIE_API_KEY");
 
-    const kieTaskIdResult = await fs.readMetadata<{ taskId: string }>(sourceVideoId, "kie-task-id", projectSlug);
+    const kieTaskIdResult = await fs.metadata.artifacts.read<{ taskId: string }>(sourceVideoId, "kie-task-id", projectSlug);
     if (!kieTaskIdResult.ok) {
       throw new Error(`No Kie taskId found for source video ${sourceVideoId}. The source video must have been generated via Kie.`);
     }
@@ -38,7 +38,7 @@ export function registerExtendGrokImagineVideoJob(fs: VideocityFs): void {
     // resolution as a top-level hint (mirrors veo3's top-level `duration` hint;
     // kie's createTask ignores unknown top-level fields), defaulting to the
     // grok-imagine default when the source predates resolution metadata.
-    const sourcePayloadResult = await fs.readMetadata<{ input?: { resolution?: GrokImagineResolution } }>(
+    const sourcePayloadResult = await fs.metadata.artifacts.read<{ input?: { resolution?: GrokImagineResolution } }>(
       sourceVideoId, "generation-payload", projectSlug,
     );
     const resolution: GrokImagineResolution =

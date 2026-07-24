@@ -1,3 +1,4 @@
+import type { Engine } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 import { readWatermarkConfig, setAuthenticatedHandle } from "../watermark-config.js";
 import { fetchAuthenticatedXHandle } from "../x/authenticated-handle.js";
@@ -10,17 +11,17 @@ import { fetchAuthenticatedXHandle } from "../x/authenticated-handle.js";
  * live and update the cache on success; on any failure we fall back to the last
  * cached value (null on first-ever call).
  */
-export function getWatermarkConfigDef(): ToolDef {
+export function getWatermarkConfigDef(fs: Engine): ToolDef {
   return {
     name: "get_watermark_config",
     description:
       "Read the saved watermark X-handle preferences: { savedHandle, recent, authenticatedHandle }. Used to pre-fill the /watermark dialog.",
     schema: {},
     handler: async () => {
-      const cached = await readWatermarkConfig();
-      const live = await fetchAuthenticatedXHandle();
+      const cached = await readWatermarkConfig(fs);
+      const live = await fetchAuthenticatedXHandle(fs);
       const authenticatedHandle = live !== null
-        ? (await setAuthenticatedHandle(live)).authenticatedHandle
+        ? (await setAuthenticatedHandle(live, fs)).authenticatedHandle
         : cached.authenticatedHandle;
       const config = { ...cached, authenticatedHandle };
       return {

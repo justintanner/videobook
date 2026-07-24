@@ -18,7 +18,7 @@ export function usePublishGoogleFlowCharacter(
     options?: {
       personalityNotes?: string
       voiceId?: string
-      /** Existing .character.json text (for merge after publish) */
+      /** Existing character metadata text (for merge after publish) */
       existingMetadata?: string
     },
   ) => {
@@ -70,7 +70,7 @@ export function usePublishGoogleFlowCharacter(
       }
 
       // Persist the Google Flow ref on the local char-* asset so re-publish
-      // and notebook refs can reuse it. Only char-* has .character.json.
+      // and notebook refs can reuse it.
       const charId = assetId.replace(/^@/, '')
       if (characterRef && charId.startsWith('char-')) {
         const merged = {
@@ -88,7 +88,7 @@ export function usePublishGoogleFlowCharacter(
           const metaMsg = (metaResult.content as Array<{ type: string; text: string }>)?.[0]?.text
           toast({
             title: 'Published, but metadata save failed',
-            description: metaMsg ?? 'Could not write .character.json',
+            description: metaMsg ?? 'Could not write character metadata',
             duration: 5000,
           })
         }

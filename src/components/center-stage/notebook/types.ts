@@ -29,15 +29,8 @@ export interface NotebookPlanDefinition {
   sequence: NotebookPlanStep[]
 }
 
-export interface NotebookPlanSidecar {
-  format: 'notebook'
-  schema_version: typeof NOTEBOOK_SCHEMA_VERSION
-  definition: NotebookPlanDefinition
-}
-
 export interface NotebookPlanResponse {
   exists: boolean
-  legacy?: boolean
   definition: NotebookPlanDefinition
 }
 

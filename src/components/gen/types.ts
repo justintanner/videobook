@@ -80,7 +80,7 @@ export interface DynamicGenerationPreview {
   selected_model: string;
   selected_provider?: string;
   model_options: ModelOption[];
-  resolved_assets?: ResolvedAsset[];
+  resolved_assets?: ResolvedArtifact[];
 }
 
 export interface FullPreviewResponse extends DynamicGenerationPreview {
@@ -96,7 +96,7 @@ export interface FullPreviewResponse extends DynamicGenerationPreview {
   };
 }
 
-export interface ResolvedAsset {
+export interface ResolvedArtifact {
   slug: string;
   src: string;
   thumbnailSrc?: string | null;

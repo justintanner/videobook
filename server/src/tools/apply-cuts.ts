@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -41,7 +41,7 @@ function validateCuts(
   return { ok: true, sorted };
 }
 
-export function applyCutsDef(fs: VideocityFs): ToolDef {
+export function applyCutsDef(fs: Engine): ToolDef {
   return {
     name: "apply_cuts",
     description:
@@ -69,7 +69,7 @@ export function applyCutsDef(fs: VideocityFs): ToolDef {
       };
       const assetId = asset_id.replace(/^@/, "");
 
-      const manifestResult = await fs.getManifest(assetId, project_slug);
+      const manifestResult = await fs.files.manifest(assetId, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -85,7 +85,7 @@ export function applyCutsDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const metaResult = await fs.readMetadata<{ duration?: number; hasAudio?: boolean }>(
+      const metaResult = await fs.metadata.artifacts.read<{ duration?: number; hasAudio?: boolean }>(
         assetId, "original", project_slug,
       );
       const duration = metaResult.ok && typeof metaResult.value.duration === "number"

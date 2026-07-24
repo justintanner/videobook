@@ -1,10 +1,10 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createFs } from "videobook-engine";
+import { createEngine } from "videobook-engine";
 import { contentStoreFromEnvironment } from "./content-store.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_PROJECTS_DIR = resolve(__dirname, "../../projects");
+const DEFAULT_WORKSPACE_DIR = resolve(__dirname, "../../workspaces");
 const DEFAULT_DATA_DIR = resolve(__dirname, "../../data");
 
 export function environmentValue(
@@ -15,25 +15,54 @@ export function environmentValue(
   return normalized ? normalized : fallback;
 }
 
-export const PROJECTS_DIR = environmentValue(
-  process.env.VIDEOBOOK_PROJECTS_DIR,
-  DEFAULT_PROJECTS_DIR,
+export const WORKSPACE_DIR = environmentValue(
+  process.env.VIDEOBOOK_WORKSPACE_DIR,
+  DEFAULT_WORKSPACE_DIR,
 );
 export const DATA_DIR = environmentValue(
   process.env.VIDEOBOOK_DATA_DIR,
   DEFAULT_DATA_DIR,
 );
 const objectStore = contentStoreFromEnvironment();
-export const fs = createFs({
-  projectsDir: PROJECTS_DIR,
+export const fs = createEngine({
   dataDir: DATA_DIR,
-  ...(objectStore ? { objectStore } : {}),
+  workspaceDir: WORKSPACE_DIR,
+  ...(objectStore ? { remoteObjects: objectStore } : {}),
   objectPrefix: environmentValue(
     process.env.VIDEOBOOK_OBJECT_PREFIX,
     "superlzy-media/videobook/sha256",
   ),
+  ...(process.env.VIDEOBOOK_CATALOG_BACKUP_URL?.trim()
+    ? {
+        catalogBackup: {
+          name: environmentValue(
+            process.env.VIDEOBOOK_CATALOG_BACKUP_NAME,
+            "backup",
+          ),
+          url: process.env.VIDEOBOOK_CATALOG_BACKUP_URL.trim(),
+        },
+      }
+    : {}),
 });
 
-export function createFsForTest(projectsDir: string) {
-  return createFs({ projectsDir, dataDir: `${projectsDir}.data` });
+const testEngines = new Map<string, ReturnType<typeof createEngine>>();
+
+export function createEngineForTest(rootDir: string) {
+  const normalizedRoot = resolve(rootDir);
+  const existing = testEngines.get(normalizedRoot);
+  if (existing) return existing;
+  const engine = createEngine({ rootDir: normalizedRoot });
+  testEngines.set(normalizedRoot, engine);
+  return engine;
+}
+
+export function closeEngineForTest(
+  rootDir: string,
+  engine: ReturnType<typeof createEngine>,
+): void {
+  const normalizedRoot = resolve(rootDir);
+  if (testEngines.get(normalizedRoot) === engine) {
+    testEngines.delete(normalizedRoot);
+  }
+  engine.close();
 }

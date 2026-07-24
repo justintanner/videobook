@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -31,7 +31,7 @@ function sourcePrefix(url: string): string {
   }
 }
 
-export function downloadVideoDef(fs: VideocityFs): ToolDef {
+export function downloadVideoDef(fs: Engine): ToolDef {
   return {
     name: "download_video",
     description: "Download a full video from a URL (YouTube, Twitter/X, etc.) into a videocity project as original.mp4. Supports requested range metadata and auto-exports 16:9 and 9:16 versions.",
@@ -75,7 +75,7 @@ export function downloadVideoDef(fs: VideocityFs): ToolDef {
       const prefix = sourcePrefix(normalizedUrl);
       const title = new URL(normalizedUrl).pathname.split("/").filter(Boolean).pop() ?? "video";
       const assetName = `${prefix} ${title}`;
-      const assetResult = await fs.createAsset("vid", assetName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", assetName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -83,7 +83,7 @@ export function downloadVideoDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId, path: assetDir } = assetResult.value;
+      const { slug: assetId, path: assetDir } = assetResult.value;
 
       const outputPath = join(assetDir, "original.mp4");
       const jobId = `download-${assetId}-${Date.now()}`;

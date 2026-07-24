@@ -6,7 +6,7 @@
  *
  * Only identity, labels, and image slot limits are configured here.
  */
-import type { ResolvedAsset } from "videobook-engine";
+import type { ResolvedArtifact } from "videobook-engine";
 import { createKie } from "@apicity/kie";
 import type { KieMediaModel, PayloadFieldSchema } from "@apicity/kie";
 import { canonicalCharacterId, totalImageReferenceSlots, GOOGLE_IMAGE_MAX_REFERENCE_SLOTS } from "./google-flow-refs.js";
@@ -835,7 +835,7 @@ function buildImageModelOption(
   modelKey: string,
   modelInfo: ImageModelInfo,
   baseParams: Record<string, unknown>,
-  resolvedAssets: ResolvedAsset[],
+  resolvedAssets: ResolvedArtifact[],
   historyEntries?: ActionLogEntry[],
   providerOverride?: string,
   projectAssetTags?: Set<string>,
@@ -863,7 +863,7 @@ function buildImageModelOption(
   }
 
   const imageTags = resolvedAssets
-    .filter((a) => a.asset_type === "image" && a.file_path)
+    .filter((a) => a.artifactType === "image" && a.filePath)
     .map((a) => a.tag);
   params.image_slugs = imageTags.length > 0 ? imageTags : [];
 

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import {
   mkdtemp,
   readFile as readNodeFile,
@@ -43,13 +43,13 @@ type RenderQrOutroPayload = {
 };
 
 async function stageAssetFile(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   ref: QrOutroAssetRef,
   bundleDir: string,
   stem: string,
 ): Promise<{ filename: string; path: string }> {
-  const read = await fs.readFile(ref.assetId, ref.filename, projectSlug);
+  const read = await fs.files.read(ref.assetId, ref.filename, projectSlug);
   if (!read.ok) {
     throw new Error(`Failed to read ${ref.assetId}/${ref.filename}: ${read.error.message}`);
   }
@@ -61,12 +61,12 @@ async function stageAssetFile(
 
 function assertWrite(
   operation: string,
-  result: Awaited<ReturnType<VideocityFs["writeFile"]>>,
+  result: Awaited<ReturnType<Engine["files"]["write"]>>,
 ): void {
   if (!result.ok) throw new Error(`${operation}: ${result.error.message}`);
 }
 
-export function registerRenderQrOutroJob(fs: VideocityFs): void {
+export function registerRenderQrOutroJob(fs: Engine): void {
   registerJobHandler("render_qr_outro", async (payload, ctx) => {
     ctx.signal.throwIfAborted();
     const {
@@ -80,7 +80,7 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
       includeAudio = true,
     } = payload as RenderQrOutroPayload;
 
-    const outputManifest = await fs.getManifest(assetId, projectSlug);
+    const outputManifest = await fs.files.manifest(assetId, projectSlug);
     if (!outputManifest.ok) {
       throw new Error(`Failed to resolve output asset: ${outputManifest.error.message}`);
     }
@@ -166,7 +166,7 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
           const output = await readNodeFile(tempOutputPath);
           assertWrite(
             `Failed to write ${assetId}/original.mp4`,
-            await fs.writeFile(assetId, "original.mp4", output, projectSlug),
+            await fs.files.write(assetId, "original.mp4", output, projectSlug),
           );
 
           const spec = buildOutroSpec(
@@ -191,7 +191,7 @@ export function registerRenderQrOutroJob(fs: VideocityFs): void {
             impact_frames: spec.impacts.map((impact) => impact.frame),
             rendered_at: new Date().toISOString(),
           };
-          const metadata = await fs.writeMetadata(
+          const metadata = await fs.metadata.artifacts.write(
             assetId,
             "qr-outro",
             provenance,

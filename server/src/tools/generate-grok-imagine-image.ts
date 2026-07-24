@@ -1,5 +1,5 @@
 import { modelSlug } from "@apicity/cost";
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { GrokImageToImageRequestSchema } from "@apicity/kie/zod";
 import { join, extname } from "node:path";
@@ -10,7 +10,7 @@ import { apicityField, apicityStringArrayField, apicityStringField } from "./sch
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
+function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -34,7 +34,7 @@ const generateGrokImagineImageSchema = {
 
 type Args = SchemaArgs<typeof generateGrokImagineImageSchema>;
 
-export function generateGrokImagineImageDef(fs: VideocityFs): ToolDef {
+export function generateGrokImagineImageDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_grok_imagine_image_to_image",
     description: "Generate an image from an image asset using Grok Imagine image-to-image. Creates a new img- asset and enqueues a background job. Requires at least one of asset_id or image_slugs.",
@@ -64,7 +64,7 @@ export function generateGrokImagineImageDef(fs: VideocityFs): ToolDef {
         return toolError(`asset_id must start with img-, got: ${asset_id}`);
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return toolError(manifestResult.error.message);
       }
@@ -77,12 +77,12 @@ export function generateGrokImagineImageDef(fs: VideocityFs): ToolDef {
 
       const imagePath = join(manifest.path, imageFile.name);
       const imgName = deriveImageName(asset_id);
-      const assetResult = await fs.createAsset("img", imgName, project_slug);
+      const assetResult = await fs.artifacts.create("img", imgName, project_slug);
       if (!assetResult.ok) {
         return toolError(`Failed to create image asset: ${assetResult.error.message}`);
       }
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("kie", "grok-imagine/text-to-image")}-${imgAssetId}-${Date.now()}`;
 

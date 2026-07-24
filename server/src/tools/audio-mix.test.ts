@@ -1,10 +1,11 @@
+import { createEngineForTest } from "../fs.js";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { createFs, findAudioFile, type VideocityFs } from "videobook-engine";
+import { findAudioFile, type Engine } from "videobook-engine";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { queue } from "../queue.js";
@@ -21,7 +22,7 @@ function parseResult(result: { content?: unknown }): Record<string, unknown> {
 
 describe("audio_mix tool", () => {
   let client: Client;
-  let fs: VideocityFs;
+  let fs: Engine;
   let tempDir: string;
   let targetAssetId: string;
   let layerAssetId: string;
@@ -43,22 +44,22 @@ describe("audio_mix tool", () => {
       layerFixture,
     ]);
 
-    fs = createFs({ projectsDir: tempDir });
-    const project = await fs.createProject(PROJECT_SLUG);
+    fs = createEngineForTest(tempDir);
+    const project = await fs.projects.create(PROJECT_SLUG);
     if (!project.ok) throw new Error(project.error.message);
-    const target = await fs.createAsset("aud", "target", PROJECT_SLUG);
-    const layer = await fs.createAsset("aud", "layer", PROJECT_SLUG);
+    const target = await fs.artifacts.create("aud", "target", PROJECT_SLUG);
+    const layer = await fs.artifacts.create("aud", "layer", PROJECT_SLUG);
     if (!target.ok) throw new Error(target.error.message);
     if (!layer.ok) throw new Error(layer.error.message);
-    targetAssetId = target.value.assetId;
-    layerAssetId = layer.value.assetId;
-    const targetWrite = await fs.writeFile(
+    targetAssetId = target.value.slug;
+    layerAssetId = layer.value.slug;
+    const targetWrite = await fs.files.write(
       targetAssetId,
       "original.wav",
       await readFile(targetFixture),
       PROJECT_SLUG,
     );
-    const layerWrite = await fs.writeFile(
+    const layerWrite = await fs.files.write(
       layerAssetId,
       "original.wav",
       await readFile(layerFixture),
@@ -94,7 +95,7 @@ describe("audio_mix tool", () => {
       volume: 30,
       status: "completed",
     });
-    const manifest = await fs.getManifest(targetAssetId, PROJECT_SLUG);
+    const manifest = await fs.files.manifest(targetAssetId, PROJECT_SLUG);
     if (!manifest.ok) throw new Error(manifest.error.message);
     const targetFile = findAudioFile(manifest.value.files, targetAssetId);
     expect(targetFile?.name).toBe("original.wav");
@@ -103,7 +104,7 @@ describe("audio_mix tool", () => {
     const probe = await probeVideo(join(manifest.value.path, "original.wav"));
     expect(probe.hasAudio).toBe(true);
     expect(probe.audioDuration).toBeCloseTo(2, 1);
-    const waveform = await fs.readAudioWaveform(targetAssetId, PROJECT_SLUG);
+    const waveform = await fs.metadata.waveforms.read(targetAssetId, PROJECT_SLUG);
     expect(waveform.ok).toBe(true);
   }, 30_000);
 

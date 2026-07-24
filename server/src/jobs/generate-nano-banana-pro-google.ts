@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { queue, registerJobHandler } from "../queue.js";
 import { contentHash } from "../upload.js";
 import { buildGoogleNbpImagePayload, type GoogleNbpImageArgs } from "../payload-builders.js";
@@ -48,7 +48,7 @@ function extensionForContentType(contentType: string | null): string {
   return "png";
 }
 
-export function registerGenerateNanoBananaProGoogleJob(fs: VideocityFs): void {
+export function registerGenerateNanoBananaProGoogleJob(fs: Engine): void {
   registerJobHandler("generate_nano_banana_pro_google", async (payload) => {
     const p = payload as GenerateNanoBananaProGooglePayload;
     // Unlike the kie/fal paths there is no async job to poll — the images
@@ -77,7 +77,7 @@ export function registerGenerateNanoBananaProGoogleJob(fs: VideocityFs): void {
         p.character_refs,
       ) as Record<string, unknown>,
     ) as GoogleFlowImagesRequest;
-    await fs.writeMetadata(p.imgAssetId, "generation-payload", request, p.projectSlug);
+    await fs.metadata.artifacts.write(p.imgAssetId, "generation-payload", request, p.projectSlug);
 
     const res = await callGoogleFlowWithCaptchaRetry(
       (body) => provider.v1.images(body as GoogleFlowImagesRequest),
@@ -92,7 +92,7 @@ export function registerGenerateNanoBananaProGoogleJob(fs: VideocityFs): void {
     }
     const ext = extensionForContentType(download.headers.get("content-type"));
     const buffer = Buffer.from(await download.arrayBuffer());
-    await fs.writeFile(p.imgAssetId, `original.${ext}`, buffer, p.projectSlug);
+    await fs.files.write(p.imgAssetId, `original.${ext}`, buffer, p.projectSlug);
 
     const provenance = {
       source_assets: p.sourceImageIds,

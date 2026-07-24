@@ -3,8 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { assessDialogQuality, readAndAssessDialog } from "./dialog-quality.js";
-import { createFsForTest } from "./fs.js";
-import type { VideocityFs } from "videobook-engine";
+import { createEngineForTest } from "./fs.js";
+import type { Engine } from "videobook-engine";
 
 describe("assessDialogQuality", () => {
   it("returns hasDialog=false with reason 'empty' for empty text", () => {
@@ -97,13 +97,13 @@ describe("assessDialogQuality", () => {
 });
 
 describe("readAndAssessDialog", () => {
-  let fs: VideocityFs;
+  let fs: Engine;
   let tempDir: string;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-dialog-test-"));
-    fs = createFsForTest(tempDir);
-    await fs.createProject("test-proj");
+    fs = createEngineForTest(tempDir);
+    await fs.projects.create("test-proj");
   });
 
   afterEach(async () => {
@@ -111,12 +111,12 @@ describe("readAndAssessDialog", () => {
   });
 
   it("returns real dialog quality for valid transcription file", async () => {
-    const assetResult = await fs.createAsset("vid", "dialog-asset", "test-proj");
+    const assetResult = await fs.artifacts.create("vid", "dialog-asset", "test-proj");
     if (!assetResult.ok) throw new Error(assetResult.error.message);
-    const assetId = assetResult.value.assetId;
+    const assetId = assetResult.value.slug;
 
     const transcription = JSON.stringify({ text: "The quick brown fox jumps over the lazy dog" });
-    await fs.writeFile(assetId, ".analysis.gpt4otrans.json", transcription, "test-proj");
+    await fs.files.write(assetId, ".analysis.gpt4otrans.json", transcription, "test-proj");
 
     const result = await readAndAssessDialog(fs, assetId, "test-proj");
     expect(result.hasDialog).toBe(true);
@@ -125,9 +125,9 @@ describe("readAndAssessDialog", () => {
   });
 
   it("returns no_transcription for nonexistent transcription file", async () => {
-    const assetResult = await fs.createAsset("vid", "no-trans", "test-proj");
+    const assetResult = await fs.artifacts.create("vid", "no-trans", "test-proj");
     if (!assetResult.ok) throw new Error(assetResult.error.message);
-    const assetId = assetResult.value.assetId;
+    const assetId = assetResult.value.slug;
 
     const result = await readAndAssessDialog(fs, assetId, "test-proj");
     expect(result.hasDialog).toBe(false);
@@ -137,11 +137,11 @@ describe("readAndAssessDialog", () => {
   });
 
   it("returns no_transcription for invalid JSON in transcription file", async () => {
-    const assetResult = await fs.createAsset("vid", "bad-json", "test-proj");
+    const assetResult = await fs.artifacts.create("vid", "bad-json", "test-proj");
     if (!assetResult.ok) throw new Error(assetResult.error.message);
-    const assetId = assetResult.value.assetId;
+    const assetId = assetResult.value.slug;
 
-    await fs.writeFile(assetId, ".analysis.gpt4otrans.json", "not valid json {{{", "test-proj");
+    await fs.files.write(assetId, ".analysis.gpt4otrans.json", "not valid json {{{", "test-proj");
 
     const result = await readAndAssessDialog(fs, assetId, "test-proj");
     expect(result.hasDialog).toBe(false);

@@ -1,10 +1,11 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { join, basename } from "node:path";
 import { createElevenLabs } from "@apicity/elevenlabs";
 import { registerJobHandler, queue } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { probeVideo, runFfmpeg, AUDIO_OPTS } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
 const LOCK_DURATION_MS = 1_800_000;
 // Tail fade as a click-suppressor in case a cue ends on a transient.
@@ -14,7 +15,6 @@ const STALE_DERIVATIVES = [
   ".original.analysis.json",
   ".analysis.gpt4otrans.json",
   "elevenlabs.json",
-  ".kie-task.json",
   ".suggest-sfx.json",
 ];
 
@@ -38,7 +38,7 @@ type ApplySfxPayload = {
 
 async function generateAndWriteSfx(
   provider: ReturnType<typeof createElevenLabs>,
-  fs: VideocityFs,
+  fs: Engine,
   entry: SfxEntry,
   index: number,
   assetId: string,
@@ -51,7 +51,7 @@ async function generateAndWriteSfx(
     prompt_influence: 0.75,
   });
   const filename = `original.sfx.${index}.mp3`;
-  const writeResult = await fs.writeFile(assetId, filename, Buffer.from(audio), projectSlug);
+  const writeResult = await fs.files.write(assetId, filename, Buffer.from(audio), projectSlug);
   if (!writeResult.ok) throw new Error(`SFX ${index} write failed: ${writeResult.error.message}`);
   return filename;
 }
@@ -120,7 +120,7 @@ export async function mixSfxIntoVideo(
   await runFfmpeg(ffmpegArgs, { signal });
 }
 
-export function registerApplySfxJob(fs: VideocityFs): void {
+export function registerApplySfxJob(fs: Engine): void {
   registerJobHandler("apply_sfx", async (payload, ctx) => {
     const {
       videoPath, outputPath, sfx,
@@ -153,15 +153,19 @@ export function registerApplySfxJob(fs: VideocityFs): void {
       );
 
       const inputFilename = basename(videoPath);
-      const outputFilename = basename(outputPath);
-      await fs.deleteFile(assetId, inputFilename, projectSlug);
-      await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
+      await replaceArtifactFileFromPath(
+        fs,
+        projectSlug,
+        assetId,
+        inputFilename,
+        outputPath,
+      );
 
       for (const fn of generatedFilenames) {
-        await fs.deleteFile(assetId, fn, projectSlug).catch(() => {});
+        await fs.files.delete(assetId, fn, projectSlug).catch(() => {});
       }
       for (const stale of STALE_DERIVATIVES) {
-        await fs.deleteFile(assetId, stale, projectSlug);
+        await fs.files.delete(assetId, stale, projectSlug);
       }
 
       const newVideoPath = join(assetDir, inputFilename);

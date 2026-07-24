@@ -1,9 +1,9 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createFs } from "videobook-engine";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import {
   slugifyName,
@@ -606,7 +606,7 @@ describe("rename_all tool", () => {
     expect(slots[0]?.slug).toBe("img-sunset-beach");
   });
 
-  it("apply rewrites notebook @-references, bare output ids, and the markdown mirror", async () => {
+  it("apply rewrites normalized notebook @-references and bare output ids", async () => {
     const data = Buffer.from("fake-png").toString("base64");
     const upload = await client.callTool({
       name: "upload_file",
@@ -626,20 +626,18 @@ describe("rename_all tool", () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
-    const fsObj = createFs({ projectsDir: tempDir });
-    const asset = await fsObj.createAsset("nb", "main", "test-proj");
-    const notebookDir = join(tempDir, "test-proj", asset.value.assetId);
-    await writeFile(join(notebookDir, ".notebook.json"), JSON.stringify({
-      format: "notebook",
-      schema_version: 1,
-      definition: {
-        properties: {},
-        sequence: [{
+    const fsObj = createEngineForTest(tempDir);
+    const notebook = await fsObj.notebooks.create("Main", "test-proj");
+    expect(notebook.ok).toBe(true);
+    if (!notebook.ok) return;
+    const saved = await fsObj.notebooks.write({
+      ...notebook.value,
+      cells: [{
           id: "image-1",
-          componentType: "task",
           type: "image",
-          name: "Key frame",
-          properties: {
+          title: "Key frame",
+          position: { x: 0, y: 0 },
+          inputs: {
             model: "nano-banana-pro",
             values: {
               prompt: `Match the lighting of @${assetId} exactly.`,
@@ -651,14 +649,19 @@ describe("rename_all tool", () => {
           },
         }, {
           id: "asset-source",
-          componentType: "task",
           type: "asset",
-          name: "Source",
-          properties: { slug: `@${assetId}` },
+          title: "Source",
+          position: { x: 320, y: 0 },
+          inputs: { slug: `@${assetId}` },
         }],
-      },
-    }, null, 2));
-    await writeFile(join(notebookDir, "index.md"), "stale index");
+      edges: [{
+        id: "asset-source:image-1",
+        source: "asset-source",
+        target: "image-1",
+        targetInput: "input-0",
+      }],
+    }, "test-proj");
+    expect(saved.ok).toBe(true);
 
     const result = await client.callTool({
       name: "rename_all",
@@ -671,20 +674,19 @@ describe("rename_all tool", () => {
 
     expect(result.isError).toBeFalsy();
     const renamed = "img-sunset-beach";
-    const sidecar = JSON.parse(await readFile(join(notebookDir, ".notebook.json"), "utf8")) as {
-      definition: {
-        sequence: Array<{ properties: { values?: Record<string, unknown>; asset_ids?: string[]; slug?: string } }>;
-      };
+    const updated = fsObj.notebooks.read(notebook.value.id, "test-proj");
+    expect(updated.ok).toBe(true);
+    if (!updated.ok) return;
+    const imageInputs = updated.value.cells[0].inputs as {
+      values: Record<string, unknown>;
+      asset_ids: string[];
     };
-    expect(sidecar.definition.sequence[0].properties.values.image_slugs).toEqual([`@${renamed}`]);
-    expect(sidecar.definition.sequence[0].properties.values.first_frame_slug).toBe(`@${renamed}`);
-    expect(sidecar.definition.sequence[0].properties.asset_ids).toEqual([renamed]);
-    expect(sidecar.definition.sequence[0].properties.values.prompt).toBe(
+    expect(imageInputs.values.image_slugs).toEqual([`@${renamed}`]);
+    expect(imageInputs.values.first_frame_slug).toBe(`@${renamed}`);
+    expect(imageInputs.asset_ids).toEqual([renamed]);
+    expect(imageInputs.values.prompt).toBe(
       `Match the lighting of @${renamed} exactly.`,
     );
-    expect(sidecar.definition.sequence[1].properties.slug).toBe(`@${renamed}`);
-    const markdown = await readFile(join(notebookDir, "index.md"), "utf8");
-    expect(markdown).toContain(`@${renamed}`);
-    expect(markdown).not.toContain(assetId);
+    expect(updated.value.cells[1].inputs?.slug).toBe(`@${renamed}`);
   });
 });

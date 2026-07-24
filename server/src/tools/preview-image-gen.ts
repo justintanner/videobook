@@ -5,9 +5,8 @@
  * Always defaults to nano_banana (richest settings). The user can switch
  * models via the dropdown in the UI.
  */
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { resolveAllAssets, expandSlotRefs } from "videobook-engine";
 import {
   getImageModels,
   buildImageModelOption,
@@ -16,7 +15,7 @@ import {
 import type { ActionLogEntry } from "../image-models.js";
 import type { ToolDef } from "./tool-def.js";
 
-export function previewImageGenDef(fs: VideocityFs): ToolDef {
+export function previewImageGenDef(fs: Engine): ToolDef {
   return {
     name: "prepare_image_generation",
     description:
@@ -37,18 +36,25 @@ export function previewImageGenDef(fs: VideocityFs): ToolDef {
 
       // 1. Expand @s01 slot refs → actual asset slugs
       let expandedPrompt = prompt;
-      const timelineResult = await fs.readProjectMeta<{ slots: Array<{ slug: string }> }>("timeline", slug);
+      const timelineResult = await fs.metadata.projects.read<{ slots: Array<{ slug: string }> }>("timeline", slug);
       if (timelineResult.ok && timelineResult.value.slots) {
-        expandedPrompt = expandSlotRefs(prompt, timelineResult.value.slots);
+        expandedPrompt = fs.resolver.expandSlotRefs(prompt, timelineResult.value.slots);
       }
 
       // 2. Resolve @asset tags
-      const { resolved: resolvedAssets, unresolved } = await resolveAllAssets(expandedPrompt, fs, slug);
+      const resolvedResult = await fs.resolver.resolveAll(expandedPrompt, slug);
+      if (!resolvedResult.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: resolvedResult.error.message }],
+        };
+      }
+      const { resolved: resolvedAssets, unresolved } = resolvedResult.value;
 
       // 3. Load prompt history from action log
       let historyEntries: ActionLogEntry[] = [];
       try {
-        const log = await fs.getActionLog({ limit: 100 }, slug);
+        const log = fs.history.actionLog(slug, { limit: 100 });
         historyEntries = log as ActionLogEntry[];
       } catch {
         // action log unavailable
@@ -56,8 +62,8 @@ export function previewImageGenDef(fs: VideocityFs): ToolDef {
 
       // 3b. Build set of valid asset tags for the current project so
       //     historical slug references that no longer exist are stripped.
-      const allProjectAssets = await fs.listAssets(slug);
-      const projectAssetTags = new Set(allProjectAssets.map((a) => `@${a.id}`));
+      const allProjectAssets = fs.artifacts.list(slug);
+      const projectAssetTags = new Set(allProjectAssets.map((a) => `@${a.slug}`));
 
       // 4. Build model options for all image models
       // Strip @asset tags from prompt to get the user's text input
@@ -84,13 +90,13 @@ export function previewImageGenDef(fs: VideocityFs): ToolDef {
 
       // 6. Build resolved_assets output
       const assetDicts = resolvedAssets.map((a) => {
-        const fileName = a.file_path?.split("/").pop() ?? "original.png";
-        const src = a.file_path ? `/files/${slug}/${a.asset_id}/${fileName}` : "";
-        const isVideo = a.asset_type === "video";
+        const fileName = a.filePath?.split("/").pop() ?? "original.png";
+        const src = a.filePath ? `/files/${slug}/${a.artifactSlug}/${fileName}` : "";
+        const isVideo = a.artifactType === "video";
         return {
           slug: a.tag,
           src,
-          thumbnailSrc: isVideo && a.file_path ? `/files/${slug}/${a.asset_id}/original.jpg` : undefined,
+          thumbnailSrc: isVideo && a.filePath ? `/files/${slug}/${a.artifactSlug}/original.jpg` : undefined,
           type: isVideo ? "video" as const : "image" as const,
         };
       });

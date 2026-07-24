@@ -1,9 +1,10 @@
+import { createEngineForTest } from "../fs.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { createFs, findVideoFile, type VideocityFs } from "videobook-engine";
+import { findVideoFile, type Engine } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import {
   keywordPlacementFingerprint,
@@ -26,14 +27,14 @@ const ORIENTATIONS = ["landscape", "portrait", "square"] as const;
 
 describe("animate_keywords tool", () => {
   let client: Client;
-  let fs: VideocityFs;
+  let fs: Engine;
   let tempDir: string;
   const projectSlug = "test-proj";
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-animate-keywords-test-"));
     client = await createTestClient(tempDir);
-    fs = createFs({ projectsDir: tempDir });
+    fs = createEngineForTest(tempDir);
     await client.callTool({
       name: "create_project",
       arguments: { project_slug: projectSlug },
@@ -47,9 +48,9 @@ describe("animate_keywords tool", () => {
   });
 
   async function createVideo(withTranscript: boolean): Promise<string> {
-    const created = await fs.createAsset("vid", "interview", projectSlug);
+    const created = await fs.artifacts.create("vid", "interview", projectSlug);
     if (!created.ok) throw new Error(created.error.message);
-    const video = await fs.writeFile(created.value.assetId, "original.mp4", Buffer.from("video"), projectSlug);
+    const video = await fs.files.write(created.value.slug, "original.mp4", Buffer.from("video"), projectSlug);
     if (!video.ok) throw new Error(video.error.message);
     if (withTranscript) {
       const transcript = {
@@ -61,30 +62,30 @@ describe("animate_keywords tool", () => {
           { text: "forever", start: 11, end: 11.4, type: "word" },
         ],
       };
-      const written = await fs.writeFile(
-        created.value.assetId,
+      const written = await fs.files.write(
+        created.value.slug,
         "elevenlabs.json",
         JSON.stringify(transcript),
         projectSlug,
       );
       if (!written.ok) throw new Error(written.error.message);
     }
-    return created.value.assetId;
+    return created.value.slug;
   }
 
   async function seedPlacementCache(assetId: string, keywords?: string[]): Promise<void> {
-    const transcript = await fs.readFile(assetId, "elevenlabs.json", projectSlug);
+    const transcript = await fs.files.read(assetId, "elevenlabs.json", projectSlug);
     if (!transcript.ok) throw new Error(transcript.error.message);
     const segments = parseKeywordTranscript(JSON.parse(transcript.value.toString()) as unknown);
     const graphics = keywords
       ? selectRequestedKeywordGraphics(segments, keywords).graphics
       : selectKeywordGraphics(segments);
-    const manifest = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+    const manifest = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
     if (!manifest.ok) throw new Error(manifest.error.message);
     const videoFile = findVideoFile(manifest.value.files);
     if (!videoFile) throw new Error("test video missing");
     const fingerprint = keywordPlacementFingerprint(videoFile, transcript.value, graphics);
-    const frameCache = await fs.writeFile(
+    const frameCache = await fs.files.write(
       assetId,
       KEYWORD_FRAME_CACHE_FILENAME,
       Buffer.from("cached-frame-sheet"),
@@ -126,7 +127,7 @@ describe("animate_keywords tool", () => {
     expect(response.keywords).toHaveLength(4);
 
     for (const orientation of ORIENTATIONS) {
-      const metadata = await fs.readMetadata<Record<string, unknown>>(
+      const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
         assetId,
         `${orientation}.render`,
         projectSlug,
@@ -148,7 +149,7 @@ describe("animate_keywords tool", () => {
 
     expect(result.isError).toBeFalsy();
     for (const orientation of ORIENTATIONS) {
-      const metadata = await fs.readMetadata<Record<string, unknown>>(
+      const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
         assetId,
         `${orientation}.render`,
         projectSlug,
@@ -176,7 +177,7 @@ describe("animate_keywords tool", () => {
     expect(response.mode).toBe("explicit");
     expect(response.requested_keywords).toEqual(["Cinema", "Everything"]);
     for (const orientation of ORIENTATIONS) {
-      const metadata = await fs.readMetadata<Record<string, unknown>>(
+      const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
         assetId,
         `${orientation}.render`,
         projectSlug,
@@ -217,7 +218,7 @@ describe("animate_keywords tool", () => {
     const response = JSON.parse((result.content as TextContent)[0].text) as Record<string, unknown>;
     expect(response.status).toBe("missing_vision_provider");
     for (const orientation of ORIENTATIONS) {
-      const metadata = await fs.readMetadata<Record<string, unknown>>(
+      const metadata = await fs.metadata.artifacts.read<Record<string, unknown>>(
         assetId,
         `${orientation}.render`,
         projectSlug,

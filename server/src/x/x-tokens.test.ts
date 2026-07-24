@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import type { Engine } from "videobook-engine";
+import { closeEngineForTest, createEngineForTest } from "../fs.js";
 import {
   getValidAccessToken,
   readTokens,
@@ -58,7 +60,7 @@ function makeStubFetch(responses: Array<{ status: number; body: unknown }>): {
 
 describe("x-tokens", () => {
   let tempDir: string;
-  let tokensFile: string;
+  let fs: Engine;
   const originalEnv = {
     X_ACCESS_TOKEN: process.env.X_ACCESS_TOKEN,
     X_CLIENT_ID: process.env.X_CLIENT_ID,
@@ -67,15 +69,13 @@ describe("x-tokens", () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-xtok-"));
-    tokensFile = join(tempDir, "x-tokens.json");
-    process.env.X_TOKENS_PATH = tokensFile;
+    fs = createEngineForTest(tempDir);
     delete process.env.X_ACCESS_TOKEN;
     delete process.env.X_CLIENT_ID;
     delete process.env.X_CLIENT_SECRET;
   });
 
   afterEach(async () => {
-    delete process.env.X_TOKENS_PATH;
     if (originalEnv.X_ACCESS_TOKEN !== undefined) {
       process.env.X_ACCESS_TOKEN = originalEnv.X_ACCESS_TOKEN;
     }
@@ -85,29 +85,30 @@ describe("x-tokens", () => {
     if (originalEnv.X_CLIENT_SECRET !== undefined) {
       process.env.X_CLIENT_SECRET = originalEnv.X_CLIENT_SECRET;
     }
+    closeEngineForTest(tempDir, fs);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("returns access_token from state file when not near expiry", async () => {
+  it("returns access_token from Dolt runtime state when not near expiry", async () => {
     const state: XTokenState = {
       access_token: "live-tok",
       refresh_token: "rt-1",
       expires_at: new Date(Date.now() + 60 * 60_000).toISOString(),
     };
-    await writeTokens(state);
+    await writeTokens(state, fs);
 
-    const tok = await getValidAccessToken();
+    const tok = await getValidAccessToken({ engine: fs });
     expect(tok).toBe("live-tok");
   });
 
   it("falls back to X_ACCESS_TOKEN env when no state file", async () => {
     process.env.X_ACCESS_TOKEN = "static-fallback";
-    const tok = await getValidAccessToken();
+    const tok = await getValidAccessToken({ engine: fs });
     expect(tok).toBe("static-fallback");
   });
 
   it("throws a helpful error when no token configured at all", async () => {
-    await expect(getValidAccessToken()).rejects.toThrow(
+    await expect(getValidAccessToken({ engine: fs })).rejects.toThrow(
       /No X access token available/,
     );
   });
@@ -120,7 +121,7 @@ describe("x-tokens", () => {
       refresh_token: "old-refresh",
       expires_at: new Date(Date.now() + 5_000).toISOString(),
     };
-    await writeTokens(expiringState);
+    await writeTokens(expiringState, fs);
 
     const { fetch: stubFetch, calls } = makeStubFetch([
       {
@@ -134,7 +135,10 @@ describe("x-tokens", () => {
       },
     ]);
 
-    const refreshed = await refreshTokens(expiringState, stubFetch);
+    const refreshed = await refreshTokens(expiringState, {
+      fetchImpl: stubFetch,
+      engine: fs,
+    });
     expect(refreshed.access_token).toBe("new-access");
     expect(refreshed.refresh_token).toBe("new-refresh");
     expect(new Date(refreshed.expires_at).getTime()).toBeGreaterThan(Date.now() + 7000_000);
@@ -148,7 +152,9 @@ describe("x-tokens", () => {
     expect(calls[0].body).toContain("grant_type=refresh_token");
     expect(calls[0].body).toContain("refresh_token=old-refresh");
 
-    const persisted = JSON.parse(await readFile(tokensFile, "utf8")) as XTokenState;
+    const persisted = await readTokens(fs);
+    expect(persisted).not.toBeNull();
+    if (!persisted) throw new Error("Missing persisted token state");
     expect(persisted.access_token).toBe("new-access");
     expect(persisted.refresh_token).toBe("new-refresh");
   });
@@ -161,14 +167,17 @@ describe("x-tokens", () => {
       refresh_token: "keep-me",
       expires_at: new Date(Date.now() + 1_000).toISOString(),
     };
-    await writeTokens(state);
+    await writeTokens(state, fs);
     const { fetch: stubFetch } = makeStubFetch([
       {
         status: 200,
         body: { access_token: "next", expires_in: 7200 },
       },
     ]);
-    const refreshed = await refreshTokens(state, stubFetch);
+    const refreshed = await refreshTokens(state, {
+      fetchImpl: stubFetch,
+      engine: fs,
+    });
     expect(refreshed.refresh_token).toBe("keep-me");
   });
 
@@ -183,7 +192,10 @@ describe("x-tokens", () => {
     const { fetch: stubFetch } = makeStubFetch([
       { status: 400, body: { error: "invalid_grant" } },
     ]);
-    await expect(refreshTokens(state, stubFetch)).rejects.toThrow(
+    await expect(refreshTokens(state, {
+      fetchImpl: stubFetch,
+      engine: fs,
+    })).rejects.toThrow(
       /token refresh failed.*invalid_grant/i,
     );
   });
@@ -194,13 +206,16 @@ describe("x-tokens", () => {
       refresh_token: "rt",
       expires_at: new Date().toISOString(),
     };
-    await expect(refreshTokens(state)).rejects.toThrow(
+    await expect(refreshTokens(state, { engine: fs })).rejects.toThrow(
       /X_CLIENT_ID\/X_CLIENT_SECRET/,
     );
   });
 
-  it("readTokens returns null on malformed file", async () => {
-    await writeFile(tokensFile, "not json", "utf8");
-    expect(await readTokens()).toBeNull();
+  it("readTokens returns null on malformed runtime state", async () => {
+    const result = fs.settings.set("x.oauth.tokens", {
+      access_token: 42,
+    });
+    expect(result.ok).toBe(true);
+    expect(await readTokens(fs)).toBeNull();
   });
 });

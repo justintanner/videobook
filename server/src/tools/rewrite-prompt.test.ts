@@ -3,9 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createFsForTest } from "../fs.js";
+import { createEngineForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import {
   loadGuide,
   loadUseapiGuide,
@@ -287,12 +287,12 @@ describe("normalizePromptForMatch", () => {
 
 describe("findPreviousErrorForPrompt", () => {
   let tempDir: string;
-  let fs: VideocityFs;
+  let fs: Engine;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-err-"));
-    fs = createFsForTest(tempDir);
-    await fs.createProject("err-proj");
+    fs = createEngineForTest(tempDir);
+    await fs.projects.create("err-proj");
   });
 
   afterEach(async () => {
@@ -300,18 +300,18 @@ describe("findPreviousErrorForPrompt", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  async function createAsset(fs: VideocityFs, name: string): Promise<string> {
-    const result = await fs.createAsset("vid", name, "err-proj");
+  async function createAsset(fs: Engine, name: string): Promise<string> {
+    const result = await fs.artifacts.create("vid", name, "err-proj");
     if (!result.ok) throw new Error(result.error.message);
-    return result.value.assetId;
+    return result.value.slug;
   }
 
   async function writeError(
-    fs: VideocityFs,
+    fs: Engine,
     assetId: string,
     info: { message: string; failCode?: string; prompt?: string | null },
   ): Promise<void> {
-    const result = await fs.generationErrors.write("err-proj", assetId, info);
+    const result = await fs.jobs.failures.write("err-proj", assetId, info);
     if (!result.ok) throw new Error(result.error.message);
   }
 

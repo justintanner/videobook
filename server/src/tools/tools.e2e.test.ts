@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdtemp, rm, readFile, stat } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
@@ -8,6 +8,8 @@ import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
 import { queue, waitForJob } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Engine } from "videobook-engine";
+import { createEngineForTest } from "../fs.js";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -31,14 +33,13 @@ function parseText(result: { content: unknown }): string {
   return (result.content as TextContent)[0].text;
 }
 
-async function fileExists(p: string): Promise<boolean> {
-  return stat(p).then(s => s.isFile(), () => false);
-}
-async function dirExists(p: string): Promise<boolean> {
-  return stat(p).then(s => s.isDirectory(), () => false);
-}
-async function readJson(p: string): Promise<unknown> {
-  return JSON.parse(await readFile(p, "utf-8"));
+function value<T>(
+  result:
+    | { ok: true; value: T }
+    | { ok: false; error: { message: string } },
+): T {
+  if (!result.ok) throw new Error(result.error.message);
+  return result.value;
 }
 
 async function generateTestVideo(outputPath: string): Promise<void> {
@@ -52,33 +53,22 @@ async function generateTestVideo(outputPath: string): Promise<void> {
   ]);
 }
 
-async function pollForFile(
-  dir: string,
-  fileName: string,
-  timeoutMs = 30_000,
-): Promise<void> {
-  const filePath = join(dir, fileName);
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (await fileExists(filePath)) return;
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error(`${fileName} not found in ${dir} after ${timeoutMs}ms`);
-}
-
 describe("MCP tools e2e", () => {
   let client: Client;
   let tempDir: string;
   let videoPath: string;
+  let fs: Engine;
 
   // Shared state across sequential tests
   let imgAssetId: string;
+  let imgArtifactId: string;
   let scriptAssetId: string;
   let vidAssetId: string;
   let renamedAssetId: string;
   let dupAssetId: string;
   let exportedAssetId: string;
   let dupPreDeleteHash: string;
+  let dupArtifactId: string;
 
   beforeAll(async () => {
     await queue.start();
@@ -86,6 +76,7 @@ describe("MCP tools e2e", () => {
     videoPath = join(tempDir, "test-source.mp4");
     await generateTestVideo(videoPath);
     client = await createTestClient(tempDir);
+    fs = createEngineForTest(tempDir);
   });
 
   afterAll(async () => {
@@ -102,10 +93,9 @@ describe("MCP tools e2e", () => {
       arguments: { project_slug: PROJECT },
     });
     expect(result.isError).toBeFalsy();
-    expect(await dirExists(join(tempDir, PROJECT))).toBe(true);
-    expect(await fileExists(join(tempDir, PROJECT, ".videobook"))).toBe(true);
-    expect(await fileExists(join(tempDir, ".default-project"))).toBe(true);
-    expect(await readFile(join(tempDir, ".default-project"), "utf-8")).toBe(PROJECT);
+    const project = value(fs.projects.get(PROJECT));
+    expect(project.slug).toBe(PROJECT);
+    expect(project.isDefault).toBe(true);
   });
 
   it("creates a second project", async () => {
@@ -114,8 +104,9 @@ describe("MCP tools e2e", () => {
       arguments: { project_slug: TARGET_PROJECT },
     });
     expect(result.isError).toBeFalsy();
-    expect(await dirExists(join(tempDir, TARGET_PROJECT))).toBe(true);
-    expect(await fileExists(join(tempDir, TARGET_PROJECT, ".videobook"))).toBe(true);
+    expect(value(fs.projects.get(TARGET_PROJECT)).slug).toBe(
+      TARGET_PROJECT,
+    );
   });
 
   it("lists projects", async () => {
@@ -142,9 +133,13 @@ describe("MCP tools e2e", () => {
     const parsed = parse(result);
     imgAssetId = parsed.assetId as string;
     expect(imgAssetId).toMatch(/^img-/);
-    const imgStat = await stat(join(tempDir, PROJECT, imgAssetId, "original.png"));
-    expect(imgStat.isFile()).toBe(true);
-    expect(imgStat.size).toBeGreaterThan(0);
+    const artifact = value(fs.artifacts.get(PROJECT, imgAssetId));
+    imgArtifactId = artifact.artifactId;
+    expect(
+      value(
+        await fs.files.read(imgArtifactId, "original.png", PROJECT),
+      ).length,
+    ).toBeGreaterThan(0);
   });
 
   it("uploads a markdown script", async () => {
@@ -157,8 +152,11 @@ describe("MCP tools e2e", () => {
     const parsed = parse(result);
     scriptAssetId = parsed.assetId as string;
     expect(scriptAssetId).toMatch(/^script-/);
-    const mdContent = await readFile(join(tempDir, PROJECT, scriptAssetId, "original.md"), "utf-8");
-    expect(mdContent).toBe("# Episode Notes\n\nSome content here.");
+    expect(
+      value(
+        await fs.files.read(scriptAssetId, "original.md", PROJECT),
+      ).toString(),
+    ).toBe("# Episode Notes\n\nSome content here.");
   });
 
   it("uploads a video", async () => {
@@ -171,9 +169,11 @@ describe("MCP tools e2e", () => {
     const parsed = parse(result);
     vidAssetId = parsed.assetId as string;
     expect(vidAssetId).toMatch(/^vid-/);
-    const vidStat = await stat(join(tempDir, PROJECT, vidAssetId, "original.mp4"));
-    expect(vidStat.isFile()).toBe(true);
-    expect(vidStat.size).toBeGreaterThan(0);
+    expect(
+      value(
+        await fs.files.read(vidAssetId, "original.mp4", PROJECT),
+      ).length,
+    ).toBeGreaterThan(0);
   });
 
   // ── Section 3: Asset manifest ──────────────────────────────────
@@ -187,7 +187,6 @@ describe("MCP tools e2e", () => {
     const data = parse(result);
     const fileNames = (data.files as ManifestFile[]).map((f) => f.name);
     expect(fileNames).toContain("original.png");
-    // asset_manifest excludes dotfiles by default, so .original.json is not listed
   });
 
   it("reads script manifest", async () => {
@@ -213,9 +212,20 @@ describe("MCP tools e2e", () => {
     expect(parsed.old_asset_id).toBe(imgAssetId);
     renamedAssetId = parsed.new_asset_id as string;
     expect(renamedAssetId).toMatch(/^img-sunset-beach/);
-    expect(await dirExists(join(tempDir, PROJECT, imgAssetId))).toBe(false);
-    expect(await dirExists(join(tempDir, PROJECT, renamedAssetId))).toBe(true);
-    expect(await fileExists(join(tempDir, PROJECT, renamedAssetId, "original.png"))).toBe(true);
+    expect(fs.artifacts.resolveSlug(PROJECT, imgAssetId).ok).toBe(false);
+    const renamed = value(
+      fs.artifacts.get(PROJECT, imgArtifactId),
+    );
+    expect(renamed.slug).toBe(renamedAssetId);
+    expect(
+      value(
+        await fs.files.read(
+          imgArtifactId,
+          "original.png",
+          PROJECT,
+        ),
+      ).length,
+    ).toBeGreaterThan(0);
   });
 
   it("reads renamed asset manifest", async () => {
@@ -239,7 +249,11 @@ describe("MCP tools e2e", () => {
     expect(parsed.source_asset_id).toBe(renamedAssetId);
     dupAssetId = parsed.new_asset_id as string;
     expect(dupAssetId).toMatch(/^img-/);
-    expect(await fileExists(join(tempDir, PROJECT, dupAssetId, "original.png"))).toBe(true);
+    expect(
+      value(
+        await fs.files.read(dupAssetId, "original.png", PROJECT),
+      ).length,
+    ).toBeGreaterThan(0);
   });
 
   it("verifies duplicate files", async () => {
@@ -267,7 +281,15 @@ describe("MCP tools e2e", () => {
     expect(parsed.source_asset_id).toBe(renamedAssetId);
     expect(parsed.target_project).toBe(TARGET_PROJECT);
     exportedAssetId = parsed.new_asset_id as string;
-    expect(await fileExists(join(tempDir, TARGET_PROJECT, exportedAssetId, "original.png"))).toBe(true);
+    expect(
+      value(
+        await fs.files.read(
+          exportedAssetId,
+          "original.png",
+          TARGET_PROJECT,
+        ),
+      ).length,
+    ).toBeGreaterThan(0);
 
     // Verify manifest in target project
     const manifest = await client.callTool({
@@ -310,6 +332,9 @@ describe("MCP tools e2e", () => {
     });
     const commits = parse(historyResult) as unknown as Array<{ hash: string }>;
     dupPreDeleteHash = commits[0].hash;
+    dupArtifactId = value(
+      fs.artifacts.get(PROJECT, dupAssetId),
+    ).artifactId;
 
     const result = await client.callTool({
       name: "delete_asset",
@@ -318,7 +343,7 @@ describe("MCP tools e2e", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
     expect(parsed.status).toBe("deleted");
-    expect(await dirExists(join(tempDir, PROJECT, dupAssetId))).toBe(false);
+    expect(fs.artifacts.get(PROJECT, dupAssetId).ok).toBe(false);
 
     // Verify manifest returns error
     const manifest = await client.callTool({
@@ -332,7 +357,7 @@ describe("MCP tools e2e", () => {
     const result = await client.callTool({
       name: "restore_asset_version",
       arguments: {
-        asset_id: dupAssetId,
+        asset_id: dupArtifactId,
         commit_hash: dupPreDeleteHash,
         project_slug: PROJECT,
       },
@@ -340,9 +365,20 @@ describe("MCP tools e2e", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
     expect(parsed.status).toBe("restored");
-    expect(parsed.asset_id).toBe(dupAssetId);
-    expect(await dirExists(join(tempDir, PROJECT, dupAssetId))).toBe(true);
-    expect(await fileExists(join(tempDir, PROJECT, dupAssetId, "original.png"))).toBe(true);
+    expect(parsed.asset_id).toBe(dupArtifactId);
+    const restored = value(
+      fs.artifacts.get(PROJECT, dupArtifactId),
+    );
+    expect(restored.slug).toBe(dupAssetId);
+    expect(
+      value(
+        await fs.files.read(
+          dupArtifactId,
+          "original.png",
+          PROJECT,
+        ),
+      ).length,
+    ).toBeGreaterThan(0);
 
     // Verify manifest succeeds again
     const manifest = await client.callTool({
@@ -368,7 +404,9 @@ describe("MCP tools e2e", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
     expect(parsed.status).toBe("rewound");
-    expect(await dirExists(join(tempDir, TARGET_PROJECT, exportedAssetId))).toBe(false);
+    expect(
+      fs.artifacts.get(TARGET_PROJECT, exportedAssetId).ok,
+    ).toBe(false);
 
     // Verify exported asset is gone
     const manifest = await client.callTool({
@@ -387,9 +425,8 @@ describe("MCP tools e2e", () => {
     });
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
-    expect((parsed.metadata as Record<string, unknown>).slug).toBe(PROJECT);
-    const defaultContent = await readFile(join(tempDir, ".default-project"), "utf-8");
-    expect(defaultContent).toBe(PROJECT);
+    expect(parsed.slug).toBe(PROJECT);
+    expect(value(fs.projects.get()).slug).toBe(PROJECT);
   });
 
   // ── Section 7: Timeline ────────────────────────────────────────
@@ -417,8 +454,12 @@ describe("MCP tools e2e", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
     expect(parsed.path).toBeTruthy();
-    expect(await fileExists(join(tempDir, PROJECT, ".timeline.json"))).toBe(true);
-    const timeline = await readJson(join(tempDir, PROJECT, ".timeline.json")) as { slots: Array<Record<string, unknown>>; render: string };
+    const timeline = value(
+      await fs.metadata.projects.read<{
+        slots: Array<Record<string, unknown>>;
+        render: string;
+      }>("timeline", PROJECT),
+    );
     expect(timeline.slots).toHaveLength(2);
     expect(timeline.slots[0].slug).toBe("vid-intro");
     expect(timeline.slots[1].slug).toBe("vid-outro");
@@ -463,8 +504,13 @@ describe("MCP tools e2e", () => {
   // ── Section 9: Video processing (requires ffmpeg + queue) ─────
 
   it("waits for video processing", async () => {
-    await pollForFile(join(tempDir, PROJECT, vidAssetId), ".original.json");
-    const meta = await readJson(join(tempDir, PROJECT, vidAssetId, ".original.json")) as Record<string, unknown>;
+    const meta = value(
+      await fs.metadata.artifacts.read<Record<string, unknown>>(
+        vidAssetId,
+        "original",
+        PROJECT,
+      ),
+    );
     expect(meta.width).toBeGreaterThan(0);
     expect(meta.height).toBeGreaterThan(0);
     expect(meta.duration).toBeGreaterThan(0);
@@ -498,9 +544,11 @@ describe("MCP tools e2e", () => {
     expect(result.isError).toBeFalsy();
     const parsed = parse(result);
     expect(parsed.status).toBe("completed");
-    const trimStat = await stat(join(tempDir, PROJECT, vidAssetId, "original.mp4"));
-    expect(trimStat.isFile()).toBe(true);
-    expect(trimStat.size).toBeGreaterThan(0);
+    expect(
+      value(
+        await fs.files.read(vidAssetId, "original.mp4", PROJECT),
+      ).length,
+    ).toBeGreaterThan(0);
   });
 
   it("changes video speed", async () => {
@@ -516,7 +564,11 @@ describe("MCP tools e2e", () => {
     const parsed = parse(result);
     expect(parsed.status).toBe("enqueued");
     await waitForJob(parsed.job_id as string);
-    expect(await fileExists(join(tempDir, PROJECT, vidAssetId, "original.mp4"))).toBe(true);
+    expect(
+      value(
+        await fs.files.read(vidAssetId, "original.mp4", PROJECT),
+      ).length,
+    ).toBeGreaterThan(0);
   });
 
   it("reverses video", async () => {
@@ -531,7 +583,11 @@ describe("MCP tools e2e", () => {
     const parsed = parse(result);
     expect(parsed.status).toBe("enqueued");
     await waitForJob(parsed.job_id as string);
-    expect(await fileExists(join(tempDir, PROJECT, vidAssetId, "original.mp4"))).toBe(true);
+    expect(
+      value(
+        await fs.files.read(vidAssetId, "original.mp4", PROJECT),
+      ).length,
+    ).toBeGreaterThan(0);
   });
 
   it("extracts first frame", async () => {
@@ -559,9 +615,22 @@ describe("MCP tools e2e", () => {
     const manifestData = parse(manifest);
     const fileNames = (manifestData.files as ManifestFile[]).map((f) => f.name);
     expect(fileNames).toContain("original.jpg");
-    expect(await fileExists(join(tempDir, PROJECT, firstFrameId, "original.jpg"))).toBe(true);
-    expect(await fileExists(join(tempDir, PROJECT, firstFrameId, ".original.json"))).toBe(true);
-    const firstFrameMeta = await readJson(join(tempDir, PROJECT, firstFrameId, ".original.json")) as Record<string, unknown>;
+    expect(
+      value(
+        await fs.files.read(
+          firstFrameId,
+          "original.jpg",
+          PROJECT,
+        ),
+      ).length,
+    ).toBeGreaterThan(0);
+    const firstFrameMeta = value(
+      await fs.metadata.artifacts.read<Record<string, unknown>>(
+        firstFrameId,
+        "original",
+        PROJECT,
+      ),
+    );
     expect(firstFrameMeta.origin).toBe("first_frame");
   });
 
@@ -589,9 +658,22 @@ describe("MCP tools e2e", () => {
     const manifestData = parse(manifest);
     const fileNames = (manifestData.files as ManifestFile[]).map((f) => f.name);
     expect(fileNames).toContain("original.jpg");
-    expect(await fileExists(join(tempDir, PROJECT, lastFrameId, "original.jpg"))).toBe(true);
-    expect(await fileExists(join(tempDir, PROJECT, lastFrameId, ".original.json"))).toBe(true);
-    const lastFrameMeta = await readJson(join(tempDir, PROJECT, lastFrameId, ".original.json")) as Record<string, unknown>;
+    expect(
+      value(
+        await fs.files.read(
+          lastFrameId,
+          "original.jpg",
+          PROJECT,
+        ),
+      ).length,
+    ).toBeGreaterThan(0);
+    const lastFrameMeta = value(
+      await fs.metadata.artifacts.read<Record<string, unknown>>(
+        lastFrameId,
+        "original",
+        PROJECT,
+      ),
+    );
     expect(lastFrameMeta.origin).toBe("last_frame");
   });
 
@@ -620,9 +702,18 @@ describe("MCP tools e2e", () => {
     const manifestData = parse(manifest);
     const fileNames = (manifestData.files as ManifestFile[]).map((f) => f.name);
     expect(fileNames).toContain("original.mp3");
-    expect(await fileExists(join(tempDir, PROJECT, audioId, "original.mp3"))).toBe(true);
-    expect(await fileExists(join(tempDir, PROJECT, audioId, ".original.json"))).toBe(true);
-    const audioMeta = await readJson(join(tempDir, PROJECT, audioId, ".original.json")) as Record<string, unknown>;
+    expect(
+      value(
+        await fs.files.read(audioId, "original.mp3", PROJECT),
+      ).length,
+    ).toBeGreaterThan(0);
+    const audioMeta = value(
+      await fs.metadata.artifacts.read<Record<string, unknown>>(
+        audioId,
+        "original",
+        PROJECT,
+      ),
+    );
     expect(audioMeta.origin).toBe("extract_audio");
   });
 

@@ -1,9 +1,9 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import sharp from "sharp";
-import { createFs } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
@@ -12,11 +12,11 @@ const PROJECT = "invert-proj";
 describe("invert_image tool", () => {
   let client: Client | undefined;
   let tempDir: string;
-  let fs: ReturnType<typeof createFs>;
+  let fs: ReturnType<typeof createEngineForTest>;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-invert-image-"));
-    fs = createFs({ projectsDir: tempDir });
+    fs = createEngineForTest(tempDir);
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
@@ -30,7 +30,7 @@ describe("invert_image tool", () => {
   });
 
   it("inverts an image asset in-place", async () => {
-    const asset = await fs.createAsset("img", "test-image", PROJECT);
+    const asset = await fs.artifacts.create("img", "test-image", PROJECT);
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
@@ -40,13 +40,13 @@ describe("invert_image tool", () => {
       0, 0, 0, 0, 0, 0,             // black, black
     ]);
     const png = await sharp(rawData, { raw: { width: 2, height: 2, channels: 3 } }).png().toBuffer();
-    await fs.writeFile(asset.value.assetId, "original.png", png, PROJECT);
+    await fs.files.write(asset.value.slug, "original.png", png, PROJECT);
 
     const result = await client!.callTool({
       name: "invert_image",
       arguments: {
         project_slug: PROJECT,
-        asset_id: asset.value.assetId,
+        asset_id: asset.value.slug,
       },
     });
 
@@ -54,7 +54,7 @@ describe("invert_image tool", () => {
       throw new Error(`Tool failed: ${JSON.stringify(result.content)}`);
     }
 
-    const read = await fs.readFile(asset.value.assetId, "original.png", PROJECT);
+    const read = await fs.files.read(asset.value.slug, "original.png", PROJECT);
     expect(read.ok).toBe(true);
     if (!read.ok) return;
 

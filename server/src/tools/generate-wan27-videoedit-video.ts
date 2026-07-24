@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import {
@@ -17,7 +17,7 @@ import { apicityField, apicityStringField } from "./schema-from-apicity.js";
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 const WAN27_VIDEO_EDIT_DURATIONS = Wan27VideoEditDurationValues.map(String) as [string, ...string[]];
 
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
+function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -38,20 +38,20 @@ type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-async function resolveVideoSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveVideoSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slug must be a vid-* asset, got: ${assetId}` };
-  const manifest = await fs.getManifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findVideoFile(manifest.value.files);
   if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-async function resolveImageSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveImageSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("img-")) return { ok: false, error: `image_slug must be an img-* asset, got: ${assetId}` };
-  const manifest = await fs.getManifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
   if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
@@ -77,7 +77,7 @@ const generateWan27VideoeditVideoSchema = {
 
 type Args = SchemaArgs<typeof generateWan27VideoeditVideoSchema>;
 
-export function generateWan27VideoeditVideoDef(fs: VideocityFs): ToolDef {
+export function generateWan27VideoeditVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_wan_2_7_edit_video",
     description: "Edit a video using Wan 2.7 Video Edit with optional reference image for character, clothing, or style guidance. Creates a new vid- asset and enqueues a background job.",
@@ -112,7 +112,7 @@ export function generateWan27VideoeditVideoDef(fs: VideocityFs): ToolDef {
       // second, so a 10s preset typically produces ~10.01s. Allow a small
       // tolerance before failing.
       const DURATION_TOLERANCE = 0.05;
-      const meta = await fs.readMetadata<{ duration?: number }>(videoInput.assetId, "original", project_slug);
+      const meta = await fs.metadata.artifacts.read<{ duration?: number }>(videoInput.assetId, "original", project_slug);
       if (meta.ok && typeof meta.value.duration === "number" && meta.value.duration > MAX_INPUT_DURATION + DURATION_TOLERANCE) {
         return {
           isError: true as const,
@@ -128,7 +128,7 @@ export function generateWan27VideoeditVideoDef(fs: VideocityFs): ToolDef {
       }
 
       const videoName = `${modelSlug("kie", "wan/2-7-videoedit")}-${slugify(prompt ?? "") || String(Date.now())}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -136,7 +136,7 @@ export function generateWan27VideoeditVideoDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = imageInput ? [imageInput.assetId] : [];
       const sourceVideoIds = [videoInput.assetId];
       const sourceAudioIds: string[] = [];

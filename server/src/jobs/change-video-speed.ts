@@ -1,8 +1,9 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { basename, join } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { getFFmpeggy, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
 const LOCK_DURATION_MS = 300_000;
 const ATEMPO_MIN = 0.5;
@@ -43,7 +44,7 @@ type ChangeVideoSpeedPayload = {
   projectSlug: string;
 };
 
-export function registerChangeVideoSpeedJob(fs: VideocityFs): void {
+export function registerChangeVideoSpeedJob(fs: Engine): void {
   registerJobHandler("change_video_speed", async (payload, ctx) => {
     const {
       inputPath, outputPath, speed, targetDuration, hasAudio,
@@ -75,9 +76,13 @@ export function registerChangeVideoSpeedJob(fs: VideocityFs): void {
       await ff.done();
 
       const inputFilename = basename(inputPath);
-      const outputFilename = basename(outputPath);
-      await fs.deleteFile(assetId, inputFilename, projectSlug);
-      await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
+      await replaceArtifactFileFromPath(
+        fs,
+        projectSlug,
+        assetId,
+        inputFilename,
+        outputPath,
+      );
 
       const videoPath = join(assetDir, inputFilename);
       return { videoPath };

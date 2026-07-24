@@ -1,3 +1,4 @@
+import { createEngineForTest } from "../fs.js";
 /**
  * End-to-end tests for all slash commands.
  *
@@ -11,7 +12,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createFs } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { parseCommandArgs, filterCommandsByMountKeys, normalizeApplySfxCommandArgs, normalizeSyncAudioCommandArgs, normalizeTimewarpCommandArgs, selectCommandForInput } from "../../../src/lib/command-registry.js";
@@ -744,16 +744,16 @@ describe("slash commands e2e", () => {
     });
 
     it("enqueues render for vid asset with video file", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "my-video", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "my-video", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
       // Write a minimal fake video file
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           orientation: "landscape",
         },
@@ -765,15 +765,15 @@ describe("slash commands e2e", () => {
     });
 
     it("errors for osg_asset_id with non-img prefix", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "my-video2", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "my-video2", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           osg_asset_id: "vid-something",
         },
@@ -826,15 +826,15 @@ describe("slash commands e2e", () => {
       const origKey = process.env.KIE_API_KEY;
       process.env.KIE_API_KEY = "test-key";
       try {
-        const fs = createFs({ projectsDir: tempDir });
-        const asset = await fs.createAsset("vid", "no-audio", "test-proj");
+        const fs = createEngineForTest(tempDir);
+        const asset = await fs.artifacts.create("vid", "no-audio", "test-proj");
         if (!asset.ok) throw new Error("Failed to create asset");
-        await fs.writeFile(asset.value.assetId, "notes.txt", "hello", "test-proj");
+        await fs.files.write(asset.value.slug, "notes.txt", "hello", "test-proj");
 
         const result = await client.callTool({
           name: "isolate_vocals",
           arguments: {
-            asset_id: asset.value.assetId,
+            asset_id: asset.value.slug,
             project_slug: "test-proj",
           },
         });
@@ -850,15 +850,15 @@ describe("slash commands e2e", () => {
       const origKey = process.env.KIE_API_KEY;
       process.env.KIE_API_KEY = "test-key";
       try {
-        const fs = createFs({ projectsDir: tempDir });
-        const asset = await fs.createAsset("vid", "has-audio", "test-proj");
+        const fs = createEngineForTest(tempDir);
+        const asset = await fs.artifacts.create("vid", "has-audio", "test-proj");
         if (!asset.ok) throw new Error("Failed to create asset");
-        await fs.writeFile(asset.value.assetId, "audio_original.mp3", Buffer.from("fake-mp3"), "test-proj");
+        await fs.files.write(asset.value.slug, "audio_original.mp3", Buffer.from("fake-mp3"), "test-proj");
 
         const result = await client.callTool({
           name: "isolate_vocals",
           arguments: {
-            asset_id: asset.value.assetId,
+            asset_id: asset.value.slug,
             project_slug: "test-proj",
           },
         });
@@ -1157,8 +1157,8 @@ describe("slash commands e2e", () => {
 
     it("dispatches create_qart and creates inverted and monochrome assets by default", async () => {
       const sharp = (await import("sharp")).default;
-      const fs = createFs({ projectsDir: tempDir });
-      const cover = await fs.createAsset("img", "cover-photo", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const cover = await fs.artifacts.create("img", "cover-photo", "test-proj");
       expect(cover.ok).toBe(true);
       if (!cover.ok) return;
       const png = await sharp({
@@ -1166,12 +1166,12 @@ describe("slash commands e2e", () => {
       })
         .png()
         .toBuffer();
-      const write = await fs.writeFile(cover.value.assetId, "original.png", png, "test-proj");
+      const write = await fs.files.write(cover.value.slug, "original.png", png, "test-proj");
       expect(write.ok).toBe(true);
 
       const cmd = findCommand("/qart");
       const args = parseCommandArgs(
-        `@${cover.value.assetId} https://example.com/qart-slash`,
+        `@${cover.value.slug} https://example.com/qart-slash`,
         cmd.params,
       );
       const result = await client.callTool({
@@ -1186,7 +1186,7 @@ describe("slash commands e2e", () => {
       expect(parsed.inverted_asset_id).toMatch(/^img-/);
       expect(parsed.monochrome_asset_id).toMatch(/^img-/);
       expect(parsed.value).toBe("https://example.com/qart-slash");
-      expect(parsed.source_image).toBe(cover.value.assetId);
+      expect(parsed.source_image).toBe(cover.value.slug);
     });
   });
 
@@ -1261,8 +1261,8 @@ describe("slash commands e2e", () => {
 
     it("dispatches concat_images and preserves an empty second slot", async () => {
       const sharp = (await import("sharp")).default;
-      const fs = createFs({ projectsDir: tempDir });
-      const source = await fs.createAsset("img", "concat-source", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const source = await fs.artifacts.create("img", "concat-source", "test-proj");
       expect(source.ok).toBe(true);
       if (!source.ok) return;
       const png = await sharp({
@@ -1270,11 +1270,11 @@ describe("slash commands e2e", () => {
       })
         .png()
         .toBuffer();
-      const write = await fs.writeFile(source.value.assetId, "original.png", png, "test-proj");
+      const write = await fs.files.write(source.value.slug, "original.png", png, "test-proj");
       expect(write.ok).toBe(true);
 
       const cmd = findCommand("/concat");
-      const args = parseCommandArgs(`@${source.value.assetId}`, cmd.params);
+      const args = parseCommandArgs(`@${source.value.slug}`, cmd.params);
       const result = await client.callTool({
         name: "concat_images",
         arguments: { ...args, project_slug: "test-proj" },
@@ -1284,7 +1284,7 @@ describe("slash commands e2e", () => {
       expect(parsed.width).toBe(1920);
       expect(parsed.height).toBe(1080);
       expect(parsed.layout).toBe("horizontal");
-      expect(parsed.source_images).toEqual([source.value.assetId]);
+      expect(parsed.source_images).toEqual([source.value.slug]);
       expect(parsed.placements).toHaveLength(1);
     });
   });
@@ -1648,15 +1648,15 @@ describe("slash commands e2e", () => {
   // -----------------------------------------------------------------------
   describe("/render different inputs", () => {
     it("accepts valid 6-digit hex colors", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "hex-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "hex-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           text_color: "#FFFFFF",
           highlight_color: "#000000",
@@ -1705,15 +1705,15 @@ describe("slash commands e2e", () => {
     });
 
     it("accepts audio_volume=0 (muted)", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "muted-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "muted-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           audio_volume: 0,
         },
@@ -1722,15 +1722,15 @@ describe("slash commands e2e", () => {
     });
 
     it("accepts audio_fade_in=0 and audio_fade_out=0", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "nofade-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "nofade-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           audio_fade_in: 0,
           audio_fade_out: 0,
@@ -1790,21 +1790,21 @@ describe("slash commands e2e", () => {
     });
 
     it("renders with portrait orientation from timeline config", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "portrait-vid", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "portrait-vid", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       // Set timeline render to portrait
-      await fs.writeProjectMeta("timeline", {
-        slots: [{ slug: asset.value.assetId }],
+      await fs.metadata.projects.write("timeline", {
+        slots: [{ slug: asset.value.slug }],
         render: "portrait",
       }, "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           orientation: "portrait",
         },
@@ -1815,15 +1815,15 @@ describe("slash commands e2e", () => {
     });
 
     it("errors when osg_asset_id is nonexistent", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "osg-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "osg-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           osg_asset_id: "img-nonexistent",
         },
@@ -1833,15 +1833,15 @@ describe("slash commands e2e", () => {
     });
 
     it("renders with background_mode=black", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "black-bg-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "black-bg-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           background_mode: "black",
         },
@@ -1850,16 +1850,16 @@ describe("slash commands e2e", () => {
     });
 
     it("renders with all subtitle options", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "subs-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "subs-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
-      await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "elevenlabs.json", Buffer.from("{}"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           subtitles_enabled: true,
           highlight_style: "highlight",
@@ -1871,15 +1871,15 @@ describe("slash commands e2e", () => {
     });
 
     it("enqueues when subtitles_enabled=true but no elevenlabs.json", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "no-subs", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "no-subs", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           subtitles_enabled: true,
         },
@@ -1894,17 +1894,17 @@ describe("slash commands e2e", () => {
   // -----------------------------------------------------------------------
   describe("/duplicate different inputs", () => {
     it("duplicates asset with multiple files", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("img", "multi-file", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("img", "multi-file", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.png", Buffer.from("fake-png"), "test-proj");
-      await fs.writeFile(asset.value.assetId, "thumbnail.jpg", Buffer.from("fake-jpg"), "test-proj");
-      await fs.writeFile(asset.value.assetId, "notes.txt", "some notes", "test-proj");
+      await fs.files.write(asset.value.slug, "original.png", Buffer.from("fake-png"), "test-proj");
+      await fs.files.write(asset.value.slug, "thumbnail.jpg", Buffer.from("fake-jpg"), "test-proj");
+      await fs.files.write(asset.value.slug, "notes.txt", "some notes", "test-proj");
 
       const result = await client.callTool({
         name: "duplicate_asset",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
         },
       });
@@ -1928,15 +1928,15 @@ describe("slash commands e2e", () => {
     });
 
     it("duplicates vid- prefixed asset preserving prefix", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "my-clip", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "my-clip", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
         name: "duplicate_asset",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
         },
       });
@@ -1973,15 +1973,15 @@ describe("slash commands e2e", () => {
     });
 
     it("preserves asset prefix after rename", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "old-name", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "old-name", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
         name: "rename_asset",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           new_name: "new-name",
           project_slug: "test-proj",
         },
@@ -1997,15 +1997,15 @@ describe("slash commands e2e", () => {
   // -----------------------------------------------------------------------
   describe("/delete different inputs", () => {
     it("deleting a vid- asset works", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "to-delete", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "to-delete", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
         name: "delete_asset",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
         },
       });
@@ -2074,15 +2074,15 @@ describe("slash commands e2e", () => {
       const origKey = process.env.KIE_API_KEY;
       process.env.KIE_API_KEY = "test-key";
       try {
-        const fs = createFs({ projectsDir: tempDir });
-        const asset = await fs.createAsset("aud", "my-track", "test-proj");
+        const fs = createEngineForTest(tempDir);
+        const asset = await fs.artifacts.create("aud", "my-track", "test-proj");
         if (!asset.ok) throw new Error("Failed to create asset");
-        await fs.writeFile(asset.value.assetId, "track.mp3", Buffer.from("fake-mp3"), "test-proj");
+        await fs.files.write(asset.value.slug, "track.mp3", Buffer.from("fake-mp3"), "test-proj");
 
         const result = await client.callTool({
           name: "isolate_vocals",
           arguments: {
-            asset_id: asset.value.assetId,
+            asset_id: asset.value.slug,
             project_slug: "test-proj",
           },
         });
@@ -2098,15 +2098,15 @@ describe("slash commands e2e", () => {
       const origKey = process.env.KIE_API_KEY;
       process.env.KIE_API_KEY = "test-key";
       try {
-        const fs = createFs({ projectsDir: tempDir });
-        const asset = await fs.createAsset("aud", "wav-track", "test-proj");
+        const fs = createEngineForTest(tempDir);
+        const asset = await fs.artifacts.create("aud", "wav-track", "test-proj");
         if (!asset.ok) throw new Error("Failed to create asset");
-        await fs.writeFile(asset.value.assetId, "recording.wav", Buffer.from("fake-wav"), "test-proj");
+        await fs.files.write(asset.value.slug, "recording.wav", Buffer.from("fake-wav"), "test-proj");
 
         const result = await client.callTool({
           name: "isolate_vocals",
           arguments: {
-            asset_id: asset.value.assetId,
+            asset_id: asset.value.slug,
             project_slug: "test-proj",
           },
         });
@@ -2148,15 +2148,15 @@ describe("slash commands e2e", () => {
       const origKey = process.env.KIE_API_KEY;
       process.env.KIE_API_KEY = "test-key";
       try {
-        const fs = createFs({ projectsDir: tempDir });
-        const asset = await fs.createAsset("vid", "vid-noaudio", "test-proj");
+        const fs = createEngineForTest(tempDir);
+        const asset = await fs.artifacts.create("vid", "vid-noaudio", "test-proj");
         if (!asset.ok) throw new Error("Failed to create asset");
-        await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+        await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
         const result = await client.callTool({
           name: "isolate_vocals",
           arguments: {
-            asset_id: asset.value.assetId,
+            asset_id: asset.value.slug,
             project_slug: "test-proj",
           },
         });
@@ -2172,16 +2172,16 @@ describe("slash commands e2e", () => {
       const origKey = process.env.KIE_API_KEY;
       process.env.KIE_API_KEY = "test-key";
       try {
-        const fs = createFs({ projectsDir: tempDir });
-        const asset = await fs.createAsset("vid", "vid-withaudio", "test-proj");
+        const fs = createEngineForTest(tempDir);
+        const asset = await fs.artifacts.create("vid", "vid-withaudio", "test-proj");
         if (!asset.ok) throw new Error("Failed to create asset");
-        await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
-        await fs.writeFile(asset.value.assetId, "audio_original.mp3", Buffer.from("fake-mp3"), "test-proj");
+        await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+        await fs.files.write(asset.value.slug, "audio_original.mp3", Buffer.from("fake-mp3"), "test-proj");
 
         const result = await client.callTool({
           name: "isolate_vocals",
           arguments: {
-            asset_id: asset.value.assetId,
+            asset_id: asset.value.slug,
             project_slug: "test-proj",
           },
         });
@@ -2197,16 +2197,16 @@ describe("slash commands e2e", () => {
       const origKey = process.env.KIE_API_KEY;
       process.env.KIE_API_KEY = "test-key";
       try {
-        const fs = createFs({ projectsDir: tempDir });
-        const asset = await fs.createAsset("vid", "vid-fallback", "test-proj");
+        const fs = createEngineForTest(tempDir);
+        const asset = await fs.artifacts.create("vid", "vid-fallback", "test-proj");
         if (!asset.ok) throw new Error("Failed to create asset");
-        await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
-        await fs.writeFile(asset.value.assetId, "original.mp3", Buffer.from("fake-mp3"), "test-proj");
+        await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+        await fs.files.write(asset.value.slug, "original.mp3", Buffer.from("fake-mp3"), "test-proj");
 
         const result = await client.callTool({
           name: "isolate_vocals",
           arguments: {
-            asset_id: asset.value.assetId,
+            asset_id: asset.value.slug,
             project_slug: "test-proj",
           },
         });
@@ -2460,23 +2460,23 @@ describe("slash commands e2e", () => {
   // -----------------------------------------------------------------------
   describe("/render with OSG image", () => {
     it("renders with valid osg_asset_id", async () => {
-      const fs = createFs({ projectsDir: tempDir });
+      const fs = createEngineForTest(tempDir);
       // Create vid asset
-      const vid = await fs.createAsset("vid", "osg-vid", "test-proj");
+      const vid = await fs.artifacts.create("vid", "osg-vid", "test-proj");
       if (!vid.ok) throw new Error("Failed to create vid asset");
-      await fs.writeFile(vid.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(vid.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       // Create img asset for OSG
-      const img = await fs.createAsset("img", "logo", "test-proj");
+      const img = await fs.artifacts.create("img", "logo", "test-proj");
       if (!img.ok) throw new Error("Failed to create img asset");
-      await fs.writeFile(img.value.assetId, "logo.png", Buffer.from("fake-png"), "test-proj");
+      await fs.files.write(img.value.slug, "logo.png", Buffer.from("fake-png"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: vid.value.assetId,
+          asset_id: vid.value.slug,
           project_slug: "test-proj",
-          osg_asset_id: img.value.assetId,
+          osg_asset_id: img.value.slug,
           osg_position: "bottom-left",
         },
       });
@@ -2486,22 +2486,22 @@ describe("slash commands e2e", () => {
     });
 
     it("errors for osg_asset_id with no image file", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const vid = await fs.createAsset("vid", "osg-vid2", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const vid = await fs.artifacts.create("vid", "osg-vid2", "test-proj");
       if (!vid.ok) throw new Error("Failed to create vid asset");
-      await fs.writeFile(vid.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(vid.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       // Create img asset with only a text file (no actual image)
-      const img = await fs.createAsset("img", "no-image", "test-proj");
+      const img = await fs.artifacts.create("img", "no-image", "test-proj");
       if (!img.ok) throw new Error("Failed to create img asset");
-      await fs.writeFile(img.value.assetId, "notes.txt", "no image here", "test-proj");
+      await fs.files.write(img.value.slug, "notes.txt", "no image here", "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: vid.value.assetId,
+          asset_id: vid.value.slug,
           project_slug: "test-proj",
-          osg_asset_id: img.value.assetId,
+          osg_asset_id: img.value.slug,
         },
       });
       expect(result.isError).toBe(true);
@@ -2509,22 +2509,22 @@ describe("slash commands e2e", () => {
     });
 
     it("accepts all four osg_position values", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const vid = await fs.createAsset("vid", "osg-pos-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const vid = await fs.artifacts.create("vid", "osg-pos-test", "test-proj");
       if (!vid.ok) throw new Error("Failed to create vid asset");
-      await fs.writeFile(vid.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(vid.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
-      const img = await fs.createAsset("img", "pos-logo", "test-proj");
+      const img = await fs.artifacts.create("img", "pos-logo", "test-proj");
       if (!img.ok) throw new Error("Failed to create img asset");
-      await fs.writeFile(img.value.assetId, "logo.png", Buffer.from("fake-png"), "test-proj");
+      await fs.files.write(img.value.slug, "logo.png", Buffer.from("fake-png"), "test-proj");
 
       for (const pos of ["top-left", "top-right", "bottom-left", "bottom-right"] as const) {
         const result = await client.callTool({
           name: "render_video",
           arguments: {
-            asset_id: vid.value.assetId,
+            asset_id: vid.value.slug,
             project_slug: "test-proj",
-            osg_asset_id: img.value.assetId,
+            osg_asset_id: img.value.slug,
             osg_position: pos,
           },
         });
@@ -2538,16 +2538,16 @@ describe("slash commands e2e", () => {
   // -----------------------------------------------------------------------
   describe("/render subtitle auto-detection", () => {
     it("auto-enables subtitles when elevenlabs.json exists and subtitles_enabled not specified", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "auto-subs", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "auto-subs", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
-      await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "elevenlabs.json", Buffer.from("{}"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           // subtitles_enabled NOT specified — should auto-detect
         },
@@ -2558,16 +2558,16 @@ describe("slash commands e2e", () => {
     });
 
     it("subtitles_enabled=false overrides auto-detection", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "no-auto-subs", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "no-auto-subs", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
-      await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "elevenlabs.json", Buffer.from("{}"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           subtitles_enabled: false,
         },
@@ -2576,16 +2576,16 @@ describe("slash commands e2e", () => {
     });
 
     it("renders with highlight_style='impact' (default)", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "impact-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "impact-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
-      await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "elevenlabs.json", Buffer.from("{}"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           subtitles_enabled: true,
           highlight_style: "impact",
@@ -2595,17 +2595,17 @@ describe("slash commands e2e", () => {
     });
 
     it("renders with all position values", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "pos-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "pos-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
-      await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "elevenlabs.json", Buffer.from("{}"), "test-proj");
 
       for (const position of ["top", "middle", "bottom"] as const) {
         const result = await client.callTool({
           name: "render_video",
           arguments: {
-            asset_id: asset.value.assetId,
+            asset_id: asset.value.slug,
             project_slug: "test-proj",
             subtitles_enabled: true,
             position,
@@ -2616,16 +2616,16 @@ describe("slash commands e2e", () => {
     });
 
     it("renders with all font_size values", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "font-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "font-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       for (const font_size of ["small", "medium", "large"] as const) {
         const result = await client.callTool({
           name: "render_video",
           arguments: {
-            asset_id: asset.value.assetId,
+            asset_id: asset.value.slug,
             project_slug: "test-proj",
             font_size,
           },
@@ -2652,15 +2652,15 @@ describe("slash commands e2e", () => {
         const origKey = process.env.KIE_API_KEY;
         process.env.KIE_API_KEY = "test-key";
         try {
-          const fs = createFs({ projectsDir: tempDir });
-          const asset = await fs.createAsset("aud", `${ext}-track`, "test-proj");
+          const fs = createEngineForTest(tempDir);
+          const asset = await fs.artifacts.create("aud", `${ext}-track`, "test-proj");
           if (!asset.ok) throw new Error("Failed to create asset");
-          await fs.writeFile(asset.value.assetId, name, Buffer.from(`fake-${ext}`), "test-proj");
+          await fs.files.write(asset.value.slug, name, Buffer.from(`fake-${ext}`), "test-proj");
 
           const result = await client.callTool({
             name: "isolate_vocals",
             arguments: {
-              asset_id: asset.value.assetId,
+              asset_id: asset.value.slug,
               project_slug: "test-proj",
             },
           });
@@ -2679,15 +2679,15 @@ describe("slash commands e2e", () => {
   // -----------------------------------------------------------------------
   describe("/duplicate and /rename with aud- assets", () => {
     it("duplicates aud- asset preserving prefix", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("aud", "my-track", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("aud", "my-track", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "mix.mp3", Buffer.from("fake-mp3"), "test-proj");
+      await fs.files.write(asset.value.slug, "mix.mp3", Buffer.from("fake-mp3"), "test-proj");
 
       const result = await client.callTool({
         name: "duplicate_asset",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
         },
       });
@@ -2697,15 +2697,15 @@ describe("slash commands e2e", () => {
     });
 
     it("renames aud- asset preserving prefix", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("aud", "old-track", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("aud", "old-track", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "mix.mp3", Buffer.from("fake-mp3"), "test-proj");
+      await fs.files.write(asset.value.slug, "mix.mp3", Buffer.from("fake-mp3"), "test-proj");
 
       const result = await client.callTool({
         name: "rename_asset",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           new_name: "new-track",
           project_slug: "test-proj",
         },
@@ -2716,15 +2716,15 @@ describe("slash commands e2e", () => {
     });
 
     it("deletes aud- asset", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("aud", "del-track", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("aud", "del-track", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "mix.mp3", Buffer.from("fake-mp3"), "test-proj");
+      await fs.files.write(asset.value.slug, "mix.mp3", Buffer.from("fake-mp3"), "test-proj");
 
       const result = await client.callTool({
         name: "delete_asset",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
         },
       });
@@ -2738,7 +2738,7 @@ describe("slash commands e2e", () => {
   // -----------------------------------------------------------------------
   describe("/assign preserves timeline config", () => {
     it("preserves existing render orientation", async () => {
-      const fs = createFs({ projectsDir: tempDir });
+      const fs = createEngineForTest(tempDir);
       const data = Buffer.from("fake-png-data").toString("base64");
       const upload = await client.callTool({
         name: "upload_file",
@@ -2747,7 +2747,7 @@ describe("slash commands e2e", () => {
       const assetId = parseResult(upload).assetId as string;
 
       // Set timeline to portrait
-      await fs.writeProjectMeta("timeline", {
+      await fs.metadata.projects.write("timeline", {
         slots: [],
         render: "portrait",
       }, "test-proj");
@@ -2763,7 +2763,7 @@ describe("slash commands e2e", () => {
     });
 
     it("preserves existing slot volume/fade when reassigning", async () => {
-      const fs = createFs({ projectsDir: tempDir });
+      const fs = createEngineForTest(tempDir);
 
       const data = Buffer.from("fake-png-data").toString("base64");
       const upload1 = await client.callTool({
@@ -2778,7 +2778,7 @@ describe("slash commands e2e", () => {
       const id2 = parseResult(upload2).assetId as string;
 
       // Set timeline with volume/fade on slot 1
-      await fs.writeProjectMeta("timeline", {
+      await fs.metadata.projects.write("timeline", {
         slots: [{ slug: id1, volume: 80, audioFadeIn: 200, audioFadeOut: 300 }],
         render: "landscape",
       }, "test-proj");
@@ -2853,7 +2853,7 @@ describe("slash commands e2e", () => {
     });
 
     it("unassign_slot resets volume/fade settings", async () => {
-      const fs = createFs({ projectsDir: tempDir });
+      const fs = createEngineForTest(tempDir);
       const data = Buffer.from("fake-png-data").toString("base64");
       const upload = await client.callTool({
         name: "upload_file",
@@ -2862,7 +2862,7 @@ describe("slash commands e2e", () => {
       const assetId = parseResult(upload).assetId as string;
 
       // Set timeline with volume/fade
-      await fs.writeProjectMeta("timeline", {
+      await fs.metadata.projects.write("timeline", {
         slots: [{ slug: assetId, volume: 80, audioFadeIn: 200, audioFadeOut: 300 }],
         render: "landscape",
       }, "test-proj");
@@ -2892,15 +2892,15 @@ describe("slash commands e2e", () => {
       const origKey = process.env.OPENAI_API_KEY;
       process.env.OPENAI_API_KEY = "test-key";
       try {
-        const fs = createFs({ projectsDir: tempDir });
-        const asset = await fs.createAsset("vid", "no-params", "test-proj");
+        const fs = createEngineForTest(tempDir);
+        const asset = await fs.artifacts.create("vid", "no-params", "test-proj");
         if (!asset.ok) throw new Error("Failed to create asset");
 
         const result = await client.callTool({
           name: "rewrite_prompt",
           arguments: {
             project_slug: "test-proj",
-            asset_slug: asset.value.assetId,
+            asset_slug: asset.value.slug,
             scene_index: 0,
           },
         });
@@ -2916,12 +2916,12 @@ describe("slash commands e2e", () => {
       const origKey = process.env.OPENAI_API_KEY;
       process.env.OPENAI_API_KEY = "test-key";
       try {
-        const fs = createFs({ projectsDir: tempDir });
-        const asset = await fs.createAsset("vid", "scene-range", "test-proj");
+        const fs = createEngineForTest(tempDir);
+        const asset = await fs.artifacts.create("vid", "scene-range", "test-proj");
         if (!asset.ok) throw new Error("Failed to create asset");
 
         // Write tool.params with a single scene (no multi_prompt)
-        await fs.writeMetadata(asset.value.assetId, "tool.params", {
+        await fs.metadata.artifacts.write(asset.value.slug, "tool.params", {
           tool: "generate_kling30_video",
           prompt: "a test prompt",
           duration: 8,
@@ -2931,7 +2931,7 @@ describe("slash commands e2e", () => {
           name: "rewrite_prompt",
           arguments: {
             project_slug: "test-proj",
-            asset_slug: asset.value.assetId,
+            asset_slug: asset.value.slug,
             scene_index: 5,
           },
         });
@@ -2947,11 +2947,11 @@ describe("slash commands e2e", () => {
       const origKey = process.env.OPENAI_API_KEY;
       process.env.OPENAI_API_KEY = "test-key";
       try {
-        const fs = createFs({ projectsDir: tempDir });
-        const asset = await fs.createAsset("vid", "wrong-tool", "test-proj");
+        const fs = createEngineForTest(tempDir);
+        const asset = await fs.artifacts.create("vid", "wrong-tool", "test-proj");
         if (!asset.ok) throw new Error("Failed to create asset");
 
-        await fs.writeMetadata(asset.value.assetId, "tool.params", {
+        await fs.metadata.artifacts.write(asset.value.slug, "tool.params", {
           tool: "generate_grok_imagine_video",
           prompt: "a test prompt",
         }, "test-proj");
@@ -2960,7 +2960,7 @@ describe("slash commands e2e", () => {
           name: "rewrite_prompt",
           arguments: {
             project_slug: "test-proj",
-            asset_slug: asset.value.assetId,
+            asset_slug: asset.value.slug,
             scene_index: 0,
           },
         });
@@ -2999,15 +2999,15 @@ describe("slash commands e2e", () => {
   // -----------------------------------------------------------------------
   describe("/render video file detection", () => {
     it("finds .mov video file", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "mov-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "mov-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mov", Buffer.from("fake-mov"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mov", Buffer.from("fake-mov"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
         },
       });
@@ -3015,15 +3015,15 @@ describe("slash commands e2e", () => {
     });
 
     it("finds .webm video file", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "webm-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "webm-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.webm", Buffer.from("fake-webm"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.webm", Buffer.from("fake-webm"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
         },
       });
@@ -3031,15 +3031,15 @@ describe("slash commands e2e", () => {
     });
 
     it("errors for asset with no video file (only text)", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "no-video", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "no-video", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "notes.txt", "just text", "test-proj");
+      await fs.files.write(asset.value.slug, "notes.txt", "just text", "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
         },
       });
@@ -3048,16 +3048,16 @@ describe("slash commands e2e", () => {
     });
 
     it("prefers original.mp4 over other video files", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "prefer-original", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "prefer-original", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "render.mp4", Buffer.from("fake"), "test-proj");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake"), "test-proj");
+      await fs.files.write(asset.value.slug, "render.mp4", Buffer.from("fake"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
         },
       });
@@ -3065,15 +3065,15 @@ describe("slash commands e2e", () => {
     });
 
     it("renders with audio_volume=100 (max)", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "vol100", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "vol100", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           audio_volume: 100,
         },
@@ -3095,15 +3095,15 @@ describe("slash commands e2e", () => {
     });
 
     it("accepts lowercase hex '#abcdef'", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "lc-hex", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "lc-hex", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           text_color: "#abcdef",
         },
@@ -3117,14 +3117,14 @@ describe("slash commands e2e", () => {
   // -----------------------------------------------------------------------
   describe("/folder different asset types", () => {
     it("opens folder for aud- asset", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("aud", "my-audio", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("aud", "my-audio", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "mix.mp3", Buffer.from("fake"), "test-proj");
+      await fs.files.write(asset.value.slug, "mix.mp3", Buffer.from("fake"), "test-proj");
 
       const result = await client.callTool({
         name: "show_folder",
-        arguments: { asset_id: asset.value.assetId, project_slug: "test-proj" },
+        arguments: { asset_id: asset.value.slug, project_slug: "test-proj" },
       });
       // On macOS should succeed, but may fail on CI
       if (!result.isError) {
@@ -3135,14 +3135,14 @@ describe("slash commands e2e", () => {
     });
 
     it("opens folder for vid- asset", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "my-video", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "my-video", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake"), "test-proj");
 
       const result = await client.callTool({
         name: "show_folder",
-        arguments: { asset_id: asset.value.assetId, project_slug: "test-proj" },
+        arguments: { asset_id: asset.value.slug, project_slug: "test-proj" },
       });
       if (!result.isError) {
         const parsed = parseResult(result);
@@ -3451,14 +3451,14 @@ describe("slash commands e2e", () => {
   // -----------------------------------------------------------------------
   describe("/duplicate prefix extraction", () => {
     it("duplicates asset with no files (empty manifest)", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("img", "empty-asset", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("img", "empty-asset", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
 
       const result = await client.callTool({
         name: "duplicate_asset",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
         },
       });
@@ -3469,15 +3469,15 @@ describe("slash commands e2e", () => {
     });
 
     it("duplicate preserves copy name with 'copy' suffix", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("img", "beach-sunset", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("img", "beach-sunset", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "photo.png", Buffer.from("fake"), "test-proj");
+      await fs.files.write(asset.value.slug, "photo.png", Buffer.from("fake"), "test-proj");
 
       const result = await client.callTool({
         name: "duplicate_asset",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
         },
       });
@@ -3504,15 +3504,15 @@ describe("slash commands e2e", () => {
   // -----------------------------------------------------------------------
   describe("/rename edge cases", () => {
     it("rename to single character name", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("img", "longname", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("img", "longname", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "photo.png", Buffer.from("fake"), "test-proj");
+      await fs.files.write(asset.value.slug, "photo.png", Buffer.from("fake"), "test-proj");
 
       const result = await client.callTool({
         name: "rename_asset",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           new_name: "x",
           project_slug: "test-proj",
         },
@@ -3523,15 +3523,15 @@ describe("slash commands e2e", () => {
     });
 
     it("rename to name with numbers", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "clip-old", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "clip-old", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake"), "test-proj");
 
       const result = await client.callTool({
         name: "rename_asset",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           new_name: "clip 42 final v3",
           project_slug: "test-proj",
         },
@@ -3557,15 +3557,15 @@ describe("slash commands e2e", () => {
   // -----------------------------------------------------------------------
   describe("/delete different asset types", () => {
     it("deletes img- asset created via fs.createAsset", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("img", "del-img", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("img", "del-img", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "photo.png", Buffer.from("fake"), "test-proj");
+      await fs.files.write(asset.value.slug, "photo.png", Buffer.from("fake"), "test-proj");
 
       const result = await client.callTool({
         name: "delete_asset",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
         },
       });
@@ -3592,15 +3592,15 @@ describe("slash commands e2e", () => {
   // -----------------------------------------------------------------------
   describe("/render additional video formats", () => {
     it("finds .avi video file", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "avi-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "avi-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "clip.avi", Buffer.from("fake-avi"), "test-proj");
+      await fs.files.write(asset.value.slug, "clip.avi", Buffer.from("fake-avi"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
         },
       });
@@ -3608,15 +3608,15 @@ describe("slash commands e2e", () => {
     });
 
     it("finds .mkv video file", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "mkv-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "mkv-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "movie.mkv", Buffer.from("fake-mkv"), "test-proj");
+      await fs.files.write(asset.value.slug, "movie.mkv", Buffer.from("fake-mkv"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
         },
       });
@@ -3624,15 +3624,15 @@ describe("slash commands e2e", () => {
     });
 
     it("renders with background_mode=blur (default)", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "blur-bg-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "blur-bg-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           background_mode: "blur",
         },
@@ -3641,16 +3641,16 @@ describe("slash commands e2e", () => {
     });
 
     it("renders with highlight_style='highlight'", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "highlight-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "highlight-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
-      await fs.writeFile(asset.value.assetId, "elevenlabs.json", Buffer.from("{}"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "elevenlabs.json", Buffer.from("{}"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           subtitles_enabled: true,
           highlight_style: "highlight",
@@ -3662,20 +3662,20 @@ describe("slash commands e2e", () => {
     });
 
     it("renders with square orientation from timeline config", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "square-vid", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "square-vid", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
-      await fs.writeProjectMeta("timeline", {
-        slots: [{ slug: asset.value.assetId }],
+      await fs.metadata.projects.write("timeline", {
+        slots: [{ slug: asset.value.slug }],
         render: "square",
       }, "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           orientation: "square",
         },
@@ -3685,15 +3685,15 @@ describe("slash commands e2e", () => {
     });
 
     it("renders with large audio_fade_in and audio_fade_out values", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("vid", "bigfade-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("vid", "bigfade-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: asset.value.assetId,
+          asset_id: asset.value.slug,
           project_slug: "test-proj",
           audio_fade_in: 5000,
           audio_fade_out: 3000,
@@ -3704,21 +3704,21 @@ describe("slash commands e2e", () => {
     });
 
     it("renders with OSG using .webp image", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const vid = await fs.createAsset("vid", "osg-webp", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const vid = await fs.artifacts.create("vid", "osg-webp", "test-proj");
       if (!vid.ok) throw new Error("Failed to create vid asset");
-      await fs.writeFile(vid.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(vid.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
-      const img = await fs.createAsset("img", "webp-logo", "test-proj");
+      const img = await fs.artifacts.create("img", "webp-logo", "test-proj");
       if (!img.ok) throw new Error("Failed to create img asset");
-      await fs.writeFile(img.value.assetId, "logo.webp", Buffer.from("fake-webp"), "test-proj");
+      await fs.files.write(img.value.slug, "logo.webp", Buffer.from("fake-webp"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: vid.value.assetId,
+          asset_id: vid.value.slug,
           project_slug: "test-proj",
-          osg_asset_id: img.value.assetId,
+          osg_asset_id: img.value.slug,
           osg_position: "top-left",
         },
       });
@@ -3726,21 +3726,21 @@ describe("slash commands e2e", () => {
     });
 
     it("renders with OSG using .svg image", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const vid = await fs.createAsset("vid", "osg-svg", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const vid = await fs.artifacts.create("vid", "osg-svg", "test-proj");
       if (!vid.ok) throw new Error("Failed to create vid asset");
-      await fs.writeFile(vid.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(vid.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
-      const img = await fs.createAsset("img", "svg-logo", "test-proj");
+      const img = await fs.artifacts.create("img", "svg-logo", "test-proj");
       if (!img.ok) throw new Error("Failed to create img asset");
-      await fs.writeFile(img.value.assetId, "icon.svg", Buffer.from("<svg></svg>"), "test-proj");
+      await fs.files.write(img.value.slug, "icon.svg", Buffer.from("<svg></svg>"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: vid.value.assetId,
+          asset_id: vid.value.slug,
           project_slug: "test-proj",
-          osg_asset_id: img.value.assetId,
+          osg_asset_id: img.value.slug,
           osg_position: "bottom-right",
         },
       });
@@ -3748,21 +3748,21 @@ describe("slash commands e2e", () => {
     });
 
     it("renders with OSG using .gif image", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const vid = await fs.createAsset("vid", "osg-gif", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const vid = await fs.artifacts.create("vid", "osg-gif", "test-proj");
       if (!vid.ok) throw new Error("Failed to create vid asset");
-      await fs.writeFile(vid.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      await fs.files.write(vid.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
 
-      const img = await fs.createAsset("img", "gif-logo", "test-proj");
+      const img = await fs.artifacts.create("img", "gif-logo", "test-proj");
       if (!img.ok) throw new Error("Failed to create img asset");
-      await fs.writeFile(img.value.assetId, "badge.gif", Buffer.from("GIF89a"), "test-proj");
+      await fs.files.write(img.value.slug, "badge.gif", Buffer.from("GIF89a"), "test-proj");
 
       const result = await client.callTool({
         name: "render_video",
         arguments: {
-          asset_id: vid.value.assetId,
+          asset_id: vid.value.slug,
           project_slug: "test-proj",
-          osg_asset_id: img.value.assetId,
+          osg_asset_id: img.value.slug,
         },
       });
       expect(result.isError).toBeFalsy();
@@ -3788,15 +3788,15 @@ describe("slash commands e2e", () => {
       const origKey = process.env.KIE_API_KEY;
       process.env.KIE_API_KEY = "test-key";
       try {
-        const fs = createFs({ projectsDir: tempDir });
-        const asset = await fs.createAsset("aud", "m4a-track", "test-proj");
+        const fs = createEngineForTest(tempDir);
+        const asset = await fs.artifacts.create("aud", "m4a-track", "test-proj");
         if (!asset.ok) throw new Error("Failed to create asset");
-        await fs.writeFile(asset.value.assetId, "episode.m4a", Buffer.from("fake-m4a"), "test-proj");
+        await fs.files.write(asset.value.slug, "episode.m4a", Buffer.from("fake-m4a"), "test-proj");
 
         const result = await client.callTool({
           name: "isolate_vocals",
           arguments: {
-            asset_id: asset.value.assetId,
+            asset_id: asset.value.slug,
             project_slug: "test-proj",
           },
         });
@@ -3812,15 +3812,15 @@ describe("slash commands e2e", () => {
       const origKey = process.env.KIE_API_KEY;
       process.env.KIE_API_KEY = "test-key";
       try {
-        const fs = createFs({ projectsDir: tempDir });
-        const asset = await fs.createAsset("aud", "text-only", "test-proj");
+        const fs = createEngineForTest(tempDir);
+        const asset = await fs.artifacts.create("aud", "text-only", "test-proj");
         if (!asset.ok) throw new Error("Failed to create asset");
-        await fs.writeFile(asset.value.assetId, "readme.txt", "text", "test-proj");
+        await fs.files.write(asset.value.slug, "readme.txt", "text", "test-proj");
 
         const result = await client.callTool({
           name: "isolate_vocals",
           arguments: {
-            asset_id: asset.value.assetId,
+            asset_id: asset.value.slug,
             project_slug: "test-proj",
           },
         });
@@ -3836,17 +3836,17 @@ describe("slash commands e2e", () => {
       const origKey = process.env.KIE_API_KEY;
       process.env.KIE_API_KEY = "test-key";
       try {
-        const fs = createFs({ projectsDir: tempDir });
-        const asset = await fs.createAsset("vid", "both-audio", "test-proj");
+        const fs = createEngineForTest(tempDir);
+        const asset = await fs.artifacts.create("vid", "both-audio", "test-proj");
         if (!asset.ok) throw new Error("Failed to create asset");
-        await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
-        await fs.writeFile(asset.value.assetId, "original.mp3", Buffer.from("original-mp3"), "test-proj");
-        await fs.writeFile(asset.value.assetId, "audio_original.mp3", Buffer.from("audio-original-mp3"), "test-proj");
+        await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+        await fs.files.write(asset.value.slug, "original.mp3", Buffer.from("original-mp3"), "test-proj");
+        await fs.files.write(asset.value.slug, "audio_original.mp3", Buffer.from("audio-original-mp3"), "test-proj");
 
         const result = await client.callTool({
           name: "isolate_vocals",
           arguments: {
-            asset_id: asset.value.assetId,
+            asset_id: asset.value.slug,
             project_slug: "test-proj",
           },
         });
@@ -3907,10 +3907,10 @@ describe("slash commands e2e", () => {
       const origKey = process.env.OPENAI_API_KEY;
       process.env.OPENAI_API_KEY = "test-key";
       try {
-        const fs = createFs({ projectsDir: tempDir });
-        const asset = await fs.createAsset("vid", "neg-scene", "test-proj");
+        const fs = createEngineForTest(tempDir);
+        const asset = await fs.artifacts.create("vid", "neg-scene", "test-proj");
         if (!asset.ok) throw new Error("Failed to create asset");
-        await fs.writeMetadata(asset.value.assetId, "tool.params", {
+        await fs.metadata.artifacts.write(asset.value.slug, "tool.params", {
           tool: "generate_kling30_video",
           prompt: "test",
           duration: 8,
@@ -3920,7 +3920,7 @@ describe("slash commands e2e", () => {
           name: "rewrite_prompt",
           arguments: {
             project_slug: "test-proj",
-            asset_slug: asset.value.assetId,
+            asset_slug: asset.value.slug,
             scene_index: -1,
           },
         });
@@ -3936,10 +3936,10 @@ describe("slash commands e2e", () => {
       const origKey = process.env.OPENAI_API_KEY;
       process.env.OPENAI_API_KEY = "test-key";
       try {
-        const fs = createFs({ projectsDir: tempDir });
-        const asset = await fs.createAsset("vid", "multi-scene", "test-proj");
+        const fs = createEngineForTest(tempDir);
+        const asset = await fs.artifacts.create("vid", "multi-scene", "test-proj");
         if (!asset.ok) throw new Error("Failed to create asset");
-        await fs.writeMetadata(asset.value.assetId, "tool.params", {
+        await fs.metadata.artifacts.write(asset.value.slug, "tool.params", {
           tool: "generate_kling30_video",
           multi_prompt: [
             { prompt: "scene one", duration: 4 },
@@ -3951,7 +3951,7 @@ describe("slash commands e2e", () => {
           name: "rewrite_prompt",
           arguments: {
             project_slug: "test-proj",
-            asset_slug: asset.value.assetId,
+            asset_slug: asset.value.slug,
             scene_index: 2, // only 0 and 1 are valid
           },
         });
@@ -3997,19 +3997,19 @@ describe("slash commands e2e", () => {
     });
 
     it("resolves correct path for img- asset", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const asset = await fs.createAsset("img", "folder-test", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const asset = await fs.artifacts.create("img", "folder-test", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "photo.png", Buffer.from("fake"), "test-proj");
+      await fs.files.write(asset.value.slug, "photo.png", Buffer.from("fake"), "test-proj");
 
       const result = await client.callTool({
         name: "show_folder",
-        arguments: { asset_id: asset.value.assetId, project_slug: "test-proj" },
+        arguments: { asset_id: asset.value.slug, project_slug: "test-proj" },
       });
       // On macOS with Finder this should succeed; either way no validation error
       if (!result.isError) {
         const parsed = parseResult(result);
-        expect(parsed.path).toContain(asset.value.assetId);
+        expect(parsed.path).toBe(asset.value.path);
       }
     });
   });
@@ -4089,13 +4089,13 @@ describe("slash commands e2e", () => {
   // -----------------------------------------------------------------------
   describe("full round-trip: create → rename → duplicate → assign → render", () => {
     it("end-to-end lifecycle with vid asset", async () => {
-      const fs = createFs({ projectsDir: tempDir });
+      const fs = createEngineForTest(tempDir);
 
       // Create vid asset
-      const asset = await fs.createAsset("vid", "raw-footage", "test-proj");
+      const asset = await fs.artifacts.create("vid", "raw-footage", "test-proj");
       if (!asset.ok) throw new Error("Failed to create asset");
-      await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
-      const origId = asset.value.assetId;
+      await fs.files.write(asset.value.slug, "original.mp4", Buffer.from("fake-mp4"), "test-proj");
+      const origId = asset.value.slug;
 
       // Rename
       const renameResult = await client.callTool({

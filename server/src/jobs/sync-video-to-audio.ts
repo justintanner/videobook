@@ -1,6 +1,7 @@
 import type { ElevenLabsSpeechToTextResponse } from "@apicity/elevenlabs";
 import { findAudioFile, findVideoFile } from "videobook-engine";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
+import { rm } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { hasTimedSpeechWords, resolveAudioCue } from "../audio-cue.js";
 import type { RequestedAudioSyncAnchor } from "../audio-sync-request.js";
@@ -17,6 +18,7 @@ import {
   writeElevenLabsTranscript,
 } from "./_transcribe.js";
 import { claimLockedLease, withLockedLocalLease } from "./_lease.js";
+import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
 const LOCK_DURATION_MS = 900_000;
 
@@ -143,11 +145,11 @@ export async function validateAudioSyncOutput(
 }
 
 async function readUsableTimedTranscript(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<unknown | null> {
-  const result = await fs.readFile(assetId, "elevenlabs.json", projectSlug);
+  const result = await fs.files.read(assetId, "elevenlabs.json", projectSlug);
   if (!result.ok) {
     if (result.error.code === "NOT_FOUND") return null;
     throw new Error(`Failed to read elevenlabs.json: ${result.error.message}`);
@@ -161,14 +163,14 @@ async function readUsableTimedTranscript(
 }
 
 export async function prepareAudioSyncTranscript(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<PreparedAudioSyncTranscript> {
   const existing = await readUsableTimedTranscript(fs, assetId, projectSlug);
   if (existing !== null) return { transcript: existing, replacement: null };
 
-  const manifest = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+  const manifest = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
   if (!manifest.ok) throw new Error(`auto-transcribe failed: ${manifest.error.message}`);
   const audioFile = findAudioFile(manifest.value.files, assetId)
     ?? findVideoFile(manifest.value.files);
@@ -187,27 +189,21 @@ export async function prepareAudioSyncTranscript(
 }
 
 async function deleteIfPresent(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   filename: string,
   projectSlug: string,
 ): Promise<void> {
-  const result = await fs.deleteFile(assetId, filename, projectSlug);
+  const result = await fs.files.delete(assetId, filename, projectSlug);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
     throw new Error(`Failed to delete ${filename}: ${result.error.message}`);
   }
 }
 
 async function discardTemp(
-  fs: VideocityFs,
-  assetId: string,
   outputPath: string,
-  projectSlug: string,
 ): Promise<void> {
-  const filename = basename(outputPath);
-  await fs.deleteFile(assetId, filename, projectSlug).catch(() => undefined);
-  const remaining = await fs.readFile(assetId, filename, projectSlug);
-  if (remaining.ok) throw new Error(`Failed to discard temporary file ${filename}`);
+  await rm(outputPath, { force: true });
 }
 
 function errorMessage(error: unknown): string {
@@ -215,21 +211,28 @@ function errorMessage(error: unknown): string {
 }
 
 export async function restoreAudioSyncSnapshot(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   restoreCommit: string,
 ): Promise<string> {
-  let restored: string | null;
-  try {
-    restored = await fs.restoreAsset(assetId, restoreCommit, projectSlug);
-  } catch (error) {
-    throw new Error(`Failed to restore ${assetId} to ${restoreCommit}: ${errorMessage(error)}`);
+  const artifact = fs.artifacts.get(projectSlug, assetId);
+  if (!artifact.ok) {
+    throw new Error(
+      `Failed to resolve ${assetId} for restore: ${artifact.error.message}`,
+    );
   }
-  if (restored === null) {
-    throw new Error(`Failed to restore ${assetId} to ${restoreCommit}: engine returned no commit`);
+  const restored = await fs.history.restoreArtifact(
+    artifact.value.artifactId,
+    restoreCommit,
+    projectSlug,
+  );
+  if (!restored.ok) {
+    throw new Error(
+      `Failed to restore ${assetId} to ${restoreCommit}: ${restored.error.message}`,
+    );
   }
-  return restored;
+  return restored.value.hash;
 }
 
 function rollbackError(original: unknown, failures: readonly unknown[]): Error {
@@ -239,27 +242,28 @@ function rollbackError(original: unknown, failures: readonly unknown[]): Error {
 }
 
 async function clearAudioSyncFailure(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<void> {
-  const cleared = await fs.generationErrors.clear(projectSlug, assetId);
+  const cleared = await fs.jobs.failures.clear(projectSlug, assetId);
   if (!cleared.ok) {
     throw new Error(`Failed to clear audio-sync error for ${assetId}: ${cleared.error.message}`);
   }
 }
 
 async function rollbackAudioSyncFailure(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   outputPath: string,
   projectSlug: string,
   restoreCommit: string,
   original: unknown,
+  markFailureHandled: () => void,
 ): Promise<never> {
   const failures: unknown[] = [];
   try {
-    await discardTemp(fs, assetId, outputPath, projectSlug);
+    await discardTemp(outputPath);
   } catch (error) {
     failures.push(error);
   }
@@ -274,11 +278,12 @@ async function rollbackAudioSyncFailure(
     failures.push(error);
   }
   if (failures.length > 0) throw rollbackError(original, failures);
+  markFailureHandled();
   throw original;
 }
 
 async function restoreAfterEnqueueFailure(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   assetDir: string,
   projectSlug: string,
@@ -295,9 +300,9 @@ async function restoreAfterEnqueueFailure(
   );
   if (!claim.ok) throw new Error(`Could not claim ${assetId} for rollback: ${claim.reason}`);
 
-  const released = await fs.releaseLock(assetDir);
+  const released = await fs.jobs.locks.release(assetDir);
   if (!released.ok) {
-    await fs.assetWork.fail(projectSlug, assetId, claim.ownerId, {
+    await fs.jobs.artifactWork.fail(projectSlug, assetId, claim.ownerId, {
       message: released.error.message,
     }).catch(() => undefined);
     throw new Error(`Failed to release ${assetId} lock before rollback: ${released.error.message}`);
@@ -309,13 +314,13 @@ async function restoreAfterEnqueueFailure(
     await restoreAudioSyncSnapshot(fs, assetId, projectSlug, restoreCommit);
     restored = true;
   } catch (error) {
-    await fs.assetWork.fail(projectSlug, assetId, claim.ownerId, {
+    await fs.jobs.artifactWork.fail(projectSlug, assetId, claim.ownerId, {
       message: errorMessage(error),
     }).catch(() => undefined);
     throw error;
   } finally {
     if (restored) {
-      await fs.assetWork.complete(projectSlug, assetId, claim.ownerId).catch(() => undefined);
+      fs.jobs.artifactWork.complete(projectSlug, assetId, claim.ownerId);
     }
   }
 }
@@ -326,7 +331,7 @@ function requestedAnchorMetadata(anchor: RequestedAudioSyncAnchor): Record<strin
     : { video_seconds: anchor.videoSeconds, audio_cue: anchor.audioCue };
 }
 
-export function registerSyncVideoToAudioJob(fs: VideocityFs): void {
+export function registerSyncVideoToAudioJob(fs: Engine): void {
   registerJobHandler("sync_video_to_audio", async (payload, ctx) => {
     const {
       inputPath,
@@ -353,7 +358,7 @@ export function registerSyncVideoToAudioJob(fs: VideocityFs): void {
         { durationMs: LOCK_DURATION_MS, data: { state: "syncing_audio" } },
         async () => {
           rollbackState.enteredLease = true;
-          const history = await fs.getAssetHistory(assetId, projectSlug, 1);
+          const history = await fs.history.artifact(assetId, projectSlug, 1);
           rollbackState.restoreCommit = history[0]?.hash ?? null;
           if (!rollbackState.restoreCommit) {
             throw new Error(`sync_video_to_audio requires revision history for ${assetId}`);
@@ -385,15 +390,13 @@ export function registerSyncVideoToAudioJob(fs: VideocityFs): void {
           await validateAudioSyncOutput(inputPath, outputPath, plan, ctx.signal);
 
           const inputFilename = basename(inputPath);
-          const outputFilename = basename(outputPath);
-          const rendered = await fs.readFile(assetId, outputFilename, projectSlug);
-          if (!rendered.ok) {
-            throw new Error(`Failed to read rendered audio-sync video: ${rendered.error.message}`);
-          }
-          const written = await fs.writeFile(assetId, inputFilename, rendered.value, projectSlug);
-          if (!written.ok) {
-            throw new Error(`Failed to replace ${inputFilename}: ${written.error.message}`);
-          }
+          await replaceArtifactFileFromPath(
+            fs,
+            projectSlug,
+            assetId,
+            inputFilename,
+            outputPath,
+          );
           if (preparedTranscript?.replacement) {
             await writeElevenLabsTranscript(
               fs,
@@ -403,7 +406,6 @@ export function registerSyncVideoToAudioJob(fs: VideocityFs): void {
               AUTO_TRANSCRIBE_OPTIONS,
             );
           }
-          await discardTemp(fs, assetId, outputPath, projectSlug);
           for (const filename of STALE_VISUAL_DERIVATIVES) {
             await deleteIfPresent(fs, assetId, filename, projectSlug);
           }
@@ -436,6 +438,7 @@ export function registerSyncVideoToAudioJob(fs: VideocityFs): void {
         projectSlug,
         rollbackState.restoreCommit,
         error,
+        () => ctx.markAssetFailureHandled(),
       );
     }
 

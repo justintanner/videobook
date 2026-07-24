@@ -1,5 +1,5 @@
+import { fs } from "./fs.js";
 import { describe, expect, it } from "vitest";
-import { createFs } from "videobook-engine";
 import {
   GENERATION_ACTIONS,
   getActionSpec,
@@ -45,7 +45,6 @@ describe("generation-registry", () => {
   });
 
   it("exposes each canonical tool exactly once and no historical aliases", () => {
-    const fs = createFs({ projectsDir: "/tmp/test-generation-registry" });
     const names = getAllToolDefs(fs).map((tool) => tool.name);
     const registered = new Set(names);
     const canonical = new Set(GENERATION_ACTIONS.map((action) => action.canonical_name));

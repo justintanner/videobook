@@ -1,8 +1,8 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function renameProjectDef(fs: VideocityFs): ToolDef {
+export function renameProjectDef(fs: Engine): ToolDef {
   return {
     name: "rename_project",
     description:
@@ -16,7 +16,7 @@ export function renameProjectDef(fs: VideocityFs): ToolDef {
         old_slug: string;
         new_slug: string;
       };
-      const result = await fs.renameProject(old_slug, new_slug);
+      const result = await fs.projects.rename(old_slug, new_slug);
       if (result.ok) {
         return {
           content: [

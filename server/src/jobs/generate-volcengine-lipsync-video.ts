@@ -1,4 +1,4 @@
-import type { TaskType, VideocityFs } from "videobook-engine";
+import type { TaskType, Engine } from "videobook-engine";
 import type { VolcengineVideoToVideoLipSyncMode } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -33,14 +33,14 @@ type GenerateVolcengineLipsyncVideoPayload = {
 };
 
 async function uploadSingle(
-  fs: VideocityFs,
+  fs: Engine,
   input: RefInput,
   projectSlug: string,
 ): Promise<string> {
   return uploadAssetToKie(fs, input.assetId, input.filename, projectSlug);
 }
 
-export function registerGenerateVolcengineLipsyncVideoJob(fs: VideocityFs): void {
+export function registerGenerateVolcengineLipsyncVideoJob(fs: Engine): void {
   registerJobHandler("generate_volcengine_lipsync_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug,
@@ -59,7 +59,7 @@ export function registerGenerateVolcengineLipsyncVideoJob(fs: VideocityFs): void
     );
 
     // volcengine lip-sync bills per second of source video; schema has no duration.
-    const videoMeta = await fs.readMetadata<{ duration?: number }>(
+    const videoMeta = await fs.metadata.artifacts.read<{ duration?: number }>(
       videoInput.assetId, "original", projectSlug,
     );
     const durationHint =

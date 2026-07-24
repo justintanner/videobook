@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -20,7 +20,7 @@ async function getVideoDuration(filePath: string): Promise<number> {
   return parseFloat(probe.format.duration);
 }
 
-export function reverseVideoDef(fs: VideocityFs): ToolDef {
+export function reverseVideoDef(fs: Engine): ToolDef {
   return {
     name: "reverse_video",
     description: "Reverse video playback (play backwards). Toggle operation — reversing twice restores original. Max 300s due to memory buffering.",
@@ -30,7 +30,7 @@ export function reverseVideoDef(fs: VideocityFs): ToolDef {
     },
     handler: async (args) => {
       const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

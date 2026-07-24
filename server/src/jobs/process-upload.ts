@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetEntry, AssetType } from "videobook-engine";
+import type { Engine, Artifact, ArtifactKind } from "videobook-engine";
 import * as path from "node:path";
 import { queue } from "../queue.js";
 import { probeVideo } from "../ffmpeg.js";
@@ -12,7 +12,7 @@ const SCRIPT_EXTENSIONS = new Set([".md"]);
 // proof that processing already ran, so the upload sweep must never promote
 // one of them to `original.{ext}` — that's how a portrait PNG gets cropped
 // into a 1920x1080 landscape JPG when the sweep races a missing
-// .original.json.
+// native processing metadata.
 const IMAGE_VARIANT_FILENAMES = new Set(["landscape.jpg", "portrait.jpg", "square.jpg"]);
 
 type UploadMediaType = "video" | "image" | "audio" | "script";
@@ -29,7 +29,7 @@ export type UnprocessedUpload = {
 // promoted OG thumbnail (original.jpg) must not be classified as an image
 // upload just because the .jpg sorts before the .mp4. Returns null for asset
 // types that aren't candidates for the upload sweep (character/final/plan).
-function uploadShapeFor(type: AssetType): { mediaType: UploadMediaType; extensions: Set<string> } | null {
+function uploadShapeFor(type: ArtifactKind): { mediaType: UploadMediaType; extensions: Set<string> } | null {
   switch (type) {
     case "video": return { mediaType: "video", extensions: VIDEO_EXTENSIONS };
     case "audio": return { mediaType: "audio", extensions: AUDIO_EXTENSIONS };
@@ -40,30 +40,30 @@ function uploadShapeFor(type: AssetType): { mediaType: UploadMediaType; extensio
 }
 
 export async function findUnprocessedUploads(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
-  assets: AssetEntry[],
+  assets: Artifact[],
 ): Promise<UnprocessedUpload[]> {
   const results = await Promise.all(
     assets.map(async (asset): Promise<UnprocessedUpload | null> => {
-      if (asset.id === "final") return null;
-      const shape = uploadShapeFor(asset.type);
+      if (asset.slug === "final") return null;
+      const shape = uploadShapeFor(asset.kind);
       if (!shape) return null;
 
       // Parallelize the independent disk/db reads — each was ~5-20ms serially,
       // multiplied by every asset on every sync.
       const [manifest, originResult, locked, work] = await Promise.all([
-        fs.getManifest(asset.id, projectSlug),
-        fs.readMetadata(asset.id, "original", projectSlug),
-        fs.isLocked(asset.path),
-        fs.assetWork.read(projectSlug, asset.id),
+        fs.files.manifest(asset.slug, projectSlug),
+        fs.metadata.artifacts.read(asset.slug, "original", projectSlug),
+        fs.jobs.locks.isLocked(asset.path),
+        fs.jobs.artifactWork.read(projectSlug, asset.slug),
       ]);
       if (!manifest.ok) return null;
       if (originResult.ok) return null;
       // Skip assets currently held by another job (splice/trim/render mid-write).
       // Otherwise the sweep races the in-flight ffmpeg writing original.mp4 and
       // hands a half-written file to process_video, producing a spurious
-      // .generation-error.json before the real owner finishes.
+      // runtime failure before the real owner finishes.
       if (locked) return null;
       // Skip assets that already have an active job or a terminal failure.
       // 'pending'/'working' WITH meta.kind = the upload's own process_video is
@@ -87,8 +87,8 @@ export async function findUnprocessedUploads(
       // produced by upload-file and processExternalUpload itself. Only fall
       // back to an arbitrary-name file (user dragged "photo.png" straight
       // into the asset folder) when no `original.*` exists AND no
-      // process_image variant exists. Without that variant guard, a missing
-      // `.original.json` would cause the sweep to pick the alphabetically
+      // process_image variant exists. Without that variant guard, missing
+      // processing metadata would cause the sweep to pick the alphabetically
       // first variant (landscape.jpg) and rename it to original.jpg.
       let mediaFile = manifest.value.files.find((f) => {
         const ext = path.extname(f.name).toLowerCase();
@@ -108,7 +108,7 @@ export async function findUnprocessedUploads(
       const ext = path.extname(mediaFile.name).toLowerCase();
 
       return {
-        assetId: asset.id,
+        assetId: asset.slug,
         assetDir: asset.path,
         mediaFilename: mediaFile.name,
         extension: ext,
@@ -120,19 +120,17 @@ export async function findUnprocessedUploads(
 }
 
 export async function processExternalUpload(
-  fs: VideocityFs,
+  fs: Engine,
   upload: UnprocessedUpload,
   projectSlug: string,
 ): Promise<void> {
   const targetFilename = `original${upload.extension}`;
 
   if (upload.mediaFilename !== targetFilename) {
-    await fs.renameFile(upload.assetId, upload.mediaFilename, targetFilename, projectSlug);
+    await fs.files.rename(upload.assetId, upload.mediaFilename, targetFilename, projectSlug);
   }
 
-  // Drop any prior failure sidecar so a successful retry dismisses the
-  // /inbox FAILED tile (mirrors writePendingTask in pending-task.ts).
-  await fs.deleteFile(upload.assetId, ".generation-error.json", projectSlug).catch(() => {});
+  await fs.jobs.failures.clear(projectSlug, upload.assetId);
 
   const provenance = { origin: "external", processed_at: new Date().toISOString() };
   if (upload.mediaType === "video") {
@@ -164,13 +162,13 @@ export async function processExternalUpload(
         duration = probe.duration;
       }
     } catch { /* non-fatal — list_assets backfill can recover */ }
-    await fs.writeMetadata(
+    await fs.metadata.artifacts.write(
       upload.assetId,
       "original",
       { ...provenance, ...(duration !== undefined ? { duration } : {}) },
       projectSlug,
     );
   } else {
-    await fs.writeMetadata(upload.assetId, "original", provenance, projectSlug);
+    await fs.metadata.artifacts.write(upload.assetId, "original", provenance, projectSlug);
   }
 }

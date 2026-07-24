@@ -33,7 +33,6 @@ export function useNotebookPlan({ notebookId, projectSlug, callTool, mcpState }:
   const [definition, setDefinitionState] = useState<NotebookPlanDefinition | null>(null)
   const [saveState, setSaveState] = useState<NotebookSaveState>('loading')
   const [error, setError] = useState<string | null>(null)
-  const [legacy, setLegacy] = useState(false)
   const [loadVersion, setLoadVersion] = useState(0)
   const [loadedDefinition, setLoadedDefinition] = useState<NotebookPlanDefinition | null>(null)
   const callToolRef = useRef(callTool)
@@ -51,7 +50,6 @@ export function useNotebookPlan({ notebookId, projectSlug, callTool, mcpState }:
     setLoadedDefinition(null)
     setSaveState('loading')
     setError(null)
-    setLegacy(false)
   }
 
   useEffect(() => {
@@ -83,7 +81,6 @@ export function useNotebookPlan({ notebookId, projectSlug, callTool, mcpState }:
     try {
       await attempt
       lastSavedJsonRef.current = serialized
-      setLegacy(false)
       setSaveState('saved')
     } catch (cause) {
       setSaveState('error')
@@ -130,8 +127,6 @@ export function useNotebookPlan({ notebookId, projectSlug, callTool, mcpState }:
         const parsed = JSON.parse(responseText(result)) as unknown
         const loaded = toDefinition(parsed)
         if (cancelled) return
-        const response = parsed as Partial<NotebookPlanResponse>
-        setLegacy(response.legacy === true)
         const normalized = normalizeDefinition(loaded)
         lastSavedJsonRef.current = JSON.stringify(loaded)
         setDefinitionState(normalized.definition)
@@ -157,7 +152,6 @@ export function useNotebookPlan({ notebookId, projectSlug, callTool, mcpState }:
     definition,
     saveState,
     error,
-    legacy,
     loadVersion,
     loadedDefinition,
     setDefinition,

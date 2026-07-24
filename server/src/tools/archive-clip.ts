@@ -1,15 +1,15 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import type { ToolDef } from "./tool-def.js";
 
-async function resolveQueueProjectSlug(fs: VideocityFs, projectSlug: string | undefined): Promise<string> {
+async function resolveQueueProjectSlug(fs: Engine, projectSlug: string | undefined): Promise<string> {
   if (projectSlug) return projectSlug;
-  const existing = await fs.getProject();
-  if (existing.ok) return existing.value.metadata.slug;
-  const created = await fs.createProject();
+  const existing = await fs.projects.get();
+  if (existing.ok) return existing.value.slug;
+  const created = await fs.projects.create();
   if (created.ok) return created.value.slug;
   throw new Error(created.error.message);
 }
@@ -18,7 +18,7 @@ function normalizeUrl(url: string): string {
   return /^https?:\/\//i.test(url) ? url : `https://${url}`;
 }
 
-export function archiveClipDef(fs: VideocityFs): ToolDef {
+export function archiveClipDef(fs: Engine): ToolDef {
   return {
     name: "archive_clip",
     description: "Archive a full URL or existing video/audio asset to the global clip archive (B2 if configured, otherwise a local archive folder next to the projects directory), dedupe by media SHA-256, and transcribe long clips in chunks.",
@@ -88,7 +88,7 @@ export function archiveClipDef(fs: VideocityFs): ToolDef {
       }
 
       if (asset_id && project_slug) {
-        const manifest = await fs.getManifest(asset_id, project_slug, { includeDotfiles: true });
+        const manifest = await fs.files.manifest(asset_id, project_slug, { includeDotfiles: true });
         if (!manifest.ok) {
           return {
             isError: true as const,
@@ -127,4 +127,3 @@ export function archiveClipDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

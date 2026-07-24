@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join, extname } from "node:path";
 import { queue } from "../queue.js";
@@ -51,7 +51,7 @@ function validateTrimParams(
   return { mode: "keep", trimStart, trimEnd };
 }
 
-export function trimAudioDef(fs: VideocityFs): ToolDef {
+export function trimAudioDef(fs: Engine): ToolDef {
   return {
     name: "trim_audio",
     description: "Trim an aud-* asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for vid-* assets so picture and sound remain synchronized. Operates in-place with git versioning.",
@@ -84,7 +84,7 @@ export function trimAudioDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const manifestResult = await fs.getManifest(assetId, project_slug);
+      const manifestResult = await fs.files.manifest(assetId, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

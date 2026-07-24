@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import type { Seedance2MiniAspectRatio, Seedance2MiniResolution } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -30,7 +30,7 @@ type GenerateSeedance2MiniVideoPayload = {
   replaceAudioWith?: RefInput;
 };
 
-async function uploadAll(fs: VideocityFs, inputs: RefInput[], projectSlug: string): Promise<string[]> {
+async function uploadAll(fs: Engine, inputs: RefInput[], projectSlug: string): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
     urls.push(await uploadAssetToKie(fs, assetId, filename, projectSlug));
@@ -38,7 +38,7 @@ async function uploadAll(fs: VideocityFs, inputs: RefInput[], projectSlug: strin
   return urls;
 }
 
-export function registerGenerateSeedance2MiniVideoJob(fs: VideocityFs): void {
+export function registerGenerateSeedance2MiniVideoJob(fs: Engine): void {
   registerJobHandler("generate_seedance2_mini_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug,

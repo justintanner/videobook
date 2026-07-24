@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { AssetManifestFile, VideocityFs } from "videobook-engine";
+import type { ArtifactManifestFile, Engine } from "videobook-engine";
 import { z } from "zod";
 import {
   KEYWORD_FRAME_CACHE_FILENAME,
@@ -43,7 +43,7 @@ const analysisSchema = z.object({
 }).strict();
 
 export function keywordPlacementFingerprint(
-  videoFile: AssetManifestFile,
+  videoFile: ArtifactManifestFile,
   transcript: Buffer,
   graphics: KeywordGraphic[],
 ): string {
@@ -52,7 +52,7 @@ export function keywordPlacementFingerprint(
     version: KEYWORD_PLACEMENT_VERSION,
     video: {
       name: videoFile.name,
-      size: videoFile.size_bytes,
+      size: videoFile.sizeBytes,
       modified: videoFile.mtimeMs,
     },
     transcriptHash,
@@ -72,11 +72,11 @@ export function parseKeywordPlacementAnalysis(raw: unknown): KeywordPlacementAna
 }
 
 export async function readKeywordPlacementAnalysis(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<KeywordPlacementAnalysis | null> {
-  const result = await fs.readMetadata<unknown>(
+  const result = await fs.metadata.artifacts.read<unknown>(
     assetId,
     KEYWORD_PLACEMENT_METADATA_KEY,
     projectSlug,
@@ -87,13 +87,13 @@ export async function readKeywordPlacementAnalysis(
 }
 
 export async function writeKeywordPlacementAnalysis(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   analysis: KeywordPlacementAnalysis,
 ): Promise<void> {
   const parsed = parseKeywordPlacementAnalysis(analysis);
-  const result = await fs.writeMetadata(
+  const result = await fs.metadata.artifacts.write(
     assetId,
     KEYWORD_PLACEMENT_METADATA_KEY,
     parsed,
@@ -103,7 +103,7 @@ export async function writeKeywordPlacementAnalysis(
 }
 
 export async function isKeywordPlacementCacheValid(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   analysis: KeywordPlacementAnalysis | null,
@@ -115,6 +115,6 @@ export async function isKeywordPlacementCacheValid(
   const cachedCueIds = analysis.cues.map((cue: KeywordPlacementCueAnalysis) => cue.cueId);
   if (expectedCueIds.length !== cachedCueIds.length) return false;
   if (expectedCueIds.some((cueId, index) => cueId !== cachedCueIds[index])) return false;
-  const frameCache = await fs.readFile(assetId, KEYWORD_FRAME_CACHE_FILENAME, projectSlug);
+  const frameCache = await fs.files.read(assetId, KEYWORD_FRAME_CACHE_FILENAME, projectSlug);
   return frameCache.ok;
 }

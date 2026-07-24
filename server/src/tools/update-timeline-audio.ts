@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -43,7 +43,7 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   };
 }
 
-export function updateTimelineAudioDef(fs: VideocityFs): ToolDef {
+export function updateTimelineAudioDef(fs: Engine): ToolDef {
   return {
     name: "update_timeline_audio",
     description: "Update an overlay audio clip's volume / fade-in / fade-out by id",
@@ -67,7 +67,7 @@ export function updateTimelineAudioDef(fs: VideocityFs): ToolDef {
         return toolError("update_timeline_audio: nothing to update (provide volume, fade_in, or fade_out)");
       }
 
-      const readResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
+      const readResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
       if (!readResult.ok) {
         const err = (readResult as { ok: false; error: { code: string; message: string } }).error;
         return toolError(err.code === "NOT_FOUND" ? "No timeline exists for this project" : err.message);
@@ -87,7 +87,7 @@ export function updateTimelineAudioDef(fs: VideocityFs): ToolDef {
       audio[idx] = next;
       config.audio = audio;
 
-      const writeResult = await fs.writeProjectMeta("timeline", config, project_slug);
+      const writeResult = await fs.metadata.projects.write("timeline", config, project_slug);
       if (!writeResult.ok) {
         const writeErr = (writeResult as { ok: false; error: { message: string } }).error;
         return toolError(writeErr.message);

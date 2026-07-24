@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import type { HappyHorse11AspectRatio, HappyHorseResolution } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -22,7 +22,7 @@ type GenerateHappyhorseRefVideoPayload = {
   duration?: string;
 };
 
-export function registerGenerateHappyhorseRefVideoJob(fs: VideocityFs): void {
+export function registerGenerateHappyhorseRefVideoJob(fs: Engine): void {
   registerJobHandler("generate_happyhorse_ref_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt,

@@ -1,8 +1,9 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { basename, extname, join } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { getFFmpeggy, AUDIO_OPTS } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
 const LOCK_DURATION_MS = 300_000;
 
@@ -29,7 +30,7 @@ type AudioBoostPayload = {
   projectSlug: string;
 };
 
-export function registerAudioBoostJob(fs: VideocityFs): void {
+export function registerAudioBoostJob(fs: Engine): void {
   registerJobHandler("audio_boost", async (payload, ctx) => {
     const {
       inputPath, outputPath, boost, isVideo,
@@ -58,9 +59,13 @@ export function registerAudioBoostJob(fs: VideocityFs): void {
         await ff.done();
 
         const inputFilename = basename(inputPath);
-        const outputFilename = basename(outputPath);
-        await fs.deleteFile(assetId, inputFilename, projectSlug);
-        await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
+        await replaceArtifactFileFromPath(
+          fs,
+          projectSlug,
+          assetId,
+          inputFilename,
+          outputPath,
+        );
 
         const mediaPath = join(assetDir, inputFilename);
         return { mediaPath };

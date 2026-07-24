@@ -10,7 +10,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `apply_cuts` — Splice out one or more time ranges from a video asset in-place. Operates via ffmpeg concat-splice; re-runs process_video downstream so frames, transcripts, and analyses are regenerated. Pair with /suggest-cuts to source ranges, or hand-pick them.
 - `apply_sfx` — Generate sound effects via ElevenLabs text-to-sound-effects and mix them onto a video asset's audio track in-place. Each entry yields one discrete SFX cue at `duration_seconds`, mixed at the given timestamp. Re-runs process_video downstream. Pair with /suggest-sfx to source entries.
 - `archive_clip` — Archive a full URL or existing video/audio asset to the global clip archive (B2 if configured, otherwise a local archive folder next to the projects directory), dedupe by media SHA-256, and transcribe long clips in chunks.
-- `asset_history` — Get git commit history for a specific asset
+- `asset_history` — Get immutable Dolt revision history for an asset
 - `asset_manifest` — List all files in an asset directory
 - `assign_slot` — Assign an asset to a timeline slot (e.g. slot 's02' = index 1)
 - `audio_boost` — Boost audio volume of a video or audio asset using a linear multiplier (1.0–4.0). Operates in-place with git versioning.
@@ -47,10 +47,10 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `delete_scene` — Delete a reusable scene
 - `describe_image` — Analyze an image asset with vision and create a new script-* asset containing a reproduction-ready prompt (index.md). Returns immediately after enqueueing; reconcile_project_work reports status="generating" until the markdown is written.
 - `detect_scenes` — Run ffmpeg scdet over a video asset and return a candidate timeline of natural visual breaks. Each candidate is { t, score, kind } where kind="shot" is a camera/cut change (scdet score ≥ 10) and kind="settle" is a motion-settle moment inside a steady shot (the falling edge of a sustained high-motion run, e.g. "the man finished standing up"). Runs in the background and persists to .detect-scenes.json and is useful as a standalone read-only diagnostic.
-- `doctor` — Diagnose the health of every asset in a project (all asset types: video, image, audio, script, final, character, plan). Reports assets stuck in the error state and assets wedged in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore that one asset to its last usable state before the current error — clears a stale error or lease when the media is intact, otherwise restores the asset from git history. A bare fix:true scan never bulk-fixes; it just reports.
+- `doctor` — Diagnose the health of every asset in a project (all asset types: video, image, audio, script, final, character, plan). Reports assets stuck in the error state and assets wedged in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore that one asset to its last usable state before the current error — clears a stale error or lease when the media is intact, otherwise restores the asset from Dolt history. A bare fix:true scan never bulk-fixes; it just reports.
 - `download_video` — Download a full video from a URL (YouTube, Twitter/X, etc.) into a videocity project as original.mp4. Supports requested range metadata and auto-exports 16:9 and 9:16 versions.
 - `duplicate_asset` — Duplicate an asset within the same project
-- `ensure_default_project` — Return the default Videocity project, creating it when none exists
+- `ensure_default_project` — Return the default Videobook project, creating it when none exists
 - `estimate_cost` — Estimate the USD cost of a generation tool call before invoking it. Accepts one or more {tool_name, input} pairs and returns a single CostEstimate summed across all calls. Token-based providers (openai/anthropic/xai) use a chars/4 heuristic and price via a bundled local rate table. Tools without a registered cost adapter return a $0 estimate with a warning.
 - `export_asset_to_project` — Export an asset from one project to a different project
 - `export_to_downloads` — Copy an asset's original media file to the user's Downloads folder
@@ -179,14 +179,14 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `project_history` — Get git commit history for a project
 - `provider_key_status` — List all managed environment keys with their source (1password = injected via op run, read-only; env = from .env, editable), masked values, and live credit/token lookups for supported providers. Never exposes secret values.
 - `push_chat_history` — Append a message to the chat input history log.
-- `read_asset_metadata` — Read an asset's metadata sidecar at HEAD (e.g. `.original.json` → name="original"). Returns the parsed JSON or an error if the file is missing/invalid.
-- `read_file_at_commit` — Read a file's contents from a specific immutable revision for a given asset. Non-destructive — used to preview an old version of a script/prompt without restoring it. The legacy endpoint name is preserved for Videocity MCP compatibility.
-- `read_notebook` — Read a Notebook sidecar (nb-*/.notebook.json).
+- `read_asset_metadata` — Read native artifact metadata at the current Dolt revision. Returns the parsed value or an error if the key is missing.
+- `read_file_at_commit` — Read a file's contents from a specific immutable revision for a given asset. Non-destructive — used to preview an old version of a script/prompt without restoring it.
+- `read_notebook` — Read a normalized Dolt-native notebook.
 - `read_transcript` — Read the transcript for a video or audio asset. Prefers timed ElevenLabs word-level cues (elevenlabs.json), falling back to plain text (.analysis.gpt4otrans.json). Returns kind='timed' with per-word start/end cues, kind='plain' with full text, kind='silence' if a transcript exists but contains no dialog, or kind='missing' if no transcript file exists.
 - `reconcile_project_work` (historical names, not exposed: `sync`) — Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.
 - `record_book_action` — Append a permanent semantic action to the project book
 - `record_book_layout` — Record a permanent stage and column change in the project book
-- `record_prompt` — Append a user-typed prompt to the per-surface, per-project history (metadata.sqlite). Surfaces: chat, image_rewrite, video_rewrite, script_rewrite, post, image_generate, video_generate.
+- `record_prompt` — Append a user-typed prompt to the per-surface, per-project Dolt history. Surfaces: chat, image_rewrite, video_rewrite, script_rewrite, post, image_generate, video_generate.
 - `recover_asset` — Recover a single asset stuck in the failed/error state by clearing its persisted generation error. Non-destructive: the asset and its media files are kept intact — only the error record is removed, returning the card to its normal ready state. Use this instead of clean_failed_assets when the asset must be preserved.
 - `remove_sound` — Remove a described sound (e.g. a horse neigh) from a vid-* or aud-* asset in place. ElevenLabs Scribe tags audio events with timestamps, events matching the description are silenced with short fades, and video streams are preserved untouched with git versioning.
 - `remove_timeline_audio` — Remove an overlay audio clip from the timeline by its id
@@ -206,10 +206,10 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `revision_history` — Read the same canonical action history rendered by the project book
 - `rewind_project` — Restore a project revision and record the result as a new forward revision
 - `rewrite_prompt` — Rewrite a generation prompt using model-specific best practices. Supports standard mode (rewrite any prompt) and scene mode (rewrite a specific scene in a Kling 3.0 multi-shot asset).
-- `rewrite_script` — Rewrite a generated script asset in-place as a text-to-text transformation of its existing markdown (the source image is NOT re-read). Variants: "full" (full reproduction prompt + breakdown) or "tldr" (1–2 sentence summary). Optional platform preset ("ig" | "tiktok" | "youtube") tunes authentic-capture cues for that feed. Optional custom_prompt applies a transformation instruction (e.g. "replace the pig with a man in a blue suit"). Previous versions are preserved in git history via videobook-engine. Returns immediately; reconcile_project_work reports status="generating" until the new markdown is written.
+- `rewrite_script` — Rewrite a generated script asset in-place as a text-to-text transformation of its existing markdown (the source image is NOT re-read). Variants: "full" (full reproduction prompt + breakdown) or "tldr" (1–2 sentence summary). Optional platform preset ("ig" | "tiktok" | "youtube") tunes authentic-capture cues for that feed. Optional custom_prompt applies a transformation instruction (e.g. "replace the pig with a man in a blue suit"). Previous versions are preserved as immutable Dolt revisions. Returns immediately; reconcile_project_work reports status="generating" until the new markdown is written.
 - `run_notebook` — Queue an explicit topological notebook run
 - `search_archive` — Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.
-- `set_character_metadata` — Write free-form metadata to a character's .character.json sidecar. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).
+- `set_character_metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).
 - `set_env_secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.
 - `set_timeline` — Set the timeline for a project (replaces all slots and render orientation; unspecified optional fields like audio are preserved)
 - `set_video_overlay` — Set or clear the on-screen graphic overlay on a video asset. Persists to the asset's render metadata for all orientations without rendering. Pass osg_asset_id=null to clear.
@@ -241,8 +241,8 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `upscale_kie_grok_imagine_video` (historical names, not exposed: `upscale_grok_imagine_video`) — Upscale an existing Grok-Imagine video asset using Kie's grok-imagine/upscale. Source must have been generated by grok-imagine. Creates a new vid- asset and enqueues a background job.
 - `verify_x_mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using xAI live X search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
-- `write_notebook` — Write a Notebook sidecar (nb-*/.notebook.json). Creates a new notebook if notebook_id is omitted. Returns the notebook_id.
-- `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns an authorize_url the client should open. After the user approves in the browser, the server captures the callback, exchanges the code, and persists refreshable tokens to ~/.videobook/x-tokens.json.
+- `write_notebook` — Create or replace a normalized Dolt-native notebook graph.
+- `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns an authorize_url the client should open. After the user approves in the browser, the server captures the callback, exchanges the code, and persists refreshable tokens in Dolt runtime settings.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at? } so the client can poll while the user authorizes in the browser.
 
 ## Slash commands (121 static commands)

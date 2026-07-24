@@ -1,7 +1,8 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";
+import { ingestWorkspaceOutputs } from "./_persist-output.js";
 
 const LOCK_DURATION_MS = 120_000;
 
@@ -28,7 +29,7 @@ type ExtractAudioPayload = {
   range?: { start_s: number; duration_s: number };
 };
 
-export function registerExtractAudioJob(fs: VideocityFs): void {
+export function registerExtractAudioJob(fs: Engine): void {
   registerJobHandler("extract_audio", async (payload, ctx) => {
     const {
       inputPath, outputPath,
@@ -37,7 +38,7 @@ export function registerExtractAudioJob(fs: VideocityFs): void {
     const destinationMode = destination !== undefined;
 
     return withLocalLease(fs, projectSlug, audioAssetId, ctx, "extract", async () => {
-      const lockResult = await fs.acquireLock(audioAssetDir, { durationMs: LOCK_DURATION_MS });
+      const lockResult = await fs.jobs.locks.acquire(audioAssetDir, { durationMs: LOCK_DURATION_MS });
       if (!lockResult.ok) throw new Error(`Asset is locked: ${lockResult.error.message}`);
 
       try {
@@ -60,30 +61,35 @@ export function registerExtractAudioJob(fs: VideocityFs): void {
           }
         } catch { /* non-fatal — list_assets backfill can recover */ }
 
+        const outputFilename = outputPath.split("/").pop()!;
+        await ingestWorkspaceOutputs(
+          fs,
+          projectSlug,
+          audioAssetId,
+          [outputFilename],
+          "extract_audio",
+          {
+            source_asset: sourceVideoId,
+            filename: outputFilename,
+            ...(range ? { range } : {}),
+            ...(duration !== undefined ? { duration } : {}),
+          },
+        );
+
         if (destinationMode) {
-          await fs.commitOperation(
-            "extract_audio",
-            audioAssetId,
-            {
-              source_asset: sourceVideoId,
-              filename: destination.filename,
-              ...(range ? { range } : {}),
-              ...(duration !== undefined ? { duration } : {}),
-            },
-            projectSlug,
-          );
+          void destination;
         } else {
           const origin = {
             origin: "extract_audio",
             source_asset: sourceVideoId,
             ...(duration !== undefined ? { duration } : {}),
           };
-          await fs.writeMetadata(audioAssetId, "original", origin, projectSlug);
+          await fs.metadata.artifacts.write(audioAssetId, "original", origin, projectSlug);
         }
 
         return { success: true };
       } finally {
-        await fs.releaseLock(audioAssetDir);
+        await fs.jobs.locks.release(audioAssetDir);
       }
     });
   });

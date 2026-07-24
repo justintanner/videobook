@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import type { CostEstimate } from "@apicity/cost";
 import { createTestClient } from "../test-client.js";
-import { createFsForTest } from "../fs.js";
+import { createEngineForTest } from "../fs.js";
 import { queue } from "../queue.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -225,17 +225,17 @@ describe("estimate_cost tool", () => {
     // motion video* — there is no user-typed duration. The previous estimate
     // always charged the 5s default, so a 30s motion video showed the price
     // for 5s at /generate. Server now resolves the duration from metadata.
-    const fs = createFsForTest(tempDir);
-    const projectResult = await fs.createProject("est-proj");
+    const fs = createEngineForTest(tempDir);
+    const projectResult = await fs.projects.create("est-proj");
     expect(projectResult.ok).toBe(true);
 
-    const assetResult = await fs.createAsset("vid", "long-motion", "est-proj");
+    const assetResult = await fs.artifacts.create("vid", "long-motion", "est-proj");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
-    const motionAssetId = assetResult.value.assetId;
+    const motionAssetId = assetResult.value.slug;
 
     const ACTUAL_DURATION = 30;
-    const writeMeta = await fs.writeMetadata(
+    const writeMeta = await fs.metadata.artifacts.write(
       motionAssetId,
       "original",
       { duration: ACTUAL_DURATION, width: 720, height: 1280 },
@@ -277,17 +277,17 @@ describe("estimate_cost tool", () => {
   });
 
   it("enriches motion-control duration when motion slug has a leading @", async () => {
-    const fs = createFsForTest(tempDir);
-    const projectResult = await fs.createProject("est-at-proj");
+    const fs = createEngineForTest(tempDir);
+    const projectResult = await fs.projects.create("est-at-proj");
     expect(projectResult.ok).toBe(true);
 
-    const assetResult = await fs.createAsset("vid", "at-motion", "est-at-proj");
+    const assetResult = await fs.artifacts.create("vid", "at-motion", "est-at-proj");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
-    const motionAssetId = assetResult.value.assetId;
+    const motionAssetId = assetResult.value.slug;
 
     const ACTUAL_DURATION = 24;
-    const writeMeta = await fs.writeMetadata(
+    const writeMeta = await fs.metadata.artifacts.write(
       motionAssetId,
       "original",
       { duration: ACTUAL_DURATION, width: 720, height: 1280 },
@@ -318,17 +318,17 @@ describe("estimate_cost tool", () => {
     // the 5s default, so a 30s source showed the price for 5s at /generate.
     // Server now resolves the duration from `original` metadata, mirroring the
     // cost hint the job handler forwards to the paygate.
-    const fs = createFsForTest(tempDir);
-    const projectResult = await fs.createProject("est-hh-proj");
+    const fs = createEngineForTest(tempDir);
+    const projectResult = await fs.projects.create("est-hh-proj");
     expect(projectResult.ok).toBe(true);
 
-    const assetResult = await fs.createAsset("vid", "long-source", "est-hh-proj");
+    const assetResult = await fs.artifacts.create("vid", "long-source", "est-hh-proj");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
-    const sourceAssetId = assetResult.value.assetId;
+    const sourceAssetId = assetResult.value.slug;
 
     const ACTUAL_DURATION = 30;
-    const writeMeta = await fs.writeMetadata(
+    const writeMeta = await fs.metadata.artifacts.write(
       sourceAssetId,
       "original",
       { duration: ACTUAL_DURATION, width: 1920, height: 1080 },
@@ -370,11 +370,11 @@ describe("estimate_cost tool", () => {
   });
 
   it("falls back to the 5s happyhorse/video-edit default when source has no duration metadata", async () => {
-    const fs = createFsForTest(tempDir);
-    const projectResult = await fs.createProject("est-hh-fallback");
+    const fs = createEngineForTest(tempDir);
+    const projectResult = await fs.projects.create("est-hh-fallback");
     expect(projectResult.ok).toBe(true);
 
-    const assetResult = await fs.createAsset("vid", "legacy-source", "est-hh-fallback");
+    const assetResult = await fs.artifacts.create("vid", "legacy-source", "est-hh-fallback");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
 
@@ -385,7 +385,7 @@ describe("estimate_cost tool", () => {
           tool_name: "generate_happyhorse_videoedit_video",
           input: {
             resolution: "1080p",
-            video_slug: assetResult.value.assetId,
+            video_slug: assetResult.value.slug,
             project_slug: "est-hh-fallback",
           },
         }],
@@ -397,16 +397,16 @@ describe("estimate_cost tool", () => {
   });
 
   it("uses the source video's stored resolution for Grok extension pricing", async () => {
-    const fs = createFsForTest(tempDir);
-    const projectResult = await fs.createProject("grok-extend-estimate");
+    const fs = createEngineForTest(tempDir);
+    const projectResult = await fs.projects.create("grok-extend-estimate");
     expect(projectResult.ok).toBe(true);
 
-    const assetResult = await fs.createAsset("vid", "grok-source", "grok-extend-estimate");
+    const assetResult = await fs.artifacts.create("vid", "grok-source", "grok-extend-estimate");
     expect(assetResult.ok).toBe(true);
     if (!assetResult.ok) return;
 
-    const writeMeta = await fs.writeMetadata(
-      assetResult.value.assetId,
+    const writeMeta = await fs.metadata.artifacts.write(
+      assetResult.value.slug,
       "generation-payload",
       { model: "grok-imagine/image-to-video", input: { resolution: "720p" } },
       "grok-extend-estimate",
@@ -420,7 +420,7 @@ describe("estimate_cost tool", () => {
           tool_name: "extend_grok_imagine_video",
           input: {
             project_slug: "grok-extend-estimate",
-            video_slug: `@${assetResult.value.assetId}`,
+            video_slug: `@${assetResult.value.slug}`,
             extend_times: "10",
           },
         }],

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetFile } from "../upload.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -21,7 +21,7 @@ type GenerateGrokImagineImagePayload = {
   _provider?: string;
 };
 
-export function registerGenerateGrokImagineImageJob(fs: VideocityFs): void {
+export function registerGenerateGrokImagineImageJob(fs: Engine): void {
   registerJobHandler("generate_grok_imagine_image", async (payload, ctx) => {
     const {
       imageFilename, imgAssetId, imgAssetDir,
@@ -42,7 +42,7 @@ export function registerGenerateGrokImagineImageJob(fs: VideocityFs): void {
         { prompt },
         [imageUrl],
       );
-      await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
+      await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request, projectSlug);
       const result = await callXaiPaid<XaiImageEditRequest, XaiImageResponse>(
         provider.post.v1.images.edits,
         XAI_IMAGE_EDITS_DOT_PATH,
@@ -54,7 +54,7 @@ export function registerGenerateGrokImagineImageJob(fs: VideocityFs): void {
 
       await downloadUrlIntoAsset(fs, resultImageUrl, imgAssetId, "original.png", projectSlug, { kind: "result image" });
 
-      // Enqueue post-processing so .original.json and derived crops are created
+      // Enqueue post-processing so metadata and derived crops are created
       const provenance = {
         source_asset: sourceImageId,
         model: "grok-imagine/image-to-image",
@@ -70,7 +70,7 @@ export function registerGenerateGrokImagineImageJob(fs: VideocityFs): void {
       } as unknown as Record<string, unknown>);
 
       // Clear queued pending task written by tool handler
-      await fs.pendingTasks.delete(projectSlug, imgAssetId);
+      await fs.jobs.pending.delete(projectSlug, imgAssetId);
 
       return { success: true, provider: "xai" };
     }

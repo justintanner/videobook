@@ -1,3 +1,4 @@
+import { createEngineForTest } from "../fs.js";
 import { execFile } from "node:child_process";
 import { createServer, type Server } from "node:http";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -5,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { createElevenLabs, type ElevenLabsSpeechToTextResponse } from "@apicity/elevenlabs";
-import { createFs, type VideocityFs } from "videobook-engine";
+import { type Engine } from "videobook-engine";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { extractWaveform, FFMPEG, probeVideo } from "../ffmpeg.js";
 import {
@@ -95,7 +96,7 @@ describe("sound event matching", () => {
 
 describe("remove sound ElevenLabs job", () => {
   let tempDir: string;
-  let fs: VideocityFs;
+  let fs: Engine;
   let server: Server;
 
   async function listen(): Promise<number> {
@@ -123,8 +124,8 @@ describe("remove sound ElevenLabs job", () => {
         response.end();
       });
     });
-    fs = createFs({ projectsDir: join(tempDir, "projects") });
-    const project = await fs.createProject(PROJECT_SLUG);
+    fs = createEngineForTest(join(tempDir, "projects"));
+    const project = await fs.projects.create(PROJECT_SLUG);
     if (!project.ok) throw new Error(project.error.message);
   });
 
@@ -170,16 +171,16 @@ describe("remove sound ElevenLabs job", () => {
       "-b:a", "192k",
       sourcePath,
     ]);
-    const created = await fs.createAsset("aud", "haunted", PROJECT_SLUG);
+    const created = await fs.artifacts.create("aud", "haunted", PROJECT_SLUG);
     if (!created.ok) throw new Error(created.error.message);
-    const write = await fs.writeFile(created.value.assetId, "original.mp3", await readFile(sourcePath), PROJECT_SLUG);
+    const write = await fs.files.write(created.value.slug, "original.mp3", await readFile(sourcePath), PROJECT_SLUG);
     if (!write.ok) throw new Error(write.error.message);
-    const assetDir = await fs.resolveAssetDir(created.value.assetId, PROJECT_SLUG);
+    const assetDir = await fs.workspaces.resolveArtifact(created.value.slug, PROJECT_SLUG);
     if (!assetDir.ok) throw new Error(assetDir.error.message);
 
     const payload: RemoveSoundPayload = {
       type: "remove_sound",
-      assetId: created.value.assetId,
+      assetId: created.value.slug,
       assetKind: "audio",
       assetDir: assetDir.value,
       filename: "original.mp3",
@@ -205,7 +206,7 @@ describe("remove sound ElevenLabs job", () => {
     expect(Math.min(...bars.dog)).toBeGreaterThan(0.1);
     expect(Math.min(...bars.intro)).toBeGreaterThan(0.1);
 
-    const waveform = await fs.readAudioWaveform(created.value.assetId, PROJECT_SLUG);
+    const waveform = await fs.metadata.waveforms.read(created.value.slug, PROJECT_SLUG);
     expect(waveform.ok).toBe(true);
     if (waveform.ok) expect(waveform.value.peaks.length).toBeGreaterThan(0);
   }, 30_000);
@@ -220,16 +221,16 @@ describe("remove sound ElevenLabs job", () => {
       "-c:a", "aac",
       sourcePath,
     ]);
-    const created = await fs.createAsset("vid", "haunted", PROJECT_SLUG);
+    const created = await fs.artifacts.create("vid", "haunted", PROJECT_SLUG);
     if (!created.ok) throw new Error(created.error.message);
-    const write = await fs.writeFile(created.value.assetId, "original.mp4", await readFile(sourcePath), PROJECT_SLUG);
+    const write = await fs.files.write(created.value.slug, "original.mp4", await readFile(sourcePath), PROJECT_SLUG);
     if (!write.ok) throw new Error(write.error.message);
-    const assetDir = await fs.resolveAssetDir(created.value.assetId, PROJECT_SLUG);
+    const assetDir = await fs.workspaces.resolveArtifact(created.value.slug, PROJECT_SLUG);
     if (!assetDir.ok) throw new Error(assetDir.error.message);
 
     const payload: RemoveSoundPayload = {
       type: "remove_sound",
-      assetId: created.value.assetId,
+      assetId: created.value.slug,
       assetKind: "video",
       assetDir: assetDir.value,
       filename: "original.mp4",
@@ -259,16 +260,16 @@ describe("remove sound ElevenLabs job", () => {
       "-c:a", "libmp3lame",
       sourcePath,
     ]);
-    const created = await fs.createAsset("aud", "haunted", PROJECT_SLUG);
+    const created = await fs.artifacts.create("aud", "haunted", PROJECT_SLUG);
     if (!created.ok) throw new Error(created.error.message);
-    const write = await fs.writeFile(created.value.assetId, "original.mp3", await readFile(sourcePath), PROJECT_SLUG);
+    const write = await fs.files.write(created.value.slug, "original.mp3", await readFile(sourcePath), PROJECT_SLUG);
     if (!write.ok) throw new Error(write.error.message);
-    const assetDir = await fs.resolveAssetDir(created.value.assetId, PROJECT_SLUG);
+    const assetDir = await fs.workspaces.resolveArtifact(created.value.slug, PROJECT_SLUG);
     if (!assetDir.ok) throw new Error(assetDir.error.message);
 
     const payload: RemoveSoundPayload = {
       type: "remove_sound",
-      assetId: created.value.assetId,
+      assetId: created.value.slug,
       assetKind: "audio",
       assetDir: assetDir.value,
       filename: "original.mp3",

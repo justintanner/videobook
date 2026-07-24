@@ -1,7 +1,9 @@
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
-import { mkdtemp, rm, readFile, access } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import type { Engine } from "videobook-engine";
+import { createEngineForTest } from "../fs.js";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -12,22 +14,10 @@ const MINIMAL_PNG = Buffer.from(
   "base64",
 );
 
-async function waitForFile(filePath: string, timeoutMs = 10_000): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    try {
-      await access(filePath);
-      return;
-    } catch {
-      await new Promise((r) => setTimeout(r, 50));
-    }
-  }
-  throw new Error(`Timed out waiting for ${filePath}`);
-}
-
 describe("upload_file tool", () => {
   let client: Client;
   let tempDir: string;
+  let fs: Engine;
 
   beforeAll(async () => {
     await queue.start();
@@ -39,6 +29,7 @@ describe("upload_file tool", () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
+    fs = createEngineForTest(tempDir);
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
@@ -66,11 +57,11 @@ describe("upload_file tool", () => {
     expect(parsed.assetId).toMatch(/^img-/);
     expect(parsed.filename).toBe("original.png");
 
-    const written = await readFile(join(tempDir, "test-proj", parsed.assetId, "original.png"));
-    expect(written.equals(MINIMAL_PNG)).toBe(true);
+    const written = await fs.files.read(parsed.assetId, "original.png", "test-proj");
+    expect(written.ok && written.value.equals(MINIMAL_PNG)).toBe(true);
   });
 
-  it("creates .original.json after media upload", async () => {
+  it("stores original metadata after media upload", async () => {
     const data = MINIMAL_PNG.toString("base64");
     const result = await client.callTool({
       name: "upload_file",
@@ -83,13 +74,12 @@ describe("upload_file tool", () => {
     const content = result.content as Array<{ type: string; text: string }>;
     const parsed = JSON.parse(content[0].text);
 
-    const metaPath = join(tempDir, "test-proj", parsed.assetId, ".original.json");
-    await waitForFile(metaPath);
-
-    const originData = await readFile(metaPath, "utf-8");
-    const origin = JSON.parse(originData);
-    expect(origin.origin).toBe("upload");
-    expect(origin.processed_at).toBeDefined();
+    const origin = await fs.metadata.artifacts.read<{
+      origin: string;
+      processed_at: string;
+    }>(parsed.assetId, "original", "test-proj");
+    expect(origin.ok && origin.value.origin).toBe("upload");
+    expect(origin.ok && origin.value.processed_at).toBeDefined();
   });
 
   it("uploads a markdown file", async () => {

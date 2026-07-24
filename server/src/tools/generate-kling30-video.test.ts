@@ -1,10 +1,10 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
-import { createFs } from "videobook-engine";
 import sharp from "sharp";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
@@ -94,12 +94,12 @@ describe("generate_kling30_video tool", () => {
   it("enqueues image-to-video job with one reference image", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("img", "source-img", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("img", "source-img", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const png = await makePng();
-    await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
 
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_video",
@@ -107,7 +107,7 @@ describe("generate_kling30_video tool", () => {
         ...requiredKlingArgs,
         project_slug: "test-proj",
         prompt: "animate this image",
-        image_slugs: [`@${asset.value.assetId}`],
+        image_slugs: [`@${asset.value.slug}`],
       },
     });
 
@@ -115,7 +115,7 @@ describe("generate_kling30_video tool", () => {
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
     expect(parsed.vid_asset_id).toMatch(/^vid-/);
-    expect(parsed.source_images).toEqual([asset.value.assetId]);
+    expect(parsed.source_images).toEqual([asset.value.slug]);
   });
 
   it("returns error when image_slugs entry is not img-*", async () => {
@@ -155,11 +155,11 @@ describe("generate_kling30_video tool", () => {
   it("returns error when image asset has no image file", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("img", "empty-img", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("img", "empty-img", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
 
-    await fs.writeFile(asset.value.assetId, "notes.txt", "hello", "test-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello", "test-proj");
 
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_video",
@@ -167,7 +167,7 @@ describe("generate_kling30_video tool", () => {
         ...requiredKlingArgs,
         project_slug: "test-proj",
         prompt: "test",
-        image_slugs: [`@${asset.value.assetId}`],
+        image_slugs: [`@${asset.value.slug}`],
       },
     });
 
@@ -179,12 +179,12 @@ describe("generate_kling30_video tool", () => {
   it("enqueues job with element slugs", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("img", "char-face", "test-proj");
-    if (!asset.ok) throw new Error("Failed to create asset");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("img", "face", "test-proj");
+    if (!asset.ok) throw new Error(asset.error.message);
 
     const png = await makePng();
-    await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
 
     const result = await client.callTool({
       name: "generate_kie_kling_3_0_video",
@@ -192,7 +192,7 @@ describe("generate_kling30_video tool", () => {
         ...requiredKlingArgs,
         project_slug: "test-proj",
         prompt: "character walks down the street",
-        element1_slugs: [`@${asset.value.assetId}`],
+        element1_slugs: [`@${asset.value.slug}`],
         element1_name: "hero",
         element1_desc: "the main character",
       },

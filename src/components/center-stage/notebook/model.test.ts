@@ -187,8 +187,8 @@ describe('notebook model', () => {
     })
   })
 
-  it('normalizes positions and converts legacy references to edges and asset nodes', () => {
-    const legacy: NotebookPlanDefinition = {
+  it('normalizes positions without importing deprecated value references', () => {
+    const unpositioned: NotebookPlanDefinition = {
       properties: {},
       sequence: [
         {
@@ -207,24 +207,26 @@ describe('notebook model', () => {
         },
       ],
     }
-    const migrated = normalizeDefinition(legacy)
-    const target = migrated.definition.sequence.find((step) => step.id === 'target')
-    const asset = migrated.definition.sequence.find((step) => step.id === 'asset-img-external')
-    expect(migrated.changed).toBe(true)
-    expect(target && stepInputs(target)).toEqual(['source', 'asset-img-external'])
-    expect((target?.properties.input_routes as Record<string, unknown>)?.['asset-img-external']).toBe('first_frame_slug')
-    expect(target?.properties.values).toEqual({ prompt: 'Animate it' })
-    expect(asset?.properties.slug).toBe('@img-external')
-    expect(migrated.definition.sequence.every((step) => {
+    const normalized = normalizeDefinition(unpositioned)
+    const target = normalized.definition.sequence.find((step) => step.id === 'target')
+    expect(normalized.changed).toBe(true)
+    expect(normalized.definition.sequence.map((step) => step.id)).toEqual(['source', 'target'])
+    expect(target && stepInputs(target)).toEqual([])
+    expect(target?.properties.values).toEqual({
+      prompt: 'Animate it',
+      image_slugs: ['@img-output', '@img-external'],
+      first_frame_slug: '@img-external',
+    })
+    expect(normalized.definition.sequence.every((step) => {
       const position = stepPosition(step)
       return position !== null && Number.isInteger(position.x) && Number.isInteger(position.y)
     })).toBe(true)
-    const idempotent = normalizeDefinition(migrated.definition)
+    const idempotent = normalizeDefinition(normalized.definition)
     expect(idempotent.changed).toBe(false)
-    expect(idempotent.definition).toBe(migrated.definition)
+    expect(idempotent.definition).toBe(normalized.definition)
   })
 
-  it('migrates the notebook-e2e plan fixture without changing its content semantics', () => {
+  it('normalizes the native notebook fixture without changing its content semantics', () => {
     const migrated = normalizeDefinition(NOTEBOOK_E2E_DEFINITION)
     expect(migrated.changed).toBe(true)
     expect(migrated.definition.sequence.map((step) => step.id)).toEqual(
@@ -411,7 +413,11 @@ describe('notebook model', () => {
         },
         {
           id: 'target', componentType: 'task', type: 'image', name: 'Target',
-          properties: { values: { prompt: 'Ignored local prompt' }, inputs: ['prompt', 'asset'], first_frame_source: 'asset' },
+          properties: {
+            values: { prompt: 'Ignored local prompt' },
+            inputs: ['prompt', 'asset'],
+            input_routes: { asset: 'first_frame_slug' },
+          },
         },
       ],
     }

@@ -701,19 +701,6 @@ function withPosition(step: NotebookPlanStep, position: StepPosition): NotebookP
   return copyStep(step, { ...step.properties, position: { x: position.x, y: position.y } })
 }
 
-function sourceForSlug(
-  sequence: NotebookPlanStep[],
-  targetIndex: number,
-  slug: string,
-): string | null {
-  const bare = normalizedSlug(slug)
-  for (let index = targetIndex - 1; index >= 0; index -= 1) {
-    const candidate = sequence[index]
-    if (isGenerationStep(candidate) && latestAssetId(candidate) === bare) return candidate.id
-  }
-  return null
-}
-
 function assetStepId(slug: string, sequence: NotebookPlanStep[]): string {
   const base = `asset-${normalizedSlug(slug)}`
   if (!sequence.some((step) => step.id === base)) return base
@@ -729,86 +716,19 @@ function findAssetStep(sequence: NotebookPlanStep[], slug: string): NotebookPlan
   )) ?? null
 }
 
-function migrateSlugToInput(
-  sequence: NotebookPlanStep[],
-  targetIndex: number,
-  slug: string,
-): { sourceId: string; sequence: NotebookPlanStep[] } {
-  const generatedSource = sourceForSlug(sequence, targetIndex, slug)
-  if (generatedSource) return { sourceId: generatedSource, sequence }
-  const existingAsset = findAssetStep(sequence, slug)
-  if (existingAsset) return { sourceId: existingAsset.id, sequence }
-  const target = sequence[targetIndex]
-  const targetPosition = stepPosition(target) ?? { x: 320, y: 80 }
-  const id = assetStepId(slug, sequence)
-  const asset: NotebookPlanStep = {
-    id,
-    componentType: 'task',
-    type: 'asset',
-    name: 'Asset',
-    properties: {
-      slug: slugWithPrefix(slug),
-      position: { x: targetPosition.x - 248, y: targetPosition.y },
-    },
-  }
-  return { sourceId: id, sequence: [...sequence, asset] }
-}
-
 export function normalizeDefinition(definition: NotebookPlanDefinition): {
   definition: NotebookPlanDefinition
   changed: boolean
 } {
   let changed = false
   let y = 80
-  let sequence = definition.sequence.map((step) => {
+  const sequence = definition.sequence.map((step) => {
     const position = positionForMissingStep(step, y)
     y += notebookNodeSizes[step.type].height + 48
     if (stepPosition(step)) return step
     changed = true
     return withPosition(step, position)
   })
-  const originalCount = sequence.length
-
-  for (let index = 0; index < originalCount; index += 1) {
-    const step = sequence[index]
-    if (!isGenerationStep(step)) continue
-    const values = valuesOf(step)
-    const hasConnectionValues = CONNECTION_OWNED_PARAMS.some((param) => Object.hasOwn(values, param))
-    if (!hasConnectionValues) continue
-    let inputs = stepInputs(step)
-    let inputRoutes = (step.properties.input_routes as JsonRecord) ?? {}
-    const firstFrameSource = stringProperty(step.properties, 'first_frame_source')
-    if (firstFrameSource && !inputRoutes[firstFrameSource]) {
-      inputRoutes = { ...inputRoutes, [firstFrameSource]: 'first_frame_slug' }
-    }
-    for (const slug of stringArray(values.image_slugs)) {
-      const migrated = migrateSlugToInput(sequence, index, slug)
-      sequence = migrated.sequence
-      if (!inputs.includes(migrated.sourceId)) inputs = [...inputs, migrated.sourceId]
-    }
-    for (const param of ['video_slug', 'first_frame_slug'] as const) {
-      const slug = values[param]
-      if (typeof slug !== 'string' || !slug) continue
-      const migrated = migrateSlugToInput(sequence, index, slug)
-      sequence = migrated.sequence
-      if (!inputs.includes(migrated.sourceId)) inputs = [...inputs, migrated.sourceId]
-      if (param === 'first_frame_slug') {
-        inputRoutes = { ...inputRoutes, [migrated.sourceId]: 'first_frame_slug' }
-      }
-    }
-    const nextValues: JsonRecord = { ...values }
-    for (const param of CONNECTION_OWNED_PARAMS) delete nextValues[param]
-    const nextProperties = { ...sequence[index].properties }
-    delete nextProperties.first_frame_source
-    sequence[index] = copyStep(sequence[index], {
-      ...nextProperties,
-      values: nextValues,
-      ...(inputs.length > 0 ? { inputs } : {}),
-      ...(Object.keys(inputRoutes).length > 0 ? { input_routes: inputRoutes } : {}),
-    })
-    changed = true
-  }
-
   const normalized = changed ? { ...definition, sequence } : definition
   const tracked = snapDefinitionToTracks(normalized)
   return tracked === definition
@@ -888,8 +808,7 @@ export function disconnectSteps(
     const nextInputs = stepInputs(step).filter((input) => input !== sourceId)
     const nextProperties: JsonRecord = { ...step.properties, inputs: nextInputs }
     const currentRoutes = (step.properties.input_routes as JsonRecord) ?? {}
-    if (currentRoutes[sourceId] || stringProperty(step.properties, 'first_frame_source') === sourceId) {
-      delete nextProperties.first_frame_source
+    if (currentRoutes[sourceId]) {
       const nextRoutes = { ...currentRoutes }
       delete nextRoutes[sourceId]
       if (Object.keys(nextRoutes).length > 0) nextProperties.input_routes = nextRoutes
@@ -1001,10 +920,8 @@ export function removeSteps(
         const nextInputs = inputs.filter((input) => !removed.has(input))
         const currentRoutes = (step.properties.input_routes as JsonRecord) ?? {}
         const hasRemovedRoutes = Object.keys(currentRoutes).some((id) => removed.has(id))
-        const pin = stringProperty(step.properties, 'first_frame_source')
-        if (nextInputs.length === inputs.length && !hasRemovedRoutes && (!pin || !removed.has(pin))) return step
+        if (nextInputs.length === inputs.length && !hasRemovedRoutes) return step
         const properties: JsonRecord = { ...step.properties, inputs: nextInputs }
-        if (pin && removed.has(pin)) delete properties.first_frame_source
         if (hasRemovedRoutes) {
           const nextRoutes = { ...currentRoutes }
           for (const id of removed) delete nextRoutes[id]
@@ -1107,11 +1024,6 @@ export function resolveEffectiveValues(
   // is text-only so connected img/vid/aud can still resolve into refs.
   const allSlots = deriveStripSlots(option, null)
   const inputRoutes = (step.properties.input_routes as JsonRecord) ?? {}
-  const legacyFirstFrameSource = stringProperty(step.properties, 'first_frame_source')
-  const effectiveRoutes = { ...inputRoutes }
-  if (legacyFirstFrameSource && !effectiveRoutes[legacyFirstFrameSource]) {
-    effectiveRoutes[legacyFirstFrameSource] = 'first_frame_slug'
-  }
   const routedStringSources = new Set<string>()
   const usedFallbackSlots = new Set<string>()
   const mediaSlugs: string[] = []
@@ -1142,7 +1054,7 @@ export function resolveEffectiveValues(
       mediaSlugs.push(slugWithPrefix(slug))
     }
     let route: { param: string, action: 'set' | 'append' } = { param: '', action: 'append' }
-    const explicitParam = typeof effectiveRoutes[inputId] === 'string' ? effectiveRoutes[inputId] : null
+    const explicitParam = typeof inputRoutes[inputId] === 'string' ? inputRoutes[inputId] : null
     let slotsForCap = modeSlots
 
     if (explicitParam === 'character' && option.schema.properties.character_refs) {

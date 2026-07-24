@@ -12,7 +12,7 @@ export interface RewriteMeta {
   processedAt?: string;
 }
 
-export interface GitCommit {
+export interface Revision {
   hash: string;
   message: string;
   date: string;
@@ -27,14 +27,14 @@ export interface GitCommit {
 }
 
 interface UseAssetHistoryResult {
-  commits: GitCommit[];
+  commits: Revision[];
   loading: boolean;
   fetchHistory: (assetId: string, projectSlug: string) => Promise<void>;
   restoreVersion: (assetId: string, commitHash: string, projectSlug: string) => Promise<boolean>;
 }
 
 export function useAssetHistory(callTool: UseMcpResult["callTool"]): UseAssetHistoryResult {
-  const [commits, setCommits] = useState<GitCommit[]>([]);
+  const [commits, setCommits] = useState<Revision[]>([]);
   const [loading, setLoading] = useState(false);
   const callToolRef = useRef(callTool);
   useEffect(() => { callToolRef.current = callTool; }, [callTool]);
@@ -48,7 +48,7 @@ export function useAssetHistory(callTool: UseMcpResult["callTool"]): UseAssetHis
         return;
       }
       const content = result.content as Array<{ type: string; text: string }>;
-      const parsed: GitCommit[] = JSON.parse(content[0].text);
+      const parsed: Revision[] = JSON.parse(content[0].text);
       setCommits(parsed);
     } catch (e: unknown) {
       console.error("[asset_history] exception:", e instanceof Error ? e.message : String(e));

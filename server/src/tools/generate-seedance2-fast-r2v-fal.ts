@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalSeedance2p0FastReferenceToVideoRequestSchema } from "@apicity/fal/zod";
@@ -12,7 +12,7 @@ import { requireAtLeastOne, toolError } from "./_shared.js";
 type MediaInput = { assetId: string; filename: string };
 
 async function resolveVideoSlugs(
-  fs: VideocityFs,
+  fs: Engine,
   rawSlugs: readonly string[],
   projectSlug: string,
 ): Promise<{ ok: true; inputs: MediaInput[]; sourceVideoIds: string[] } | { ok: false; error: string }> {
@@ -21,7 +21,7 @@ async function resolveVideoSlugs(
   for (const raw of rawSlugs) {
     const assetId = raw.replace(/^@/, "");
     if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slugs entries must be vid-* assets, got: ${assetId}` };
-    const manifest = await fs.getManifest(assetId, projectSlug);
+    const manifest = await fs.files.manifest(assetId, projectSlug);
     if (!manifest.ok) return { ok: false, error: manifest.error.message };
     const file = findVideoFile(manifest.value.files);
     if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
@@ -32,7 +32,7 @@ async function resolveVideoSlugs(
 }
 
 async function resolveAudioSlugs(
-  fs: VideocityFs,
+  fs: Engine,
   rawSlugs: readonly string[],
   projectSlug: string,
 ): Promise<{ ok: true; inputs: MediaInput[]; sourceAudioIds: string[] } | { ok: false; error: string }> {
@@ -41,7 +41,7 @@ async function resolveAudioSlugs(
   for (const raw of rawSlugs) {
     const assetId = raw.replace(/^@/, "");
     if (!assetId.startsWith("aud-")) return { ok: false, error: `audio_slugs entries must be aud-* assets, got: ${assetId}` };
-    const manifest = await fs.getManifest(assetId, projectSlug);
+    const manifest = await fs.files.manifest(assetId, projectSlug);
     if (!manifest.ok) return { ok: false, error: manifest.error.message };
     const file = findAudioFile(manifest.value.files, assetId);
     if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
@@ -68,7 +68,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateSeedance2FastR2vFalDef(fs: VideocityFs): ToolDef {
+export function generateSeedance2FastR2vFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_seedance_2_0_fast_reference_to_video",
     description: "Generate a video via fal.ai using ByteDance Seedance 2.0 Fast Reference-to-Video, guided by reference images, videos, and/or audio. Creates a new vid- asset and enqueues a background job. Requires at least one of image_slugs, video_slugs, or audio_slugs (audio alone is not allowed — pair it with an image or video).",
@@ -111,10 +111,10 @@ export function generateSeedance2FastR2vFalDef(fs: VideocityFs): ToolDef {
       const resolvedAudios = await resolveAudioSlugs(fs, audSlugs, project_slug);
       if (!resolvedAudios.ok) return toolError(resolvedAudios.error);
 
-      const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "bytedance/seedance-2-fast")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "bytedance/seedance-2-fast")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return toolError(`Failed to create video asset: ${assetResult.error.message}`);
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "bytedance/seedance-2-fast")}-r2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

@@ -662,7 +662,7 @@ describe("PARAM_SCHEMAS", () => {
 describe("buildModelOption resolved assets and coercion", () => {
   it("fills image_slugs from resolved image assets", () => {
     const resolvedAssets = [
-      { tag: "@img-sunset", asset_id: "img-sunset", asset_type: "image", file_path: "/some/path.png", asset_dir: "/some" },
+      { tag: "@img-sunset", artifactId: "id-image", artifactSlug: "img-sunset", artifactType: "image" as const, filePath: "/some/path.png", workspacePath: "/some" },
     ];
     const option = buildModelOption("kling30", VIDEO_MODELS.kling30, {}, resolvedAssets);
     expect(option.prefilled_values.image_slugs).toEqual(["@img-sunset"]);
@@ -670,7 +670,7 @@ describe("buildModelOption resolved assets and coercion", () => {
 
   it("skips image assets without file_path", () => {
     const resolvedAssets = [
-      { tag: "@img-sunset", asset_id: "img-sunset", asset_type: "image", file_path: null, asset_dir: "/some" },
+      { tag: "@img-sunset", artifactId: "id-image", artifactSlug: "img-sunset", artifactType: "image" as const, filePath: null, workspacePath: "/some" },
     ];
     const option = buildModelOption("kling30", VIDEO_MODELS.kling30, {}, resolvedAssets);
     expect(option.prefilled_values.image_slugs).toEqual([]);
@@ -678,7 +678,7 @@ describe("buildModelOption resolved assets and coercion", () => {
 
   it("extend_wan27 prefills video_slug from video assets", () => {
     const resolvedAssets = [
-      { tag: "@vid-clip", asset_id: "vid-clip", asset_type: "video", file_path: "/path/clip.mp4", asset_dir: "/path" },
+      { tag: "@vid-clip", artifactId: "id-video", artifactSlug: "vid-clip", artifactType: "video" as const, filePath: "/path/clip.mp4", workspacePath: "/path" },
     ];
     const option = buildModelOption("wan27_extend", VIDEO_MODELS.wan27_extend, {}, resolvedAssets);
     expect(option.prefilled_values.video_slug).toBe("@vid-clip");
@@ -686,7 +686,7 @@ describe("buildModelOption resolved assets and coercion", () => {
 
   it("gemini_omni prefills video_slug from a prompt-referenced video (both providers)", () => {
     const resolvedAssets = [
-      { tag: "@vid-clip", asset_id: "vid-clip", asset_type: "video", file_path: "/path/clip.mp4", asset_dir: "/path" },
+      { tag: "@vid-clip", artifactId: "id-video", artifactSlug: "vid-clip", artifactType: "video" as const, filePath: "/path/clip.mp4", workspacePath: "/path" },
     ];
     const kie = buildModelOption("gemini_omni", VIDEO_MODELS.gemini_omni, {}, resolvedAssets, undefined, "kie");
     expect(kie.prefilled_values.video_slug).toBe("@vid-clip");

@@ -3,18 +3,18 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createFsForTest } from "../fs.js";
+import { createEngineForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 
 describe("show_folder tool", () => {
   let client: Client;
   let tempDir: string;
-  let fs: VideocityFs;
+  let fs: Engine;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
-    fs = createFsForTest(tempDir);
+    fs = createEngineForTest(tempDir);
   });
 
   afterEach(async () => {
@@ -24,7 +24,7 @@ describe("show_folder tool", () => {
 
   it("show folder for nonexistent asset returns error", async () => {
     client = await createTestClient(tempDir);
-    await fs.createProject("test");
+    await fs.projects.create("test");
     const result = await client.callTool({
       name: "show_folder",
       arguments: { asset_id: "img-nonexistent", project_slug: "test" },
@@ -34,10 +34,10 @@ describe("show_folder tool", () => {
 
   it("show folder for existing asset returns a result without throwing", async () => {
     client = await createTestClient(tempDir);
-    await fs.createProject("test");
-    const assetResult = await fs.createAsset("img", "landscape-photo", "test");
+    await fs.projects.create("test");
+    const assetResult = await fs.artifacts.create("img", "landscape-photo", "test");
     if (!assetResult.ok) throw new Error(assetResult.error.message);
-    const assetId = assetResult.value.assetId;
+    const assetId = assetResult.value.slug;
 
     const result = await client.callTool({
       name: "show_folder",

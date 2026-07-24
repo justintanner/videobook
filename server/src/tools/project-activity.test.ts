@@ -8,7 +8,7 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 interface ActivityEntry {
   hash: string;
   action: string;
-  source: "action" | "snapshot";
+  source: "action";
   rewindable: boolean;
 }
 
@@ -51,7 +51,7 @@ describe("project_activity tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("returns project-changing actions and snapshots, excluding read-only calls", async () => {
+  it("returns canonical project-changing actions, excluding read-only calls", async () => {
     const data = Buffer.from("fake-png-data").toString("base64");
     const upload = await client.callTool({
       name: "upload_file",
@@ -70,9 +70,8 @@ describe("project_activity tool", () => {
     );
 
     expect(entries.some((entry) => entry.action === "tool-upload-file" && entry.source === "action")).toBe(true);
-    expect(entries.some((entry) => entry.source === "snapshot")).toBe(true);
     expect(entries.some((entry) => entry.action === "tool-asset-manifest")).toBe(false);
     expect(entries.every((entry) => entry.rewindable)).toBe(true);
-    expect(entries.some((entry) => entry.source === "snapshot" && /^write/i.test(entry.action))).toBe(false);
+    expect(entries.some((entry) => /^write/i.test(entry.action))).toBe(false);
   });
 });

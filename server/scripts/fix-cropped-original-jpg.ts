@@ -34,18 +34,18 @@ async function fileExists(p: string): Promise<boolean> {
 }
 
 async function repairAsset(projectSlug: string, assetId: string): Promise<RepairOutcome> {
-  const manifestResult = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+  const manifestResult = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
   if (!manifestResult.ok) return { kind: "failed", assetId, reason: manifestResult.error.message };
 
   const fileNames = new Set(manifestResult.value.files.map((f) => f.name));
   if (!fileNames.has("original.png")) return { kind: "skipped", assetId, reason: "no original.png" };
   if (!fileNames.has("original.jpg")) return { kind: "skipped", assetId, reason: "no original.jpg (already clean)" };
 
-  const pngResult = await fs.readFile(assetId, "original.png", projectSlug);
+  const pngResult = await fs.files.read(assetId, "original.png", projectSlug);
   if (!pngResult.ok) return { kind: "failed", assetId, reason: `read original.png: ${pngResult.error.message}` };
   const pngBuffer = Buffer.isBuffer(pngResult.value) ? pngResult.value : Buffer.from(pngResult.value);
 
-  const jpgResult = await fs.readFile(assetId, "original.jpg", projectSlug);
+  const jpgResult = await fs.files.read(assetId, "original.jpg", projectSlug);
   if (!jpgResult.ok) return { kind: "failed", assetId, reason: `read original.jpg: ${jpgResult.error.message}` };
   const jpgBuffer = Buffer.isBuffer(jpgResult.value) ? jpgResult.value : Buffer.from(jpgResult.value);
 
@@ -59,7 +59,7 @@ async function repairAsset(projectSlug: string, assetId: string): Promise<Repair
   }
 
   // Preserve provenance fields if they exist; only overwrite width/height.
-  const meta = await fs.readMetadata<Record<string, unknown>>(assetId, "original", projectSlug);
+  const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original", projectSlug);
   const provenance: Record<string, unknown> = meta.ok ? { ...meta.value } : {};
   delete provenance.width;
   delete provenance.height;
@@ -70,11 +70,11 @@ async function repairAsset(projectSlug: string, assetId: string): Promise<Repair
     cropToFill(pngBuffer, 1080, 1080),
   ]);
 
-  await fs.deleteFile(assetId, "original.jpg", projectSlug);
-  await fs.writeFile(assetId, "landscape.jpg", landscape, projectSlug);
-  await fs.writeFile(assetId, "portrait.jpg", portrait, projectSlug);
-  await fs.writeFile(assetId, "square.jpg", square, projectSlug);
-  await fs.writeMetadata(
+  await fs.files.delete(assetId, "original.jpg", projectSlug);
+  await fs.files.write(assetId, "landscape.jpg", landscape, projectSlug);
+  await fs.files.write(assetId, "portrait.jpg", portrait, projectSlug);
+  await fs.files.write(assetId, "square.jpg", square, projectSlug);
+  await fs.metadata.artifacts.write(
     assetId,
     "original",
     { ...provenance, width: pngDims.width, height: pngDims.height },

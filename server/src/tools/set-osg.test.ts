@@ -1,9 +1,10 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createFs, type VideocityFs } from "videobook-engine";
+import { type Engine } from "videobook-engine";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -12,14 +13,14 @@ const ORIENTATIONS = ["landscape", "portrait", "square"] as const;
 
 describe("set_osg tool", () => {
   let client: Client;
-  let fs: VideocityFs;
+  let fs: Engine;
   let tempDir: string;
   const projectSlug = "test-proj";
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-set-osg-test-"));
     client = await createTestClient(tempDir);
-    fs = createFs({ projectsDir: tempDir });
+    fs = createEngineForTest(tempDir);
     await client.callTool({
       name: "create_project",
       arguments: { project_slug: projectSlug },
@@ -32,11 +33,11 @@ describe("set_osg tool", () => {
   });
 
   async function createVideoAsset(): Promise<string> {
-    const created = await fs.createAsset("vid", "clip", projectSlug);
+    const created = await fs.artifacts.create("vid", "clip", projectSlug);
     if (!created.ok) throw new Error(created.error.message);
-    const write = await fs.writeFile(created.value.assetId, "original.mp4", Buffer.from("fake-video"), projectSlug);
+    const write = await fs.files.write(created.value.slug, "original.mp4", Buffer.from("fake-video"), projectSlug);
     if (!write.ok) throw new Error(write.error.message);
-    return created.value.assetId;
+    return created.value.slug;
   }
 
   it("writes osg fields to the render metadata of every orientation", async () => {
@@ -59,7 +60,7 @@ describe("set_osg tool", () => {
     expect(parsed.osg).toEqual({ assetId: "img-logo", position: "bottom-right", size: "large", scale: 1.5 });
 
     for (const orient of ORIENTATIONS) {
-      const meta = await fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
+      const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
       if (!meta.ok) throw new Error(`missing ${orient}.render`);
       expect(meta.value.osgAssetId).toBe("img-logo");
       expect(meta.value.osgPosition).toBe("bottom-right");
@@ -73,7 +74,7 @@ describe("set_osg tool", () => {
   it("preserves unrelated render settings when merging osg fields", async () => {
     const assetId = await createVideoAsset();
     // Seed a pre-existing render setting that set_osg must not clobber.
-    await fs.writeMetadata(assetId, "landscape.render", { subtitlesEnabled: false, textColor: "#ABCDEF" }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "landscape.render", { subtitlesEnabled: false, textColor: "#ABCDEF" }, projectSlug);
 
     await client.callTool({
       name: "set_video_overlay",
@@ -86,7 +87,7 @@ describe("set_osg tool", () => {
       },
     });
 
-    const meta = await fs.readMetadata<Record<string, unknown>>(assetId, "landscape.render", projectSlug);
+    const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "landscape.render", projectSlug);
     if (!meta.ok) throw new Error("missing landscape.render");
     expect(meta.value.subtitlesEnabled).toBe(false);
     expect(meta.value.textColor).toBe("#ABCDEF");
@@ -100,7 +101,7 @@ describe("set_osg tool", () => {
     const assetId = await createVideoAsset();
     // Seed a legacy tail so we can prove an absolute window supersedes it.
     for (const orient of ORIENTATIONS) {
-      await fs.writeMetadata(assetId, `${orient}.render`, { osgTailSeconds: 2 }, projectSlug);
+      await fs.metadata.artifacts.write(assetId, `${orient}.render`, { osgTailSeconds: 2 }, projectSlug);
     }
 
     const result = await client.callTool({
@@ -118,7 +119,7 @@ describe("set_osg tool", () => {
 
     expect(result.isError).toBeFalsy();
     for (const orient of ORIENTATIONS) {
-      const meta = await fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
+      const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
       if (!meta.ok) throw new Error(`missing ${orient}.render`);
       expect(meta.value.osgStartSeconds).toBe(10);
       expect(meta.value.osgEndSeconds).toBe(22);
@@ -154,7 +155,7 @@ describe("set_osg tool", () => {
     });
 
     for (const orient of ORIENTATIONS) {
-      const meta = await fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
+      const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
       if (!meta.ok) throw new Error(`missing ${orient}.render`);
       expect(meta.value.osgStartSeconds).toBeNull();
       expect(meta.value.osgEndSeconds).toBeNull();
@@ -190,7 +191,7 @@ describe("set_osg tool", () => {
     expect(parsed.osg).toBeNull();
 
     for (const orient of ORIENTATIONS) {
-      const meta = await fs.readMetadata<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
+      const meta = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, `${orient}.render`, projectSlug);
       if (!meta.ok) throw new Error(`missing ${orient}.render`);
       expect(meta.value.osgAssetId).toBeNull();
       expect(meta.value.osgTailSeconds).toBeNull();

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { assessDialogQuality } from "../dialog-quality.js";
 import type { ToolDef } from "./tool-def.js";
@@ -40,7 +40,7 @@ function isTimedWord(v: unknown): v is TimedWord {
     && typeof (v as Record<string, unknown>).end === "number";
 }
 
-export function readTranscriptDef(fs: VideocityFs): ToolDef {
+export function readTranscriptDef(fs: Engine): ToolDef {
   return {
     name: "read_transcript",
     description:
@@ -52,7 +52,7 @@ export function readTranscriptDef(fs: VideocityFs): ToolDef {
     handler: async (args) => {
       const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
 
-      const elevenLabsResult = await fs.readFile(asset_id, "elevenlabs.json", project_slug);
+      const elevenLabsResult = await fs.files.read(asset_id, "elevenlabs.json", project_slug);
       if (elevenLabsResult.ok) {
         try {
           const raw = JSON.parse(elevenLabsResult.value.toString()) as unknown;
@@ -90,7 +90,7 @@ export function readTranscriptDef(fs: VideocityFs): ToolDef {
         }
       }
 
-      const plainResult = await fs.readFile(asset_id, ".analysis.gpt4otrans.json", project_slug);
+      const plainResult = await fs.files.read(asset_id, ".analysis.gpt4otrans.json", project_slug);
       if (plainResult.ok) {
         try {
           const data = JSON.parse(plainResult.value.toString()) as { text?: string };

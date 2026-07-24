@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import type { Wan27Resolution } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -31,14 +31,14 @@ type GenerateWan27I2vVideoPayload = {
 };
 
 async function uploadInput(
-  fs: VideocityFs,
+  fs: Engine,
   input: RefInput,
   projectSlug: string,
 ): Promise<string> {
   return uploadAssetToKie(fs, input.assetId, input.filename, projectSlug);
 }
 
-export function registerGenerateWan27I2vVideoJob(fs: VideocityFs): void {
+export function registerGenerateWan27I2vVideoJob(fs: Engine): void {
   registerJobHandler("generate_wan27_i2v_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt,

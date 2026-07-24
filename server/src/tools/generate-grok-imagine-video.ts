@@ -1,5 +1,5 @@
 import { modelSlug } from "@apicity/cost";
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { GrokImageToVideoRequestSchema } from "@apicity/kie/zod";
 import { extname } from "node:path";
@@ -12,7 +12,7 @@ import type { SchemaArgs, ToolDef } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
+function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -39,13 +39,13 @@ const generateGrokImagineVideoSchema = {
   resolution: apicityField(grokI2v.resolution, "Output resolution"),
   aspect_ratio: apicityField(grokI2v.aspect_ratio, "Output aspect ratio"),
   nsfw_checker: apicityField(grokI2v.nsfw_checker, "Enable NSFW content safety filter (default false)"),
-  replace_audio_with: z.string().optional().describe("After generation, splice this audio over the Grok output (aud-* slug or `<assetId>/<filename>` form, e.g. `plan/s1.mp3`). Runs server-side so the asset only reaches ready once the splice is in."),
+  replace_audio_with: z.string().optional().describe("After generation, splice an aud-* artifact over the Grok output. Runs server-side so the asset only reaches ready once the splice is in."),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie', 'xai')"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof generateGrokImagineVideoSchema>;
 
-export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
+export function generateGrokImagineVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_grok_imagine_image_to_video",
     description: "Generate a video from image asset(s) using Kie Grok Imagine Video 1.5. Creates a new vid- asset and enqueues a background job. Requires at least one of image_slugs or asset_id.",
@@ -78,7 +78,7 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
           return toolError(`image asset must start with img-, got: ${assetId}`);
         }
 
-        const manifestResult = await fs.getManifest(assetId, project_slug);
+        const manifestResult = await fs.files.manifest(assetId, project_slug);
         if (!manifestResult.ok) {
           return toolError(manifestResult.error.message);
         }
@@ -101,12 +101,12 @@ export function generateGrokImagineVideoDef(fs: VideocityFs): ToolDef {
       }
 
       const videoName = deriveVideoName(assetIds[0]);
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return toolError(`Failed to create video asset: ${assetResult.error.message}`);
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("kie", "grok-imagine/image-to-video")}-${vidAssetId}-${Date.now()}`;
 

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import type { KlingMotionControlRequest, MediaGenerationRequest } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -28,7 +28,7 @@ type GenerateKling30MotionControlPayload = {
   background_source?: KlingMotionControlRequest["input"]["background_source"];
 };
 
-async function uploadInputs(fs: VideocityFs, inputs: RefInput[], projectSlug: string): Promise<string[]> {
+async function uploadInputs(fs: Engine, inputs: RefInput[], projectSlug: string): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
     urls.push(await uploadAssetToKie(fs, assetId, filename, projectSlug));
@@ -36,7 +36,7 @@ async function uploadInputs(fs: VideocityFs, inputs: RefInput[], projectSlug: st
   return urls;
 }
 
-export function registerGenerateKling30MotionControlVideoJob(fs: VideocityFs): void {
+export function registerGenerateKling30MotionControlVideoJob(fs: Engine): void {
   registerJobHandler("generate_kling30_motion_control_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug,
@@ -63,7 +63,7 @@ export function registerGenerateKling30MotionControlVideoJob(fs: VideocityFs): v
     );
 
     const motionVideo = videoInputs[0];
-    const motionMeta = await fs.readMetadata<{ duration?: number }>(
+    const motionMeta = await fs.metadata.artifacts.read<{ duration?: number }>(
       motionVideo.assetId, "original", projectSlug,
     );
     const durationHint =

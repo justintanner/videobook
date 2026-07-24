@@ -1,8 +1,8 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function projectHistoryDef(fs: VideocityFs): ToolDef {
+export function projectHistoryDef(fs: Engine): ToolDef {
   return {
     name: "project_history",
     description: "Get git commit history for a project",
@@ -12,7 +12,7 @@ export function projectHistoryDef(fs: VideocityFs): ToolDef {
     },
     handler: async (args) => {
       const { project_slug, limit } = args as { project_slug: string; limit?: number };
-      const commits = await fs.getHistory(project_slug, limit ?? 20);
+      const commits = await fs.history.project(project_slug, limit ?? 20);
       return {
         content: [{
           type: "text" as const,

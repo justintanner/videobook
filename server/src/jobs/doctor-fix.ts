@@ -1,7 +1,7 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 
-// How far back through an asset's git history to look for a usable state.
+// How far back through an asset's immutable revisions to look for a usable state.
 const HISTORY_LIMIT = 25;
 
 interface DoctorFixPayload {
@@ -24,11 +24,11 @@ export type DoctorFixResult =
   | { status: "busy"; asset_id: string; reason: string };
 
 async function statusOf(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   assetId: string,
 ): Promise<string> {
-  const res = await fs.getAssetStatus(assetId, projectSlug);
+  const res = await fs.status.get(assetId, projectSlug);
   return res.ok ? res.value : "error";
 }
 
@@ -45,23 +45,23 @@ async function statusOf(
  * If the media on disk is intact, this *is* the last usable state and no file
  * changes are needed.
  *
- * Tier 2 (git restore): the working tree itself is broken, so walk the asset's
- * git history newest-first and restore the first commit that yields a `ready`
+ * Tier 2 (Dolt restore): the current manifest itself is broken, so walk the
+ * asset history newest-first and restore the first revision that yields a `ready`
  * asset.
  */
 async function fixAsset(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   assetId: string,
 ): Promise<DoctorFixResult> {
   // Refuse to touch an asset a job is actively working (live, unexpired lease).
-  const work = await fs.assetWork.read(projectSlug, assetId);
+  const work = await fs.jobs.artifactWork.read(projectSlug, assetId);
   if (
     work.ok &&
     work.value &&
     work.value.status === "working" &&
     work.value.deadlineAt != null &&
-    work.value.deadlineAt * 1000 > Date.now()
+    work.value.deadlineAt > Date.now()
   ) {
     return { status: "busy", asset_id: assetId, reason: "asset has an active job lease" };
   }
@@ -69,15 +69,15 @@ async function fixAsset(
   const before = await statusOf(fs, projectSlug, assetId);
 
   // Tier 1 — clear durable failure signals, then re-derive from disk.
-  await fs.generationErrors.clear(projectSlug, assetId);
-  const pending = await fs.pendingTasks.read(projectSlug, assetId);
+  await fs.jobs.failures.clear(projectSlug, assetId);
+  const pending = await fs.jobs.pending.read(projectSlug, assetId);
   if (pending.ok && pending.value) {
     // delete (not forceFail) so we don't write a fresh generation error.
-    await fs.pendingTasks.delete(projectSlug, assetId);
+    await fs.jobs.pending.delete(projectSlug, assetId);
   }
-  const dirRes = await fs.resolveAssetDir(assetId, projectSlug);
-  if (dirRes.ok) await fs.cleanStaleLock(dirRes.value);
-  await fs.recoverAssetRow(projectSlug, assetId);
+  const dirRes = await fs.workspaces.resolveArtifact(assetId, projectSlug);
+  if (dirRes.ok) await fs.jobs.locks.cleanStale(dirRes.value);
+  await fs.jobs.recoverArtifact(projectSlug, assetId);
 
   const afterTier1 = await statusOf(fs, projectSlug, assetId);
   if (afterTier1 === "ready") {
@@ -88,13 +88,30 @@ async function fixAsset(
     };
   }
 
-  // Tier 2 — restore from git history.
-  const history = await fs.getAssetHistory(assetId, projectSlug, HISTORY_LIMIT);
+  // Tier 2 — restore from immutable Dolt history using stable identity.
+  const artifact = fs.artifacts.get(projectSlug, assetId);
+  if (!artifact.ok) {
+    return {
+      status: "unfixable",
+      asset_id: assetId,
+      scanned: 0,
+      asset_status: afterTier1,
+    };
+  }
+  const history = fs.history.artifact(
+    artifact.value.artifactId,
+    projectSlug,
+    HISTORY_LIMIT,
+  );
   for (const commit of history) {
-    const restored = await fs.restoreAsset(assetId, commit.hash, projectSlug);
-    if (!restored) continue;
+    const restored = await fs.history.restoreArtifact(
+      artifact.value.artifactId,
+      commit.hash,
+      projectSlug,
+    );
+    if (!restored.ok) continue;
     // restoreAsset re-derives the row; clear any error it carried forward.
-    await fs.generationErrors.clear(projectSlug, assetId);
+    await fs.jobs.failures.clear(projectSlug, assetId);
     const status = await statusOf(fs, projectSlug, assetId);
     if (status === "ready") {
       return {
@@ -115,7 +132,7 @@ async function fixAsset(
   };
 }
 
-export function registerDoctorFixJob(fs: VideocityFs): void {
+export function registerDoctorFixJob(fs: Engine): void {
   registerJobHandler("doctor_fix", async (payload) => {
     const { projectSlug, assetId } = payload as unknown as DoctorFixPayload;
     return fixAsset(fs, projectSlug, assetId);

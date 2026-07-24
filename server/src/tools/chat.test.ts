@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createFsForTest } from "../fs.js";
+import { createEngineForTest } from "../fs.js";
 import {
   loadScriptContentsForChat,
   normalizeChatTimestampParams,
@@ -241,16 +241,16 @@ describe("enrichAssetContext", () => {
     if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("attaches source_url from .original.json metadata", async () => {
+  it("attaches source_url from native original metadata", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-chat-enrich-"));
-    const fs = createFsForTest(tempDir);
-    await fs.createProject("enrich-proj");
-    const asset = await fs.createAsset("vid", "og", "enrich-proj");
+    const fs = createEngineForTest(tempDir);
+    await fs.projects.create("enrich-proj");
+    const asset = await fs.artifacts.create("vid", "og", "enrich-proj");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
-    await fs.writeMetadata(
-      asset.value.assetId,
+    await fs.metadata.artifacts.write(
+      asset.value.slug,
       "original",
       {
         origin: "download",
@@ -262,10 +262,12 @@ describe("enrichAssetContext", () => {
     const rows = await enrichAssetContext(
       fs,
       [{
-        tag: asset.value.assetId,
-        asset_type: "video",
-        asset_id: asset.value.assetId,
-        file_path: join(asset.value.path, "original.mp4"),
+        tag: asset.value.slug,
+        artifactType: "video",
+        artifactId: asset.value.artifactId,
+        artifactSlug: asset.value.slug,
+        filePath: join(asset.value.path, "original.mp4"),
+        workspacePath: asset.value.path,
       }],
       "enrich-proj",
     );
@@ -285,52 +287,56 @@ describe("loadScriptContentsForChat", () => {
 
   it("reads script body from original.md (not index.md)", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-chat-script-"));
-    const fs = createFsForTest(tempDir);
-    const project = await fs.createProject("chat-script-proj");
+    const fs = createEngineForTest(tempDir);
+    const project = await fs.projects.create("chat-script-proj");
     expect(project.ok).toBe(true);
 
-    const script = await fs.createAsset("script", "scene-one", "chat-script-proj");
+    const script = await fs.artifacts.create("script", "scene-one", "chat-script-proj");
     expect(script.ok).toBe(true);
     if (!script.ok) return;
 
     const body = "A pig sits upright on a red stool.";
-    const wrote = await fs.writeFile(script.value.assetId, SCRIPT_FILENAME, body, "chat-script-proj");
+    const wrote = await fs.files.write(script.value.slug, SCRIPT_FILENAME, body, "chat-script-proj");
     expect(wrote.ok).toBe(true);
 
-    const decoy = await fs.writeFile(script.value.assetId, "index.md", "WRONG PLAN FILE", "chat-script-proj");
+    const decoy = await fs.files.write(script.value.slug, "index.md", "WRONG PLAN FILE", "chat-script-proj");
     expect(decoy.ok).toBe(true);
 
     const contents = await loadScriptContentsForChat(
       fs,
       [{
-        tag: script.value.assetId,
-        asset_type: "script",
-        asset_id: script.value.assetId,
-        file_path: join(script.value.path, SCRIPT_FILENAME),
+        tag: script.value.slug,
+        artifactType: "script",
+        artifactId: script.value.artifactId,
+        artifactSlug: script.value.slug,
+        filePath: join(script.value.path, SCRIPT_FILENAME),
+        workspacePath: script.value.path,
       }],
       "chat-script-proj",
     );
 
-    expect(contents).toEqual([{ tag: script.value.assetId, content: body }]);
+    expect(contents).toEqual([{ tag: script.value.slug, content: body }]);
     expect(contents[0]?.content).not.toContain("WRONG PLAN FILE");
     fs.close();
   });
 
   it("returns empty when only index.md exists (legacy wrong path)", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-chat-script-bad-"));
-    const fs = createFsForTest(tempDir);
-    await fs.createProject("chat-script-proj");
-    const script = await fs.createAsset("script", "orphan", "chat-script-proj");
+    const fs = createEngineForTest(tempDir);
+    await fs.projects.create("chat-script-proj");
+    const script = await fs.artifacts.create("script", "orphan", "chat-script-proj");
     if (!script.ok) throw new Error(script.error.message);
-    await fs.writeFile(script.value.assetId, "index.md", "should not be loaded", "chat-script-proj");
+    await fs.files.write(script.value.slug, "index.md", "should not be loaded", "chat-script-proj");
 
     const contents = await loadScriptContentsForChat(
       fs,
       [{
-        tag: script.value.assetId,
-        asset_type: "script",
-        asset_id: script.value.assetId,
-        file_path: join(script.value.path, "index.md"),
+        tag: script.value.slug,
+        artifactType: "script",
+        artifactId: script.value.artifactId,
+        artifactSlug: script.value.slug,
+        filePath: join(script.value.path, "index.md"),
+        workspacePath: script.value.path,
       }],
       "chat-script-proj",
     );

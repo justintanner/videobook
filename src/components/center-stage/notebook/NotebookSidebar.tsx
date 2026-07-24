@@ -769,11 +769,6 @@ function InputList({
 }) {
   const sources = new Map(definition.sequence.map((candidate) => [candidate.id, candidate]))
   const inputRoutes = (step.properties.input_routes as JsonRecord) ?? {}
-  const legacyFirstFrameSource = typeof step.properties.first_frame_source === 'string' ? step.properties.first_frame_source : null
-  const effectiveRoutes = { ...inputRoutes }
-  if (legacyFirstFrameSource && !effectiveRoutes[legacyFirstFrameSource]) {
-    effectiveRoutes[legacyFirstFrameSource] = 'first_frame_slug'
-  }
   const modeSlots = deriveStripSlots(option, null)
 
   const inputs = stepInputs(step)
@@ -794,7 +789,7 @@ function InputList({
             ? slug
             : `${typeof source.properties.model === 'string' ? source.properties.model : source.type} · ${slug || 'no output'}`
 
-        const explicitParam = typeof effectiveRoutes[id] === 'string' ? effectiveRoutes[id] : null
+        const explicitParam = typeof inputRoutes[id] === 'string' ? inputRoutes[id] : null
         const autoRoute = kind ? routeDrop(kind, modeSlots) : { param: '' }
         const options = kind ? modeSlots.filter((slot) => {
           if (kind === 'image') return slot.kind === 'image' || slot.param === 'first_frame_slug' || slot.param === 'last_frame_slug'

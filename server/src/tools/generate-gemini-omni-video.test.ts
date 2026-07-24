@@ -1,8 +1,8 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createFs } from "videobook-engine";
 import sharp from "sharp";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { createTestClient } from "../test-client.js";
@@ -43,22 +43,22 @@ describe("generate_gemini_omni_video tool", () => {
   });
 
   it("enqueues with image and video slugs before provider upload", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const imageAsset = await fs.createAsset("img", "source-img", "test-proj");
-    const videoAsset = await fs.createAsset("vid", "source-video", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const imageAsset = await fs.artifacts.create("img", "source-img", "test-proj");
+    const videoAsset = await fs.artifacts.create("vid", "source-video", "test-proj");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
     if (!videoAsset.ok) throw new Error("Failed to create video asset");
 
-    await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
-    await fs.writeFile(videoAsset.value.assetId, "original.mp4", Buffer.from("fake mp4"), "test-proj");
+    await fs.files.write(imageAsset.value.slug, "original.png", await makePng(), "test-proj");
+    await fs.files.write(videoAsset.value.slug, "original.mp4", Buffer.from("fake mp4"), "test-proj");
 
     const result = await client.callTool({
       name: "generate_kie_gemini_omni_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "char swap",
-        image_slugs: [`@${imageAsset.value.assetId}`],
-        video_slug: `@${videoAsset.value.assetId}`,
+        image_slugs: [`@${imageAsset.value.slug}`],
+        video_slug: `@${videoAsset.value.slug}`,
         video_clip_start: 0,
         video_clip_ends: 9.97,
         duration: "10",
@@ -70,7 +70,7 @@ describe("generate_gemini_omni_video tool", () => {
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
     expect(parsed.vid_asset_id).toMatch(/^vid-/);
-    expect(parsed.source_images).toEqual([imageAsset.value.assetId]);
-    expect(parsed.source_videos).toEqual([videoAsset.value.assetId]);
+    expect(parsed.source_images).toEqual([imageAsset.value.slug]);
+    expect(parsed.source_videos).toEqual([videoAsset.value.slug]);
   });
 });

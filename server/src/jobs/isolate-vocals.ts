@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFile, unlink } from "node:fs/promises";
@@ -20,7 +20,7 @@ type IsolateVocalsPayload = {
   isAudioAsset: boolean;
 };
 
-export function registerIsolateVocalsJob(fs: VideocityFs): void {
+export function registerIsolateVocalsJob(fs: Engine): void {
   registerJobHandler("isolate_vocals", async (payload, ctx) => {
     const {
       audioFilename, assetId, assetDir, projectSlug, isAudioAsset,
@@ -29,7 +29,7 @@ export function registerIsolateVocalsJob(fs: VideocityFs): void {
     requireApiKey("KIE_API_KEY");
 
     // Read audio file from asset
-    const readResult = await fs.readFile(assetId, audioFilename, projectSlug);
+    const readResult = await fs.files.read(assetId, audioFilename, projectSlug);
     if (!readResult.ok) throw new Error(readResult.error.message);
     const audioBuffer = Buffer.from(readResult.value);
 

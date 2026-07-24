@@ -1,10 +1,10 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { findVideoFile } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
-export function detectScenesDef(fs: VideocityFs): ToolDef {
+export function detectScenesDef(fs: Engine): ToolDef {
   return {
     name: "detect_scenes",
     description:
@@ -24,7 +24,7 @@ export function detectScenesDef(fs: VideocityFs): ToolDef {
       };
       const sourceAssetId = source_asset_id.replace(/^@/, "");
 
-      const manifestResult = await fs.getManifest(sourceAssetId, project_slug, { includeDotfiles: false });
+      const manifestResult = await fs.files.manifest(sourceAssetId, project_slug, { includeDotfiles: false });
       if (!manifestResult.ok) {
         return {
           isError: true as const,

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 import { transcribeAssetToElevenLabsJson } from "./_transcribe.js";
@@ -16,7 +16,7 @@ type TranscribePayload = {
   projectSlug: string;
 };
 
-export function registerTranscribeJob(fs: VideocityFs): void {
+export function registerTranscribeJob(fs: Engine): void {
   registerJobHandler("transcribe", async (payload, ctx) => {
     const {
       audioFilename,

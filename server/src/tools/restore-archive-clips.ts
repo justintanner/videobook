@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { extname } from "node:path";
 import { indexKey } from "../archive-b2.js";
@@ -108,25 +108,25 @@ function archiveMetadata(index: ArchiveIndex): Record<string, unknown> {
 }
 
 async function existingArchiveAssets(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   archiveIds: string[],
 ): Promise<Map<string, string>> {
   const wanted = new Set(archiveIds);
   const out = new Map<string, string>();
-  const assets = await fs.listAssets(projectSlug);
+  const assets = await fs.artifacts.list(projectSlug);
   await Promise.all(assets.map(async (asset) => {
-    const meta = await fs.readMetadata<ArchiveMetadata>(asset.id, "archive", projectSlug);
+    const meta = await fs.metadata.artifacts.read<ArchiveMetadata>(asset.slug, "archive", projectSlug);
     if (!meta.ok) return;
     const archiveId = meta.value.archive_id;
     if (typeof archiveId === "string" && wanted.has(archiveId)) {
-      out.set(archiveId, asset.id);
+      out.set(archiveId, asset.slug);
     }
   }));
   return out;
 }
 
-export function restoreArchiveClipsDef(fs: VideocityFs): ToolDef {
+export function restoreArchiveClipsDef(fs: Engine): ToolDef {
   return {
     name: "restore_archive_clips",
     description: "Restore selected archived video/audio clips into the current videocity project as new assets.",
@@ -148,7 +148,7 @@ export function restoreArchiveClipsDef(fs: VideocityFs): ToolDef {
       const invalid = archiveIds.filter((id) => !ARCHIVE_ID_RE.test(id));
       if (invalid.length > 0) return toolError(`Invalid archive_id: ${invalid.join(", ")}`);
 
-      const project = await fs.getProject(project_slug);
+      const project = await fs.projects.get(project_slug);
       if (!project.ok) return toolError(project.error.message);
 
       const store = getArchiveStore();
@@ -175,21 +175,21 @@ export function restoreArchiveClipsDef(fs: VideocityFs): ToolDef {
         const target = archiveMediaTarget(index);
         if (!target) return toolError(`Archive media type is not supported: ${index.media.filename}`);
 
-        const created = await fs.createAsset(target.prefix, archiveAssetName(index), project_slug);
+        const created = await fs.artifacts.create(target.prefix, archiveAssetName(index), project_slug);
         if (!created.ok) return toolError(created.error.message);
 
-        const writeArchive = await fs.writeMetadata(created.value.assetId, "archive", archiveMetadata(index), project_slug);
+        const writeArchive = await fs.metadata.artifacts.write(created.value.slug, "archive", archiveMetadata(index), project_slug);
         if (!writeArchive.ok) {
-          await fs.deleteAsset(created.value.assetId, project_slug).catch(() => undefined);
+          await fs.artifacts.delete(created.value.slug, project_slug).catch(() => undefined);
           return toolError(writeArchive.error.message);
         }
 
-        const jobId = `restore-archive-${created.value.assetId}-${Date.now()}`;
+        const jobId = `restore-archive-${created.value.slug}-${Date.now()}`;
         try {
           await queue.enqueue(jobId, {
             type: "restore_archive_clip",
             projectSlug: project_slug,
-            assetId: created.value.assetId,
+            assetId: created.value.slug,
             assetDir: created.value.path,
             archiveId: index.archive_id,
             mediaKey: index.media.key,
@@ -202,13 +202,13 @@ export function restoreArchiveClipsDef(fs: VideocityFs): ToolDef {
             people: tagLabels(index.people),
           } as unknown as Record<string, unknown>);
         } catch (error) {
-          await fs.deleteAsset(created.value.assetId, project_slug).catch(() => undefined);
+          await fs.artifacts.delete(created.value.slug, project_slug).catch(() => undefined);
           return toolError(error instanceof Error ? error.message : String(error));
         }
 
         restored.push({
           archive_id: index.archive_id,
-          asset_id: created.value.assetId,
+          asset_id: created.value.slug,
           job_id: jobId,
         });
       }

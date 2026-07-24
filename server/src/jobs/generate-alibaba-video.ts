@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import {
   createAlibaba,
   type AlibabaVideoSynthesisParameters,
@@ -36,7 +36,7 @@ type GenerateAlibabaVideoPayload = {
 };
 
 async function uploadInput(
-  fs: VideocityFs,
+  fs: Engine,
   input: RefInput,
   projectSlug: string,
   model: string,
@@ -44,10 +44,10 @@ async function uploadInput(
   return uploadAssetToAlibaba(fs, input.assetId, input.filename, projectSlug, model);
 }
 
-export function registerGenerateAlibabaVideoJob(fs: VideocityFs): void {
+export function registerGenerateAlibabaVideoJob(fs: Engine): void {
   registerJobHandler("generate_alibaba_video", async (payload, ctx) => {
     const {
-      vidAssetId, vidAssetDir, projectSlug, prompt, negative_prompt, model,
+      vidAssetId, projectSlug, prompt, negative_prompt, model,
       firstFrame, lastFrame, firstClip, drivingAudio, videoRef,
       sourceImageIds, sourceVideoIds, sourceAudioIds,
       resolution, duration, prompt_extend, watermark, audio_setting, seed,
@@ -77,15 +77,14 @@ export function registerGenerateAlibabaVideoJob(fs: VideocityFs): void {
       },
       { firstFrameUrl, lastFrameUrl, firstClipUrl, drivingAudioUrl, videoUrl },
     );
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
+    await fs.metadata.artifacts.write(vidAssetId, "generation-payload", request, projectSlug);
     const submitResult = await provider.post.api.v1.services.aigc.videoGeneration.videoSynthesis(request);
     const taskId = submitResult.output.task_id;
     {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+      const _ptResult = await fs.jobs.pending.write(projectSlug, {
         taskId,
         taskType: "alibaba_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
+        artifactId: vidAssetId,
         meta: {
           prompt,
           sourceImageIds,

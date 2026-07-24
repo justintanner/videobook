@@ -1,8 +1,9 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createFs, type VideocityFs } from "videobook-engine";
+import { type Engine } from "videobook-engine";
 import sharp from "sharp";
 import { createGoogleFlow } from "@apicity/googleflow";
 import {
@@ -38,14 +39,14 @@ function stubProvider(body: unknown, calls?: Array<{ url: string; method: string
 }
 
 describe("google flow character tools — handler guards", () => {
-  let fs: VideocityFs;
+  let fs: Engine;
   let tempDir: string;
   const originalKey = process.env.GOOGLE_FLOW_API_KEY;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-gf-characters-test-"));
-    fs = createFs({ projectsDir: tempDir });
-    await fs.createProject("test-proj");
+    fs = createEngineForTest(tempDir);
+    await fs.projects.create("test-proj");
   });
 
   afterEach(async () => {
@@ -78,14 +79,14 @@ describe("google flow character tools — handler guards", () => {
 
   it("create resolves real slugs then fails closed on a placeholder key", async () => {
     process.env.GOOGLE_FLOW_API_KEY = "test-key";
-    const asset = await fs.createAsset("img", "hero", "test-proj");
+    const asset = await fs.artifacts.create("img", "hero", "test-proj");
     if (!asset.ok) throw new Error("failed to create image asset");
-    await fs.writeFile(asset.value.assetId, "original.png", await makePng(), "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", await makePng(), "test-proj");
 
     const result = await createGoogleFlowCharacterDef(fs).handler({
       project_slug: "test-proj",
       display_name: "Hero",
-      image_slugs: [`@${asset.value.assetId}`],
+      image_slugs: [`@${asset.value.slug}`],
     });
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain("placeholder");
@@ -308,14 +309,14 @@ describe("replaceGoogleFlowCharacter — stubbed provider", () => {
     const provider = routingProvider({ calls });
 
     const tempDir = await mkdtemp(join(tmpdir(), "videocity-replace-test-"));
-    const fs = createFs({ projectsDir: tempDir });
-    await fs.createProject("test-proj");
-    const asset = await fs.createAsset("img", "newimg", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    await fs.projects.create("test-proj");
+    const asset = await fs.artifacts.create("img", "newimg", "test-proj");
     if (!asset.ok) throw new Error("failed to create asset");
-    await fs.writeFile(asset.value.assetId, "original.png", await makePng(), "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", await makePng(), "test-proj");
 
     const result = await replaceGoogleFlowCharacter(provider, fs, "test-proj", OLD_REF, {
-      imageSlugs: [`@${asset.value.assetId}`],
+      imageSlugs: [`@${asset.value.slug}`],
       personalityNotes: "new notes",
     });
     expect(result.character_ref).toBe(NEW_REF);

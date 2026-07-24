@@ -31,8 +31,8 @@ describe("rename_project tool", () => {
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
-    expect(data.oldSlug).toBe("original");
-    expect(data.newSlug).toBe("renamed");
+    expect(data.slug).toBe("renamed");
+    expect(data.projectId).toBeTruthy();
   });
 
   it("old slug not found and new slug works after rename", async () => {

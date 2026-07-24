@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { z } from "zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
@@ -7,7 +7,7 @@ import sharp from "sharp";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
 
-function findOriginalImage(files: AssetManifestFile[]): AssetManifestFile | null {
+function findOriginalImage(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -23,7 +23,7 @@ function findOriginalImage(files: AssetManifestFile[]): AssetManifestFile | null
   );
 }
 
-export function invertImageDef(fs: VideocityFs): ToolDef {
+export function invertImageDef(fs: Engine): ToolDef {
   return {
     name: "invert_image",
     description: "In-place inverts an img-* asset and regenerates crops.",
@@ -34,7 +34,7 @@ export function invertImageDef(fs: VideocityFs): ToolDef {
     handler: async (args) => {
       const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return { isError: true, content: [{ type: "text", text: manifestResult.error.message }] };
       }
@@ -47,7 +47,7 @@ export function invertImageDef(fs: VideocityFs): ToolDef {
       const rawExt = imageFile.extension ?? extname(imageFile.name);
       const extWithDot = rawExt.startsWith(".") ? rawExt : `.${rawExt}`;
       
-      const readResult = await fs.readFile(asset_id, imageFile.name, project_slug);
+      const readResult = await fs.files.read(asset_id, imageFile.name, project_slug);
       if (!readResult.ok) {
         return { isError: true, content: [{ type: "text", text: readResult.error.message }] };
       }
@@ -61,12 +61,12 @@ export function invertImageDef(fs: VideocityFs): ToolDef {
         return { isError: true, content: [{ type: "text", text: `Invert failed: ${err instanceof Error ? err.message : String(err)}` }] };
       }
 
-      const writeResult = await fs.writeFile(asset_id, imageFile.name, inverted, project_slug);
+      const writeResult = await fs.files.write(asset_id, imageFile.name, inverted, project_slug);
       if (!writeResult.ok) {
         return { isError: true, content: [{ type: "text", text: writeResult.error.message }] };
       }
 
-      const metadataResult = await fs.readMetadata(asset_id, "original", project_slug);
+      const metadataResult = await fs.metadata.artifacts.read(asset_id, "original", project_slug);
       const provenance = metadataResult.ok && metadataResult.value ? metadataResult.value : { origin: "invert_image" };
 
       const jobId = `invert-${asset_id}-${Date.now()}`;

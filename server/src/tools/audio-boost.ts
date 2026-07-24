@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { extname, join } from "node:path";
 import { queue } from "../queue.js";
@@ -15,7 +15,7 @@ function validateBoost(boost: number): string | null {
   return null;
 }
 
-export function audioBoostDef(fs: VideocityFs): ToolDef {
+export function audioBoostDef(fs: Engine): ToolDef {
   return {
     name: "audio_boost",
     description:
@@ -52,7 +52,7 @@ export function audioBoostDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

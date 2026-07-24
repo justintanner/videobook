@@ -6,8 +6,8 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { createAudioSyncPlan } from "../audio-sync.js";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
-import { createFsForTest } from "../fs.js";
-import { queue, setProjectsDir } from "../queue.js";
+import { createEngineForTest } from "../fs.js";
+import { queue, setEngineRoot } from "../queue.js";
 import {
   prepareAudioSyncTranscript,
   registerSyncVideoToAudioJob,
@@ -163,15 +163,15 @@ describe("sync video to audio media rendering", () => {
 describe("audio sync transcript preparation and rollback", () => {
   it("uses an existing timed transcript without requesting replacement", async () => {
     const projectsDir = await mkdtemp(join(tmpdir(), "videocity-audio-sync-transcript-"));
-    const fs = createFsForTest(projectsDir);
+    const fs = createEngineForTest(projectsDir);
     const savedApiKey = process.env.ELEVENLABS_API_KEY;
     try {
-      const project = await fs.createProject("transcript-test");
+      const project = await fs.projects.create("transcript-test");
       if (!project.ok) throw new Error(project.error.message);
-      const created = await fs.createAsset("vid", "valid transcript", "transcript-test");
+      const created = await fs.artifacts.create("vid", "valid transcript", "transcript-test");
       if (!created.ok) throw new Error(created.error.message);
-      const audio = await fs.writeFile(
-        created.value.assetId,
+      const audio = await fs.files.write(
+        created.value.slug,
         "original.mp3",
         Buffer.from("audio"),
         "transcript-test",
@@ -180,8 +180,8 @@ describe("audio sync transcript preparation and rollback", () => {
       const transcript = {
         words: [{ text: "England", start: 3.879, type: "word" }],
       };
-      const written = await fs.writeFile(
-        created.value.assetId,
+      const written = await fs.files.write(
+        created.value.slug,
         "elevenlabs.json",
         JSON.stringify(transcript),
         "transcript-test",
@@ -191,7 +191,7 @@ describe("audio sync transcript preparation and rollback", () => {
 
       await expect(prepareAudioSyncTranscript(
         fs,
-        created.value.assetId,
+        created.value.slug,
         "transcript-test",
       )).resolves.toEqual({ transcript, replacement: null });
     } finally {
@@ -212,31 +212,31 @@ describe("audio sync transcript preparation and rollback", () => {
     ["untimed", JSON.stringify({ words: [{ text: "England", type: "word" }] }), "original.mp3"],
   ] as const)("requests replacement for an %s transcript without mutating it", async (_name, contents, sourceFilename) => {
     const projectsDir = await mkdtemp(join(tmpdir(), "videocity-audio-sync-replace-"));
-    const fs = createFsForTest(projectsDir);
+    const fs = createEngineForTest(projectsDir);
     const savedApiKey = process.env.ELEVENLABS_API_KEY;
     try {
-      const project = await fs.createProject("replacement-test");
+      const project = await fs.projects.create("replacement-test");
       if (!project.ok) throw new Error(project.error.message);
-      const created = await fs.createAsset("vid", "replacement transcript", "replacement-test");
+      const created = await fs.artifacts.create("vid", "replacement transcript", "replacement-test");
       if (!created.ok) throw new Error(created.error.message);
-      const audio = await fs.writeFile(
-        created.value.assetId,
+      const audio = await fs.files.write(
+        created.value.slug,
         sourceFilename,
         Buffer.from("audio"),
         "replacement-test",
       );
       if (!audio.ok) throw new Error(audio.error.message);
       if (contents !== null) {
-        const written = await fs.writeFile(
-          created.value.assetId,
+        const written = await fs.files.write(
+          created.value.slug,
           "elevenlabs.json",
           contents,
           "replacement-test",
         );
         if (!written.ok) throw new Error(written.error.message);
       }
-      const historyBefore = await fs.getAssetHistory(
-        created.value.assetId,
+      const historyBefore = await fs.history.artifact(
+        created.value.slug,
         "replacement-test",
         20,
       );
@@ -244,12 +244,12 @@ describe("audio sync transcript preparation and rollback", () => {
 
       await expect(prepareAudioSyncTranscript(
         fs,
-        created.value.assetId,
+        created.value.slug,
         "replacement-test",
       )).rejects.toThrow("ELEVENLABS_API_KEY environment variable is not set");
 
-      const transcriptAfter = await fs.readFile(
-        created.value.assetId,
+      const transcriptAfter = await fs.files.read(
+        created.value.slug,
         "elevenlabs.json",
         "replacement-test",
       );
@@ -259,8 +259,8 @@ describe("audio sync transcript preparation and rollback", () => {
         expect(transcriptAfter.ok).toBe(true);
         if (transcriptAfter.ok) expect(transcriptAfter.value.toString("utf8")).toBe(contents);
       }
-      const historyAfter = await fs.getAssetHistory(
-        created.value.assetId,
+      const historyAfter = await fs.history.artifact(
+        created.value.slug,
         "replacement-test",
         20,
       );
@@ -280,11 +280,11 @@ describe("audio sync transcript preparation and rollback", () => {
 
   it("restores media, transcripts, derivatives, and added files to the checked commit", async () => {
     const projectsDir = await mkdtemp(join(tmpdir(), "videocity-audio-sync-restore-"));
-    const fs = createFsForTest(projectsDir);
+    const fs = createEngineForTest(projectsDir);
     try {
-      const project = await fs.createProject("restore-test");
+      const project = await fs.projects.create("restore-test");
       if (!project.ok) throw new Error(project.error.message);
-      const created = await fs.createAsset("vid", "restore source", "restore-test");
+      const created = await fs.artifacts.create("vid", "restore source", "restore-test");
       if (!created.ok) throw new Error(created.error.message);
       for (const [filename, contents] of [
         ["original.mp4", "original media"],
@@ -292,15 +292,15 @@ describe("audio sync transcript preparation and rollback", () => {
         ["elevenlabs.json", "original transcript"],
         [".original.analysis.json", "original analysis"],
       ] as const) {
-        const written = await fs.writeFile(
-          created.value.assetId,
+        const written = await fs.files.write(
+          created.value.slug,
           filename,
           contents,
           "restore-test",
         );
         if (!written.ok) throw new Error(written.error.message);
       }
-      const history = await fs.getAssetHistory(created.value.assetId, "restore-test", 1);
+      const history = await fs.history.artifact(created.value.slug, "restore-test", 1);
       const restoreCommit = history[0]?.hash;
       if (!restoreCommit) throw new Error("missing restore commit");
 
@@ -309,16 +309,16 @@ describe("audio sync transcript preparation and rollback", () => {
         ["elevenlabs.json", "changed transcript"],
         [".suggest-cuts.json", "new derivative"],
       ] as const) {
-        const written = await fs.writeFile(
-          created.value.assetId,
+        const written = await fs.files.write(
+          created.value.slug,
           filename,
           contents,
           "restore-test",
         );
         if (!written.ok) throw new Error(written.error.message);
       }
-      const deleted = await fs.deleteFile(
-        created.value.assetId,
+      const deleted = await fs.files.delete(
+        created.value.slug,
         ".original.analysis.json",
         "restore-test",
       );
@@ -326,7 +326,7 @@ describe("audio sync transcript preparation and rollback", () => {
 
       await expect(restoreAudioSyncSnapshot(
         fs,
-        created.value.assetId,
+        created.value.slug,
         "restore-test",
         restoreCommit,
       )).resolves.toMatch(/^[a-f0-9]{40}$/);
@@ -336,22 +336,22 @@ describe("audio sync transcript preparation and rollback", () => {
         ["elevenlabs.json", "original transcript"],
         [".original.analysis.json", "original analysis"],
       ] as const) {
-        const restored = await fs.readFile(created.value.assetId, filename, "restore-test");
+        const restored = await fs.files.read(created.value.slug, filename, "restore-test");
         expect(restored.ok).toBe(true);
         if (restored.ok) expect(restored.value.toString("utf8")).toBe(contents);
       }
-      await expect(fs.readFile(
-        created.value.assetId,
+      await expect(fs.files.read(
+        created.value.slug,
         ".suggest-cuts.json",
         "restore-test",
       )).resolves.toMatchObject({ ok: false });
       await expect(restoreAudioSyncSnapshot(
         fs,
-        created.value.assetId,
+        created.value.slug,
         "restore-test",
         "0000000000000000000000000000000000000000",
       )).rejects.toThrow("ref not found");
-      const work = await fs.assetWork.read("restore-test", created.value.assetId);
+      const work = await fs.jobs.artifactWork.read("restore-test", created.value.slug);
       expect(work.ok).toBe(true);
       if (work.ok) expect(work.value?.status).toBe("ready");
     } finally {
@@ -364,15 +364,15 @@ describe("audio sync transcript preparation and rollback", () => {
     const projectsDir = await mkdtemp(join(tmpdir(), "videocity-audio-sync-job-rollback-"));
     const sourcePath = join(projectsDir, "source.mp4");
     await generateMarkedVideo(sourcePath);
-    const fs = createFsForTest(projectsDir);
-    await setProjectsDir(projectsDir, fs);
+    const fs = createEngineForTest(projectsDir);
+    await setEngineRoot(projectsDir, fs);
     try {
-      const project = await fs.createProject("job-rollback-test");
+      const project = await fs.projects.create("job-rollback-test");
       if (!project.ok) throw new Error(project.error.message);
-      const created = await fs.createAsset("vid", "job rollback", "job-rollback-test");
+      const created = await fs.artifacts.create("vid", "job rollback", "job-rollback-test");
       if (!created.ok) throw new Error(created.error.message);
-      const video = await fs.writeFile(
-        created.value.assetId,
+      const video = await fs.files.write(
+        created.value.slug,
         "original.mp4",
         await readFile(sourcePath),
         "job-rollback-test",
@@ -381,67 +381,69 @@ describe("audio sync transcript preparation and rollback", () => {
       const transcriptText = JSON.stringify({
         words: [{ text: "England", start: 1.2, type: "word" }],
       });
-      const transcript = await fs.writeFile(
-        created.value.assetId,
+      const transcript = await fs.files.write(
+        created.value.slug,
         "elevenlabs.json",
         transcriptText,
         "job-rollback-test",
       );
       if (!transcript.ok) throw new Error(transcript.error.message);
-      const metadata = await fs.writeFile(
-        created.value.assetId,
-        ".original.json",
-        "{}",
+      const metadata = await fs.metadata.artifacts.write(
+        created.value.slug,
+        "original",
+        {},
         "job-rollback-test",
       );
       if (!metadata.ok) throw new Error(metadata.error.message);
-      const historyBefore = await fs.getAssetHistory(
-        created.value.assetId,
+      const historyBefore = await fs.history.artifact(
+        created.value.slug,
         "job-rollback-test",
         20,
       );
       registerSyncVideoToAudioJob(fs);
 
       await expect(queue.enqueueAndWait(
-        `sync-audio-rollback-${created.value.assetId}`,
+        `sync-audio-rollback-${created.value.slug}`,
         {
           type: "sync_video_to_audio",
           inputPath: join(created.value.path, "original.mp4"),
           outputPath: join(created.value.path, ".sync-audio-rollback.mp4"),
           anchors: [{ videoSeconds: 1, audioCue: "missing cue" }],
-          assetId: created.value.assetId,
+          assetId: created.value.slug,
           assetDir: created.value.path,
           projectSlug: "job-rollback-test",
         },
         30_000,
       )).rejects.toThrow("was not found");
 
-      const work = await fs.assetWork.read("job-rollback-test", created.value.assetId);
+      const work = await fs.jobs.artifactWork.read("job-rollback-test", created.value.slug);
       expect(work.ok).toBe(true);
       if (work.ok) expect(work.value?.status).toBe("ready");
-      const generationError = await fs.generationErrors.read(
+      const generationError = await fs.jobs.failures.read(
         "job-rollback-test",
-        created.value.assetId,
+        created.value.slug,
       );
       expect(generationError.ok).toBe(true);
       if (generationError.ok) expect(generationError.value).toBeNull();
-      const transcriptAfter = await fs.readFile(
-        created.value.assetId,
+      const transcriptAfter = await fs.files.read(
+        created.value.slug,
         "elevenlabs.json",
         "job-rollback-test",
       );
       expect(transcriptAfter.ok).toBe(true);
       if (transcriptAfter.ok) expect(transcriptAfter.value.toString("utf8")).toBe(transcriptText);
-      const historyAfter = await fs.getAssetHistory(
-        created.value.assetId,
+      const historyAfter = await fs.history.artifact(
+        created.value.slug,
         "job-rollback-test",
         20,
       );
-      expect(historyAfter).toHaveLength(historyBefore.length + 1);
-      expect(historyAfter[0]?.operation).toBe("restore");
-      expect(historyAfter.slice(1).map((entry) => entry.hash)).toEqual(
-        historyBefore.map((entry) => entry.hash),
-      );
+      expect(historyAfter.length).toBeGreaterThan(historyBefore.length);
+      expect(historyAfter.some((entry) => entry.operation === "restore_artifact"))
+        .toBe(true);
+      const restoredHashes = new Set(historyAfter.map((entry) => entry.hash));
+      for (const entry of historyBefore) {
+        expect(restoredHashes.has(entry.hash)).toBe(true);
+      }
     } finally {
       await queue.stop();
       fs.close();

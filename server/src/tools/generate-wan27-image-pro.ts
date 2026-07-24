@@ -1,5 +1,5 @@
 import { modelSlug } from "@apicity/cost";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { Wan27ImageInputSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -38,7 +38,7 @@ const generateWan27ImageProSchema = {
 
 type Args = SchemaArgs<typeof generateWan27ImageProSchema>;
 
-export function generateWan27ImageProDef(fs: VideocityFs): ToolDef {
+export function generateWan27ImageProDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_wan_2_7_pro_text_to_image",
     description: "Generate an image using Wan 2.7 Image Pro. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).",
@@ -70,7 +70,7 @@ export function generateWan27ImageProDef(fs: VideocityFs): ToolDef {
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
       const assetName = `${modelSlug("kie", "wan/2-7-image-pro")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset(prefix, assetName, project_slug);
+      const assetResult = await fs.artifacts.create(prefix, assetName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -78,7 +78,7 @@ export function generateWan27ImageProDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("kie", "wan/2-7-image-pro")}-${imgAssetId}-${Date.now()}`;
 

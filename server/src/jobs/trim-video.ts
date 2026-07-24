@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { execFile } from "node:child_process";
 import { mkdir, writeFile as fsWriteFile, rename, rm } from "node:fs/promises";
 import { promisify } from "node:util";
@@ -6,6 +6,7 @@ import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS, FFPROBE } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -310,7 +311,7 @@ type TrimVideoPayload = {
   commitParams: Record<string, unknown>;
 };
 
-export function registerTrimVideoJob(fs: VideocityFs): void {
+export function registerTrimVideoJob(fs: Engine): void {
   registerJobHandler("trim_video", async (payload, ctx) => {
     const {
       inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd,
@@ -340,17 +341,20 @@ export function registerTrimVideoJob(fs: VideocityFs): void {
       }
 
       const inputFilename = basename(inputPath);
-      const outputFilename = basename(outputPath);
-      await fs.deleteFile(assetId, inputFilename, projectSlug);
-      await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
+      await replaceArtifactFileFromPath(
+        fs,
+        projectSlug,
+        assetId,
+        inputFilename,
+        outputPath,
+      );
 
       for (const stale of [
         ".original.analysis.json",
         ".analysis.gpt4otrans.json",
         "elevenlabs.json",
-        ".kie-task.json",
       ]) {
-        await fs.deleteFile(assetId, stale, projectSlug);
+        await fs.files.delete(assetId, stale, projectSlug);
       }
 
       const videoPath = join(assetDir, inputFilename);

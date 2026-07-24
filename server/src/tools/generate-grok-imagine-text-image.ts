@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { GrokTextToImageRequestSchema } from "@apicity/kie/zod";
@@ -28,7 +28,7 @@ const generateGrokImagineTextImageSchema = {
 
 type Args = SchemaArgs<typeof generateGrokImagineTextImageSchema>;
 
-export function generateGrokImagineTextImageDef(fs: VideocityFs): ToolDef {
+export function generateGrokImagineTextImageDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_grok_imagine_text_to_image",
     description:
@@ -47,7 +47,7 @@ export function generateGrokImagineTextImageDef(fs: VideocityFs): ToolDef {
       }
 
       const assetName = `${modelSlug("kie", "grok-imagine/text-to-image")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset("img", assetName, project_slug);
+      const assetResult = await fs.artifacts.create("img", assetName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -55,7 +55,7 @@ export function generateGrokImagineTextImageDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("kie", "grok-imagine/text-to-image")}-text-${imgAssetId}-${Date.now()}`;
 

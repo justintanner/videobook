@@ -1,3 +1,4 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -119,17 +120,15 @@ describe("apply_sfx tool", () => {
 
   it("returns error when asset has no video", async () => {
     process.env.ELEVENLABS_API_KEY = "test-key";
-
-    const { createFs } = await import("videobook-engine");
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("vid", "no-video", "sfx-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("vid", "no-video", "sfx-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.writeFile(asset.value.assetId, "notes.txt", "hello", "sfx-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello", "sfx-proj");
 
     const result = await client.callTool({
       name: "apply_sfx",
       arguments: {
-        asset_id: asset.value.assetId,
+        asset_id: asset.value.slug,
         project_slug: "sfx-proj",
         sfx: [{ timestamp: 1, type: "whoosh", description: "test" }],
       },
@@ -143,10 +142,8 @@ describe("apply_sfx tool", () => {
   it("returns error when all entries are past duration", async () => {
     process.env.ELEVENLABS_API_KEY = "test-key";
     const uploaded = await uploadVideo(client, "sfx-proj", videoPath);
-
-    const { createFs } = await import("videobook-engine");
-    const fs = createFs({ projectsDir: tempDir });
-    await fs.writeMetadata(
+    const fs = createEngineForTest(tempDir);
+    await fs.metadata.artifacts.write(
       uploaded.assetId,
       "original",
       { width: 320, height: 240, duration: 3, hasAudio: true },

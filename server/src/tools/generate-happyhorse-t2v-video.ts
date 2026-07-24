@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import {
@@ -33,7 +33,7 @@ const generateHappyhorseT2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateHappyhorseT2vVideoSchema>;
 
-export function generateHappyhorseT2vVideoDef(fs: VideocityFs): ToolDef {
+export function generateHappyhorseT2vVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_happyhorse_1_1_text_to_video",
     description: "Generate a video from a prompt using HappyHorse text-to-video. Creates a new vid- asset and enqueues a background job.",
@@ -46,12 +46,12 @@ export function generateHappyhorseT2vVideoDef(fs: VideocityFs): ToolDef {
       }
 
       const videoName = `${SLUG}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
       const jobId = `${SLUG}-t2v-${vidAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { join } from "node:path";
 import { createElevenLabs } from "@apicity/elevenlabs";
 import { registerJobHandler } from "../queue.js";
@@ -15,7 +15,7 @@ type GenerateElevenlabsT2aPayload = {
   outputFormat: string;
 };
 
-export function registerGenerateElevenlabsT2aJob(fs: VideocityFs): void {
+export function registerGenerateElevenlabsT2aJob(fs: Engine): void {
   registerJobHandler("generate_elevenlabs_t2a", async (payload, ctx) => {
     const {
       audAssetId,
@@ -36,12 +36,12 @@ export function registerGenerateElevenlabsT2aJob(fs: VideocityFs): void {
       output_format: outputFormat,
     });
 
-    const write = await fs.writeFile(audAssetId, "original.mp3", Buffer.from(audio), projectSlug);
+    const write = await fs.files.write(audAssetId, "original.mp3", Buffer.from(audio), projectSlug);
     if (!write.ok) throw new Error(`Failed to write original.mp3: ${write.error.message}`);
 
     let duration: number | undefined;
     try {
-      const dir = await fs.resolveAssetDir(audAssetId, projectSlug);
+      const dir = await fs.workspaces.resolveArtifact(audAssetId, projectSlug);
       if (dir.ok) {
         const probe = await probeVideo(join(dir.value, "original.mp3"));
         if (Number.isFinite(probe.duration) && probe.duration > 0) {
@@ -60,8 +60,8 @@ export function registerGenerateElevenlabsT2aJob(fs: VideocityFs): void {
       generated_at: new Date().toISOString(),
       ...(duration !== undefined ? { duration } : {}),
     };
-    const metaWrite = await fs.writeMetadata(audAssetId, "original", metadata, projectSlug);
-    if (!metaWrite.ok) throw new Error(`Failed to write .original.json: ${metaWrite.error.message}`);
+    const metaWrite = await fs.metadata.artifacts.write(audAssetId, "original", metadata, projectSlug);
+    if (!metaWrite.ok) throw new Error(`Failed to write artifact metadata: ${metaWrite.error.message}`);
 
     return { success: true, provider: "elevenlabs" as const };
   });

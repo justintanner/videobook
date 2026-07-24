@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { getProjectsDir } from "./queue.js";
+import { getEngineRoot } from "./queue.js";
 import {
   createLocalArchiveStore,
   getArchiveStore,
@@ -68,11 +68,11 @@ describe("archive store", () => {
     expect(getArchiveStore().kind).toBe("local");
   });
 
-  it("honors VIDEOBOOK_ARCHIVE_DIR and defaults to archive/ next to the projects dir", () => {
+  it("honors VIDEOBOOK_ARCHIVE_DIR and defaults inside the engine root", () => {
     process.env.VIDEOBOOK_ARCHIVE_DIR = join(tempDir, "custom-archive");
     expect(localArchiveDir()).toBe(join(tempDir, "custom-archive"));
     delete process.env.VIDEOBOOK_ARCHIVE_DIR;
-    expect(localArchiveDir()).toBe(join(dirname(resolve(getProjectsDir())), "archive"));
+    expect(localArchiveDir()).toBe(join(resolve(getEngineRoot()), "archive"));
   });
 
   it("round-trips json, text, and bytes through the local store", async () => {

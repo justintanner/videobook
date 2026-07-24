@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { submitFalJob } from "./_fal-shared.js";
@@ -18,7 +18,7 @@ type Payload = {
   seed?: number;
 };
 
-export function registerGenerateWan27T2vFalJob(fs: VideocityFs): void {
+export function registerGenerateWan27T2vFalJob(fs: Engine): void {
   registerJobHandler("generate_wan27_t2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.projectSlug, p.vidAssetId, ctx, "generate", async (ownerId) => {

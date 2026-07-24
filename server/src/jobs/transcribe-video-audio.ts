@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -66,7 +66,7 @@ async function transcribeChunked(provider: OpenAiProvider, mediaPath: string, du
 }
 
 export async function runTranscribeVideoAudio(
-  fs: VideocityFs,
+  fs: Engine,
   payload: TranscribeVideoAudioPayload,
   ctx: JobHandlerContext,
 ): Promise<TranscribeVideoAudioResult> {
@@ -86,13 +86,13 @@ export async function runTranscribeVideoAudio(
         chunkCount = chunkStarts(probe.duration, CHUNK_SECONDS).length;
         text = await transcribeChunked(provider, videoPath, probe.duration);
       } else {
-        const readResult = await fs.readFile(assetId, "original.mp3", projectSlug);
+        const readResult = await fs.files.read(assetId, "original.mp3", projectSlug);
         if (!readResult.ok) throw new Error(readResult.error.message);
         text = await transcribeBytes(provider, new Uint8Array(readResult.value), "original.mp3");
       }
 
       const jsonString = JSON.stringify({ text }, null, 2);
-      await fs.writeFile(assetId, ".analysis.gpt4otrans.json", jsonString, projectSlug);
+      await fs.files.write(assetId, ".analysis.gpt4otrans.json", jsonString, projectSlug);
 
       return { success: true, text, chunk_count: chunkCount };
     } catch (err) {
@@ -104,7 +104,7 @@ export async function runTranscribeVideoAudio(
       // lease, so the asset stays claimable for a later retry.
       const reason = err instanceof Error ? err.message : String(err);
       console.warn(`[transcribe_video_audio] soft-failed for ${assetId}: ${reason}`);
-      await fs.logAction("transcribe-soft-fail", { assetId, error: reason }, projectSlug).catch(() => undefined);
+      await fs.history.logAction("transcribe-soft-fail", { assetId, error: reason }, projectSlug).catch(() => undefined);
       return { success: false, reason };
     }
   });
@@ -125,7 +125,7 @@ export async function runTranscribeVideoAudio(
   return result;
 }
 
-export function registerTranscribeVideoAudioJob(fs: VideocityFs): void {
+export function registerTranscribeVideoAudioJob(fs: Engine): void {
   registerJobHandler("transcribe_video_audio", async (payload, ctx) =>
     runTranscribeVideoAudio(fs, payload as TranscribeVideoAudioPayload, ctx));
 }

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalWanV2p7EditVideoRequestSchema } from "@apicity/fal/zod";
@@ -27,7 +27,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateWan27VideoeditFalDef(fs: VideocityFs): ToolDef {
+export function generateWan27VideoeditFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_wan_2_7_edit_video",
     description: "Edit a video via fal.ai using Alibaba Wan v2.7 Edit-Video, optionally guided by a reference image. Creates a new vid- asset and enqueues a background job.",
@@ -48,7 +48,7 @@ export function generateWan27VideoeditFalDef(fs: VideocityFs): ToolDef {
       if (!sourceVideoAssetId.startsWith("vid-")) {
         return { isError: true as const, content: [{ type: "text" as const, text: `video_slug must be a vid-* asset, got: ${sourceVideoAssetId}` }] };
       }
-      const manifest = await fs.getManifest(sourceVideoAssetId, project_slug);
+      const manifest = await fs.files.manifest(sourceVideoAssetId, project_slug);
       if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
       const sourceVideoFile = findVideoFile(manifest.value.files);
       if (!sourceVideoFile) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${sourceVideoAssetId}` }] };
@@ -62,10 +62,10 @@ export function generateWan27VideoeditFalDef(fs: VideocityFs): ToolDef {
         refImageAssetId = resolved.sourceImageIds[0];
       }
 
-      const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "wan/2-7-videoedit")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "wan/2-7-videoedit")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "wan/2-7-videoedit")}-edit-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

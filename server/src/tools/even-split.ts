@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -121,7 +121,7 @@ function deriveChunkName(originalAssetId: string, index: number): string {
   return `${tail}-${index}`;
 }
 
-export function splitVideoByDurationsDef(fs: VideocityFs): ToolDef {
+export function splitVideoByDurationsDef(fs: Engine): ToolDef {
   return {
     name: "split_video_by_durations",
     description:
@@ -170,7 +170,7 @@ export function splitVideoByDurationsDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -237,7 +237,7 @@ export function splitVideoByDurationsDef(fs: VideocityFs): ToolDef {
 
       if (destination !== undefined) {
         destinationMode = true;
-        const destManifest = await fs.getManifest(destination.asset_id, project_slug, { includeDotfiles: true });
+        const destManifest = await fs.files.manifest(destination.asset_id, project_slug, { includeDotfiles: true });
         if (!destManifest.ok) {
           return {
             isError: true as const,
@@ -272,7 +272,7 @@ export function splitVideoByDurationsDef(fs: VideocityFs): ToolDef {
         for (let i = 0; i < plan.chunks.length; i++) {
           const chunk = plan.chunks[i];
           const name = deriveChunkName(asset_id, i + 1);
-          const c = await fs.createAsset(prefix, name, project_slug);
+          const c = await fs.artifacts.create(prefix, name, project_slug);
           if (!c.ok) {
             return {
               isError: true as const,
@@ -280,7 +280,7 @@ export function splitVideoByDurationsDef(fs: VideocityFs): ToolDef {
             };
           }
           created.push({
-            assetId: c.value.assetId,
+            assetId: c.value.slug,
             assetDir: c.value.path,
             outputPath: join(c.value.path, "original.mp4"),
             start: chunk.start,

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -34,7 +34,7 @@ export type Seedance2JobPayload = {
 };
 
 async function uploadAll(
-  fs: VideocityFs,
+  fs: Engine,
   inputs: RefInput[],
   projectSlug: string,
 ): Promise<string[]> {
@@ -45,7 +45,7 @@ async function uploadAll(
   return urls;
 }
 
-export function registerSeedance2Job(fs: VideocityFs, jobType: string): void {
+export function registerSeedance2Job(fs: Engine, jobType: string): void {
   registerJobHandler(jobType, async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt, apiModel,

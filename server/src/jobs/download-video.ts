@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { join } from "node:path";
 import { stat, unlink } from "node:fs/promises";
 import { YtDlp } from "ytdlp-nodejs";
@@ -8,6 +8,7 @@ import { queue, registerJobHandler } from "../queue.js";
 import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { downloadUrlIntoAsset } from "./_download-into-asset.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { ingestWorkspaceOutputs } from "./_persist-output.js";
 
 const LOCK_DURATION_MS = 600_000;
 
@@ -98,8 +99,8 @@ function extractOgImageUrl(ogImage: IOGResult["ogImage"]): string | null {
   return typeof ogImage === "object" && "url" in ogImage ? (ogImage.url as string) : null;
 }
 
-async function readOpenGraphData(fs: VideocityFs, assetId: string, projectSlug: string): Promise<IOGResult | null> {
-  const result = await fs.readFile(assetId, ".opengraph.json", projectSlug);
+async function readOpenGraphData(fs: Engine, assetId: string, projectSlug: string): Promise<IOGResult | null> {
+  const result = await fs.files.read(assetId, ".opengraph.json", projectSlug);
   if (!result.ok) return null;
   try {
     return JSON.parse(result.value.toString()) as IOGResult;
@@ -109,7 +110,7 @@ async function readOpenGraphData(fs: VideocityFs, assetId: string, projectSlug: 
 }
 
 async function loadOpenGraphData(
-  fs: VideocityFs,
+  fs: Engine,
   url: string,
   assetId: string,
   projectSlug: string,
@@ -121,7 +122,7 @@ async function loadOpenGraphData(
       redirect: "follow",
     });
     const ogData = extractOpenGraph(await response.text());
-    await fs.writeFile(assetId, ".opengraph.json", Buffer.from(JSON.stringify(ogData, null, 2)), projectSlug);
+    await fs.files.write(assetId, ".opengraph.json", Buffer.from(JSON.stringify(ogData, null, 2)), projectSlug);
     return ogData;
   } catch {
     return readOpenGraphData(fs, assetId, projectSlug);
@@ -129,7 +130,7 @@ async function loadOpenGraphData(
 }
 
 async function stageOpenGraphImage(
-  fs: VideocityFs,
+  fs: Engine,
   ogData: IOGResult,
   assetId: string,
   projectSlug: string,
@@ -188,7 +189,7 @@ export function imageExtension(info: InfoResult): string {
   return IMAGE_EXTENSIONS.has(ext) ? `.${ext}` : ".jpg";
 }
 
-export function registerDownloadVideoJob(fs: VideocityFs): void {
+export function registerDownloadVideoJob(fs: Engine): void {
   const ytdlp = new YtDlp();
 
   registerJobHandler("download_video", async (payload, ctx) => {
@@ -226,7 +227,7 @@ export function registerDownloadVideoJob(fs: VideocityFs): void {
 
         // (b2) yt-dlp found no video — fall back to OG image as an image asset
         if (/no video/i.test(msg)) {
-          const ogImageResult = await fs.readFile(assetId, OG_IMAGE_FILENAME, projectSlug ?? "");
+          const ogImageResult = await fs.files.read(assetId, OG_IMAGE_FILENAME, projectSlug ?? "");
           if (!ogImageResult.ok) throw new Error(`No video found and no OG image available: ${msg}`);
 
           const slug = projectSlug ?? "";
@@ -237,20 +238,20 @@ export function registerDownloadVideoJob(fs: VideocityFs): void {
           if (fallbackOgData?.ogTitle) ogTitle = cleanOgTitle(fallbackOgData.ogTitle);
 
           const assetName = [sourcePrefix, ogTitle].join(" ");
-          const imgResult = await fs.createAsset("img", assetName, slug);
+          const imgResult = await fs.artifacts.create("img", assetName, slug);
           if (!imgResult.ok) throw new Error(`Failed to create image asset: ${imgResult.error.message}`);
 
-          const imgAssetId = imgResult.value.assetId;
+          const imgAssetId = imgResult.value.slug;
 
           // Copy OG image and metadata to new img- asset
-          await fs.writeFile(imgAssetId, "original.jpg", ogImageResult.value, slug);
+          await fs.files.write(imgAssetId, "original.jpg", ogImageResult.value, slug);
           try {
-            await fs.copyFile(assetId, ".opengraph.json", imgAssetId, ".opengraph.json", slug);
+            await fs.files.copy(assetId, ".opengraph.json", imgAssetId, ".opengraph.json", slug);
           } catch { /* non-fatal */ }
 
           // Release lock and delete the old vid- asset
-          await fs.releaseLock(assetDir);
-          await fs.deleteAsset(assetId, slug);
+          await fs.jobs.locks.release(assetDir);
+          await fs.artifacts.delete(assetId, slug);
 
           const provenance = {
             origin: "download",
@@ -291,10 +292,10 @@ export function registerDownloadVideoJob(fs: VideocityFs): void {
           const entryPrefix = isImageContent(entry) ? "img" : "vid";
           const entryName = `${sourcePrefix} ${entry.title ?? `${entryPrefix === "img" ? "image" : "video"} ${i + 1}`}`;
 
-          const assetResult = await fs.createAsset(entryPrefix, entryName, projectSlug ?? "");
+          const assetResult = await fs.artifacts.create(entryPrefix, entryName, projectSlug ?? "");
           if (!assetResult.ok) continue;
 
-          const { assetId: newAssetId, path: newAssetDir } = assetResult.value;
+          const { slug: newAssetId, path: newAssetDir } = assetResult.value;
           const newFilename = "original.mp4";
           const newOutputPath = join(newAssetDir, newFilename);
           const newJobId = `download-${newAssetId}-${Date.now()}`;
@@ -335,21 +336,21 @@ export function registerDownloadVideoJob(fs: VideocityFs): void {
         // Retype vid- asset to img- if needed
         if (assetId.startsWith("vid-")) {
           const assetName = [sourcePrefix, itemInfo.title ?? "image"].join(" ");
-          const imgResult = await fs.createAsset("img", assetName, slug);
+          const imgResult = await fs.artifacts.create("img", assetName, slug);
           if (!imgResult.ok) throw new Error(`Failed to create image asset: ${imgResult.error.message}`);
 
-          effectiveAssetId = imgResult.value.assetId;
+          effectiveAssetId = imgResult.value.slug;
 
           // Copy .opengraph.json to new asset
           try {
-            await fs.copyFile(assetId, ".opengraph.json", effectiveAssetId, ".opengraph.json", slug);
+            await fs.files.copy(assetId, ".opengraph.json", effectiveAssetId, ".opengraph.json", slug);
           } catch {
             // non-fatal — OG data may not exist
           }
 
           // Release lock and delete the old vid- asset
-          await fs.releaseLock(assetDir);
-          const delResult = await fs.deleteAsset(assetId, slug);
+          await fs.jobs.locks.release(assetDir);
+          const delResult = await fs.artifacts.delete(assetId, slug);
           if (!delResult.ok) {
             // non-fatal — orphan vid- asset is acceptable
           }
@@ -413,9 +414,9 @@ export function registerDownloadVideoJob(fs: VideocityFs): void {
       // first-frame extraction. Best-effort — process_video falls back to a
       // first-frame thumbnail when original.jpg is absent.
       try {
-        const ogImageResult = await fs.readFile(assetId, OG_IMAGE_FILENAME, projectSlug ?? "");
+        const ogImageResult = await fs.files.read(assetId, OG_IMAGE_FILENAME, projectSlug ?? "");
         if (ogImageResult.ok) {
-          await fs.writeFile(assetId, "original.jpg", ogImageResult.value, projectSlug ?? "");
+          await fs.files.write(assetId, "original.jpg", ogImageResult.value, projectSlug ?? "");
         }
       } catch { /* non-fatal */ }
 
@@ -452,6 +453,15 @@ export function registerDownloadVideoJob(fs: VideocityFs): void {
         ...(requestedRange ? { requested_range: requestedRange } : {}),
         downloaded_at: new Date().toISOString(),
       };
+
+      await ingestWorkspaceOutputs(
+        fs,
+        slug,
+        assetId,
+        ["original.mp4", ...exports],
+        "download_video",
+        { sourceUrl: url, exports },
+      );
 
       // (g) Enqueue process_video
       const processJobId = `process-video-${assetId}-${Date.now()}`;

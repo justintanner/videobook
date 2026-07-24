@@ -38,15 +38,16 @@ providers, and diagnostics.
 `videobook-engine` keeps durable, rewindable metadata and file manifests in one
 embedded DoltLite catalog at `VIDEOBOOK_DATA_DIR/videobook.db`. Media bytes live
 in a SHA-256 content-addressed cache and can be published to B2 under immutable
-keys. Queue and publication state live in ordinary SQLite and are not rewound.
+keys. Runtime jobs, leases, pending tasks, locks, failures, and publication
+state are unversioned tables in that same Dolt database.
 
 Rewind is forward-only: Videobook materializes the selected historical state,
 then creates a new revision. It never checks out detached history, rewrites
 history, or deletes canonical B2 objects.
 
-Projects remain materialized under `VIDEOBOOK_PROJECTS_DIR` for ffmpeg,
-Remotion, and `/files`. The catalog, runtime database, and object cache must use
-a separate data directory.
+The engine materializes UUID-addressed scratch workspaces under
+`VIDEOBOOK_WORKSPACE_DIR` for ffmpeg and Remotion. `/files` resolves content
+through the engine; workspace paths are not an authoritative data model.
 
 ## Development
 
@@ -80,8 +81,8 @@ The frontend is served on port 5173 and the MCP server on port 3001.
 The storage-specific variables are:
 
 ```text
-VIDEOBOOK_PROJECTS_DIR
 VIDEOBOOK_DATA_DIR
+VIDEOBOOK_WORKSPACE_DIR
 VIDEOBOOK_OBJECT_PREFIX
 B2_ACCESS_KEY_ID
 B2_SECRET_ACCESS_KEY

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -11,7 +11,7 @@ function error(text: string): ToolResult {
  *  Clears the error row (reverting the asset to claimable `pending`) and
  *  re-enqueues the exact job, so the queue's generate_* handoff re-claims the
  *  SAME asset. Safe because generationErrors.clear is CAS-revertible. */
-export function retryGenerationDef(fs: VideocityFs): ToolDef {
+export function retryGenerationDef(fs: Engine): ToolDef {
   return {
     name: "retry_generation",
     description:
@@ -24,7 +24,7 @@ export function retryGenerationDef(fs: VideocityFs): ToolDef {
       const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
       const assetId = asset_id.replace(/^@/, "");
 
-      const metaResult = await fs.readMetadata<Record<string, unknown>>(assetId, "generation-request", project_slug);
+      const metaResult = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "generation-request", project_slug);
       if (!metaResult.ok || metaResult.value === null) {
         return error(`No generation-request metadata found for ${assetId} — cannot retry. Recover or regenerate instead.`);
       }
@@ -44,13 +44,13 @@ export function retryGenerationDef(fs: VideocityFs): ToolDef {
       }
 
       // Refuse if an active task is already in flight for this asset.
-      const taskResult = await fs.pendingTasks.read(project_slug, assetId);
+      const taskResult = await fs.jobs.pending.read(project_slug, assetId);
       const activeTask = taskResult.ok ? taskResult.value : null;
       if (activeTask !== null) {
         return error(`${assetId} already has an active generation in progress (task ${activeTask.taskId})`);
       }
 
-      const cleared = await fs.generationErrors.clear(project_slug, assetId);
+      const cleared = await fs.jobs.failures.clear(project_slug, assetId);
       if (!cleared.ok) {
         return error(`Failed to clear error for ${assetId}: ${cleared.error.message}`);
       }

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
@@ -24,7 +24,7 @@ type Payload = {
   seed?: number;
 };
 
-export function registerGenerateQwenImageEditFalJob(fs: VideocityFs): void {
+export function registerGenerateQwenImageEditFalJob(fs: Engine): void {
   registerJobHandler("generate_qwen_image_edit_fal", async (payload, ctx) => {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.projectSlug, p.imgAssetId, ctx, "generate", async (ownerId) => {

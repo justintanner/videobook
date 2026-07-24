@@ -1,8 +1,8 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createFs } from "videobook-engine";
 import sharp from "sharp";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { createTestClient } from "../test-client.js";
@@ -72,17 +72,17 @@ describe("generate_nano_banana_2_lite_fal / generate_nano_banana_2_lite_edit_fal
   });
 
   it("enqueues generate_nano_banana_2_lite_edit_fal job (image-to-image)", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("img", "ref-img", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("img", "ref-img", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.writeFile(asset.value.assetId, "original.png", await makePng(), "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", await makePng(), "test-proj");
 
     const result = await client.callTool({
       name: "generate_fal_nano_banana_2_lite_edit_image",
       arguments: {
         prompt: "add a sunset",
         project_slug: "test-proj",
-        image_slugs: [`@${asset.value.assetId}`],
+        image_slugs: [`@${asset.value.slug}`],
       },
     });
 
@@ -90,7 +90,7 @@ describe("generate_nano_banana_2_lite_fal / generate_nano_banana_2_lite_edit_fal
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
     expect(parsed.img_asset_id).toMatch(/^img-/);
-    expect(parsed.source_images).toEqual([asset.value.assetId]);
+    expect(parsed.source_images).toEqual([asset.value.slug]);
     expect(parsed.job_id).toBeDefined();
   });
 });

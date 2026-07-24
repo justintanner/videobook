@@ -1,7 +1,7 @@
 import {
   findAudioFile,
   findVideoFile,
-  type VideocityFs,
+  type Engine,
 } from "videobook-engine";
 import { z } from "zod";
 import type { RemoveSoundAssetKind, RemoveSoundResult } from "../jobs/remove-sound.js";
@@ -11,7 +11,7 @@ import type { ToolDef } from "./tool-def.js";
 
 const JOB_TIMEOUT_MS = 30 * 60_000;
 
-export function removeSoundDef(fs: VideocityFs): ToolDef {
+export function removeSoundDef(fs: Engine): ToolDef {
   return {
     name: "remove_sound",
     description: "Remove a described sound (e.g. a horse neigh) from a vid-* or aud-* asset in place. ElevenLabs Scribe tags audio events with timestamps, events matching the description are silenced with short fades, and video streams are preserved untouched with git versioning.",
@@ -39,7 +39,7 @@ export function removeSoundDef(fs: VideocityFs): ToolDef {
         return toolError(`remove_sound only supports vid-* or aud-* assets, got ${assetId}`);
       }
 
-      const manifest = await fs.getManifest(assetId, project_slug);
+      const manifest = await fs.files.manifest(assetId, project_slug);
       if (!manifest.ok) return toolError(manifest.error.message);
       const file = kind === "video"
         ? findVideoFile(manifest.value.files)

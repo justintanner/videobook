@@ -3,8 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createX } from "@apicity/x";
-import type { VideocityFs } from "videobook-engine";
-import { createFsForTest } from "../fs.js";
+import type { Engine } from "videobook-engine";
+import { createEngineForTest } from "../fs.js";
 import { postToX } from "./post-to-x.js";
 import { readXPostMetadata, POST_METADATA_FILE } from "./post-metadata.js";
 
@@ -57,15 +57,15 @@ function makeStubFetch(plan: StubResponse[]): { fetch: typeof fetch; calls: Reco
 }
 
 async function uploadFakeAsset(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   prefix: string,
   ext: string,
 ): Promise<string> {
-  const created = await fs.createAsset(prefix, `clip-${prefix}`, projectSlug);
+  const created = await fs.artifacts.create(prefix, `clip-${prefix}`, projectSlug);
   if (!created.ok) throw new Error(created.error.message);
-  const { assetId } = created.value;
-  const writeResult = await fs.writeFile(
+  const assetId = created.value.slug;
+  const writeResult = await fs.files.write(
     assetId,
     `original${ext}`,
     Buffer.from("fake-bytes-for-test"),
@@ -76,14 +76,14 @@ async function uploadFakeAsset(
 }
 
 describe("postToX helper", () => {
-  let fs: VideocityFs;
+  let fs: Engine;
   let tempDir: string;
   const projectSlug = "post-test";
 
   beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-postx-"));
-    fs = createFsForTest(tempDir);
-    const created = await fs.createProject(projectSlug);
+    fs = createEngineForTest(tempDir);
+    const created = await fs.projects.create(projectSlug);
     if (!created.ok) throw new Error(created.error.message);
   });
 
@@ -226,10 +226,10 @@ describe("postToX helper", () => {
   });
 
   it("rejects unsupported file extensions", async () => {
-    const created = await fs.createAsset("aud", "song", projectSlug);
+    const created = await fs.artifacts.create("aud", "song", projectSlug);
     if (!created.ok) throw new Error(created.error.message);
-    await fs.writeFile(
-      created.value.assetId,
+    await fs.files.write(
+      created.value.slug,
       "original.mp3",
       Buffer.from("audio"),
       projectSlug,
@@ -237,7 +237,7 @@ describe("postToX helper", () => {
 
     const x = createX({ accessToken: "test-token", fetch: makeStubFetch([]).fetch });
     await expect(
-      postToX({ fs, assetId: created.value.assetId, projectSlug, x }),
+      postToX({ fs, assetId: created.value.slug, projectSlug, x }),
     ).rejects.toThrow(/unsupported media file/i);
   });
 

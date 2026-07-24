@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -20,7 +20,7 @@ type GenerateQwen2ImageEditPayload = {
   seed?: number;
 };
 
-export function registerGenerateQwen2ImageEditJob(fs: VideocityFs): void {
+export function registerGenerateQwen2ImageEditJob(fs: Engine): void {
   registerJobHandler("generate_qwen2_image_edit", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,

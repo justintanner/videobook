@@ -2,14 +2,13 @@
  * rewrite_prompt MCP tool — rewrites generation prompts using model-specific
  * prompting guides via GPT-5.2.
  */
-import type { VideocityFs, GenerationError } from "videobook-engine";
+import type { Engine, GenerationError } from "videobook-engine";
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createOpenAi, textPart, imageUrlPart, firstContent } from "@apicity/openai";
 import type { OpenAiContentPart, OpenAiMessage } from "@apicity/openai";
-import { resolveAllAssets, expandSlotRefs } from "videobook-engine";
 import { getCanonicalName } from "../generation-registry.js";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 import type { ToolDef } from "./tool-def.js";
@@ -237,17 +236,17 @@ export function normalizePromptForMatch(p: string): string {
   return p.replace(/\s+/g, " ").trim();
 }
 
-const ERROR_RECENCY_SECONDS = 7 * 24 * 60 * 60;
+const ERROR_RECENCY_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function findPreviousErrorForPrompt(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   prompt: string,
 ): Promise<GenerationError | null> {
-  const result = await fs.generationErrors.findAll(projectSlug);
+  const result = await fs.jobs.failures.findAll(projectSlug);
   if (!result.ok) return null;
   const normalized = normalizePromptForMatch(prompt);
-  const cutoff = Date.now() / 1000 - ERROR_RECENCY_SECONDS;
+  const cutoff = Date.now() - ERROR_RECENCY_MS;
   const matching = result.value.filter(
     (e): e is GenerationError & { prompt: string } =>
       typeof e.prompt === "string" &&
@@ -371,19 +370,25 @@ function buildSceneResult(
 
 async function resolveImageDataUris(
   imageSlugs: string[],
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
 ): Promise<string[]> {
   const tagText = imageSlugs.map((s) => `@${s.replace(/^@/, "")}`).join(" ");
-  const { resolved } = await resolveAllAssets(tagText, fs, projectSlug);
+  const resolvedResult = await fs.resolver.resolveAll(tagText, projectSlug);
+  if (!resolvedResult.ok) return [];
+  const { resolved } = resolvedResult.value;
 
   const dataUris: string[] = [];
   for (const asset of resolved) {
-    if (!asset.file_path) continue;
-    const readResult = await fs.readFile(asset.asset_id, asset.file_path.split("/").pop()!, projectSlug);
+    if (!asset.filePath) continue;
+    const readResult = await fs.files.read(
+      asset.artifactId,
+      asset.filePath.split("/").pop()!,
+      projectSlug,
+    );
     if (!readResult.ok) continue;
     const buf = Buffer.from(readResult.value);
-    const ext = asset.file_path.split(".").pop()?.toLowerCase() ?? "png";
+    const ext = asset.filePath.split(".").pop()?.toLowerCase() ?? "png";
     const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "webp" ? "image/webp" : "image/png";
     dataUris.push(`data:${mime};base64,${buf.toString("base64")}`);
   }
@@ -392,7 +397,7 @@ async function resolveImageDataUris(
 
 // --- Tool definition ---
 
-export function rewritePromptDef(fs: VideocityFs): ToolDef {
+export function rewritePromptDef(fs: Engine): ToolDef {
   return {
     name: "rewrite_prompt",
     description:
@@ -500,9 +505,12 @@ export function rewritePromptDef(fs: VideocityFs): ToolDef {
       // Expand @s01 slot refs → actual asset slugs
       let expandedPrompt = prompt ?? "";
       if (expandedPrompt) {
-        const timelineResult = await fs.readProjectMeta<{ slots: Array<{ slug: string }> }>("timeline", project_slug);
+        const timelineResult = await fs.metadata.projects.read<{ slots: Array<{ slug: string }> }>("timeline", project_slug);
         if (timelineResult.ok && timelineResult.value.slots) {
-          expandedPrompt = expandSlotRefs(expandedPrompt, timelineResult.value.slots);
+          expandedPrompt = fs.resolver.expandSlotRefs(
+            expandedPrompt,
+            timelineResult.value.slots,
+          );
         }
       }
 
@@ -512,7 +520,7 @@ export function rewritePromptDef(fs: VideocityFs): ToolDef {
 }
 
 async function handleStandardRewrite(
-  fs: VideocityFs,
+  fs: Engine,
   apiKey: string,
   prompt: string,
   model: string,
@@ -578,7 +586,7 @@ async function handleStandardRewrite(
 }
 
 async function handleSceneRewrite(
-  fs: VideocityFs,
+  fs: Engine,
   apiKey: string,
   assetSlug: string,
   sceneIndex: number,
@@ -587,7 +595,7 @@ async function handleSceneRewrite(
 ): Promise<{ isError?: true; content: Array<{ type: "text"; text: string }> }> {
   const assetId = assetSlug.replace(/^@/, "");
 
-  const metaResult = await fs.readMetadata<Record<string, unknown>>(assetId, "tool.params", projectSlug);
+  const metaResult = await fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "tool.params", projectSlug);
   if (!metaResult.ok) {
     return {
       isError: true as const,

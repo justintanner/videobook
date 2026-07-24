@@ -2,37 +2,36 @@ import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createFsForTest } from "../fs.js";
+import { createEngineForTest } from "../fs.js";
 import { failPendingTaskAndLog } from "../jobs/task-failure.js";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 
-async function createImageAsset(fs: VideocityFs, projectSlug: string, name: string): Promise<string> {
-  const result = await fs.createAsset("img", name, projectSlug);
+async function createImageAsset(fs: Engine, projectSlug: string, name: string): Promise<string> {
+  const result = await fs.artifacts.create("img", name, projectSlug);
   if (!result.ok) throw new Error(`createAsset failed: ${result.error.message}`);
-  return result.value.assetId;
+  return result.value.slug;
 }
 
 async function writeSyntheticPendingTask(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   assetId: string,
   taskId: string,
 ): Promise<void> {
-  const lease = await fs.assetWork.begin(projectSlug, assetId, {
+  const lease = await fs.jobs.artifactWork.begin(projectSlug, assetId, {
     kind: "generate",
     ownerKind: "job",
     durationMs: 60_000,
   });
   if (!lease) throw new Error(`assetWork.begin failed for ${assetId}`);
-  const written = await fs.pendingTasks.write(
+  const written = await fs.jobs.pending.write(
     projectSlug,
     {
+      artifactId: assetId,
       taskId,
       taskType: "alibaba_image",
-      assetId,
-      assetDir: assetId,
       meta: {},
     },
     lease.ownerId,
@@ -44,12 +43,12 @@ async function writeSyntheticPendingTask(
 describe("clear_failed_tasks tool", () => {
   let client: Client;
   let tempDir: string;
-  let fs: VideocityFs;
+  let fs: Engine;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     client = await createTestClient(tempDir);
-    fs = createFsForTest(tempDir);
+    fs = createEngineForTest(tempDir);
     await client.callTool({
       name: "create_project",
       arguments: { project_slug: "test-proj" },
@@ -102,12 +101,12 @@ describe("clear_failed_tasks tool", () => {
   it("keeps a materialized asset and clears its error row instead of deleting", async () => {
     // A completed video whose sidecar job (e.g. ElevenLabs transcribe) failed:
     // it has real media, so /clear-failed must not destroy it.
-    const created = await fs.createAsset("vid", "real clip", "test-proj");
+    const created = await fs.artifacts.create("vid", "real clip", "test-proj");
     if (!created.ok) throw new Error(created.error.message);
-    const videoAsset = created.value.assetId;
-    const written = await fs.writeFile(videoAsset, "original.mp4", Buffer.from("fake-video"), "test-proj");
+    const videoAsset = created.value.slug;
+    const written = await fs.files.write(videoAsset, "original.mp4", Buffer.from("fake-video"), "test-proj");
     if (!written.ok) throw new Error(written.error.message);
-    const errWritten = await fs.generationErrors.write("test-proj", videoAsset, {
+    const errWritten = await fs.jobs.failures.write("test-proj", videoAsset, {
       message: "ElevenLabs API error 401: Invalid API key",
     });
     if (!errWritten.ok) throw new Error(errWritten.error.message);
@@ -134,7 +133,7 @@ describe("clear_failed_tasks tool", () => {
       arguments: { asset_id: videoAsset, project_slug: "test-proj" },
     });
     expect(manifest.isError).toBeFalsy();
-    const errorRow = await fs.generationErrors.read("test-proj", videoAsset);
+    const errorRow = await fs.jobs.failures.read("test-proj", videoAsset);
     expect(errorRow.ok && errorRow.value).toBeNull();
   });
 

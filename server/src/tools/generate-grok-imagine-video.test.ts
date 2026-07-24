@@ -1,10 +1,10 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
-import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
-import { createFs } from "videobook-engine";
 import sharp from "sharp";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
@@ -90,16 +90,16 @@ describe("generate_grok_imagine_video tool", () => {
   it("returns error when image asset has no image file", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("img", "empty-img", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("img", "empty-img", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
 
-    await fs.writeFile(asset.value.assetId, "notes.txt", "hello", "test-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello", "test-proj");
 
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
-        asset_id: asset.value.assetId,
+        asset_id: asset.value.slug,
         project_slug: "test-proj",
       },
     });
@@ -112,19 +112,19 @@ describe("generate_grok_imagine_video tool", () => {
   it("enqueues job with valid image asset", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("img", "source-img", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("img", "source-img", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
 
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
-        asset_id: asset.value.assetId,
+        asset_id: asset.value.slug,
         project_slug: "test-proj",
       },
     });
@@ -133,26 +133,26 @@ describe("generate_grok_imagine_video tool", () => {
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
     expect(parsed.vid_asset_id).toMatch(/^vid-/);
-    expect(parsed.source_images).toEqual([asset.value.assetId]);
+    expect(parsed.source_images).toEqual([asset.value.slug]);
     expect(parsed.job_id).toBeDefined();
   });
 
   it("accepts string duration (gen UI / localStorage wire shape)", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("img", "str-dur", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("img", "str-dur", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 0, g: 255, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
 
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
-        asset_id: asset.value.assetId,
+        asset_id: asset.value.slug,
         project_slug: "test-proj",
         duration: "6",
         mode: "fun",
@@ -168,16 +168,16 @@ describe("generate_grok_imagine_video tool", () => {
   it("enqueues job with up to 7 image_slugs", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
+    const fs = createEngineForTest(tempDir);
     const ids: string[] = [];
     for (let i = 0; i < 7; i++) {
-      const a = await fs.createAsset("img", `ref-${i}`, "test-proj");
+      const a = await fs.artifacts.create("img", `ref-${i}`, "test-proj");
       if (!a.ok) throw new Error("Failed to create asset");
       const png = await sharp({
         create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
       }).png().toBuffer();
-      await fs.writeFile(a.value.assetId, "original.png", png, "test-proj");
-      ids.push(a.value.assetId);
+      await fs.files.write(a.value.slug, "original.png", png, "test-proj");
+      ids.push(a.value.slug);
     }
 
     const result = await client.callTool({
@@ -198,16 +198,16 @@ describe("generate_grok_imagine_video tool", () => {
   it("rejects more than 7 image_slugs", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
+    const fs = createEngineForTest(tempDir);
     const ids: string[] = [];
     for (let i = 0; i < 8; i++) {
-      const a = await fs.createAsset("img", `over-${i}`, "test-proj");
+      const a = await fs.artifacts.create("img", `over-${i}`, "test-proj");
       if (!a.ok) throw new Error("Failed to create asset");
       const png = await sharp({
         create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
       }).png().toBuffer();
-      await fs.writeFile(a.value.assetId, "original.png", png, "test-proj");
-      ids.push(a.value.assetId);
+      await fs.files.write(a.value.slug, "original.png", png, "test-proj");
+      ids.push(a.value.slug);
     }
 
     const result = await client.callTool({
@@ -224,53 +224,45 @@ describe("generate_grok_imagine_video tool", () => {
     expect(content[0].text).toContain("expected array to have <=7 items");
   });
 
-  it("accepts a slashed @nb-1/<file> reference for replace_audio_with", async () => {
+  it("rejects a slashed notebook file reference for replace_audio_with", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("img", "anchor-img", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("img", "anchor-img", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
-
-    // A plan may address per-scene audio as @nb-1/sN.mp3 — a sibling file inside
-    // the non-media-prefixed `plan` asset, not an aud-* asset.
-    const planDir = join(tempDir, "test-proj", "nb-1");
-    await mkdir(planDir, { recursive: true });
-    await writeFile(join(planDir, "s1.mp3"), Buffer.from("fake-mp3-bytes"));
+    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
 
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
-        image_slugs: [asset.value.assetId],
+        image_slugs: [asset.value.slug],
         project_slug: "test-proj",
         replace_audio_with: "@nb-1/s1.mp3",
       },
     });
 
-    expect(result.isError).toBeFalsy();
-    const parsed = JSON.parse((result.content as TextContent)[0].text);
-    expect(parsed.status).toBe("enqueued");
-    expect(parsed.replace_audio_with).toBe("nb-1");
+    expect(result.isError).toBe(true);
+    expect((result.content as TextContent)[0].text).toContain("aud-*");
   });
 
   it("rejects a bare non-aud reference for replace_audio_with", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("img", "anchor2-img", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("img", "anchor2-img", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
 
     const result = await client.callTool({
       name: "generate_kie_grok_imagine_image_to_video",
       arguments: {
-        image_slugs: [asset.value.assetId],
+        image_slugs: [asset.value.slug],
         project_slug: "test-proj",
         replace_audio_with: "vid-not-audio",
       },

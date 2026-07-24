@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
@@ -19,7 +19,7 @@ type Payload = {
   max_images?: number;
 };
 
-export function registerGenerateSeedreamV5LiteEditFalJob(fs: VideocityFs): void {
+export function registerGenerateSeedreamV5LiteEditFalJob(fs: Engine): void {
   registerJobHandler("generate_seedream_v5_lite_edit_fal", async (payload, ctx) => {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.projectSlug, p.imgAssetId, ctx, "generate", async (ownerId) => {

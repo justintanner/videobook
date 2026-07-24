@@ -1,8 +1,8 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function pushChatHistoryDef(fs: VideocityFs): ToolDef {
+export function pushChatHistoryDef(fs: Engine): ToolDef {
   return {
     name: "push_chat_history",
     description: "Append a message to the chat input history log.",
@@ -17,7 +17,7 @@ export function pushChatHistoryDef(fs: VideocityFs): ToolDef {
         message: string;
         project_slug: string;
       };
-      const result = await fs.appendLog(
+      const result = await fs.logs.append(
         "chat-input-history",
         { message, ts: Date.now() },
         slug,
@@ -35,7 +35,7 @@ export function pushChatHistoryDef(fs: VideocityFs): ToolDef {
   };
 }
 
-export function listChatHistoryDef(fs: VideocityFs): ToolDef {
+export function listChatHistoryDef(fs: Engine): ToolDef {
   return {
     name: "list_chat_history",
     description: "List recent chat input history entries.",
@@ -53,7 +53,7 @@ export function listChatHistoryDef(fs: VideocityFs): ToolDef {
         project_slug: string;
         limit?: number;
       };
-      const entries = await fs.readLog("chat-input-history", slug, {
+      const entries = await fs.logs.read("chat-input-history", slug, {
         limit: limit ?? 100,
       });
       const messages = entries

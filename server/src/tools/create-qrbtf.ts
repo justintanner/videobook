@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import sharp from "sharp";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -114,36 +114,36 @@ export async function buildQrbtfPng(
 }
 
 async function persistQrbtfAsset(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   assetName: string,
   files: QrbtfFiles,
   metadata: Record<string, unknown>,
 ): Promise<{ ok: true; assetId: string } | { ok: false; error: string }> {
-  const created = await fs.createAsset("img", assetName, projectSlug);
+  const created = await fs.artifacts.create("img", assetName, projectSlug);
   if (!created.ok) return { ok: false, error: `Failed to create image asset: ${created.error.message}` };
-  const assetId = created.value.assetId;
+  const assetId = created.value.slug;
   const writes = await Promise.all([
-    fs.writeFile(assetId, "original.png", files.original, projectSlug),
-    fs.writeFile(assetId, "landscape.jpg", files.landscape, projectSlug),
-    fs.writeFile(assetId, "portrait.jpg", files.portrait, projectSlug),
-    fs.writeFile(assetId, "square.jpg", files.square, projectSlug),
+    fs.files.write(assetId, "original.png", files.original, projectSlug),
+    fs.files.write(assetId, "landscape.jpg", files.landscape, projectSlug),
+    fs.files.write(assetId, "portrait.jpg", files.portrait, projectSlug),
+    fs.files.write(assetId, "square.jpg", files.square, projectSlug),
   ]);
   const writeFailure = writes.find((result) => !result.ok);
   if (writeFailure && !writeFailure.ok) {
-    await fs.deleteAsset(assetId, projectSlug).catch(() => undefined);
+    await fs.artifacts.delete(assetId, projectSlug).catch(() => undefined);
     return { ok: false, error: writeFailure.error.message };
   }
 
-  const metadataResult = await fs.writeMetadata(assetId, "original", metadata, projectSlug);
+  const metadataResult = await fs.metadata.artifacts.write(assetId, "original", metadata, projectSlug);
   if (!metadataResult.ok) {
-    await fs.deleteAsset(assetId, projectSlug).catch(() => undefined);
+    await fs.artifacts.delete(assetId, projectSlug).catch(() => undefined);
     return { ok: false, error: metadataResult.error.message };
   }
   return { ok: true, assetId };
 }
 
-export function createQrbtfDef(fs: VideocityFs): ToolDef {
+export function createQrbtfDef(fs: Engine): ToolDef {
   return {
     name: "create_qrbtf",
     description:

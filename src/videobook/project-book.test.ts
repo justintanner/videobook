@@ -51,6 +51,10 @@ describe('project book canvas projection', () => {
       new URL('../components/videobook/CellInspectorPanel.tsx', import.meta.url),
       'utf8',
     )
+    const projectLoader = readFileSync(
+      new URL('../hooks/useProjectScreenLoader.ts', import.meta.url),
+      'utf8',
+    )
     const css = readFileSync(
       new URL('../index.css', import.meta.url),
       'utf8',
@@ -67,6 +71,12 @@ describe('project book canvas projection', () => {
     expect(app).not.toContain('View source for')
     expect(app).not.toContain('ActionDetailModal')
     expect(app).toContain('<CellInspectorPanel')
+    expect(app).toContain('useProjectScreenLoader({')
+    expect(app).toContain(
+      "active: mcp.state === 'ready' && screen === 'projects'",
+    )
+    expect(projectLoader).toContain('loadedForVisit')
+    expect(app).toContain('Create a project or use the command bar')
     expect(app).toContain('elementsSelectable')
     expect(app).not.toContain('elementsSelectable={flowInteractive}')
     expect(nodeClick).toContain("setInspectorTab('details')")
@@ -79,6 +89,8 @@ describe('project book canvas projection', () => {
     expect(app).not.toContain('cell-node-turn-flipped')
     expect(app).not.toContain('data.stage.toString()')
     expect(app).not.toContain('<small>{data.title}</small>')
+    expect(app).toContain('`${selected.data.kind.toUpperCase()} CELL`')
+    expect(inspector).not.toContain('inspector-kicker')
     expect(app).toContain('position="top-left" className="palette-panel"')
     expect(cellNode).toContain('data.stage > 1')
     expect(app).toContain('orientation="horizontal"')
@@ -211,10 +223,12 @@ describe('project book canvas projection', () => {
     expect(notebookGrid.minStages).toBe(6)
     expect(app).toContain('extendStageRunway(viewport)')
     expect(app).toContain('clampNotebookViewport(viewport)')
-    expect(css).toContain('left: 56px')
-    expect(css).toContain('right: 440px')
+    expect(css).toContain('left: 72px')
+    expect(css).toContain('right: 424px')
     expect(commandShellRule).toContain('border-right-width: 3px')
     expect(commandShellRule).toContain('border-left-width: 3px')
+    expect(commandShellRule).toContain('rgba(114, 231, 170, 0.62)')
+    expect(commandShellRule).toContain('0 0 18px rgba(55, 176, 107, 0.09)')
     expect(css).toContain('font-size: 14px')
   })
 

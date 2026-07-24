@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { KieGeminiPart } from "@apicity/kie";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import sharp from "sharp";
 import { z } from "zod";
 import { getApiKey } from "../api-key.js";
@@ -256,14 +256,14 @@ async function analyzeFrames(
 }
 
 async function writeContactSheetIfChanged(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   contactSheet: Buffer,
 ): Promise<void> {
-  const existing = await fs.readFile(assetId, KEYWORD_FRAME_CACHE_FILENAME, projectSlug);
+  const existing = await fs.files.read(assetId, KEYWORD_FRAME_CACHE_FILENAME, projectSlug);
   if (existing.ok && existing.value.equals(contactSheet)) return;
-  const write = await fs.writeFile(
+  const write = await fs.files.write(
     assetId,
     KEYWORD_FRAME_CACHE_FILENAME,
     contactSheet,
@@ -272,7 +272,7 @@ async function writeContactSheetIfChanged(
   if (!write.ok) throw new Error(`Failed to persist keyword frame cache: ${write.error.message}`);
 }
 
-export function registerAnalyzeKeywordPlacementJob(fs: VideocityFs): void {
+export function registerAnalyzeKeywordPlacementJob(fs: Engine): void {
   registerJobHandler("analyze_keyword_placement", async (payload, ctx) => {
     const {
       assetId,

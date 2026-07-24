@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
@@ -46,9 +46,11 @@ describe("list_assets tool", () => {
     const data = JSON.parse(content[0].text);
     expect(data.assets).toHaveLength(1);
     expect(data.assets[0]).toMatchObject({
-      id: "nb-scratch",
       type: "notebook",
     });
+    expect(data.assets[0].id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
   });
 
   it("lists uploaded assets", async () => {
@@ -95,6 +97,7 @@ describe("list_assets tool", () => {
     const firstParsed = JSON.parse(
       (firstResult.content as Array<{ type: string; text: string }>)[0].text,
     );
+    await new Promise((resolve) => setTimeout(resolve, 2));
     const secondResult = await client.callTool({
       name: "upload_file",
       arguments: { project_slug: slug, filename: "second.png", data: pngData },
@@ -103,11 +106,6 @@ describe("list_assets tool", () => {
       (secondResult.content as Array<{ type: string; text: string }>)[0].text,
     );
 
-    // Force distinct timestamps so sort order is deterministic
-    const now = Math.floor(Date.now() / 1000);
-    await writeFile(join(tempDir, slug, firstParsed.assetId, ".created_at"), String(now - 100));
-    await writeFile(join(tempDir, slug, secondParsed.assetId, ".created_at"), String(now));
-
     const newestResult = await client.callTool({
       name: "list_assets",
       arguments: { project_slug: slug, sort: "newest" },
@@ -115,8 +113,8 @@ describe("list_assets tool", () => {
     const newestContent = newestResult.content as Array<{ type: string; text: string }>;
     const newestData = JSON.parse(newestContent[0].text);
     const newestIds = newestData.assets
-      .map((a: { id: string }) => a.id)
-      .filter((id: string) => id !== "nb-scratch");
+      .filter((a: { type: string }) => a.type !== "notebook")
+      .map((a: { id: string }) => a.id);
 
     const oldestResult = await client.callTool({
       name: "list_assets",
@@ -125,8 +123,8 @@ describe("list_assets tool", () => {
     const oldestContent = oldestResult.content as Array<{ type: string; text: string }>;
     const oldestData = JSON.parse(oldestContent[0].text);
     const oldestIds = oldestData.assets
-      .map((a: { id: string }) => a.id)
-      .filter((id: string) => id !== "nb-scratch");
+      .filter((a: { type: string }) => a.type !== "notebook")
+      .map((a: { id: string }) => a.id);
 
     // Newest should have second asset first, oldest should have first asset first
     expect(newestIds[0]).toBe(secondParsed.assetId);

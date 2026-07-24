@@ -1,8 +1,5 @@
-import { homedir } from "node:os";
-import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { queue } from "./queue.js";
+import { getActiveEngine, queue } from "./queue.js";
 
 export interface ScheduledPostPayload {
   asset_id: string;
@@ -31,13 +28,7 @@ export interface ScheduledPostEntry {
 
 const REARM_INTERVAL_MS = 12 * 60 * 60_000;
 const SAFE_TIMEOUT_MS = 2_147_483_000;
-
-function defaultStateFile(): string {
-  return (
-    process.env.SCHEDULED_POSTS_PATH
-    ?? join(homedir(), ".videobook", "scheduled-posts.json")
-  );
-}
+const SETTINGS_KEY = "application.scheduled_posts.v1";
 
 const armed = new Map<string, NodeJS.Timeout>();
 let writeChain: Promise<unknown> = Promise.resolve();
@@ -50,24 +41,13 @@ function serialize<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 async function readState(): Promise<ScheduledPostEntry[]> {
-  const path = defaultStateFile();
-  try {
-    const raw = await readFile(path, "utf8");
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed as ScheduledPostEntry[];
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw err;
-  }
+  const entries = getActiveEngine().settings.get<unknown>(SETTINGS_KEY);
+  return Array.isArray(entries) ? entries as ScheduledPostEntry[] : [];
 }
 
 async function writeState(entries: ScheduledPostEntry[]): Promise<void> {
-  const path = defaultStateFile();
-  await mkdir(dirname(path), { recursive: true });
-  const tmp = `${path}.tmp.${process.pid}`;
-  await writeFile(tmp, JSON.stringify(entries, null, 2), "utf8");
-  await rename(tmp, path);
+  const written = getActiveEngine().settings.set(SETTINGS_KEY, entries);
+  if (!written.ok) throw new Error(written.error.message);
 }
 
 async function updateEntry(

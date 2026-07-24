@@ -3,10 +3,9 @@
  * video generation tool and returns a rich preview JSON for the frontend to
  * render a dynamic parameter form.
  */
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { createOpenAi, firstContent } from "@apicity/openai";
-import { resolveAllAssets, expandSlotRefs } from "videobook-engine";
 import {
   DEFAULT_VIDEO_MODEL_KEY,
   VIDEO_MODELS,
@@ -28,7 +27,7 @@ function findSelectedModel(rawToolName: string): string | null {
   return null;
 }
 
-export function previewVideoGenDef(fs: VideocityFs): ToolDef {
+export function previewVideoGenDef(fs: Engine): ToolDef {
   return {
     name: "prepare_video_generation",
     description:
@@ -49,13 +48,20 @@ export function previewVideoGenDef(fs: VideocityFs): ToolDef {
 
       // 1. Expand @s01 slot refs → actual asset slugs
       let expandedPrompt = prompt;
-      const timelineResult = await fs.readProjectMeta<{ slots: Array<{ slug: string }> }>("timeline", slug);
+      const timelineResult = await fs.metadata.projects.read<{ slots: Array<{ slug: string }> }>("timeline", slug);
       if (timelineResult.ok && timelineResult.value.slots) {
-        expandedPrompt = expandSlotRefs(prompt, timelineResult.value.slots);
+        expandedPrompt = fs.resolver.expandSlotRefs(prompt, timelineResult.value.slots);
       }
 
       // 2. Resolve @asset tags
-      const { resolved: resolvedAssets, unresolved } = await resolveAllAssets(expandedPrompt, fs, slug);
+      const resolvedResult = await fs.resolver.resolveAll(expandedPrompt, slug);
+      if (!resolvedResult.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: resolvedResult.error.message }],
+        };
+      }
+      const { resolved: resolvedAssets, unresolved } = resolvedResult.value;
 
       // 3. Route prompt via GPT-4o-mini (skip when model explicitly selected)
       let routedToolName = VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name;
@@ -77,16 +83,16 @@ export function previewVideoGenDef(fs: VideocityFs): ToolDef {
         try {
           const assetContext = resolvedAssets.map((a) => ({
             tag: a.tag,
-            type: a.asset_type,
-            asset_id: a.asset_id,
-            has_file: a.file_path !== null,
+            type: a.artifactType,
+            asset_id: a.artifactSlug,
+            has_file: a.filePath !== null,
           }));
 
           const imageTags = resolvedAssets
-            .filter((a) => a.asset_type === "image")
+            .filter((a) => a.artifactType === "image")
             .map((a) => a.tag);
           const videoTags = resolvedAssets
-            .filter((a) => a.asset_type === "video")
+            .filter((a) => a.artifactType === "video")
             .map((a) => a.tag);
 
           const userMessage = `User query: ${prompt}
@@ -129,7 +135,7 @@ Determine which video generation tool to use and what parameters to pass.`;
       // 4. Load prompt history from action log
       let historyEntries: ActionLogEntry[] = [];
       try {
-        const log = await fs.getActionLog({ limit: 100 }, slug);
+        const log = fs.history.actionLog(slug, { limit: 100 });
         historyEntries = log as ActionLogEntry[];
       } catch {
         // action log unavailable
@@ -137,8 +143,8 @@ Determine which video generation tool to use and what parameters to pass.`;
 
       // 4b. Build set of valid asset tags for the current project so
       //     historical slug references that no longer exist are stripped.
-      const allProjectAssets = await fs.listAssets(slug);
-      const projectAssetTags = new Set(allProjectAssets.map((a) => `@${a.id}`));
+      const allProjectAssets = fs.artifacts.list(slug);
+      const projectAssetTags = new Set(allProjectAssets.map((a) => `@${a.slug}`));
 
       // 5. Build model options for all 5 video models
       // Only pass router params to the model that was actually routed to;
@@ -166,15 +172,15 @@ Determine which video generation tool to use and what parameters to pass.`;
       }
       const selectedOption = modelOptions.find((o) => o.key === selectedModel) ?? modelOptions[0];
 
-      // 7. Build resolved_assets output (slug/src/type for frontend ResolvedAsset)
+      // 7. Build resolved_assets output (slug/src/type for frontend ResolvedArtifact)
       const assetDicts = resolvedAssets.map((a) => {
-        const fileName = a.file_path?.split("/").pop() ?? "original.png";
-        const src = a.file_path ? `/files/${slug}/${a.asset_id}/${fileName}` : "";
-        const isVideo = a.asset_type === "video";
+        const fileName = a.filePath?.split("/").pop() ?? "original.png";
+        const src = a.filePath ? `/files/${slug}/${a.artifactSlug}/${fileName}` : "";
+        const isVideo = a.artifactType === "video";
         return {
           slug: a.tag,
           src,
-          thumbnailSrc: isVideo && a.file_path ? `/files/${slug}/${a.asset_id}/original.jpg` : undefined,
+          thumbnailSrc: isVideo && a.filePath ? `/files/${slug}/${a.artifactSlug}/original.jpg` : undefined,
           type: isVideo ? "video" as const : "image" as const,
         };
       });

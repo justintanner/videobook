@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import {
@@ -34,7 +34,7 @@ const generateGrokImagineT2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateGrokImagineT2vVideoSchema>;
 
-export function generateGrokImagineT2vVideoDef(fs: VideocityFs): ToolDef {
+export function generateGrokImagineT2vVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_grok_imagine_text_to_video",
     description: "Generate a video from a text prompt using Grok Imagine text-to-video (no images). Creates a new vid- asset and enqueues a background job.",
@@ -50,7 +50,7 @@ export function generateGrokImagineT2vVideoDef(fs: VideocityFs): ToolDef {
       }
 
       const videoName = `${modelSlug("kie", "grok-imagine/text-to-video")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -58,7 +58,7 @@ export function generateGrokImagineT2vVideoDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("kie", "grok-imagine/text-to-video")}-t2v-${vidAssetId}-${Date.now()}`;
 

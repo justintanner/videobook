@@ -461,7 +461,6 @@ export function Notebook({
         <CloseButton onClick={onClose} tone="emerald" title="Close (ESC)" />
       </header>
       {plan.error ? <div className="vc-notebook-load-error">{plan.error}</div> : null}
-      {plan.legacy ? <div className="vc-notebook-legacy-note">This project has a notebook from the old formula system. Saving changes replaces that old plan file.</div> : null}
       {definition ? (
         <div className="vc-notebook-body">
           <ReactFlowProvider>

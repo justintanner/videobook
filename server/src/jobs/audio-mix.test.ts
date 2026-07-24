@@ -1,10 +1,11 @@
+import { createEngineForTest } from "../fs.js";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createFs, type VideocityFs } from "videobook-engine";
+import { type Engine } from "videobook-engine";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import { resolveAudioMixAsset } from "../tools/audio-mix.js";
 import { buildAudioMixFilter, mixAudioMedia } from "./audio-mix.js";
@@ -13,21 +14,21 @@ const execFileAsync = promisify(execFile);
 const PROJECT_SLUG = "audio-mix-test";
 
 async function createAssetWithFile(
-  fs: VideocityFs,
+  fs: Engine,
   prefix: "vid" | "aud",
   name: string,
   filename: string,
 ): Promise<string> {
-  const created = await fs.createAsset(prefix, name, PROJECT_SLUG);
+  const created = await fs.artifacts.create(prefix, name, PROJECT_SLUG);
   if (!created.ok) throw new Error(created.error.message);
-  const written = await fs.writeFile(
-    created.value.assetId,
+  const written = await fs.files.write(
+    created.value.slug,
     filename,
     Buffer.from(`fixture-${name}`),
     PROJECT_SLUG,
   );
   if (!written.ok) throw new Error(written.error.message);
-  return created.value.assetId;
+  return created.value.slug;
 }
 
 function projectedAmplitude(samples: Buffer, frequency: number, sampleRate: number): number {
@@ -45,7 +46,7 @@ function projectedAmplitude(samples: Buffer, frequency: number, sampleRate: numb
 
 describe("audio mix", () => {
   let tempDir: string;
-  let fs: VideocityFs;
+  let fs: Engine;
   let videoTargetId: string;
   let videoLayerId: string;
   let audioTargetId: string;
@@ -53,8 +54,8 @@ describe("audio mix", () => {
 
   beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-audio-mix-"));
-    fs = createFs({ projectsDir: join(tempDir, "projects") });
-    const project = await fs.createProject(PROJECT_SLUG);
+    fs = createEngineForTest(join(tempDir, "projects"));
+    const project = await fs.projects.create(PROJECT_SLUG);
     if (!project.ok) throw new Error(project.error.message);
     videoTargetId = await createAssetWithFile(fs, "vid", "video target", "original.mp4");
     videoLayerId = await createAssetWithFile(fs, "vid", "video layer", "original.mkv");

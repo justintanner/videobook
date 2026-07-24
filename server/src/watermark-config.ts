@@ -7,13 +7,11 @@
  * (see x/authenticated-handle.ts); `authenticatedHandle` below is a read-through
  * cache so the dialog still pre-fills when the API is unreachable.
  *
- * Stored at ~/.videobook/watermark-config.json (override WATERMARK_CONFIG_PATH),
- * mirroring the atomic-write pattern in x/x-tokens.ts.
+ * Stored as unversioned application state in the main Dolt database.
  */
 
-import { homedir } from "node:os";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import type { Engine } from "videobook-engine";
+import { getActiveEngine } from "./queue.js";
 
 const RECENT_LIMIT = 8;
 
@@ -24,13 +22,7 @@ export interface WatermarkConfig {
 }
 
 const EMPTY_CONFIG: WatermarkConfig = { savedHandle: null, recent: [], authenticatedHandle: null };
-
-function configFilePath(): string {
-  return (
-    process.env.WATERMARK_CONFIG_PATH
-    ?? join(homedir(), ".videobook", "watermark-config.json")
-  );
-}
+const SETTINGS_KEY = "application.watermark.v1";
 
 /** Trim surrounding whitespace then strip one leading @; empty string ⇒ null. */
 export function normalizeHandle(handle: string): string | null {
@@ -45,35 +37,29 @@ function serialize<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-export async function readWatermarkConfig(): Promise<WatermarkConfig> {
-  let raw: string;
-  try {
-    raw = await readFile(configFilePath(), "utf8");
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return { ...EMPTY_CONFIG };
-    throw err;
-  }
-  try {
-    const parsed = JSON.parse(raw) as Partial<WatermarkConfig>;
-    const recent = Array.isArray(parsed.recent)
-      ? parsed.recent.filter((h): h is string => typeof h === "string")
-      : [];
-    const savedHandle = typeof parsed.savedHandle === "string" ? parsed.savedHandle : null;
-    const authenticatedHandle = typeof parsed.authenticatedHandle === "string" ? parsed.authenticatedHandle : null;
-    return { savedHandle, recent, authenticatedHandle };
-  } catch {
-    return { ...EMPTY_CONFIG };
-  }
+function readConfig(engine: Engine): WatermarkConfig {
+  const parsed = engine.settings.get<Partial<WatermarkConfig>>(SETTINGS_KEY);
+  if (!parsed) return { ...EMPTY_CONFIG };
+  const recent = Array.isArray(parsed.recent)
+    ? parsed.recent.filter((handle): handle is string => typeof handle === "string")
+    : [];
+  const savedHandle = typeof parsed.savedHandle === "string" ? parsed.savedHandle : null;
+  const authenticatedHandle = typeof parsed.authenticatedHandle === "string" ? parsed.authenticatedHandle : null;
+  return { savedHandle, recent, authenticatedHandle };
 }
 
-async function writeWatermarkConfig(config: WatermarkConfig): Promise<void> {
-  await serialize(async () => {
-    const path = configFilePath();
-    await mkdir(dirname(path), { recursive: true });
-    const tmp = `${path}.tmp.${process.pid}`;
-    await writeFile(tmp, JSON.stringify(config, null, 2), "utf8");
-    await rename(tmp, path);
-  });
+export async function readWatermarkConfig(
+  engine: Engine = getActiveEngine(),
+): Promise<WatermarkConfig> {
+  return readConfig(engine);
+}
+
+function writeWatermarkConfig(
+  engine: Engine,
+  config: WatermarkConfig,
+): void {
+  const written = engine.settings.set(SETTINGS_KEY, config);
+  if (!written.ok) throw new Error(written.error.message);
 }
 
 /** Record a freshly-used handle: unshift into `recent` (case-insensitive dedup,
@@ -82,32 +68,40 @@ async function writeWatermarkConfig(config: WatermarkConfig): Promise<void> {
 export async function recordHandle(
   handle: string,
   opts: { saveDefault?: boolean } = {},
+  engine: Engine = getActiveEngine(),
 ): Promise<WatermarkConfig> {
   const normalized = normalizeHandle(handle);
-  if (!normalized) return readWatermarkConfig();
+  if (!normalized) return readConfig(engine);
 
-  const current = await readWatermarkConfig();
-  const deduped = current.recent.filter((h) => h.toLowerCase() !== normalized.toLowerCase());
-  const next: WatermarkConfig = {
-    savedHandle: opts.saveDefault ? normalized : current.savedHandle,
-    recent: [normalized, ...deduped].slice(0, RECENT_LIMIT),
-    authenticatedHandle: current.authenticatedHandle,
-  };
-  await writeWatermarkConfig(next);
-  return next;
+  return serialize(async () => {
+    const current = readConfig(engine);
+    const deduped = current.recent.filter((h) => h.toLowerCase() !== normalized.toLowerCase());
+    const next: WatermarkConfig = {
+      savedHandle: opts.saveDefault ? normalized : current.savedHandle,
+      recent: [normalized, ...deduped].slice(0, RECENT_LIMIT),
+      authenticatedHandle: current.authenticatedHandle,
+    };
+    writeWatermarkConfig(engine, next);
+    return next;
+  });
 }
 
 /** Cache the authenticated X handle (read-through fallback when the API is
  *  unreachable). Pass null to clear. No-op when the value is unchanged. */
-export async function setAuthenticatedHandle(handle: string | null): Promise<WatermarkConfig> {
+export async function setAuthenticatedHandle(
+  handle: string | null,
+  engine: Engine = getActiveEngine(),
+): Promise<WatermarkConfig> {
   const normalized = handle === null ? null : normalizeHandle(handle);
-  const current = await readWatermarkConfig();
-  if (current.authenticatedHandle === normalized) return current;
-  const next: WatermarkConfig = {
-    savedHandle: current.savedHandle,
-    recent: current.recent,
-    authenticatedHandle: normalized,
-  };
-  await writeWatermarkConfig(next);
-  return next;
+  return serialize(async () => {
+    const current = readConfig(engine);
+    if (current.authenticatedHandle === normalized) return current;
+    const next: WatermarkConfig = {
+      savedHandle: current.savedHandle,
+      recent: current.recent,
+      authenticatedHandle: normalized,
+    };
+    writeWatermarkConfig(engine, next);
+    return next;
+  });
 }

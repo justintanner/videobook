@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
@@ -32,11 +32,11 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
 }
 
 async function removeFromTimeline(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<{ updated: boolean; error?: string }> {
-  const readResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", projectSlug);
+  const readResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", projectSlug);
   if (!readResult.ok) {
     const error = (readResult as { ok: false; error: { code: string; message: string } }).error;
     if (error.code === "NOT_FOUND") return { updated: false };
@@ -66,7 +66,7 @@ async function removeFromTimeline(
   if ((config.audio ?? []).length > 0 && audio.length === 0) {
     nextConfig.audio = [];
   }
-  const writeResult = await fs.writeProjectMeta("timeline", nextConfig, projectSlug);
+  const writeResult = await fs.metadata.projects.write("timeline", nextConfig, projectSlug);
   if (!writeResult.ok) {
     const error = (writeResult as { ok: false; error: { message: string } }).error;
     return { updated: false, error: error.message };
@@ -74,7 +74,7 @@ async function removeFromTimeline(
   return { updated: true };
 }
 
-export function deleteAssetDef(fs: VideocityFs): ToolDef {
+export function deleteAssetDef(fs: Engine): ToolDef {
   return {
     name: "delete_asset",
     description: "Delete an asset directory",
@@ -84,7 +84,7 @@ export function deleteAssetDef(fs: VideocityFs): ToolDef {
     },
     handler: async (args) => {
       const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
-      const result = await fs.deleteAsset(asset_id, project_slug);
+      const result = await fs.artifacts.delete(asset_id, project_slug);
       if (!result.ok) {
         return {
           isError: true as const,
@@ -98,7 +98,7 @@ export function deleteAssetDef(fs: VideocityFs): ToolDef {
           text: JSON.stringify({
             status: "deleted",
             asset_id,
-            deleted_at: result.value.deleted_at,
+            deleted_at: result.value.deletedAt,
             timeline: await removeFromTimeline(fs, asset_id, project_slug),
           }),
         }],

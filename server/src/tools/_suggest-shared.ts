@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { findVideoFile } from "videobook-engine";
 import { KIE_GEMINI_FLASH_MODEL } from "../kie-gemini.js";
@@ -143,11 +143,11 @@ function condenseElevenLabsWords(words: ElevenLabsWord[]): string {
 }
 
 async function loadTranscript(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<TranscriptResult | null> {
-  const elevenRead = await fs.readFile(assetId, "elevenlabs.json", projectSlug);
+  const elevenRead = await fs.files.read(assetId, "elevenlabs.json", projectSlug);
   if (elevenRead.ok) {
     try {
       const parsed = JSON.parse(decodeBuffer(elevenRead.value)) as ElevenLabs;
@@ -158,7 +158,7 @@ async function loadTranscript(
       // fall through to gpt4otrans
     }
   }
-  const gptRead = await fs.readFile(assetId, ".analysis.gpt4otrans.json", projectSlug);
+  const gptRead = await fs.files.read(assetId, ".analysis.gpt4otrans.json", projectSlug);
   if (gptRead.ok) {
     try {
       const parsed = JSON.parse(decodeBuffer(gptRead.value)) as Gpt4oTrans;
@@ -173,11 +173,11 @@ async function loadTranscript(
 }
 
 async function loadPriorAnalysis(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<PriorAnalysis | null> {
-  const read = await fs.readFile(assetId, ".original.analysis.json", projectSlug);
+  const read = await fs.files.read(assetId, ".original.analysis.json", projectSlug);
   if (!read.ok) return null;
   try {
     return JSON.parse(decodeBuffer(read.value)) as PriorAnalysis;
@@ -325,11 +325,11 @@ export type AssetForAnalysisError =
   | { kind: "no-transcript"; message: string };
 
 export async function loadAssetForAnalysis(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<{ ok: true; value: AssetForAnalysis } | { ok: false; error: AssetForAnalysisError }> {
-  const manifestResult = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+  const manifestResult = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
   if (!manifestResult.ok) {
     return { ok: false, error: { kind: "manifest", message: manifestResult.error.message } };
   }
@@ -358,7 +358,7 @@ export async function loadAssetForAnalysis(
     };
   }
 
-  const metaResult = await fs.readMetadata<OriginalMeta>(assetId, "original", projectSlug);
+  const metaResult = await fs.metadata.artifacts.read<OriginalMeta>(assetId, "original", projectSlug);
   const meta = metaResult.ok ? metaResult.value : null;
   const prior = await loadPriorAnalysis(fs, assetId, projectSlug);
 

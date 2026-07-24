@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import {
   GoogleFlowCharactersCreateRequestSchema,
@@ -9,11 +9,11 @@ import { apicityField } from "./schema-from-apicity.js";
 import { toolError } from "./_shared.js";
 
 import { extname } from "node:path";
-import type { AssetManifestFile } from "videobook-engine";
+import type { ArtifactManifestFile } from "videobook-engine";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-function getImagesFromManifest(files: AssetManifestFile[]): AssetManifestFile[] {
+function getImagesFromManifest(files: ArtifactManifestFile[]): ArtifactManifestFile[] {
   return files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -272,7 +272,7 @@ const createGoogleFlowCharacterSchema = {
     .describe("Optional voice: a preset name (e.g. 'Kore') or a custom voice ref from create_google_flow_voice"),
 } satisfies ZodRawShape;
 
-export function createGoogleFlowCharacterDef(fs: VideocityFs): ToolDef {
+export function createGoogleFlowCharacterDef(fs: Engine): ToolDef {
   return {
     name: "create_google_flow_character",
     description:
@@ -294,7 +294,7 @@ export function createGoogleFlowCharacterDef(fs: VideocityFs): ToolDef {
         if (!assetId.startsWith("img-") && !assetId.startsWith("char-")) {
           return toolError(`image_slugs entries must be img-* or char-* assets, got: ${assetId}`);
         }
-        const manifest = await fs.getManifest(assetId, a.project_slug);
+        const manifest = await fs.files.manifest(assetId, a.project_slug);
         if (!manifest.ok) return toolError(`image_slugs: ${manifest.error.message}`);
         const images = getImagesFromManifest(manifest.value.files);
         if (images.length === 0) return toolError(`image_slugs: No image files found in asset ${assetId}`);
@@ -455,7 +455,7 @@ export type ReplacedGoogleFlowCharacter = {
 
 export async function replaceGoogleFlowCharacter(
   provider: GoogleFlowProvider,
-  fs: VideocityFs | undefined,
+  fs: Engine | undefined,
   projectSlug: string | undefined,
   ref: string,
   opts: {
@@ -484,7 +484,7 @@ export async function replaceGoogleFlowCharacter(
       if (!assetId.startsWith("img-") && !assetId.startsWith("char-")) {
         throw new Error(`image_slugs entries must be img-* or char-* assets, got: ${assetId}`);
       }
-      const manifest = await fs.getManifest(assetId, projectSlug);
+      const manifest = await fs.files.manifest(assetId, projectSlug);
       if (!manifest.ok) throw new Error(`image_slugs: ${manifest.error.message}`);
       const images = getImagesFromManifest(manifest.value.files);
       if (images.length === 0) throw new Error(`image_slugs: No image files found in asset ${assetId}`);
@@ -570,7 +570,7 @@ const replaceGoogleFlowCharacterSchema = {
   clear_voice: z.boolean().optional().describe("Clear existing voice"),
 } satisfies ZodRawShape;
 
-export function replaceGoogleFlowCharacterDef(fs: VideocityFs): ToolDef {
+export function replaceGoogleFlowCharacterDef(fs: Engine): ToolDef {
   return {
     name: "replace_google_flow_character",
     description: "Replace a Google Flow character with updated fields. Returns { character_ref, old_ref, status, warning }. Recreate happens first, then best-effort delete.",

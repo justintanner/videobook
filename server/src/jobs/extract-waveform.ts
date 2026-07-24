@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { join } from "node:path";
 import { registerJobHandler } from "../queue.js";
 import { extractWaveform } from "../ffmpeg.js";
@@ -16,16 +16,16 @@ type ExtractWaveformPayload = {
   videoFilename: string;
 };
 
-export function registerExtractWaveformJob(fs: VideocityFs): void {
+export function registerExtractWaveformJob(fs: Engine): void {
   registerJobHandler("extract_waveform", async (payload) => {
     const { projectSlug, waveformAssetId, videoFilename } =
       payload as ExtractWaveformPayload;
 
     // Idempotent: a concurrent poll may have already cached this waveform.
-    const existing = await fs.readAudioWaveform(waveformAssetId, projectSlug);
+    const existing = await fs.metadata.waveforms.read(waveformAssetId, projectSlug);
     if (existing.ok) return { cached: true };
 
-    const dir = await fs.resolveAssetDir(waveformAssetId, projectSlug);
+    const dir = await fs.workspaces.resolveArtifact(waveformAssetId, projectSlug);
     if (!dir.ok) {
       throw new Error(
         `extract_waveform: resolveAssetDir failed for ${waveformAssetId}: ${dir.error.message}`,
@@ -36,7 +36,7 @@ export function registerExtractWaveformJob(fs: VideocityFs): void {
     // Persist even when empty. A silent track — or one ffmpeg can't decode —
     // caches as "no waveform" so we don't re-decode the same file on every
     // sync. extractWaveform already logs the underlying ffmpeg failure.
-    const write = await fs.writeAudioWaveform(
+    const write = await fs.metadata.waveforms.write(
       waveformAssetId,
       peaks,
       projectSlug,

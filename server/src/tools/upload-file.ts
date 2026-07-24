@@ -1,9 +1,9 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { uploadLocalBytes } from "../local-upload.js";
 import type { ToolDef } from "./tool-def.js";
 
-export function uploadFileDef(fs: VideocityFs): ToolDef {
+export function uploadFileDef(fs: Engine): ToolDef {
   return {
     name: "upload_file",
     description: "Upload a media or markdown file into a videocity project as an asset",

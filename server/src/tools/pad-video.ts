@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -7,7 +7,7 @@ import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
 import { parseTime } from "../time-parse.js";
 
-export function padVideoDef(fs: VideocityFs): ToolDef {
+export function padVideoDef(fs: Engine): ToolDef {
   return {
     name: "pad_video",
     description: "Append black video frames at the end to make a whole-second video tail. Retains original audio and makes the appended tail silent.",
@@ -31,7 +31,7 @@ export function padVideoDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

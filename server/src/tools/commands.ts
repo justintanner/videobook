@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 import {
   VIDEO_EDITING_COMMANDS,
@@ -1575,7 +1575,7 @@ export function getCanonicalCommands(): Command[] {
   return canonicalizeCommands(CANONICAL_COMMANDS);
 }
 
-export function commandsDef(fs: VideocityFs): ToolDef {
+export function commandsDef(fs: Engine): ToolDef {
   return {
     name: "slash_commands",
     description: "List all available UI commands with scope metadata",
@@ -1583,7 +1583,7 @@ export function commandsDef(fs: VideocityFs): ToolDef {
     handler: async () => {
       const commands: Command[] = [...CANONICAL_COMMANDS];
       const reserved = new Set(commands.flatMap((command) => [command.command, ...(command.aliases ?? [])]));
-      const projects = await fs.listProjects();
+      const projects = await fs.projects.list();
       for (const p of projects) {
         if (reserved.has(`/${p.slug}`)) continue;
         commands.push({

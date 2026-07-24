@@ -3,19 +3,19 @@ import { mkdtemp, rm, access } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createFsForTest } from "../fs.js";
+import { createEngineForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 
 describe("duplicate_asset tool", () => {
   let client: Client;
   let tempDir: string;
-  let fs: VideocityFs;
+  let fs: Engine;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     client = await createTestClient(tempDir);
-    fs = createFsForTest(tempDir);
+    fs = createEngineForTest(tempDir);
     await client.callTool({
       name: "create_project",
       arguments: { project_slug: "test-proj" },
@@ -94,12 +94,12 @@ describe("duplicate_asset tool", () => {
   });
 
   it("video duplicate skips in-flight job markers", async () => {
-    const created = await fs.createAsset("vid", "in-flight-source", "test-proj");
+    const created = await fs.artifacts.create("vid", "in-flight-source", "test-proj");
     if (!created.ok) throw new Error(created.error.message);
-    const sourceId = created.value.assetId;
-    await fs.writeFile(sourceId, "original.mp4", "fake", "test-proj");
-    await fs.writeFile(sourceId, ".kie-task.json", "{}", "test-proj");
-    await fs.writeFile(sourceId, ".generation-error.json", "{}", "test-proj");
+    const sourceId = created.value.slug;
+    await fs.files.write(sourceId, "original.mp4", "fake", "test-proj");
+    await fs.files.write(sourceId, ".kie-task.json", "{}", "test-proj");
+    await fs.files.write(sourceId, ".generation-error.json", "{}", "test-proj");
 
     const result = await client.callTool({
       name: "duplicate_asset",

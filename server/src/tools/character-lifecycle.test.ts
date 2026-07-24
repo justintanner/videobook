@@ -1,7 +1,7 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect } from "vitest";
 import { createCharacterDef } from "./create-character.js";
 import { setCharacterMetadataDef } from "./set-character-metadata.js";
-import { createFs } from "videobook-engine";
 import * as path from "node:path";
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
@@ -9,9 +9,9 @@ import * as os from "node:os";
 describe("Character lifecycle (create + metadata)", () => {
   it("creates a character and writes free-form metadata", async () => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-test-"));
-    const fs = createFs({ projectsDir: dir });
+    const fs = createEngineForTest(dir);
     const slug = "test-proj";
-    await fs.createProject(slug);
+    await fs.projects.create(slug);
     
     // Create
     const createTool = createCharacterDef(fs);
@@ -33,7 +33,7 @@ describe("Character lifecycle (create + metadata)", () => {
     expect(setResult.isError).toBeFalsy();
     
     // Verify metadata
-    const read = await fs.readMetadata(charId, "character", slug);
+    const read = await fs.metadata.artifacts.read(charId, "character", slug);
     expect(read.ok).toBe(true);
     if (read.ok) {
       expect(read.value).toMatchObject({ age: 32, traits: ["brave", "tall"] });
@@ -42,9 +42,9 @@ describe("Character lifecycle (create + metadata)", () => {
 
   it("accepts plain-text notes and structured object metadata", async () => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-meta-"));
-    const fs = createFs({ projectsDir: dir });
+    const fs = createEngineForTest(dir);
     const slug = "test-proj";
-    await fs.createProject(slug);
+    await fs.projects.create(slug);
 
     const createTool = createCharacterDef(fs);
     const createResult = await createTool.handler({ project_slug: slug, args: ["ada"] }, {});
@@ -58,7 +58,7 @@ describe("Character lifecycle (create + metadata)", () => {
       metadata: "French headshot, friendly tone",
     }, {});
     expect(notesResult.isError).toBeFalsy();
-    const notesRead = await fs.readMetadata(charId, "character", slug);
+    const notesRead = await fs.metadata.artifacts.read(charId, "character", slug);
     expect(notesRead.ok && notesRead.value).toMatchObject({
       notes: "French headshot, friendly tone",
     });
@@ -70,7 +70,7 @@ describe("Character lifecycle (create + metadata)", () => {
       metadata: { google_flow_character_ref: "character:abc", display_name: "Ada" },
     }, {});
     expect(objResult.isError).toBeFalsy();
-    const objRead = await fs.readMetadata(charId, "character", slug);
+    const objRead = await fs.metadata.artifacts.read(charId, "character", slug);
     expect(objRead.ok && objRead.value).toMatchObject({
       google_flow_character_ref: "character:abc",
       display_name: "Ada",
@@ -89,20 +89,20 @@ describe("Character lifecycle (create + metadata)", () => {
 
   it("creates a character seeded from one or more existing image assets", async () => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-test-asset-"));
-    const fs = createFs({ projectsDir: dir });
+    const fs = createEngineForTest(dir);
     const slug = "test-proj";
-    await fs.createProject(slug);
+    await fs.projects.create(slug);
 
     // Create dummy image assets to serve as sources
-    const faceAsset = await fs.createAsset("img", "face", slug);
-    const bodyAsset = await fs.createAsset("img", "body", slug);
+    const faceAsset = await fs.artifacts.create("img", "face", slug);
+    const bodyAsset = await fs.artifacts.create("img", "body", slug);
     expect(faceAsset.ok).toBe(true);
     expect(bodyAsset.ok).toBe(true);
     if (faceAsset.ok) {
-        await fs.writeFile(faceAsset.value.assetId, "original.png", "fake data", slug);
+        await fs.files.write(faceAsset.value.slug, "original.png", "fake data", slug);
     }
     if (bodyAsset.ok) {
-        await fs.writeFile(bodyAsset.value.assetId, "original.png", "fake data", slug);
+        await fs.files.write(bodyAsset.value.slug, "original.png", "fake data", slug);
     }
 
     const createTool = createCharacterDef(fs);
@@ -113,7 +113,7 @@ describe("Character lifecycle (create + metadata)", () => {
     const parsed1 = JSON.parse((createRes1.content[0] as { type: "text", text: string }).text);
     expect(parsed1.asset_id).toMatch(/^char-alice/);
     expect(parsed1.display_name).toBe("alice");
-    const meta1 = await fs.readMetadata(parsed1.asset_id as string, "character", slug);
+    const meta1 = await fs.metadata.artifacts.read(parsed1.asset_id as string, "character", slug);
     expect(meta1.ok && meta1.value).toMatchObject({ display_name: "alice" });
 
     // Test with multiple images and no explicit name → short stem (face), not char-img-face
@@ -122,7 +122,7 @@ describe("Character lifecycle (create + metadata)", () => {
     const parsed2 = JSON.parse((createRes2.content[0] as { type: "text", text: string }).text);
     expect(parsed2.asset_id).toMatch(/^char-face/);
     expect(parsed2.display_name).toBe("face");
-    const meta2 = await fs.readMetadata(parsed2.asset_id as string, "character", slug);
+    const meta2 = await fs.metadata.artifacts.read(parsed2.asset_id as string, "character", slug);
     expect(meta2.ok && meta2.value).toMatchObject({ display_name: "face" });
 
     // Test validation for duplicate images
@@ -130,24 +130,24 @@ describe("Character lifecycle (create + metadata)", () => {
     expect(createRes3.isError).toBe(true);
 
     // Test validation for non-image sources
-    await fs.createAsset("vid", "clip", slug);
+    await fs.artifacts.create("vid", "clip", slug);
     const createRes4 = await createTool.handler({ project_slug: slug, args: ["vid-clip"] }, {});
     expect(createRes4.isError).toBe(true);
   });
 
   it("seeds display_name when creating a named character with no images", async () => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-char-name-only-"));
-    const fs = createFs({ projectsDir: dir });
+    const fs = createEngineForTest(dir);
     const slug = "test-proj";
-    await fs.createProject(slug);
+    await fs.projects.create(slug);
     const createTool = createCharacterDef(fs);
-    // createAsset may strip stop-words (the-guy → char-guy); display_name keeps the user string.
+    // Native slugs preserve meaningful normalized words from the display name.
     const res = await createTool.handler({ project_slug: slug, args: ["the-guy"] }, {});
     expect(res.isError).toBeFalsy();
     const parsed = JSON.parse((res.content[0] as { text: string }).text);
-    expect(parsed.asset_id).toMatch(/^char-guy/);
+    expect(parsed.asset_id).toBe("char-the-guy");
     expect(parsed.display_name).toBe("the-guy");
-    const meta = await fs.readMetadata(parsed.asset_id as string, "character", slug);
+    const meta = await fs.metadata.artifacts.read(parsed.asset_id as string, "character", slug);
     expect(meta.ok && meta.value).toMatchObject({ display_name: "the-guy" });
   });
 });

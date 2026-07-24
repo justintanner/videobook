@@ -27,7 +27,7 @@ describe("get_default_project tool", () => {
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
-    expect(data.metadata.slug).toBeTruthy();
+    expect(data.slug).toBeTruthy();
     expect(data.path).toBeTruthy();
   });
 
@@ -44,7 +44,7 @@ describe("get_default_project tool", () => {
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
-    expect(data.metadata.slug).toBe("my-proj");
+    expect(data.slug).toBe("my-proj");
     expect(data.path).toBeTruthy();
   });
 });

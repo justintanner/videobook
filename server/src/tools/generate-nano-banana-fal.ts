@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalNanoBananaTextToImageRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
@@ -21,7 +21,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateNanoBananaFalDef(fs: VideocityFs): ToolDef {
+export function generateNanoBananaFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_nano_banana_text_to_image",
     description: "Generate an image via fal.ai using Google Nano Banana (v1) from a text prompt. Creates a new img- asset and enqueues a background job.",
@@ -33,10 +33,10 @@ export function generateNanoBananaFalDef(fs: VideocityFs): ToolDef {
         return { isError: true as const, content: [{ type: "text" as const, text: "FAL_API_KEY environment variable is not set" }] };
       }
 
-      const assetResult = await fs.createAsset("img", `${modelSlug("kie", "nano-banana")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "nano-banana")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "nano-banana")}-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

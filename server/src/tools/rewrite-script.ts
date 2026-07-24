@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -17,7 +17,7 @@ function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
 }
 
-export function rewriteScriptDef(fs: VideocityFs): ToolDef {
+export function rewriteScriptDef(fs: Engine): ToolDef {
   return {
     name: "rewrite_script",
     description:
@@ -25,7 +25,7 @@ export function rewriteScriptDef(fs: VideocityFs): ToolDef {
       "Variants: \"full\" (full reproduction prompt + breakdown) or \"tldr\" (1–2 sentence summary). " +
       "Optional platform preset (\"ig\" | \"tiktok\" | \"youtube\") tunes authentic-capture cues for that feed. " +
       "Optional custom_prompt applies a transformation instruction (e.g. \"replace the pig with a man in a blue suit\"). " +
-      "Previous versions are preserved in git history via videobook-engine. " +
+      "Previous versions are preserved as immutable Dolt revisions. " +
       "Returns immediately; reconcile_project_work reports status=\"generating\" until the new markdown is written.",
     schema: {
       asset_id: z.string().describe("Script asset ID (script-*)"),
@@ -49,9 +49,9 @@ export function rewriteScriptDef(fs: VideocityFs): ToolDef {
         return error(`rewrite_script only accepts script-* assets, got: ${asset_id}`);
       }
 
-      const originalResult = await fs.readMetadata<OriginalMeta>(asset_id, "original", project_slug);
+      const originalResult = await fs.metadata.artifacts.read<OriginalMeta>(asset_id, "original", project_slug);
       if (!originalResult.ok) {
-        return error(`Script ${asset_id} has no .original.json metadata — cannot determine origin`);
+        return error(`Script ${asset_id} has no native original metadata — cannot determine origin`);
       }
       const { origin, sourceAssetId } = originalResult.value;
       if (origin !== "describe_image" || !sourceAssetId) {
@@ -64,7 +64,7 @@ export function rewriteScriptDef(fs: VideocityFs): ToolDef {
         return error("KIE_API_KEY is not set");
       }
 
-      const scriptManifest = await fs.getManifest(asset_id, project_slug);
+      const scriptManifest = await fs.files.manifest(asset_id, project_slug);
       if (!scriptManifest.ok) {
         return error(scriptManifest.error.message);
       }

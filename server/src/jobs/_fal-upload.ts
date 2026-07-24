@@ -1,5 +1,5 @@
 import { createFal, uploadFile } from "@apicity/fal";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import {
   prepareAssetForUpload,
   prepareBytesForUpload,
@@ -39,7 +39,7 @@ async function uploadPreparedToFal(
 // Returns a stable https://v3.fal.media/... URL that fal's own model endpoints
 // can fetch directly — no third-party free-host dependency.
 export async function uploadAssetToFal(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   filename: string,
   projectSlug: string,

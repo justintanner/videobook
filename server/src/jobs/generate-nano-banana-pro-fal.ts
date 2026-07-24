@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { submitFalJob } from "./_fal-shared.js";
@@ -17,7 +17,7 @@ type Payload = {
   enable_web_search?: boolean;
 };
 
-export function registerGenerateNanoBananaProFalJob(fs: VideocityFs): void {
+export function registerGenerateNanoBananaProFalJob(fs: Engine): void {
   registerJobHandler("generate_nano_banana_pro_fal", async (payload, ctx) => {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.projectSlug, p.imgAssetId, ctx, "generate", async (ownerId) => {

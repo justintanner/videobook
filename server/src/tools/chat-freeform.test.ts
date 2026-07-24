@@ -1,3 +1,4 @@
+import { createEngineForTest } from "../fs.js";
 /**
  * Freeform chat command tests — exercises the chat tool's pre-routing pipeline
  * with many different natural language inputs.
@@ -10,7 +11,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createFs } from "videobook-engine";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -493,15 +493,15 @@ describe("freeform chat commands", () => {
 
   describe("script asset in freeform prompts", () => {
     it("resolves @script-tag for generation prompts", async () => {
-      const fs = createFs({ projectsDir: tempDir });
-      const scriptResult = await fs.createAsset("script", "my-scene", "test-proj");
+      const fs = createEngineForTest(tempDir);
+      const scriptResult = await fs.artifacts.create("script", "my-scene", "test-proj");
       if (!scriptResult.ok) throw new Error("Failed to create script asset");
-      await fs.writeFile(scriptResult.value.assetId, "original.md", "A beautiful sunset over the ocean", "test-proj");
+      await fs.files.write(scriptResult.value.slug, "original.md", "A beautiful sunset over the ocean", "test-proj");
 
       const result = await client.callTool({
         name: "chat",
         arguments: {
-          prompt: `generate a video from @${scriptResult.value.assetId}`,
+          prompt: `generate a video from @${scriptResult.value.slug}`,
           project_slug: "test-proj",
         },
       });

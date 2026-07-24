@@ -6,7 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
-import { createFsForTest } from "../fs.js";
+import { createEngineForTest } from "../fs.js";
 import { queue } from "../queue.js";
 import { probeVideo } from "../ffmpeg.js";
 import { resolveHasAudioForCuts } from "./apply-cuts.js";
@@ -42,7 +42,7 @@ async function generateSilentVideo(outputPath: string): Promise<void> {
 // Drop the video into the asset dir directly via the fs API instead of
 // upload_file — that path enqueues process_video, which kicks off ffmpeg in
 // the background. If the next test's beforeEach fires before that work
-// finishes, setProjectsDir has to drain the runner past the 30s hookTimeout
+// finishes, setEngineRoot has to drain the runner past the 30s hookTimeout
 // on slower machines, producing a misleading "beforeEach hook timed out" on
 // whichever test happens to be next.
 async function placeVideo(
@@ -50,18 +50,18 @@ async function placeVideo(
   projectSlug: string,
   videoPath: string,
 ): Promise<{ assetId: string; path: string }> {
-  const fs = createFsForTest(projectsDir);
-  const asset = await fs.createAsset("vid", "test-source", projectSlug);
+  const fs = createEngineForTest(projectsDir);
+  const asset = await fs.artifacts.create("vid", "test-source", projectSlug);
   if (!asset.ok) throw new Error(`createAsset failed: ${asset.error.message}`);
   const bytes = await readFile(videoPath);
-  const written = await fs.writeFile(
-    asset.value.assetId,
+  const written = await fs.files.write(
+    asset.value.slug,
     "original.mp4",
     bytes,
     projectSlug,
   );
   if (!written.ok) throw new Error(`writeFile failed: ${written.error.message}`);
-  return { assetId: asset.value.assetId, path: asset.value.path };
+  return { assetId: asset.value.slug, path: asset.value.path };
 }
 
 describe("apply_cuts tool", () => {
@@ -162,10 +162,8 @@ describe("apply_cuts tool", () => {
 
   it("returns error for cut_end past duration", async () => {
     const uploaded = await placeVideo(tempDir, "cuts-proj", videoPath);
-
-    const { createFs } = await import("videobook-engine");
-    const fs = createFs({ projectsDir: tempDir });
-    await fs.writeMetadata(
+    const fs = createEngineForTest(tempDir);
+    await fs.metadata.artifacts.write(
       uploaded.assetId,
       "original",
       { width: 320, height: 240, duration: 3, hasAudio: true },
@@ -217,16 +215,15 @@ describe("apply_cuts tool", () => {
   });
 
   it("returns error when asset has no video", async () => {
-    const { createFs } = await import("videobook-engine");
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("vid", "no-video", "cuts-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("vid", "no-video", "cuts-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.writeFile(asset.value.assetId, "notes.txt", "hello", "cuts-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello", "cuts-proj");
 
     const result = await client.callTool({
       name: "apply_cuts",
       arguments: {
-        asset_id: asset.value.assetId,
+        asset_id: asset.value.slug,
         project_slug: "cuts-proj",
         cuts: [{ cut_start: 1, cut_end: 2 }],
       },
@@ -243,8 +240,8 @@ describe("apply_cuts tool", () => {
     const uploaded = await placeVideo(tempDir, "cuts-proj", silentPath);
 
     // Metadata has duration but deliberately no hasAudio — old code assumed true and failed.
-    const fs = createFsForTest(tempDir);
-    await fs.writeMetadata(
+    const fs = createEngineForTest(tempDir);
+    await fs.metadata.artifacts.write(
       uploaded.assetId,
       "original",
       { width: 320, height: 240, duration: 3 },

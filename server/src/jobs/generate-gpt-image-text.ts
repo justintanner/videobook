@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { submitKieTask } from "./kie-paygate.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -16,7 +16,7 @@ type GenerateGptImageTextPayload = {
   nsfwChecker?: boolean;
 };
 
-export function registerGenerateGptImageTextJob(fs: VideocityFs): void {
+export function registerGenerateGptImageTextJob(fs: Engine): void {
   registerJobHandler("generate_gpt_image_text", async (payload, ctx) => {
     const {
       prompt, imgAssetId, imgAssetDir, projectSlug, aspectRatio, resolution, nsfwChecker,

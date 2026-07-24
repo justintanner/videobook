@@ -1,9 +1,9 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { prepareProjectForRewind, resumeProjectAfterRewind } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 
-export function rewindProjectDef(fs: VideocityFs): ToolDef {
+export function rewindProjectDef(fs: Engine): ToolDef {
   return {
     name: "rewind_project",
     description: "Restore a project revision and record the result as a new forward revision",
@@ -17,7 +17,7 @@ export function rewindProjectDef(fs: VideocityFs): ToolDef {
       let abortedJobs = 0;
       let failedPendingTasks = 0;
       try {
-        const history = await fs.getHistory(project_slug, 10_000);
+        const history = await fs.history.project(project_slug, 10_000);
         const matches = history.filter((commit) => commit.hash.startsWith(commit_hash));
         if (matches.length === 0) {
           return {
@@ -44,7 +44,7 @@ export function rewindProjectDef(fs: VideocityFs): ToolDef {
         abortedJobs = queueResult.abortedJobs;
         failedPendingTasks = queueResult.failedPendingTasks;
 
-        const result = await fs.rewindProject(resolvedHash, project_slug);
+        const result = await fs.history.restoreProject(resolvedHash, project_slug);
         if (!result) {
           return {
             isError: true as const,

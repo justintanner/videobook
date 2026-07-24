@@ -1,11 +1,11 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 
-export function replaceVideoAudioDef(fs: VideocityFs): ToolDef {
+export function replaceVideoAudioDef(fs: Engine): ToolDef {
   return {
     name: "replace_video_audio",
     description: "Replace the audio track of a video asset in-place with audio from an aud-* asset, or a specific file inside another asset via the `<assetId>/<filename>` form (e.g. `plan/s1.mp3`). Operates on the vid- asset's original.mp4 with git versioning. Existing per-orientation renders are now stale — re-run /render before /final.",
@@ -41,7 +41,7 @@ export function replaceVideoAudioDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const videoManifest = await fs.getManifest(asset_id, project_slug);
+      const videoManifest = await fs.files.manifest(asset_id, project_slug);
       if (!videoManifest.ok) {
         return {
           isError: true as const,
@@ -56,7 +56,7 @@ export function replaceVideoAudioDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const audioManifest = await fs.getManifest(audioAssetIdResolved, project_slug, { includeDotfiles: true });
+      const audioManifest = await fs.files.manifest(audioAssetIdResolved, project_slug, { includeDotfiles: true });
       if (!audioManifest.ok) {
         return {
           isError: true as const,

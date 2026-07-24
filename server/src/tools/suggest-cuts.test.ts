@@ -1,10 +1,10 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
-import { createFs } from "videobook-engine";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -67,14 +67,14 @@ describe("suggest_cuts tool", () => {
   it("returns error when asset has no video file", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("vid", "empty-vid", "cuts-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("vid", "empty-vid", "cuts-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.writeFile(asset.value.assetId, "notes.txt", "hello", "cuts-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello", "cuts-proj");
 
     const result = await client.callTool({
       name: "suggest_cuts",
-      arguments: { asset_id: asset.value.assetId, project_slug: "cuts-proj" },
+      arguments: { asset_id: asset.value.slug, project_slug: "cuts-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -85,14 +85,14 @@ describe("suggest_cuts tool", () => {
   it("returns error when asset has no frames", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("vid", "no-frames-vid", "cuts-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("vid", "no-frames-vid", "cuts-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from([0]), "cuts-proj");
+    await fs.files.write(asset.value.slug, "original.mp4", Buffer.from([0]), "cuts-proj");
 
     const result = await client.callTool({
       name: "suggest_cuts",
-      arguments: { asset_id: asset.value.assetId, project_slug: "cuts-proj" },
+      arguments: { asset_id: asset.value.slug, project_slug: "cuts-proj" },
     });
 
     expect(result.isError).toBe(true);
@@ -103,17 +103,20 @@ describe("suggest_cuts tool", () => {
   it("returns error when asset has frames but no transcript", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("vid", "no-transcript-vid", "cuts-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("vid", "no-transcript-vid", "cuts-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.writeFile(asset.value.assetId, "original.mp4", Buffer.from([0]), "cuts-proj");
-    const framesDir = join(tempDir, "cuts-proj", asset.value.assetId, "original_frames");
-    await mkdir(framesDir, { recursive: true });
-    await writeFile(join(framesDir, "0.000.jpg"), Buffer.from([0xff, 0xd8, 0xff]));
+    await fs.files.write(asset.value.slug, "original.mp4", Buffer.from([0]), "cuts-proj");
+    await fs.files.write(
+      asset.value.slug,
+      "original_frames/0.000.jpg",
+      Buffer.from([0xff, 0xd8, 0xff]),
+      "cuts-proj",
+    );
 
     const result = await client.callTool({
       name: "suggest_cuts",
-      arguments: { asset_id: asset.value.assetId, project_slug: "cuts-proj" },
+      arguments: { asset_id: asset.value.slug, project_slug: "cuts-proj" },
     });
 
     expect(result.isError).toBe(true);

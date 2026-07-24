@@ -4,7 +4,7 @@ import type {
   EntityDocument,
   EntityType,
   NotebookDocument,
-  VideobookFs,
+  Engine,
 } from "videobook-engine";
 import { z } from "zod";
 
@@ -40,7 +40,7 @@ function failure(message: string): ToolResult {
   return { isError: true, content: [{ type: "text", text: message }] };
 }
 
-export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
+export function videobookDomainDefs(fs: Engine): ToolDef[] {
   return [
     {
       name: "get_project_book",
@@ -51,7 +51,7 @@ export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
         cursor: z.string().optional(),
       },
       handler: async (args) => {
-        const result = await fs.getProjectBook(String(args.project_slug), {
+        const result = await fs.history.projectBook(String(args.project_slug), {
           ...(typeof args.limit === "number" ? { limit: args.limit } : {}),
           ...(typeof args.cursor === "string" ? { cursor: args.cursor } : {}),
         });
@@ -63,7 +63,7 @@ export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
       description: "Read one logical project-book action and its lifecycle events",
       schema: { ...projectSchema, action_id: z.string() },
       handler: async (args) => {
-        const result = await fs.getBookAction(
+        const result = await fs.history.bookAction(
           String(args.project_slug),
           String(args.action_id),
         );
@@ -95,7 +95,7 @@ export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
       handler: async (args) => {
         const stage = typeof args.stage === "number" ? args.stage : undefined;
         const column = typeof args.column === "number" ? args.column : undefined;
-        const result = await fs.recordBookAction({
+        const result = await fs.history.recordBookAction({
           projectSlug: String(args.project_slug),
           operation: String(args.operation),
           ...(typeof args.action_id === "string"
@@ -152,7 +152,7 @@ export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
       },
       handler: async (args) => {
         const targetActionId = String(args.target_action_id);
-        const result = await fs.recordBookAction({
+        const result = await fs.history.recordBookAction({
           projectSlug: String(args.project_slug),
           operation: "move_entry",
           scope: "layout",
@@ -176,14 +176,14 @@ export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
       description: "List first-class Videobook notebooks",
       schema: projectSchema,
       handler: async (args) =>
-        json(await fs.listNotebooks(String(args.project_slug))),
+        json(await fs.notebooks.list(String(args.project_slug))),
     },
     {
       name: "create_notebook",
       description: "Create an empty version 2 notebook",
       schema: { ...projectSchema, name: z.string() },
       handler: async (args) => {
-        const result = await fs.createNotebook(
+        const result = await fs.notebooks.create(
           String(args.name),
           String(args.project_slug),
         );
@@ -195,7 +195,7 @@ export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
       description: "Read a notebook and its typed cells and edges",
       schema: { ...projectSchema, notebook_id: z.string() },
       handler: async (args) => {
-        const result = await fs.readNotebook(
+        const result = await fs.notebooks.read(
           String(args.notebook_id),
           String(args.project_slug),
         );
@@ -210,7 +210,7 @@ export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
         notebook: z.record(z.string(), z.unknown()),
       },
       handler: async (args) => {
-        const result = await fs.writeNotebook(
+        const result = await fs.notebooks.write(
           args.notebook as unknown as NotebookDocument,
           String(args.project_slug),
         );
@@ -222,7 +222,7 @@ export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
       description: "Tombstone a notebook asset",
       schema: { ...projectSchema, notebook_id: z.string() },
       handler: async (args) => {
-        const result = await fs.deleteNotebook(
+        const result = await fs.notebooks.delete(
           String(args.notebook_id),
           String(args.project_slug),
         );
@@ -256,7 +256,7 @@ export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
       description: "List persistent jobs for the active project",
       schema: projectSchema,
       handler: async (args) =>
-        json(await fs.queue.list(String(args.project_slug))),
+        json(await fs.jobs.queue.list(String(args.project_slug))),
     },
     ...entityDefs(fs, "prompt"),
     ...entityDefs(fs, "scene"),
@@ -269,13 +269,13 @@ export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
       name: "storage_status",
       description: "Read DoltLite and content-store publication status",
       schema: {},
-      handler: async () => json(await fs.getStorageStatus()),
+      handler: async () => json(await fs.storage.status()),
     },
     {
       name: "storage_sync",
       description: "Publish pending content-addressed objects",
       schema: {},
-      handler: async () => json(await fs.sync()),
+      handler: async () => json(await fs.storage.backup()),
     },
     {
       name: "revision_history",
@@ -285,7 +285,7 @@ export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
         limit: z.number().int().positive().max(10_000).optional(),
       },
       handler: async (args) => {
-        const result = await fs.getProjectBook(String(args.project_slug), {
+        const result = await fs.history.projectBook(String(args.project_slug), {
           ...(typeof args.limit === "number" ? { limit: args.limit } : {}),
         });
         return result.ok ? json(result.value) : failure(result.error.message);
@@ -294,7 +294,7 @@ export function videobookDomainDefs(fs: VideobookFs): ToolDef[] {
   ];
 }
 
-function entityDefs(fs: VideobookFs, type: EntityType): ToolDef[] {
+function entityDefs(fs: Engine, type: EntityType): ToolDef[] {
   const singular = type;
   const plural = type === "character" ? "characters" : `${type}s`;
   return [
@@ -309,7 +309,7 @@ function entityDefs(fs: VideobookFs, type: EntityType): ToolDef[] {
         data: z.record(z.string(), z.unknown()).optional(),
       },
       handler: async (args) => {
-        const result = await fs.createEntity(
+        const result = await fs.entities.create(
           type,
           String(args.name),
           String(args.project_slug),
@@ -329,14 +329,14 @@ function entityDefs(fs: VideobookFs, type: EntityType): ToolDef[] {
       description: `List reusable ${plural}`,
       schema: projectSchema,
       handler: async (args) =>
-        json(await fs.listEntities(String(args.project_slug), type)),
+        json(await fs.entities.list(String(args.project_slug), type)),
     },
     {
       name: `get_${singular}`,
       description: `Read a reusable ${singular}`,
       schema: { ...projectSchema, entity_id: z.string() },
       handler: async (args) => {
-        const result = await fs.readEntity(
+        const result = await fs.entities.read(
           String(args.entity_id),
           String(args.project_slug),
         );
@@ -351,7 +351,7 @@ function entityDefs(fs: VideobookFs, type: EntityType): ToolDef[] {
         entity: z.record(z.string(), z.unknown()),
       },
       handler: async (args) => {
-        const result = await fs.writeEntity(
+        const result = await fs.entities.write(
           args.entity as unknown as EntityDocument,
           String(args.project_slug),
         );
@@ -363,7 +363,7 @@ function entityDefs(fs: VideobookFs, type: EntityType): ToolDef[] {
       description: `Delete a reusable ${singular}`,
       schema: { ...projectSchema, entity_id: z.string() },
       handler: async (args) => {
-        const result = await fs.deleteEntity(
+        const result = await fs.entities.delete(
           String(args.entity_id),
           String(args.project_slug),
         );

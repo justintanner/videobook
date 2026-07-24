@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
@@ -29,7 +29,7 @@ type TimelineConfig = {
   currentOrientation?: ViewerSize;
 };
 
-export function setTimelineDef(fs: VideocityFs): ToolDef {
+export function setTimelineDef(fs: Engine): ToolDef {
   return {
     name: "set_timeline",
     description: "Set the timeline for a project (replaces all slots and render orientation; unspecified optional fields like audio are preserved)",
@@ -68,7 +68,7 @@ export function setTimelineDef(fs: VideocityFs): ToolDef {
 
       // Preserve optional fields the caller didn't send — a partial update
       // (e.g. orientation only) must not wipe existing audio clips.
-      const existingResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
+      const existingResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
       const existing: TimelineConfig | undefined =
         existingResult.ok && !Array.isArray(existingResult.value)
           ? existingResult.value
@@ -82,7 +82,7 @@ export function setTimelineDef(fs: VideocityFs): ToolDef {
         ...(mergedAudio !== undefined && { audio: mergedAudio }),
         ...(mergedOrientation !== undefined && { currentOrientation: mergedOrientation }),
       };
-      const result = await fs.writeProjectMeta("timeline", config, project_slug);
+      const result = await fs.metadata.projects.write("timeline", config, project_slug);
       if (result.ok) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify({ path: result.value }) }],

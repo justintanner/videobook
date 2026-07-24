@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 import { probeImage, cropToFill } from "../image.js";
@@ -13,20 +13,20 @@ type ProcessImagePayload = {
   provenance: Record<string, unknown>;
 };
 
-export function registerProcessImageJob(fs: VideocityFs): void {
+export function registerProcessImageJob(fs: Engine): void {
   registerJobHandler("process_image", async (payload, ctx) => {
     const {
       assetId, projectSlug, extension, provenance,
     } = payload as ProcessImagePayload;
 
     return withLocalLease(fs, projectSlug, assetId, ctx, "process", async () => {
-      const readResult = await fs.readFile(assetId, `original${extension}`, projectSlug);
+      const readResult = await fs.files.read(assetId, `original${extension}`, projectSlug);
       if (!readResult.ok) throw new Error(`Failed to read original: ${readResult.error.message}`);
 
       const buffer = Buffer.isBuffer(readResult.value) ? readResult.value : Buffer.from(readResult.value);
       const { width, height } = await probeImage(buffer);
 
-      await fs.writeMetadata(assetId, "original", { ...provenance, width, height }, projectSlug);
+      await fs.metadata.artifacts.write(assetId, "original", { ...provenance, width, height }, projectSlug);
 
       if (!SKIP_CROP_EXTENSIONS.has(extension)) {
         const [landscape, portrait, square] = await Promise.all([
@@ -36,9 +36,9 @@ export function registerProcessImageJob(fs: VideocityFs): void {
         ]);
 
         await Promise.all([
-          fs.writeFile(assetId, "landscape.jpg", landscape, projectSlug),
-          fs.writeFile(assetId, "portrait.jpg", portrait, projectSlug),
-          fs.writeFile(assetId, "square.jpg", square, projectSlug),
+          fs.files.write(assetId, "landscape.jpg", landscape, projectSlug),
+          fs.files.write(assetId, "portrait.jpg", portrait, projectSlug),
+          fs.files.write(assetId, "square.jpg", square, projectSlug),
         ]);
       }
 

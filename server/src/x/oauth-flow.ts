@@ -1,6 +1,7 @@
 import http from "node:http";
 import crypto from "node:crypto";
 import { createXOAuth, type XOAuthTokenResponse } from "@apicity/x";
+import type { Engine } from "videobook-engine";
 import { readTokens, writeTokens } from "./x-tokens.js";
 
 const REDIRECT = "http://127.0.0.1:8765/callback";
@@ -66,7 +67,9 @@ async function exchangeCodeForTokens(
   });
 }
 
-export async function startOAuthFlow(): Promise<{ authorize_url: string }> {
+export async function startOAuthFlow(
+  fs: Engine,
+): Promise<{ authorize_url: string }> {
   const clientId = process.env.X_CLIENT_ID;
   const clientSecret = process.env.X_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
@@ -151,11 +154,14 @@ export async function startOAuthFlow(): Promise<{ authorize_url: string }> {
           "X did not return a refresh token — check that the offline.access scope is granted.",
         );
       }
-      await writeTokens({
-        access_token: tok.access_token,
-        refresh_token: tok.refresh_token,
-        expires_at: new Date(Date.now() + tok.expires_in * 1000).toISOString(),
-      });
+      await writeTokens(
+        {
+          access_token: tok.access_token,
+          refresh_token: tok.refresh_token,
+          expires_at: new Date(Date.now() + tok.expires_in * 1000).toISOString(),
+        },
+        fs,
+      );
       flow.status = "succeeded";
       res
         .writeHead(200, { "Content-Type": "text/html; charset=utf-8" })
@@ -200,8 +206,10 @@ export interface OAuthFlowStatus {
   expires_at?: string;
 }
 
-export async function getOAuthFlowStatus(): Promise<OAuthFlowStatus> {
-  const tokens = await readTokens();
+export async function getOAuthFlowStatus(
+  fs: Engine,
+): Promise<OAuthFlowStatus> {
+  const tokens = await readTokens(fs);
   const connected = tokens !== null;
   const pending = activeFlow?.status === "pending";
   const error

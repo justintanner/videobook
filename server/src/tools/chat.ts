@@ -1,11 +1,9 @@
 /**
  * chat MCP tool — natural language interface that routes to appropriate tools.
  */
-import type { VideobookFs, VideocityFs } from "videobook-engine";
+import type { ChatLogEntry, Engine, ResolvedArtifact } from "videobook-engine";
 import { z } from "zod";
-import { resolveAllAssets, expandSlotRefs } from "videobook-engine";
 import { buildChatRoutingPrompt, getRoutableTool, NESTED_TIMESTAMP_PARAMS, TIMESTAMP_PARAMS } from "../chat-router.js";
-import { getRecentHistory, formatHistoryForPrompt, logUserTurn, logAssistantTurn } from "videobook-engine";
 import { parseTime } from "../time-parse.js";
 import { withLogging } from "./log-wrapper.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -26,12 +24,17 @@ const CHAT_ROUTING_MAX_OUTPUT_TOKENS = 2048;
 // surfaced as "Routing failed: ... AbortError" before any decision JSON arrived.
 const CHAT_ROUTING_TIMEOUT_MS = 45_000;
 
-export type ChatResolvedAsset = {
-  tag: string;
-  asset_type: string;
-  asset_id: string;
-  file_path: string | null;
-};
+export type ChatResolvedAsset = ResolvedArtifact;
+
+function formatHistoryForPrompt(lines: ChatLogEntry[]): string {
+  if (lines.length === 0) return "";
+  const formatted = lines.map((line) =>
+    line.role === "user"
+      ? `User: ${line.text ?? ""}`
+      : `Assistant: ${line.tool ? `[${line.tool}] ` : ""}${line.message ?? ""}`,
+  );
+  return `Recent conversation:\n${formatted.join("\n")}`;
+}
 
 /** Drop non-@img refs from generate_image params; fold them into prompt text. */
 export function sanitizeGenerateImageParams(
@@ -210,7 +213,7 @@ type AssetOriginMeta = {
 };
 
 export async function enrichAssetContext(
-  fs: VideocityFs,
+  fs: Engine,
   resolvedAssets: ChatResolvedAsset[],
   slug: string,
 ): Promise<Array<Record<string, unknown>>> {
@@ -218,11 +221,15 @@ export async function enrichAssetContext(
   for (const a of resolvedAssets) {
     const row: Record<string, unknown> = {
       tag: a.tag,
-      type: a.asset_type,
-      asset_id: a.asset_id,
-      has_file: a.file_path !== null,
+      type: a.artifactType,
+      asset_id: a.artifactSlug,
+      has_file: a.filePath !== null,
     };
-    const metaResult = await fs.readMetadata<AssetOriginMeta>(a.asset_id, "original", slug);
+    const metaResult = await fs.metadata.artifacts.read<AssetOriginMeta>(
+      a.artifactId,
+      "original",
+      slug,
+    );
     if (metaResult.ok) {
       const sourceUrl =
         typeof metaResult.value.source_url === "string"
@@ -238,14 +245,18 @@ export async function enrichAssetContext(
 }
 
 export async function loadScriptContentsForChat(
-  fs: VideocityFs,
+  fs: Engine,
   resolvedAssets: ChatResolvedAsset[],
   slug: string,
 ): Promise<Array<{ tag: string; content: string }>> {
   const scriptContents: Array<{ tag: string; content: string }> = [];
   for (const asset of resolvedAssets) {
-    if (asset.asset_type !== "script" || !asset.file_path) continue;
-    const readResult = await fs.readFile(asset.asset_id, SCRIPT_FILENAME, slug);
+    if (asset.artifactType !== "script" || !asset.filePath) continue;
+    const readResult = await fs.files.read(
+      asset.artifactId,
+      SCRIPT_FILENAME,
+      slug,
+    );
     if (!readResult.ok) continue;
     const content = typeof readResult.value === "string"
       ? readResult.value
@@ -255,7 +266,7 @@ export async function loadScriptContentsForChat(
   return scriptContents;
 }
 
-export function chatDef(fs: VideobookFs): ToolDef {
+export function chatDef(fs: Engine): ToolDef {
   return {
     name: "chat",
     description: "Natural language interface — routes free-form prompts to the appropriate tool. Supports @asset tags (e.g., @vid-foo, @img-bar).",
@@ -271,13 +282,15 @@ export function chatDef(fs: VideobookFs): ToolDef {
 
       // 1. Expand @s01 slot refs → actual asset slugs
       let expandedPrompt = prompt;
-      const timelineResult = await fs.readProjectMeta<{ slots: Array<{ slug: string }> }>("timeline", slug);
+      const timelineResult = await fs.metadata.projects.read<{ slots: Array<{ slug: string }> }>("timeline", slug);
       if (timelineResult.ok && timelineResult.value.slots) {
-        expandedPrompt = expandSlotRefs(prompt, timelineResult.value.slots);
+        expandedPrompt = fs.resolver.expandSlotRefs(prompt, timelineResult.value.slots);
       }
 
       // 2. Resolve @asset tags
-      const { resolved: resolvedAssets, unresolved } = await resolveAllAssets(expandedPrompt, fs, slug);
+      const resolvedResult = await fs.resolver.resolveAll(expandedPrompt, slug);
+      if (!resolvedResult.ok) return error(resolvedResult.error.message);
+      const { resolved: resolvedAssets, unresolved } = resolvedResult.value;
 
       if (unresolved.length > 0) {
         return error(`Asset not found: ${unresolved.map((t) => `@${t}`).join(", ")}`);
@@ -287,18 +300,20 @@ export function chatDef(fs: VideobookFs): ToolDef {
       const assetContext = await enrichAssetContext(fs, resolvedAssets, slug);
 
       const imageFiles = resolvedAssets
-        .filter((a) => a.asset_type === "image")
-        .map((a) => a.file_path)
+        .filter((a) => a.artifactType === "image")
+        .map((a) => a.filePath)
         .filter(Boolean);
       const videoFiles = resolvedAssets
-        .filter((a) => a.asset_type === "video")
-        .map((a) => a.file_path)
+        .filter((a) => a.artifactType === "video")
+        .map((a) => a.filePath)
         .filter(Boolean);
 
       const scriptContents = await loadScriptContentsForChat(fs, resolvedAssets, slug);
 
       // 4. Read recent history for context
-      const historyLines = await getRecentHistory(fs, slug);
+      const historyLines = fs.logs.read("chat", slug, {
+        limit: 10,
+      }) as unknown as ChatLogEntry[];
       const historyContext = formatHistoryForPrompt(historyLines);
 
       const apiKey = getApiKey("KIE_API_KEY");
@@ -412,8 +427,23 @@ Determine which tool to use and what parameters to pass.`;
       const handlerResult = await wrappedDef.handler(params as Record<string, unknown>);
 
       // 10. Log chat history (fire-and-forget)
-      logUserTurn(fs, slug, prompt);
-      logAssistantTurn(fs, slug, decision.tool, decision.params, decision.message, Boolean(handlerResult.isError));
+      void fs.logs
+        .append("chat", { role: "user", text: prompt, ts: Date.now() }, slug)
+        .catch(() => {});
+      void fs.logs
+        .append(
+          "chat",
+          {
+            role: "assistant",
+            tool: decision.tool,
+            params: decision.params,
+            message: decision.message,
+            error: Boolean(handlerResult.isError),
+            ts: Date.now(),
+          },
+          slug,
+        )
+        .catch(() => {});
 
       // 11. Return based on category
       if (routableTool.category === "generation") {

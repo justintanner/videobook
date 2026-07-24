@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import QRCode, { type QRCode as QrCode } from "qrcode";
 import sharp from "sharp";
@@ -190,7 +190,7 @@ export async function buildQartPng(
 }
 
 async function readCoverImage(
-  fs: VideocityFs,
+  fs: Engine,
   imageSlug: string,
   projectSlug: string,
 ): Promise<{ ok: true; assetId: string; buffer: Buffer } | { ok: false; error: string }> {
@@ -199,13 +199,13 @@ async function readCoverImage(
     return { ok: false, error: `image_slug must be an img-* asset, got: ${assetId}` };
   }
 
-  const manifestResult = await fs.getManifest(assetId, projectSlug);
+  const manifestResult = await fs.files.manifest(assetId, projectSlug);
   if (!manifestResult.ok) return { ok: false, error: manifestResult.error.message };
 
   const imageFile = findImageFile(manifestResult.value.files);
   if (!imageFile) return { ok: false, error: `No image file found in asset ${assetId}` };
 
-  const readResult = await fs.readFile(assetId, imageFile.name, projectSlug);
+  const readResult = await fs.files.read(assetId, imageFile.name, projectSlug);
   if (!readResult.ok) return { ok: false, error: readResult.error.message };
 
   const buffer = Buffer.isBuffer(readResult.value)
@@ -215,36 +215,36 @@ async function readCoverImage(
 }
 
 async function persistQartAsset(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   assetName: string,
   files: QartFiles,
   metadata: Record<string, unknown>,
 ): Promise<{ ok: true; assetId: string } | { ok: false; error: string }> {
-  const created = await fs.createAsset("img", assetName, projectSlug);
+  const created = await fs.artifacts.create("img", assetName, projectSlug);
   if (!created.ok) return { ok: false, error: `Failed to create image asset: ${created.error.message}` };
-  const assetId = created.value.assetId;
+  const assetId = created.value.slug;
   const writes = await Promise.all([
-    fs.writeFile(assetId, "original.png", files.original, projectSlug),
-    fs.writeFile(assetId, "landscape.jpg", files.landscape, projectSlug),
-    fs.writeFile(assetId, "portrait.jpg", files.portrait, projectSlug),
-    fs.writeFile(assetId, "square.jpg", files.square, projectSlug),
+    fs.files.write(assetId, "original.png", files.original, projectSlug),
+    fs.files.write(assetId, "landscape.jpg", files.landscape, projectSlug),
+    fs.files.write(assetId, "portrait.jpg", files.portrait, projectSlug),
+    fs.files.write(assetId, "square.jpg", files.square, projectSlug),
   ]);
   const writeFailure = writes.find((result) => !result.ok);
   if (writeFailure && !writeFailure.ok) {
-    await fs.deleteAsset(assetId, projectSlug).catch(() => undefined);
+    await fs.artifacts.delete(assetId, projectSlug).catch(() => undefined);
     return { ok: false, error: writeFailure.error.message };
   }
 
-  const metadataResult = await fs.writeMetadata(assetId, "original", metadata, projectSlug);
+  const metadataResult = await fs.metadata.artifacts.write(assetId, "original", metadata, projectSlug);
   if (!metadataResult.ok) {
-    await fs.deleteAsset(assetId, projectSlug).catch(() => undefined);
+    await fs.artifacts.delete(assetId, projectSlug).catch(() => undefined);
     return { ok: false, error: metadataResult.error.message };
   }
   return { ok: true, assetId };
 }
 
-export function createQartDef(fs: VideocityFs): ToolDef {
+export function createQartDef(fs: Engine): ToolDef {
   return {
     name: "create_qart",
     description:

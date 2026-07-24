@@ -1,3 +1,4 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -6,7 +7,6 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
-import { createFs } from "videobook-engine";
 import { FFMPEG, FFPROBE } from "../ffmpeg.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
@@ -99,15 +99,15 @@ describe("trim_audio tool", () => {
   });
 
   it("returns error when asset has no audio file", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("aud", "empty", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("aud", "empty", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
-    await fs.writeFile(asset.value.assetId, "notes.txt", "hello", "test-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello", "test-proj");
 
     const result = await client.callTool({
       name: "trim_audio",
       arguments: {
-        asset_id: asset.value.assetId,
+        asset_id: asset.value.slug,
         project_slug: "test-proj",
         trim_start: 1,
       },
@@ -119,14 +119,14 @@ describe("trim_audio tool", () => {
   });
 
   it("rejects vid-* assets and directs callers to trim_video", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("vid", "video-clip", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("vid", "video-clip", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const result = await client.callTool({
       name: "trim_audio",
       arguments: {
-        asset_id: asset.value.assetId,
+        asset_id: asset.value.slug,
         project_slug: "test-proj",
         trim_start: 0.5,
       },
@@ -139,19 +139,19 @@ describe("trim_audio tool", () => {
   });
 
   it("trims real aud-* MP3 in keep mode", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("aud", "music-clip", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("aud", "music-clip", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const genPath = join(tempDir, "temp-sine.mp3");
     await generateTestMp3(genPath, 3.0);
     const audioData = await readFile(genPath);
-    await fs.writeFile(asset.value.assetId, "original.mp3", audioData, "test-proj");
+    await fs.files.write(asset.value.slug, "original.mp3", audioData, "test-proj");
 
     const result = await client.callTool({
       name: "trim_audio",
       arguments: {
-        asset_id: asset.value.assetId,
+        asset_id: asset.value.slug,
         project_slug: "test-proj",
         trim_start: 0.5,
         trim_end: 2.0,
@@ -163,7 +163,7 @@ describe("trim_audio tool", () => {
     }
     expect(result.isError).toBeFalsy();
 
-    const manifestResult = await fs.getManifest(asset.value.assetId, "test-proj");
+    const manifestResult = await fs.files.manifest(asset.value.slug, "test-proj");
     expect(manifestResult.ok).toBe(true);
     if (!manifestResult.ok) return;
 
@@ -171,8 +171,8 @@ describe("trim_audio tool", () => {
     const duration = await probeAudioDuration(trimmedPath);
     expect(duration).toBeGreaterThan(1.3);
     expect(duration).toBeLessThan(1.7);
-    const provenance = await fs.readMetadata<Record<string, unknown>>(
-      asset.value.assetId,
+    const provenance = await fs.metadata.artifacts.read<Record<string, unknown>>(
+      asset.value.slug,
       "original",
       "test-proj",
     );
@@ -180,7 +180,7 @@ describe("trim_audio tool", () => {
     if (provenance.ok) {
       expect(provenance.value).toMatchObject({
         origin: "trim_audio",
-        source_asset_id: asset.value.assetId,
+        source_asset_id: asset.value.slug,
         mode: "keep",
         trim_start: 0.5,
         trim_end: 2,
@@ -189,19 +189,19 @@ describe("trim_audio tool", () => {
   });
 
   it("trims real aud-* MP3 in cut mode", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("aud", "podcast-clip", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("aud", "podcast-clip", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const genPath = join(tempDir, "temp-sine.mp3");
     await generateTestMp3(genPath, 3.0);
     const audioData = await readFile(genPath);
-    await fs.writeFile(asset.value.assetId, "original.mp3", audioData, "test-proj");
+    await fs.files.write(asset.value.slug, "original.mp3", audioData, "test-proj");
 
     const result = await client.callTool({
       name: "trim_audio",
       arguments: {
-        asset_id: asset.value.assetId,
+        asset_id: asset.value.slug,
         project_slug: "test-proj",
         cut_start: 1.0,
         cut_end: 2.0,
@@ -210,7 +210,7 @@ describe("trim_audio tool", () => {
 
     expect(result.isError).toBeFalsy();
 
-    const manifestResult = await fs.getManifest(asset.value.assetId, "test-proj");
+    const manifestResult = await fs.files.manifest(asset.value.slug, "test-proj");
     expect(manifestResult.ok).toBe(true);
     if (!manifestResult.ok) return;
 
@@ -221,19 +221,19 @@ describe("trim_audio tool", () => {
   });
 
   it("leaves the original intact when the requested range exceeds duration", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("aud", "rollback-clip", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("aud", "rollback-clip", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const genPath = join(tempDir, "temp-sine.mp3");
     await generateTestMp3(genPath, 2.0);
     const originalData = await readFile(genPath);
-    await fs.writeFile(asset.value.assetId, "original.mp3", originalData, "test-proj");
+    await fs.files.write(asset.value.slug, "original.mp3", originalData, "test-proj");
 
     const result = await client.callTool({
       name: "trim_audio",
       arguments: {
-        asset_id: asset.value.assetId,
+        asset_id: asset.value.slug,
         project_slug: "test-proj",
         trim_start: 0.5,
         trim_end: 8,
@@ -241,7 +241,7 @@ describe("trim_audio tool", () => {
     });
 
     expect(result.isError).toBe(true);
-    const restored = await fs.readFile(asset.value.assetId, "original.mp3", "test-proj");
+    const restored = await fs.files.read(asset.value.slug, "original.mp3", "test-proj");
     expect(restored.ok).toBe(true);
     if (!restored.ok) return;
     expect(restored.value.equals(originalData)).toBe(true);

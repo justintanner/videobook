@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -14,7 +14,7 @@ function deriveSpliceName(firstId: string, secondId: string): string {
   return `splice-${stripVidPrefix(firstId)}-${stripVidPrefix(secondId)}`;
 }
 
-export function spliceVideoDef(fs: VideocityFs): ToolDef {
+export function spliceVideoDef(fs: Engine): ToolDef {
   return {
     name: "splice_video",
     description: "Splice two videos with an explicit overlap window. An overlap of 0 concatenates both complete videos; a positive overlap searches that many seconds at the end of the first video for the frame that best matches the first frame of the second. Creates a new vid- asset.",
@@ -40,8 +40,8 @@ export function spliceVideoDef(fs: VideocityFs): ToolDef {
       }
 
       const [firstManifestRes, secondManifestRes] = await Promise.all([
-        fs.getManifest(first_asset_id, project_slug),
-        fs.getManifest(second_asset_id, project_slug),
+        fs.files.manifest(first_asset_id, project_slug),
+        fs.files.manifest(second_asset_id, project_slug),
       ]);
       if (!firstManifestRes.ok) {
         return {
@@ -87,7 +87,7 @@ export function spliceVideoDef(fs: VideocityFs): ToolDef {
       }
 
       const spliceName = deriveSpliceName(first_asset_id, second_asset_id);
-      const assetResult = await fs.createAsset("vid", spliceName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", spliceName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -95,7 +95,7 @@ export function spliceVideoDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId, path: assetDir } = assetResult.value;
+      const { slug: assetId, path: assetDir } = assetResult.value;
       const outputPath = join(assetDir, "original.mp4");
       const jobId = `splice-${assetId}-${Date.now()}`;
 

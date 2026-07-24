@@ -71,6 +71,7 @@ describe('CellInspectorPanel', () => {
     expect(html).toContain('Selected video cell contents')
     expect(html).toContain('@vid-dancing-cat')
     expect(html).toContain('class="inspector-slug"')
+    expect(html).not.toContain('inspector-kicker')
     expect(html).toContain('title="Click to copy @vid-dancing-cat"')
     expect(html).toContain('tabindex="0"')
     expect(html).not.toContain('Copy slug')

@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { KlingMotionControlRequestSchema } from "@apicity/kie/zod";
@@ -10,7 +10,7 @@ import { apicityField, apicityStringArrayField, apicityStringField } from "./sch
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-function getImagesFromManifest(files: AssetManifestFile[]): AssetManifestFile[] {
+function getImagesFromManifest(files: ArtifactManifestFile[]): ArtifactManifestFile[] {
   return files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -43,7 +43,7 @@ const generateKling30MotionControlVideoSchema = {
 
 type Args = SchemaArgs<typeof generateKling30MotionControlVideoSchema>;
 
-export function generateKling30MotionControlVideoDef(fs: VideocityFs): ToolDef {
+export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_kling_3_0_motion_control",
     description: "Apply motion from reference videos to character images using Kling 3.0 motion-control. Creates a new vid- asset and enqueues a background job.",
@@ -68,7 +68,7 @@ export function generateKling30MotionControlVideoDef(fs: VideocityFs): ToolDef {
         if (!assetId.startsWith("img-") && !assetId.startsWith("char-")) {
           return { isError: true as const, content: [{ type: "text" as const, text: `character_image_slugs entries must be img-* or char-* assets, got: ${assetId}` }] };
         }
-        const manifest = await fs.getManifest(assetId, project_slug);
+        const manifest = await fs.files.manifest(assetId, project_slug);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
         const images = getImagesFromManifest(manifest.value.files);
         if (images.length === 0) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
@@ -85,7 +85,7 @@ export function generateKling30MotionControlVideoDef(fs: VideocityFs): ToolDef {
         if (!assetId.startsWith("vid-")) {
           return { isError: true as const, content: [{ type: "text" as const, text: `motion_video_slugs entries must be vid-* assets, got: ${assetId}` }] };
         }
-        const manifest = await fs.getManifest(assetId, project_slug);
+        const manifest = await fs.files.manifest(assetId, project_slug);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
         const file = findVideoFile(manifest.value.files);
         if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${assetId}` }] };
@@ -94,12 +94,12 @@ export function generateKling30MotionControlVideoDef(fs: VideocityFs): ToolDef {
 
       const baseName = prompt ? slugify(prompt) : imageInputs[0].assetId.replace(/^img-/, "");
       const videoName = `${modelSlug("kie", "kling-3.0/motion-control")}-${baseName || Date.now()}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = imageInputs.map((i) => i.assetId);
       const sourceVideoIds = videoInputs.map((i) => i.assetId);
 

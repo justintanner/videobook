@@ -141,7 +141,12 @@ describe('deriveStepEstimateCall', () => {
     const target = step({
       id: 'video-1',
       type: 'video',
-      properties: { model: 'omni', values: {}, inputs: ['image-1'], first_frame_source: 'image-1' },
+      properties: {
+        model: 'omni',
+        values: {},
+        inputs: ['image-1'],
+        input_routes: { 'image-1': 'first_frame_slug' },
+      },
     })
     expect(deriveStepEstimateCall(definition(source, target), target, preview('omni', [opt]), 'proj')?.toolName)
       .toBe('generate_omni_i2v')

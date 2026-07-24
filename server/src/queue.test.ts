@@ -1,18 +1,18 @@
+import { createEngineForTest } from "./fs.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import * as fsP from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 
-import { createFs } from "videobook-engine";
 import {
   queue as appQueue,
   registerJobHandler,
-  setProjectsDir,
+  setEngineRoot,
   extractAssetId,
 } from "./queue.js";
 import { withProviderHandoff } from "./jobs/_lease.js";
 
-describe("server queue (sqlite-backed)", () => {
+describe("server queue (Dolt-native)", () => {
   let projectsDir: string;
 
   beforeEach(async () => {
@@ -24,12 +24,12 @@ describe("server queue (sqlite-backed)", () => {
     await fsP.rm(projectsDir, { recursive: true, force: true });
   });
 
-  it("enqueues, runs handler, and resolves enqueueAndWait via the SQLite queue", async () => {
-    const cfs = createFs({ projectsDir });
-    const created = await cfs.createProject("p");
+  it("enqueues, runs a handler, and waits for the native queue result", async () => {
+    const cfs = createEngineForTest(projectsDir);
+    const created = await cfs.projects.create("p");
     expect(created.ok).toBe(true);
 
-    const runner = (await cfs.queue.createRunner("p", {
+    const runner = (await cfs.jobs.queue.createRunner("p", {
       concurrency: 2,
       pollIntervalMs: 25,
       resolveHandler: (type) =>
@@ -39,15 +39,15 @@ describe("server queue (sqlite-backed)", () => {
     }))!;
     runner.start();
     try {
-      const result = await cfs.queue.enqueueAndWait<{ ok: boolean; ref: string }>(
-        "p",
-        {
-          type: "noop",
-          payload: { ref: "abc" },
-          dedupeKey: "test-job-1",
-        },
-        5_000,
-      );
+      const enqueued = cfs.jobs.queue.enqueue("p", {
+        type: "noop",
+        payload: { ref: "abc" },
+        dedupeKey: "test-job-1",
+      });
+      const result = await runner.waitFor(enqueued.job.id, 5_000) as {
+        ok: boolean;
+        ref: string;
+      };
       expect(result.ok).toBe(true);
       expect(result.ref).toBe("abc");
     } finally {
@@ -57,11 +57,11 @@ describe("server queue (sqlite-backed)", () => {
   });
 
   it("lets provider handoff helpers reuse the queue wrapper owner", async () => {
-    const cfs = createFs({ projectsDir });
-    await setProjectsDir(projectsDir, cfs);
-    const created = await cfs.createProject("p");
+    const cfs = createEngineForTest(projectsDir);
+    await setEngineRoot(projectsDir, cfs);
+    const created = await cfs.projects.create("p");
     expect(created.ok).toBe(true);
-    const asset = await cfs.createAsset("img", "handoff", "p");
+    const asset = await cfs.artifacts.create("img", "handoff", "p");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
@@ -70,17 +70,16 @@ describe("server queue (sqlite-backed)", () => {
       withProviderHandoff(
         cfs,
         "p",
-        asset.value.assetId,
+        asset.value.slug,
         ctx,
         "generate",
         async (ownerId) => {
-          const written = await cfs.pendingTasks.write(
+          const written = await cfs.jobs.pending.write(
             "p",
             {
-              assetId: asset.value.assetId,
+              artifactId: asset.value.artifactId,
               taskId,
               taskType: "fal_nano_banana",
-              assetDir: asset.value.path,
             },
             ownerId,
           );
@@ -97,13 +96,13 @@ describe("server queue (sqlite-backed)", () => {
       {
         type: "generate_provider_handoff_probe",
         projectSlug: "p",
-        imgAssetId: asset.value.assetId,
+        imgAssetId: asset.value.slug,
       },
       5_000,
     );
 
     expect(result.ok).toBe(true);
-    const pending = await cfs.pendingTasks.read("p", asset.value.assetId);
+    const pending = await cfs.jobs.pending.read("p", asset.value.slug);
     expect(pending.ok).toBe(true);
     expect(pending.ok ? pending.value?.taskId : null).toBe(taskId);
     await appQueue.stop();
@@ -111,11 +110,11 @@ describe("server queue (sqlite-backed)", () => {
   });
 
   it("releases a wrapper-owned synchronous generate before child jobs run", async () => {
-    const cfs = createFs({ projectsDir });
-    await setProjectsDir(projectsDir, cfs);
-    const created = await cfs.createProject("p");
+    const cfs = createEngineForTest(projectsDir);
+    await setEngineRoot(projectsDir, cfs);
+    const created = await cfs.projects.create("p");
     expect(created.ok).toBe(true);
-    const asset = await cfs.createAsset("img", "sync", "p");
+    const asset = await cfs.artifacts.create("img", "sync", "p");
     expect(asset.ok).toBe(true);
     if (!asset.ok) return;
 
@@ -124,12 +123,12 @@ describe("server queue (sqlite-backed)", () => {
       await appQueue.enqueue("sync-child-probe", {
         type: "sync_child_probe",
         projectSlug: "p",
-        assetId: asset.value.assetId,
+        assetId: asset.value.slug,
       });
       return { ok: true };
     });
     registerJobHandler("sync_child_probe", async () => {
-      const row = await cfs.assetWork.read("p", asset.value.assetId);
+      const row = await cfs.jobs.artifactWork.read("p", asset.value.slug);
       childSawReady =
         row.ok &&
         row.value?.status === "ready" &&
@@ -142,7 +141,7 @@ describe("server queue (sqlite-backed)", () => {
       {
         type: "generate_sync_probe",
         projectSlug: "p",
-        imgAssetId: asset.value.assetId,
+        imgAssetId: asset.value.slug,
       },
       5_000,
     );
@@ -163,9 +162,9 @@ describe("server queue (sqlite-backed)", () => {
   });
 
   it("drops the jobIdIndex entry once a job reaches a terminal state", async () => {
-    const cfs = createFs({ projectsDir });
-    await setProjectsDir(projectsDir, cfs);
-    const created = await cfs.createProject("p");
+    const cfs = createEngineForTest(projectsDir);
+    await setEngineRoot(projectsDir, cfs);
+    const created = await cfs.projects.create("p");
     expect(created.ok).toBe(true);
 
     registerJobHandler("index_cleanup_probe", async () => ({ ok: true }));

@@ -1,13 +1,13 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fsP from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 import { createServer, type Server } from "node:http";
-import { createFs } from "videobook-engine";
 import {
   queue as appQueue,
   registerJobHandler,
-  setProjectsDir,
+  setEngineRoot,
 } from "../queue.js";
 import { registerCompleteKieTaskJob } from "./complete-kie-task.js";
 
@@ -36,7 +36,7 @@ describe("complete_kie_task fal_qwen branches", () => {
 
   beforeEach(async () => {
     projectsDir = await fsP.mkdtemp(path.join(os.tmpdir(), "vc-complete-qwen-"));
-    await setProjectsDir(projectsDir);
+    await setEngineRoot(projectsDir);
 
     imageServer = createServer((_req, res) => {
       res.writeHead(200, { "Content-Type": "image/png", "Content-Length": TINY_PNG.length });
@@ -60,16 +60,16 @@ describe("complete_kie_task fal_qwen branches", () => {
 
   async function seedPendingQwenTask(
     taskType: "fal_qwen_image" | "fal_qwen_image_edit",
-  ): Promise<{ assetId: string; assetDir: string; taskId: string; fs: ReturnType<typeof createFs> }> {
-    const cfs = createFs({ projectsDir });
-    await setProjectsDir(projectsDir, cfs);
-    const created = await cfs.createProject("p");
+  ): Promise<{ assetId: string; assetDir: string; taskId: string; fs: ReturnType<typeof createEngineForTest> }> {
+    const cfs = createEngineForTest(projectsDir);
+    await setEngineRoot(projectsDir, cfs);
+    const created = await cfs.projects.create("p");
     expect(created.ok).toBe(true);
-    const asset = await cfs.createAsset("img", "qwen-out", "p");
+    const asset = await cfs.artifacts.create("img", "qwen-out", "p");
     expect(asset.ok).toBe(true);
     if (!asset.ok) throw new Error(asset.error.message);
 
-    const lease = await cfs.assetWork.begin("p", asset.value.assetId, {
+    const lease = await cfs.jobs.artifactWork.begin("p", asset.value.slug, {
       kind: "generate",
       ownerKind: "job",
       durationMs: 60_000,
@@ -77,13 +77,12 @@ describe("complete_kie_task fal_qwen branches", () => {
     if (!lease) throw new Error("assetWork.begin failed");
 
     const taskId = `fal-qwen-task-${taskType}`;
-    const written = await cfs.pendingTasks.write(
+    const written = await cfs.jobs.pending.write(
       "p",
       {
+        artifactId: asset.value.artifactId,
         taskId,
         taskType,
-        assetId: asset.value.assetId,
-        assetDir: asset.value.path,
         meta: { prompt: "a cat", sourceImageIds: [] },
       },
       lease.ownerId,
@@ -92,7 +91,7 @@ describe("complete_kie_task fal_qwen branches", () => {
     if (!written.ok) throw new Error(written.error.message);
 
     return {
-      assetId: asset.value.assetId,
+      assetId: asset.value.slug,
       assetDir: asset.value.path,
       taskId,
       fs: cfs,
@@ -123,7 +122,7 @@ describe("complete_kie_task fal_qwen branches", () => {
 
     expect(result.success).toBe(true);
 
-    const original = await cfs.readFile(assetId, "original.png", "p");
+    const original = await cfs.files.read(assetId, "original.png", "p");
     expect(original.ok).toBe(true);
     if (original.ok) {
       const buf = typeof original.value === "string"
@@ -132,7 +131,7 @@ describe("complete_kie_task fal_qwen branches", () => {
       expect(buf.equals(TINY_PNG)).toBe(true);
     }
 
-    const pending = await cfs.pendingTasks.read("p", assetId);
+    const pending = await cfs.jobs.pending.read("p", assetId);
     expect(pending.ok).toBe(true);
     expect(pending.ok ? pending.value : "fail").toBeNull();
 
@@ -162,7 +161,7 @@ describe("complete_kie_task fal_qwen branches", () => {
 
     expect(result.success).toBe(true);
 
-    const original = await cfs.readFile(assetId, "original.png", "p");
+    const original = await cfs.files.read(assetId, "original.png", "p");
     expect(original.ok).toBe(true);
 
     cfs.close();
@@ -191,7 +190,7 @@ describe("complete_kie_task fal_qwen branches", () => {
     ).rejects.toThrow(/No image URL in result/i);
 
     // Regression: prior bug deleted the pending task and left the asset empty.
-    const original = await cfs.readFile(assetId, "original.png", "p");
+    const original = await cfs.files.read(assetId, "original.png", "p");
     expect(original.ok).toBe(false);
 
     cfs.close();

@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { z } from "zod";
-import { findVideoFile, type VideocityFs } from "videobook-engine";
+import { findVideoFile, type Engine } from "videobook-engine";
 import { probeVideo, type ProbeResult } from "../ffmpeg.js";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
@@ -24,7 +24,7 @@ function validVideoProbe(probe: ProbeResult): boolean {
   return probe.width > 0 && probe.height > 0 && probe.fps > 0 && probe.videoDuration > 0;
 }
 
-export function smoothSceneConcatDef(fs: VideocityFs): ToolDef {
+export function smoothSceneConcatDef(fs: Engine): ToolDef {
   return {
     name: "smooth_scene_concat",
     description: "Smoothly concatenate two video scenes into a new vid-* asset. When their boundary audio overlaps, automatically aligns the shared waveform to avoid duplicated speech and dissolves the picture across that overlap. Otherwise uses a short crossfade.",
@@ -55,8 +55,8 @@ export function smoothSceneConcatDef(fs: VideocityFs): ToolDef {
       }
 
       const [firstManifestResult, secondManifestResult] = await Promise.all([
-        fs.getManifest(first_asset_id, project_slug),
-        fs.getManifest(second_asset_id, project_slug),
+        fs.files.manifest(first_asset_id, project_slug),
+        fs.files.manifest(second_asset_id, project_slug),
       ]);
       if (!firstManifestResult.ok) {
         return error(`First asset: ${firstManifestResult.error.message}`);
@@ -92,7 +92,7 @@ export function smoothSceneConcatDef(fs: VideocityFs): ToolDef {
         return error("transition_seconds must be shorter than both video clips");
       }
 
-      const assetResult = await fs.createAsset(
+      const assetResult = await fs.artifacts.create(
         "vid",
         concatName(first_asset_id, second_asset_id),
         project_slug,
@@ -101,7 +101,7 @@ export function smoothSceneConcatDef(fs: VideocityFs): ToolDef {
         return error(`Failed to create scene concat asset: ${assetResult.error.message}`);
       }
 
-      const { assetId, path: assetDir } = assetResult.value;
+      const { slug: assetId, path: assetDir } = assetResult.value;
       const outputPath = join(assetDir, "original.mp4");
       const jobId = `scene-concat-${assetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

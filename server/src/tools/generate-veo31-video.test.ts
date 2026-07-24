@@ -1,8 +1,8 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createFs } from "videobook-engine";
 import sharp from "sharp";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { createTestClient } from "../test-client.js";
@@ -43,17 +43,17 @@ describe("generate_veo31_video tools", () => {
   });
 
   it("enqueues a fast-tier job with start frame and duration", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const imageAsset = await fs.createAsset("img", "start-frame", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const imageAsset = await fs.artifacts.create("img", "start-frame", "test-proj");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
-    await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
+    await fs.files.write(imageAsset.value.slug, "original.png", await makePng(), "test-proj");
 
     const result = await client.callTool({
       name: "generate_google_flow_veo_3_1_fast_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "a slow push through fog",
-        first_frame_slug: `@${imageAsset.value.assetId}`,
+        first_frame_slug: `@${imageAsset.value.slug}`,
         aspect_ratio: "16:9",
         duration: "8",
       },
@@ -63,7 +63,7 @@ describe("generate_veo31_video tools", () => {
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
     expect(parsed.vid_asset_id).toMatch(/^vid-/);
-    expect(parsed.source_images).toEqual([imageAsset.value.assetId]);
+    expect(parsed.source_images).toEqual([imageAsset.value.slug]);
   });
 
   it("rejects last_frame_slug without first_frame_slug", async () => {

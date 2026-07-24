@@ -3,8 +3,8 @@ import { join } from "node:path";
 import {
   findAudioFile,
   findVideoFile,
-  type AssetManifestFile,
-  type VideocityFs,
+  type ArtifactManifestFile,
+  type Engine,
 } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
@@ -38,17 +38,17 @@ function assetKind(assetId: string): AudioMixAssetKind | null {
 }
 
 function findMediaFile(
-  files: AssetManifestFile[],
+  files: ArtifactManifestFile[],
   assetId: string,
   kind: AudioMixAssetKind,
-): AssetManifestFile | null {
+): ArtifactManifestFile | null {
   return kind === "video"
     ? findVideoFile(files)
     : findAudioFile(files, assetId);
 }
 
 export async function resolveAudioMixAsset(
-  fs: VideocityFs,
+  fs: Engine,
   assetIdInput: string,
   projectSlug: string,
 ): Promise<ResolvedAudioMixAsset> {
@@ -58,7 +58,7 @@ export async function resolveAudioMixAsset(
     throw new Error(`Audio mix assets must start with vid-* or aud-*, got: ${assetId}`);
   }
 
-  const manifestResult = await fs.getManifest(assetId, projectSlug);
+  const manifestResult = await fs.files.manifest(assetId, projectSlug);
   if (!manifestResult.ok) throw new Error(manifestResult.error.message);
 
   const file = findMediaFile(manifestResult.value.files, assetId, kind);
@@ -75,7 +75,7 @@ export async function resolveAudioMixAsset(
   };
 }
 
-export function audioMixDef(fs: VideocityFs): ToolDef {
+export function audioMixDef(fs: Engine): ToolDef {
   return {
     name: "audio_mix",
     description:

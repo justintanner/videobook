@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createFsForTest } from "../fs.js";
+import { createEngineForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -265,8 +265,8 @@ describe("assign_slot lazy analysis trigger", () => {
     const assetId = await uploadImage("photo.png");
 
     // Drop the analysis sidecar in place by hand to simulate prior run.
-    const fs = createFsForTest(tempDir);
-    const writeRes = await fs.writeFile(
+    const fs = createEngineForTest(tempDir);
+    const writeRes = await fs.files.write(
       assetId,
       ".original.analysis.json",
       Buffer.from(JSON.stringify({ summary: "" })),
@@ -285,10 +285,10 @@ describe("assign_slot lazy analysis trigger", () => {
   });
 
   it("enqueues analyze_video for an unanalyzed vid- dropped into a slot", async () => {
-    const fs = createFsForTest(tempDir);
-    const created = await fs.createAsset("vid", "fake-clip", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const created = await fs.artifacts.create("vid", "fake-clip", "test-proj");
     if (!created.ok) throw new Error(created.error.message);
-    const assetId = created.value.assetId;
+    const assetId = created.value.slug;
     await writeFile(join(created.value.path, "original.mp4"), "fake-video-data");
 
     const result = await client.callTool({

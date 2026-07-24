@@ -2,18 +2,24 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import type { Engine } from "videobook-engine";
+import { closeEngineForTest, createEngineForTest } from "./fs.js";
+import { queue, setEngineRoot } from "./queue.js";
 import { normalizeHandle, readWatermarkConfig, recordHandle, setAuthenticatedHandle } from "./watermark-config.js";
 
 describe("watermark-config store", () => {
   let tempDir: string;
+  let engine: Engine;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-watermark-config-"));
-    process.env.WATERMARK_CONFIG_PATH = join(tempDir, "watermark-config.json");
+    engine = createEngineForTest(tempDir);
+    await setEngineRoot(tempDir, engine);
   });
 
   afterEach(async () => {
-    delete process.env.WATERMARK_CONFIG_PATH;
+    await queue.stop();
+    closeEngineForTest(tempDir, engine);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 

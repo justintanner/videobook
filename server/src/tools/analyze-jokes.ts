@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -12,7 +12,7 @@ function hasSpokenWords(eleven: ElevenLabs): boolean {
   return Array.isArray(eleven.words) && eleven.words.some((w) => w.type === "word");
 }
 
-export function analyzeJokesDef(fs: VideocityFs): ToolDef {
+export function analyzeJokesDef(fs: Engine): ToolDef {
   return {
     name: "analyze_jokes",
     description:
@@ -32,12 +32,12 @@ export function analyzeJokesDef(fs: VideocityFs): ToolDef {
         return error("OPENAI_API_KEY environment variable is not set");
       }
 
-      const manifestResult = await fs.getManifest(assetId, project_slug);
+      const manifestResult = await fs.files.manifest(assetId, project_slug);
       if (!manifestResult.ok) {
         return error(manifestResult.error.message);
       }
 
-      const read = await fs.readFile(assetId, "elevenlabs.json", project_slug);
+      const read = await fs.files.read(assetId, "elevenlabs.json", project_slug);
       if (!read.ok) {
         return error(`No ElevenLabs transcript found for ${assetId} — run /transcribe @${assetId} first.`);
       }

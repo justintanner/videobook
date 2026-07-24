@@ -1,12 +1,12 @@
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
-import { mkdtemp, rm, readFile, copyFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
-import { createFsForTest } from "../fs.js";
+import { createEngineForTest } from "../fs.js";
 import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
@@ -83,9 +83,9 @@ describe("render_timeline tool", () => {
   });
 
   it("returns error when timeline has no slots with assets", async () => {
-    const fs = createFsForTest(tempDir);
+    const fs = createEngineForTest(tempDir);
     // Write an empty slots array as timeline data (render_timeline expects an array)
-    await fs.writeProjectMeta("timeline", { slots: [{ slug: "" }, { slug: "" }], render: "landscape" }, "timeline-proj");
+    await fs.metadata.projects.write("timeline", { slots: [{ slug: "" }, { slug: "" }], render: "landscape" }, "timeline-proj");
 
     const result = await client.callTool({
       name: "render_timeline",
@@ -100,8 +100,8 @@ describe("render_timeline tool", () => {
   });
 
   it("returns error when slot references nonexistent asset", async () => {
-    const fs = createFsForTest(tempDir);
-    await fs.writeProjectMeta(
+    const fs = createEngineForTest(tempDir);
+    await fs.metadata.projects.write(
       "timeline",
       { slots: [{ slug: "vid-nonexistent" }], render: "landscape" },
       "timeline-proj",
@@ -124,8 +124,8 @@ describe("render_timeline tool", () => {
     // Upload a video to create a real asset (it won't have the rendered mp4)
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
 
-    const fs = createFsForTest(tempDir);
-    await fs.writeProjectMeta(
+    const fs = createEngineForTest(tempDir);
+    await fs.metadata.projects.write(
       "timeline",
       { slots: [{ slug: uploaded.assetId }], render: "landscape" },
       "timeline-proj",
@@ -148,10 +148,14 @@ describe("render_timeline tool", () => {
 
   it("uses explicit orientation arg over timeline fields", async () => {
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
-    await copyFile(videoPath, join(uploaded.path, "portrait.mp4"));
-
-    const fs = createFsForTest(tempDir);
-    await fs.writeProjectMeta(
+    const fs = createEngineForTest(tempDir);
+    expect((await fs.files.writeFromPath(
+      uploaded.assetId,
+      "portrait.mp4",
+      videoPath,
+      "timeline-proj",
+    )).ok).toBe(true);
+    await fs.metadata.projects.write(
       "timeline",
       { slots: [{ slug: uploaded.assetId }], render: "landscape", currentOrientation: "square" },
       "timeline-proj",
@@ -169,10 +173,14 @@ describe("render_timeline tool", () => {
 
   it("falls back to currentOrientation when no orientation arg given", async () => {
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
-    await copyFile(videoPath, join(uploaded.path, "portrait.mp4"));
-
-    const fs = createFsForTest(tempDir);
-    await fs.writeProjectMeta(
+    const fs = createEngineForTest(tempDir);
+    expect((await fs.files.writeFromPath(
+      uploaded.assetId,
+      "portrait.mp4",
+      videoPath,
+      "timeline-proj",
+    )).ok).toBe(true);
+    await fs.metadata.projects.write(
       "timeline",
       { slots: [{ slug: uploaded.assetId }], render: "landscape", currentOrientation: "portrait" },
       "timeline-proj",
@@ -190,10 +198,14 @@ describe("render_timeline tool", () => {
 
   it("falls back to render field when currentOrientation is unset or 'original'", async () => {
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
-    await copyFile(videoPath, join(uploaded.path, "square.mp4"));
-
-    const fs = createFsForTest(tempDir);
-    await fs.writeProjectMeta(
+    const fs = createEngineForTest(tempDir);
+    expect((await fs.files.writeFromPath(
+      uploaded.assetId,
+      "square.mp4",
+      videoPath,
+      "timeline-proj",
+    )).ok).toBe(true);
+    await fs.metadata.projects.write(
       "timeline",
       { slots: [{ slug: uploaded.assetId }], render: "square", currentOrientation: "original" },
       "timeline-proj",
@@ -213,12 +225,14 @@ describe("render_timeline tool", () => {
     // Upload a video to create a real asset
     const uploaded = await uploadVideo(client, "timeline-proj", videoPath);
 
-    // Copy the test video as the rendered landscape file in the asset dir
-    const renderedPath = join(uploaded.path, "landscape.mp4");
-    await copyFile(videoPath, renderedPath);
-
-    const fs = createFsForTest(tempDir);
-    await fs.writeProjectMeta(
+    const fs = createEngineForTest(tempDir);
+    expect((await fs.files.writeFromPath(
+      uploaded.assetId,
+      "landscape.mp4",
+      videoPath,
+      "timeline-proj",
+    )).ok).toBe(true);
+    await fs.metadata.projects.write(
       "timeline",
       { slots: [{ slug: uploaded.assetId }], render: "landscape" },
       "timeline-proj",

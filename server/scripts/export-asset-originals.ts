@@ -66,7 +66,7 @@ async function exportAsset(
   projectSlug: string,
 ): Promise<ProjectStats> {
   const stats = emptyStats();
-  const dirResult = await fs.resolveAssetDir(assetId, projectSlug);
+  const dirResult = await fs.workspaces.resolveArtifact(assetId, projectSlug);
   if (!dirResult.ok) {
     stats.failed += 1;
     return stats;
@@ -102,7 +102,7 @@ async function exportProject(slug: string, exportsDir: string): Promise<ProjectS
     return stats;
   }
 
-  const assets = await fs.listAssets(slug);
+  const assets = await fs.artifacts.list(slug);
   const media = assets.filter(
     (a) => a.type === "video" || a.type === "image" || a.type === "character",
   );
@@ -139,7 +139,7 @@ async function main(): Promise<void> {
   if (argSlug) {
     slugs = [argSlug];
   } else {
-    const projects = await fs.listProjects();
+    const projects = await fs.projects.list();
     slugs = projects.map((p) => p.slug);
   }
 

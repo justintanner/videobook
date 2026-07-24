@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { VideobookFs, VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 import { videobookDomainDefs } from "./videobook-domain.js";
 import { apiStatusDef } from "./api-status.js";
@@ -217,7 +217,7 @@ import { createQrbtfDef } from "./create-qrbtf.js";
 import { getWatermarkConfigDef } from "./get-watermark-config.js";
 import { withLogging } from "./log-wrapper.js";
 
-export function getVideoEditingToolDefs(fs: VideocityFs): ToolDef[] {
+export function getVideoEditingToolDefs(fs: Engine): ToolDef[] {
   return [
     trimVideoDef(fs),
     trimAudioDef(fs),
@@ -271,14 +271,14 @@ export function getVideoEditingToolDefs(fs: VideocityFs): ToolDef[] {
   ];
 }
 
-export function registerAllTools(server: McpServer, fs: VideobookFs): void {
+export function registerAllTools(server: McpServer, fs: Engine): void {
   const defs = getAllToolDefs(fs).map((def) => withLogging(def, fs));
   for (const def of defs) {
     server.tool(def.name, def.description, def.schema, def.handler);
   }
 }
 
-export function getAllToolDefs(fs: VideobookFs): ToolDef[] {
+export function getAllToolDefs(fs: Engine): ToolDef[] {
   const rawDefs: ToolDef[] = [
     apiStatusDef(),
     providerKeyStatusDef(),
@@ -437,12 +437,12 @@ export function getAllToolDefs(fs: VideobookFs): ToolDef[] {
 
     generateElevenlabsT2aDef(fs),
     postDef(),
-    xConnectStartDef(),
-    xConnectStatusDef(),
+    xConnectStartDef(fs),
+    xConnectStatusDef(fs),
     createQrOutroDef(fs),
     createQartDef(fs),
     createQrbtfDef(fs),
-    getWatermarkConfigDef(),
+    getWatermarkConfigDef(fs),
     ...videobookDomainDefs(fs),
   ];
 

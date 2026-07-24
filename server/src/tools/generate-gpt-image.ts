@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { GptImage2ImageToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -31,7 +31,7 @@ const generateGptImageSchema = {
 
 type Args = SchemaArgs<typeof generateGptImageSchema>;
 
-export function generateGptImageDef(fs: VideocityFs): ToolDef {
+export function generateGptImageDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_gpt_image_2_image_to_image",
     description: "Generate an image using GPT Image 2.0 editing with 1-16 reference images. Creates a new img- asset and enqueues a background job.",
@@ -69,7 +69,7 @@ export function generateGptImageDef(fs: VideocityFs): ToolDef {
       const { inputs: imageInputs, sourceImageIds } = resolved;
 
       const assetName = slugify(prompt);
-      const assetResult = await fs.createAsset(prefix, assetName, project_slug);
+      const assetResult = await fs.artifacts.create(prefix, assetName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -77,7 +77,7 @@ export function generateGptImageDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `gpt-image-${imgAssetId}-${Date.now()}`;
 

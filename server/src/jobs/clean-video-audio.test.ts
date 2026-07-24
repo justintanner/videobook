@@ -1,3 +1,4 @@
+import { createEngineForTest } from "../fs.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -5,7 +6,6 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
-import { createFs } from "videobook-engine";
 import {
   buildCleanAudioFilter,
   renderCleanVideoAudio,
@@ -125,32 +125,32 @@ describe("clean-video-audio job media mix", () => {
     );
 
     const projectsDir = join(tempDir, "projects");
-    const fs = createFs({ projectsDir });
-    const project = await fs.createProject("in-place");
+    const fs = createEngineForTest(projectsDir);
+    const project = await fs.projects.create("in-place");
     if (!project.ok) throw new Error(project.error.message);
-    const asset = await fs.createAsset("vid", "source", "in-place");
+    const asset = await fs.artifacts.create("vid", "source", "in-place");
     if (!asset.ok) throw new Error(asset.error.message);
-    const sourceWrite = await fs.writeFile(
-      asset.value.assetId,
+    const sourceWrite = await fs.files.write(
+      asset.value.slug,
       "original.mp4",
       await readFile(sourcePath),
       "in-place",
     );
     if (!sourceWrite.ok) throw new Error(sourceWrite.error.message);
-    const historyBefore = await fs.getAssetHistory(asset.value.assetId, "in-place");
+    const historyBefore = await fs.history.artifact(asset.value.slug, "in-place");
 
     await replaceVideoAssetInPlace(
       fs,
-      asset.value.assetId,
+      asset.value.slug,
       "original.mp4",
       outputPath,
       "in-place",
     );
 
-    const stored = await fs.readFile(asset.value.assetId, "original.mp4", "in-place");
+    const stored = await fs.files.read(asset.value.slug, "original.mp4", "in-place");
     if (!stored.ok) throw new Error(stored.error.message);
     expect(stored.value.equals(await readFile(outputPath))).toBe(true);
-    expect((await fs.getAssetHistory(asset.value.assetId, "in-place")).length).toBeGreaterThan(historyBefore.length);
+    expect((await fs.history.artifact(asset.value.slug, "in-place")).length).toBeGreaterThan(historyBefore.length);
     fs.close();
   }, 60_000);
 });

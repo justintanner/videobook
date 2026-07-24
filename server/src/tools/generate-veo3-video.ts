@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { VeoGenerateRequestSchema } from "@apicity/kie/zod";
 import type { VeoModel } from "@apicity/kie";
@@ -24,8 +24,8 @@ function makeVeo3VideoTool(
   model: VeoModel,
   label: string,
   description: string,
-): (fs: VideocityFs) => ToolDef {
-  return (fs: VideocityFs) => ({
+): (fs: Engine) => ToolDef {
+  return (fs: Engine) => ({
     name: toolName,
     description,
     schema: veo3VideoSchema,
@@ -49,12 +49,12 @@ function makeVeo3VideoTool(
       }
 
       const videoName = `${model}-${slugify(prompt) || Date.now().toString(36)}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = imageInputs.map((i) => i.assetId);
       const jobId = `${model}-${vidAssetId}-${Date.now()}`;
 

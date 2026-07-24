@@ -1,6 +1,6 @@
+import { fs } from "../fs.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createFs } from "videobook-engine";
 import { describe, expect, it } from "vitest";
 import {
   renderCommandReference,
@@ -19,7 +19,6 @@ describe("generated command documentation", () => {
   });
 
   it("lists every exposed MCP endpoint and canonical slash command once", () => {
-    const fs = createFs({ projectsDir: "/tmp/test-command-reference" });
     const tools = getAllToolDefs(fs);
     const commands = getCanonicalCommands();
     const actual = readFileSync(resolve(root, "docs/command-reference.md"), "utf8");

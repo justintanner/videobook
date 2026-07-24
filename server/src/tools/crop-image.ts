@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { z } from "zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
@@ -24,7 +24,7 @@ function validateRect(
   return null;
 }
 
-function findOriginalImage(files: AssetManifestFile[]): AssetManifestFile | null {
+function findOriginalImage(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -41,7 +41,7 @@ function findOriginalImage(files: AssetManifestFile[]): AssetManifestFile | null
   );
 }
 
-export function cropImageDef(fs: VideocityFs): ToolDef {
+export function cropImageDef(fs: Engine): ToolDef {
   return {
     name: "crop_image",
     description:
@@ -70,7 +70,7 @@ export function cropImageDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

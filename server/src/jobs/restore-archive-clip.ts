@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { join } from "node:path";
 import { getArchiveStore } from "../archive-store.js";
 import { queue, registerJobHandler } from "../queue.js";
@@ -33,7 +33,7 @@ function provenance(payload: RestoreArchiveClipPayload): Record<string, unknown>
   };
 }
 
-export function registerRestoreArchiveClipJob(fs: VideocityFs): void {
+export function registerRestoreArchiveClipJob(fs: Engine): void {
   registerJobHandler("restore_archive_clip", async (payload, ctx) => {
     const p = payload as RestoreArchiveClipPayload;
     return withLockedLocalLease(
@@ -48,7 +48,7 @@ export function registerRestoreArchiveClipJob(fs: VideocityFs): void {
         const store = getArchiveStore();
         const body = await store.getBytes(p.mediaKey);
         if (!body) throw new Error(`Archive media not found: ${p.mediaKey}`);
-        const write = await fs.writeFile(p.assetId, p.filename, Buffer.from(body), p.projectSlug);
+        const write = await fs.files.write(p.assetId, p.filename, Buffer.from(body), p.projectSlug);
         if (!write.ok) throw new Error(write.error.message);
 
         const meta = provenance(p);
@@ -65,7 +65,7 @@ export function registerRestoreArchiveClipJob(fs: VideocityFs): void {
           return { success: true, archive_id: p.archiveId, asset_id: p.assetId, job_id: processJobId };
         }
 
-        const writeMeta = await fs.writeMetadata(p.assetId, "original", {
+        const writeMeta = await fs.metadata.artifacts.write(p.assetId, "original", {
           ...meta,
           content_type: p.contentType,
           duration: typeof p.duration === "number" ? p.duration : null,

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -22,7 +22,7 @@ function validateRect(
   return null;
 }
 
-export function cropVideoDef(fs: VideocityFs): ToolDef {
+export function cropVideoDef(fs: Engine): ToolDef {
   return {
     name: "crop_video",
     description:
@@ -51,7 +51,7 @@ export function cropVideoDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

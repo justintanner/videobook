@@ -1,11 +1,10 @@
 import { createFal } from "@apicity/fal";
-import type { VideocityFs } from "videobook-engine";
-import { type PendingTask } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { requireApiKey } from "../api-key.js";
-export type FalTaskType = Extract<PendingTask["taskType"], `fal_${string}`>;
+export type FalTaskType = `fal_${string}`;
 
 export type FalSubmitArgs = {
-  fs: VideocityFs;
+  fs: Engine;
   projectSlug: string;
   assetId: string;
   assetDir: string;
@@ -22,7 +21,7 @@ export async function submitFalJob(args: FalSubmitArgs): Promise<string> {
 
   const provider = createFal({ apiKey, timeout: 60_000 });
 
-  await args.fs.writeMetadata(
+  await args.fs.metadata.artifacts.write(
     args.assetId,
     "generation-payload",
     { endpoint_id: args.endpointId, input: args.input },
@@ -34,13 +33,12 @@ export async function submitFalJob(args: FalSubmitArgs): Promise<string> {
     input: args.input,
   });
 
-  const ptResult = await args.fs.pendingTasks.write(
+  const ptResult = await args.fs.jobs.pending.write(
     args.projectSlug,
     {
       taskId: submit.request_id,
       taskType: args.taskType,
-      assetId: args.assetId,
-      assetDir: args.assetDir,
+      artifactId: args.assetId,
       meta: {
         ...args.meta,
         falEndpointId: args.endpointId,

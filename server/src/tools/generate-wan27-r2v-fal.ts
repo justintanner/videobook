@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalWanV2p7ReferenceToVideoRequestSchema } from "@apicity/fal/zod";
@@ -12,7 +12,7 @@ import { requireAtLeastOne, toolError } from "./_shared.js";
 type VideoInput = { assetId: string; filename: string };
 
 async function resolveVideoSlugs(
-  fs: VideocityFs,
+  fs: Engine,
   rawSlugs: readonly string[],
   projectSlug: string,
 ): Promise<{ ok: true; inputs: VideoInput[]; sourceVideoIds: string[] } | { ok: false; error: string }> {
@@ -21,7 +21,7 @@ async function resolveVideoSlugs(
   for (const raw of rawSlugs) {
     const assetId = raw.replace(/^@/, "");
     if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slugs entries must be vid-* assets, got: ${assetId}` };
-    const manifest = await fs.getManifest(assetId, projectSlug);
+    const manifest = await fs.files.manifest(assetId, projectSlug);
     if (!manifest.ok) return { ok: false, error: manifest.error.message };
     const file = findVideoFile(manifest.value.files);
     if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
@@ -49,7 +49,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateWan27R2vFalDef(fs: VideocityFs): ToolDef {
+export function generateWan27R2vFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_wan_2_7_reference_to_video",
     description: "Generate a video via fal.ai using Alibaba Wan v2.7 Reference-to-Video guided by reference images and/or videos. Creates a new vid- asset and enqueues a background job. Requires at least one of image_slugs or video_slugs.",
@@ -81,10 +81,10 @@ export function generateWan27R2vFalDef(fs: VideocityFs): ToolDef {
       const resolvedVideos = await resolveVideoSlugs(fs, vidSlugs, project_slug);
       if (!resolvedVideos.ok) return toolError(resolvedVideos.error);
 
-      const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "wan/2-7-r2v")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "wan/2-7-r2v")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return toolError(`Failed to create video asset: ${assetResult.error.message}`);
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "wan/2-7-r2v")}-r2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

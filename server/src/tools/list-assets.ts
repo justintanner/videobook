@@ -1,9 +1,9 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { buildAssetList } from "./sync.js";
 
-export function listAssetsDef(fs: VideocityFs): ToolDef {
+export function listAssetsDef(fs: Engine): ToolDef {
   return {
     name: "list_assets",
     description:

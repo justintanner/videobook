@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { AUDIO_OPTS, extractWaveform, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { queue, registerJobHandler } from "../queue.js";
 import type { AudioMixAssetKind } from "../tools/audio-mix.js";
@@ -13,7 +13,6 @@ const STALE_DERIVATIVES = [
   ".original.analysis.json",
   ".analysis.gpt4otrans.json",
   "elevenlabs.json",
-  ".kie-task.json",
   ".suggest-sfx.json",
 ];
 
@@ -161,32 +160,32 @@ export async function mixAudioMedia(
 }
 
 async function deleteIfPresent(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   filename: string,
   projectSlug: string,
 ): Promise<void> {
-  const result = await fs.deleteFile(assetId, filename, projectSlug);
+  const result = await fs.files.delete(assetId, filename, projectSlug);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
     throw new Error(`Failed to delete ${filename}: ${result.error.message}`);
   }
 }
 
 async function replaceMixedMedia(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   targetFilename: string,
   outputPath: string,
   projectSlug: string,
 ): Promise<void> {
   const output = await readFile(outputPath);
-  const writeResult = await fs.writeFile(assetId, targetFilename, output, projectSlug);
+  const writeResult = await fs.files.write(assetId, targetFilename, output, projectSlug);
   if (!writeResult.ok) {
     throw new Error(`Failed to replace ${targetFilename}: ${writeResult.error.message}`);
   }
 }
 
-export function registerAudioMixJob(fs: VideocityFs): void {
+export function registerAudioMixJob(fs: Engine): void {
   registerJobHandler("audio_mix", async (payload, ctx) => {
     const {
       targetPath,
@@ -233,7 +232,7 @@ export function registerAudioMixJob(fs: VideocityFs): void {
         const mediaPath = join(assetDir, targetFilename);
         if (targetKind === "audio") {
           const peaks = await extractWaveform(mediaPath);
-          const waveformResult = await fs.writeAudioWaveform(assetId, peaks, projectSlug);
+          const waveformResult = await fs.metadata.waveforms.write(assetId, peaks, projectSlug);
           if (!waveformResult.ok) {
             throw new Error(`Failed to update audio waveform: ${waveformResult.error.message}`);
           }

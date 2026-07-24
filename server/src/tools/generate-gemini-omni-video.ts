@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { GeminiOmniVideoRequestSchema } from "@apicity/kie/zod";
@@ -28,7 +28,7 @@ const generateGeminiOmniVideoSchema = {
 
 type Args = SchemaArgs<typeof generateGeminiOmniVideoSchema>;
 
-export function generateGeminiOmniVideoDef(fs: VideocityFs): ToolDef {
+export function generateGeminiOmniVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_gemini_omni_video",
     description: "Generate a video using Google Gemini Omni (KIE). Multimodal: a text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes. Creates a new vid- asset and enqueues a background job.",
@@ -88,12 +88,12 @@ export function generateGeminiOmniVideoDef(fs: VideocityFs): ToolDef {
       }
 
       const videoName = `${SLUG}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = imageInputs.map((i) => i.assetId);
       const sourceVideoIds = videoInput ? [videoInput.assetId] : [];
       const jobId = `${SLUG}-${vidAssetId}-${Date.now()}`;

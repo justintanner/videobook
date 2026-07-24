@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import {
   AUDIO_OPTS,
   FFMPEG,
@@ -11,6 +11,7 @@ import {
 } from "../ffmpeg.js";
 import { registerJobHandler, queue } from "../queue.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { ingestWorkspaceOutputs } from "./_persist-output.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -363,7 +364,7 @@ export async function smoothSceneConcatFiles(
   return { ...timing, outputDuration };
 }
 
-export function registerSmoothSceneConcatJob(fs: VideocityFs): void {
+export function registerSmoothSceneConcatJob(fs: Engine): void {
   registerJobHandler("smooth_scene_concat", async (payload, ctx) => {
     const {
       firstPath,
@@ -405,7 +406,15 @@ export function registerSmoothSceneConcatJob(fs: VideocityFs): void {
           output_duration: concat.outputDuration,
           concatenated_at: new Date().toISOString(),
         };
-        await fs.writeMetadata(assetId, "original", provenance, projectSlug);
+        await ingestWorkspaceOutputs(
+          fs,
+          projectSlug,
+          assetId,
+          [outputPath.split("/").pop()!],
+          "smooth_scene_concat",
+          provenance,
+        );
+        await fs.metadata.artifacts.write(assetId, "original", provenance, projectSlug);
         return { concat, provenance };
       },
       { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },

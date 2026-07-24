@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type {
   BookActionPhase,
   BookActionScope,
-  VideobookFs,
+  Engine,
 } from "videobook-engine";
 import { actionNameForTool, isBookToolActivity } from "./activity-policy.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -63,7 +63,7 @@ function actionScope(
 }
 
 async function recordLifecycle(
-  fs: VideobookFs,
+  fs: Engine,
   input: {
     slug: string;
     actionId: string;
@@ -79,7 +79,7 @@ async function recordLifecycle(
   const outputArtifactIds = [...collectArtifactIds(input.value)]
     .filter((assetId) => !inputArtifactIdSet.has(assetId));
   const targetArtifactId = outputArtifactIds[0] ?? inputArtifactIds[0];
-  const recorded = await fs.recordBookAction({
+  const recorded = await fs.history.recordBookAction({
     projectSlug: input.slug,
     actionId: input.actionId,
     operation: input.actionName,
@@ -112,7 +112,7 @@ async function recordLifecycle(
   }
 }
 
-function withLogging(def: ToolDef, fs: VideobookFs): ToolDef {
+function withLogging(def: ToolDef, fs: Engine): ToolDef {
   return {
     ...def,
     handler: async (args) => {

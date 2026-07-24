@@ -3,19 +3,19 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createFsForTest } from "../fs.js";
+import { createEngineForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 
 describe("rewind_project tool", () => {
   let client: Client;
   let tempDir: string;
-  let fs: VideocityFs;
+  let fs: Engine;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
     client = await createTestClient(tempDir);
-    fs = createFsForTest(tempDir);
+    fs = createEngineForTest(tempDir);
     await client.callTool({
       name: "create_project",
       arguments: { project_slug: "test-proj" },
@@ -119,7 +119,7 @@ describe("rewind_project tool", () => {
     );
     const targetHash = commits[0].hash as string;
 
-    await fs.queue.enqueue("test-proj", {
+    await fs.jobs.queue.enqueue("test-proj", {
       type: "never_run",
       payload: { type: "never_run", projectSlug: "test-proj" },
       dedupeKey: null,

@@ -1,10 +1,11 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, extname, join } from "node:path";
+import { extname, join } from "node:path";
 import { H264_MEDIUM, probeVideo, runFfmpeg } from "../ffmpeg.js";
 import { queue, registerJobHandler } from "../queue.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
 const LOCK_DURATION_MS = 900_000;
 
@@ -103,44 +104,41 @@ export async function validateInjectedFirstFrame(
 }
 
 async function deleteIfPresent(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   filename: string,
   projectSlug: string,
 ): Promise<void> {
-  const result = await fs.deleteFile(assetId, filename, projectSlug);
+  const result = await fs.files.delete(assetId, filename, projectSlug);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
     throw new Error(`Failed to delete ${filename}: ${result.error.message}`);
   }
 }
 
 async function discardTemp(
-  fs: VideocityFs,
-  assetId: string,
   outputPath: string,
-  projectSlug: string,
 ): Promise<void> {
-  const filename = basename(outputPath);
-  await fs.deleteFile(assetId, filename, projectSlug).catch(() => undefined);
-  const remaining = await fs.readFile(assetId, filename, projectSlug);
-  if (remaining.ok) throw new Error(`Failed to discard temporary file ${filename}`);
+  await rm(outputPath, { force: true });
 }
 
 async function replaceAssetFile(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   targetFilename: string,
   outputPath: string,
   projectSlug: string,
 ): Promise<void> {
-  const rendered = await fs.readFile(assetId, basename(outputPath), projectSlug);
-  if (!rendered.ok) throw new Error(`Failed to read first-frame output: ${rendered.error.message}`);
-  const written = await fs.writeFile(assetId, targetFilename, rendered.value, projectSlug);
-  if (!written.ok) throw new Error(`Failed to replace ${targetFilename}: ${written.error.message}`);
+  await replaceArtifactFileFromPath(
+    fs,
+    projectSlug,
+    assetId,
+    targetFilename,
+    outputPath,
+  );
 }
 
 async function refreshFinalThumbnail(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   assetDir: string,
   targetFilename: string,
@@ -161,7 +159,7 @@ async function refreshFinalThumbnail(
     if (!thumbnailStat || thumbnailStat.size === 0) {
       throw new Error("Failed to generate final thumbnail");
     }
-    const written = await fs.writeFile(
+    const written = await fs.files.write(
       assetId,
       "original.jpg",
       await readFile(thumbnailPath),
@@ -173,7 +171,7 @@ async function refreshFinalThumbnail(
   }
 }
 
-export function registerInjectFirstFrameJob(fs: VideocityFs): void {
+export function registerInjectFirstFrameJob(fs: Engine): void {
   registerJobHandler("inject_first_frame", async (payload, ctx) => {
     const {
       assetId,
@@ -200,7 +198,7 @@ export function registerInjectFirstFrameJob(fs: VideocityFs): void {
         if (source.videoCodec === null || source.width <= 0 || source.height <= 0 || source.fps <= 0) {
           throw new Error(`No usable video stream found in ${targetFilename}`);
         }
-        const history = await fs.getAssetHistory(assetId, projectSlug, 1);
+        const history = await fs.history.artifact(assetId, projectSlug, 1);
         const restoreCommit = history[0]?.hash;
         try {
           await renderInjectedFirstFrame(
@@ -213,7 +211,6 @@ export function registerInjectFirstFrameJob(fs: VideocityFs): void {
           );
           await validateInjectedFirstFrame(inputPath, outputPath, ctx.signal);
           await replaceAssetFile(fs, assetId, targetFilename, outputPath, projectSlug);
-          await discardTemp(fs, assetId, outputPath, projectSlug);
 
           if (assetId === "final") {
             await refreshFinalThumbnail(
@@ -229,7 +226,7 @@ export function registerInjectFirstFrameJob(fs: VideocityFs): void {
               await deleteIfPresent(fs, assetId, filename, projectSlug);
             }
           }
-          await fs.commitOperation("inject_first_frame", assetId, {
+          await fs.history.recordOperation("inject_first_frame", assetId, {
             image_asset_id: imageAssetId,
             target_filename: targetFilename,
             orientation,
@@ -237,8 +234,8 @@ export function registerInjectFirstFrameJob(fs: VideocityFs): void {
             timing_preserved: true,
           }, projectSlug);
         } catch (error) {
-          await discardTemp(fs, assetId, outputPath, projectSlug).catch(() => undefined);
-          if (restoreCommit) await fs.restoreAsset(assetId, restoreCommit, projectSlug);
+          await discardTemp(outputPath).catch(() => undefined);
+          if (restoreCommit) await fs.history.restoreArtifact(assetId, restoreCommit, projectSlug);
           throw error;
         }
         return { videoPath: join(assetDir, targetFilename) };

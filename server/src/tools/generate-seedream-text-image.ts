@@ -1,5 +1,5 @@
 import { modelSlug } from "@apicity/cost";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { SeedreamTextToImageRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -29,7 +29,7 @@ const generateSeedreamTextImageSchema = {
 
 type Args = SchemaArgs<typeof generateSeedreamTextImageSchema>;
 
-export function generateSeedreamTextImageDef(fs: VideocityFs): ToolDef {
+export function generateSeedreamTextImageDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_seedream_v5_lite_text_to_image",
     description: "Generate an image from text using ByteDance Seedream 5 Lite via Kie. Creates a new img- asset and enqueues a background job.",
@@ -56,7 +56,7 @@ export function generateSeedreamTextImageDef(fs: VideocityFs): ToolDef {
       if (!apicityCheck.success) return zodErrorToToolResult(apicityCheck.error);
 
       const assetName = `${modelSlug("kie", "seedream/5-lite-text-to-image")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset("img", assetName, project_slug);
+      const assetResult = await fs.artifacts.create("img", assetName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -64,7 +64,7 @@ export function generateSeedreamTextImageDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `${modelSlug("kie", "seedream/5-lite-text-to-image")}-text-${imgAssetId}-${Date.now()}`;
 

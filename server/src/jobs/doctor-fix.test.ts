@@ -2,11 +2,11 @@ import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createFsForTest } from "../fs.js";
+import { createEngineForTest } from "../fs.js";
 import { failPendingTaskAndLog } from "./task-failure.js";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 
 const SLUG = "doc-proj";
 
@@ -19,27 +19,27 @@ function parse<T>(res: Awaited<ReturnType<Client["callTool"]>>): T {
 }
 
 async function createAsset(
-  fs: VideocityFs,
+  fs: Engine,
   prefix: string,
   name: string,
 ): Promise<string> {
-  const result = await fs.createAsset(prefix, name, SLUG);
+  const result = await fs.artifacts.create(prefix, name, SLUG);
   if (!result.ok) throw new Error(`createAsset failed: ${result.error.message}`);
-  return result.value.assetId;
+  return result.value.slug;
 }
 
 /** Drive an asset into the error state: claim a lease, write a pending task,
  *  then fail it — exactly the path a crashed generation job leaves behind. */
-async function breakAsset(fs: VideocityFs, assetId: string, taskId: string): Promise<void> {
-  const lease = await fs.assetWork.begin(SLUG, assetId, {
+async function breakAsset(fs: Engine, assetId: string, taskId: string): Promise<void> {
+  const lease = await fs.jobs.artifactWork.begin(SLUG, assetId, {
     kind: "generate",
     ownerKind: "job",
     durationMs: 60_000,
   });
   if (!lease) throw new Error(`assetWork.begin failed for ${assetId}`);
-  const written = await fs.pendingTasks.write(
+  const written = await fs.jobs.pending.write(
     SLUG,
-    { taskId, taskType: "alibaba_image", assetId, assetDir: assetId, meta: {} },
+    { taskId, taskType: "alibaba_image", artifactId: assetId, meta: {} },
     lease.ownerId,
   );
   if (!written.ok || !written.value) throw new Error(`pendingTasks.write failed for ${assetId}`);
@@ -65,12 +65,12 @@ interface DoctorFixResult {
 describe("doctor tool", () => {
   let client: Client;
   let tempDir: string;
-  let fs: VideocityFs;
+  let fs: Engine;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-doctor-test-"));
     client = await createTestClient(tempDir);
-    fs = createFsForTest(tempDir);
+    fs = createEngineForTest(tempDir);
     await client.callTool({ name: "create_project", arguments: { project_slug: SLUG } });
   });
 
@@ -82,17 +82,17 @@ describe("doctor tool", () => {
   it("reports broken and stuck assets and leaves healthy ones unflagged (all types)", async () => {
     // Healthy script asset.
     const healthy = await createAsset(fs, "script", "good one");
-    await fs.writeFile(healthy, "original.md", "all is well", SLUG);
+    await fs.files.write(healthy, "original.md", "all is well", SLUG);
 
     // Broken image asset (intact media but a recorded generation error).
     const broken = await createAsset(fs, "img", "failed one");
-    await fs.writeFile(broken, "original.png", Buffer.from([0xff]), SLUG);
+    await fs.files.write(broken, "original.png", Buffer.from([0xff]), SLUG);
     await breakAsset(fs, broken, "task-broken");
 
     // Stuck audio asset: a working lease whose deadline has already elapsed.
     const stuck = await createAsset(fs, "aud", "wedged one");
-    await fs.writeFile(stuck, "original.mp3", Buffer.from([0x00]), SLUG);
-    const lease = await fs.assetWork.begin(SLUG, stuck, {
+    await fs.files.write(stuck, "original.mp3", Buffer.from([0x00]), SLUG);
+    const lease = await fs.jobs.artifactWork.begin(SLUG, stuck, {
       kind: "generate",
       ownerKind: "job",
       durationMs: 500,
@@ -114,10 +114,10 @@ describe("doctor tool", () => {
 
   it("fix recovers an asset in place when its media is intact (tier 1)", async () => {
     const assetId = await createAsset(fs, "img", "recoverable");
-    await fs.writeFile(assetId, "original.png", Buffer.from([0xff]), SLUG);
+    await fs.files.write(assetId, "original.png", Buffer.from([0xff]), SLUG);
     await breakAsset(fs, assetId, "task-recover");
 
-    const before = await fs.getAssetStatus(assetId, SLUG);
+    const before = await fs.status.get(assetId, SLUG);
     expect(before.ok && before.value).toBe("error");
 
     const res = await client.callTool({
@@ -129,24 +129,24 @@ describe("doctor tool", () => {
     expect(result.status).toBe("recovered_in_place");
     expect(result.asset_status).toBe("ready");
 
-    const after = await fs.getAssetStatus(assetId, SLUG);
+    const after = await fs.status.get(assetId, SLUG);
     expect(after.ok && after.value).toBe("ready");
-    const err = await fs.generationErrors.read(SLUG, assetId);
+    const err = await fs.jobs.failures.read(SLUG, assetId);
     expect(err.ok && err.value).toBeFalsy();
   });
 
   it("fix restores from git history when the working tree is broken (tier 2)", async () => {
     const assetId = await createAsset(fs, "img", "restorable");
     // Commit a usable state: media present.
-    await fs.writeFile(assetId, "original.png", Buffer.from([0xde, 0xad]), SLUG);
-    await fs.commitOperation("doctor-test-seed-media", assetId, {}, SLUG);
+    await fs.files.write(assetId, "original.png", Buffer.from([0xde, 0xad]), SLUG);
+    await fs.history.recordOperation("doctor-test-seed-media", assetId, {}, SLUG);
     // Break the working tree: remove the primary media and record a failure, so
     // the asset is genuinely in 'error' and can't be recovered in place.
-    await fs.deleteFile(assetId, "original.png", SLUG);
+    await fs.files.delete(assetId, "original.png", SLUG);
     await breakAsset(fs, assetId, "task-restore");
-    await fs.commitOperation("doctor-test-break", assetId, {}, SLUG);
+    await fs.history.recordOperation("doctor-test-break", assetId, {}, SLUG);
 
-    const before = await fs.getAssetStatus(assetId, SLUG);
+    const before = await fs.status.get(assetId, SLUG);
     expect(before.ok && before.value).toBe("error");
 
     const res = await client.callTool({
@@ -159,9 +159,9 @@ describe("doctor tool", () => {
     expect(result.asset_status).toBe("ready");
     expect(result.from_commit).toBeTruthy();
 
-    const after = await fs.getAssetStatus(assetId, SLUG);
+    const after = await fs.status.get(assetId, SLUG);
     expect(after.ok && after.value).toBe("ready");
-    const manifest = await fs.getManifest(assetId, SLUG);
+    const manifest = await fs.files.manifest(assetId, SLUG);
     expect(manifest.ok && manifest.value.files.some((f) => f.name === "original.png")).toBe(true);
   });
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Mint an X (Twitter) OAuth 2.0 user-context access token + refresh token,
- * and write them to ~/.videobook/x-tokens.json (override via X_TOKENS_PATH)
- * so the running server picks them up automatically and refreshes on its own.
+ * and write them to the main Dolt database so the running server picks them
+ * up automatically and refreshes on its own.
  *
  * Adapted from @apicity/x README. Run once after configuring your X app:
  *
@@ -17,10 +17,10 @@
  */
 import http from "node:http";
 import crypto from "node:crypto";
-import { mkdir, rename, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createXOAuth } from "@apicity/x";
+import { createEngine } from "videobook-engine";
 
 const CLIENT_ID = process.env.X_CLIENT_ID;
 const CLIENT_SECRET = process.env.X_CLIENT_SECRET;
@@ -38,8 +38,12 @@ if (!CLIENT_ID || !CLIENT_SECRET) {
   process.exit(1);
 }
 
-const STATE_PATH =
-  process.env.X_TOKENS_PATH ?? join(homedir(), ".videobook", "x-tokens.json");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const engine = createEngine({
+  dataDir: process.env.VIDEOBOOK_DATA_DIR?.trim() || join(root, "data"),
+  workspaceDir:
+    process.env.VIDEOBOOK_WORKSPACE_DIR?.trim() || join(root, "workspaces"),
+});
 
 const verifier = crypto.randomBytes(32).toString("base64url");
 const challenge = crypto
@@ -94,13 +98,18 @@ const server = http.createServer(async (req, res) => {
     refresh_token: tok.refresh_token,
     expires_at: new Date(Date.now() + tok.expires_in * 1000).toISOString(),
   };
-  await mkdir(dirname(STATE_PATH), { recursive: true });
-  const tmp = `${STATE_PATH}.tmp.${process.pid}`;
-  await writeFile(tmp, JSON.stringify(next, null, 2), "utf8");
-  await rename(tmp, STATE_PATH);
+  const written = engine.settings.set("x.oauth.tokens", next);
+  if (!written.ok) {
+    res.writeHead(500).end("token persistence failed");
+    console.error(`Token persistence failed: ${written.error.message}`);
+    engine.close();
+    server.close();
+    process.exit(1);
+  }
   res.writeHead(200).end("Authorized — token saved. You can close this tab.");
-  console.log(`Wrote tokens to ${STATE_PATH}`);
+  console.log("Wrote tokens to the main Dolt database.");
   console.log(`Access token expires at ${next.expires_at}.`);
+  engine.close();
   server.close();
 });
 

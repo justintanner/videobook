@@ -1,8 +1,8 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function markAssetSeenDef(fs: VideocityFs): ToolDef {
+export function markAssetSeenDef(fs: Engine): ToolDef {
   return {
     name: "mark_asset_seen",
     description:
@@ -16,7 +16,7 @@ export function markAssetSeenDef(fs: VideocityFs): ToolDef {
         asset_id: string;
         project_slug: string;
       };
-      const updated = await fs.assetWork.markSeen(project_slug, asset_id);
+      const updated = await fs.jobs.artifactWork.markSeen(project_slug, asset_id);
       return {
         content: [
           {

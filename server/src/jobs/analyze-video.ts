@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { join } from "node:path";
 import { readFile } from "node:fs/promises";
 import type { KieGeminiPart } from "@apicity/kie";
@@ -53,7 +53,7 @@ function sampleFrames(frames: string[]): string[] {
   );
 }
 
-export function registerAnalyzeVideoJob(fs: VideocityFs): void {
+export function registerAnalyzeVideoJob(fs: Engine): void {
   registerJobHandler("analyze_video", async (payload, ctx) => {
     const {
       assetId, assetDir, projectSlug, hasTranscription,
@@ -62,12 +62,12 @@ export function registerAnalyzeVideoJob(fs: VideocityFs): void {
     const result = await withLocalLease(fs, projectSlug, assetId, ctx, "analyze", async () => {
     {
 
-    const metaResult = await fs.readMetadata<{ width: number; height: number; duration: number }>(
+    const metaResult = await fs.metadata.artifacts.read<{ width: number; height: number; duration: number }>(
       assetId, "original", projectSlug
     );
     const metadata = metaResult.ok ? metaResult.value : null;
 
-    const listResult = await fs.listAssetSubdir(assetId, "original_frames", projectSlug);
+    const listResult = await fs.files.listSubdir(assetId, "original_frames", projectSlug);
     const frameFiles = listResult.ok
       ? listResult.value
           .filter((f) => f.endsWith(".jpg"))
@@ -86,7 +86,7 @@ export function registerAnalyzeVideoJob(fs: VideocityFs): void {
 
     let transcriptionText = "";
     if (hasTranscription) {
-      const transResult = await fs.readFile(assetId, ".analysis.gpt4otrans.json", projectSlug);
+      const transResult = await fs.files.read(assetId, ".analysis.gpt4otrans.json", projectSlug);
       if (transResult.ok) {
         try {
           const parsed = JSON.parse(
@@ -139,7 +139,7 @@ export function registerAnalyzeVideoJob(fs: VideocityFs): void {
     }
 
     const jsonString = JSON.stringify(analysis, null, 2);
-    await fs.writeFile(assetId, ".original.analysis.json", jsonString, projectSlug);
+    await fs.files.write(assetId, ".original.analysis.json", jsonString, projectSlug);
 
     // Auto-transcribe trigger (replaces the whitelist-tool gate). Run only if
     // the analysis says there's real dialog, ElevenLabs/Kie is configured, no
@@ -160,21 +160,21 @@ export function registerAnalyzeVideoJob(fs: VideocityFs): void {
 }
 
 async function maybeEnqueueAutoTranscribe(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   assetDir: string,
   projectSlug: string,
 ): Promise<void> {
   if (!getApiKey("ELEVENLABS_API_KEY")) return;
 
-  const manifestResult = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+  const manifestResult = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
   if (!manifestResult.ok) return;
   const manifest = manifestResult.value;
   const fileNames = new Set(manifest.files.map((f) => f.name));
 
   if (fileNames.has("elevenlabs.json")) return;
 
-  const errorRow = await fs.generationErrors.read(projectSlug, assetId);
+  const errorRow = await fs.jobs.failures.read(projectSlug, assetId);
   if (errorRow.ok && errorRow.value !== null) return;
 
   const dialog = await readAndAssessDialog(fs, assetId, projectSlug);

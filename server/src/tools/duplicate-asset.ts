@@ -1,8 +1,8 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function duplicateAssetDef(fs: VideocityFs): ToolDef {
+export function duplicateAssetDef(fs: Engine): ToolDef {
   return {
     name: "duplicate_asset",
     description: "Duplicate an asset within the same project",
@@ -13,7 +13,7 @@ export function duplicateAssetDef(fs: VideocityFs): ToolDef {
     },
     handler: async (args) => {
       const { asset_id, project_slug, new_name } = args as { asset_id: string; project_slug: string; new_name?: string };
-      const manifestResult = await fs.getManifest(asset_id, project_slug, { includeDotfiles: true });
+      const manifestResult = await fs.files.manifest(asset_id, project_slug, { includeDotfiles: true });
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -25,7 +25,7 @@ export function duplicateAssetDef(fs: VideocityFs): ToolDef {
       const originalName = asset_id.slice(prefix.length + 1);
       const name = new_name ?? `${originalName} copy`;
 
-      const createResult = await fs.createAsset(prefix, name, project_slug);
+      const createResult = await fs.artifacts.create(prefix, name, project_slug);
       if (!createResult.ok) {
         return {
           isError: true as const,
@@ -33,20 +33,17 @@ export function duplicateAssetDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const newAssetId = createResult.value.assetId;
-
-      const SKIP_FILES = new Set([".kie-task.json", ".generation-error.json", ".generation-request.json"]);
+      const newAssetId = createResult.value.slug;
 
       for (const file of manifestResult.value.files) {
-        if (SKIP_FILES.has(file.name)) continue;
-        const readResult = await fs.readFile(asset_id, file.name, project_slug);
+        const readResult = await fs.files.read(asset_id, file.name, project_slug);
         if (!readResult.ok) {
           return {
             isError: true as const,
             content: [{ type: "text" as const, text: readResult.error.message }],
           };
         }
-        const writeResult = await fs.writeFile(newAssetId, file.name, readResult.value, project_slug);
+        const writeResult = await fs.files.write(newAssetId, file.name, readResult.value, project_slug);
         if (!writeResult.ok) {
           return {
             isError: true as const,
@@ -67,4 +64,3 @@ export function duplicateAssetDef(fs: VideocityFs): ToolDef {
     },
   };
 }
-

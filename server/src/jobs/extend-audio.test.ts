@@ -1,3 +1,4 @@
+import { createEngineForTest } from "../fs.js";
 import { execFile } from "node:child_process";
 import { createServer, type Server } from "node:http";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -5,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { createElevenLabs } from "@apicity/elevenlabs";
-import { createFs, type VideocityFs } from "videobook-engine";
+import { type Engine } from "videobook-engine";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FFMPEG, probeVideo } from "../ffmpeg.js";
 import {
@@ -44,7 +45,7 @@ async function closeServer(server: Server): Promise<void> {
 
 describe("extend audio ElevenLabs job", () => {
   let tempDir: string;
-  let fs: VideocityFs;
+  let fs: Engine;
   let server: Server;
   let sourceAudio: Buffer;
   let continuationAudio: Buffer;
@@ -116,8 +117,8 @@ describe("extend audio ElevenLabs job", () => {
       });
     });
 
-    fs = createFs({ projectsDir: join(tempDir, "projects") });
-    const project = await fs.createProject(PROJECT_SLUG);
+    fs = createEngineForTest(join(tempDir, "projects"));
+    const project = await fs.projects.create(PROJECT_SLUG);
     if (!project.ok) throw new Error(project.error.message);
   });
 
@@ -128,11 +129,11 @@ describe("extend audio ElevenLabs job", () => {
   });
 
   it("describes the source, generates its continuation, crossfades it, and writes a 15s aud-* asset", async () => {
-    const source = await fs.createAsset("aud", "source", PROJECT_SLUG);
-    const output = await fs.createAsset("aud", "extended", PROJECT_SLUG);
+    const source = await fs.artifacts.create("aud", "source", PROJECT_SLUG);
+    const output = await fs.artifacts.create("aud", "extended", PROJECT_SLUG);
     if (!source.ok) throw new Error(source.error.message);
     if (!output.ok) throw new Error(output.error.message);
-    const sourceWrite = await fs.writeFile(source.value.assetId, "original.mp3", sourceAudio, PROJECT_SLUG);
+    const sourceWrite = await fs.files.write(source.value.slug, "original.mp3", sourceAudio, PROJECT_SLUG);
     if (!sourceWrite.ok) throw new Error(sourceWrite.error.message);
 
     const port = await listen(server);
@@ -143,8 +144,8 @@ describe("extend audio ElevenLabs job", () => {
     });
     const payload: ExtendAudioPayload = {
       type: "extend_audio",
-      audAssetId: output.value.assetId,
-      sourceAssetId: source.value.assetId,
+      audAssetId: output.value.slug,
+      sourceAssetId: source.value.slug,
       sourceFilename: "original.mp3",
       sourceDurationMs: 6_048,
       targetDurationMs: 15_000,
@@ -183,25 +184,25 @@ describe("extend audio ElevenLabs job", () => {
     expect(soundBody.text).toContain("No intro, unrelated sound, fade-in, early ending, or silent tail");
     expect(soundBody.text?.length).toBeLessThanOrEqual(450);
 
-    const written = await fs.readFile(output.value.assetId, "original.mp3", PROJECT_SLUG);
+    const written = await fs.files.read(output.value.slug, "original.mp3", PROJECT_SLUG);
     expect(written.ok).toBe(true);
     if (!written.ok) return;
     expect(written.value).not.toEqual(sourceAudio);
     expect(written.value).not.toEqual(continuationAudio);
-    const manifest = await fs.getManifest(output.value.assetId, PROJECT_SLUG, { includeDotfiles: true });
+    const manifest = await fs.files.manifest(output.value.slug, PROJECT_SLUG, { includeDotfiles: true });
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
     const probe = await probeVideo(join(manifest.value.path, "original.mp3"));
     expect(probe.audioDuration).toBeCloseTo(15, 1);
 
-    const metadata = await fs.readMetadata(output.value.assetId, "original", PROJECT_SLUG);
+    const metadata = await fs.metadata.artifacts.read(output.value.slug, "original", PROJECT_SLUG);
     expect(metadata.ok).toBe(true);
     if (metadata.ok) {
       expect(metadata.value).toMatchObject({
         origin: "elevenlabs_sound_generation_extend",
         transcription_model: "scribe_v2",
         generation_model: "eleven_text_to_sound_v2",
-        source_asset: source.value.assetId,
+        source_asset: source.value.slug,
         source_description: "horse neighing",
         source_duration: 6.048,
         target_duration: 15,
@@ -215,11 +216,11 @@ describe("extend audio ElevenLabs job", () => {
   }, 30_000);
 
   it("leads the sound generation prompt with a continuation direction like add outro music", async () => {
-    const source = await fs.createAsset("aud", "source", PROJECT_SLUG);
-    const output = await fs.createAsset("aud", "extended", PROJECT_SLUG);
+    const source = await fs.artifacts.create("aud", "source", PROJECT_SLUG);
+    const output = await fs.artifacts.create("aud", "extended", PROJECT_SLUG);
     if (!source.ok) throw new Error(source.error.message);
     if (!output.ok) throw new Error(output.error.message);
-    const sourceWrite = await fs.writeFile(source.value.assetId, "original.mp3", sourceAudio, PROJECT_SLUG);
+    const sourceWrite = await fs.files.write(source.value.slug, "original.mp3", sourceAudio, PROJECT_SLUG);
     if (!sourceWrite.ok) throw new Error(sourceWrite.error.message);
 
     const port = await listen(server);
@@ -230,8 +231,8 @@ describe("extend audio ElevenLabs job", () => {
     });
     const payload: ExtendAudioPayload = {
       type: "extend_audio",
-      audAssetId: output.value.assetId,
-      sourceAssetId: source.value.assetId,
+      audAssetId: output.value.slug,
+      sourceAssetId: source.value.slug,
       sourceFilename: "original.mp3",
       sourceDurationMs: 6_048,
       targetDurationMs: 15_000,
@@ -248,7 +249,7 @@ describe("extend audio ElevenLabs job", () => {
     expect(soundBody.text).not.toContain("unrelated sound");
     expect(soundBody.text?.length).toBeLessThanOrEqual(450);
 
-    const metadata = await fs.readMetadata(output.value.assetId, "original", PROJECT_SLUG);
+    const metadata = await fs.metadata.artifacts.read(output.value.slug, "original", PROJECT_SLUG);
     expect(metadata.ok).toBe(true);
     if (metadata.ok) {
       expect(metadata.value).toMatchObject({ continuation_prompt: "add outro music" });

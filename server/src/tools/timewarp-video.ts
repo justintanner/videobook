@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { findVideoFile } from "videobook-engine";
 import { join } from "node:path";
 import { z } from "zod";
@@ -17,7 +17,7 @@ function errorResult(message: string): {
   };
 }
 
-export function timewarpVideoDef(fs: VideocityFs): ToolDef {
+export function timewarpVideoDef(fs: Engine): ToolDef {
   return {
     name: "timewarp_video",
     description: "Retime one video range and compensate the remaining picture to preserve the original duration and audio.",
@@ -43,7 +43,7 @@ export function timewarpVideoDef(fs: VideocityFs): ToolDef {
         stretch_factor: number;
       };
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) return errorResult(manifestResult.error.message);
       const videoFile = findVideoFile(manifestResult.value.files);
       if (!videoFile) return errorResult(`No video file found in asset ${asset_id}`);

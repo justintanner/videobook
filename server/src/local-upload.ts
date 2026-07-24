@@ -1,4 +1,4 @@
-import type { VideocityFs, FsError } from "videobook-engine";
+import type { Engine, EngineError } from "videobook-engine";
 import { createWriteStream } from "node:fs";
 import { unlink } from "node:fs/promises";
 import * as path from "node:path";
@@ -57,7 +57,7 @@ interface UploadLocalStreamArgs {
   targetAssetId?: string;
 }
 
-function statusCodeForFsError(error: FsError): number {
+function statusCodeForFsError(error: EngineError): number {
   if (error.code === "NOT_FOUND") return 404;
   if (error.code === "INVALID_INPUT" || error.code === "ALREADY_EXISTS") return 400;
   if (error.code === "LOCKED") return 423;
@@ -65,7 +65,7 @@ function statusCodeForFsError(error: FsError): number {
 }
 
 export async function uploadLocalBytes(
-  fs: VideocityFs,
+  fs: Engine,
   args: UploadLocalBytesArgs,
 ): Promise<LocalUploadOutcome> {
   return uploadLocal(fs, {
@@ -75,7 +75,7 @@ export async function uploadLocalBytes(
     waitForProcessing: args.waitForProcessing,
     targetAssetId: args.targetAssetId,
     write: async (assetId, writtenFilename) => {
-      const writeResult = await fs.writeFile(
+      const writeResult = await fs.files.write(
         assetId,
         writtenFilename,
         args.data,
@@ -94,7 +94,7 @@ export async function uploadLocalBytes(
 }
 
 export async function uploadLocalStream(
-  fs: VideocityFs,
+  fs: Engine,
   args: UploadLocalStreamArgs,
 ): Promise<LocalUploadOutcome> {
   return uploadLocal(fs, {
@@ -107,7 +107,14 @@ export async function uploadLocalStream(
       const filePath = path.join(assetPath, writtenFilename);
       try {
         await pipeline(args.stream, createWriteStream(filePath, { flags: "wx" }));
-        await fs.commitOperation("write", assetId, { file: writtenFilename }, args.projectSlug);
+        const ingested = await fs.files.ingestWorkspace(
+          assetId,
+          [writtenFilename],
+          args.projectSlug,
+          "upload_stream",
+          { file: writtenFilename },
+        );
+        if (!ingested.ok) throw new Error(ingested.error.message);
         return { ok: true };
       } catch (error) {
         await unlink(filePath).catch(() => {});
@@ -135,7 +142,7 @@ interface UploadLocalArgs {
 }
 
 // Long enough to cover slow streaming writes for large videos plus the
-// runner's 250ms poll. process_video writes .original.json a few seconds in,
+// runner's 250ms poll. process_video writes native metadata a few seconds in,
 // so even if this lock expires mid-job, the sweep falls back to the metadata
 // presence check and still skips the asset.
 const UPLOAD_LOCK_MS = 5 * 60_000;
@@ -158,7 +165,7 @@ async function runProcessingJob(
 }
 
 async function uploadLocal(
-  fs: VideocityFs,
+  fs: Engine,
   args: UploadLocalArgs,
 ): Promise<LocalUploadOutcome> {
   const ext = path.extname(args.filename).toLowerCase();
@@ -179,7 +186,7 @@ async function uploadLocal(
     if (!args.targetAssetId.startsWith("char-")) {
       return { ok: false, statusCode: 400, message: "Target asset must be a character folder" };
     }
-    const resolveResult = await fs.resolveAssetDir(args.targetAssetId, args.projectSlug);
+    const resolveResult = await fs.workspaces.resolveArtifact(args.targetAssetId, args.projectSlug);
     if (!resolveResult.ok) {
       return { ok: false, statusCode: statusCodeForFsError(resolveResult.error), message: resolveResult.error.message };
     }
@@ -187,7 +194,7 @@ async function uploadLocal(
     assetPath = resolveResult.value;
   } else {
     const assetName = path.basename(args.filename, ext);
-    const assetResult = await fs.createAsset(prefix!, assetName, args.projectSlug);
+    const assetResult = await fs.artifacts.create(prefix!, assetName, args.projectSlug);
     if (!assetResult.ok) {
       return {
         ok: false,
@@ -195,7 +202,7 @@ async function uploadLocal(
         message: assetResult.error.message,
       };
     }
-    assetId = assetResult.value.assetId;
+    assetId = assetResult.value.slug;
     assetPath = assetResult.value.path;
     isNewAsset = true;
   }
@@ -205,7 +212,7 @@ async function uploadLocal(
     const baseName = path.basename(args.filename, ext);
     let counter = 1;
     while (true) {
-      const checkResult = await fs.getManifest(assetId, args.projectSlug);
+      const checkResult = await fs.files.manifest(assetId, args.projectSlug);
       if (!checkResult.ok) break;
       const exists = checkResult.value.files.some((f) => f.name === writtenFilename);
       if (!exists) break;
@@ -219,12 +226,12 @@ async function uploadLocal(
   // streaming write — sees `original.{ext}` with no metadata and no lock —
   // and queues a duplicate process_video that re-extracts every frame after
   // the real job finishes.
-  const lockResult = await fs.acquireLock(assetPath, {
+  const lockResult = await fs.jobs.locks.acquire(assetPath, {
     durationMs: UPLOAD_LOCK_MS,
     data: { state: "uploading" },
   });
   if (!lockResult.ok) {
-    await fs.deleteAsset(assetId, args.projectSlug).catch(() => {});
+    await fs.artifacts.delete(assetId, args.projectSlug).catch(() => {});
     return {
       ok: false,
       statusCode: statusCodeForFsError(lockResult.error),
@@ -274,7 +281,7 @@ async function uploadLocal(
         } as unknown as Record<string, unknown>;
         processingError = await runProcessingJob(jobId, payload, args.waitForProcessing);
       } else {
-        await fs.writeMetadata(assetId, "original", provenance, args.projectSlug);
+        await fs.metadata.artifacts.write(assetId, "original", provenance, args.projectSlug);
       }
       outcome = {
         ok: true,
@@ -289,11 +296,11 @@ async function uploadLocal(
   } finally {
     // deleteAsset refuses while the lock is held, so always release before
     // any cleanup branch below runs.
-    await fs.releaseLock(assetPath).catch(() => {});
+    fs.jobs.locks.release(assetPath);
   }
 
   if (!outcome.ok && isNewAsset) {
-    await fs.deleteAsset(assetId, args.projectSlug).catch(() => {});
+    await fs.artifacts.delete(assetId, args.projectSlug).catch(() => {});
   }
   return outcome;
 }

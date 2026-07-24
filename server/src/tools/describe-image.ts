@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { z } from "zod";
 import { extname } from "node:path";
 import { queue } from "../queue.js";
@@ -6,7 +6,7 @@ import type { ToolDef, ToolResult } from "./tool-def.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
+function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -18,7 +18,7 @@ function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
 }
 
-export function describeImageDef(fs: VideocityFs): ToolDef {
+export function describeImageDef(fs: Engine): ToolDef {
   return {
     name: "describe_image",
     description:
@@ -41,7 +41,7 @@ export function describeImageDef(fs: VideocityFs): ToolDef {
         return error("KIE_API_KEY is not set");
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return error(manifestResult.error.message);
       }
@@ -52,11 +52,11 @@ export function describeImageDef(fs: VideocityFs): ToolDef {
       }
 
       const scriptName = `desc ${asset_id.replace(/^img-/, "")}`;
-      const createResult = await fs.createAsset("script", scriptName, project_slug);
+      const createResult = await fs.artifacts.create("script", scriptName, project_slug);
       if (!createResult.ok) {
         return error(`Failed to create script asset: ${createResult.error.message}`);
       }
-      const { assetId: scriptAssetId } = createResult.value;
+      const { slug: scriptAssetId } = createResult.value;
 
       const jobId = `describe-image-${asset_id}-${Date.now()}`;
       await queue.enqueue(jobId, {

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
@@ -17,7 +17,7 @@ type Payload = {
   resolution?: string;
 };
 
-export function registerGenerateGrokImagineVideoEditFalJob(fs: VideocityFs): void {
+export function registerGenerateGrokImagineVideoEditFalJob(fs: Engine): void {
   registerJobHandler("generate_grok_imagine_video_edit_fal", async (payload, ctx) => {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.projectSlug, p.vidAssetId, ctx, "generate", async (ownerId) => {

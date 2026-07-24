@@ -1,9 +1,10 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, FFMPEG, H264_MEDIUM, AUDIO_OPTS, probeVideo } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { ingestWorkspaceOutputs } from "./_persist-output.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -235,7 +236,7 @@ export async function spliceVideoFiles(options: SpliceFilesOptions): Promise<Spl
   return match;
 }
 
-export function registerSpliceVideoJob(fs: VideocityFs): void {
+export function registerSpliceVideoJob(fs: Engine): void {
   registerJobHandler("splice_video", async (payload, ctx) => {
     const {
       firstPath, secondPath, outputPath,
@@ -282,7 +283,15 @@ export function registerSpliceVideoJob(fs: VideocityFs): void {
         match_score: splice.score,
         spliced_at: new Date().toISOString(),
       };
-      await fs.writeMetadata(assetId, "original", provenance, projectSlug);
+      await ingestWorkspaceOutputs(
+        fs,
+        projectSlug,
+        assetId,
+        [outputPath.split("/").pop()!],
+        "splice_video",
+        provenance,
+      );
+      await fs.metadata.artifacts.write(assetId, "original", provenance, projectSlug);
 
       return { provenance, timestamp: splice.timestamp, score: splice.score };
       },

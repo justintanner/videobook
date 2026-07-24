@@ -1,13 +1,12 @@
+import { fs } from "../fs.js";
 import { describe, it, expect } from "vitest";
 import { VIDEO_MODELS, getVideoToolSchema } from "../video-models.js";
 import { getImageModels, getImageToolSchema } from "../image-models.js";
 import { getAllToolDefs } from "./index.js";
-import { createFs } from "videobook-engine";
 import { getCanonicalName } from "../generation-registry.js";
 import { GENERATION_ACTIONS } from "../generation-registry.js";
 
 describe("schema parity between pickers and tool definitions", () => {
-  const fs = createFs({ projectsDir: "/tmp/test-parity" });
   const tools = getAllToolDefs(fs);
   const toolMap = new Map(tools.map((t) => [t.name, t]));
 

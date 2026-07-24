@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -31,7 +31,7 @@ function deriveAudioName(videoAssetId: string): string {
   return `ext-${baseName}`;
 }
 
-export function extractAudioDef(fs: VideocityFs): ToolDef {
+export function extractAudioDef(fs: Engine): ToolDef {
   return {
     name: "extract_audio",
     description: "Extract the audio track from a video asset as MP3. By default creates a new aud-* asset with original.mp3; pass `destination` to instead write the mp3 as a sibling file inside an existing asset (e.g. plan/s1.mp3). Pass `range` to clip a specific time window (e.g. one scene's audio from a longer source).",
@@ -64,7 +64,7 @@ export function extractAudioDef(fs: VideocityFs): ToolDef {
         destination?: { asset_id: string; filename: string };
         range?: { start_s: number; duration_s: number };
       };
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -107,7 +107,7 @@ export function extractAudioDef(fs: VideocityFs): ToolDef {
       const destinationMode = destination !== undefined;
 
       if (destination !== undefined) {
-        const destManifest = await fs.getManifest(destination.asset_id, project_slug, { includeDotfiles: true });
+        const destManifest = await fs.files.manifest(destination.asset_id, project_slug, { includeDotfiles: true });
         if (!destManifest.ok) {
           return {
             isError: true as const,
@@ -129,14 +129,14 @@ export function extractAudioDef(fs: VideocityFs): ToolDef {
         outputPath = join(audioAssetDir, destination.filename);
       } else {
         const audioName = deriveAudioName(asset_id);
-        const assetResult = await fs.createAsset("aud", audioName, project_slug);
+        const assetResult = await fs.artifacts.create("aud", audioName, project_slug);
         if (!assetResult.ok) {
           return {
             isError: true as const,
             content: [{ type: "text" as const, text: `Failed to create audio asset: ${assetResult.error.message}` }],
           };
         }
-        audioAssetId = assetResult.value.assetId;
+        audioAssetId = assetResult.value.slug;
         audioAssetDir = assetResult.value.path;
         outputPath = join(audioAssetDir, "original.mp3");
       }

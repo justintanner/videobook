@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { modelSlug } from "@apicity/cost";
 import { queue } from "../queue.js";
@@ -31,7 +31,7 @@ const generateNanoBananaProGoogleSchema = {
 
 type Args = SchemaArgs<typeof generateNanoBananaProGoogleSchema>;
 
-export function generateNanoBananaProGoogleDef(fs: VideocityFs): ToolDef {
+export function generateNanoBananaProGoogleDef(fs: Engine): ToolDef {
   return {
     name: "generate_google_flow_nano_banana_pro_image",
     description: "Generate an image using Google Nano Banana Pro via Google Flow. Text-to-image or image-to-image from up to 10 reference images. Creates a new img- asset and enqueues a background job.",
@@ -79,12 +79,12 @@ export function generateNanoBananaProGoogleDef(fs: VideocityFs): ToolDef {
       const nameSlug = modelSlug("kie", "nano-banana-pro");
       const normalizedPrompt = rewriteImageSlugMentions(prompt, rawSlugs, "reference").replace(/@referenceImage_/g, "@reference_");
       const imageName = `${nameSlug}-${slugify(normalizedPrompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset("img", imageName, project_slug);
+      const assetResult = await fs.artifacts.create("img", imageName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
       }
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
       const jobId = `google-${nameSlug}-${imgAssetId}-${Date.now()}`;
 
       await queue.enqueue(jobId, {

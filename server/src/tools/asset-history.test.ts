@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createFsForTest } from "../fs.js";
+import { createEngineForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 // Single shared client/project. Tests use unique asset ids and only read
@@ -51,16 +51,15 @@ describe("asset_history tool", () => {
     expect(commits[0]).toHaveProperty("message");
   });
 
-  it("attaches rewrite metadata when .original.json exists for a script asset", async () => {
-    // Seed a script asset with markdown + .original.json via the fs layer directly.
-    const fs = createFsForTest(tempDir);
-    const createResult = await fs.createAsset("script", "desc-x-pig-1", "test-proj");
+  it("attaches rewrite metadata when native original metadata exists for a script asset", async () => {
+    const fs = createEngineForTest(tempDir);
+    const createResult = await fs.artifacts.create("script", "desc-x-pig-1", "test-proj");
     expect(createResult.ok).toBe(true);
     if (!createResult.ok) return;
-    const scriptAssetId = createResult.value.assetId;
+    const scriptAssetId = createResult.value.slug;
 
-    await fs.writeFile(scriptAssetId, "original.md", "a pig sits upright", "test-proj");
-    await fs.writeMetadata(
+    await fs.files.write(scriptAssetId, "original.md", "a pig sits upright", "test-proj");
+    await fs.metadata.artifacts.write(
       scriptAssetId,
       "original",
       {
@@ -118,15 +117,11 @@ describe("asset_history tool", () => {
     }
   });
 
-  it("returns empty or throws for nonexistent asset", async () => {
+  it("returns an error for a nonexistent asset", async () => {
     const result = await client.callTool({
       name: "asset_history",
       arguments: { asset_id: "img-nonexistent-asset", project_slug: "test-proj" },
     });
-    // asset_history calls fs.getAssetHistory which returns empty array for missing assets
-    const content = result.content as Array<{ type: string; text: string }>;
-    const commits = JSON.parse(content[0].text);
-    expect(Array.isArray(commits)).toBe(true);
-    expect(commits.length).toBe(0);
+    expect(result.isError).toBe(true);
   });
 });

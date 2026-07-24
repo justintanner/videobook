@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { submitKieTask } from "./kie-paygate.js";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
@@ -18,7 +18,7 @@ type GenerateGrokImagineT2vVideoPayload = {
   nsfw_checker?: boolean;
 };
 
-export function registerGenerateGrokImagineT2vVideoJob(fs: VideocityFs): void {
+export function registerGenerateGrokImagineT2vVideoJob(fs: Engine): void {
   registerJobHandler("generate_grok_imagine_t2v_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug, prompt,

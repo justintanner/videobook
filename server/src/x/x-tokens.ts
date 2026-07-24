@@ -6,20 +6,17 @@
  * access token and refresh proactively before each call when expiry is near.
  *
  * Two operating modes:
- *   1. OAuth (recommended): user runs `node scripts/mint-x-token.mjs` once.
- *      The script writes { access_token, refresh_token, expires_at } to the
- *      state file. We refresh automatically thereafter using X_CLIENT_ID +
- *      X_CLIENT_SECRET from .env.
- *   2. Static token: only X_ACCESS_TOKEN is set in .env. Works for ~2h after
- *      a manual mint, then fails until the user updates the env. No refresh.
+ *   1. OAuth (recommended): refreshable token state lives in the engine's
+ *      unversioned runtime settings.
+ *   2. Static token: only X_ACCESS_TOKEN is set in .env.
  */
 
-import { homedir } from "node:os";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
 import { createXOAuth, XError, type XOAuthTokenResponse } from "@apicity/x";
+import type { Engine } from "videobook-engine";
+import { fs as defaultEngine } from "../fs.js";
 
 const REFRESH_BUFFER_MS = 60_000;
+const SETTINGS_KEY = "x.oauth.tokens";
 
 export interface XTokenState {
   access_token: string;
@@ -27,12 +24,7 @@ export interface XTokenState {
   expires_at: string;
 }
 
-function stateFilePath(): string {
-  return (
-    process.env.X_TOKENS_PATH
-    ?? join(homedir(), ".videobook", "x-tokens.json")
-  );
-}
+export type XTokenStore = Pick<Engine, "settings">;
 
 let writeChain: Promise<unknown> = Promise.resolve();
 function serialize<T>(fn: () => Promise<T>): Promise<T> {
@@ -41,36 +33,28 @@ function serialize<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-export async function readTokens(): Promise<XTokenState | null> {
-  let raw: string;
-  try {
-    raw = await readFile(stateFilePath(), "utf8");
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw err;
+export async function readTokens(
+  engine: XTokenStore = defaultEngine,
+): Promise<XTokenState | null> {
+  const parsed = engine.settings.get<Partial<XTokenState>>(SETTINGS_KEY);
+  if (
+    parsed
+    && typeof parsed.access_token === "string"
+    && typeof parsed.refresh_token === "string"
+    && typeof parsed.expires_at === "string"
+  ) {
+    return parsed as XTokenState;
   }
-  try {
-    const parsed = JSON.parse(raw) as Partial<XTokenState>;
-    if (
-      typeof parsed.access_token === "string"
-      && typeof parsed.refresh_token === "string"
-      && typeof parsed.expires_at === "string"
-    ) {
-      return parsed as XTokenState;
-    }
-    return null;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
-export async function writeTokens(state: XTokenState): Promise<void> {
+export async function writeTokens(
+  state: XTokenState,
+  engine: XTokenStore = defaultEngine,
+): Promise<void> {
   await serialize(async () => {
-    const path = stateFilePath();
-    await mkdir(dirname(path), { recursive: true });
-    const tmp = `${path}.tmp.${process.pid}`;
-    await writeFile(tmp, JSON.stringify(state, null, 2), "utf8");
-    await rename(tmp, path);
+    const written = engine.settings.set(SETTINGS_KEY, state);
+    if (!written.ok) throw new Error(written.error.message);
   });
 }
 
@@ -82,14 +66,16 @@ function expiresWithin(state: XTokenState, ms: number): boolean {
 
 export async function refreshTokens(
   state: XTokenState,
-  fetchImpl: typeof fetch = fetch,
+  options: GetTokenOptions = {},
 ): Promise<XTokenState> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const engine = options.engine ?? defaultEngine;
   const clientId = process.env.X_CLIENT_ID;
   const clientSecret = process.env.X_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
     throw new Error(
       "X token expired and X_CLIENT_ID/X_CLIENT_SECRET are not set. "
-      + "Re-run scripts/mint-x-token.mjs or refresh manually.",
+      + "Run x_connect_start or refresh manually.",
     );
   }
   const oauth = createXOAuth({ clientId, clientSecret, fetch: fetchImpl });
@@ -111,30 +97,35 @@ export async function refreshTokens(
     refresh_token: body.refresh_token ?? state.refresh_token,
     expires_at: new Date(Date.now() + body.expires_in * 1000).toISOString(),
   };
-  await writeTokens(next);
+  await writeTokens(next, engine);
   return next;
 }
 
 export interface GetTokenOptions {
   fetchImpl?: typeof fetch;
+  engine?: XTokenStore;
 }
 
 export async function getValidAccessToken(
   opts: GetTokenOptions = {},
 ): Promise<string> {
-  const state = await readTokens();
+  const engine = opts.engine ?? defaultEngine;
+  const state = await readTokens(engine);
   if (state) {
     if (!expiresWithin(state, REFRESH_BUFFER_MS)) {
       return state.access_token;
     }
-    const refreshed = await refreshTokens(state, opts.fetchImpl);
+    const refreshed = await refreshTokens(state, {
+      fetchImpl: opts.fetchImpl,
+      engine,
+    });
     return refreshed.access_token;
   }
   const fallback = process.env.X_ACCESS_TOKEN;
   if (fallback && fallback.length > 0) return fallback;
   throw new Error(
     "No X access token available. Set X_ACCESS_TOKEN in .env (manual, "
-    + "expires in 2h) or run `node scripts/mint-x-token.mjs` to enable "
+    + "expires in 2h) or run x_connect_start to enable "
     + "auto-refreshed tokens. See node_modules/@apicity/x/README.md.",
   );
 }

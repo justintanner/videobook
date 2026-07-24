@@ -1,5 +1,4 @@
-import type { VideobookFs, VideocityFs } from "videobook-engine";
-import { registerJobHandler } from "../queue.js";
+import type { Engine } from "videobook-engine";
 import { registerTranscribeJob } from "./transcribe.js";
 import { registerTranslateTranscriptJob } from "./translate-transcript.js";
 import { registerDownloadVideoJob } from "./download-video.js";
@@ -128,7 +127,7 @@ import { registerExtendAudioJob } from "./extend-audio.js";
 import { registerRemoveSoundJob } from "./remove-sound.js";
 import { registerRunNotebookJob } from "./run-notebook.js";
 
-export function registerAllJobHandlers(fs: VideocityFs): void {
+export function registerAllJobHandlers(fs: Engine): void {
   registerTranscribeJob(fs);
   registerTranslateTranscriptJob(fs);
   registerDownloadVideoJob(fs);
@@ -257,23 +256,6 @@ export function registerAllJobHandlers(fs: VideocityFs): void {
   registerExtendAudioJob(fs);
   registerRemoveSoundJob(fs);
   registerPostToXJob(fs);
-  registerRunNotebookJob(fs as VideobookFs);
+  registerRunNotebookJob(fs as Engine);
 
-  // Formula plan jobs were removed in the plan-notebook rework, but project
-  // queues are persistent (.videocity/state.sqlite): a job enqueued before
-  // the upgrade would dispatch into "No handler for job type" on restart and
-  // flip its asset to a failed state. Drain them as no-ops instead.
-  for (const legacyType of [
-    "plan_visualization",
-    "ensure_plan_source_frames",
-    "match_plan_characters",
-    "plan_clip_show",
-    "regenerate_clip_show_segment",
-    "extract_character",
-  ]) {
-    registerJobHandler(legacyType, async (payload) => {
-      console.warn(`[jobs] dropping legacy ${legacyType} job from before the plan-notebook rework`, payload.projectSlug ?? "");
-      return { dropped: true };
-    });
-  }
 }

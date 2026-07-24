@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { FFMPEG } from "../ffmpeg.js";
-import { createFsForTest } from "../fs.js";
+import { createEngineForTest } from "../fs.js";
 import { queue, waitForJob } from "../queue.js";
 import { createTestClient } from "../test-client.js";
 
@@ -23,7 +23,7 @@ function valueOf<T>(result: { ok: true; value: T } | { ok: false; error: { messa
 
 describe("sync_video_to_audio tool", () => {
   let client: Client;
-  let fs: VideocityFs;
+  let fs: Engine;
   let tempDir: string;
   let silentAssetId: string;
   let audioAssetId: string;
@@ -55,14 +55,14 @@ describe("sync_video_to_audio tool", () => {
     ]);
 
     client = await createTestClient(tempDir);
-    fs = createFsForTest(tempDir);
-    valueOf(await fs.createProject(PROJECT));
-    const created = valueOf(await fs.createAsset("vid", "silent sync source", PROJECT));
-    silentAssetId = created.assetId;
-    valueOf(await fs.writeFile(silentAssetId, "original.mp4", await readFile(silentPath), PROJECT));
-    const audioCreated = valueOf(await fs.createAsset("vid", "audio sync source", PROJECT));
-    audioAssetId = audioCreated.assetId;
-    valueOf(await fs.writeFile(audioAssetId, "original.mp4", await readFile(audioPath), PROJECT));
+    fs = createEngineForTest(tempDir);
+    valueOf(await fs.projects.create(PROJECT));
+    const created = valueOf(await fs.artifacts.create("vid", "silent sync source", PROJECT));
+    silentAssetId = created.slug;
+    valueOf(await fs.files.write(silentAssetId, "original.mp4", await readFile(silentPath), PROJECT));
+    const audioCreated = valueOf(await fs.artifacts.create("vid", "audio sync source", PROJECT));
+    audioAssetId = audioCreated.slug;
+    valueOf(await fs.files.write(audioAssetId, "original.mp4", await readFile(audioPath), PROJECT));
   });
 
   afterAll(async () => {
@@ -148,7 +148,7 @@ describe("sync_video_to_audio tool", () => {
       message: "between",
     },
   ])("rejects numeric $name without enqueueing", async ({ anchors, message }) => {
-    const jobCountBefore = await fs.queue.count(PROJECT);
+    const jobCountBefore = await fs.jobs.queue.count(PROJECT);
     const result = await client.callTool({
       name: "sync_video_to_audio",
       arguments: {
@@ -160,7 +160,7 @@ describe("sync_video_to_audio tool", () => {
 
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain(message);
-    await expect(fs.queue.count(PROJECT)).resolves.toBe(jobCountBefore);
+    expect(fs.jobs.queue.count(PROJECT)).toBe(jobCountBefore);
   });
 
   it.each([
@@ -196,7 +196,7 @@ describe("sync_video_to_audio tool", () => {
       message: "one source frame",
     },
   ])("rejects $name without enqueueing", async ({ anchors, message }) => {
-    const jobCountBefore = await fs.queue.count(PROJECT);
+    const jobCountBefore = await fs.jobs.queue.count(PROJECT);
     const result = await client.callTool({
       name: "sync_video_to_audio",
       arguments: {
@@ -208,7 +208,7 @@ describe("sync_video_to_audio tool", () => {
 
     expect(result.isError).toBe(true);
     expect((result.content as TextContent)[0].text).toContain(message);
-    await expect(fs.queue.count(PROJECT)).resolves.toBe(jobCountBefore);
+    expect(fs.jobs.queue.count(PROJECT)).toBe(jobCountBefore);
   });
 
   it("enqueues a valid numeric anchor request", async () => {

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
@@ -29,7 +29,7 @@ type TimelineConfig = {
   currentOrientation?: ViewerSize;
 };
 
-export function getTimelineDef(fs: VideocityFs): ToolDef {
+export function getTimelineDef(fs: Engine): ToolDef {
   return {
     name: "get_timeline",
     description: "Get the timeline config for a project: { slots, render } where render is the orientation to produce",
@@ -39,7 +39,7 @@ export function getTimelineDef(fs: VideocityFs): ToolDef {
     handler: async (args) => {
       const { project_slug } = args as { project_slug: string };
 
-      const result = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
+      const result = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
       if (result.ok) {
         const config: TimelineConfig = Array.isArray(result.value)
           ? { slots: result.value, render: "landscape" }

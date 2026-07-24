@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { PROMPT_SURFACES, isPromptSurface } from "../prompt-surfaces.js";
@@ -17,11 +17,11 @@ function invalidSurface(value: unknown) {
   };
 }
 
-export function recordPromptDef(fs: VideocityFs): ToolDef {
+export function recordPromptDef(fs: Engine): ToolDef {
   return {
     name: "record_prompt",
     description:
-      "Append a user-typed prompt to the per-surface, per-project history (metadata.sqlite). " +
+      "Append a user-typed prompt to the per-surface, per-project Dolt history. " +
       "Surfaces: " +
       SURFACE_LIST +
       ".",
@@ -55,9 +55,9 @@ export function recordPromptDef(fs: VideocityFs): ToolDef {
           ],
         };
       }
-      const result = await fs.recordPrompt(
-        { surface, prompt, params },
+      const result = await fs.prompts.record(
         slug,
+        { surface, prompt, context: params ?? {} },
       );
       if (!result.ok) {
         return {
@@ -74,22 +74,7 @@ export function recordPromptDef(fs: VideocityFs): ToolDef {
   };
 }
 
-async function maybeImportChatJsonl(
-  fs: VideocityFs,
-  slug: string,
-): Promise<void> {
-  const existing = await fs.countPromptHistory("chat", slug);
-  if (existing > 0) return;
-  const legacy = await fs.readLog("chat-input-history", slug, { limit: 1000 });
-  if (legacy.length === 0) return;
-  for (const entry of legacy) {
-    const message = (entry as { message?: unknown }).message;
-    if (typeof message !== "string" || !message.trim()) continue;
-    await fs.recordPrompt({ surface: "chat", prompt: message }, slug);
-  }
-}
-
-export function listPromptHistoryDef(fs: VideocityFs): ToolDef {
+export function listPromptHistoryDef(fs: Engine): ToolDef {
   return {
     name: "list_prompt_history",
     description:
@@ -114,21 +99,26 @@ export function listPromptHistoryDef(fs: VideocityFs): ToolDef {
       };
       if (!isPromptSurface(surface)) return invalidSurface(surface);
 
-      if (surface === "chat") {
-        try {
-          await maybeImportChatJsonl(fs, slug);
-        } catch {
-          // Best-effort: don't fail the read if legacy log is unreadable.
-        }
-      }
-
-      const entries = await fs.listPromptHistory(
-        { surface, limit: limit ?? 100 },
+      const entries = fs.prompts.list(
         slug,
+        { surface, limit: limit ?? 100 },
       );
+      if (!entries.ok) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: entries.error.message }],
+        };
+      }
+      const payload = entries.value.map((entry) => ({
+        id: entry.id,
+        surface: entry.surface,
+        prompt: entry.prompt,
+        params: entry.context,
+        created_at: entry.createdAt,
+      }));
       return {
         content: [
-          { type: "text" as const, text: JSON.stringify({ entries }) },
+          { type: "text" as const, text: JSON.stringify({ entries: payload }) },
         ],
       };
     },

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import sharp from "sharp";
 import { z, type ZodRawShape } from "zod";
 import { cropToFill, probeImage } from "../image.js";
@@ -59,7 +59,7 @@ const dimensionsByAspectRatio: Record<AspectRatio, Dimensions> = {
   "3:4": { width: 1080, height: 1440 },
 };
 
-export function concatImagesDef(fs: VideocityFs): ToolDef {
+export function concatImagesDef(fs: Engine): ToolDef {
   return {
     name: "concat_images",
     description:
@@ -100,13 +100,13 @@ export function concatImagesDef(fs: VideocityFs): ToolDef {
       }
 
       const assetName = name ?? deriveAssetName(sourceImageIds);
-      const assetResult = await fs.createAsset("img", assetName, project_slug);
+      const assetResult = await fs.artifacts.create("img", assetName, project_slug);
       if (!assetResult.ok) return error(`Failed to create image asset: ${assetResult.error.message}`);
 
-      const imgAssetId = assetResult.value.assetId;
-      const writeResult = await fs.writeFile(imgAssetId, "original.png", output.buffer, project_slug);
+      const imgAssetId = assetResult.value.slug;
+      const writeResult = await fs.files.write(imgAssetId, "original.png", output.buffer, project_slug);
       if (!writeResult.ok) {
-        await fs.deleteAsset(imgAssetId, project_slug).catch(() => undefined);
+        await fs.artifacts.delete(imgAssetId, project_slug).catch(() => undefined);
         return error(writeResult.error.message);
       }
 
@@ -119,9 +119,9 @@ export function concatImagesDef(fs: VideocityFs): ToolDef {
         aspect_ratio: resolvedAspectRatio,
         source_images: sourceImageIds,
       };
-      const metadataResult = await fs.writeMetadata(imgAssetId, "original", metadata, project_slug);
+      const metadataResult = await fs.metadata.artifacts.write(imgAssetId, "original", metadata, project_slug);
       if (!metadataResult.ok) {
-        await fs.deleteAsset(imgAssetId, project_slug).catch(() => undefined);
+        await fs.artifacts.delete(imgAssetId, project_slug).catch(() => undefined);
         return error(metadataResult.error.message);
       }
 
@@ -129,12 +129,12 @@ export function concatImagesDef(fs: VideocityFs): ToolDef {
       try {
         variantsResult = await writeImageVariants(fs, imgAssetId, output.buffer, project_slug);
       } catch (e) {
-        await fs.deleteAsset(imgAssetId, project_slug).catch(() => undefined);
+        await fs.artifacts.delete(imgAssetId, project_slug).catch(() => undefined);
         const message = e instanceof Error ? e.message : String(e);
         return error(`Failed to write image variants: ${message}`);
       }
       if (!variantsResult.ok) {
-        await fs.deleteAsset(imgAssetId, project_slug).catch(() => undefined);
+        await fs.artifacts.delete(imgAssetId, project_slug).catch(() => undefined);
         return error(variantsResult.error);
       }
 
@@ -159,7 +159,7 @@ export function concatImagesDef(fs: VideocityFs): ToolDef {
 }
 
 async function readSourceImages(
-  fs: VideocityFs,
+  fs: Engine,
   rawSlugs: readonly (string | null)[],
   projectSlug: string,
 ): Promise<{ ok: true; value: SourceImageSlot[] } | { ok: false; error: string }> {
@@ -174,13 +174,13 @@ async function readSourceImages(
       return { ok: false, error: `image_slugs entries must be img-* assets, got: ${assetId}` };
     }
 
-    const manifestResult = await fs.getManifest(assetId, projectSlug);
+    const manifestResult = await fs.files.manifest(assetId, projectSlug);
     if (!manifestResult.ok) return { ok: false, error: manifestResult.error.message };
 
     const imageFile = findImageFile(manifestResult.value.files);
     if (!imageFile) return { ok: false, error: `No image file found in asset ${assetId}` };
 
-    const readResult = await fs.readFile(assetId, imageFile.name, projectSlug);
+    const readResult = await fs.files.read(assetId, imageFile.name, projectSlug);
     if (!readResult.ok) return { ok: false, error: readResult.error.message };
 
     const buffer = Buffer.isBuffer(readResult.value)
@@ -275,7 +275,7 @@ function cellFor(index: number, grid: Grid, dimensions: Dimensions): Placement["
 }
 
 export async function writeImageVariants(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   buffer: Buffer,
   projectSlug: string,
@@ -286,9 +286,9 @@ export async function writeImageVariants(
     cropToFill(buffer, 1080, 1080),
   ]);
   const results = await Promise.all([
-    fs.writeFile(assetId, "landscape.jpg", landscape, projectSlug),
-    fs.writeFile(assetId, "portrait.jpg", portrait, projectSlug),
-    fs.writeFile(assetId, "square.jpg", square, projectSlug),
+    fs.files.write(assetId, "landscape.jpg", landscape, projectSlug),
+    fs.files.write(assetId, "portrait.jpg", portrait, projectSlug),
+    fs.files.write(assetId, "square.jpg", square, projectSlug),
   ]);
   const failure = results.find((result) => !result.ok);
   if (failure && !failure.ok) return { ok: false, error: failure.error.message };

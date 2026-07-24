@@ -2,9 +2,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createFs } from "videobook-engine";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
+import { createEngine } from "videobook-engine";
 
 import { withLogging } from "./log-wrapper.js";
 import { videobookDomainDefs } from "./videobook-domain.js";
@@ -24,11 +24,14 @@ describe("project book tools", () => {
 
   it("records explicit lifecycle and layout actions in the canonical book", async () => {
     root = await mkdtemp(join(tmpdir(), "videobook-project-book-"));
-    const fs = createFs({
-      projectsDir: join(root, "projects"),
-      dataDir: join(root, "data"),
+    const fs = createEngine({ rootDir: root });
+    await fs.projects.create("studio");
+    const prompt = await fs.artifacts.create({
+      project: "studio",
+      kind: "prompt",
+      slug: "prm-cat",
     });
-    await fs.createProject("studio");
+    if (!prompt.ok) throw new Error(prompt.error.message);
     const tools = new Map(
       videobookDomainDefs(fs).map((definition) => [
         definition.name,
@@ -87,11 +90,20 @@ describe("project book tools", () => {
 
   it("records a successful inherited write tool with inputs and outputs", async () => {
     root = await mkdtemp(join(tmpdir(), "videobook-wrapper-book-"));
-    const fs = createFs({
-      projectsDir: join(root, "projects"),
-      dataDir: join(root, "data"),
+    const fs = createEngine({ rootDir: root });
+    await fs.projects.create("studio");
+    const prompt = await fs.artifacts.create({
+      project: "studio",
+      kind: "prompt",
+      slug: "prm-cat",
     });
-    await fs.createProject("studio");
+    const image = await fs.artifacts.create({
+      project: "studio",
+      kind: "image",
+      slug: "img-cat",
+    });
+    if (!prompt.ok) throw new Error(prompt.error.message);
+    if (!image.ok) throw new Error(image.error.message);
     const wrapped = withLogging({
       name: "generate_test_image",
       description: "test",
@@ -114,16 +126,22 @@ describe("project book tools", () => {
       prompt_slug: "@prm-cat",
     });
 
-    const book = await fs.getProjectBook("studio", { limit: 100 });
+    const book = await fs.history.projectBook("studio", { limit: 100 });
     expect(book.ok).toBe(true);
     if (!book.ok) throw new Error(book.error.message);
     expect(book.value.actions.find((action) =>
-      action.operation === "book:tool-generate-test-image"
+      action.operation === "tool-generate-test-image"
     )).toMatchObject({
       scope: "artifact",
-      inputArtifacts: [{ id: "prm-cat" }],
-      outputArtifacts: [{ id: "img-cat" }],
-      targetArtifactId: "img-cat",
+      inputArtifacts: [{
+        id: prompt.value.artifactId,
+        slug: "prm-cat",
+      }],
+      outputArtifacts: [{
+        id: image.value.artifactId,
+        slug: "img-cat",
+      }],
+      targetArtifactId: image.value.artifactId,
       phase: "completed",
       events: [
         { phase: "requested" },
@@ -135,11 +153,14 @@ describe("project book tools", () => {
 
   it("records failed inherited writes as lifecycle trails", async () => {
     root = await mkdtemp(join(tmpdir(), "videobook-wrapper-failed-book-"));
-    const fs = createFs({
-      projectsDir: join(root, "projects"),
-      dataDir: join(root, "data"),
+    const fs = createEngine({ rootDir: root });
+    await fs.projects.create("studio");
+    const image = await fs.artifacts.create({
+      project: "studio",
+      kind: "image",
+      slug: "img-cat",
     });
-    await fs.createProject("studio");
+    if (!image.ok) throw new Error(image.error.message);
     const wrapped = withLogging({
       name: "generate_test_video",
       description: "test",
@@ -157,14 +178,17 @@ describe("project book tools", () => {
       image_slug: "@img-cat",
     });
 
-    const book = await fs.getProjectBook("studio", { limit: 100 });
+    const book = await fs.history.projectBook("studio", { limit: 100 });
     expect(book.ok).toBe(true);
     if (!book.ok) throw new Error(book.error.message);
     expect(book.value.actions.find((action) =>
-      action.operation === "book:tool-generate-test-video"
+      action.operation === "tool-generate-test-video"
     )).toMatchObject({
       phase: "failed",
-      inputArtifacts: [{ id: "img-cat" }],
+      inputArtifacts: [{
+        id: image.value.artifactId,
+        slug: "img-cat",
+      }],
       outputArtifacts: [],
       events: [
         { phase: "requested" },

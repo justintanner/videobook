@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -23,7 +23,7 @@ async function probeMedia(filePath: string): Promise<{ hasAudio: boolean; durati
   return { hasAudio, duration };
 }
 
-export function changeVideoSpeedDef(fs: VideocityFs): ToolDef {
+export function changeVideoSpeedDef(fs: Engine): ToolDef {
   return {
     name: "change_video_speed",
     description: "Change video playback speed (speed up or slow down). Operates in-place with git versioning.",
@@ -50,7 +50,7 @@ export function changeVideoSpeedDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

@@ -1,6 +1,6 @@
+import { createEngineForTest } from "../fs.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { createFs } from "videobook-engine";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -70,15 +70,15 @@ describe("clean_video_audio tool", () => {
 
   it("rejects an asset without a video file", async () => {
     process.env.ELEVENLABS_API_KEY = "test-key";
-    const fs = createFs({ projectsDir: tempDir });
-    const created = await fs.createAsset("vid", "no-video", "clean-audio-proj");
+    const fs = createEngineForTest(tempDir);
+    const created = await fs.artifacts.create("vid", "no-video", "clean-audio-proj");
     if (!created.ok) throw new Error(created.error.message);
-    const written = await fs.writeFile(created.value.assetId, "notes.txt", "hello", "clean-audio-proj");
+    const written = await fs.files.write(created.value.slug, "notes.txt", "hello", "clean-audio-proj");
     if (!written.ok) throw new Error(written.error.message);
 
     const result = await client.callTool({
       name: "clean_video_audio",
-      arguments: { asset_id: created.value.assetId, project_slug: "clean-audio-proj" },
+      arguments: { asset_id: created.value.slug, project_slug: "clean-audio-proj" },
     });
 
     expect(result.isError).toBe(true);

@@ -3,9 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
-import type { VideocityFs } from "videobook-engine";
-import { createFsForTest } from "../fs.js";
-import { queue, setProjectsDir } from "../queue.js";
+import type { Engine } from "videobook-engine";
+import { createEngineForTest } from "../fs.js";
+import { queue, setEngineRoot } from "../queue.js";
 import { createQrOutroDef } from "./create-qr-outro.js";
 
 const PROJECT = "qr-outro-test";
@@ -16,13 +16,13 @@ function parseResult(result: { content: Array<{ text: string }> }): Record<strin
 
 describe("create_qr_outro", () => {
   let tempDir: string;
-  let fs: VideocityFs;
+  let fs: Engine;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-qr-outro-tool-"));
-    fs = createFsForTest(tempDir);
-    await setProjectsDir(tempDir, fs);
-    const project = await fs.createProject(PROJECT);
+    fs = createEngineForTest(tempDir);
+    await setEngineRoot(tempDir, fs);
+    const project = await fs.projects.create(PROJECT);
     expect(project.ok).toBe(true);
   });
 
@@ -33,7 +33,7 @@ describe("create_qr_outro", () => {
   });
 
   async function createImage(name: string, color: string): Promise<string> {
-    const asset = await fs.createAsset("img", name, PROJECT);
+    const asset = await fs.artifacts.create("img", name, PROJECT);
     if (!asset.ok) throw new Error(asset.error.message);
     const png = await sharp({
       create: {
@@ -43,22 +43,22 @@ describe("create_qr_outro", () => {
         background: color,
       },
     }).png().toBuffer();
-    const written = await fs.writeFile(asset.value.assetId, "original.png", png, PROJECT);
+    const written = await fs.files.write(asset.value.slug, "original.png", png, PROJECT);
     if (!written.ok) throw new Error(written.error.message);
-    return asset.value.assetId;
+    return asset.value.slug;
   }
 
   async function createAudio(name: string): Promise<string> {
-    const asset = await fs.createAsset("aud", name, PROJECT);
+    const asset = await fs.artifacts.create("aud", name, PROJECT);
     if (!asset.ok) throw new Error(asset.error.message);
-    const written = await fs.writeFile(
-      asset.value.assetId,
+    const written = await fs.files.write(
+      asset.value.slug,
       "original.wav",
       Buffer.from("RIFF0000WAVE"),
       PROJECT,
     );
     if (!written.ok) throw new Error(written.error.message);
-    return asset.value.assetId;
+    return asset.value.slug;
   }
 
   it("normalizes references and queues a portrait render", async () => {
@@ -86,7 +86,7 @@ describe("create_qr_outro", () => {
     expect(data.asset_id).toBe("vid-qr-outro-qr-one");
     expect(data.job_id).toMatch(/^render-qr-outro-/);
 
-    const status = await fs.getAssetStatus(String(data.asset_id), PROJECT);
+    const status = await fs.status.get(String(data.asset_id), PROJECT);
     expect(status.ok && status.value).toBe("render-queued-portrait");
   });
 
@@ -143,18 +143,18 @@ describe("create_qr_outro", () => {
   });
 
   it("rejects missing media files before creating an output", async () => {
-    const empty = await fs.createAsset("img", "empty-qr", PROJECT);
+    const empty = await fs.artifacts.create("img", "empty-qr", PROJECT);
     if (!empty.ok) throw new Error(empty.error.message);
-    const before = await fs.listAssets(PROJECT);
+    const before = await fs.artifacts.list(PROJECT);
 
     const result = await createQrOutroDef(fs).handler({
       project_slug: PROJECT,
-      qr_image_slugs: [empty.value.assetId],
+      qr_image_slugs: [empty.value.slug],
     });
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("No image file found");
-    expect(await fs.listAssets(PROJECT)).toHaveLength(before.length);
+    expect(await fs.artifacts.list(PROJECT)).toHaveLength(before.length);
   });
 
   it("rejects references with the wrong asset type", async () => {

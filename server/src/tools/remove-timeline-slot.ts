@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -59,7 +59,7 @@ function trimTrailingEmptySlots(slots: TimelineSlot[]): number {
   return removed;
 }
 
-export function removeTimelineSlotDef(fs: VideocityFs): ToolDef {
+export function removeTimelineSlotDef(fs: Engine): ToolDef {
   return {
     name: "remove_timeline_slot",
     description: "Remove a stored timeline slot, shift later slots left, and discard redundant trailing empty slots",
@@ -78,7 +78,7 @@ export function removeTimelineSlotDef(fs: VideocityFs): ToolDef {
         return toolError(`Invalid slot format: "${slot}". Expected format like "s01", "s02", etc.`);
       }
 
-      const readResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
+      const readResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
       if (!readResult.ok) {
         if (readResult.error.code === "NOT_FOUND") {
           return toolError("No timeline exists for this project");
@@ -93,7 +93,7 @@ export function removeTimelineSlotDef(fs: VideocityFs): ToolDef {
 
       const [removedSlot] = config.slots.splice(index, 1);
       const trimmedTrailingSlots = trimTrailingEmptySlots(config.slots);
-      const writeResult = await fs.writeProjectMeta("timeline", config, project_slug);
+      const writeResult = await fs.metadata.projects.write("timeline", config, project_slug);
       if (!writeResult.ok) return toolError(writeResult.error.message);
 
       return {

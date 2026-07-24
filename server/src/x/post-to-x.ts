@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { findPrimaryMediaFile } from "videobook-engine";
 import { createX } from "@apicity/x";
 import type { XProvider } from "@apicity/x";
@@ -49,7 +49,7 @@ function inferMediaType(filename: string): MediaTypeInfo | null {
 export type PostOrientation = "portrait" | "landscape";
 
 export interface PostToXArgs {
-  fs: VideocityFs;
+  fs: Engine;
   assetId: string;
   projectSlug: string;
   text?: string;
@@ -117,9 +117,12 @@ function tweetUrl(id: string): string {
   return `https://x.com/i/web/status/${id}`;
 }
 
-async function getXClient(injected?: XProvider): Promise<XProvider> {
+async function getXClient(
+  fs: Engine,
+  injected?: XProvider,
+): Promise<XProvider> {
   if (injected) return injected;
-  const accessToken = await getValidAccessToken();
+  const accessToken = await getValidAccessToken({ engine: fs });
   return createX({ accessToken });
 }
 
@@ -218,7 +221,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
     signal,
   } = args;
 
-  const manifestResult = await fs.getManifest(assetId, projectSlug);
+  const manifestResult = await fs.files.manifest(assetId, projectSlug);
   if (!manifestResult.ok) {
     throw new Error(`Asset ${assetId} not found: ${manifestResult.error.message}`);
   }
@@ -244,14 +247,14 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
       tempPath = transformed.tempPath;
       info = { mediaType: transformed.mediaType, mediaCategory: "tweet_video" };
     } else {
-      const readResult = await fs.readFile(assetId, file.name, projectSlug);
+      const readResult = await fs.files.read(assetId, file.name, projectSlug);
       if (!readResult.ok) {
         throw new Error(`Failed to read ${file.name}: ${readResult.error.message}`);
       }
       buffer = readResult.value;
     }
   } else {
-    const readResult = await fs.readFile(assetId, file.name, projectSlug);
+    const readResult = await fs.files.read(assetId, file.name, projectSlug);
     if (!readResult.ok) {
       throw new Error(`Failed to read ${file.name}: ${readResult.error.message}`);
     }
@@ -260,7 +263,7 @@ export async function postToX(args: PostToXArgs): Promise<PostToXResult> {
 
   let mediaId: string;
   try {
-    const x = await getXClient(args.x);
+    const x = await getXClient(args.fs, args.x);
     mediaId = await uploadMedia(x, buffer, info, signal);
 
     const tweetRes = await x.post.v2.tweets(

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import type { KlingElement, KlingVideoRequest, MultiShotPrompt } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -32,7 +32,7 @@ type GenerateKling30VideoPayload = {
   multi_prompt?: MultiShotPrompt[];
 };
 
-export function registerGenerateKling30VideoJob(fs: VideocityFs): void {
+export function registerGenerateKling30VideoJob(fs: Engine): void {
   registerJobHandler("generate_kling30_video", async (payload, ctx) => {
     const {
       imageInputs, elementInputs, sourceImageIds,

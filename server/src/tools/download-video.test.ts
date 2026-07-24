@@ -26,7 +26,7 @@ describe("download_video tool", () => {
     // Stub the real handler: these tests cover the tool's enqueue-time
     // validation, not the download. The real handler shells out to yt-dlp,
     // which won't return for a fake URL — and runner.stop() in the next
-    // test's setProjectsDir blocks until in-flight jobs drain, blowing the
+    // test's setEngineRoot blocks until in-flight jobs drain, blowing the
     // beforeEach hook timeout.
     registerJobHandler("download_video", async () => ({ stubbed: true }));
     await client.callTool({

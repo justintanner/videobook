@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { findVideoFile, type VideocityFs } from "videobook-engine";
+import { findVideoFile, type Engine } from "videobook-engine";
 import { z } from "zod";
 import { getApiKey } from "../api-key.js";
 import type { AnalyzeKeywordPlacementResult } from "../jobs/analyze-keyword-placement.js";
@@ -36,7 +36,7 @@ import type { ToolDef } from "./tool-def.js";
 import { RENDER_ORIENTATIONS } from "./sync.js";
 
 async function persistSettings(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   enabled: boolean,
@@ -45,12 +45,12 @@ async function persistSettings(
   keywords: string[] | null,
 ): Promise<void> {
   for (const orientation of RENDER_ORIENTATIONS) {
-    const existing = await fs.readMetadata<Record<string, unknown>>(
+    const existing = await fs.metadata.artifacts.read<Record<string, unknown>>(
       assetId,
       `${orientation}.render`,
       projectSlug,
     );
-    const write = await fs.writeMetadata(assetId, `${orientation}.render`, {
+    const write = await fs.metadata.artifacts.write(assetId, `${orientation}.render`, {
       ...(existing.ok ? existing.value : {}),
       keywordGraphicsEnabled: enabled,
       keywordGraphicsMaxCount: maxCount,
@@ -74,7 +74,7 @@ function isFontSize(value: unknown): value is FontSizePreset {
 }
 
 async function placementSummary(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
   graphics: KeywordGraphic[],
@@ -82,7 +82,7 @@ async function placementSummary(
 ): Promise<Record<Orientation, Record<string, unknown>>> {
   const summaries = {} as Record<Orientation, Record<string, unknown>>;
   for (const orientation of RENDER_ORIENTATIONS) {
-    const storedResult = await fs.readMetadata<Record<string, unknown>>(
+    const storedResult = await fs.metadata.artifacts.read<Record<string, unknown>>(
       assetId,
       `${orientation}.render`,
       projectSlug,
@@ -115,7 +115,7 @@ function errorResult(status: string, message: string, details: Record<string, un
   };
 }
 
-export function animateKeywordsDef(fs: VideocityFs): ToolDef {
+export function animateKeywordsDef(fs: Engine): ToolDef {
   return {
     name: "animate_keywords",
     description:
@@ -165,7 +165,7 @@ export function animateKeywordsDef(fs: VideocityFs): ToolDef {
         return errorResult("invalid_asset", "asset_id must start with vid-");
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug, { includeDotfiles: true });
+      const manifestResult = await fs.files.manifest(asset_id, project_slug, { includeDotfiles: true });
       if (!manifestResult.ok) {
         return errorResult("asset_not_found", manifestResult.error.message);
       }
@@ -184,7 +184,7 @@ export function animateKeywordsDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const transcriptResult = await fs.readFile(asset_id, "elevenlabs.json", project_slug);
+      const transcriptResult = await fs.files.read(asset_id, "elevenlabs.json", project_slug);
       if (!transcriptResult.ok) {
         return errorResult(
           "missing_transcript",
@@ -244,7 +244,7 @@ export function animateKeywordsDef(fs: VideocityFs): ToolDef {
             "KIE_API_KEY is required to verify face-safe keyword placement.",
           );
         }
-        const clear = await fs.generationErrors.clear(project_slug, asset_id);
+        const clear = await fs.jobs.failures.clear(project_slug, asset_id);
         if (!clear.ok) {
           return errorResult("placement_analysis_failed", clear.error.message);
         }

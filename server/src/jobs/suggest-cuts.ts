@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { readFile as fsReadFile } from "node:fs/promises";
@@ -85,7 +85,7 @@ const ModelOutputSchema = z.object({
   summary: z.string(),
 });
 
-export function registerSuggestCutsJob(fs: VideocityFs): void {
+export function registerSuggestCutsJob(fs: Engine): void {
   registerJobHandler("suggest_cuts", async (payload, ctx) => {
     const { assetId, projectSlug } = payload as SuggestCutsPayload;
 
@@ -157,7 +157,7 @@ export function registerSuggestCutsJob(fs: VideocityFs): void {
         asset_id: assetId,
       };
 
-      const writeResult = await fs.writeFile(
+      const writeResult = await fs.files.write(
         assetId,
         ".suggest-cuts.json",
         JSON.stringify(final, null, 2),

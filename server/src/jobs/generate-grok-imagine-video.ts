@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { submitKieTask } from "./kie-paygate.js";
 import type { GrokImageToVideoRequest } from "@apicity/kie";
 import type { XaiVideoAsyncResponse, XaiVideoGenerateRequest } from "@apicity/xai";
@@ -26,7 +26,7 @@ type GenerateGrokImagineVideoPayload = {
   _provider?: string;
 };
 
-export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
+export function registerGenerateGrokImagineVideoJob(fs: Engine): void {
   registerJobHandler("generate_grok_imagine_video", async (payload, ctx) => {
     const {
       sourceImageIds, imageFilenames, vidAssetId, vidAssetDir,
@@ -56,7 +56,7 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
         { prompt, duration, resolution, aspect_ratio, nsfw_checker },
         imageUrls,
       );
-      await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
+      await fs.metadata.artifacts.write(vidAssetId, "generation-payload", request, projectSlug);
       const { request_id } = await callXaiPaid<XaiVideoGenerateRequest, XaiVideoAsyncResponse>(
         provider.post.v1.videos.generations,
         XAI_VIDEO_GENERATIONS_DOT_PATH,
@@ -64,11 +64,10 @@ export function registerGenerateGrokImagineVideoJob(fs: VideocityFs): void {
       );
 
       {
-        const _ptResult = await fs.pendingTasks.write(projectSlug, {
+        const _ptResult = await fs.jobs.pending.write(projectSlug, {
           taskId: request_id,
           taskType: "xai_grok_imagine_video",
-          assetId: vidAssetId,
-          assetDir: vidAssetDir,
+          artifactId: vidAssetId,
           meta: {
             sourceImageIds,
             ...(prompt !== undefined ? { prompt } : {}),

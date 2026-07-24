@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
 import { uploadAssetToFal } from "./_fal-upload.js";
@@ -23,7 +23,7 @@ type Payload = {
   seed?: number;
 };
 
-export function registerGenerateNanoBanana2LiteEditFalJob(fs: VideocityFs): void {
+export function registerGenerateNanoBanana2LiteEditFalJob(fs: Engine): void {
   registerJobHandler("generate_nano_banana_2_lite_edit_fal", async (payload, ctx) => {
     requireApiKey("FAL_API_KEY");
     const p = payload as Payload;

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
@@ -16,7 +16,7 @@ type GenerationPayloadResponse = {
   taskType: string | null;
 };
 
-export function generationPayloadDef(fs: VideocityFs): ToolDef {
+export function generationPayloadDef(fs: Engine): ToolDef {
   return {
     name: "inspect_generation_request",
     description: "Read the persisted Kie request payload, task meta, and failure info for a single asset. Used by the /inbox hover inspector to show what was sent to the provider.",
@@ -28,9 +28,9 @@ export function generationPayloadDef(fs: VideocityFs): ToolDef {
       const { project_slug, asset_id } = args as { project_slug: string; asset_id: string };
 
       const [payloadRes, taskRes, errorRes] = await Promise.all([
-        fs.readMetadata<unknown>(asset_id, "generation-payload", project_slug),
-        fs.pendingTasks.read(project_slug, asset_id),
-        fs.generationErrors.read(project_slug, asset_id),
+        fs.metadata.artifacts.read<unknown>(asset_id, "generation-payload", project_slug),
+        fs.jobs.pending.read(project_slug, asset_id),
+        fs.jobs.failures.read(project_slug, asset_id),
       ]);
 
       const task = taskRes.ok ? taskRes.value : null;

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
@@ -146,7 +146,7 @@ function formatTldrMarkdown(r: DescribeImageResult): string {
   return `${r.prompt.trim()}\n`;
 }
 
-export function registerRewriteScriptJob(fs: VideocityFs): void {
+export function registerRewriteScriptJob(fs: Engine): void {
   registerJobHandler("rewrite_script", async (payload, ctx) => {
     const {
       assetId: scriptAssetId,
@@ -160,7 +160,7 @@ export function registerRewriteScriptJob(fs: VideocityFs): void {
     return withLocalLease(fs, projectSlug, scriptAssetId, ctx, "rewrite_script", async () => {
       const responses = buildResponses(requireApiKey("KIE_API_KEY"));
 
-      const readResult = await fs.readFile(scriptAssetId, SCRIPT_FILENAME, projectSlug);
+      const readResult = await fs.files.read(scriptAssetId, SCRIPT_FILENAME, projectSlug);
       if (!readResult.ok) {
         throw new Error(`Failed to read ${SCRIPT_FILENAME} from ${scriptAssetId}: ${readResult.error.message}`);
       }
@@ -177,12 +177,12 @@ export function registerRewriteScriptJob(fs: VideocityFs): void {
       });
 
       const markdown = tldr ? formatTldrMarkdown(rewritten) : formatMarkdown(rewritten);
-      const writeResult = await fs.writeFile(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);
+      const writeResult = await fs.files.write(scriptAssetId, SCRIPT_FILENAME, markdown, projectSlug);
       if (!writeResult.ok) {
         throw new Error(`Failed to write ${SCRIPT_FILENAME} to ${scriptAssetId}: ${writeResult.error.message}`);
       }
 
-      await fs.writeMetadata(
+      await fs.metadata.artifacts.write(
         scriptAssetId,
         "original",
         {

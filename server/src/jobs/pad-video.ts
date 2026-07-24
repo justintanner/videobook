@@ -1,9 +1,10 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { rm } from "node:fs/promises";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { join, basename } from "node:path";
 import { withLockedLocalLease } from "./_lease.js";
+import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
 const LOCK_DURATION_MS = 300_000;
 
@@ -17,7 +18,7 @@ export type PadVideoPayload = {
   hasAudio: boolean;
 };
 
-export function registerPadVideoJob(fs: VideocityFs): void {
+export function registerPadVideoJob(fs: Engine): void {
   registerJobHandler("pad_video", async (payload, ctx) => {
     console.log("pad_video payload:", payload);
     const { sourcePath, assetDir, sourceAssetId, projectSlug, targetSecs, hasAudio } = payload as PadVideoPayload;
@@ -69,21 +70,23 @@ export function registerPadVideoJob(fs: VideocityFs): void {
           };
 
           const inputFilename = basename(sourcePath);
-          const outputFilename = basename(outputPath);
-
-          await fs.deleteFile(sourceAssetId, inputFilename, projectSlug);
-          await fs.renameFile(sourceAssetId, outputFilename, inputFilename, projectSlug);
+          await replaceArtifactFileFromPath(
+            fs,
+            projectSlug,
+            sourceAssetId,
+            inputFilename,
+            outputPath,
+          );
 
           for (const stale of [
             ".original.analysis.json",
             ".analysis.gpt4otrans.json",
             "elevenlabs.json",
-            ".kie-task.json",
           ]) {
-            await fs.deleteFile(sourceAssetId, stale, projectSlug);
+            await fs.files.delete(sourceAssetId, stale, projectSlug);
           }
 
-          await fs.writeMetadata(sourceAssetId, "original", provenance, projectSlug);
+          await fs.metadata.artifacts.write(sourceAssetId, "original", provenance, projectSlug);
 
           const videoPath = join(assetDir, inputFilename);
           return { videoPath, provenance };

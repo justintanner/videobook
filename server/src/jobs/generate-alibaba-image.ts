@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { createAlibaba, type AlibabaImageGenerationRequest } from "@apicity/alibaba";
 import { uploadAssetToAlibaba } from "./_alibaba-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -21,10 +21,10 @@ type GenerateAlibabaImagePayload = {
   seed?: number;
 };
 
-export function registerGenerateAlibabaImageJob(fs: VideocityFs): void {
+export function registerGenerateAlibabaImageJob(fs: Engine): void {
   registerJobHandler("generate_alibaba_image", async (payload, ctx) => {
     const {
-      prompt, imageInputs, imgAssetId, imgAssetDir,
+      prompt, imageInputs, imgAssetId,
       sourceImageIds, projectSlug, model, size, n, watermark, thinkingMode, seed,
     } = payload as GenerateAlibabaImagePayload;
 
@@ -41,15 +41,14 @@ export function registerGenerateAlibabaImageJob(fs: VideocityFs): void {
       { prompt, model, size, n, watermark, thinking_mode: thinkingMode, seed },
       uploadedUrls,
     );
-    await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
+    await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request, projectSlug);
     const submitResult = await provider.post.api.v1.services.aigc.imageGeneration.generation(request);
     const taskId = submitResult.output.task_id;
     {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+      const _ptResult = await fs.jobs.pending.write(projectSlug, {
         taskId,
         taskType: "alibaba_image",
-        assetId: imgAssetId,
-        assetDir: imgAssetDir,
+        artifactId: imgAssetId,
         meta: {
           sourceImageIds,
           prompt,
@@ -69,10 +68,10 @@ export function registerGenerateAlibabaImageJob(fs: VideocityFs): void {
   });
 }
 
-export function registerGenerateAlibabaImageProJob(fs: VideocityFs): void {
+export function registerGenerateAlibabaImageProJob(fs: Engine): void {
   registerJobHandler("generate_alibaba_image_pro", async (payload, ctx) => {
     const {
-      prompt, imageInputs, imgAssetId, imgAssetDir,
+      prompt, imageInputs, imgAssetId,
       sourceImageIds, projectSlug, size, n, watermark, thinkingMode, seed,
     } = payload as GenerateAlibabaImagePayload;
 
@@ -89,15 +88,14 @@ export function registerGenerateAlibabaImageProJob(fs: VideocityFs): void {
       { prompt, model: "wan2.7-image-pro", size, n, watermark, thinking_mode: thinkingMode, seed },
       uploadedUrls,
     );
-    await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
+    await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request, projectSlug);
     const submitResult = await provider.post.api.v1.services.aigc.imageGeneration.generation(request);
     const taskId = submitResult.output.task_id;
     {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+      const _ptResult = await fs.jobs.pending.write(projectSlug, {
         taskId,
         taskType: "alibaba_image_pro",
-        assetId: imgAssetId,
-        assetDir: imgAssetDir,
+        artifactId: imgAssetId,
         meta: {
           sourceImageIds,
           prompt,

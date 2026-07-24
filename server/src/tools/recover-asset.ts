@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 
@@ -6,7 +6,7 @@ function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
 }
 
-export function recoverAssetDef(fs: VideocityFs): ToolDef {
+export function recoverAssetDef(fs: Engine): ToolDef {
   return {
     name: "recover_asset",
     description:
@@ -21,7 +21,7 @@ export function recoverAssetDef(fs: VideocityFs): ToolDef {
       const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
       const assetId = asset_id.replace(/^@/, "");
 
-      const cleared = await fs.generationErrors.clear(project_slug, assetId);
+      const cleared = await fs.jobs.failures.clear(project_slug, assetId);
       if (!cleared.ok) {
         return error(`Failed to clear error for ${assetId}: ${cleared.error.message}`);
       }

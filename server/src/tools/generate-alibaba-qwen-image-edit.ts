@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import {
@@ -14,7 +14,7 @@ import { apicityField, apicityStringArrayField, apicityStringField } from "./sch
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
+function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -47,7 +47,7 @@ const generateAlibabaQwenImageEditSchema = {
 
 type Args = SchemaArgs<typeof generateAlibabaQwenImageEditSchema>;
 
-export function generateAlibabaQwenImageEditDef(fs: VideocityFs): ToolDef {
+export function generateAlibabaQwenImageEditDef(fs: Engine): ToolDef {
   return {
     name: "generate_alibaba_qwen_2_0_edit_image",
     description: "Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.",
@@ -106,7 +106,7 @@ export function generateAlibabaQwenImageEditDef(fs: VideocityFs): ToolDef {
             content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${id}` }],
           };
         }
-        const manifestResult = await fs.getManifest(id, project_slug);
+        const manifestResult = await fs.files.manifest(id, project_slug);
         if (!manifestResult.ok) {
           return {
             isError: true as const,
@@ -124,7 +124,7 @@ export function generateAlibabaQwenImageEditDef(fs: VideocityFs): ToolDef {
         sourceImageIds.push(id);
       }
 
-      const assetResult = await fs.createAsset("img", `${modelSlug("alibaba", resolvedModel)}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("img", `${modelSlug("alibaba", resolvedModel)}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -132,7 +132,7 @@ export function generateAlibabaQwenImageEditDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `alibaba-${modelSlug("alibaba", resolvedModel)}-edit-${imgAssetId}-${Date.now()}`;
 

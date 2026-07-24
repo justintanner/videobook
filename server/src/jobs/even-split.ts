@@ -1,7 +1,8 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { rm } from "node:fs/promises";
 import { registerJobHandler, queue } from "../queue.js";
 import { trimRange, trimRangeExact, assertSaneTrimOutput } from "./trim-video.js";
+import { ingestWorkspaceOutputs } from "./_persist-output.js";
 
 type EvenSplitChunkPayload = {
   assetId: string;
@@ -30,7 +31,7 @@ type EvenSplitPayload = {
 };
 
 async function buildChunk(
-  fs: VideocityFs,
+  fs: Engine,
   args: {
     sourcePath: string;
     outputPath: string;
@@ -66,11 +67,19 @@ async function buildChunk(
     throw err;
   }
   if (!skipMetadata) {
-    await fs.writeMetadata(assetId, "original", provenance, projectSlug);
+    await ingestWorkspaceOutputs(
+      fs,
+      projectSlug,
+      assetId,
+      [outputPath.split("/").pop()!],
+      "even_split_chunk",
+      provenance,
+    );
+    await fs.metadata.artifacts.write(assetId, "original", provenance, projectSlug);
   }
 }
 
-export function registerEvenSplitJob(fs: VideocityFs): void {
+export function registerEvenSplitJob(fs: Engine): void {
   registerJobHandler("even_split", async (payload) => {
     const { sourcePath, sourceAssetId, chunks, projectSlug, destination } = payload as EvenSplitPayload;
     const splitAtIso = new Date().toISOString();
@@ -108,21 +117,24 @@ export function registerEvenSplitJob(fs: VideocityFs): void {
       // One commit captures the whole batch; no process_video pass (those exist
       // to extract per-asset waveform/metadata for standalone vid-* assets,
       // not for scratch siblings inside a shared asset like plan/).
-      await fs.commitOperation(
-        "even_split",
+      const filenames = chunks.map((chunk) => chunk.outputPath.split("/").pop()!);
+      await ingestWorkspaceOutputs(
+        fs,
+        projectSlug,
         destination.assetId,
+        filenames,
+        "even_split",
         {
           source_asset_id: sourceAssetId,
-          filenames: chunks.map((c) => c.outputPath.split("/").pop()),
+          filenames,
           chunk_count: chunks.length,
           split_at_iso: splitAtIso,
         },
-        projectSlug,
       );
       return {
         success: true,
         destination_asset_id: destination.assetId,
-        filenames: chunks.map((c) => c.outputPath.split("/").pop()),
+        filenames,
       };
     }
 

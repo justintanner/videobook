@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { registerJobHandler, queue } from "../queue.js";
 import { cropRegion, probeImage } from "../image.js";
 import { withLockedLocalLease } from "./_lease.js";
@@ -31,7 +31,7 @@ type CropImagePayload = {
   projectSlug: string;
 };
 
-export function registerCropImageJob(fs: VideocityFs): void {
+export function registerCropImageJob(fs: Engine): void {
   registerJobHandler("crop_image", async (payload, ctx) => {
     const {
       inputFilename, ratio, rect,
@@ -47,7 +47,7 @@ export function registerCropImageJob(fs: VideocityFs): void {
       "crop",
       { durationMs: LOCK_DURATION_MS, data: { state: "cropping", ratio } },
       async () => {
-        const readResult = await fs.readFile(assetId, inputFilename, projectSlug);
+        const readResult = await fs.files.read(assetId, inputFilename, projectSlug);
         if (!readResult.ok) {
           throw new Error(`Failed to read ${inputFilename}: ${readResult.error.message}`);
         }
@@ -83,14 +83,14 @@ export function registerCropImageJob(fs: VideocityFs): void {
         }
 
         const finalFilename = "original.jpg";
-        const writeResult = await fs.writeFile(assetId, finalFilename, cropped, projectSlug);
+        const writeResult = await fs.files.write(assetId, finalFilename, cropped, projectSlug);
         if (!writeResult.ok) {
           throw new Error(`Failed to write cropped image: ${writeResult.error.message}`);
         }
 
         // Drop the previous original when it was a different filename (e.g. original.png).
         if (inputFilename !== finalFilename) {
-          await fs.deleteFile(assetId, inputFilename, projectSlug);
+          await fs.files.delete(assetId, inputFilename, projectSlug);
         }
 
         return { extension: ".jpg" as const };

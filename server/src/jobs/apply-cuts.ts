@@ -1,8 +1,9 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { join, basename } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
 const LOCK_DURATION_MS = 600_000;
 
@@ -10,7 +11,6 @@ const STALE_DERIVATIVES = [
   ".original.analysis.json",
   ".analysis.gpt4otrans.json",
   "elevenlabs.json",
-  ".kie-task.json",
   ".suggest-cuts.json",
 ];
 
@@ -57,7 +57,7 @@ function buildFilterGraph(keeps: Array<[number, number]>, hasAudio: boolean): st
   return parts.join(";");
 }
 
-export function registerApplyCutsJob(fs: VideocityFs): void {
+export function registerApplyCutsJob(fs: Engine): void {
   registerJobHandler("apply_cuts", async (payload, ctx) => {
     const {
       inputPath, outputPath, cuts, duration, hasAudio,
@@ -92,12 +92,16 @@ export function registerApplyCutsJob(fs: VideocityFs): void {
       await runFfmpeg(args);
 
       const inputFilename = basename(inputPath);
-      const outputFilename = basename(outputPath);
-      await fs.deleteFile(assetId, inputFilename, projectSlug);
-      await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
+      await replaceArtifactFileFromPath(
+        fs,
+        projectSlug,
+        assetId,
+        inputFilename,
+        outputPath,
+      );
 
       for (const stale of STALE_DERIVATIVES) {
-        await fs.deleteFile(assetId, stale, projectSlug);
+        await fs.files.delete(assetId, stale, projectSlug);
       }
 
       const newVideoPath = join(assetDir, inputFilename);

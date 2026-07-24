@@ -1,4 +1,5 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
+import { rm } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { probeVideo, runFfmpeg, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { registerJobHandler, queue } from "../queue.js";
@@ -8,6 +9,7 @@ import {
   type TimewarpPlan,
 } from "../timewarp.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
 const LOCK_DURATION_MS = 900_000;
 
@@ -107,30 +109,24 @@ export async function validateTimewarpOutput(
 }
 
 async function deleteIfPresent(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   filename: string,
   projectSlug: string,
 ): Promise<void> {
-  const result = await fs.deleteFile(assetId, filename, projectSlug);
+  const result = await fs.files.delete(assetId, filename, projectSlug);
   if (!result.ok && result.error.code !== "NOT_FOUND") {
     throw new Error(`Failed to delete ${filename}: ${result.error.message}`);
   }
 }
 
 async function discardTemp(
-  fs: VideocityFs,
-  assetId: string,
   outputPath: string,
-  projectSlug: string,
 ): Promise<void> {
-  const filename = basename(outputPath);
-  await fs.deleteFile(assetId, filename, projectSlug).catch(() => undefined);
-  const remaining = await fs.readFile(assetId, filename, projectSlug);
-  if (remaining.ok) throw new Error(`Failed to discard temporary file ${filename}`);
+  await rm(outputPath, { force: true });
 }
 
-export function registerTimewarpVideoJob(fs: VideocityFs): void {
+export function registerTimewarpVideoJob(fs: Engine): void {
   registerJobHandler("timewarp_video", async (payload, ctx) => {
     const {
       inputPath,
@@ -171,34 +167,26 @@ export function registerTimewarpVideoJob(fs: VideocityFs): void {
           );
           await validateTimewarpOutput(inputPath, outputPath, plan);
         } catch (error) {
-          await discardTemp(fs, assetId, outputPath, projectSlug);
+          await discardTemp(outputPath);
           throw error;
         }
 
-        const history = await fs.getAssetHistory(assetId, projectSlug, 1);
+        const history = await fs.history.artifact(assetId, projectSlug, 1);
         const restoreCommit = history[0]?.hash;
         try {
           const inputFilename = basename(inputPath);
-          const outputFilename = basename(outputPath);
-          const rendered = await fs.readFile(assetId, outputFilename, projectSlug);
-          if (!rendered.ok) {
-            throw new Error(`Failed to read rendered timewarp: ${rendered.error.message}`);
-          }
-          const written = await fs.writeFile(
+          await replaceArtifactFileFromPath(
+            fs,
+            projectSlug,
             assetId,
             inputFilename,
-            rendered.value,
-            projectSlug,
+            outputPath,
           );
-          if (!written.ok) {
-            throw new Error(`Failed to replace ${inputFilename}: ${written.error.message}`);
-          }
-          await discardTemp(fs, assetId, outputPath, projectSlug);
           for (const filename of STALE_VISUAL_DERIVATIVES) {
             await deleteIfPresent(fs, assetId, filename, projectSlug);
           }
         } catch (error) {
-          if (restoreCommit) await fs.restoreAsset(assetId, restoreCommit, projectSlug);
+          if (restoreCommit) await fs.history.restoreArtifact(assetId, restoreCommit, projectSlug);
           throw error;
         }
 

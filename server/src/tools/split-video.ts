@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -48,7 +48,7 @@ function deriveChunkName(originalAssetId: string, suffix: "1" | "2"): string {
   return `${tail}-${suffix}`;
 }
 
-export function splitVideoDef(fs: VideocityFs): ToolDef {
+export function splitVideoDef(fs: Engine): ToolDef {
   return {
     name: "split_video",
     description:
@@ -75,7 +75,7 @@ export function splitVideoDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -131,14 +131,14 @@ export function splitVideoDef(fs: VideocityFs): ToolDef {
       const nameA = deriveChunkName(asset_id, "1");
       const nameB = deriveChunkName(asset_id, "2");
 
-      const createA = await fs.createAsset(prefix, nameA, project_slug);
+      const createA = await fs.artifacts.create(prefix, nameA, project_slug);
       if (!createA.ok) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: `Failed to create chunk A asset: ${createA.error.message}` }],
         };
       }
-      const createB = await fs.createAsset(prefix, nameB, project_slug);
+      const createB = await fs.artifacts.create(prefix, nameB, project_slug);
       if (!createB.ok) {
         return {
           isError: true as const,
@@ -146,8 +146,8 @@ export function splitVideoDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const assetIdA = createA.value.assetId;
-      const assetIdB = createB.value.assetId;
+      const assetIdA = createA.value.slug;
+      const assetIdB = createB.value.slug;
       const assetDirA = createA.value.path;
       const assetDirB = createB.value.path;
       const outputPathA = join(assetDirA, "original.mp4");

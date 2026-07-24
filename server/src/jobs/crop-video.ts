@@ -1,9 +1,10 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { rm } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
 const LOCK_DURATION_MS = 300_000;
 const ASPECT_TOLERANCE = 0.02;
@@ -52,7 +53,7 @@ type CropVideoPayload = {
   projectSlug: string;
 };
 
-export function registerCropVideoJob(fs: VideocityFs): void {
+export function registerCropVideoJob(fs: Engine): void {
   registerJobHandler("crop_video", async (payload, ctx) => {
     const {
       inputPath, outputPath, ratio, rect,
@@ -123,17 +124,20 @@ export function registerCropVideoJob(fs: VideocityFs): void {
         }
 
         const inputFilename = basename(inputPath);
-        const outputFilename = basename(outputPath);
-        await fs.deleteFile(assetId, inputFilename, projectSlug);
-        await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
+        await replaceArtifactFileFromPath(
+          fs,
+          projectSlug,
+          assetId,
+          inputFilename,
+          outputPath,
+        );
 
         for (const stale of [
           ".original.analysis.json",
           ".analysis.gpt4otrans.json",
           "elevenlabs.json",
-          ".kie-task.json",
         ]) {
-          await fs.deleteFile(assetId, stale, projectSlug);
+          await fs.files.delete(assetId, stale, projectSlug);
         }
 
         const videoPath = join(assetDir, inputFilename);

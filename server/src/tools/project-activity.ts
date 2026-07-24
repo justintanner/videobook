@@ -1,4 +1,4 @@
-import type { BookAction, VideobookFs } from "videobook-engine";
+import type { BookAction, Engine } from "videobook-engine";
 import { z } from "zod";
 import { isExcludedAction } from "./activity-policy.js";
 import type { ToolDef } from "./tool-def.js";
@@ -94,16 +94,12 @@ function actionEntry(entry: BookAction): ProjectActivityEntry | null {
     entry.outputArtifacts[0]?.id ??
     entry.inputArtifacts[0]?.id ??
     extractAssetIdFromPayload(payload);
-  const source =
-    typeof entry.details.book_action_id === "string"
-      ? "action"
-      : "snapshot";
   return {
     hash: event.revision,
     action,
     title: normalizeActionName(action),
     category: categorize(action, payload),
-    source,
+    source: "action",
     date: event.date,
     rewindable: true,
     payload,
@@ -115,7 +111,7 @@ function byNewest(a: ProjectActivityEntry, b: ProjectActivityEntry): number {
   return new Date(b.date).getTime() - new Date(a.date).getTime();
 }
 
-export function projectActivityDef(fs: VideobookFs): ToolDef {
+export function projectActivityDef(fs: Engine): ToolDef {
   return {
     name: "project_activity",
     description: "Read project-changing actions from the canonical project book",
@@ -127,7 +123,7 @@ export function projectActivityDef(fs: VideobookFs): ToolDef {
       const { project_slug, limit } = args as { project_slug: string; limit?: number };
       const max = limit ?? 50;
       const fetchLimit = Math.max(max * 4, 100);
-      const book = await fs.getProjectBook(project_slug, {
+      const book = await fs.history.projectBook(project_slug, {
         limit: fetchLimit,
       });
       if (!book.ok) {

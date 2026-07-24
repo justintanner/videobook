@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { findVideoFile } from "videobook-engine";
 import { join } from "node:path";
 import { z } from "zod";
@@ -60,7 +60,7 @@ function validateVideoAnchors(
   }
 }
 
-export function syncVideoToAudioDef(fs: VideocityFs): ToolDef {
+export function syncVideoToAudioDef(fs: Engine): ToolDef {
   return {
     name: "sync_video_to_audio",
     description: "Smoothly retime a video's picture through multiple anchors while preserving its original audio unchanged.",
@@ -79,7 +79,7 @@ export function syncVideoToAudioDef(fs: VideocityFs): ToolDef {
         >;
       };
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) return errorResult(manifestResult.error.message);
       const videoFile = findVideoFile(manifestResult.value.files);
       if (!videoFile) return errorResult(`No video file found in asset ${asset_id}`);

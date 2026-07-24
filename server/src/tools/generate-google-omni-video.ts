@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
 import {
@@ -69,7 +69,7 @@ const generateGoogleOmniVideoSchema = {
 
 type Args = SchemaArgs<typeof generateGoogleOmniVideoSchema>;
 
-export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
+export function generateGoogleOmniVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_google_flow_omni_flash_video",
     description: "Generate a video using Google Gemini Omni via Google Flow. Multimodal: a text prompt plus optional first frame, reference images (0-7), or one reference video clip with in/out timecodes. Creates a new vid- asset and enqueues a background job.",
@@ -188,12 +188,12 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
       );
 
       const videoName = `${SLUG}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = imageInputs.map((i) => i.assetId);
       const sourceVideoIds = videoInput ? [videoInput.assetId] : [];
       const sourceFirstFrameId = firstFrame ? firstFrame.assetId : undefined;
@@ -221,7 +221,7 @@ export function generateGoogleOmniVideoDef(fs: VideocityFs): ToolDef {
 
       // Persist the exact enqueued payload so retry_generation can replay it
       // after a failure without re-resolving inputs.
-      await fs.writeMetadata(vidAssetId, "generation-request", jobPayload, project_slug);
+      await fs.metadata.artifacts.write(vidAssetId, "generation-request", jobPayload, project_slug);
 
       await queue.enqueue(jobId, jobPayload);
 

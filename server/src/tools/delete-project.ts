@@ -1,8 +1,8 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function deleteProjectDef(fs: VideocityFs): ToolDef {
+export function deleteProjectDef(fs: Engine): ToolDef {
   return {
     name: "delete_project",
     description:
@@ -12,7 +12,7 @@ export function deleteProjectDef(fs: VideocityFs): ToolDef {
     },
     handler: async (args) => {
       const { project_slug } = args as { project_slug: string };
-      const result = await fs.deleteProject(project_slug);
+      const result = await fs.projects.delete(project_slug);
       if (result.ok) {
         return {
           content: [

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalXaiGrokImagineImageEditRequestSchema } from "@apicity/fal/zod";
@@ -20,7 +20,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateGrokImagineImageEditFalDef(fs: VideocityFs): ToolDef {
+export function generateGrokImagineImageEditFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_grok_imagine_edit_image",
     description: "Edit images via fal.ai using xAI Grok Imagine Image edit with 1-3 @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
@@ -35,10 +35,10 @@ export function generateGrokImagineImageEditFalDef(fs: VideocityFs): ToolDef {
       const resolved = await resolveImageSlugs(fs, image_slugs, project_slug);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.createAsset("img", `${modelSlug("kie", "grok-imagine/image-to-image")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "grok-imagine/image-to-image")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "grok-imagine/image-to-image")}-edit-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

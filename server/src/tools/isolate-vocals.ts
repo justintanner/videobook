@@ -2,14 +2,14 @@
  * isolate_vocals MCP tool — isolates vocals from video/audio assets
  * via ElevenLabs cloud API through KIE.
  */
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
 import { findAudioFile } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 
-export function isolateVocalsDef(fs: VideocityFs): ToolDef {
+export function isolateVocalsDef(fs: Engine): ToolDef {
   return {
     name: "isolate_vocals",
     description:
@@ -32,7 +32,7 @@ export function isolateVocalsDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

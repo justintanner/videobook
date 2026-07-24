@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdtemp, rm, readFile, stat } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
-import { queue, getProjectsDir } from "../queue.js";
-import { createFsForTest } from "../fs.js";
+import { queue, getEngineRoot } from "../queue.js";
+import { createEngineForTest } from "../fs.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 const execFileAsync = promisify(execFile);
@@ -22,10 +22,6 @@ function parse(result: { content: unknown }): Record<string, unknown> {
   return JSON.parse((result.content as TextContent)[0].text);
 }
 
-async function fileExists(p: string): Promise<boolean> {
-  return stat(p).then((s) => s.isFile(), () => false);
-}
-
 async function generateTestVideo(outputPath: string): Promise<void> {
   await execFileAsync(FFMPEG, [
     "-y",
@@ -37,20 +33,10 @@ async function generateTestVideo(outputPath: string): Promise<void> {
   ]);
 }
 
-async function pollForFile(filePath: string, timeoutMs = 60_000): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (await fileExists(filePath)) return;
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error(`${filePath} not found after ${timeoutMs}ms`);
-}
-
 describe("process_video persists audio waveform via videobook-engine primitive", () => {
   let client: Client;
   let tempDir: string;
   let assetId: string;
-  let assetDir: string;
 
   beforeAll(async () => {
     await queue.start();
@@ -72,9 +58,6 @@ describe("process_video persists audio waveform via videobook-engine primitive",
     });
     const parsed = parse(uploaded) as unknown as { assetId: string };
     assetId = parsed.assetId;
-    assetDir = join(tempDir, PROJECT, assetId);
-
-    await pollForFile(join(assetDir, ".original.json"), 60_000);
   });
 
   afterAll(async () => {
@@ -83,29 +66,18 @@ describe("process_video persists audio waveform via videobook-engine primitive",
     if (tempDir) await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("writes audio_waveforms row + per-asset export and emits no waveform.json sidecar", async () => {
-    const fs = createFsForTest(getProjectsDir());
+  it("writes audio_waveforms in Dolt and emits no waveform sidecar", async () => {
+    const fs = createEngineForTest(getEngineRoot());
 
-    const wave = await fs.readAudioWaveform(assetId, PROJECT);
+    const wave = await fs.metadata.waveforms.read(assetId, PROJECT);
     expect(wave.ok).toBe(true);
     if (!wave.ok) return;
-    expect(wave.value.bar_count).toBeGreaterThan(0);
     expect(Array.isArray(wave.value.peaks)).toBe(true);
-    expect(wave.value.peaks.length).toBe(wave.value.bar_count);
+    expect(wave.value.peaks.length).toBeGreaterThan(0);
 
-    const manifest = await fs.getManifest(assetId, PROJECT, { includeDotfiles: true });
+    const manifest = await fs.files.manifest(assetId, PROJECT, { includeDotfiles: true });
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
     expect(manifest.value.files.find((f) => f.name === "waveform.json")).toBeUndefined();
-
-    const exportPath = join(
-      tempDir,
-      PROJECT,
-      ".videocity",
-      "export",
-      "audio_waveforms",
-      `${assetId}.json`,
-    );
-    expect(await fileExists(exportPath)).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { Qwen2ImageEditRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -28,7 +28,7 @@ const generateQwen2ImageEditSchema = {
 
 type Args = SchemaArgs<typeof generateQwen2ImageEditSchema>;
 
-export function generateQwen2ImageEditDef(fs: VideocityFs): ToolDef {
+export function generateQwen2ImageEditDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_qwen_2_0_edit_image",
     description: "Edit an image using Qwen2 image-edit on Kie. Requires exactly 1 reference image. Creates a new img- asset and enqueues a background job.",
@@ -79,7 +79,7 @@ export function generateQwen2ImageEditDef(fs: VideocityFs): ToolDef {
 
       const nameSeed = sourceImageIds[0] ?? `ephemeral-${Date.now()}`;
       const imgName = deriveImageName(nameSeed);
-      const assetResult = await fs.createAsset(prefix, imgName, project_slug);
+      const assetResult = await fs.artifacts.create(prefix, imgName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -87,7 +87,7 @@ export function generateQwen2ImageEditDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `qwen2-image-edit-${imgAssetId}-${Date.now()}`;
 

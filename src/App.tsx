@@ -64,6 +64,7 @@ import {
   type InspectorTab,
 } from '@/components/videobook/CellInspectorPanel'
 import { NotebookStageBoard } from '@/components/videobook/NotebookStageBoard'
+import { useProjectScreenLoader } from '@/hooks/useProjectScreenLoader'
 import {
   clampNotebookViewport,
   nextNotebookGridSlot,
@@ -503,6 +504,19 @@ function App() {
     return next
   }, [call])
 
+  const loadProjectScreen = useCallback(async () => {
+    setBusy(true)
+    try {
+      const next = await loadProjects()
+      setRecords(next)
+      setWorkspaceNotice(`Updated ${new Date().toLocaleTimeString()}`)
+    } catch (error) {
+      setWorkspaceNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }, [loadProjects])
+
   const loadCommands = useCallback(async () => {
     const value = await call('slash_commands', {})
     const next = asCommands(value)
@@ -737,6 +751,11 @@ function App() {
       setBusy(false)
     }
   }, [call, reloadProjectBook, screen])
+
+  useProjectScreenLoader({
+    active: mcp.state === 'ready' && screen === 'projects',
+    load: loadProjectScreen,
+  })
 
   const createEntity = useCallback(async (
     type: EntityKind,
@@ -1413,7 +1432,11 @@ function App() {
 
           <aside className={`inspector ${panelOpen ? '' : 'inspector-closed'}`}>
             <header>
-              <span>INSPECTOR</span>
+              <span>
+                {selected
+                  ? `${selected.data.kind.toUpperCase()} CELL`
+                  : 'INSPECTOR'}
+              </span>
               <button
                 type="button"
                 onClick={() => setPanelOpen(false)}
@@ -1679,8 +1702,20 @@ function WorkspaceScreen({
         <div className="record-grid">
           {records.length === 0 ? (
             <>
-              <EmptyRecord icon={Boxes} label="No records loaded" />
-              <EmptyRecord icon={Sparkles} label="Use Refresh or the command bar" />
+              <EmptyRecord
+                icon={Boxes}
+                label={busy && screen === 'projects'
+                  ? 'Loading projects…'
+                  : screen === 'projects'
+                    ? 'No projects yet'
+                    : 'No records loaded'}
+              />
+              <EmptyRecord
+                icon={Sparkles}
+                label={screen === 'projects'
+                  ? 'Create a project or use the command bar'
+                  : 'Use Refresh or the command bar'}
+              />
               <EmptyRecord icon={BookOpen} label="Local data stays revisioned" />
             </>
           ) : (

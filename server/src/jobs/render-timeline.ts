@@ -1,10 +1,11 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { join } from "node:path";
 import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { registerJobHandler } from "../queue.js";
 import { runFfmpeg, probeVideo, AUDIO_OPTS, H264_MEDIUM } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { ingestWorkspaceOutputs } from "./_persist-output.js";
 
 const LOCK_DURATION_MS = 1_800_000;
 
@@ -300,7 +301,7 @@ async function runCopyConcat(opts: {
   }
 }
 
-export function registerRenderTimelineJob(fs: VideocityFs): void {
+export function registerRenderTimelineJob(fs: Engine): void {
   registerJobHandler("render_timeline", async (payload, ctx) => {
     ctx.signal.throwIfAborted();
     const {
@@ -310,11 +311,19 @@ export function registerRenderTimelineJob(fs: VideocityFs): void {
       resolvedAudio = [],
     } = payload as RenderTimelinePayload;
 
-    const projectResult = await fs.getProject(projectSlug);
+    const projectResult = await fs.projects.get(projectSlug);
     if (!projectResult.ok) throw new Error(projectResult.error.message);
-    const projectDir = projectResult.value.path;
-
-    const finalDir = join(projectDir, "final");
+    let finalResult = fs.artifacts.get(projectSlug, "final");
+    if (!finalResult.ok) {
+      const created = await fs.artifacts.create({
+        project: projectSlug,
+        kind: "final",
+        slug: "final",
+      });
+      if (!created.ok) throw new Error(created.error.message);
+      finalResult = created;
+    }
+    const finalDir = finalResult.value.path;
     await mkdir(finalDir, { recursive: true });
 
     return withLockedLocalLease(
@@ -393,15 +402,22 @@ export function registerRenderTimelineJob(fs: VideocityFs): void {
       const thumbPath = join(finalDir, "original.jpg");
       await runFfmpeg(["-y", "-i", outputPath, "-frames:v", "1", "-q:v", "2", thumbPath], { signal: ctx.signal });
 
+      await ingestWorkspaceOutputs(
+        fs,
+        projectSlug,
+        "final",
+        [outputFilename, "original.jpg"],
+        "render_timeline",
+        { orientation, slotCount: n },
+      );
+
       const renderMeta = {
         slotCount: n,
         slots: resolvedSlots.map((s) => s.slug),
         output: outputFilename,
         renderedAt: new Date().toISOString(),
       };
-      await fs.writeMetadata("final", `${orientation}.render`, renderMeta, projectSlug);
-
-      await fs.commitOperation("render-timeline", "final", { orientation, slotCount: n }, projectSlug);
+      await fs.metadata.artifacts.write("final", `${orientation}.render`, renderMeta, projectSlug);
 
       return { success: true, output: outputFilename };
       },

@@ -1,39 +1,23 @@
 /**
- * SQLite-backed persistent queue.
+ * Dolt-native persistent queue.
  *
- * Storage is per-project: each project's `.videocity/state.sqlite` holds its
- * own pending_jobs rows. The queue routes enqueue calls to the right project's
- * state DB by joining `projectsDir` (settable for tests via setProjectsDir)
- * with the payload's `projectSlug`.
+ * Every project's jobs, leases, provider tasks, and terminal audit rows live
+ * in the engine's single catalog. Workspaces are scratch space only.
  */
 
-import * as path from "node:path";
-import * as fsp from "node:fs/promises";
-
 import {
-  type VideocityFs,
-  type AssetWorkKind,
+  type Engine,
+  type ArtifactWorkKind,
   type Job,
   type JobHandler,
   type JobState,
   QueueRunner,
-  createFs,
-  isValidProjectSlug,
-  queueApi,
-  closeStateDb,
+  createEngine,
 } from "videobook-engine";
 
-import { fs as defaultFs, PROJECTS_DIR } from "./fs.js";
+import { fs as defaultFs, DATA_DIR } from "./fs.js";
+import { dirname } from "node:path";
 import { runWithJobDeadline } from "./job-deadline.js";
-
-async function projectExists(dir: string): Promise<boolean> {
-  try {
-    await fsp.access(path.join(dir, ".videobook"));
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 type JobPayload = Record<string, unknown>;
 
@@ -52,6 +36,7 @@ export interface JobHandlerContext {
   signal: AbortSignal;
   setLease(token: LeaseToken): void;
   getOwnerId(): string;
+  markAssetFailureHandled(): void;
 }
 
 export type ServerJobHandler = (
@@ -93,11 +78,10 @@ function extractType(payload: Record<string, unknown>): string {
   return t;
 }
 
-let activeProjectsDir: string = PROJECTS_DIR;
-const fsRef: { current: VideocityFs } = { current: defaultFs };
+let activeEngineRoot = dirname(DATA_DIR);
+const fsRef: { current: Engine } = { current: defaultFs };
 
 interface RunnerInfo {
-  projectsDir: string;
   slug: string;
   runner: QueueRunner;
 }
@@ -112,10 +96,10 @@ const JOB_INDEX_MAX = 2000;
 const rewindingProjects = new Set<string>();
 
 type Orientation = "portrait" | "landscape" | "square";
-type ClassifiedJob = { kind: AssetWorkKind; orientation?: Orientation };
+type ClassifiedJob = { kind: ArtifactWorkKind; orientation?: Orientation };
 
 /**
- * Maps a job type to the clean AssetWorkKind that the engine writes into
+ * Maps a job type to the clean ArtifactWorkKind that the engine writes into
  * assets.meta.kind at enqueue time. Mirrors what the corresponding handler
  * later passes to beginAssetWork, so a single in-progress UI state is
  * derivable for the asset across the queued → working → ready lifecycle.
@@ -137,7 +121,7 @@ function jobTypeToAssetWorkKind(
       o === "portrait" || o === "landscape" || o === "square"
         ? (o as Orientation)
         : undefined;
-    const kind: AssetWorkKind =
+    const kind: ArtifactWorkKind =
       jobType === "render_timeline" ? "final" : "render";
     return orientation ? { kind, orientation } : { kind };
   }
@@ -194,7 +178,7 @@ function jobTypeToAssetWorkKind(
 /** Subset of jobTypeToAssetWorkKind used by the wrapper to decide whether to
  *  pre-claim a local lease before invoking the handler (Pattern A handoff).
  *  Only generation/extend/upscale/isolate_vocals follow this pattern. */
-function providerHandoffKindFor(jobType: string): AssetWorkKind | null {
+function providerHandoffKindFor(jobType: string): ArtifactWorkKind | null {
   if (jobType === "isolate_vocals") return "isolate";
   if (
     jobType.startsWith("generate_") ||
@@ -204,13 +188,6 @@ function providerHandoffKindFor(jobType: string): AssetWorkKind | null {
     return "generate";
   }
   return null;
-}
-
-function projectDirFor(slug: string): string {
-  if (!isValidProjectSlug(slug)) {
-    throw new Error(`Invalid project slug: ${slug}`);
-  }
-  return path.join(activeProjectsDir, slug);
 }
 
 function makeWrappedResolver(): (type: string) => JobHandler | null {
@@ -227,6 +204,7 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
       // would dead-narrow to `never`). A ref-cell sidesteps that — TS treats
       // each `leaseRef.current` read as a fresh access at its declared type.
       const leaseRef: { current: LeaseToken | null } = { current: null };
+      let assetFailureHandled = false;
       let heartbeat: ReturnType<typeof setInterval> | null = null;
       const providerKind = providerHandoffKindFor(type);
       const ctx: JobHandlerContext = {
@@ -270,6 +248,9 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
           }
           return current.ownerId;
         },
+        markAssetFailureHandled() {
+          assetFailureHandled = true;
+        },
       };
 
       try {
@@ -281,7 +262,7 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
               `Provider handoff job ${type} requires projectSlug and asset id`,
             );
           }
-          const claimed = await fsRef.current.assetWork.begin(
+          const claimed = await fsRef.current.jobs.artifactWork.begin(
             projectSlug,
             assetId,
             {
@@ -298,11 +279,16 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
             // After a Pattern A owner→task handoff the owner lease is dead;
             // stop renewing it.
             if (leaseRef.current?.kind !== "owner") return;
-            void fsRef.current.assetWork
-              .renew(projectSlug, assetId, claimed.ownerId, 60_000)
-              .catch((e) =>
-                console.warn(`[heartbeat] renew failed for ${assetId}:`, e),
+            try {
+              fsRef.current.jobs.artifactWork.renew(
+                projectSlug,
+                assetId,
+                claimed.ownerId,
+                60_000,
               );
+            } catch (error) {
+              console.warn(`[heartbeat] renew failed for ${assetId}:`, error);
+            }
           }, 20_000);
         }
         const result = await handler(job.payload, ctx);
@@ -310,7 +296,7 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
         const projectSlug = extractProjectSlug(job.payload);
         const finalLease = leaseRef.current;
         if (finalLease?.kind === "owner" && assetId && projectSlug) {
-          await fsRef.current.assetWork.complete(
+          await fsRef.current.jobs.artifactWork.complete(
             projectSlug,
             assetId,
             finalLease.ownerId,
@@ -323,7 +309,7 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
         const message =
           error instanceof Error ? error.message : String(error);
 
-        if (assetId && projectSlug) {
+        if (assetId && projectSlug && !assetFailureHandled) {
           const fsForCleanup = fsRef.current;
           await dispatchFailure(
             fsForCleanup,
@@ -332,6 +318,15 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
             leaseRef.current,
             message,
           );
+        }
+        if (assetFailureHandled) {
+          if (error instanceof Error) {
+            Object.assign(error, { preserveArtifactState: true });
+          } else {
+            const handled = new Error(message);
+            Object.assign(handled, { preserveArtifactState: true });
+            throw handled;
+          }
         }
         throw error;
       } finally {
@@ -342,7 +337,7 @@ function makeWrappedResolver(): (type: string) => JobHandler | null {
 }
 
 async function dispatchFailure(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   assetId: string,
   lease: LeaseToken | null,
@@ -350,27 +345,27 @@ async function dispatchFailure(
 ): Promise<void> {
   try {
     if (lease?.kind === "owner") {
-      await fs.assetWork.fail(projectSlug, assetId, lease.ownerId, {
+      await fs.jobs.artifactWork.fail(projectSlug, assetId, lease.ownerId, {
         message,
       });
       await fs
-        .logAction("job-error", { assetId, error: message }, projectSlug)
+        .history.logAction("job-error", { assetId, error: message }, projectSlug)
         .catch(() => {});
       return;
     }
     if (lease?.kind === "task") {
-      await fs.pendingTasks.fail(projectSlug, assetId, lease.taskId, {
+      await fs.jobs.pending.fail(projectSlug, assetId, lease.taskId, {
         message,
       });
       await fs
-        .logAction("job-error", { assetId, error: message }, projectSlug)
+        .history.logAction("job-error", { assetId, error: message }, projectSlug)
         .catch(() => {});
       return;
     }
     // No lease registered. Force-fail by asset_id to clear any pending row.
-    await fs.pendingTasks.forceFail(projectSlug, assetId, { message });
+    await fs.jobs.pending.forceFail(projectSlug, assetId, { message });
     await fs
-      .logAction("job-error", { assetId, error: message }, projectSlug)
+      .history.logAction("job-error", { assetId, error: message }, projectSlug)
       .catch(() => {});
   } catch (secondary) {
     // Best-effort: we couldn't mark the asset failed, so it may stay wedged
@@ -387,27 +382,22 @@ async function dispatchFailure(
 function ensureRunner(slug: string): RunnerInfo {
   const cached = runnerByProject.get(slug);
   if (cached) return cached;
-  const dir = projectDirFor(slug);
-  const runner = queueApi.createRunner(dir, {
+  const runner = fsRef.current.jobs.queue.createRunner(slug, {
     concurrency: 5,
     pollIntervalMs: 250,
     resolveHandler: makeWrappedResolver(),
   });
   runner.start();
-  const info: RunnerInfo = { projectsDir: activeProjectsDir, slug, runner };
+  const info: RunnerInfo = { slug, runner };
   runnerByProject.set(slug, info);
   return info;
 }
 
 export async function reconcileQueueOnStartup(): Promise<void> {
-  const projects = await fsRef.current.listProjects();
+  await fsRef.current.ready;
+  const projects = fsRef.current.projects.list();
   for (const project of projects) {
-    const dir = projectDirFor(project.slug);
-    await fsRef.current.ensureProjectInitialized(project.slug);
-    queueApi.reapOnStartup(dir);
-    await queueApi.reconcileFromSidecars(dir).catch((e) => {
-      console.error(`[queue] reconcile failed for ${project.slug}:`, e);
-    });
+    await fsRef.current.jobs.queue.reap(project.projectId);
     ensureRunner(project.slug);
   }
 }
@@ -445,25 +435,24 @@ function mapState(state: JobState): "queued" | "running" | "completed" | "failed
 async function ensureProjectReady(
   jobId: string,
   payload: JobPayload,
-): Promise<{ slug: string; dir: string }> {
+): Promise<{ slug: string }> {
   const slug = extractProjectSlug(payload);
   if (!slug) {
     throw new Error(
       `queue.enqueue requires payload.projectSlug; got jobId=${jobId} type=${String(payload.type)}`,
     );
   }
-  const dir = projectDirFor(slug);
   if (rewindingProjects.has(slug)) {
     throw new Error(`queue.enqueue: project is rewinding: ${slug}`);
   }
-  if (!(await projectExists(dir))) {
+  const project = fsRef.current.projects.get(slug);
+  if (!project.ok) {
     throw new Error(
       `queue.enqueue: project not found: ${slug} (jobId=${jobId})`,
     );
   }
-  await fsRef.current.ensureProjectInitialized(slug);
   ensureRunner(slug);
-  return { slug, dir };
+  return { slug };
 }
 
 function buildEnqueueOptions(jobId: string, payload: JobPayload) {
@@ -472,19 +461,22 @@ function buildEnqueueOptions(jobId: string, payload: JobPayload) {
   const classified = assetId ? jobTypeToAssetWorkKind(type, payload) : null;
   return {
     type,
-    assetId,
+    artifactId: assetId,
     payload,
     dedupeKey: jobId,
     maxAttempts: 1,
-    assetWorkKind: classified?.kind ?? null,
-    assetWorkOrientation: classified?.orientation ?? null,
+    artifactWorkKind: classified?.kind ?? null,
+    artifactWorkOrientation: classified?.orientation ?? null,
   };
 }
 
 export const queue: Queue = {
   enqueue: async (jobId, payload) => {
-    const { slug, dir } = await ensureProjectReady(jobId, payload);
-    const result = queueApi.enqueue(dir, buildEnqueueOptions(jobId, payload));
+    const { slug } = await ensureProjectReady(jobId, payload);
+    const result = fsRef.current.jobs.queue.enqueue(
+      slug,
+      buildEnqueueOptions(jobId, payload),
+    );
     jobIdIndex.set(jobId, { slug, internalId: result.job.id });
     if (jobIdIndex.size > JOB_INDEX_MAX) {
       const overflow = jobIdIndex.size - JOB_INDEX_MAX;
@@ -502,17 +494,18 @@ export const queue: Queue = {
     timeoutMs = 300_000,
   ): Promise<T> => {
     const { slug } = await ensureProjectReady(jobId, payload);
-    return fsRef.current.queue.enqueueAndWait<T>(
+    const result = fsRef.current.jobs.queue.enqueue(
       slug,
       buildEnqueueOptions(jobId, payload),
-      timeoutMs,
     );
+    const runner = ensureRunner(slug).runner;
+    return (await runner.waitFor(result.job.id, timeoutMs)) as T;
   },
 
   getStatus: async (jobId) => {
     const ix = jobIdIndex.get(jobId);
     if (!ix) return null;
-    const job = await fsRef.current.queue.getJob(ix.slug, ix.internalId);
+    const job = fsRef.current.jobs.queue.get(ix.slug, ix.internalId);
     if (!job) return null;
     const state = mapState(job.state);
     // Once a job is terminal the mapping is no longer needed: every caller
@@ -534,9 +527,6 @@ export const queue: Queue = {
     runnerByProject.clear();
     jobIdIndex.clear();
     await Promise.all(infos.map((info) => info.runner.stop()));
-    for (const info of infos) {
-      closeStateDb(projectDirFor(info.slug));
-    }
   },
 };
 
@@ -585,7 +575,7 @@ async function waitForRunnerStop(
 
 async function restartRunnerIfProjectExists(projectSlug: string): Promise<void> {
   try {
-    if (await projectExists(projectDirFor(projectSlug))) {
+    if (fsRef.current.projects.get(projectSlug).ok) {
       ensureRunner(projectSlug);
     }
   } catch {
@@ -603,7 +593,8 @@ export async function prepareProjectForRewind(
   rewindingProjects.add(projectSlug);
   let stoppedRunner = false;
   try {
-    await fsRef.current.ensureProjectInitialized(projectSlug);
+    const project = fsRef.current.projects.get(projectSlug);
+    if (!project.ok) throw new Error(project.error.message);
     const info = runnerByProject.get(projectSlug);
     if (info) {
       const { stopped, stopPromise } = await waitForRunnerStop(
@@ -633,22 +624,22 @@ export async function prepareProjectForRewind(
     }
 
     const states: JobState[] = ["queued", "running", "completing"];
-    const jobs = await fsRef.current.queue.list(projectSlug, { states });
+    const jobs = fsRef.current.jobs.queue.list(projectSlug, { states });
     for (const job of jobs) {
-      await fsRef.current.queue.abort(
+      await fsRef.current.jobs.queue.abort(
         projectSlug,
         job.id,
         "Aborted by project rewind",
       );
     }
 
-    const pending = await fsRef.current.pendingTasks.findAll(projectSlug);
+    const pending = await fsRef.current.jobs.pending.findAll(projectSlug);
     let failedPendingTasks = 0;
     if (pending.ok) {
       for (const task of pending.value) {
-        const failed = await fsRef.current.pendingTasks.forceFail(
+        const failed = await fsRef.current.jobs.pending.forceFail(
           projectSlug,
-          task.assetId,
+          task.artifactId,
           { message: "Aborted by project rewind", failCode: "rewind" },
         );
         if (failed.ok) failedPendingTasks += 1;
@@ -657,7 +648,7 @@ export async function prepareProjectForRewind(
 
     if (jobs.length > 0 || failedPendingTasks > 0) {
       await fsRef.current
-        .logAction(
+        .history.logAction(
           "rewind-abort-jobs",
           { aborted_jobs: jobs.length, failed_pending_tasks: failedPendingTasks },
           projectSlug,
@@ -665,7 +656,6 @@ export async function prepareProjectForRewind(
         .catch(() => {});
     }
 
-    closeStateDb(projectDirFor(projectSlug));
     return { abortedJobs: jobs.length, failedPendingTasks };
   } catch (error) {
     rewindingProjects.delete(projectSlug);
@@ -680,27 +670,29 @@ export async function resumeProjectAfterRewind(projectSlug: string): Promise<voi
 }
 
 /**
- * Test-only: redirect all queue operations to a different projectsDir, and
- * tear down any runners pointing at the previous one.
+ * Test-only: redirect all queue operations to another engine root and tear
+ * down runners bound to the previous engine.
  */
-export async function setProjectsDir(
+export async function setEngineRoot(
   dir: string,
-  nextFs?: VideocityFs,
+  nextFs?: Engine,
 ): Promise<void> {
-  if (dir === activeProjectsDir && !nextFs) return;
+  if (dir === activeEngineRoot && !nextFs) return;
   const stale = Array.from(runnerByProject.values());
   runnerByProject.clear();
   jobIdIndex.clear();
   await Promise.all(stale.map((info) => info.runner.stop().catch(() => {})));
-  for (const info of stale) {
-    closeStateDb(path.join(info.projectsDir, info.slug));
-  }
   const prior = fsRef.current;
-  if (prior !== defaultFs) prior.close();
-  activeProjectsDir = dir;
-  fsRef.current = nextFs ?? createFs({ projectsDir: dir });
+  if (prior !== defaultFs && prior !== nextFs) prior.close();
+  activeEngineRoot = dir;
+  fsRef.current = nextFs ?? createEngine({ rootDir: dir });
+  await fsRef.current.ready;
 }
 
-export function getProjectsDir(): string {
-  return activeProjectsDir;
+export function getEngineRoot(): string {
+  return activeEngineRoot;
+}
+
+export function getActiveEngine(): Engine {
+  return fsRef.current;
 }

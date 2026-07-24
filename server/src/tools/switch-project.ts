@@ -1,8 +1,8 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function switchProjectDef(fs: VideocityFs): ToolDef {
+export function switchProjectDef(fs: Engine): ToolDef {
   return {
     name: "switch_project",
     description:
@@ -12,7 +12,7 @@ export function switchProjectDef(fs: VideocityFs): ToolDef {
     },
     handler: async (args) => {
       const { project_slug } = args as { project_slug: string };
-      const result = await fs.switchProject(project_slug);
+      const result = await fs.projects.switch(project_slug);
       if (result.ok) {
         return {
           content: [

@@ -2,7 +2,7 @@ import { copyFile, access } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { homedir } from "node:os";
 import { extname, join } from "node:path";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { findPrimaryMediaFile } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
@@ -27,7 +27,7 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-export function exportToDownloadsDef(fs: VideocityFs): ToolDef {
+export function exportToDownloadsDef(fs: Engine): ToolDef {
   return {
     name: "export_to_downloads",
     description: "Copy an asset's original media file to the user's Downloads folder",
@@ -38,7 +38,7 @@ export function exportToDownloadsDef(fs: VideocityFs): ToolDef {
     handler: async (args) => {
       const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

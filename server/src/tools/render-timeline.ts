@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -56,11 +56,11 @@ const PORTRAIT_RENDER = "portrait.mp4";
 const SQUARE_RENDER = "square.mp4";
 
 async function runRenderTimeline(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   orientationOverride?: Orientation,
 ): Promise<RenderTimelineOutcome> {
-  const timelineResult = await fs.readProjectMeta<
+  const timelineResult = await fs.metadata.projects.read<
     {
       slots: TimelineSlot[];
       audio?: TimelineAudioClip[];
@@ -100,7 +100,7 @@ async function runRenderTimeline(
   const missingSlugs: string[] = [];
 
   for (const slot of slots) {
-    const manifestResult = await fs.getManifest(slot.slug, projectSlug, { includeDotfiles: true });
+    const manifestResult = await fs.files.manifest(slot.slug, projectSlug, { includeDotfiles: true });
     if (!manifestResult.ok) {
       return {
         status: "error",
@@ -138,7 +138,7 @@ async function runRenderTimeline(
 
   const resolvedAudio: ResolvedAudioOverlay[] = [];
   for (const clip of audioClips) {
-    const manifestResult = await fs.getManifest(clip.slug, projectSlug);
+    const manifestResult = await fs.files.manifest(clip.slug, projectSlug);
     if (!manifestResult.ok) {
       return {
         status: "error",
@@ -178,7 +178,7 @@ async function runRenderTimeline(
   return { status: "enqueued", jobId, slotCount: resolvedSlots.length, orientation };
 }
 
-export function renderTimelineDef(fs: VideocityFs): ToolDef {
+export function renderTimelineDef(fs: Engine): ToolDef {
   return {
     name: "render_timeline",
     description:

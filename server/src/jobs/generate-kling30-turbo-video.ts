@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -29,7 +29,7 @@ type GenerateKling30TurboVideoPayload = {
   aspect_ratio?: KlingV3TurboAspectRatio;
 };
 
-async function uploadAll(fs: VideocityFs, inputs: RefInput[], projectSlug: string): Promise<string[]> {
+async function uploadAll(fs: Engine, inputs: RefInput[], projectSlug: string): Promise<string[]> {
   const urls: string[] = [];
   for (const { assetId, filename } of inputs) {
     urls.push(await uploadAssetToKie(fs, assetId, filename, projectSlug));
@@ -37,7 +37,7 @@ async function uploadAll(fs: VideocityFs, inputs: RefInput[], projectSlug: strin
   return urls;
 }
 
-export function registerGenerateKling30TurboVideoJob(fs: VideocityFs): void {
+export function registerGenerateKling30TurboVideoJob(fs: Engine): void {
   registerJobHandler("generate_kling30_turbo_video", async (payload, ctx) => {
     const {
       vidAssetId,

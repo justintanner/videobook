@@ -1,8 +1,8 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function assetManifestDef(fs: VideocityFs): ToolDef {
+export function assetManifestDef(fs: Engine): ToolDef {
   return {
     name: "asset_manifest",
     description: "List all files in an asset directory",
@@ -12,7 +12,7 @@ export function assetManifestDef(fs: VideocityFs): ToolDef {
     },
     handler: async (args) => {
       const { asset_id, project_slug } = args as { asset_id: string; project_slug: string };
-      const result = await fs.getManifest(asset_id, project_slug);
+      const result = await fs.files.manifest(asset_id, project_slug);
       if (!result.ok) {
         return {
           isError: true as const,

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import sharp from "sharp";
 import QRCode from "qrcode";
@@ -78,7 +78,7 @@ async function buildCardPng(url: string, handle: string): Promise<Buffer> {
     .toBuffer();
 }
 
-export function createWatermarkCardDef(fs: VideocityFs): ToolDef {
+export function createWatermarkCardDef(fs: Engine): ToolDef {
   return {
     name: "create_watermark_card",
     description:
@@ -117,25 +117,25 @@ export function createWatermarkCardDef(fs: VideocityFs): ToolDef {
       }
 
       const assetName = `watermark-${resolvedHandle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36)}`;
-      const created = await fs.createAsset("img", assetName, project_slug);
+      const created = await fs.artifacts.create("img", assetName, project_slug);
       if (!created.ok) {
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: `Failed to create image asset: ${created.error.message}` }],
         };
       }
-      const assetId = created.value.assetId;
+      const assetId = created.value.slug;
 
-      const writeResult = await fs.writeFile(assetId, "original.png", buffer, project_slug);
+      const writeResult = await fs.files.write(assetId, "original.png", buffer, project_slug);
       if (!writeResult.ok) {
-        await fs.deleteAsset(assetId, project_slug).catch(() => undefined);
+        await fs.artifacts.delete(assetId, project_slug).catch(() => undefined);
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: writeResult.error.message }],
         };
       }
 
-      const metadataResult = await fs.writeMetadata(
+      const metadataResult = await fs.metadata.artifacts.write(
         assetId,
         "original",
         {
@@ -149,7 +149,7 @@ export function createWatermarkCardDef(fs: VideocityFs): ToolDef {
         project_slug,
       );
       if (!metadataResult.ok) {
-        await fs.deleteAsset(assetId, project_slug).catch(() => undefined);
+        await fs.artifacts.delete(assetId, project_slug).catch(() => undefined);
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: metadataResult.error.message }],
@@ -158,7 +158,7 @@ export function createWatermarkCardDef(fs: VideocityFs): ToolDef {
 
       const variantsResult = await writeImageVariants(fs, assetId, buffer, project_slug);
       if (!variantsResult.ok) {
-        await fs.deleteAsset(assetId, project_slug).catch(() => undefined);
+        await fs.artifacts.delete(assetId, project_slug).catch(() => undefined);
         return {
           isError: true as const,
           content: [{ type: "text" as const, text: variantsResult.error }],
@@ -166,7 +166,7 @@ export function createWatermarkCardDef(fs: VideocityFs): ToolDef {
       }
 
       // Remember the handle so the next watermark dialog defaults to it.
-      await recordHandle(resolvedHandle, { saveDefault: save_default }).catch(() => undefined);
+      await recordHandle(resolvedHandle, { saveDefault: save_default }, fs).catch(() => undefined);
 
       return {
         content: [{

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { registerJobHandler, type JobHandlerContext } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
@@ -28,13 +28,13 @@ export type TranslateTranscriptResult = {
 };
 
 export async function runTranslateTranscript(
-  fs: VideocityFs,
+  fs: Engine,
   payload: TranslateTranscriptPayload,
   ctx: JobHandlerContext,
 ): Promise<TranslateTranscriptResult> {
   const { assetId, projectSlug, targetLanguage } = payload;
 
-  // Leased as "transcribe": the engine's AssetWorkKind union has no
+  // Leased as "transcribe": the engine's ArtifactWorkKind union has no
   // translate kind, and sharing it serializes translation against
   // re-transcription of the same asset.
   const result = await withLocalLease(
@@ -44,7 +44,7 @@ export async function runTranslateTranscript(
     ctx,
     "transcribe",
     async (): Promise<TranslateTranscriptResult> => {
-      const readResult = await fs.readFile(assetId, "elevenlabs.json", projectSlug);
+      const readResult = await fs.files.read(assetId, "elevenlabs.json", projectSlug);
       if (!readResult.ok) {
         throw new Error(`No transcript for ${assetId}: ${readResult.error.message}. Transcribe the asset first.`);
       }
@@ -55,7 +55,7 @@ export async function runTranslateTranscript(
       }
 
       const sidecarFilename = translatedTranscriptFilename(targetLanguage);
-      const existing = await fs.readFile(assetId, sidecarFilename, projectSlug);
+      const existing = await fs.files.read(assetId, sidecarFilename, projectSlug);
       if (existing.ok) {
         const sourceSegments = parseSegments(raw as Parameters<typeof parseSegments>[0]);
         try {
@@ -71,7 +71,7 @@ export async function runTranslateTranscript(
       const responses = buildResponses(requireApiKey("KIE_API_KEY"));
       const sidecar = await translateTranscript(raw, targetLanguage, responses);
 
-      const writeResult = await fs.writeFile(
+      const writeResult = await fs.files.write(
         assetId,
         sidecarFilename,
         JSON.stringify(sidecar, null, 2),
@@ -81,7 +81,7 @@ export async function runTranslateTranscript(
         throw new Error(`Failed to write ${sidecarFilename}: ${writeResult.error.message}`);
       }
 
-      await fs.commitOperation("translate_transcript", assetId, { targetLanguage }, projectSlug);
+      await fs.history.recordOperation("translate_transcript", assetId, { targetLanguage }, projectSlug);
 
       return { success: true, targetLanguage };
     },
@@ -94,7 +94,7 @@ export async function runTranslateTranscript(
   return result;
 }
 
-export function registerTranslateTranscriptJob(fs: VideocityFs): void {
+export function registerTranslateTranscriptJob(fs: Engine): void {
   registerJobHandler("translate_transcript", (payload, ctx) =>
     runTranslateTranscript(fs, payload as TranslateTranscriptPayload, ctx));
 }

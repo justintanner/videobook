@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
@@ -37,7 +37,7 @@ type ExtractFramePayload = {
   mode: "first" | "last" | "custom";
 };
 
-export function registerExtractFrameJob(fs: VideocityFs): void {
+export function registerExtractFrameJob(fs: Engine): void {
   registerJobHandler("extract_frame", async (payload, ctx) => {
     const {
       inputPath, timestamp,
@@ -47,10 +47,7 @@ export function registerExtractFrameJob(fs: VideocityFs): void {
 
     // ffmpeg has no API for "write to memory", so we stage the frame in a
     // tempfile outside the asset directory and then route the bytes through
-    // fs.writeFile, which commits the file to the engine's git history.
-    // Writing directly into the asset dir leaves original.jpg untracked —
-    // the asset's manifest/UI still works (we read from disk) but git
-    // versioning silently breaks for that file.
+    // the engine file API, which ingests it into CAS and versions the mapping.
     const tempPath = join(
       tmpdir(),
       `videocity-extract-frame-${imageAssetId}-${Date.now()}.jpg`,
@@ -83,7 +80,7 @@ export function registerExtractFrameJob(fs: VideocityFs): void {
         }
 
         const buffer = await readFile(tempPath);
-        const writeResult = await fs.writeFile(imageAssetId, "original.jpg", buffer, projectSlug);
+        const writeResult = await fs.files.write(imageAssetId, "original.jpg", buffer, projectSlug);
         if (!writeResult.ok) {
           throw new Error(
             `failed to write original.jpg for ${imageAssetId}: ${writeResult.error.message}`,
@@ -97,7 +94,7 @@ export function registerExtractFrameJob(fs: VideocityFs): void {
           width,
           height,
         };
-        await fs.writeMetadata(imageAssetId, "original", origin, projectSlug);
+        await fs.metadata.artifacts.write(imageAssetId, "original", origin, projectSlug);
         return origin;
         },
         { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },

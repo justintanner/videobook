@@ -1,9 +1,9 @@
+import { createEngineForTest } from "../fs.js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
-import { createFs } from "videobook-engine";
 import {
   adaptCommandArgs,
   COMMAND_ADAPTERS,
@@ -30,7 +30,7 @@ describe("video editing command contract", () => {
 
   beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-command-contract-"));
-    const fs = createFs({ projectsDir: tempDir });
+    const fs = createEngineForTest(tempDir);
     toolDefs = getVideoEditingToolDefs(fs);
     const result = await commandsDef(fs).handler({});
     commands = JSON.parse((result.content as TextContent)[0].text) as ServerCommand[];

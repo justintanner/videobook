@@ -1,9 +1,9 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import type { ToolDef } from "./tool-def.js";
 
-export function translateSubtitlesDef(fs: VideocityFs): ToolDef {
+export function translateSubtitlesDef(fs: Engine): ToolDef {
   return {
     name: "translate_subtitles",
     description:
@@ -37,7 +37,7 @@ export function translateSubtitlesDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,

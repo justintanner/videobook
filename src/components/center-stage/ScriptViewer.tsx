@@ -152,7 +152,7 @@ export function ScriptViewer({ item, projectSlug, flipped, onFlippedChange, pend
   // Script history navigation — Prev/Next instantly restore HEAD one step back/forward
   const historyNav = useScriptHistoryNav({ callTool, assetId: item.id, projectSlug });
 
-  // Last-rewrite metadata (model/variant/platform/customPrompt) from .original.json
+  // Last-rewrite metadata (model/variant/platform/customPrompt).
   const { meta: lastRewrite, refresh: refreshLastRewrite } = useAssetOriginalMeta(
     callTool,
     item.id,

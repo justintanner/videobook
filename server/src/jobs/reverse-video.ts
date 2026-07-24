@@ -1,8 +1,9 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { basename, join } from "node:path";
 import { registerJobHandler, queue } from "../queue.js";
 import { getFFmpeggy, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
 const LOCK_DURATION_MS = 300_000;
 
@@ -27,7 +28,7 @@ type ReverseVideoPayload = {
   projectSlug: string;
 };
 
-export function registerReverseVideoJob(fs: VideocityFs): void {
+export function registerReverseVideoJob(fs: Engine): void {
   registerJobHandler("reverse_video", async (payload, ctx) => {
     const {
       inputPath, outputPath, hasAudio,
@@ -56,9 +57,13 @@ export function registerReverseVideoJob(fs: VideocityFs): void {
       await ff.done();
 
       const inputFilename = basename(inputPath);
-      const outputFilename = basename(outputPath);
-      await fs.deleteFile(assetId, inputFilename, projectSlug);
-      await fs.renameFile(assetId, outputFilename, inputFilename, projectSlug);
+      await replaceArtifactFileFromPath(
+        fs,
+        projectSlug,
+        assetId,
+        inputFilename,
+        outputPath,
+      );
 
       const videoPath = join(assetDir, inputFilename);
       return { videoPath };

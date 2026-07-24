@@ -27,7 +27,7 @@ describe("create_project tool", () => {
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
     expect(data.slug).toBe("my-project");
-    expect(data.is_default).toBe(true);
+    expect(data.isDefault).toBe(true);
   });
 
   it("seeds a readable timeline on success", async () => {

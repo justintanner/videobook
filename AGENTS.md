@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for AI coding agents working in the Videocity repository.
+Guidance for AI coding agents working in the Videobook repository.
 
 ## Build Commands
 
@@ -25,7 +25,7 @@ Guidance for AI coding agents working in the Videocity repository.
 
 - **Frontend (`src/`)**: React 19 + TypeScript + Vite 7 SPA. Entry: `main.tsx` → `App.tsx`. Uses `use-mcp` to connect to MCP server at `/mcp`.
 - **Backend (`server/src/`)**: Express MCP server on port 3001. Entry: `server/src/index.ts`. Tools in `server/src/tools/*.ts` registered via `server/src/tools/index.ts`.
-- **Filesystem (`videobook-engine`)**: npm dependency providing project/asset operations. All project/asset ops MUST use `createFs()` — never `node:fs` directly.
+- **Domain/storage (`videobook-engine`)**: npm dependency providing Dolt-native project, artifact, file/CAS, metadata, history, and runtime-job operations. All managed data goes through a namespaced `Engine`.
 
 ## Code Style
 
@@ -76,10 +76,13 @@ Guidance for AI coding agents working in the Videocity repository.
 ### Filesystem Operations
 **ALWAYS use `videobook-engine`** — never `node:fs` for projects/assets:
 ```typescript
-import { createFs } from "videobook-engine";
-const fs = createFs({ projectsDir: "/path/to/projects" });
-const project = await fs.createProject("my-project");
-const asset = await fs.createAsset("vid", "intro clip", "my-project");
+import { createEngine } from "videobook-engine";
+const engine = createEngine({
+  dataDir: "/path/to/data",
+  workspaceDir: "/path/to/workspaces",
+});
+const project = await engine.projects.create("my-project");
+const artifact = await engine.artifacts.create("video", "intro clip", "my-project");
 ```
 
 ### External APIs
@@ -164,8 +167,8 @@ Always build client before server if both change: `npm run build && npm run buil
 | MCP Server | @modelcontextprotocol/sdk |
 | Server | Express |
 | Validation | Zod |
-| Filesystem | videobook-engine |
-| Job Queue | @platformatic/job-queue |
+| Domain/storage | videobook-engine + embedded DoltLite |
+| Job Queue | videobook-engine runtime tables |
 | Linting | ESLint 9 |
 | Testing | Vitest |
 

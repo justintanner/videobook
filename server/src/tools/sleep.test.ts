@@ -3,10 +3,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createFsForTest } from "../fs.js";
+import { createEngineForTest } from "../fs.js";
 import { sleepDef } from "./sleep.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 
 describe("sleep tool", () => {
   let client: Client;
@@ -45,14 +45,14 @@ describe("sleep tool", () => {
     // Create the asset directly so no process_image job is enqueued. The job
     // fails on synthetic bytes and writes a generation_errors row, which sync
     // surfaces as a failure — same race the clear_failed_tasks test avoids.
-    const fs = createFsForTest(tempDir);
-    const created = await fs.createAsset("img", "photo", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const created = await fs.artifacts.create("img", "photo", "test-proj");
     if (!created.ok) throw new Error(created.error.message);
 
     const result = await client.callTool({
       name: "wait_for_asset_ready",
       arguments: {
-        asset_id: created.value.assetId,
+        asset_id: created.value.slug,
         project_slug: "test-proj",
         timeout_seconds: 1,
       },
@@ -61,18 +61,18 @@ describe("sleep tool", () => {
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
     expect(data.status).toBe("ready");
-    expect(data.asset_id).toBe(created.value.assetId);
+    expect(data.asset_id).toBe(created.value.slug);
   });
 });
 
 describe("sleepDef handler", () => {
-  let fs: VideocityFs;
+  let fs: Engine;
   let tempDir: string;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-sleep-test-"));
-    fs = createFsForTest(tempDir);
-    await fs.createProject("test-proj");
+    fs = createEngineForTest(tempDir);
+    await fs.projects.create("test-proj");
   });
 
   afterEach(async () => {
@@ -80,24 +80,23 @@ describe("sleepDef handler", () => {
   });
 
   it("returns timeout for asset with pending task that never completes", async () => {
-    const assetResult = await fs.createAsset("vid", "pending-asset", "test-proj");
+    const assetResult = await fs.artifacts.create("vid", "pending-asset", "test-proj");
     if (!assetResult.ok) throw new Error(assetResult.error.message);
-    const assetId = assetResult.value.assetId;
+    const assetId = assetResult.value.slug;
 
     {
-      const lease = await fs.assetWork.begin("test-proj", assetId, {
+      const lease = await fs.jobs.artifactWork.begin("test-proj", assetId, {
         kind: "transcribe",
         ownerKind: "job",
         durationMs: 60_000,
       });
       if (!lease) throw new Error(`assetWork.begin failed for ${assetId}`);
-      const _ptResult = await fs.pendingTasks.write(
+      const _ptResult = await fs.jobs.pending.write(
         "test-proj",
         {
+          artifactId: assetResult.value.artifactId,
           taskId: "task-will-timeout",
           taskType: "transcribe",
-          assetId,
-          assetDir: assetResult.value.path,
           meta: {},
         },
         lease.ownerId,
@@ -130,17 +129,34 @@ describe("sleepDef handler", () => {
   }, 15_000);
 
   it("does not report ready before an enqueued job claims its asset", async () => {
-    const assetResult = await fs.createAsset("img", "queued-asset", "test-proj");
+    const assetResult = await fs.artifacts.create("img", "queued-asset", "test-proj");
     if (!assetResult.ok) throw new Error(assetResult.error.message);
-    await fs.queue.enqueue("test-proj", {
+    const options = {
       type: "test_generation",
-      assetId: assetResult.value.assetId,
+      artifactId: assetResult.value.slug,
       payload: {},
-      assetWorkKind: "generate",
+      artifactWorkKind: "generate" as const,
+    };
+    expect(options.artifactWorkKind).toBe("generate");
+    fs.jobs.queue.enqueue("test-proj", options);
+    const queuedWork = await fs.jobs.artifactWork.read(
+      "test-proj",
+      assetResult.value.slug,
+    );
+    expect(queuedWork.ok).toBe(true);
+    if (!queuedWork.ok) throw new Error(queuedWork.error.message);
+    expect(queuedWork.value).toMatchObject({
+      status: "pending",
+      meta: { kind: "generate", queued: true },
     });
+    expect(
+      fs.jobs.queue.list("test-proj", {
+        artifactId: assetResult.value.slug,
+      })[0]?.state,
+    ).toBe("queued");
 
     const result = await sleepDef(fs).handler({
-      asset_id: assetResult.value.assetId,
+      asset_id: assetResult.value.slug,
       project_slug: "test-proj",
       timeout_seconds: 0.01,
     });

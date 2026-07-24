@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { HappyHorseVideoEditRequestSchema } from "@apicity/kie/zod";
@@ -11,7 +11,7 @@ import { apicityField, apicityStringArrayField, apicityStringField } from "./sch
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 const happyHorseVideoEdit = HappyHorseVideoEditRequestSchema.shape.input.shape;
 
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
+function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -43,7 +43,7 @@ const generateHappyhorseVideoeditVideoSchema = {
 
 type Args = SchemaArgs<typeof generateHappyhorseVideoeditVideoSchema>;
 
-export function generateHappyhorseVideoeditVideoDef(fs: VideocityFs): ToolDef {
+export function generateHappyhorseVideoeditVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_happyhorse_1_1_edit_video",
     description: "Edit a source video using HappyHorse video-edit with optional reference images for character/style. Creates a new vid- asset and enqueues a background job.",
@@ -59,7 +59,7 @@ export function generateHappyhorseVideoeditVideoDef(fs: VideocityFs): ToolDef {
       if (!videoAssetId.startsWith("vid-")) {
         return { isError: true as const, content: [{ type: "text" as const, text: `video_slug must be a vid-* asset, got: ${videoAssetId}` }] };
       }
-      const videoManifest = await fs.getManifest(videoAssetId, project_slug);
+      const videoManifest = await fs.files.manifest(videoAssetId, project_slug);
       if (!videoManifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: videoManifest.error.message }] };
       const videoFile = findVideoFile(videoManifest.value.files);
       if (!videoFile) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${videoAssetId}` }] };
@@ -70,7 +70,7 @@ export function generateHappyhorseVideoeditVideoDef(fs: VideocityFs): ToolDef {
         if (!assetId.startsWith("img-")) {
           return { isError: true as const, content: [{ type: "text" as const, text: `image_slugs entries must be img-* assets, got: ${assetId}` }] };
         }
-        const manifest = await fs.getManifest(assetId, project_slug);
+        const manifest = await fs.files.manifest(assetId, project_slug);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
         const file = findImageFile(manifest.value.files);
         if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
@@ -78,12 +78,12 @@ export function generateHappyhorseVideoeditVideoDef(fs: VideocityFs): ToolDef {
       }
 
       const videoName = `${modelSlug("kie", "happyhorse/video-edit")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceVideoIds = [videoAssetId];
       const sourceImageIds = imageInputs.map((i) => i.assetId);
       const jobId = `${modelSlug("kie", "happyhorse/video-edit")}-edit-${vidAssetId}-${Date.now()}`;

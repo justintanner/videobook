@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetEntry } from "videobook-engine";
+import type { Engine, Artifact } from "videobook-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -14,12 +14,12 @@ type LazyAnalysisResult = {
 };
 
 async function enqueueLazyAnalysis(
-  fs: VideocityFs,
-  asset: AssetEntry,
+  fs: Engine,
+  asset: Artifact,
   projectSlug: string,
 ): Promise<LazyAnalysisResult | null> {
-  const isVideo = asset.id.startsWith("vid-");
-  const isImage = asset.id.startsWith("img-");
+  const isVideo = asset.slug.startsWith("vid-");
+  const isImage = asset.slug.startsWith("img-");
   if (!isVideo && !isImage) return null;
 
   // Skip if user clearly hasn't configured a vision provider. Truthy env
@@ -28,7 +28,7 @@ async function enqueueLazyAnalysis(
   // call inside analyze-video / describe-image (via requireApiKey/getApiKey).
   if (!process.env.KIE_API_KEY) return null;
 
-  const manifestResult = await fs.getManifest(asset.id, projectSlug, { includeDotfiles: true });
+  const manifestResult = await fs.files.manifest(asset.slug, projectSlug, { includeDotfiles: true });
   if (!manifestResult.ok) return null;
   const manifest = manifestResult.value;
   const fileNames = new Set(manifest.files.map((f) => f.name));
@@ -39,10 +39,10 @@ async function enqueueLazyAnalysis(
   if (isVideo) {
     // Stable dedupe key, shared with enqueueLazyAnalysisIfSlotted: a slot
     // re-drop racing a re-process revival yields one analyze job, not two.
-    const jobId = `auto-analyze-${asset.id}`;
+    const jobId = `auto-analyze-${asset.slug}`;
     await queue.enqueue(jobId, {
       type: "analyze_video",
-      assetId: asset.id,
+      assetId: asset.slug,
       assetDir: manifest.path,
       projectSlug,
       hasTranscription: fileNames.has(".analysis.gpt4otrans.json"),
@@ -57,10 +57,10 @@ async function enqueueLazyAnalysis(
   const ext = originalFile.name.slice(originalFile.name.lastIndexOf("."));
   if (SKIP_CROP_EXTENSIONS.has(ext.toLowerCase())) return null;
 
-  const jobId = `auto-describe-${asset.id}`;
+  const jobId = `auto-describe-${asset.slug}`;
   await queue.enqueue(jobId, {
     type: "describe_image",
-    sourceAssetId: asset.id,
+    sourceAssetId: asset.slug,
     sourceImageFilename: originalFile.name,
     projectSlug,
   } as unknown as Record<string, unknown>);
@@ -107,7 +107,7 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   };
 }
 
-export function assignSlotDef(fs: VideocityFs): ToolDef {
+export function assignSlotDef(fs: Engine): ToolDef {
   return {
     name: "assign_slot",
     description: "Assign an asset to a timeline slot (e.g. slot 's02' = index 1)",
@@ -134,14 +134,14 @@ export function assignSlotDef(fs: VideocityFs): ToolDef {
       }
 
       // Validate asset exists
-      const assets = await fs.listAssets(project_slug);
-      const asset = assets.find((a) => a.id === asset_id);
+      const assets = await fs.artifacts.list(project_slug);
+      const asset = assets.find((a) => a.slug === asset_id);
       if (!asset) {
         return toolError(`Asset "${asset_id}" not found in project "${project_slug}"`);
       }
 
       // Read current timeline (default to empty)
-      const readResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
+      const readResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
       let config: TimelineConfig;
       if (readResult.ok) {
         config = normalizeConfig(readResult.value);
@@ -163,7 +163,7 @@ export function assignSlotDef(fs: VideocityFs): ToolDef {
       config.slots[index] = { ...config.slots[index], slug: asset_id };
 
       // Write back
-      const writeResult = await fs.writeProjectMeta("timeline", config, project_slug);
+      const writeResult = await fs.metadata.projects.write("timeline", config, project_slug);
       if (writeResult.ok) {
         // Lazy vision analysis: enqueue analyze_video (vid-) or describe_image
         // (img-) when the asset has no .original.analysis.json yet. Failure

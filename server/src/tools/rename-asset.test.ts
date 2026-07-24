@@ -1,10 +1,10 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { createFs } from "videobook-engine";
 
 describe("rename_asset tool", () => {
   let client: Client;
@@ -60,16 +60,13 @@ describe("rename_asset tool", () => {
     expect(parsed.new_asset_id).toMatch(/^img-/);
     expect(parsed.new_asset_id).not.toBe(uploaded.assetId);
 
-    // Querying the old asset ID should now transparently return the new asset's manifest
+    // Slugs are active names, not aliases. The old name becomes available
+    // immediately while the artifact keeps its stable UUID.
     const oldManifest = await client.callTool({
       name: "asset_manifest",
       arguments: { asset_id: uploaded.assetId, project_slug: "test-proj" },
     });
-    expect(oldManifest.isError).toBeFalsy();
-    const oldParsed = JSON.parse(
-      (oldManifest.content as Array<{ type: string; text: string }>)[0].text
-    );
-    expect(oldParsed.asset_id).toBe(uploaded.assetId);
+    expect(oldManifest.isError).toBe(true);
 
     // New asset should exist
     const newManifest = await client.callTool({
@@ -79,7 +76,7 @@ describe("rename_asset tool", () => {
     const newParsed = JSON.parse(
       (newManifest.content as Array<{ type: string; text: string }>)[0].text
     );
-    expect(newParsed.asset_id).toBe(parsed.new_asset_id);
+    expect(newParsed.slug).toBe(parsed.new_asset_id);
   });
 
   it("returns error for nonexistent asset", async () => {
@@ -94,15 +91,16 @@ describe("rename_asset tool", () => {
     expect(result.isError).toBe(true);
   });
 
-  it("moves ignored audio media, removes the ghost asset, and preserves its waveform", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const created = await fs.createAsset("aud", "old track", "test-proj");
+  it("keeps media and waveform on the same stable artifact identity", async () => {
+    const fs = createEngineForTest(tempDir);
+    const created = await fs.artifacts.create("aud", "old track", "test-proj");
     if (!created.ok) throw new Error(created.error.message);
-    const sourceId = created.value.assetId;
+    const sourceId = created.value.slug;
+    const stableArtifactId = created.value.artifactId;
     const audio = Buffer.from("fake-mp3-audio");
-    const write = await fs.writeFile(sourceId, "original.mp3", audio, "test-proj");
+    const write = await fs.files.write(sourceId, "original.mp3", audio, "test-proj");
     if (!write.ok) throw new Error(write.error.message);
-    const waveform = await fs.writeAudioWaveform(sourceId, [0.1, 0.8, 0.3], "test-proj");
+    const waveform = await fs.metadata.waveforms.write(sourceId, [0.1, 0.8, 0.3], "test-proj");
     if (!waveform.ok) throw new Error(waveform.error.message);
 
     const result = await client.callTool({
@@ -118,19 +116,21 @@ describe("rename_asset tool", () => {
       (result.content as Array<{ type: string; text: string }>)[0].text
     ) as { new_asset_id: string };
 
-    const renamedAudio = await fs.readFile(parsed.new_asset_id, "original.mp3", "test-proj");
+    const renamedAudio = await fs.files.read(parsed.new_asset_id, "original.mp3", "test-proj");
     expect(renamedAudio.ok).toBe(true);
     if (renamedAudio.ok) expect(renamedAudio.value).toEqual(audio);
-    const assets = await fs.listAssets("test-proj");
-    expect(assets.map((asset) => asset.id)).not.toContain(sourceId);
-    const oldAlias = await fs.getManifest(sourceId, "test-proj");
-    const newManifest = await fs.getManifest(parsed.new_asset_id, "test-proj");
-    expect(oldAlias.ok).toBe(true);
+    const assets = fs.artifacts.list("test-proj");
+    expect(assets.map((asset) => asset.slug)).not.toContain(sourceId);
+    expect(assets.map((asset) => asset.slug)).toContain(parsed.new_asset_id);
+    const oldManifest = await fs.files.manifest(sourceId, "test-proj");
+    const newManifest = await fs.files.manifest(parsed.new_asset_id, "test-proj");
+    expect(oldManifest.ok).toBe(false);
     expect(newManifest.ok).toBe(true);
-    if (oldAlias.ok && newManifest.ok) expect(oldAlias.value.path).toBe(newManifest.value.path);
-    const renamedWaveform = await fs.readAudioWaveform(parsed.new_asset_id, "test-proj");
+    const renamed = fs.artifacts.get("test-proj", parsed.new_asset_id);
+    expect(renamed.ok).toBe(true);
+    if (renamed.ok) expect(renamed.value.artifactId).toBe(stableArtifactId);
+    const renamedWaveform = await fs.metadata.waveforms.read(parsed.new_asset_id, "test-proj");
     expect(renamedWaveform.ok).toBe(true);
     if (renamedWaveform.ok) expect(renamedWaveform.value.peaks).toEqual([0.1, 0.8, 0.3]);
-    fs.close();
   });
 });

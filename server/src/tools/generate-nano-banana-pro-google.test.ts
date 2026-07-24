@@ -1,8 +1,8 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createFs } from "videobook-engine";
 import sharp from "sharp";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { createTestClient } from "../test-client.js";
@@ -61,17 +61,17 @@ describe("generate_nano_banana_pro_google tool", () => {
   });
 
   it("enqueues with reference images resolved to asset inputs", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const imageAsset = await fs.createAsset("img", "style-ref", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const imageAsset = await fs.artifacts.create("img", "style-ref", "test-proj");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
-    await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
+    await fs.files.write(imageAsset.value.slug, "original.png", await makePng(), "test-proj");
 
     const result = await client.callTool({
       name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
         project_slug: "test-proj",
         prompt: "same style, new scene",
-        image_slugs: [`@${imageAsset.value.assetId}`],
+        image_slugs: [`@${imageAsset.value.slug}`],
         aspect_ratio: "auto",
       },
     });
@@ -79,7 +79,7 @@ describe("generate_nano_banana_pro_google tool", () => {
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.source_images).toEqual([imageAsset.value.assetId]);
+    expect(parsed.source_images).toEqual([imageAsset.value.slug]);
   });
 
   it("rejects aspect_ratio 'auto' without reference images", async () => {
@@ -126,17 +126,17 @@ describe("generate_nano_banana_pro_google tool", () => {
   });
 
   it("rejects when combined reference count exceeds 10 slots", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const imageAsset = await fs.createAsset("img", "style-ref", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const imageAsset = await fs.artifacts.create("img", "style-ref", "test-proj");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
-    await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
+    await fs.files.write(imageAsset.value.slug, "original.png", await makePng(), "test-proj");
 
     const result = await client.callTool({
       name: "generate_google_flow_nano_banana_pro_image",
       arguments: {
         project_slug: "test-proj",
         prompt: "too many refs",
-        image_slugs: [`@${imageAsset.value.assetId}`],
+        image_slugs: [`@${imageAsset.value.slug}`],
         character_refs: ["character:a-imgs:5", "character:b-imgs:5"],
       },
     });

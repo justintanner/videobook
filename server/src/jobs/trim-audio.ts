@@ -1,10 +1,12 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { execFile } from "node:child_process";
+import { rm } from "node:fs/promises";
 import { promisify } from "node:util";
 import { basename, extname } from "node:path";
 import { registerJobHandler } from "../queue.js";
 import { FFMPEG, FFPROBE } from "../ffmpeg.js";
 import { withLockedLocalLease } from "./_lease.js";
+import { replaceArtifactFileFromPath } from "./_persist-output.js";
 
 const execFileAsync = promisify(execFile);
 const LOCK_DURATION_MS = 300_000;
@@ -186,41 +188,6 @@ async function runTrimAudio(
   }
 }
 
-async function replaceOriginalAudio(
-  fs: VideocityFs,
-  projectSlug: string,
-  assetId: string,
-  inputFilename: string,
-  outputFilename: string,
-  onReplaced: () => Promise<void>,
-): Promise<void> {
-  const originalResult = await fs.readFile(assetId, inputFilename, projectSlug);
-  if (!originalResult.ok) throw new Error(originalResult.error.message);
-  const outputResult = await fs.readFile(assetId, outputFilename, projectSlug);
-  if (!outputResult.ok) throw new Error(outputResult.error.message);
-
-  let writeError: string;
-  try {
-    const writeResult = await fs.writeFile(assetId, inputFilename, outputResult.value, projectSlug);
-    if (!writeResult.ok) throw new Error(writeResult.error.message);
-    await onReplaced();
-    return;
-  } catch (error) {
-    writeError = error instanceof Error ? error.message : String(error);
-  }
-
-  try {
-    const rollbackResult = await fs.writeFile(assetId, inputFilename, originalResult.value, projectSlug);
-    if (!rollbackResult.ok) {
-      throw new Error(rollbackResult.error.message);
-    }
-  } catch (error) {
-    const rollbackError = error instanceof Error ? error.message : String(error);
-    throw new Error(`${writeError}; rollback failed: ${rollbackError}`);
-  }
-  throw new Error(writeError);
-}
-
 export type TrimAudioPayload = {
   type: "trim_audio";
   inputPath: string;
@@ -236,14 +203,13 @@ export type TrimAudioPayload = {
   commitParams: Record<string, unknown>;
 };
 
-export function registerTrimAudioJob(fs: VideocityFs): void {
+export function registerTrimAudioJob(fs: Engine): void {
   registerJobHandler("trim_audio", async (payload, ctx) => {
     const {
       inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd,
       assetId, assetDir, projectSlug, commitParams,
     } = payload as TrimAudioPayload;
     const inputFilename = basename(inputPath);
-    const outputFilename = basename(outputPath);
 
     try {
       await withLockedLocalLease(
@@ -255,29 +221,42 @@ export function registerTrimAudioJob(fs: VideocityFs): void {
         "trim",
         { durationMs: LOCK_DURATION_MS, data: { state: "trimming-audio", ...commitParams } },
         async () => {
+          const original = await fs.files.read(assetId, inputFilename, projectSlug);
+          if (!original.ok) throw new Error(original.error.message);
           await runTrimAudio(inputPath, outputPath, mode, trimStart, trimEnd, cutStart, cutEnd);
-          await replaceOriginalAudio(
+          await replaceArtifactFileFromPath(
             fs,
             projectSlug,
             assetId,
             inputFilename,
-            outputFilename,
-            async () => {
-              const provenanceResult = await fs.writeMetadata(assetId, "original", {
-                origin: "trim_audio",
-                source_asset_id: assetId,
-                ...commitParams,
-                trimmed_at: new Date().toISOString(),
-              }, projectSlug);
-              if (!provenanceResult.ok) throw new Error(provenanceResult.error.message);
-            },
+            outputPath,
           );
+          const provenanceResult = await fs.metadata.artifacts.write(assetId, "original", {
+            origin: "trim_audio",
+            source_asset_id: assetId,
+            ...commitParams,
+            trimmed_at: new Date().toISOString(),
+          }, projectSlug);
+          if (!provenanceResult.ok) {
+            const rollback = await fs.files.write(
+              assetId,
+              inputFilename,
+              original.value,
+              projectSlug,
+            );
+            if (!rollback.ok) {
+              throw new Error(
+                `${provenanceResult.error.message}; rollback failed: ${rollback.error.message}`,
+              );
+            }
+            throw new Error(provenanceResult.error.message);
+          }
         },
         { durationMs: LOCK_DURATION_MS, waitForActiveMs: 30_000 },
       );
       return { success: true };
     } finally {
-      await fs.deleteFile(assetId, outputFilename, projectSlug).catch(() => {});
+      await rm(outputPath, { force: true });
     }
   });
 }

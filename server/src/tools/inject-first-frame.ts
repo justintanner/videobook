@@ -1,4 +1,4 @@
-import type { AssetManifestFile, VideocityFs } from "videobook-engine";
+import type { ArtifactManifestFile, Engine } from "videobook-engine";
 import { z } from "zod";
 import { extname, join } from "node:path";
 import { probeVideo } from "../ffmpeg.js";
@@ -29,7 +29,7 @@ function orientationForDimensions(width: number, height: number): Orientation {
   return width > height ? "landscape" : "portrait";
 }
 
-function findImageFile(files: AssetManifestFile[], orientation: Orientation): AssetManifestFile | null {
+function findImageFile(files: ArtifactManifestFile[], orientation: Orientation): ArtifactManifestFile | null {
   const preferred = files.find((file) => file.name.toLowerCase() === `${orientation}.jpg`);
   if (preferred) return preferred;
   return files.find((file) => {
@@ -38,23 +38,23 @@ function findImageFile(files: AssetManifestFile[], orientation: Orientation): As
   }) ?? null;
 }
 
-function findCanonicalVideo(files: AssetManifestFile[]): AssetManifestFile | null {
+function findCanonicalVideo(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   return files.find((file) => /^original\.(mp4|mov)$/i.test(file.name)) ?? null;
 }
 
-async function timelineOrientation(fs: VideocityFs, projectSlug: string): Promise<Orientation | null> {
-  const result = await fs.readProjectMeta<Record<string, unknown> | unknown[]>("timeline", projectSlug);
+async function timelineOrientation(fs: Engine, projectSlug: string): Promise<Orientation | null> {
+  const result = await fs.metadata.projects.read<Record<string, unknown> | unknown[]>("timeline", projectSlug);
   if (!result.ok || Array.isArray(result.value)) return null;
   if (isOrientation(result.value.currentOrientation)) return result.value.currentOrientation;
   return isOrientation(result.value.render) ? result.value.render : null;
 }
 
 async function findFinalVideo(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
-  files: AssetManifestFile[],
+  files: ArtifactManifestFile[],
   requested?: Orientation,
-): Promise<{ file: AssetManifestFile; orientation: Orientation } | null> {
+): Promise<{ file: ArtifactManifestFile; orientation: Orientation } | null> {
   const preferred = requested ?? await timelineOrientation(fs, projectSlug);
   const candidates: Orientation[] = [
     ...(preferred ? [preferred] : []),
@@ -71,7 +71,7 @@ async function findFinalVideo(
   return null;
 }
 
-export function injectFirstFrameDef(fs: VideocityFs): ToolDef {
+export function injectFirstFrameDef(fs: Engine): ToolDef {
   return {
     name: "inject_first_frame",
     description: "Replace exactly the first frame of a vid-* or final video with an img-* asset in place. Preserves runtime and stream-copies the original audio unchanged. For final, orientation defaults to the active timeline orientation.",
@@ -110,13 +110,13 @@ export function injectFirstFrameDef(fs: VideocityFs): ToolDef {
       }
 
       const [targetManifest, imageManifest] = await Promise.all([
-        fs.getManifest(targetAssetId, project_slug),
-        fs.getManifest(imageAssetId, project_slug),
+        fs.files.manifest(targetAssetId, project_slug),
+        fs.files.manifest(imageAssetId, project_slug),
       ]);
       if (!targetManifest.ok) return toolError(targetManifest.error.message);
       if (!imageManifest.ok) return toolError(imageManifest.error.message);
 
-      let targetFile: AssetManifestFile | null;
+      let targetFile: ArtifactManifestFile | null;
       let targetOrientation: Orientation;
       if (targetAssetId === "final") {
         const resolved = await findFinalVideo(

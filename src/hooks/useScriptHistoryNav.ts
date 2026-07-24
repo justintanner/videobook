@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { UseMcpResult } from "use-mcp/react";
 import { toast } from "@/hooks/useToast";
-import type { GitCommit } from "@/hooks/useAssetHistory";
+import type { Revision } from "@/hooks/useAssetHistory";
 
 /**
- * Step a script asset's HEAD backward/forward through its git history in one click.
+ * Step a script asset backward/forward through its Dolt revisions in one click.
  *
  * Each PREV/NEXT call invokes restore_asset_version against the target commit and
  * issues a sync so the normal item.prompt flow picks up the new content. There is
@@ -24,7 +24,7 @@ export interface UseScriptHistoryNavResult {
 }
 
 const FILENAME = "original.md";
-const EMPTY_COMMITS: GitCommit[] = [];
+const EMPTY_COMMITS: Revision[] = [];
 
 interface Args {
   callTool: UseMcpResult["callTool"];
@@ -34,7 +34,7 @@ interface Args {
 
 interface HistoryState {
   assetId: string;
-  commits: GitCommit[];
+  commits: Revision[];
   idx: number;
 }
 
@@ -53,7 +53,7 @@ export function useScriptHistoryNav({ callTool, assetId, projectSlug }: Args): U
   }, [callTool]);
   const inFlightRef = useRef(false);
 
-  const fetchCommits = useCallback(async (): Promise<GitCommit[]> => {
+  const fetchCommits = useCallback(async (): Promise<Revision[]> => {
     const result = await callToolRef.current("asset_history", {
       asset_id: assetId,
       project_slug: projectSlug,
@@ -61,13 +61,13 @@ export function useScriptHistoryNav({ callTool, assetId, projectSlug }: Args): U
     });
     if (result.isError) return [];
     const content = result.content as Array<{ type: string; text: string }>;
-    const raw: GitCommit[] = JSON.parse(content[0].text);
+    const raw: Revision[] = JSON.parse(content[0].text);
     const filtered = raw.filter((c) => !c.files || c.files.length === 0 || c.files.includes(FILENAME));
     setHistory({ assetId, commits: filtered, idx: 0 });
     return filtered;
   }, [assetId, projectSlug]);
 
-  const stepTo = useCallback(async (targetIdx: number, list: GitCommit[]) => {
+  const stepTo = useCallback(async (targetIdx: number, list: Revision[]) => {
     const commit = list[targetIdx];
     if (!commit) return;
     const result = await callToolRef.current("restore_asset_version", {

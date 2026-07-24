@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { findVideoFile } from "videobook-engine";
 import { join } from "node:path";
 import { registerJobHandler } from "../queue.js";
@@ -12,12 +12,12 @@ type DetectScenesPayload = {
   projectSlug: string;
 };
 
-export function registerDetectScenesJob(fs: VideocityFs): void {
+export function registerDetectScenesJob(fs: Engine): void {
   registerJobHandler("detect_scenes", async (payload, ctx) => {
     const { assetId, projectSlug } = payload as DetectScenesPayload;
 
     return withLocalLease(fs, projectSlug, assetId, ctx, "analyze", async () => {
-      const manifestResult = await fs.getManifest(assetId, projectSlug, { includeDotfiles: false });
+      const manifestResult = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: false });
       if (!manifestResult.ok) throw new Error(manifestResult.error.message);
 
       const videoFile = findVideoFile(manifestResult.value.files);
@@ -35,7 +35,7 @@ export function registerDetectScenesJob(fs: VideocityFs): void {
         candidates,
       };
 
-      const writeResult = await fs.writeFile(
+      const writeResult = await fs.files.write(
         assetId,
         ".detect-scenes.json",
         JSON.stringify(final, null, 2),

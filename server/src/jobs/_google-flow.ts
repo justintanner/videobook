@@ -1,6 +1,6 @@
 import { createGoogleFlow, GoogleFlowError } from "@apicity/googleflow";
 import type { GoogleFlowVideosRequest, GoogleFlowProvider } from "@apicity/googleflow";
-import type { TaskType, VideocityFs } from "videobook-engine";
+import type { TaskType, Engine } from "videobook-engine";
 import type { JobHandlerContext } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { prepareAssetForUpload, prepareBytesForUpload } from "../upload.js";
@@ -304,7 +304,7 @@ async function uploadBytesToGoogleFlow(
 // google-flow requests reference prior uploads by id.
 export async function uploadAssetToGoogleFlow(
   provider: GoogleFlowProvider,
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   filename: string,
   projectSlug: string,
@@ -347,13 +347,13 @@ type SubmitGoogleFlowVideoArgs = {
  *  endpoint (the engine's TaskType union has no google literals, so these
  *  tasks ride "seedance2_video" like veo3/gemini-omni do on kie). */
 export async function submitGoogleFlowVideoTask(
-  fs: VideocityFs,
+  fs: Engine,
   ctx: JobHandlerContext,
   args: SubmitGoogleFlowVideoArgs,
 ): Promise<string> {
   const provider = createGoogleFlowProvider();
   const request = withGoogleFlowCaptchaDefaults(args.request as Record<string, unknown>) as GoogleFlowVideosRequest;
-  await fs.writeMetadata(args.assetId, "generation-payload", request, args.projectSlug);
+  await fs.metadata.artifacts.write(args.assetId, "generation-payload", request, args.projectSlug);
 
   let res: Record<string, unknown>;
   try {
@@ -384,11 +384,10 @@ export async function submitGoogleFlowVideoTask(
   const taskId = readJobId(res);
   if (!taskId) throw new Error("Google Flow video submit returned no job id");
 
-  const pendingResult = await fs.pendingTasks.write(args.projectSlug, {
+  const pendingResult = await fs.jobs.pending.write(args.projectSlug, {
     taskId,
     taskType: args.taskType,
-    assetId: args.assetId,
-    assetDir: args.assetDir,
+    artifactId: args.assetId,
     meta: { ...args.meta, googleFlow: true },
   }, ctx.getOwnerId());
   if (!pendingResult.ok) throw new Error(`Failed to write pending-task for ${args.assetId}: ${pendingResult.error.message}`);

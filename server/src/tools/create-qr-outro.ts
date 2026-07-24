@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { findAudioFile } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
@@ -31,7 +31,7 @@ function normalizeAssetId(raw: string): string {
 }
 
 async function resolveImageRef(
-  fs: VideocityFs,
+  fs: Engine,
   raw: string,
   projectSlug: string,
   field: string,
@@ -40,7 +40,7 @@ async function resolveImageRef(
   if (!assetId.startsWith("img-")) {
     return { ok: false, error: `${field} must be an img-* asset, got: ${assetId}` };
   }
-  const manifest = await fs.getManifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
   if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
@@ -48,7 +48,7 @@ async function resolveImageRef(
 }
 
 async function resolveAudioRef(
-  fs: VideocityFs,
+  fs: Engine,
   raw: string,
   projectSlug: string,
 ): Promise<RefResult> {
@@ -59,14 +59,14 @@ async function resolveAudioRef(
       error: `sound_effect_slug must be an aud-* asset, got: ${assetId}`,
     };
   }
-  const manifest = await fs.getManifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findAudioFile(manifest.value.files, assetId);
   if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-export function createQrOutroDef(fs: VideocityFs): ToolDef {
+export function createQrOutroDef(fs: Engine): ToolDef {
   return {
     name: "create_qr_outro",
     description:
@@ -143,7 +143,7 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
         duration_seconds,
       );
       const firstQrStem = qrImages[0].assetId.replace(/^img-/, "");
-      const created = await fs.createAsset(
+      const created = await fs.artifacts.create(
         "vid",
         `qr-outro-${firstQrStem}`,
         project_slug,
@@ -152,7 +152,7 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
         return toolError(`Failed to create output asset: ${created.error.message}`);
       }
 
-      const assetId = created.value.assetId;
+      const assetId = created.value.slug;
       const jobId = `render-qr-outro-${assetId}-${Date.now()}`;
       try {
         await queue.enqueue(jobId, {
@@ -168,9 +168,9 @@ export function createQrOutroDef(fs: VideocityFs): ToolDef {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        const deleted = await fs.deleteAsset(assetId, project_slug);
+        const deleted = await fs.artifacts.delete(assetId, project_slug);
         if (!deleted.ok) {
-          await fs.pendingTasks.forceFail(project_slug, assetId, {
+          await fs.jobs.pending.forceFail(project_slug, assetId, {
             message: `Enqueue failed and rollback failed: ${deleted.error.message}`,
           });
         }

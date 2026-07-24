@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { readFile as fsReadFile } from "node:fs/promises";
@@ -66,7 +66,7 @@ const ModelOutputSchema = z.object({
   summary: z.string(),
 });
 
-export function registerSuggestSfxJob(fs: VideocityFs): void {
+export function registerSuggestSfxJob(fs: Engine): void {
   registerJobHandler("suggest_sfx", async (payload, ctx) => {
     const { assetId, projectSlug } = payload as SuggestSfxPayload;
 
@@ -146,7 +146,7 @@ export function registerSuggestSfxJob(fs: VideocityFs): void {
         asset_id: assetId,
       };
 
-      const writeResult = await fs.writeFile(
+      const writeResult = await fs.files.write(
         assetId,
         ".suggest-sfx.json",
         JSON.stringify(final, null, 2),

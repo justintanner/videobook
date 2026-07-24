@@ -1,8 +1,8 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function exportAssetDef(fs: VideocityFs): ToolDef {
+export function exportAssetDef(fs: Engine): ToolDef {
   return {
     name: "export_asset_to_project",
     description: "Export an asset from one project to a different project",
@@ -26,7 +26,7 @@ export function exportAssetDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -38,7 +38,7 @@ export function exportAssetDef(fs: VideocityFs): ToolDef {
       const originalName = asset_id.slice(prefix.length + 1);
       const name = new_name ?? originalName;
 
-      const createResult = await fs.createAsset(prefix, name, target_project);
+      const createResult = await fs.artifacts.create(prefix, name, target_project);
       if (!createResult.ok) {
         return {
           isError: true as const,
@@ -46,17 +46,17 @@ export function exportAssetDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const newAssetId = createResult.value.assetId;
+      const newAssetId = createResult.value.slug;
 
       for (const file of manifestResult.value.files) {
-        const readResult = await fs.readFile(asset_id, file.name, project_slug);
+        const readResult = await fs.files.read(asset_id, file.name, project_slug);
         if (!readResult.ok) {
           return {
             isError: true as const,
             content: [{ type: "text" as const, text: readResult.error.message }],
           };
         }
-        const writeResult = await fs.writeFile(newAssetId, file.name, readResult.value, target_project);
+        const writeResult = await fs.files.write(newAssetId, file.name, readResult.value, target_project);
         if (!writeResult.ok) {
           return {
             isError: true as const,

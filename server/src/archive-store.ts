@@ -3,7 +3,7 @@ import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { pipeline } from "node:stream/promises";
 import { dirname, join, resolve, sep } from "node:path";
-import { getProjectsDir } from "./queue.js";
+import { getEngineRoot } from "./queue.js";
 import {
   archiveKey,
   clipPrefix,
@@ -42,7 +42,7 @@ export interface ArchiveStore {
 export function localArchiveDir(): string {
   const fromEnv = process.env.VIDEOBOOK_ARCHIVE_DIR;
   if (fromEnv) return resolve(fromEnv);
-  return join(dirname(resolve(getProjectsDir())), "archive");
+  return join(resolve(getEngineRoot()), "archive");
 }
 
 export function isArchiveB2Configured(): boolean {

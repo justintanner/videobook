@@ -5,7 +5,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { createServer } from "./server.js";
 import { queue, reconcileQueueOnStartup } from "./queue.js";
 import { localArchiveDir } from "./archive-store.js";
-import { fs, PROJECTS_DIR } from "./fs.js";
+import { fs } from "./fs.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
 import { uploadLocalStream } from "./local-upload.js";
@@ -15,8 +15,21 @@ const reaperHandles: { stop: () => void }[] = [];
 
 const app = express();
 app.use(cors());
-app.use("/files", express.static(PROJECTS_DIR, { dotfiles: "allow" }));
 app.use("/archive-files", express.static(localArchiveDir(), { dotfiles: "allow" }));
+
+app.get(/^\/files\/([^/]+)\/([^/]+)\/(.+)$/, async (req, res) => {
+  const projectSlug = String(req.params[0]);
+  const artifactSlug = String(req.params[1]);
+  const filename = String(req.params[2]);
+  const result = await fs.files.read(artifactSlug, filename, projectSlug);
+  if (!result.ok) {
+    res
+      .status(result.error.code === "NOT_FOUND" ? 404 : 400)
+      .json({ error: result.error.message });
+    return;
+  }
+  res.type(filename).send(result.value);
+});
 
 app.post("/api/upload/:projectSlug", async (req, res) => {
   const filename = typeof req.query.filename === "string" ? req.query.filename : "";
@@ -46,7 +59,7 @@ app.use(express.json({ limit: "500mb" }));
 
 app.get("/api/manifest/:projectSlug/:assetId", async (req, res) => {
   const { projectSlug, assetId } = req.params;
-  const result = await fs.getManifest(assetId, projectSlug, {
+  const result = await fs.files.manifest(assetId, projectSlug, {
     includeDotfiles: true,
   });
   if (result.ok) {
@@ -83,39 +96,28 @@ app.get("/mcp", (_req, res) => {
 });
 
 async function start(): Promise<void> {
+  await fs.ready;
   registerAllJobHandlers(fs);
   await queue.start();
-  for (const project of await fs.listProjects()) {
-    const check = await fs.checkSchemaVersion(project.slug);
-    if (!check.ok) {
-      console.error(
-        `[startup] refusing to open ${project.slug}: ${check.reason}`,
-      );
-      console.error(
-        "[startup] upgrade videocity (or roll back the project) before continuing.",
-      );
-      process.exit(1);
-    }
-    const aborted = await fs.recoverIncompleteOperations(project.slug);
-    if (aborted > 0) {
-      console.log(
-        `[startup] aborted ${aborted} orphan operation(s) in ${project.slug}`,
-      );
-    }
-    // Backfill the assets table from disk + tables. Replaces the old
-    // sidecar-cleanup helpers for completing/queued/lock-race rows once the
-    // assets table is the projected source of truth.
-    const recovered = await fs.recoverAssetsTable(project.slug);
+  const check = fs.jobs.checkSchema();
+  if (!check.ok) {
+    console.error(`[startup] refusing to open catalog: ${check.reason}`);
+    console.error(
+      "[startup] upgrade videobook (or roll back the catalog) before continuing.",
+    );
+    process.exit(1);
+  }
+  for (const project of fs.projects.list()) {
+    const recovered = fs.jobs.recoverAll(project.projectId);
     if (recovered.ok) {
       console.log(
-        `[startup] recovered ${recovered.value.recovered} asset row(s) in ${project.slug}`,
+        `[startup] recovered ${recovered.value.recovered} artifact row(s) in ${project.slug}`,
       );
     }
-    // Start the deadline-driven reaper for this project.
-    const reaper = await fs.startAssetReaper(project.slug, {
+    const reaper = fs.jobs.startReaper(project.projectId, {
       intervalMs: ASSET_REAPER_INTERVAL_MS,
     });
-    if (reaper) reaperHandles.push(reaper);
+    reaperHandles.push(reaper);
   }
   await reconcileQueueOnStartup();
   await loadAndArmAll();

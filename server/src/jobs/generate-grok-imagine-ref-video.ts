@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import type { XaiVideoAsyncResponse, XaiVideoGenerateRequest } from "@apicity/xai";
 import { uploadAssetFile } from "../upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -24,10 +24,10 @@ type GenerateGrokImagineRefVideoPayload = {
   aspectRatio?: XaiVideoGenerateRequest["aspect_ratio"];
 };
 
-export function registerGenerateGrokImagineRefVideoJob(fs: VideocityFs): void {
+export function registerGenerateGrokImagineRefVideoJob(fs: Engine): void {
   registerJobHandler("generate_grok_imagine_ref_video", async (payload, ctx) => {
     const {
-      prompt, vidAssetId, vidAssetDir, projectSlug,
+      prompt, vidAssetId, projectSlug,
       refImages, duration, resolution, aspectRatio,
     } = payload as GenerateGrokImagineRefVideoPayload;
 
@@ -48,7 +48,7 @@ export function registerGenerateGrokImagineRefVideoJob(fs: VideocityFs): void {
       imageUrls,
     );
 
-    await fs.writeMetadata(vidAssetId, "generation-payload", request, projectSlug);
+    await fs.metadata.artifacts.write(vidAssetId, "generation-payload", request, projectSlug);
     const { request_id } = await callXaiPaid<XaiVideoGenerateRequest, XaiVideoAsyncResponse>(
       provider.post.v1.videos.generations,
       XAI_VIDEO_GENERATIONS_DOT_PATH,
@@ -56,11 +56,10 @@ export function registerGenerateGrokImagineRefVideoJob(fs: VideocityFs): void {
     );
     // Write pending task for async polling (sync.ts picks up xai_ prefixed tasks)
     {
-      const _ptResult = await fs.pendingTasks.write(projectSlug, {
+      const _ptResult = await fs.jobs.pending.write(projectSlug, {
         taskId: request_id,
         taskType: "xai_grok_imagine_ref_video",
-        assetId: vidAssetId,
-        assetDir: vidAssetDir,
+        artifactId: vidAssetId,
         meta: {
           prompt,
           refCount: refImages.length,

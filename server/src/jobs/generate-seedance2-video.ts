@@ -1,6 +1,6 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { registerSeedance2Job } from "./_seedance2-shared.js";
 
-export function registerGenerateSeedance2VideoJob(fs: VideocityFs): void {
+export function registerGenerateSeedance2VideoJob(fs: Engine): void {
   registerSeedance2Job(fs, "generate_seedance2_video");
 }

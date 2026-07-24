@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { createTestClient } from "../test-client.js";
-import { createFsForTest } from "../fs.js";
+import { createEngineForTest } from "../fs.js";
 import { queue, registerJobHandler } from "../queue.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -221,8 +221,8 @@ describe("archive MCP tools", () => {
     const c = await makeClient();
     clearArchiveEnv();
     useLocalArchiveDir();
-    const fs = createFsForTest(join(tempDir!, "projects"));
-    const created = await fs.createProject();
+    const fs = createEngineForTest(join(tempDir!, "projects"));
+    const created = await fs.projects.create();
     if (!created.ok) throw new Error(created.error.message);
 
     const result = await c.callTool({

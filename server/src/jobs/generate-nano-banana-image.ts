@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -21,7 +21,7 @@ type GenerateNanoBananaImagePayload = {
   outputFormat?: NanoBananaProRequest["input"]["output_format"];
 };
 
-export function registerGenerateNanoBananaImageJob(fs: VideocityFs): void {
+export function registerGenerateNanoBananaImageJob(fs: Engine): void {
   registerJobHandler("generate_nano_banana_image", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,

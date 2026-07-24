@@ -3,8 +3,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
+import { createEngineForTest } from "../fs.js";
 import { queue } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Engine } from "videobook-engine";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -36,6 +38,7 @@ type TranscriptResponse =
 
 describe("read_transcript tool (integration)", () => {
   let client: Client;
+  let fs: Engine;
   let tempDir: string;
 
   beforeAll(async () => {
@@ -48,6 +51,7 @@ describe("read_transcript tool (integration)", () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-read-transcript-"));
+    fs = createEngineForTest(tempDir);
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
@@ -60,9 +64,9 @@ describe("read_transcript tool (integration)", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   }, 120_000);
 
-  async function uploadAndWriteSidecar(
-    sidecarFilename: string,
-    sidecarContent: object | string,
+  async function uploadAndWriteTranscript(
+    filename: string,
+    content: object | string,
   ): Promise<string> {
     const uploadResult = await client.callTool({
       name: "upload_file",
@@ -75,16 +79,16 @@ describe("read_transcript tool (integration)", () => {
     const asset = JSON.parse((uploadResult.content as TextContent)[0].text);
     const assetId = asset.assetId as string;
 
-    const manifestResult = await client.callTool({
-      name: "asset_manifest",
-      arguments: { asset_id: assetId, project_slug: "transcript-proj" },
-    });
-    const manifest = JSON.parse((manifestResult.content as TextContent)[0].text);
-    const assetDir = manifest.path as string;
-
-    const { writeFile } = await import("node:fs/promises");
-    const contentStr = typeof sidecarContent === "string" ? sidecarContent : JSON.stringify(sidecarContent, null, 2);
-    await writeFile(join(assetDir, sidecarFilename), contentStr, "utf-8");
+    const text = typeof content === "string"
+      ? content
+      : JSON.stringify(content, null, 2);
+    const written = await fs.files.write(
+      assetId,
+      filename,
+      text,
+      "transcript-proj",
+    );
+    if (!written.ok) throw new Error(written.error.message);
 
     return assetId;
   }
@@ -118,7 +122,7 @@ describe("read_transcript tool (integration)", () => {
       audio_duration_secs: 3.0,
     };
 
-    const assetId = await uploadAndWriteSidecar("elevenlabs.json", elevenLabsJson);
+    const assetId = await uploadAndWriteTranscript("elevenlabs.json", elevenLabsJson);
     const response = await callReadTranscript(assetId);
 
     expect(response.kind).toBe("timed");
@@ -145,7 +149,7 @@ describe("read_transcript tool (integration)", () => {
       audio_duration_secs: 2.0,
     };
 
-    const assetId = await uploadAndWriteSidecar("elevenlabs.json", elevenLabsJson);
+    const assetId = await uploadAndWriteTranscript("elevenlabs.json", elevenLabsJson);
     const response = await callReadTranscript(assetId);
 
     expect(response.kind).toBe("silence");
@@ -154,7 +158,7 @@ describe("read_transcript tool (integration)", () => {
   it("falls back to plain text when elevenlabs.json is absent but gpt4otrans exists", async () => {
     const plainJson = { text: "This is a plain text transcript with enough words to pass quality checks." };
 
-    const assetId = await uploadAndWriteSidecar(".analysis.gpt4otrans.json", plainJson);
+    const assetId = await uploadAndWriteTranscript(".analysis.gpt4otrans.json", plainJson);
     const response = await callReadTranscript(assetId);
 
     expect(response.kind).toBe("plain");
@@ -165,7 +169,7 @@ describe("read_transcript tool (integration)", () => {
   it("returns silence when gpt4otrans has only noise tags", async () => {
     const plainJson = { text: "[music] [applause]" };
 
-    const assetId = await uploadAndWriteSidecar(".analysis.gpt4otrans.json", plainJson);
+    const assetId = await uploadAndWriteTranscript(".analysis.gpt4otrans.json", plainJson);
     const response = await callReadTranscript(assetId);
 
     expect(response.kind).toBe("silence");
@@ -213,14 +217,20 @@ describe("read_transcript tool (integration)", () => {
     const asset = JSON.parse((uploadResult.content as TextContent)[0].text);
     const assetId = asset.assetId as string;
 
-    const manifestResult = await client.callTool({
-      name: "asset_manifest",
-      arguments: { asset_id: assetId, project_slug: "transcript-proj" },
-    });
-    const manifest = JSON.parse((manifestResult.content as TextContent)[0].text);
-    const { writeFile } = await import("node:fs/promises");
-    await writeFile(join(manifest.path, "elevenlabs.json"), JSON.stringify(elevenLabsJson, null, 2), "utf-8");
-    await writeFile(join(manifest.path, ".analysis.gpt4otrans.json"), JSON.stringify(plainJson, null, 2), "utf-8");
+    const timedWrite = await fs.files.write(
+      assetId,
+      "elevenlabs.json",
+      JSON.stringify(elevenLabsJson, null, 2),
+      "transcript-proj",
+    );
+    const plainWrite = await fs.files.write(
+      assetId,
+      ".analysis.gpt4otrans.json",
+      JSON.stringify(plainJson, null, 2),
+      "transcript-proj",
+    );
+    if (!timedWrite.ok) throw new Error(timedWrite.error.message);
+    if (!plainWrite.ok) throw new Error(plainWrite.error.message);
 
     const response = await callReadTranscript(assetId);
 

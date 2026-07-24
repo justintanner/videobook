@@ -1,8 +1,8 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import type { ToolDef } from "./tool-def.js";
 import { buildSeedance2ToolDef } from "./_seedance2-shared.js";
 
-export function generateSeedance2FastVideoDef(fs: VideocityFs): ToolDef {
+export function generateSeedance2FastVideoDef(fs: Engine): ToolDef {
   return buildSeedance2ToolDef(fs, {
     toolName: "generate_kie_seedance_2_0_fast_video",
     jobType: "generate_seedance2_fast_video",

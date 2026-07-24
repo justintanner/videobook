@@ -1,9 +1,9 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
-import { createFs } from "videobook-engine";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
 type TextContent = Array<{ type: string; text: string }>;
@@ -92,7 +92,7 @@ describe("write_notebook tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("writes a ready notebook asset, mirrors markdown, and round-trips through read_notebook", async () => {
+  it("writes a ready normalized notebook and round-trips through read_notebook", async () => {
     const result = await client.callTool({
       name: "write_notebook",
       arguments: { project_slug: "test-proj", name: "testnb", definition: NOTEBOOK_DEFINITION },
@@ -102,20 +102,25 @@ describe("write_notebook tool", () => {
     expect(result.isError).toBeFalsy();
     expect(JSON.parse(resultText(result))).toMatchObject({ ok: true, steps: 4 });
     const resultObj = JSON.parse(resultText(result));
-    const sidecar = await readFile(join(tempDir, "test-proj", resultObj.notebook_id, ".notebook.json"), "utf8");
-    expect(JSON.parse(sidecar)).toEqual({
-      format: "notebook",
-      schema_version: 1,
-      definition: NOTEBOOK_DEFINITION,
-    });
-    const markdown = await readFile(join(tempDir, "test-proj", resultObj.notebook_id, "index.md"), "utf8");
-    expect(markdown).toContain("Idea — prompt");
-    expect(markdown).toContain("Key frame — image");
-    expect(markdown).toContain("**Model:** nano-banana-pro");
-    expect(markdown).toContain("**Inputs:** #1 Idea, @img-source");
-    expect(markdown).toContain("**Asset:** @img-source");
-    expect(markdown).toContain("@img-output");
-    expect(markdown).toContain("> A neon fox in the rain");
+    const native = createEngineForTest(tempDir).notebooks.read(
+      resultObj.notebook_id,
+      "test-proj",
+    );
+    expect(native.ok).toBe(true);
+    if (native.ok) {
+      expect(native.value.properties).toEqual(NOTEBOOK_DEFINITION.properties);
+      expect(native.value.cells).toHaveLength(4);
+      expect(native.value.edges).toEqual([
+        expect.objectContaining({
+          source: "prompt-1",
+          target: "image-1",
+        }),
+        expect.objectContaining({
+          source: "asset-source",
+          target: "image-1",
+        }),
+      ]);
+    }
 
     const assetsResult = await client.callTool({
       name: "list_assets",
@@ -140,14 +145,19 @@ describe("write_notebook tool", () => {
     });
   });
 
-  it("succeeds when rewriting an identical definition", async () => {
+  it("succeeds when replacing a notebook with an identical definition", async () => {
     const first = await client.callTool({
       name: "write_notebook",
       arguments: { project_slug: "test-proj", definition: NOTEBOOK_DEFINITION },
     });
+    const notebookId = JSON.parse(resultText(first)).notebook_id;
     const second = await client.callTool({
       name: "write_notebook",
-      arguments: { project_slug: "test-proj", definition: NOTEBOOK_DEFINITION },
+      arguments: {
+        project_slug: "test-proj",
+        notebook_id: notebookId,
+        definition: NOTEBOOK_DEFINITION,
+      },
     });
 
     expect(first.isError).toBeFalsy();
@@ -182,20 +192,13 @@ describe("write_notebook tool", () => {
     expect(typeResult.isError).toBe(true);
   });
 
-  it("overwrites a legacy sidecar", async () => {
-    const fsObj = createFs({ projectsDir: tempDir });
-    const asset = await fsObj.createAsset("nb", "legacy", "test-proj");
-    const notebookDir = join(tempDir, "test-proj", asset.value.assetId);
-    await writeFile(join(notebookDir, ".notebook.json"), JSON.stringify({ formula: "char_swap" }));
-    
-    // Now use this assetId for the test
+  it("rejects a notebook id that is not a normalized notebook", async () => {
+    const fsObj = createEngineForTest(tempDir);
+    const asset = await fsObj.artifacts.create("nb", "legacy", "test-proj");
     const result = await client.callTool({
       name: "write_notebook",
-      arguments: { project_slug: "test-proj", notebook_id: asset.value.assetId, definition: NOTEBOOK_DEFINITION },
+      arguments: { project_slug: "test-proj", notebook_id: asset.value.slug, definition: NOTEBOOK_DEFINITION },
     });
-    
-    expect(result.isError).toBeFalsy();
-    const sidecar = await readFile(join(notebookDir, ".notebook.json"), "utf8");
-    expect(JSON.parse(sidecar)).toMatchObject({ format: "notebook", definition: NOTEBOOK_DEFINITION });
+    expect(result.isError).toBe(true);
   });
 });

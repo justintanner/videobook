@@ -140,35 +140,6 @@ describe("prompt history tools", () => {
     expect(data.entries).toEqual([]);
   });
 
-  it("imports legacy chat-input-history.jsonl on first list of surface=chat", async () => {
-    client = await createTestClient(tempDir);
-    await createProject(client, "p");
-    // Seed legacy log via push_chat_history (which writes JSONL).
-    await client.callTool({
-      name: "push_chat_history",
-      arguments: { project_slug: "p", message: "legacy one" },
-    });
-    await client.callTool({
-      name: "push_chat_history",
-      arguments: { project_slug: "p", message: "legacy two" },
-    });
-
-    const data = await list(client, "p", "chat");
-    expect(data.entries.map((e) => e.prompt)).toEqual([
-      "legacy two",
-      "legacy one",
-    ]);
-
-    // A second list should NOT re-import (count > 0 now).
-    await record(client, "p", "chat", "new entry");
-    const second = await list(client, "p", "chat");
-    expect(second.entries.map((e) => e.prompt)).toEqual([
-      "new entry",
-      "legacy two",
-      "legacy one",
-    ]);
-  });
-
   it("record on nonexistent project returns error", async () => {
     client = await createTestClient(tempDir);
     const result = await record(client, "no-such", "chat", "hi");

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -43,7 +43,7 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   };
 }
 
-export function removeTimelineAudioDef(fs: VideocityFs): ToolDef {
+export function removeTimelineAudioDef(fs: Engine): ToolDef {
   return {
     name: "remove_timeline_audio",
     description: "Remove an overlay audio clip from the timeline by its id",
@@ -57,7 +57,7 @@ export function removeTimelineAudioDef(fs: VideocityFs): ToolDef {
         audio_id: string;
       };
 
-      const readResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
+      const readResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
       if (!readResult.ok) {
         const err = (readResult as { ok: false; error: { code: string; message: string } }).error;
         return toolError(err.code === "NOT_FOUND" ? "No timeline exists for this project" : err.message);
@@ -70,7 +70,7 @@ export function removeTimelineAudioDef(fs: VideocityFs): ToolDef {
         return toolError(`Timeline audio clip "${audio_id}" not found`);
       }
 
-      const writeResult = await fs.writeProjectMeta("timeline", config, project_slug);
+      const writeResult = await fs.metadata.projects.write("timeline", config, project_slug);
       if (!writeResult.ok) {
         const writeErr = (writeResult as { ok: false; error: { message: string } }).error;
         return toolError(writeErr.message);

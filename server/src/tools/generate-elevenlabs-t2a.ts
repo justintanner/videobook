@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { ElevenLabsTextToSpeechRequestSchema } from "@apicity/elevenlabs/zod";
 import { queue } from "../queue.js";
@@ -21,7 +21,7 @@ function slugify(text: string): string {
 
 
 
-export function generateElevenlabsT2aDef(fs: VideocityFs): ToolDef {
+export function generateElevenlabsT2aDef(fs: Engine): ToolDef {
   return {
     name: "generate_elevenlabs_text_to_audio",
     description: "Generate an aud-* text-to-audio asset using an ElevenLabs voice.",
@@ -60,7 +60,7 @@ export function generateElevenlabsT2aDef(fs: VideocityFs): ToolDef {
       const voiceId = voice_id.trim();
 
       const name = asset_name?.trim() || `elevenlabs-${slugify(text) || Date.now()}`;
-      const assetResult = await fs.createAsset("aud", name, project_slug);
+      const assetResult = await fs.artifacts.create("aud", name, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -68,7 +68,7 @@ export function generateElevenlabsT2aDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: audAssetId, path: audAssetDir } = assetResult.value;
+      const { slug: audAssetId, path: audAssetDir } = assetResult.value;
       const jobId = `elevenlabs-t2a-${audAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "generate_elevenlabs_t2a",

@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
+import type { Engine } from "videobook-engine";
+import { createEngineForTest } from "../fs.js";
 import { createTestClient } from "../test-client.js";
 import { queue, waitForJob } from "../queue.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -53,6 +55,7 @@ describe("extract_audio tool", () => {
   let client: Client;
   let tempDir: string;
   let videoPath: string;
+  let fs: Engine;
 
   beforeAll(async () => {
     await queue.start();
@@ -66,6 +69,7 @@ describe("extract_audio tool", () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-extract-audio-test-"));
     videoPath = join(tempDir, "test-source.mp4");
     await generateTestVideo(videoPath);
+    fs = createEngineForTest(tempDir);
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
@@ -167,7 +171,7 @@ describe("extract_audio tool", () => {
     expect(content[0].text).toContain("no audio stream");
   });
 
-  it("writes .original.json with correct metadata", async () => {
+  it("writes native original metadata", async () => {
     const uploaded = await uploadVideo(client, "audio-proj", videoPath);
 
     const result = await client.callTool({
@@ -181,17 +185,15 @@ describe("extract_audio tool", () => {
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     await waitForJob(parsed.job_id);
 
-    const manifest = await client.callTool({
-      name: "asset_manifest",
-      arguments: { asset_id: parsed.audio_asset_id, project_slug: "audio-proj" },
-    });
-    const manifestData = JSON.parse((manifest.content as TextContent)[0].text);
-
-    const originJson = JSON.parse(await readFile(join(manifestData.path, ".original.json"), "utf-8"));
-    expect(originJson.origin).toBe("extract_audio");
-    expect(originJson.source_asset).toBe(uploaded.assetId);
-    expect(typeof originJson.duration).toBe("number");
-    expect(originJson.duration).toBeGreaterThan(0);
+    const origin = await fs.metadata.artifacts.read<{
+      origin: string;
+      source_asset: string;
+      duration: number;
+    }>(parsed.audio_asset_id, "original", "audio-proj");
+    expect(origin.ok && origin.value.origin).toBe("extract_audio");
+    expect(origin.ok && origin.value.source_asset).toBe(uploaded.assetId);
+    expect(origin.ok && typeof origin.value.duration).toBe("number");
+    expect(origin.ok && origin.value.duration).toBeGreaterThan(0);
   });
 
   describe("destination mode", () => {

@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { ImageIcon, Video, Music, X, Plus } from 'lucide-react';
 import { sectionTheme } from '@/theme/domains';
 
-interface ResolvedAsset {
+interface ResolvedArtifact {
   id?: string;
   slug: string;
   src: string;
@@ -12,8 +12,8 @@ interface ResolvedAsset {
 }
 
 interface AssetDropSlotProps {
-  value: ResolvedAsset | null;
-  onChange: (asset: ResolvedAsset | null) => void;
+  value: ResolvedArtifact | null;
+  onChange: (asset: ResolvedArtifact | null) => void;
   label?: string;
   required?: boolean;
   disabled?: boolean;

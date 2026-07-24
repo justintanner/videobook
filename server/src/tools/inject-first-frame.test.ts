@@ -1,3 +1,4 @@
+import { createEngineForTest } from "../fs.js";
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -7,7 +8,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import sharp from "sharp";
-import { createFs, type VideocityFs } from "videobook-engine";
+import { type Engine } from "videobook-engine";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
@@ -171,19 +172,19 @@ async function frameColor(
 }
 
 async function assetHash(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   filename: string,
   projectSlug: string,
 ): Promise<string> {
-  const result = await fs.readFile(assetId, filename, projectSlug);
+  const result = await fs.files.read(assetId, filename, projectSlug);
   if (!result.ok) throw new Error(result.error.message);
   return createHash("sha256").update(result.value).digest("hex");
 }
 
 describe("inject_first_frame tool", () => {
   let client: Client;
-  let fs: VideocityFs;
+  let fs: Engine;
   let tempDir: string;
   let fixtureDir: string;
   let videoFixture: string;
@@ -209,7 +210,7 @@ describe("inject_first_frame tool", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-inject-first-frame-test-"));
     client = await createTestClient(tempDir);
-    fs = createFs({ projectsDir: tempDir });
+    fs = createEngineForTest(tempDir);
     await client.callTool({
       name: "create_project",
       arguments: { project_slug: projectSlug },
@@ -265,12 +266,12 @@ describe("inject_first_frame tool", () => {
   it("uses the active final orientation and leaves other final outputs untouched", async () => {
     const video = await upload(client, projectSlug, "blue.mp4", videoFixture);
     const image = await upload(client, projectSlug, "red.png", imageFixture);
-    const original = await fs.readFile(video.assetId, "original.mp4", projectSlug);
+    const original = await fs.files.read(video.assetId, "original.mp4", projectSlug);
     if (!original.ok) throw new Error(original.error.message);
     const writes = await Promise.all([
-      fs.writeFile(video.assetId, "landscape.mp4", original.value, projectSlug),
-      fs.writeFile(video.assetId, "portrait.mp4", original.value, projectSlug),
-      fs.writeProjectMeta("timeline", {
+      fs.files.write(video.assetId, "landscape.mp4", original.value, projectSlug),
+      fs.files.write(video.assetId, "portrait.mp4", original.value, projectSlug),
+      fs.metadata.projects.write("timeline", {
         slots: [{ slug: video.assetId }],
         render: "portrait",
         currentOrientation: "portrait",
@@ -290,7 +291,7 @@ describe("inject_first_frame tool", () => {
       await waitForJob(String(renderResult.job_id));
     }
 
-    const finalManifest = await fs.getManifest("final", projectSlug);
+    const finalManifest = await fs.files.manifest("final", projectSlug);
     if (!finalManifest.ok) throw new Error(finalManifest.error.message);
     const portraitPath = join(finalManifest.value.path, "timeline_portrait.mp4");
     const beforeProbe = await probeSummary(portraitPath);

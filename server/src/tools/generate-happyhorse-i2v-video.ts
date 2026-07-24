@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import {
@@ -15,7 +15,7 @@ const SLUG = modelSlug("kie", "happyhorse-1-1/image-to-video");
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
+function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -34,7 +34,7 @@ const generateHappyhorseI2vVideoSchema = {
 
 type Args = SchemaArgs<typeof generateHappyhorseI2vVideoSchema>;
 
-export function generateHappyhorseI2vVideoDef(fs: VideocityFs): ToolDef {
+export function generateHappyhorseI2vVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_happyhorse_1_1_image_to_video",
     description: "Generate a video from a single first-frame image using HappyHorse image-to-video. Creates a new vid- asset and enqueues a background job.",
@@ -50,18 +50,18 @@ export function generateHappyhorseI2vVideoDef(fs: VideocityFs): ToolDef {
       if (!assetId.startsWith("img-")) {
         return { isError: true as const, content: [{ type: "text" as const, text: `first_frame_slug must be an img-* asset, got: ${assetId}` }] };
       }
-      const manifest = await fs.getManifest(assetId, project_slug);
+      const manifest = await fs.files.manifest(assetId, project_slug);
       if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
       const file = findImageFile(manifest.value.files);
       if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
 
       const videoName = `${SLUG}-${assetId.replace(/^img-/, "")}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = [assetId];
       const jobId = `${SLUG}-i2v-${vidAssetId}-${Date.now()}`;
 

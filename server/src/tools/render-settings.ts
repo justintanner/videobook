@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { readLanguageCode, iso1FromIso3 } from "../jobs/_translate-transcript.js";
@@ -13,13 +13,13 @@ type TranscriptInfo = {
 const TRANSLATED_SIDECAR_RE = /^elevenlabs\.([a-z]{2})\.json$/;
 
 async function readTranscriptInfo(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<TranscriptInfo> {
   const info: TranscriptInfo = { sourceLanguageCode: null, sourceLanguage: null, cachedTranslations: [] };
 
-  const manifestResult = await fs.getManifest(assetId, projectSlug);
+  const manifestResult = await fs.files.manifest(assetId, projectSlug);
   if (manifestResult.ok) {
     for (const file of manifestResult.value.files) {
       const match = TRANSLATED_SIDECAR_RE.exec(file.name);
@@ -27,7 +27,7 @@ async function readTranscriptInfo(
     }
   }
 
-  const transcriptResult = await fs.readFile(assetId, "elevenlabs.json", projectSlug);
+  const transcriptResult = await fs.files.read(assetId, "elevenlabs.json", projectSlug);
   if (transcriptResult.ok) {
     try {
       const raw = JSON.parse(transcriptResult.value.toString()) as unknown;
@@ -41,7 +41,7 @@ async function readTranscriptInfo(
   return info;
 }
 
-export function getRenderSettingsDef(fs: VideocityFs): ToolDef {
+export function getRenderSettingsDef(fs: Engine): ToolDef {
   return {
     name: "get_render_settings",
     description: "Fetch stored render settings for a single asset across all orientations, plus transcript language info (detected source language and cached subtitle translations)",

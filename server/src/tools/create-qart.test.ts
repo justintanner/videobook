@@ -1,3 +1,4 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -5,7 +6,6 @@ import { tmpdir } from "node:os";
 import jsQR from "jsqr";
 import QRCode from "qrcode";
 import sharp from "sharp";
-import { createFs } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import {
   buildQartPng,
@@ -55,11 +55,11 @@ async function decodeQr(buffer: Buffer): Promise<string | null> {
 describe("create_qart tool", () => {
   let client: Client | undefined;
   let tempDir: string;
-  let fs: ReturnType<typeof createFs>;
+  let fs: ReturnType<typeof createEngineForTest>;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-create-qart-"));
-    fs = createFs({ projectsDir: tempDir });
+    fs = createEngineForTest(tempDir);
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
@@ -73,15 +73,15 @@ describe("create_qart tool", () => {
   });
 
   async function createImageAsset(name: string, buffer: Buffer): Promise<string> {
-    const asset = await fs.createAsset("img", name, PROJECT);
+    const asset = await fs.artifacts.create("img", name, PROJECT);
     if (!asset.ok) throw new Error(asset.error.message);
-    const write = await fs.writeFile(asset.value.assetId, "original.png", buffer, PROJECT);
+    const write = await fs.files.write(asset.value.slug, "original.png", buffer, PROJECT);
     if (!write.ok) throw new Error(write.error.message);
-    return asset.value.assetId;
+    return asset.value.slug;
   }
 
   async function readAssetFile(assetId: string, name: string): Promise<Buffer> {
-    const read = await fs.readFile(assetId, name, PROJECT);
+    const read = await fs.files.read(assetId, name, PROJECT);
     if (!read.ok) throw new Error(read.error.message);
     return Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
   }
@@ -118,13 +118,11 @@ describe("create_qart tool", () => {
     expect(parsed.qr_version).toBe(QART_MIN_VERSION);
 
     for (const assetId of [parsed.inverted_asset_id, parsed.monochrome_asset_id]) {
-      const manifest = await fs.getManifest(assetId, PROJECT, { includeDotfiles: true });
+      const manifest = await fs.files.manifest(assetId, PROJECT, { includeDotfiles: true });
       expect(manifest.ok).toBe(true);
       if (!manifest.ok) return;
       const fileNames = new Set(manifest.value.files.map((file) => file.name));
       for (const filename of [
-        ".created_at",
-        ".original.json",
         "original.png",
         "landscape.jpg",
         "portrait.jpg",
@@ -137,7 +135,7 @@ describe("create_qart tool", () => {
         expect(await decodeQr(await readAssetFile(assetId, filename))).toBe(value);
       }
 
-      const metadata = await fs.readMetadata(assetId, "original", PROJECT);
+      const metadata = await fs.metadata.artifacts.read(assetId, "original", PROJECT);
       expect(metadata.ok).toBe(true);
       if (!metadata.ok) return;
       expect(metadata.value).toMatchObject({

@@ -1,10 +1,10 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
-import { createFs } from "videobook-engine";
 import sharp from "sharp";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
@@ -112,18 +112,18 @@ describe("generate_nano_banana_image tool", () => {
   it("returns error when reference image asset has no image file", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("img", "empty-img", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("img", "empty-img", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
 
-    await fs.writeFile(asset.value.assetId, "notes.txt", "hello", "test-proj");
+    await fs.files.write(asset.value.slug, "notes.txt", "hello", "test-proj");
 
     const result = await client.callTool({
       name: "generate_kie_nano_banana_pro_text_to_image",
       arguments: {
         prompt: "test prompt",
         project_slug: "test-proj",
-        image_slugs: [`@${asset.value.assetId}`],
+        image_slugs: [`@${asset.value.slug}`],
       },
     });
 
@@ -153,21 +153,21 @@ describe("generate_nano_banana_image tool", () => {
   it("enqueues job with prompt and valid reference images", async () => {
     process.env.KIE_API_KEY = "test-key";
 
-    const fs = createFs({ projectsDir: tempDir });
-    const asset = await fs.createAsset("img", "ref-img", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const asset = await fs.artifacts.create("img", "ref-img", "test-proj");
     if (!asset.ok) throw new Error("Failed to create asset");
 
     const png = await sharp({
       create: { width: 10, height: 10, channels: 4, background: { r: 255, g: 0, b: 0, alpha: 1 } },
     }).png().toBuffer();
-    await fs.writeFile(asset.value.assetId, "original.png", png, "test-proj");
+    await fs.files.write(asset.value.slug, "original.png", png, "test-proj");
 
     const result = await client.callTool({
       name: "generate_kie_nano_banana_pro_text_to_image",
       arguments: {
         prompt: "transform this image",
         project_slug: "test-proj",
-        image_slugs: [`@${asset.value.assetId}`],
+        image_slugs: [`@${asset.value.slug}`],
       },
     });
 

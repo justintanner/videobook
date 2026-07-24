@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
 import { registerJobHandler } from "../queue.js";
@@ -21,7 +21,7 @@ type GenerateWan27ImageProPayload = {
   nsfwChecker?: boolean;
 };
 
-export function registerGenerateWan27ImageProJob(fs: VideocityFs): void {
+export function registerGenerateWan27ImageProJob(fs: Engine): void {
   registerJobHandler("generate_wan27_image_pro", async (payload, ctx) => {
     const {
       prompt, imageInputs, imgAssetId, imgAssetDir,

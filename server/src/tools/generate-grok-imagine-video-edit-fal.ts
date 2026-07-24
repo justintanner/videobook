@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { FalXaiGrokImagineVideoEditVideoRequestSchema } from "@apicity/fal/zod";
 import { queue } from "../queue.js";
@@ -19,7 +19,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateGrokImagineVideoEditFalDef(fs: VideocityFs): ToolDef {
+export function generateGrokImagineVideoEditFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_grok_imagine_video_edit_video",
     description: "Edit a video via fal.ai using xAI Grok Imagine Video edit-video. Creates a new vid- asset and enqueues a background job.",
@@ -35,15 +35,15 @@ export function generateGrokImagineVideoEditFalDef(fs: VideocityFs): ToolDef {
       if (!sourceVideoAssetId.startsWith("vid-")) {
         return { isError: true as const, content: [{ type: "text" as const, text: `video_slug must be a vid-* asset, got: ${sourceVideoAssetId}` }] };
       }
-      const manifest = await fs.getManifest(sourceVideoAssetId, project_slug);
+      const manifest = await fs.files.manifest(sourceVideoAssetId, project_slug);
       if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
       const sourceVideoFile = findVideoFile(manifest.value.files);
       if (!sourceVideoFile) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${sourceVideoAssetId}` }] };
 
-      const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "grok-imagine/text-to-video")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "grok-imagine/text-to-video")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "grok-imagine/text-to-video")}-edit-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

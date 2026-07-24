@@ -9,6 +9,8 @@ import { createTestClient } from "../test-client.js";
 import { queue, waitForJob } from "../queue.js";
 import { probeVideo } from "../ffmpeg.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Engine } from "videobook-engine";
+import { createEngineForTest } from "../fs.js";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -24,10 +26,6 @@ function parse(result: { content: unknown }): Record<string, unknown> {
 
 async function fileExists(p: string): Promise<boolean> {
   return stat(p).then((s) => s.isFile(), () => false);
-}
-
-async function readJson(p: string): Promise<Record<string, unknown>> {
-  return JSON.parse(await readFile(p, "utf-8"));
 }
 
 async function generateTestVideo(outputPath: string): Promise<void> {
@@ -54,32 +52,32 @@ async function uploadVideo(
   return parse(result) as unknown as { assetId: string; path: string };
 }
 
-async function pollForFile(
-  filePath: string,
-  timeoutMs = 30_000,
-): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (await fileExists(filePath)) return;
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error(`${filePath} not found after ${timeoutMs}ms`);
-}
-
 async function pollForDuration(
-  metaPath: string,
+  fs: Engine,
+  assetId: string,
   maxDuration: number,
   timeoutMs = 60_000,
 ): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    try {
-      const meta = await readJson(metaPath);
-      if (typeof meta.duration === 'number' && meta.duration <= maxDuration) return;
-    } catch { /* file not ready */ }
+    const result =
+      await fs.metadata.artifacts.read<Record<string, unknown>>(
+        assetId,
+        "original",
+        PROJECT,
+      );
+    if (
+      result.ok &&
+      typeof result.value.duration === "number" &&
+      result.value.duration <= maxDuration
+    ) {
+      return;
+    }
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error(`Duration in ${metaPath} did not drop below ${maxDuration}s after ${timeoutMs}ms`);
+  throw new Error(
+    `Duration for ${assetId} did not drop below ${maxDuration}s after ${timeoutMs}ms`,
+  );
 }
 
 describe("trim video in place and re-render e2e", () => {
@@ -88,6 +86,7 @@ describe("trim video in place and re-render e2e", () => {
   let videoPath: string;
   let assetId: string;
   let assetDir: string;
+  let fs: Engine;
 
   beforeAll(async () => {
     await queue.start();
@@ -95,6 +94,7 @@ describe("trim video in place and re-render e2e", () => {
     videoPath = join(tempDir, "test-source.mp4");
     await generateTestVideo(videoPath);
     client = await createTestClient(tempDir);
+    fs = createEngineForTest(tempDir);
 
     // Create project
     const createResult = await client.callTool({
@@ -106,10 +106,7 @@ describe("trim video in place and re-render e2e", () => {
     // Upload video
     const uploaded = await uploadVideo(client, PROJECT, videoPath);
     assetId = uploaded.assetId;
-    assetDir = join(tempDir, PROJECT, assetId);
-
-    // Wait for process_video job to finish (triggered by upload)
-    await pollForFile(join(assetDir, ".original.json"), 60_000);
+    assetDir = uploaded.path;
   });
 
   afterAll(async () => {
@@ -140,8 +137,7 @@ describe("trim video in place and re-render e2e", () => {
     expect(parsed.status).toBe("completed");
     expect(parsed.asset_id).toBe(assetId);
 
-    // process_video runs async after trim — poll until metadata reflects shorter duration
-    await pollForDuration(join(assetDir, ".original.json"), 2.5, 60_000);
+    await pollForDuration(fs, assetId, 2.5, 60_000);
   });
 
   it("video file still exists at the same asset path", async () => {
@@ -155,8 +151,15 @@ describe("trim video in place and re-render e2e", () => {
   });
 
   it("metadata reflects new duration", async () => {
-    const meta = await readJson(join(assetDir, ".original.json"));
-    const duration = meta.duration as number;
+    const result =
+      await fs.metadata.artifacts.read<Record<string, unknown>>(
+        assetId,
+        "original",
+        PROJECT,
+      );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const duration = result.value.duration as number;
     expect(duration).toBeGreaterThanOrEqual(1.5);
     expect(duration).toBeLessThanOrEqual(2.5);
   });

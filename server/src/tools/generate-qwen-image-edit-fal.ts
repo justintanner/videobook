@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalQwenImageEditRequestSchema } from "@apicity/fal/zod";
@@ -57,7 +57,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateQwenImageEditFalDef(fs: VideocityFs): ToolDef {
+export function generateQwenImageEditFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_qwen_2_0_edit_image",
     description: "Edit an image via fal.ai using Alibaba Qwen Image edit with one @img-* reference input. Creates a new img- asset and enqueues a background job.",
@@ -77,10 +77,10 @@ export function generateQwenImageEditFalDef(fs: VideocityFs): ToolDef {
       const [refImage] = resolved.inputs;
       const normalizedSize = normalizeImageSize(image_size);
 
-      const assetResult = await fs.createAsset(prefix, `${modelSlug("kie", "qwen2/image-edit")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create(prefix, `${modelSlug("kie", "qwen2/image-edit")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "qwen2/image-edit")}-edit-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

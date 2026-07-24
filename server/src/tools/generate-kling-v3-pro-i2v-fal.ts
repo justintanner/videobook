@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalKlingVideoV3ProImageToVideoRequestSchema } from "@apicity/fal/zod";
@@ -22,7 +22,7 @@ const generateKlingV3ProI2vFalSchema = {
 
 type Args = SchemaArgs<typeof generateKlingV3ProI2vFalSchema>;
 
-export function generateKlingV3ProI2vFalDef(fs: VideocityFs): ToolDef {
+export function generateKlingV3ProI2vFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_kling_video_v3_pro_image_to_video",
     description: "Generate a video via fal.ai using Kling Video v3 Pro image-to-video. Requires a first-frame image; optional end frame for transition control. Creates a new vid- asset and enqueues a background job.",
@@ -40,10 +40,10 @@ export function generateKlingV3ProI2vFalDef(fs: VideocityFs): ToolDef {
 
       const [firstFrame, endFrame] = resolved.inputs;
       const nameSource = prompt ?? first_frame_slug;
-      const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "kling-3.0/video/pro")}-${slugify(nameSource) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "kling-3.0/video/pro")}-${slugify(nameSource) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "kling-3.0/video/pro")}-i2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

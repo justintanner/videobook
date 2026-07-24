@@ -1,4 +1,4 @@
-import type { AssetType, ClipState, MediaItem } from './types';
+import type { ArtifactKind, ClipState, MediaItem } from './types';
 import { cardTone } from '@/theme/domains';
 
 export type CardTone =
@@ -177,7 +177,7 @@ const TONE_STYLES: Record<CardTone, {
   notebook: cardTone('notebook'),
 };
 
-const TYPE_TO_TONE: Record<AssetType, CardTone> = {
+const TYPE_TO_TONE: Record<ArtifactKind, CardTone> = {
   video: 'video',
   image: 'image',
   character: 'character',

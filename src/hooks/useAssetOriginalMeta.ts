@@ -23,7 +23,7 @@ function parseOriginalToRewrite(json: OriginalJson): RewriteMeta | null {
 }
 
 /**
- * Fetches `.original.json` for the current HEAD and returns it as a RewriteMeta.
+ * Fetches native `original` metadata for the current revision.
  * Returns null when missing, unparseable, or origin !== describe_image.
  * Re-fetches on asset-id change; expose `refresh` for post-rewrite invalidation.
  */

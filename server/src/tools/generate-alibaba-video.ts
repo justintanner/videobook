@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import {
   AlibabaVideoSynthesisInputSchema,
@@ -14,7 +14,7 @@ import { requireAtLeastOne, toolError } from "./_shared.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
+function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -35,10 +35,10 @@ type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-async function resolveImageSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveImageSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("img-")) return { ok: false, error: `Frame slugs must be img-* assets, got: ${assetId}` };
-  const manifest = await fs.getManifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
   if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
@@ -48,7 +48,7 @@ async function resolveImageSlug(fs: VideocityFs, raw: string, projectSlug: strin
 // `@<assetId>/<filename>` addresses a specific sibling file inside an asset
 // (e.g. `@plan/s1.mp4`). Bypasses the prefix gate so plan-driven slugs work.
 async function resolveSlashedSlug(
-  fs: VideocityFs,
+  fs: Engine,
   raw: string,
   projectSlug: string,
 ): Promise<ResolveOk | ResolveErr | null> {
@@ -58,31 +58,31 @@ async function resolveSlashedSlug(
   const assetId = stripped.slice(0, slashIdx);
   const filename = stripped.slice(slashIdx + 1);
   if (!assetId || !filename) return { ok: false, error: `Invalid slashed slug: ${raw}` };
-  const manifest = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+  const manifest = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = manifest.value.files.find((f) => f.name === filename);
   if (!file) return { ok: false, error: `File ${filename} not found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename } };
 }
 
-async function resolveVideoSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveVideoSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const slashed = await resolveSlashedSlug(fs, raw, projectSlug);
   if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("vid-")) return { ok: false, error: `Video slugs must be vid-* assets, got: ${assetId}` };
-  const manifest = await fs.getManifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findVideoFile(manifest.value.files);
   if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveAudioSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const slashed = await resolveSlashedSlug(fs, raw, projectSlug);
   if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("aud-")) return { ok: false, error: `Audio slugs must be aud-* assets, got: ${assetId}` };
-  const manifest = await fs.getManifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findAudioFile(manifest.value.files, assetId);
   if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
@@ -110,7 +110,7 @@ const generateAlibabaVideoSchema = {
 
 type Args = SchemaArgs<typeof generateAlibabaVideoSchema>;
 
-export function generateAlibabaVideoDef(fs: VideocityFs): ToolDef {
+export function generateAlibabaVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_alibaba_wan_2_7_video",
     description: "Generate a video using Alibaba Cloud DashScope Video Synthesis. Requires at least one media input (first/last frame, reference video, driving audio, or clip continuation). Creates a new vid- asset and enqueues a background job.",
@@ -172,12 +172,12 @@ export function generateAlibabaVideoDef(fs: VideocityFs): ToolDef {
       }
 
       const videoName = `alibaba-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return toolError(`Failed to create video asset: ${assetResult.error.message}`);
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = [firstFrame?.assetId, lastFrame?.assetId].filter((v): v is string => v !== undefined);
       const sourceVideoIds = [firstClip?.assetId, videoRef?.assetId].filter((v): v is string => v !== undefined);
       const sourceAudioIds = drivingAudio ? [drivingAudio.assetId] : [];

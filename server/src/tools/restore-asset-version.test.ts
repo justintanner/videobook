@@ -33,6 +33,11 @@ describe("restore_asset_version tool", () => {
     const uploaded = JSON.parse(
       (uploadResult.content as Array<{ type: string; text: string }>)[0].text
     );
+    const { createEngineForTest } = await import("../fs.js");
+    const fs = createEngineForTest(tempDir);
+    const artifact = fs.artifacts.get("test-proj", uploaded.assetId);
+    if (!artifact.ok) throw new Error(artifact.error.message);
+    const stableArtifactId = artifact.value.artifactId;
 
     // Get the commit hash for the initial version
     const historyResult = await client.callTool({
@@ -54,7 +59,7 @@ describe("restore_asset_version tool", () => {
     const result = await client.callTool({
       name: "restore_asset_version",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: stableArtifactId,
         commit_hash: firstCommit,
         project_slug: "test-proj",
       },
@@ -64,14 +69,14 @@ describe("restore_asset_version tool", () => {
       (result.content as Array<{ type: string; text: string }>)[0].text
     );
     expect(parsed.status).toBe("restored");
-    expect(parsed.asset_id).toBe(uploaded.assetId);
+    expect(parsed.asset_id).toBe(stableArtifactId);
     expect(parsed.from_commit).toBe(firstCommit);
     expect(parsed.new_commit).toBeDefined();
 
     const repeatResult = await client.callTool({
       name: "restore_asset_version",
       arguments: {
-        asset_id: uploaded.assetId,
+        asset_id: stableArtifactId,
         commit_hash: firstCommit,
         project_slug: "test-proj",
       },
@@ -81,7 +86,7 @@ describe("restore_asset_version tool", () => {
       (repeatResult.content as Array<{ type: string; text: string }>)[0].text
     );
     expect(repeatParsed.status).toBe("restored");
-    expect(repeatParsed.asset_id).toBe(uploaded.assetId);
+    expect(repeatParsed.asset_id).toBe(stableArtifactId);
     expect(repeatParsed.from_commit).toBe(firstCommit);
     expect(repeatParsed.new_commit).toBeDefined();
   });

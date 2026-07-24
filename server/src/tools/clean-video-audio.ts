@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { findVideoFile } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
@@ -9,7 +9,7 @@ const DEFAULT_SOURCE_MIX = 0.22;
 const DEFAULT_EDGE_FADE_MS = 250;
 const DEFAULT_MUSIC_VOLUME = 0.08;
 
-export function cleanVideoAudioDef(fs: VideocityFs): ToolDef {
+export function cleanVideoAudioDef(fs: Engine): ToolDef {
   return {
     name: "clean_video_audio",
     description:
@@ -74,7 +74,7 @@ export function cleanVideoAudioDef(fs: VideocityFs): ToolDef {
         return toolError(`clean_video_audio requires a vid-* asset, got ${asset_id}`);
       }
 
-      const manifestResult = await fs.getManifest(assetId, project_slug);
+      const manifestResult = await fs.files.manifest(assetId, project_slug);
       if (!manifestResult.ok) return toolError(manifestResult.error.message);
 
       const manifest = manifestResult.value;

@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { VideocityFs } from "videobook-engine";
-import { createFsForTest } from "../fs.js";
+import type { Engine } from "videobook-engine";
+import { createEngineForTest } from "../fs.js";
 import { claimLockedLease } from "./_lease.js";
 
 const LOCK = { durationMs: 60_000 };
@@ -13,7 +13,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 describe("claimLockedLease", () => {
-  let fs: VideocityFs;
+  let fs: Engine;
   let tempDir: string;
   let assetId: string;
   let assetDir: string;
@@ -21,13 +21,13 @@ describe("claimLockedLease", () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-claim-lease-test-"));
-    fs = createFsForTest(tempDir);
-    const project = await fs.createProject(projectSlug);
+    fs = createEngineForTest(tempDir);
+    const project = await fs.projects.create(projectSlug);
     if (!project.ok) throw new Error(project.error.message);
-    const created = await fs.createAsset("vid", "clip", projectSlug);
+    const created = await fs.artifacts.create("vid", "clip", projectSlug);
     if (!created.ok) throw new Error(created.error.message);
-    assetId = created.value.assetId;
-    const manifest = await fs.getManifest(assetId, projectSlug);
+    assetId = created.value.slug;
+    const manifest = await fs.files.manifest(assetId, projectSlug);
     if (!manifest.ok) throw new Error(manifest.error.message);
     assetDir = manifest.value.path;
   });
@@ -37,8 +37,8 @@ describe("claimLockedLease", () => {
   });
 
   async function releaseClaim(ownerId: string): Promise<void> {
-    await fs.assetWork.complete(projectSlug, assetId, ownerId);
-    await fs.releaseLock(assetDir);
+    await fs.jobs.artifactWork.complete(projectSlug, assetId, ownerId);
+    await fs.jobs.locks.release(assetDir);
   }
 
   it("claims lock and lease when the asset is free", async () => {
@@ -46,8 +46,8 @@ describe("claimLockedLease", () => {
 
     expect(claim.ok).toBe(true);
     if (!claim.ok) return;
-    expect(await fs.isLocked(assetDir)).toBe(true);
-    const second = await fs.assetWork.begin(projectSlug, assetId, {
+    expect(await fs.jobs.locks.isLocked(assetDir)).toBe(true);
+    const second = await fs.jobs.artifactWork.begin(projectSlug, assetId, {
       kind: "render",
       ownerKind: "job",
       durationMs: 60_000,
@@ -57,7 +57,7 @@ describe("claimLockedLease", () => {
   });
 
   it("fails fast when the dir lock is held and no wait is requested", async () => {
-    const lock = await fs.acquireLock(assetDir, LOCK);
+    const lock = await fs.jobs.locks.acquire(assetDir, LOCK);
     if (!lock.ok) throw new Error(lock.error.message);
 
     const claim = await claimLockedLease(fs, projectSlug, assetId, assetDir, "render", LOCK);
@@ -65,15 +65,15 @@ describe("claimLockedLease", () => {
     expect(claim.ok).toBe(false);
     if (claim.ok) return;
     expect(claim.reason).toContain("locked");
-    await fs.releaseLock(assetDir);
+    await fs.jobs.locks.release(assetDir);
   });
 
   it("waits for a held dir lock to be released", async () => {
-    const lock = await fs.acquireLock(assetDir, LOCK);
+    const lock = await fs.jobs.locks.acquire(assetDir, LOCK);
     if (!lock.ok) throw new Error(lock.error.message);
     const releaseLater = (async () => {
       await sleep(300);
-      await fs.releaseLock(assetDir);
+      await fs.jobs.locks.release(assetDir);
     })();
 
     const claim = await claimLockedLease(
@@ -87,7 +87,7 @@ describe("claimLockedLease", () => {
   });
 
   it("waits for an active lease to complete", async () => {
-    const lease = await fs.assetWork.begin(projectSlug, assetId, {
+    const lease = await fs.jobs.artifactWork.begin(projectSlug, assetId, {
       kind: "transcribe",
       ownerKind: "job",
       durationMs: 60_000,
@@ -95,7 +95,7 @@ describe("claimLockedLease", () => {
     if (!lease) throw new Error("test setup: could not begin lease");
     const completeLater = (async () => {
       await sleep(300);
-      await fs.assetWork.complete(projectSlug, assetId, lease.ownerId);
+      await fs.jobs.artifactWork.complete(projectSlug, assetId, lease.ownerId);
     })();
 
     const claim = await claimLockedLease(

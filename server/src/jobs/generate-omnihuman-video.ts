@@ -1,4 +1,4 @@
-import type { TaskType, VideocityFs } from "videobook-engine";
+import type { TaskType, Engine } from "videobook-engine";
 import type { Omnihuman15OutputResolution } from "@apicity/kie";
 import { submitKieTask } from "./kie-paygate.js";
 import { uploadAssetToKie } from "./_kie-upload.js";
@@ -30,7 +30,7 @@ type GenerateOmnihumanVideoPayload = {
   seed?: number;
 };
 
-export function registerGenerateOmnihumanVideoJob(fs: VideocityFs): void {
+export function registerGenerateOmnihumanVideoJob(fs: Engine): void {
   registerJobHandler("generate_omnihuman_video", async (payload, ctx) => {
     const {
       vidAssetId, vidAssetDir, projectSlug,
@@ -50,7 +50,7 @@ export function registerGenerateOmnihumanVideoJob(fs: VideocityFs): void {
 
     // omnihuman-1-5 bills per second of driving audio; schema has no duration.
     // Pass measured audio length as a cost-only hint (see KieCostHints).
-    const audioMeta = await fs.readMetadata<{ duration?: number }>(
+    const audioMeta = await fs.metadata.artifacts.read<{ duration?: number }>(
       audioInput.assetId, "original", projectSlug,
     );
     const durationHint =

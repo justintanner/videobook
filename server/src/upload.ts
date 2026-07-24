@@ -1,6 +1,6 @@
 import { createFreeMediaUpload, uploadToAnyHost } from "@apicity/free-media-upload";
 import { createHash } from "node:crypto";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { maybeReencodeImage, maybeUpscaleSmallImage } from "./image-compress.js";
 
 export function contentHash(data: Buffer | Uint8Array): string {
@@ -80,12 +80,12 @@ export async function prepareBytesForUpload(
 // a collision-free remote filename. Shared preamble for every provider-native
 // upload wrapper.
 export async function prepareAssetForUpload(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   filename: string,
   projectSlug: string,
 ): Promise<{ data: Uint8Array; hashedFilename: string; contentType: string }> {
-  const readResult = await fs.readFile(assetId, filename, projectSlug);
+  const readResult = await fs.files.read(assetId, filename, projectSlug);
   if (!readResult.ok) throw new Error(readResult.error.message);
   return prepareBytesForUpload(new Uint8Array(readResult.value), filename);
 }
@@ -95,7 +95,7 @@ export async function prepareAssetForUpload(
 // specific AI provider. Provider-specific jobs should call the matching
 // `uploadAssetTo{Fal,Kie,Alibaba}` wrapper instead.
 export async function uploadAssetFile(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   filename: string,
   projectSlug: string,

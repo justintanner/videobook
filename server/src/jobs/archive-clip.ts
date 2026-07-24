@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import type {
   ElevenLabsSpeechToTextRequest,
   ElevenLabsSpeechToTextResponse,
@@ -94,7 +94,7 @@ function sourceTitle(title: string | undefined, fallback: string | undefined): s
   return value || undefined;
 }
 
-function pickMediaFile(files: AssetManifestFile[], assetId: string): AssetManifestFile | null {
+function pickMediaFile(files: ArtifactManifestFile[], assetId: string): ArtifactManifestFile | null {
   const full = files.find((file) => /^original_full\.(mp4|mov|webm|avi|mkv)$/i.test(file.name));
   return full
     ?? findPrimaryMediaFile(files, assetId)
@@ -103,7 +103,7 @@ function pickMediaFile(files: AssetManifestFile[], assetId: string): AssetManife
 }
 
 function buildAssetSnapshot(
-  manifest: { path: string; files: AssetManifestFile[]; directories?: Record<string, string[]> },
+  manifest: { path: string; files: ArtifactManifestFile[]; directories?: Record<string, string[]> },
   projectSlug: string,
   assetId: string,
 ): AssetSnapshot {
@@ -124,11 +124,11 @@ function buildAssetSnapshot(
 }
 
 async function readAnalysisTopics(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<string[]> {
-  const read = await fs.readFile(assetId, ".original.analysis.json", projectSlug);
+  const read = await fs.files.read(assetId, ".original.analysis.json", projectSlug);
   if (!read.ok) return [];
   try {
     const parsed = JSON.parse(new TextDecoder().decode(read.value)) as Record<string, unknown>;
@@ -149,13 +149,13 @@ async function readAnalysisTopics(
 }
 
 async function prepareAssetMedia(
-  fs: VideocityFs,
+  fs: Engine,
   payload: ArchiveClipPayload,
 ): Promise<PreparedMedia> {
   if (!payload.assetId || !payload.sourceProjectSlug) {
     throw new Error("asset archive requires assetId and sourceProjectSlug");
   }
-  const manifest = await fs.getManifest(payload.assetId, payload.sourceProjectSlug, { includeDotfiles: true });
+  const manifest = await fs.files.manifest(payload.assetId, payload.sourceProjectSlug, { includeDotfiles: true });
   if (!manifest.ok) throw new Error(manifest.error.message);
   const media = pickMediaFile(manifest.value.files, payload.assetId);
   if (!media) throw new Error(`No media file found in asset ${payload.assetId}`);
@@ -438,7 +438,7 @@ async function uploadAssetSnapshot(args: {
   return { prefix, fileCount };
 }
 
-async function runArchive(fs: VideocityFs, payload: ArchiveClipPayload): Promise<Record<string, unknown>> {
+async function runArchive(fs: Engine, payload: ArchiveClipPayload): Promise<Record<string, unknown>> {
   const prepared = payload.url ? await prepareUrlMedia(payload) : await prepareAssetMedia(fs, payload);
   try {
     const store = getArchiveStore();
@@ -521,11 +521,11 @@ async function runArchive(fs: VideocityFs, payload: ArchiveClipPayload): Promise
   }
 }
 
-async function writeArchiveMetadata(fs: VideocityFs, payload: ArchiveClipPayload, result: Record<string, unknown>): Promise<void> {
+async function writeArchiveMetadata(fs: Engine, payload: ArchiveClipPayload, result: Record<string, unknown>): Promise<void> {
   if (!payload.assetId || !payload.sourceProjectSlug) return;
   const archiveId = result.archive_id;
   if (typeof archiveId !== "string") return;
-  const write = await fs.writeMetadata(payload.assetId, "archive", {
+  const write = await fs.metadata.artifacts.write(payload.assetId, "archive", {
     archive_id: archiveId,
     ingest_id: result.ingest_id,
     duplicate: result.duplicate,
@@ -538,7 +538,7 @@ async function writeArchiveMetadata(fs: VideocityFs, payload: ArchiveClipPayload
   if (!write.ok) throw new Error(write.error.message);
 }
 
-export function registerArchiveClipJob(fs: VideocityFs): void {
+export function registerArchiveClipJob(fs: Engine): void {
   registerJobHandler("archive_clip", async (payload, ctx) => {
     const p = payload as ArchiveClipPayload;
     if (p.assetId) {

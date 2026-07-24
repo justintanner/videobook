@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { queue } from "../queue.js";
 import { type PendingTask } from "videobook-engine";
@@ -57,14 +57,14 @@ type EnqueueOutcome =
   | { model: string; error: string };
 
 async function enqueueModel(
-  fs: VideocityFs,
+  fs: Engine,
   spec: ModelSpec,
   prompt: string,
   projectSlug: string,
   sourceScriptId: string | undefined,
   promptSlug: string,
 ): Promise<EnqueueOutcome> {
-  const assetResult = await fs.createAsset(
+  const assetResult = await fs.artifacts.create(
     "img",
     `${spec.slugPrefix}-${promptSlug}`,
     projectSlug,
@@ -72,7 +72,7 @@ async function enqueueModel(
   if (!assetResult.ok) {
     return { model: spec.canonicalName, error: assetResult.error.message };
   }
-  const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+  const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
   const jobId = `${spec.jobPrefix}-${imgAssetId}-${Date.now()}`;
   await queue.enqueue(jobId, {
@@ -86,7 +86,7 @@ async function enqueueModel(
   return { model: spec.canonicalName, img_asset_id: imgAssetId, job_id: jobId };
 }
 
-export function genImagesAllDef(fs: VideocityFs): ToolDef {
+export function genImagesAllDef(fs: Engine): ToolDef {
   return {
     name: "generate_image_model_comparison",
     description:

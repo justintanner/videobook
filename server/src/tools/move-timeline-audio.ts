@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -43,7 +43,7 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   };
 }
 
-export function moveTimelineAudioDef(fs: VideocityFs): ToolDef {
+export function moveTimelineAudioDef(fs: Engine): ToolDef {
   return {
     name: "move_timeline_audio",
     description: "Move a timeline audio clip to a new start frame",
@@ -59,7 +59,7 @@ export function moveTimelineAudioDef(fs: VideocityFs): ToolDef {
         start_frame: number;
       };
 
-      const readResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
+      const readResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
       if (!readResult.ok) {
         const err = (readResult as { ok: false; error: { code: string; message: string } }).error;
         return toolError(err.code === "NOT_FOUND" ? "No timeline exists for this project" : err.message);
@@ -74,7 +74,7 @@ export function moveTimelineAudioDef(fs: VideocityFs): ToolDef {
       audio[idx] = { ...audio[idx], startFrame: start_frame };
       config.audio = audio;
 
-      const writeResult = await fs.writeProjectMeta("timeline", config, project_slug);
+      const writeResult = await fs.metadata.projects.write("timeline", config, project_slug);
       if (!writeResult.ok) {
         const writeErr = (writeResult as { ok: false; error: { message: string } }).error;
         return toolError(writeErr.message);

@@ -1,4 +1,4 @@
-import type { AssetManifestFile, VideocityFs } from "videobook-engine";
+import type { ArtifactManifestFile, Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
@@ -64,13 +64,13 @@ function validateSfx(
 }
 
 export function findApplySfxSourceFile(
-  files: AssetManifestFile[],
-): AssetManifestFile | null {
+  files: ArtifactManifestFile[],
+): ArtifactManifestFile | null {
   return files.find((file) => file.name.toLowerCase() === "original.mp4")
     ?? findVideoFile(files);
 }
 
-export function applySfxDef(fs: VideocityFs): ToolDef {
+export function applySfxDef(fs: Engine): ToolDef {
   return {
     name: "apply_sfx",
     description:
@@ -110,7 +110,7 @@ export function applySfxDef(fs: VideocityFs): ToolDef {
       };
       const assetId = asset_id.replace(/^@/, "");
 
-      const manifestResult = await fs.getManifest(assetId, project_slug);
+      const manifestResult = await fs.files.manifest(assetId, project_slug);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -126,7 +126,7 @@ export function applySfxDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const metaResult = await fs.readMetadata<{ duration?: number }>(
+      const metaResult = await fs.metadata.artifacts.read<{ duration?: number }>(
         assetId, "original", project_slug,
       );
       const duration = metaResult.ok && typeof metaResult.value.duration === "number"
@@ -145,7 +145,7 @@ export function applySfxDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const cleared = await fs.generationErrors.clear(project_slug, assetId);
+      const cleared = await fs.jobs.failures.clear(project_slug, assetId);
       if (!cleared.ok) {
         return {
           isError: true as const,

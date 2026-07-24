@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import { CommandButton } from '@/components/commands';
 import { EmptyState } from '@/components/ui/EmptyState';
-import type { GitCommit, RewriteMeta } from '@/hooks/useAssetHistory';
+import type { Revision, RewriteMeta } from '@/hooks/useAssetHistory';
 
 type CommitOperation =
   | 'create' | 'generate' | 'upload' | 'render' | 'restore' | 'delete' | 'rename'
@@ -62,7 +62,7 @@ function fileChangeClass(status: string): string {
 }
 
 export function HistoryListPane({ commits, selectedHash, onSelectCommit, onRefresh, loading }: {
-  commits: GitCommit[];
+  commits: Revision[];
   selectedHash: string | null;
   onSelectCommit: (hash: string) => void;
   onRefresh: () => void;
@@ -164,7 +164,7 @@ function RewriteMetadataBlock({ rewrite, onReuse }: {
 }
 
 export function HistoryDetailPane({ commit, isHead, onRestore, onReusePrompt }: {
-  commit: GitCommit | null;
+  commit: Revision | null;
   isHead: boolean;
   onRestore: (hash: string) => void;
   onReusePrompt?: (meta: RewriteMeta) => void;

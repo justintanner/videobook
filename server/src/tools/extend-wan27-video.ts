@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { Wan27ImageToVideoRequestSchema } from "@apicity/kie/zod";
@@ -21,7 +21,7 @@ type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 const wan27I2v = Wan27ImageToVideoRequestSchema.shape.input.shape;
 
-async function resolveVideoSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+async function resolveVideoSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   // `@<assetId>/<filename>` form: address a specific sibling file inside an
   // asset (e.g. `@plan/s1.mp4`). Bypasses the vid- prefix gate.
   const stripped = raw.replace(/^@/, "");
@@ -30,7 +30,7 @@ async function resolveVideoSlug(fs: VideocityFs, raw: string, projectSlug: strin
     const assetId = stripped.slice(0, slashIdx);
     const filename = stripped.slice(slashIdx + 1);
     if (!assetId || !filename) return { ok: false, error: `Invalid slashed slug: ${raw}` };
-    const manifest = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+    const manifest = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
     if (!manifest.ok) return { ok: false, error: manifest.error.message };
     const file = manifest.value.files.find((f) => f.name === filename);
     if (!file) return { ok: false, error: `File ${filename} not found in asset ${assetId}` };
@@ -38,7 +38,7 @@ async function resolveVideoSlug(fs: VideocityFs, raw: string, projectSlug: strin
   }
   const assetId = stripped;
   if (!assetId.startsWith("vid-")) return { ok: false, error: `video_slug must be a vid-* asset, got: ${assetId}` };
-  const manifest = await fs.getManifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findVideoFile(manifest.value.files);
   if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
@@ -61,7 +61,7 @@ const extendWan27VideoSchema = {
 
 type Args = SchemaArgs<typeof extendWan27VideoSchema>;
 
-export function extendWan27VideoDef(fs: VideocityFs): ToolDef {
+export function extendWan27VideoDef(fs: Engine): ToolDef {
   return {
     name: "extend_kie_wan_2_7_video",
     description: "Extend an existing video asset using Wan 2.7 Image to Video by providing the source video as first_clip. Creates a new vid- asset and enqueues a background job.",
@@ -91,7 +91,7 @@ export function extendWan27VideoDef(fs: VideocityFs): ToolDef {
       const sourceVideo = videoResult.value;
 
       const videoName = `${modelSlug("kie", "wan/2-7-image-to-video")}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -99,7 +99,7 @@ export function extendWan27VideoDef(fs: VideocityFs): ToolDef {
         };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceVideoIds = [sourceVideo.assetId];
       const sourceImageIds: string[] = [];
       const sourceAudioIds: string[] = [];

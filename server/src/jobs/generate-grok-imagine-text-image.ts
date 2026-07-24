@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { submitKieTask } from "./kie-paygate.js";
 import type { XaiImageGenerateRequest, XaiImageResponse } from "@apicity/xai";
 import { queue, registerJobHandler } from "../queue.js";
@@ -20,7 +20,7 @@ type GenerateGrokImagineTextImagePayload = {
   _provider?: string;
 };
 
-export function registerGenerateGrokImagineTextImageJob(fs: VideocityFs): void {
+export function registerGenerateGrokImagineTextImageJob(fs: Engine): void {
   registerJobHandler("generate_grok_imagine_text_image", async (payload, ctx) => {
     const {
       prompt, imgAssetId, imgAssetDir, projectSlug, aspectRatio, enablePro, nsfwChecker, _provider,
@@ -40,7 +40,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: VideocityFs): void {
         response_format: "url",
         ...(aspectRatio !== undefined ? { aspect_ratio: aspectRatio as XaiImageGenerateRequest["aspect_ratio"] } : {}),
       };
-      await fs.writeMetadata(imgAssetId, "generation-payload", request, projectSlug);
+      await fs.metadata.artifacts.write(imgAssetId, "generation-payload", request, projectSlug);
       const result = await callXaiPaid<XaiImageGenerateRequest, XaiImageResponse>(
         provider.post.v1.images.generations,
         XAI_IMAGE_GENERATIONS_DOT_PATH,
@@ -52,7 +52,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: VideocityFs): void {
 
       await downloadUrlIntoAsset(fs, imageUrl, imgAssetId, "original.png", projectSlug, { kind: "result image" });
 
-      // Enqueue post-processing so .original.json and derived crops are created
+      // Enqueue post-processing so metadata and derived crops are created
       const provenance = {
         model: "grok-imagine/text-to-image",
         prompt,
@@ -67,7 +67,7 @@ export function registerGenerateGrokImagineTextImageJob(fs: VideocityFs): void {
         provenance,
       } as unknown as Record<string, unknown>);
 
-      await fs.pendingTasks.delete(projectSlug, imgAssetId);
+      await fs.jobs.pending.delete(projectSlug, imgAssetId);
 
       return { success: true, provider: "xai" };
     }

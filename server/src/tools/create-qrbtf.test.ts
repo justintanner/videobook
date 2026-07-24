@@ -1,10 +1,11 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import jsQR from "jsqr";
 import sharp from "sharp";
-import { createFs, type VideocityFs } from "videobook-engine";
+import { type Engine } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import { buildQrbtfPng, DEFAULT_QRBTF_SIZE } from "./create-qrbtf.js";
 import type { QrbtfParams } from "./qrbtf-render.js";
@@ -36,11 +37,11 @@ async function decodeQr(buffer: Buffer): Promise<string | null> {
 describe("create_qrbtf tool", () => {
   let client: Client | undefined;
   let tempDir: string;
-  let fs: VideocityFs;
+  let fs: Engine;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-create-qrbtf-"));
-    fs = createFs({ projectsDir: tempDir });
+    fs = createEngineForTest(tempDir);
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
@@ -54,7 +55,7 @@ describe("create_qrbtf tool", () => {
   });
 
   async function readAssetFile(assetId: string, name: string): Promise<Buffer> {
-    const read = await fs.readFile(assetId, name, PROJECT);
+    const read = await fs.files.read(assetId, name, PROJECT);
     if (!read.ok) throw new Error(read.error.message);
     return Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);
   }
@@ -88,13 +89,11 @@ describe("create_qrbtf tool", () => {
       expect(parsed.size).toBe(DEFAULT_QRBTF_SIZE);
       expect(parsed.bg_color).toBe("#000000");
 
-      const manifest = await fs.getManifest(parsed.asset_id, PROJECT, { includeDotfiles: true });
+      const manifest = await fs.files.manifest(parsed.asset_id, PROJECT, { includeDotfiles: true });
       expect(manifest.ok).toBe(true);
       if (!manifest.ok) return;
       const fileNames = new Set(manifest.value.files.map((f) => f.name));
       for (const filename of [
-        ".created_at",
-        ".original.json",
         "original.png",
         "landscape.jpg",
         "portrait.jpg",
@@ -103,7 +102,7 @@ describe("create_qrbtf tool", () => {
         expect(fileNames.has(filename)).toBe(true);
       }
 
-      const metadata = await fs.readMetadata(parsed.asset_id, "original", PROJECT);
+      const metadata = await fs.metadata.artifacts.read(parsed.asset_id, "original", PROJECT);
       expect(metadata.ok).toBe(true);
       if (!metadata.ok) return;
       expect(metadata.value).toMatchObject({
@@ -196,7 +195,7 @@ describe("create_qrbtf tool", () => {
     const parsed = JSON.parse(resultText(result)) as { asset_id: string; bg_color: string };
     expect(parsed.bg_color).toBe("#1A1A2E");
 
-    const metadata = await fs.readMetadata(parsed.asset_id, "original", PROJECT);
+    const metadata = await fs.metadata.artifacts.read(parsed.asset_id, "original", PROJECT);
     expect(metadata.ok).toBe(true);
     if (!metadata.ok) return;
     expect(metadata.value).toMatchObject({

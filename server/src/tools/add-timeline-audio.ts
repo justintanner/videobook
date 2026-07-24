@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -49,7 +49,7 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   };
 }
 
-export function addTimelineAudioDef(fs: VideocityFs): ToolDef {
+export function addTimelineAudioDef(fs: Engine): ToolDef {
   return {
     name: "add_timeline_audio",
     description: "Add an overlay audio clip to the timeline at a given frame offset",
@@ -77,7 +77,7 @@ export function addTimelineAudioDef(fs: VideocityFs): ToolDef {
         return toolError(`asset_id must be an aud-* asset, got: ${asset_id}`);
       }
 
-      const manifestResult = await fs.getManifest(asset_id, project_slug);
+      const manifestResult = await fs.files.manifest(asset_id, project_slug);
       if (!manifestResult.ok) {
         return toolError(`Asset "${asset_id}" not found: ${manifestResult.error.message}`);
       }
@@ -99,7 +99,7 @@ export function addTimelineAudioDef(fs: VideocityFs): ToolDef {
         }
       }
 
-      const readResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
+      const readResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
       let config: TimelineConfig;
       if (readResult.ok) {
         config = normalizeConfig(readResult.value);
@@ -124,7 +124,7 @@ export function addTimelineAudioDef(fs: VideocityFs): ToolDef {
 
       config.audio = [...(config.audio ?? []), clip];
 
-      const writeResult = await fs.writeProjectMeta("timeline", config, project_slug);
+      const writeResult = await fs.metadata.projects.write("timeline", config, project_slug);
       if (!writeResult.ok) {
         const writeErr = (writeResult as { ok: false; error: { message: string } }).error;
         return toolError(writeErr.message);

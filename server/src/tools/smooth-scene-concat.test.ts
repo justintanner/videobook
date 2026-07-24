@@ -1,10 +1,11 @@
+import { createEngineForTest } from "../fs.js";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { createFs, type VideocityFs } from "videobook-engine";
+import { type Engine } from "videobook-engine";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FFMPEG } from "../ffmpeg.js";
 import { queue, waitForJob } from "../queue.js";
@@ -31,25 +32,25 @@ async function createVideo(path: string, color: string, withAudio: boolean): Pro
 }
 
 async function createVideoAsset(
-  fs: VideocityFs,
+  fs: Engine,
   name: string,
   sourcePath: string,
 ): Promise<string> {
-  const created = await fs.createAsset("vid", name, PROJECT);
+  const created = await fs.artifacts.create("vid", name, PROJECT);
   if (!created.ok) throw created.error;
-  const written = await fs.writeFile(
-    created.value.assetId,
+  const written = await fs.files.write(
+    created.value.slug,
     "original.mp4",
     await readFile(sourcePath),
     PROJECT,
   );
   if (!written.ok) throw written.error;
-  return created.value.assetId;
+  return created.value.slug;
 }
 
 describe("smooth_scene_concat tool", () => {
   let client: Client;
-  let fs: VideocityFs;
+  let fs: Engine;
   let projectsDir: string;
   let fixtureDir: string;
   let firstAssetId: string;
@@ -70,7 +71,7 @@ describe("smooth_scene_concat tool", () => {
       name: "create_project",
       arguments: { project_slug: PROJECT },
     });
-    fs = createFs({ projectsDir });
+    fs = createEngineForTest(projectsDir);
     firstAssetId = await createVideoAsset(fs, "first", firstPath);
     secondAssetId = await createVideoAsset(fs, "second", secondPath);
   }, 60_000);
@@ -128,7 +129,7 @@ describe("smooth_scene_concat tool", () => {
     expect(parsed.alignment_mode).toBe("fixed");
 
     await waitForJob(parsed.job_id, 60_000);
-    const metadata = await fs.readMetadata(parsed.asset_id, "original", PROJECT);
+    const metadata = await fs.metadata.artifacts.read(parsed.asset_id, "original", PROJECT);
     if (!metadata.ok) throw metadata.error;
     expect(metadata.value).toMatchObject({
       origin: "smooth_scene_concat",

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { CostEstimate } from "@apicity/cost";
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { getCostProvider } from "../cost.js";
 import { getCostAdapter } from "../cost-adapters.js";
@@ -36,7 +36,7 @@ function unknown(toolName: string): CostEstimate {
 }
 
 async function enrichMotionControlInput(
-  fs: VideocityFs,
+  fs: Engine,
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   if (typeof input.duration === "number") return input;
@@ -48,7 +48,7 @@ async function enrichMotionControlInput(
   if (!projectSlug || motionSlugs.length === 0) return input;
 
   const motionSlug = motionSlugs[0].replace(/^@/, "");
-  const meta = await fs.readMetadata(motionSlug, "original", projectSlug);
+  const meta = await fs.metadata.artifacts.read(motionSlug, "original", projectSlug);
   if (!meta.ok) return input;
   const duration = (meta.value as { duration?: unknown }).duration;
   if (typeof duration !== "number" || duration <= 0) return input;
@@ -57,7 +57,7 @@ async function enrichMotionControlInput(
 }
 
 async function enrichGrokExtendInput(
-  fs: VideocityFs,
+  fs: Engine,
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   if (typeof input.resolution === "string" && input.resolution) return input;
@@ -70,7 +70,7 @@ async function enrichGrokExtendInput(
   if (!projectSlug || !source) return input;
 
   const assetId = source.replace(/^@/, "");
-  const meta = await fs.readMetadata<{ resolution?: unknown; input?: { resolution?: unknown } }>(
+  const meta = await fs.metadata.artifacts.read<{ resolution?: unknown; input?: { resolution?: unknown } }>(
     assetId,
     "generation-payload",
     projectSlug,
@@ -87,7 +87,7 @@ async function enrichGrokExtendInput(
 // metadata so the displayed cost matches what the paygate will bound against
 // (the job handler resolves the same value and passes it as a cost hint).
 async function enrichHappyHorseVideoEditInput(
-  fs: VideocityFs,
+  fs: Engine,
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   if (typeof input.duration === "number") return input;
@@ -99,7 +99,7 @@ async function enrichHappyHorseVideoEditInput(
   const assetId = videoSlug.replace(/^@/, "");
   if (!assetId.startsWith("vid-")) return input;
 
-  const meta = await fs.readMetadata<{ duration?: unknown }>(assetId, "original", projectSlug);
+  const meta = await fs.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original", projectSlug);
   if (!meta.ok) return input;
   const duration = meta.value.duration;
   if (typeof duration !== "number" || duration <= 0) return input;
@@ -108,7 +108,7 @@ async function enrichHappyHorseVideoEditInput(
 }
 
 async function enrichSourceDuration(
-  fs: VideocityFs,
+  fs: Engine,
   input: Record<string, unknown>,
   slugField: string,
   expectedPrefix: "vid-" | "aud-",
@@ -119,7 +119,7 @@ async function enrichSourceDuration(
   if (!projectSlug || !raw) return input;
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith(expectedPrefix)) return input;
-  const meta = await fs.readMetadata<{ duration?: unknown }>(assetId, "original", projectSlug);
+  const meta = await fs.metadata.artifacts.read<{ duration?: unknown }>(assetId, "original", projectSlug);
   if (!meta.ok) return input;
   const duration = meta.value.duration;
   if (typeof duration !== "number" || duration <= 0) return input;
@@ -127,7 +127,7 @@ async function enrichSourceDuration(
 }
 
 async function enrichInput(
-  fs: VideocityFs,
+  fs: Engine,
   rawToolName: string,
   input: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
@@ -151,7 +151,7 @@ async function enrichInput(
 }
 
 async function estimateOne(
-  fs: VideocityFs,
+  fs: Engine,
   toolName: string,
   input: Record<string, unknown>,
 ): Promise<CostEstimate> {
@@ -186,7 +186,7 @@ function sumEstimates(estimates: CostEstimate[]): CostEstimate {
   };
 }
 
-export function estimateCostDef(fs: VideocityFs): ToolDef {
+export function estimateCostDef(fs: Engine): ToolDef {
   return {
     name: "estimate_cost",
     description:

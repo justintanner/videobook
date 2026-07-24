@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { VideocityFs } from "videobook-engine";
-import { createFsForTest } from "../fs.js";
+import type { Engine } from "videobook-engine";
+import { createEngineForTest } from "../fs.js";
 import type { JobHandlerContext } from "../queue.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
 import { computeSourceTextHash } from "./_translate-transcript.js";
@@ -16,7 +16,7 @@ const testCtx: JobHandlerContext = {
 };
 
 describe("runTranslateTranscript", () => {
-  let fs: VideocityFs;
+  let fs: Engine;
   let tempDir: string;
   const projectSlug = "test-proj";
   const originalKey = process.env.KIE_API_KEY;
@@ -24,8 +24,8 @@ describe("runTranslateTranscript", () => {
   beforeEach(async () => {
     delete process.env.KIE_API_KEY;
     tempDir = await mkdtemp(join(tmpdir(), "videocity-translate-test-"));
-    fs = createFsForTest(tempDir);
-    const project = await fs.createProject(projectSlug);
+    fs = createEngineForTest(tempDir);
+    const project = await fs.projects.create(projectSlug);
     if (!project.ok) throw new Error(project.error.message);
   });
 
@@ -47,20 +47,20 @@ describe("runTranslateTranscript", () => {
   };
 
   async function createTranscribedAsset(): Promise<string> {
-    const created = await fs.createAsset("vid", "clip", projectSlug);
+    const created = await fs.artifacts.create("vid", "clip", projectSlug);
     if (!created.ok) throw new Error(created.error.message);
-    const assetId = created.value.assetId;
-    const write = await fs.writeFile(assetId, "elevenlabs.json", JSON.stringify(transcriptJson), projectSlug);
+    const assetId = created.value.slug;
+    const write = await fs.files.write(assetId, "elevenlabs.json", JSON.stringify(transcriptJson), projectSlug);
     if (!write.ok) throw new Error(write.error.message);
     return assetId;
   }
 
   it("throws when the asset has no transcript", async () => {
-    const created = await fs.createAsset("vid", "clip", projectSlug);
+    const created = await fs.artifacts.create("vid", "clip", projectSlug);
     if (!created.ok) throw new Error(created.error.message);
     await expect(runTranslateTranscript(fs, {
       type: "translate_transcript",
-      assetId: created.value.assetId,
+      assetId: created.value.slug,
       projectSlug,
       targetLanguage: "en",
     }, testCtx)).rejects.toThrow(/No transcript/);
@@ -85,7 +85,7 @@ describe("runTranslateTranscript", () => {
       targetLanguage: "en",
       segments: [{ start: 0, end: 2.2, text: "Drink the milk. Thanks mom.", words: [] }],
     };
-    const write = await fs.writeFile(assetId, "elevenlabs.en.json", JSON.stringify(sidecar), projectSlug);
+    const write = await fs.files.write(assetId, "elevenlabs.en.json", JSON.stringify(sidecar), projectSlug);
     if (!write.ok) throw new Error(write.error.message);
 
     const result = await runTranslateTranscript(fs, {
@@ -104,7 +104,7 @@ describe("runTranslateTranscript", () => {
       targetLanguage: "en",
       segments: [{ start: 0, end: 2.2, text: "stale", words: [] }],
     };
-    const write = await fs.writeFile(assetId, "elevenlabs.en.json", JSON.stringify(stale), projectSlug);
+    const write = await fs.files.write(assetId, "elevenlabs.en.json", JSON.stringify(stale), projectSlug);
     if (!write.ok) throw new Error(write.error.message);
 
     // Translation is attempted (not served from cache), which fails fast on the missing key.

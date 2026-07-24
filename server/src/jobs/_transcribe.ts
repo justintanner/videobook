@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { findAudioFile } from "videobook-engine";
 import type {
   ElevenLabsSpeechToTextRequest,
@@ -44,7 +44,7 @@ function inferAudioMime(filename: string): string {
  * or a failed write so the caller can surface the failure.
  */
 export async function transcribeAssetToElevenLabsJson(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   assetId: string,
   audioFilename: string,
@@ -61,7 +61,7 @@ export async function transcribeAssetToElevenLabsJson(
 }
 
 export async function requestElevenLabsTranscript(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   assetId: string,
   audioFilename: string,
@@ -69,7 +69,7 @@ export async function requestElevenLabsTranscript(
 ): Promise<ElevenLabsSpeechToTextResponse> {
   const apiKey = requireApiKey("ELEVENLABS_API_KEY");
 
-  const readResult = await fs.readFile(assetId, audioFilename, projectSlug);
+  const readResult = await fs.files.read(assetId, audioFilename, projectSlug);
   if (!readResult.ok) {
     throw new Error(`Failed to read audio for ${assetId}: ${readResult.error.message}`);
   }
@@ -88,14 +88,14 @@ export async function requestElevenLabsTranscript(
 }
 
 export async function writeElevenLabsTranscript(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   assetId: string,
   response: ElevenLabsSpeechToTextResponse,
   options: TranscribeOptions,
 ): Promise<void> {
   const transcriptionStr = JSON.stringify(response, null, 2);
-  const writeResult = await fs.writeFile(
+  const writeResult = await fs.files.write(
     assetId,
     "elevenlabs.json",
     transcriptionStr,
@@ -105,7 +105,7 @@ export async function writeElevenLabsTranscript(
     throw new Error(`Failed to write transcription: ${writeResult.error.message}`);
   }
 
-  await fs.commitOperation(
+  await fs.history.recordOperation(
     "transcribe",
     assetId,
     {
@@ -123,12 +123,12 @@ export async function writeElevenLabsTranscript(
  * missing API key, or an API/write failure so the caller surfaces the cause.
  */
 export async function ensureElevenLabsTranscript(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   assetId: string,
 ): Promise<void> {
-  if ((await fs.readFile(assetId, "elevenlabs.json", projectSlug)).ok) return;
-  const manifest = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+  if ((await fs.files.read(assetId, "elevenlabs.json", projectSlug)).ok) return;
+  const manifest = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
   if (!manifest.ok) throw new Error(`auto-transcribe failed: ${manifest.error.message}`);
   const audioFile = findAudioFile(manifest.value.files, assetId);
   if (!audioFile) throw new Error(`auto-transcribe failed: no audio file found in asset ${assetId}`);

@@ -1,8 +1,8 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 
-export function updateScriptDef(fs: VideocityFs): ToolDef {
+export function updateScriptDef(fs: Engine): ToolDef {
   return {
     name: "update_script",
     description: "Update a script asset's markdown content (original.md).",
@@ -18,7 +18,7 @@ export function updateScriptDef(fs: VideocityFs): ToolDef {
         project_slug: string;
       };
 
-      const result = await fs.writeFile(asset_id, "original.md", content, project_slug);
+      const result = await fs.files.write(asset_id, "original.md", content, project_slug);
       if (!result.ok) {
         return {
           isError: true as const,

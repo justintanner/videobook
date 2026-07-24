@@ -1,10 +1,10 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 
 // Fetch `url`, write the response bytes to the given asset file, and return
 // the buffer for callers that need it (e.g. for content-hash provenance).
 // `options.kind` only changes the error-message wording.
 export async function downloadUrlIntoAsset(
-  fs: VideocityFs,
+  fs: Engine,
   url: string,
   assetId: string,
   filename: string,
@@ -18,6 +18,16 @@ export async function downloadUrlIntoAsset(
     );
   }
   const buffer = Buffer.from(await response.arrayBuffer());
-  await fs.writeFile(assetId, filename, buffer, projectSlug);
+  const written = await fs.files.write(
+    assetId,
+    filename,
+    buffer,
+    projectSlug,
+  );
+  if (!written.ok) {
+    throw new Error(
+      `Failed to persist ${options.kind ?? "file"}: ${written.error.message}`,
+    );
+  }
   return buffer;
 }

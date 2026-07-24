@@ -4,7 +4,7 @@ import type {
   NotebookCell,
   NotebookDocument,
   NotebookRun,
-  VideobookFs,
+  Engine,
 } from "videobook-engine";
 
 import { registerJobHandler } from "../queue.js";
@@ -15,10 +15,10 @@ interface RunNotebookPayload {
   notebookId: string;
 }
 
-export function registerRunNotebookJob(fs: VideobookFs): void {
+export function registerRunNotebookJob(fs: Engine): void {
   registerJobHandler("run_notebook", async (payload) => {
     const input = payload as unknown as RunNotebookPayload;
-    const notebookResult = await fs.readNotebook(
+    const notebookResult = await fs.notebooks.read(
       input.notebookId,
       input.projectSlug,
     );
@@ -39,7 +39,7 @@ export function registerRunNotebookJob(fs: VideobookFs): void {
       cellOrder: cellOrder.map((cell) => cell.id),
       outputs,
     };
-    const recorded = await fs.recordNotebookRun(run, input.projectSlug);
+    const recorded = await fs.notebooks.recordRun(run, input.projectSlug);
     if (!recorded.ok) throw new Error(recorded.error.message);
     return run;
   });

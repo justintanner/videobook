@@ -1,9 +1,9 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import sharp from "sharp";
-import { createFs } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import { readWatermarkConfig } from "../watermark-config.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -21,19 +21,15 @@ function resultText(result: { content?: unknown; toolResult?: unknown }): string
 describe("create_watermark tool", () => {
   let client: Client | undefined;
   let tempDir: string;
-  let fs: ReturnType<typeof createFs>;
+  let fs: ReturnType<typeof createEngineForTest>;
   let originalEnv: NodeJS.ProcessEnv;
 
   beforeEach(async () => {
     originalEnv = { ...process.env };
     tempDir = await mkdtemp(join(tmpdir(), "videocity-create-watermark-"));
-    // Isolate the remembered-handle store to this temp dir.
-    process.env.WATERMARK_CONFIG_PATH = join(tempDir, "watermark-config.json");
-    // Isolate from ambient X credentials to prevent outbound API calls
-    process.env.X_TOKENS_PATH = join(tempDir, "x-tokens.json");
     delete process.env.X_ACCESS_TOKEN;
     
-    fs = createFs({ projectsDir: tempDir });
+    fs = createEngineForTest(tempDir);
     client = await createTestClient(tempDir);
     await client.callTool({
       name: "create_project",
@@ -63,7 +59,7 @@ describe("create_watermark tool", () => {
     expect(parsed.handle).toBe("someone");
     expect(parsed.url).toBe("https://x.com/someone");
 
-    const manifest = await fs.getManifest(parsed.asset_id, PROJECT, { includeDotfiles: true });
+    const manifest = await fs.files.manifest(parsed.asset_id, PROJECT, { includeDotfiles: true });
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
     const fileNames = new Set(manifest.value.files.map((file) => file.name));
@@ -72,7 +68,7 @@ describe("create_watermark tool", () => {
     expect(fileNames.has("portrait.jpg")).toBe(true);
     expect(fileNames.has("square.jpg")).toBe(true);
 
-    const read = await fs.readFile(parsed.asset_id, "original.png", PROJECT);
+    const read = await fs.files.read(parsed.asset_id, "original.png", PROJECT);
     expect(read.ok).toBe(true);
     if (!read.ok) return;
     const buffer = Buffer.isBuffer(read.value) ? read.value : Buffer.from(read.value);

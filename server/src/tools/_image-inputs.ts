@@ -1,9 +1,9 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { extname } from "node:path";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-export function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
+export function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -28,7 +28,7 @@ function isHttpUrl(s: string): boolean {
 }
 
 export async function resolveImageSlugs(
-  fs: VideocityFs,
+  fs: Engine,
   rawSlugs: readonly string[],
   projectSlug: string,
 ): Promise<SlugResolution> {
@@ -43,7 +43,7 @@ export async function resolveImageSlugs(
     if (!assetId.startsWith("img-")) {
       return { ok: false, error: `image_slugs entries must be img-* assets or http(s) URLs, got: ${assetId}` };
     }
-    const manifestResult = await fs.getManifest(assetId, projectSlug);
+    const manifestResult = await fs.files.manifest(assetId, projectSlug);
     if (!manifestResult.ok) return { ok: false, error: manifestResult.error.message };
     const imageFile = findImageFile(manifestResult.value.files);
     if (!imageFile) return { ok: false, error: `No image file found in asset ${assetId}` };

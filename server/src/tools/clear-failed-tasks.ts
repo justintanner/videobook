@@ -1,4 +1,4 @@
-import type { AssetManifestFile, VideocityFs } from "videobook-engine";
+import type { ArtifactManifestFile, Engine } from "videobook-engine";
 import { findAudioFile, findVideoFile } from "videobook-engine";
 import { extname } from "node:path";
 import { z } from "zod";
@@ -11,7 +11,7 @@ const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif", "svg"]);
 // is only safe for unmaterialized husks — an asset holding real media must be
 // kept and merely have its error row cleared (the same clear the render tool
 // performs before retrying).
-function hasMediaFile(files: AssetManifestFile[], assetId: string): boolean {
+function hasMediaFile(files: ArtifactManifestFile[], assetId: string): boolean {
   if (findVideoFile(files)) return true;
   if (findAudioFile(files, assetId)) return true;
   return files.some((f) => {
@@ -20,7 +20,7 @@ function hasMediaFile(files: AssetManifestFile[], assetId: string): boolean {
   });
 }
 
-export function clearFailedTasksDef(fs: VideocityFs): ToolDef {
+export function clearFailedTasksDef(fs: Engine): ToolDef {
   return {
     name: "clean_failed_assets",
     description:
@@ -31,7 +31,7 @@ export function clearFailedTasksDef(fs: VideocityFs): ToolDef {
     handler: async (args) => {
       const { project_slug } = args as { project_slug: string };
 
-      const failuresRes = await fs.generationErrors.findAll(project_slug);
+      const failuresRes = await fs.jobs.failures.findAll(project_slug);
       const failures = failuresRes.ok ? failuresRes.value : [];
 
       const cleared: string[] = [];
@@ -39,25 +39,25 @@ export function clearFailedTasksDef(fs: VideocityFs): ToolDef {
       const errors: Array<{ assetId: string; message: string }> = [];
 
       for (const failure of failures) {
-        const manifest = await fs.getManifest(failure.assetId, project_slug);
+        const manifest = await fs.files.manifest(failure.artifactSlug, project_slug);
         const materialized =
-          manifest.ok && hasMediaFile(manifest.value.files, failure.assetId);
+          manifest.ok && hasMediaFile(manifest.value.files, failure.artifactSlug);
 
         if (materialized) {
-          const clearResult = await fs.generationErrors.clear(project_slug, failure.assetId);
+          const clearResult = await fs.jobs.failures.clear(project_slug, failure.artifactSlug);
           if (clearResult.ok) {
-            errorCleared.push(failure.assetId);
+            errorCleared.push(failure.artifactSlug);
           } else {
-            errors.push({ assetId: failure.assetId, message: clearResult.error.message });
+            errors.push({ assetId: failure.artifactSlug, message: clearResult.error.message });
           }
           continue;
         }
 
-        const result = await fs.deleteAsset(failure.assetId, project_slug);
+        const result = await fs.artifacts.delete(failure.artifactSlug, project_slug);
         if (result.ok) {
-          cleared.push(failure.assetId);
+          cleared.push(failure.artifactSlug);
         } else {
-          errors.push({ assetId: failure.assetId, message: result.error.message });
+          errors.push({ assetId: failure.artifactSlug, message: result.error.message });
         }
       }
 

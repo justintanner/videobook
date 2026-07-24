@@ -1,11 +1,12 @@
-import type { VideocityFs } from "videobook-engine";
-import { extname, join } from "node:path";
+import type { Engine } from "videobook-engine";
+import { basename, extname, join } from "node:path";
 import { mkdir, readFile as fsReadFile, rm } from "node:fs/promises";
 import { registerJobHandler, queue } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 import { enqueueLazyAnalysisIfSlotted } from "../lazy-render.js";
 import { probeVideo, runFfmpeg, extractWaveform, isThumbnailBlank, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
+import { ingestWorkspaceOutputs } from "./_persist-output.js";
 
 export type ProcessVideoPayload = {
   type: "process_video";
@@ -40,22 +41,22 @@ export type ProcessVideoResult = {
 // no-op write lets idempotent re-processing succeed. Mirrors
 // writePlanFileIfChanged in plan-notebook.ts.
 async function writeBinaryIfChanged(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   filename: string,
   data: Buffer,
   projectSlug: string,
 ): Promise<void> {
-  const existing = await fs.readFile(assetId, filename, projectSlug);
+  const existing = await fs.files.read(assetId, filename, projectSlug);
   if (existing.ok && existing.value.equals(data)) return;
-  const written = await fs.writeFile(assetId, filename, data, projectSlug);
+  const written = await fs.files.write(assetId, filename, data, projectSlug);
   if (!written.ok) {
     throw new Error(`writeFile ${filename} failed for ${assetId}: ${written.error.message}`);
   }
 }
 
 export async function processVideoFiles(
-  fs: VideocityFs,
+  fs: Engine,
   payload: ProcessVideoPayload,
   signal?: AbortSignal,
 ): Promise<ProcessVideoResult> {
@@ -70,6 +71,18 @@ export async function processVideoFiles(
       throw new Error(`process_video requires a video stream: ${assetId}`);
     }
     const { width, height, duration } = probe;
+    const sourceFilename = basename(videoPath);
+    const importedSource = await fs.files.writeFromPath(
+      assetId,
+      sourceFilename,
+      videoPath,
+      projectSlug,
+    );
+    if (!importedSource.ok) {
+      throw new Error(
+        `Failed to persist source video ${sourceFilename}: ${importedSource.error.message}`,
+      );
+    }
 
     // Generate original.mp4 alongside non-mp4 uploads so downstream consumers
     // (browser <video>, ffmpeg jobs, transcribe) get a canonical container.
@@ -120,11 +133,33 @@ export async function processVideoFiles(
     let frameCount = 0;
     {
 
-    await fs.writeMetadata(assetId, "original", { ...provenance, width, height, duration, hasAudio: probe.hasAudio }, projectSlug);
+    await fs.metadata.artifacts.write(assetId, "original", { ...provenance, width, height, duration, hasAudio: probe.hasAudio }, projectSlug);
 
     if (duration <= 0) return { success: true, width, height, duration, frame_count: 0 };
 
     if (force) {
+      const currentManifest = await fs.files.manifest(
+        assetId,
+        projectSlug,
+        { includeDotfiles: true },
+      );
+      if (currentManifest.ok) {
+        const staleFiles = currentManifest.value.files
+          .map((file) => file.name)
+          .filter((filename) =>
+            filename === "original.jpg" ||
+            filename.startsWith("original_frames/") ||
+            ["landscape", "portrait", "square"].some(
+              (orientation) =>
+                filename === `${orientation}.mp4` ||
+                filename === `${orientation}.jpg` ||
+                filename.startsWith(`${orientation}_frames/`),
+            ),
+          );
+        for (const filename of staleFiles) {
+          await fs.files.delete(assetId, filename, projectSlug);
+        }
+      }
       await rm(join(assetDir, "original_frames"), { recursive: true, force: true });
       await rm(join(assetDir, "original.jpg"), { force: true }).catch(() => {});
       // Renders are derived from the old source video — drop them so the UI
@@ -133,7 +168,11 @@ export async function processVideoFiles(
         await rm(join(assetDir, `${orient}.mp4`), { force: true }).catch(() => {});
         await rm(join(assetDir, `${orient}.jpg`), { force: true }).catch(() => {});
         await rm(join(assetDir, `${orient}_frames`), { recursive: true, force: true }).catch(() => {});
-        await rm(join(assetDir, `.${orient}.render.json`), { force: true }).catch(() => {});
+        await fs.metadata.artifacts.delete(
+          assetId,
+          `${orient}.render`,
+          projectSlug,
+        );
       }
     }
 
@@ -163,7 +202,7 @@ export async function processVideoFiles(
     // Extract original.mp3 from the video (kept in sync with original.mp4 so
     // standalone audio reads — timeline, transcription — match the source).
     const existingMp3 = preserveAudioArtifacts
-      ? await fs.readFile(assetId, "original.mp3", projectSlug)
+      ? await fs.files.read(assetId, "original.mp3", projectSlug)
       : null;
     if (probe.hasAudio && (!existingMp3 || !existingMp3.ok)) {
       const mp3TempPath = join(assetDir, "original.mp3.tmp");
@@ -177,12 +216,12 @@ export async function processVideoFiles(
     }
 
     const existingWaveform = preserveAudioArtifacts
-      ? await fs.readAudioWaveform(assetId, projectSlug)
+      ? await fs.metadata.waveforms.read(assetId, projectSlug)
       : null;
     if (!existingWaveform || !existingWaveform.ok) {
       const waveform = await extractWaveform(activeVideoPath);
       if (waveform.length > 0) {
-        const wavResult = await fs.writeAudioWaveform(assetId, waveform, projectSlug);
+        const wavResult = await fs.metadata.waveforms.write(assetId, waveform, projectSlug);
         if (!wavResult.ok) {
           console.warn(
             `[process_video] writeAudioWaveform soft-failed for ${assetId}: ${wavResult.error.message}`,
@@ -192,11 +231,11 @@ export async function processVideoFiles(
     }
 
     // Create original.jpg from first frame if not already set (e.g., from OG image)
-    const thumbResult = await fs.readFile(assetId, "original.jpg", projectSlug ?? "");
+    const thumbResult = await fs.files.read(assetId, "original.jpg", projectSlug ?? "");
     if (!thumbResult.ok) {
       try {
         const firstFrameBuf = await fsReadFile(join(framesDir, "0.00.jpg"));
-        await fs.writeFile(assetId, "original.jpg", firstFrameBuf, projectSlug ?? "");
+        await fs.files.write(assetId, "original.jpg", firstFrameBuf, projectSlug ?? "");
       } catch { /* frame not available */ }
     }
 
@@ -206,13 +245,18 @@ export async function processVideoFiles(
       const midTs = timestamps[Math.floor(timestamps.length / 2)];
       try {
         const midFrameBuf = await fsReadFile(join(framesDir, `${formatTimestamp(midTs)}.jpg`));
-        await fs.writeFile(assetId, "original.jpg", midFrameBuf, projectSlug ?? "");
+        await fs.files.write(assetId, "original.jpg", midFrameBuf, projectSlug ?? "");
       } catch { /* mid-frame not available */ }
     }
 
-    await fs.commitOperation("process_video", assetId, {
-      width, height, duration, frame_count: frameCount,
-    }, projectSlug);
+    await ingestWorkspaceOutputs(
+      fs,
+      projectSlug,
+      assetId,
+      ["original_frames"],
+      "process_video",
+      { width, height, duration, frame_count: frameCount },
+    );
 
     }
 
@@ -243,7 +287,7 @@ export async function processVideoFiles(
     return { success: true, width, height, duration, frame_count: frameCount };
 }
 
-export function registerProcessVideoJob(fs: VideocityFs): void {
+export function registerProcessVideoJob(fs: Engine): void {
   registerJobHandler("process_video", async (payload, ctx) => {
     const processPayload = payload as ProcessVideoPayload;
     return withLocalLease(

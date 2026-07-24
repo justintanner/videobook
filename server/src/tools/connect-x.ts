@@ -1,15 +1,16 @@
+import type { Engine } from "videobook-engine";
 import { getOAuthFlowStatus, startOAuthFlow } from "../x/oauth-flow.js";
 import type { ToolDef } from "./tool-def.js";
 
-export function xConnectStartDef(): ToolDef {
+export function xConnectStartDef(fs: Engine): ToolDef {
   return {
     name: "x_connect_start",
     description:
-      "Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns an authorize_url the client should open. After the user approves in the browser, the server captures the callback, exchanges the code, and persists refreshable tokens to ~/.videobook/x-tokens.json.",
+      "Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns an authorize_url the client should open. After the user approves in the browser, the server captures the callback, exchanges the code, and persists refreshable tokens in Dolt runtime settings.",
     schema: {},
     handler: async () => {
       try {
-        const result = await startOAuthFlow();
+        const result = await startOAuthFlow(fs);
         return {
           content: [
             {
@@ -33,14 +34,14 @@ export function xConnectStartDef(): ToolDef {
   };
 }
 
-export function xConnectStatusDef(): ToolDef {
+export function xConnectStatusDef(fs: Engine): ToolDef {
   return {
     name: "x_connect_status",
     description:
       "Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at? } so the client can poll while the user authorizes in the browser.",
     schema: {},
     handler: async () => {
-      const status = await getOAuthFlowStatus();
+      const status = await getOAuthFlowStatus(fs);
       return {
         content: [
           { type: "text" as const, text: JSON.stringify(status) },

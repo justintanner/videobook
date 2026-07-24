@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import type { GoogleVeo31Model } from "../payload-builders.js";
 import { queue } from "../queue.js";
@@ -55,8 +55,8 @@ function makeVeo31VideoTool(
   model: GoogleVeo31Model,
   allowRefs: boolean,
   description: string,
-): (fs: VideocityFs) => ToolDef {
-  return (fs: VideocityFs) => ({
+): (fs: Engine) => ToolDef {
+  return (fs: Engine) => ({
     name: toolName,
     description,
     schema: buildVeo31Schema(allowRefs),
@@ -109,12 +109,12 @@ function makeVeo31VideoTool(
 
       const modelSlugLiteral = VEO31_SLUGS[model];
       const videoName = `${modelSlugLiteral}-${slugify(prompt) || Date.now().toString(36)}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds: string[] = [];
       if (firstFrame) sourceImageIds.push(firstFrame.assetId);
       if (lastFrame && lastFrame.assetId !== firstFrame?.assetId) sourceImageIds.push(lastFrame.assetId);

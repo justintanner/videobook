@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { Orientation } from "../remotion/subtitles/types.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -43,7 +43,7 @@ function normalizeConfig(raw: TimelineConfig | TimelineSlot[]): TimelineConfig {
   };
 }
 
-export function clearSlotDef(fs: VideocityFs): ToolDef {
+export function clearSlotDef(fs: Engine): ToolDef {
   return {
     name: "unassign_slot",
     description: "Clear an asset from a timeline slot (e.g. slot 's02' = index 1)",
@@ -68,7 +68,7 @@ export function clearSlotDef(fs: VideocityFs): ToolDef {
       }
 
       // Read current timeline
-      const readResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
+      const readResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", project_slug);
       let config: TimelineConfig;
       if (readResult.ok) {
         config = normalizeConfig(readResult.value);
@@ -88,7 +88,7 @@ export function clearSlotDef(fs: VideocityFs): ToolDef {
       config.slots[index] = { slug: "" };
 
       // Write back
-      const writeResult = await fs.writeProjectMeta("timeline", config, project_slug);
+      const writeResult = await fs.metadata.projects.write("timeline", config, project_slug);
       if (writeResult.ok) {
         return {
           content: [{ type: "text" as const, text: JSON.stringify(config) }],

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { KlingV3TurboImageToVideoRequestSchema, KlingV3TurboTextToVideoRequestSchema } from "@apicity/kie/zod";
 import { queue } from "../queue.js";
@@ -21,7 +21,7 @@ const generateKling30TurboVideoSchema = {
 
 type Args = SchemaArgs<typeof generateKling30TurboVideoSchema>;
 
-export function generateKling30TurboVideoDef(fs: VideocityFs): ToolDef {
+export function generateKling30TurboVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_kling_3_0_turbo_video",
     description: "Generate a video using Kling 3.0 Turbo tier via KIE (text-to-video or image-to-video). Creates a new vid- asset and enqueues a background job.",
@@ -48,12 +48,12 @@ export function generateKling30TurboVideoDef(fs: VideocityFs): ToolDef {
       const model = isI2V ? "kling/v3-turbo-image-to-video" : "kling/v3-turbo-text-to-video";
 
       const videoName = `${modelSlug("kie", model)}-${slugify(prompt) || Date.now().toString(36)}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = imageInputs.map((i) => i.assetId);
       const jobId = `kie-${modelSlug("kie", model)}-${vidAssetId}-${Date.now()}`;
 

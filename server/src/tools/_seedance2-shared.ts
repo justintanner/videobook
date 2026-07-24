@@ -1,4 +1,4 @@
-import type { VideocityFs, AssetManifestFile } from "videobook-engine";
+import type { Engine, ArtifactManifestFile } from "videobook-engine";
 import { findAudioFile, findVideoFile } from "videobook-engine";
 import { extname } from "node:path";
 import { modelSlug } from "@apicity/cost";
@@ -24,7 +24,7 @@ type Seedance2Model = Seedance2Request["model"] | Seedance2FastRequest["model"];
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
-function findImageFile(files: AssetManifestFile[]): AssetManifestFile | null {
+function findImageFile(files: ArtifactManifestFile[]): ArtifactManifestFile | null {
   const images = files.filter((f) => {
     const ext = (f.extension ?? extname(f.name)).replace(/^\./, "").toLowerCase();
     return IMAGE_EXTENSIONS.has(ext);
@@ -46,10 +46,10 @@ export type RefInput = { assetId: string; filename: string };
 type ResolveOk = { ok: true; value: RefInput };
 type ResolveErr = { ok: false; error: string };
 
-export async function resolveImageSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+export async function resolveImageSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("img-")) return { ok: false, error: `image slug must be img-* asset, got: ${assetId}` };
-  const manifest = await fs.getManifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findImageFile(manifest.value.files);
   if (!file) return { ok: false, error: `No image file found in asset ${assetId}` };
@@ -61,7 +61,7 @@ export async function resolveImageSlug(fs: VideocityFs, raw: string, projectSlug
 // vid-/aud- prefix gate since the destination asset doesn't have to be
 // media-prefixed and may hold multiple media files.
 async function resolveSlashedSlug(
-  fs: VideocityFs,
+  fs: Engine,
   raw: string,
   projectSlug: string,
 ): Promise<ResolveOk | ResolveErr | null> {
@@ -71,34 +71,31 @@ async function resolveSlashedSlug(
   const assetId = stripped.slice(0, slashIdx);
   const filename = stripped.slice(slashIdx + 1);
   if (!assetId || !filename) return { ok: false, error: `Invalid slashed slug: ${raw}` };
-  const manifest = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+  const manifest = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = manifest.value.files.find((f) => f.name === filename);
   if (!file) return { ok: false, error: `File ${filename} not found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename } };
 }
 
-export async function resolveVideoSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
+export async function resolveVideoSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const slashed = await resolveSlashedSlug(fs, raw, projectSlug);
   if (slashed !== null) return slashed;
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("vid-")) return { ok: false, error: `video slug must be vid-* asset, got: ${assetId}` };
-  const manifest = await fs.getManifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findVideoFile(manifest.value.files);
   if (!file) return { ok: false, error: `No video file found in asset ${assetId}` };
   return { ok: true, value: { assetId, filename: file.name } };
 }
 
-// Resolve an audio reference: `@<assetId>/<filename>` (e.g. `@plan/s1.mp3`)
-// first, falling back to the aud-* asset gate. Exported for reuse by other
-// generators that splice scene audio (e.g. Grok Imagine i2v).
-export async function resolveAudioSlug(fs: VideocityFs, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
-  const slashed = await resolveSlashedSlug(fs, raw, projectSlug);
-  if (slashed !== null) return slashed;
+// Audio replacement always targets a first-class audio artifact. Notebook
+// cells reference artifact identities; they do not expose nested file paths.
+export async function resolveAudioSlug(fs: Engine, raw: string, projectSlug: string): Promise<ResolveOk | ResolveErr> {
   const assetId = raw.replace(/^@/, "");
   if (!assetId.startsWith("aud-")) return { ok: false, error: `audio slug must be aud-* asset, got: ${assetId}` };
-  const manifest = await fs.getManifest(assetId, projectSlug);
+  const manifest = await fs.files.manifest(assetId, projectSlug);
   if (!manifest.ok) return { ok: false, error: manifest.error.message };
   const file = findAudioFile(manifest.value.files, assetId);
   if (!file) return { ok: false, error: `No audio file found in asset ${assetId}` };
@@ -123,7 +120,7 @@ export function buildSeedance2Schema(apiModel: Seedance2Model) {
     generate_audio: apicityField(inputSchema.generate_audio, "Generate accompanying audio (default true)"),
     web_search: apicityField(inputSchema.web_search, "Use web search for grounding (default false)"),
     nsfw_checker: apicityField(inputSchema.nsfw_checker, "Content safety filter (default false)"),
-    replace_audio_with: z.string().optional().describe("After generation, splice this audio over the seedance output (aud-* slug or `<assetId>/<filename>` form, e.g. `plan/s1.mp3`). Runs server-side as part of the generation pipeline so the asset only reaches 'ready' once the splice is in."),
+    replace_audio_with: z.string().optional().describe("After generation, splice an aud-* artifact over the Seedance output. Runs server-side as part of the generation pipeline so the asset only reaches 'ready' once the splice is in."),
     _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
   } satisfies ZodRawShape;
 }
@@ -136,7 +133,7 @@ type Seedance2ToolFactoryOpts = {
 };
 
 export function buildSeedance2ToolDef(
-  fs: VideocityFs,
+  fs: Engine,
   opts: Seedance2ToolFactoryOpts,
 ): ToolDef {
   const schema = buildSeedance2Schema(opts.apiModel);
@@ -244,7 +241,7 @@ export function buildSeedance2ToolDef(
       }
 
       const videoName = `${modelSlug("kie", opts.apiModel)}-${slugify(prompt) || String(Date.now())}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return {
           isError: true as const,
@@ -252,7 +249,7 @@ export function buildSeedance2ToolDef(
         };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds: string[] = [];
       if (firstFrame) sourceImageIds.push(firstFrame.assetId);
       if (lastFrame && lastFrame.assetId !== firstFrame?.assetId) sourceImageIds.push(lastFrame.assetId);

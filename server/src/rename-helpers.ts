@@ -477,7 +477,7 @@ export function rewriteTimelineReferences(
 
 /** Recursively rewrite any string value equal to a key in idMap. Returns the
  *  same object reference with replacements applied in place. Used for the
- *  deeply nested notebook/.notebook sidecar. */
+ *  deeply nested notebook definition. */
 export function rewriteDeep<T>(value: T, idMap: Map<string, string>): T {
   if (typeof value === "string") {
     return (idMap.get(value) ?? value) as T;

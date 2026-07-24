@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef } from "./tool-def.js";
 import { RENDER_ORIENTATIONS } from "./sync.js";
@@ -16,7 +16,7 @@ const OSG_POSITIONS = [
  * metadata. We merge into every orientation's metadata so the badge + render
  * stay consistent regardless of which orientation is rendered.
  */
-export function setVideoOverlayDef(fs: VideocityFs): ToolDef {
+export function setVideoOverlayDef(fs: Engine): ToolDef {
   return {
     name: "set_video_overlay",
     description:
@@ -81,7 +81,7 @@ export function setVideoOverlayDef(fs: VideocityFs): ToolDef {
       const clearing = osg_asset_id == null;
 
       for (const orient of RENDER_ORIENTATIONS) {
-        const existing = await fs.readMetadata<Record<string, unknown>>(
+        const existing = await fs.metadata.artifacts.read<Record<string, unknown>>(
           asset_id,
           `${orient}.render`,
           project_slug,
@@ -114,7 +114,7 @@ export function setVideoOverlayDef(fs: VideocityFs): ToolDef {
         } else if (clearing || windowProvided) {
           merged.osgTailSeconds = null;
         }
-        await fs.writeMetadata(asset_id, `${orient}.render`, merged, project_slug);
+        await fs.metadata.artifacts.write(asset_id, `${orient}.render`, merged, project_slug);
       }
 
       return {

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { uploadAssetToFal } from "./_fal-upload.js";
 import { registerJobHandler } from "../queue.js";
 import { withProviderHandoff } from "./_lease.js";
@@ -21,7 +21,7 @@ type Payload = {
   cfg_scale?: number;
 };
 
-export function registerGenerateKlingV3ProI2vFalJob(fs: VideocityFs): void {
+export function registerGenerateKlingV3ProI2vFalJob(fs: Engine): void {
   registerJobHandler("generate_kling_v3_pro_i2v_fal", async (payload, ctx) => {
     const p = payload as Payload;
     return withProviderHandoff(fs, p.projectSlug, p.vidAssetId, ctx, "generate", async (ownerId) => {

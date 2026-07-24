@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 
 export type DialogQuality = {
   hasDialog: boolean;
@@ -36,11 +36,11 @@ export function assessDialogQuality(data: { text?: string }): DialogQuality {
 }
 
 export async function readAndAssessDialog(
-  fs: VideocityFs,
+  fs: Engine,
   assetId: string,
   projectSlug: string,
 ): Promise<DialogQuality> {
-  const result = await fs.readFile(assetId, ".analysis.gpt4otrans.json", projectSlug);
+  const result = await fs.files.read(assetId, ".analysis.gpt4otrans.json", projectSlug);
   if (!result.ok) {
     return { hasDialog: false, reason: "no_transcription", text: "", wordCount: 0 };
   }

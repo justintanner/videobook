@@ -1,8 +1,8 @@
+import { createEngineForTest } from "../fs.js";
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createFs } from "videobook-engine";
 import sharp from "sharp";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { createTestClient } from "../test-client.js";
@@ -43,22 +43,22 @@ describe("generate_google_omni_video tool", () => {
   });
 
   it("enqueues with image and video slugs before provider upload", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const imageAsset = await fs.createAsset("img", "source-img", "test-proj");
-    const videoAsset = await fs.createAsset("vid", "source-video", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const imageAsset = await fs.artifacts.create("img", "source-img", "test-proj");
+    const videoAsset = await fs.artifacts.create("vid", "source-video", "test-proj");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
     if (!videoAsset.ok) throw new Error("Failed to create video asset");
 
-    await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
-    await fs.writeFile(videoAsset.value.assetId, "original.mp4", Buffer.from("fake mp4"), "test-proj");
+    await fs.files.write(imageAsset.value.slug, "original.png", await makePng(), "test-proj");
+    await fs.files.write(videoAsset.value.slug, "original.mp4", Buffer.from("fake mp4"), "test-proj");
 
     const result = await client.callTool({
       name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "char swap",
-        image_slugs: [`@${imageAsset.value.assetId}`],
-        video_slug: `@${videoAsset.value.assetId}`,
+        image_slugs: [`@${imageAsset.value.slug}`],
+        video_slug: `@${videoAsset.value.slug}`,
         video_clip_start: 0,
         video_clip_ends: 10,
         duration: "10",
@@ -69,34 +69,34 @@ describe("generate_google_omni_video tool", () => {
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
     expect(parsed.vid_asset_id).toMatch(/^vid-/);
-    expect(parsed.source_images).toEqual([imageAsset.value.assetId]);
-    expect(parsed.source_videos).toEqual([videoAsset.value.assetId]);
+    expect(parsed.source_images).toEqual([imageAsset.value.slug]);
+    expect(parsed.source_videos).toEqual([videoAsset.value.slug]);
   });
 
   it("normalizes prompt @slug mentions to positional markers before enqueue", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const imageAsset = await fs.createAsset("img", "da-set", "test-proj");
-    const videoAsset = await fs.createAsset("vid", "motion", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const imageAsset = await fs.artifacts.create("img", "da-set", "test-proj");
+    const videoAsset = await fs.artifacts.create("vid", "motion", "test-proj");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
     if (!videoAsset.ok) throw new Error("Failed to create video asset");
 
-    await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
-    await fs.writeFile(videoAsset.value.assetId, "original.mp4", Buffer.from("fake mp4"), "test-proj");
+    await fs.files.write(imageAsset.value.slug, "original.png", await makePng(), "test-proj");
+    await fs.files.write(videoAsset.value.slug, "original.mp4", Buffer.from("fake mp4"), "test-proj");
 
     const result = await client.callTool({
       name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
-        prompt: `fade to @${imageAsset.value.assetId} inside @${videoAsset.value.assetId} while @character_1 waves`,
-        image_slugs: [`@${imageAsset.value.assetId}`],
-        video_slug: `@${videoAsset.value.assetId}`,
+        prompt: `fade to @${imageAsset.value.slug} inside @${videoAsset.value.slug} while @character_1 waves`,
+        image_slugs: [`@${imageAsset.value.slug}`],
+        video_slug: `@${videoAsset.value.slug}`,
         character_refs: ["character:bbb"],
       },
     });
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
-    const meta = await fs.readMetadata<{ prompt: string }>(
+    const meta = await fs.metadata.artifacts.read<{ prompt: string }>(
       parsed.vid_asset_id, "generation-request", "test-proj",
     );
     expect(meta.ok && meta.value).toBeTruthy();
@@ -106,49 +106,49 @@ describe("generate_google_omni_video tool", () => {
   });
 
   it("enqueues with a first-frame image slug before provider upload", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const imageAsset = await fs.createAsset("img", "start-frame", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const imageAsset = await fs.artifacts.create("img", "start-frame", "test-proj");
     if (!imageAsset.ok) throw new Error("Failed to create image asset");
 
-    await fs.writeFile(imageAsset.value.assetId, "original.png", await makePng(), "test-proj");
+    await fs.files.write(imageAsset.value.slug, "original.png", await makePng(), "test-proj");
 
     const result = await client.callTool({
       name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "animate this frame",
-        first_frame_slug: `@${imageAsset.value.assetId}`,
+        first_frame_slug: `@${imageAsset.value.slug}`,
       },
     });
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.source_first_frame).toBe(imageAsset.value.assetId);
+    expect(parsed.source_first_frame).toBe(imageAsset.value.slug);
     expect(parsed.source_images).toEqual([]);
     expect(parsed.source_videos).toEqual([]);
   });
 
   it("enqueues a reference clip without explicit trim timecodes", async () => {
-    const fs = createFs({ projectsDir: tempDir });
-    const videoAsset = await fs.createAsset("vid", "source-video", "test-proj");
+    const fs = createEngineForTest(tempDir);
+    const videoAsset = await fs.artifacts.create("vid", "source-video", "test-proj");
     if (!videoAsset.ok) throw new Error("Failed to create video asset");
 
-    await fs.writeFile(videoAsset.value.assetId, "original.mp4", Buffer.from("fake mp4"), "test-proj");
+    await fs.files.write(videoAsset.value.slug, "original.mp4", Buffer.from("fake mp4"), "test-proj");
 
     const result = await client.callTool({
       name: "generate_google_flow_omni_flash_video",
       arguments: {
         project_slug: "test-proj",
         prompt: "edit this",
-        video_slug: `@${videoAsset.value.assetId}`,
+        video_slug: `@${videoAsset.value.slug}`,
       },
     });
 
     expect(result.isError).toBeFalsy();
     const parsed = JSON.parse((result.content as TextContent)[0].text);
     expect(parsed.status).toBe("enqueued");
-    expect(parsed.source_videos).toEqual([videoAsset.value.assetId]);
+    expect(parsed.source_videos).toEqual([videoAsset.value.slug]);
   });
 
   it("rejects a reference clip window over 10 seconds", async () => {
@@ -228,8 +228,8 @@ describe("generate_google_omni_video tool", () => {
     expect(parsed.character_refs).toEqual(["character:bbb"]);
 
     // The exact enqueued payload is persisted for retry_generation replay.
-    const fs = createFs({ projectsDir: tempDir });
-    const meta = await fs.readMetadata<{ type: string; vidAssetId: string; prompt: string }>(
+    const fs = createEngineForTest(tempDir);
+    const meta = await fs.metadata.artifacts.read<{ type: string; vidAssetId: string; prompt: string }>(
       parsed.vid_asset_id, "generation-request", "test-proj",
     );
     expect(meta.ok && meta.value).toBeTruthy();
@@ -321,13 +321,13 @@ describe("generate_google_omni_video tool", () => {
   });
 
   it("rejects a budget over 7 counting characters at 2 slots each", async () => {
-    const fs = createFs({ projectsDir: tempDir });
+    const fs = createEngineForTest(tempDir);
     const imageAssets: string[] = [];
     for (let i = 0; i < 4; i++) {
-      const a = await fs.createAsset("img", `img-${i}`, "test-proj");
+      const a = await fs.artifacts.create("img", `img-${i}`, "test-proj");
       if (!a.ok) throw new Error("createAsset failed");
-      await fs.writeFile(a.value.assetId, "original.png", await makePng(), "test-proj");
-      imageAssets.push(a.value.assetId);
+      await fs.files.write(a.value.slug, "original.png", await makePng(), "test-proj");
+      imageAssets.push(a.value.slug);
     }
     const result = await client.callTool({
       name: "generate_google_flow_omni_flash_video",
@@ -343,13 +343,13 @@ describe("generate_google_omni_video tool", () => {
   });
 
   it("enqueues when 3 images + two characters exactly hit 7 slots", async () => {
-    const fs = createFs({ projectsDir: tempDir });
+    const fs = createEngineForTest(tempDir);
     const imageAssets: string[] = [];
     for (let i = 0; i < 3; i++) {
-      const a = await fs.createAsset("img", `img-${i}`, "test-proj");
+      const a = await fs.artifacts.create("img", `img-${i}`, "test-proj");
       if (!a.ok) throw new Error("createAsset failed");
-      await fs.writeFile(a.value.assetId, "original.png", await makePng(), "test-proj");
-      imageAssets.push(a.value.assetId);
+      await fs.files.write(a.value.slug, "original.png", await makePng(), "test-proj");
+      imageAssets.push(a.value.slug);
     }
     const result = await client.callTool({
       name: "generate_google_flow_omni_flash_video",

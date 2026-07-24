@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { findAudioFile, type VideocityFs } from "videobook-engine";
+import { findAudioFile, type Engine } from "videobook-engine";
 import { z } from "zod";
 import {
   MAX_AUDIO_CONTINUATION_MS,
@@ -19,7 +19,7 @@ function defaultExtendedName(assetId: string, targetDurationSeconds: number): st
   return `extended-${base}-${duration}s`;
 }
 
-export function extendAudioDef(fs: VideocityFs): ToolDef {
+export function extendAudioDef(fs: Engine): ToolDef {
   return {
     name: "extend_audio_asset",
     description: "Extend an existing aud-* asset to a requested total duration with a smooth ElevenLabs continuation. Uses Scribe to understand the source, generates a matching continuation, preserves the source at the beginning, and creates a new aud-* asset.",
@@ -59,7 +59,7 @@ export function extendAudioDef(fs: VideocityFs): ToolDef {
         return toolError(`continuation_prompt supports at most ${MAX_CONTINUATION_DIRECTION_CHARS} characters of direction`);
       }
 
-      const manifest = await fs.getManifest(sourceAssetId, project_slug, { includeDotfiles: true });
+      const manifest = await fs.files.manifest(sourceAssetId, project_slug, { includeDotfiles: true });
       if (!manifest.ok) return toolError(manifest.error.message);
       const audioFile = findAudioFile(manifest.value.files, sourceAssetId);
       if (!audioFile) return toolError(`No audio file found in asset ${sourceAssetId}`);
@@ -89,13 +89,13 @@ export function extendAudioDef(fs: VideocityFs): ToolDef {
       }
 
       const name = asset_name?.trim() || defaultExtendedName(sourceAssetId, target_duration_seconds);
-      const created = await fs.createAsset("aud", name, project_slug);
+      const created = await fs.artifacts.create("aud", name, project_slug);
       if (!created.ok) return toolError(`Failed to create audio asset: ${created.error.message}`);
 
-      const jobId = `extend-audio-${created.value.assetId}-${Date.now()}`;
+      const jobId = `extend-audio-${created.value.slug}-${Date.now()}`;
       await queue.enqueue(jobId, {
         type: "extend_audio",
-        audAssetId: created.value.assetId,
+        audAssetId: created.value.slug,
         sourceAssetId,
         sourceFilename: audioFile.name,
         sourceDurationMs,
@@ -108,7 +108,7 @@ export function extendAudioDef(fs: VideocityFs): ToolDef {
         content: [{
           type: "text" as const,
           text: JSON.stringify({
-            aud_asset_id: created.value.assetId,
+            aud_asset_id: created.value.slug,
             source_audio_asset_id: sourceAssetId,
             source_duration_seconds: sourceDurationMs / 1000,
             target_duration_seconds: targetDurationMs / 1000,

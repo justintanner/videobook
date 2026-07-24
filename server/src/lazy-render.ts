@@ -1,4 +1,4 @@
-import type { AssetEntry, VideocityFs } from "videobook-engine";
+import type { Artifact, Engine } from "videobook-engine";
 import type {
   BackgroundMode,
   FontSizePreset,
@@ -128,7 +128,7 @@ function stringArrayOrNull(value: unknown): string[] | null {
  * and render_timeline reports missing_renders until a manual /render.
  */
 export async function enqueueLazyAnalysisIfSlotted(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   assetId: string,
 ): Promise<LazyAnalysisResult | null> {
@@ -138,12 +138,12 @@ export async function enqueueLazyAnalysisIfSlotted(
   // defense lives at the API call inside analyze-video.
   if (!process.env.KIE_API_KEY) return null;
 
-  const timelineResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", projectSlug);
+  const timelineResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", projectSlug);
   if (!timelineResult.ok) return null;
   const config = normalizeConfig(timelineResult.value);
   if (!config.slots.some((slot) => slot.slug === assetId)) return null;
 
-  const manifestResult = await fs.getManifest(assetId, projectSlug, { includeDotfiles: true });
+  const manifestResult = await fs.files.manifest(assetId, projectSlug, { includeDotfiles: true });
   if (!manifestResult.ok) return null;
   const fileNames = new Set(manifestResult.value.files.map((f) => f.name));
   if (fileNames.has(".original.analysis.json")) return null;
@@ -161,12 +161,12 @@ export async function enqueueLazyAnalysisIfSlotted(
 }
 
 async function isRenderAlreadyQueued(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   assetId: string,
   orientation: Orientation,
 ): Promise<boolean> {
-  const work = await fs.assetWork.read(projectSlug, assetId);
+  const work = await fs.jobs.artifactWork.read(projectSlug, assetId);
   if (!work.ok || !work.value) return false;
   const state = work.value as AssetWorkState;
   return state.status !== "ready"
@@ -175,14 +175,14 @@ async function isRenderAlreadyQueued(
 }
 
 export async function enqueueLazyTimelineRender(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   assetId: string,
-  knownAsset?: AssetEntry,
+  knownAsset?: Artifact,
 ): Promise<LazyRenderResult | null> {
   if (!assetId.startsWith("vid-")) return null;
 
-  const timelineResult = await fs.readProjectMeta<TimelineConfig | TimelineSlot[]>("timeline", projectSlug);
+  const timelineResult = await fs.metadata.projects.read<TimelineConfig | TimelineSlot[]>("timeline", projectSlug);
   if (!timelineResult.ok) return null;
 
   const config = normalizeConfig(timelineResult.value);
@@ -191,7 +191,9 @@ export async function enqueueLazyTimelineRender(
   const orientation = config.render;
   if (await isRenderAlreadyQueued(fs, projectSlug, assetId, orientation)) return null;
 
-  const asset = knownAsset ?? (await fs.listAssets(projectSlug)).find((entry) => entry.id === assetId);
+  const asset =
+    knownAsset ??
+    fs.artifacts.list(projectSlug).find((entry) => entry.slug === assetId);
   if (!asset) return null;
 
   const renderActions = await findAutoRenderActions(fs, projectSlug, [asset], orientation);

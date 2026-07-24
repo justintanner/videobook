@@ -1,4 +1,4 @@
-import type { VideocityFs, GenerationError, AssetView } from "videobook-engine";
+import type { Engine, GenerationError, ArtifactView } from "videobook-engine";
 import { z } from "zod";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { queue } from "../queue.js";
@@ -40,24 +40,24 @@ interface DoctorReport {
 
 /**
  * Read-only health scan. Type-agnostic: it iterates every asset returned by
- * listAssets and asks the engine's own computeAssetStatus (via getAssetStatus)
+ * listAssets and asks the engine's own computeArtifactStatus (via getAssetStatus)
  * for each, so all seven asset types are covered without special-casing.
  */
 async function diagnose(
-  fs: VideocityFs,
+  fs: Engine,
   projectSlug: string,
   onlyAssetId?: string,
 ): Promise<DoctorReport> {
-  const all = await fs.listAssets(projectSlug);
-  const assets = onlyAssetId ? all.filter((a) => a.id === onlyAssetId) : all;
+  const all = await fs.artifacts.list(projectSlug);
+  const assets = onlyAssetId ? all.filter((a) => a.slug === onlyAssetId) : all;
 
-  const errorsRes = await fs.generationErrors.findAll(projectSlug);
+  const errorsRes = await fs.jobs.failures.findAll(projectSlug);
   const errorByAsset = new Map<string, GenerationError>();
-  if (errorsRes.ok) for (const e of errorsRes.value) errorByAsset.set(e.assetId, e);
+  if (errorsRes.ok) for (const e of errorsRes.value) errorByAsset.set(e.artifactSlug, e);
 
-  const workRes = await fs.assetWork.list(projectSlug);
-  const workByAsset = new Map<string, AssetView>();
-  if (workRes.ok) for (const w of workRes.value) workByAsset.set(w.assetId, w);
+  const workRes = await fs.jobs.artifactWork.list(projectSlug);
+  const workByAsset = new Map<string, ArtifactView>();
+  if (workRes.ok) for (const w of workRes.value) workByAsset.set(w.slug, w);
 
   const nowMs = Date.now();
   const broken: BrokenAsset[] = [];
@@ -66,15 +66,15 @@ async function diagnose(
 
   await Promise.all(
     assets.map(async (a) => {
-      const statusRes = await fs.getAssetStatus(a.id, projectSlug);
+      const statusRes = await fs.status.get(a.slug, projectSlug);
       const status = statusRes.ok ? statusRes.value : "error";
-      const work = workByAsset.get(a.id);
+      const work = workByAsset.get(a.slug);
 
       if (status === "error") {
-        const ge = errorByAsset.get(a.id);
+        const ge = errorByAsset.get(a.slug);
         broken.push({
-          asset_id: a.id,
-          type: a.type,
+          asset_id: a.slug,
+          type: a.kind,
           error: ge
             ? { message: ge.message, fail_code: ge.failCode ?? null, failed_at: ge.failedAt }
             : null,
@@ -83,14 +83,14 @@ async function diagnose(
         work &&
         STUCK_WORK_STATUSES.has(work.status) &&
         work.deadlineAt != null &&
-        work.deadlineAt * 1000 < nowMs
+        work.deadlineAt < nowMs
       ) {
         stuck.push({
-          asset_id: a.id,
-          type: a.type,
+          asset_id: a.slug,
+          type: a.kind,
           work_status: work.status,
           deadline_at: work.deadlineAt,
-          minutes_overdue: Math.round((nowMs - work.deadlineAt * 1000) / 60000),
+          minutes_overdue: Math.round((nowMs - work.deadlineAt) / 60000),
         });
       } else {
         healthy += 1;
@@ -112,7 +112,7 @@ async function diagnose(
   return report;
 }
 
-export function doctorDef(fs: VideocityFs): ToolDef {
+export function doctorDef(fs: Engine): ToolDef {
   return {
     name: "doctor",
     description:
@@ -120,7 +120,7 @@ export function doctorDef(fs: VideocityFs): ToolDef {
       "script, final, character, plan). Reports assets stuck in the error state and assets wedged " +
       "in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore " +
       "that one asset to its last usable state before the current error — clears a stale error or " +
-      "lease when the media is intact, otherwise restores the asset from git history. A bare " +
+      "lease when the media is intact, otherwise restores the asset from Dolt history. A bare " +
       "fix:true scan never bulk-fixes; it just reports.",
     schema: {
       project_slug: z.string().describe("Project slug"),

@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalSeedance2p0FastImageToVideoRequestSchema } from "@apicity/fal/zod";
@@ -24,7 +24,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateSeedance2FastI2vFalDef(fs: VideocityFs): ToolDef {
+export function generateSeedance2FastI2vFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_seedance_2_0_fast_image_to_video",
     description: "Generate a video via fal.ai using ByteDance Seedance 2.0 Fast from a first-frame image (optional end frame). Creates a new vid- asset and enqueues a background job.",
@@ -42,10 +42,10 @@ export function generateSeedance2FastI2vFalDef(fs: VideocityFs): ToolDef {
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
       const [firstFrame, endFrame] = resolved.inputs;
-      const assetResult = await fs.createAsset("vid", `${modelSlug("kie", "bytedance/seedance-2-fast")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("vid", `${modelSlug("kie", "bytedance/seedance-2-fast")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "bytedance/seedance-2-fast")}-i2v-${vidAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {

@@ -46,7 +46,6 @@ export function CellInspectorPanel({
 
   return (
     <div className="inspector-body">
-      <span className="inspector-kicker">{cell.kind} cell</span>
       <h2
         className="inspector-slug"
         tabIndex={0}

@@ -23,7 +23,7 @@ describe("edit_timeline tool", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("sets timeline with slots and returns path", async () => {
+  it("sets timeline with slots and returns the native metadata key", async () => {
     const result = await client.callTool({
       name: "set_timeline",
       arguments: {
@@ -34,8 +34,7 @@ describe("edit_timeline tool", () => {
     expect(result.isError).toBeFalsy();
     const content = result.content as Array<{ type: string; text: string }>;
     const data = JSON.parse(content[0].text);
-    expect(data.path).toBeTruthy();
-    expect(data.path).toContain("test-proj");
+    expect(data.path).toBe("timeline");
   });
 
   it("sets timeline with slots and render orientation", async () => {

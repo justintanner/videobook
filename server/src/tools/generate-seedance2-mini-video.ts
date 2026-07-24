@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z, type ZodRawShape } from "zod";
 import { Seedance2MiniInputSchema, Seedance2MiniRequestSchema } from "@apicity/kie/zod";
 import { modelSlug } from "@apicity/cost";
@@ -39,13 +39,13 @@ const generateSeedance2MiniVideoSchema = {
   generate_audio: apicityField(miniInput.generate_audio, "Generate accompanying audio (default true)"),
   web_search: apicityField(miniInput.web_search, "Use web search for grounding (default false)"),
   nsfw_checker: apicityField(miniInput.nsfw_checker, "Content safety filter (default true)"),
-  replace_audio_with: z.string().optional().describe("After generation, splice this audio over the seedance output (aud-* slug or `<assetId>/<filename>` form, e.g. `plan/s1.mp3`). Runs server-side as part of the generation pipeline so the asset only reaches 'ready' once the splice is in."),
+  replace_audio_with: z.string().optional().describe("After generation, splice an aud-* artifact over the Seedance output. Runs server-side as part of the generation pipeline so the asset only reaches 'ready' once the splice is in."),
   _provider: z.string().optional().describe("Provider key (e.g., 'kie')"),
 } satisfies ZodRawShape;
 
 type Args = SchemaArgs<typeof generateSeedance2MiniVideoSchema>;
 
-export function generateSeedance2MiniVideoDef(fs: VideocityFs): ToolDef {
+export function generateSeedance2MiniVideoDef(fs: Engine): ToolDef {
   return {
     name: "generate_kie_seedance_2_0_mini_video",
     description: "Generate a video using ByteDance Seedance 2 Mini (KIE). Supports a text prompt and/or reference images, videos, and audio (no first/last frame; up to 720p). Creates a new vid- asset and enqueues a background job.",
@@ -113,12 +113,12 @@ export function generateSeedance2MiniVideoDef(fs: VideocityFs): ToolDef {
       }
 
       const videoName = `${SLUG}-${slugify(prompt ?? "") || String(Date.now())}`;
-      const assetResult = await fs.createAsset("vid", videoName, project_slug);
+      const assetResult = await fs.artifacts.create("vid", videoName, project_slug);
       if (!assetResult.ok) {
         return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create video asset: ${assetResult.error.message}` }] };
       }
 
-      const { assetId: vidAssetId, path: vidAssetDir } = assetResult.value;
+      const { slug: vidAssetId, path: vidAssetDir } = assetResult.value;
       const sourceImageIds = imageInputs.map((i) => i.assetId);
       const sourceVideoIds = videoInputs.map((i) => i.assetId);
       const sourceAudioIds = audioInputs.map((i) => i.assetId);

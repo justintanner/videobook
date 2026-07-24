@@ -1,4 +1,17 @@
+import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 import { afterEach } from "vitest";
+
+const testRoot = process.env.VIDEOBOOK_TEST_ROOT;
+if (testRoot) {
+  const fileRoot = join(
+    testRoot,
+    `worker-${process.env.VITEST_POOL_ID ?? "0"}`,
+    randomUUID(),
+  );
+  process.env.VIDEOBOOK_DATA_DIR = join(fileRoot, "data");
+  process.env.VIDEOBOOK_WORKSPACE_DIR = join(fileRoot, "workspaces");
+}
 
 /**
  * Test guardrails: zero real API keys, zero outbound network.
@@ -24,7 +37,6 @@ const SECRET_ENV_VARS = [
   "X_ACCESS_TOKEN",
   "X_CLIENT_ID",
   "X_CLIENT_SECRET",
-  "X_TOKENS_PATH",
 ];
 
 for (const name of SECRET_ENV_VARS) {

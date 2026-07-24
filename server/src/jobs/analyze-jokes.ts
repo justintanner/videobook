@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { createOpenAi, withRetry, textPart, firstContent } from "@apicity/openai";
 import type { OpenAiContentPart, OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
@@ -101,7 +101,7 @@ function buildJokesContext(eleven: ElevenLabs): string {
   ].join("\n");
 }
 
-export function registerAnalyzeJokesJob(fs: VideocityFs): void {
+export function registerAnalyzeJokesJob(fs: Engine): void {
   registerJobHandler("analyze_jokes", async (payload, ctx) => {
     const { assetId, projectSlug } = payload as AnalyzeJokesPayload;
 
@@ -109,7 +109,7 @@ export function registerAnalyzeJokesJob(fs: VideocityFs): void {
       const apiKey = getApiKey("OPENAI_API_KEY");
       if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
 
-      const read = await fs.readFile(assetId, "elevenlabs.json", projectSlug);
+      const read = await fs.files.read(assetId, "elevenlabs.json", projectSlug);
       if (!read.ok) {
         throw new Error(`No ElevenLabs transcript found for ${assetId} — run /transcribe @${assetId} first.`);
       }
@@ -166,7 +166,7 @@ export function registerAnalyzeJokesJob(fs: VideocityFs): void {
         asset_id: assetId,
       };
 
-      const writeResult = await fs.writeFile(
+      const writeResult = await fs.files.write(
         assetId,
         ".analyze-jokes.json",
         JSON.stringify(final, null, 2),

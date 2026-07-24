@@ -1,4 +1,4 @@
-import type { VideocityFs } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { modelSlug } from "@apicity/cost";
 import { z, type ZodRawShape } from "zod";
 import { FalNanoBanana2EditRequestSchema } from "@apicity/fal/zod";
@@ -26,7 +26,7 @@ const schema = {
 
 type Args = SchemaArgs<typeof schema>;
 
-export function generateNanoBanana2EditFalDef(fs: VideocityFs): ToolDef {
+export function generateNanoBanana2EditFalDef(fs: Engine): ToolDef {
   return {
     name: "generate_fal_nano_banana_2_edit_image",
     description: "Edit images via fal.ai using Google Nano Banana 2 with one or more @img-* reference inputs. Creates a new img- asset and enqueues a background job.",
@@ -41,10 +41,10 @@ export function generateNanoBanana2EditFalDef(fs: VideocityFs): ToolDef {
       const resolved = await resolveImageSlugs(fs, image_slugs, project_slug);
       if (!resolved.ok) return { isError: true as const, content: [{ type: "text" as const, text: resolved.error }] };
 
-      const assetResult = await fs.createAsset("img", `${modelSlug("kie", "nano-banana-2")}-${slugify(prompt) || String(Date.now())}`, project_slug);
+      const assetResult = await fs.artifacts.create("img", `${modelSlug("kie", "nano-banana-2")}-${slugify(prompt) || String(Date.now())}`, project_slug);
       if (!assetResult.ok) return { isError: true as const, content: [{ type: "text" as const, text: `Failed to create image asset: ${assetResult.error.message}` }] };
 
-      const { assetId: imgAssetId, path: imgAssetDir } = assetResult.value;
+      const { slug: imgAssetId, path: imgAssetDir } = assetResult.value;
 
       const jobId = `fal-${modelSlug("kie", "nano-banana-2")}-edit-${imgAssetId}-${Date.now()}`;
       await queue.enqueue(jobId, {
