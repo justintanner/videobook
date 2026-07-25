@@ -20,6 +20,8 @@ export default defineConfig([
       globals: { ...globals.browser, ...globals.webextensions },
     },
     rules: {
+      'no-useless-assignment': 'off',
+      'preserve-caught-error': 'off',
       '@typescript-eslint/no-unused-vars': ['error', {
         argsIgnorePattern: '^_',
         varsIgnorePattern: '^_',
