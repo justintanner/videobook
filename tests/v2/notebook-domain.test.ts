@@ -109,7 +109,7 @@ describe('v2 notebook domain tools', () => {
 
     resultJson(await invoke('move_notebook_cells', {
       notebook_id: notebookId,
-      slots: [{ id: image.id, row: 37, column: 8 }],
+      slots: [{ id: image.id, row: 37, column: -8 }],
     }))
     const expanded = resultJson(await invoke('get_notebook', {
       notebook_id: notebookId,
@@ -118,7 +118,7 @@ describe('v2 notebook domain tools', () => {
     }
     expect('grid' in expanded).toBe(false)
     expect(expanded.cells.find((cell) => cell.id === image.id)?.slot)
-      .toEqual({ row: 37, column: 8 })
+      .toEqual({ row: 37, column: -8 })
     expect(expanded.cells.find((cell) => cell.id === prompt.id)?.slot)
       .toEqual({ row: 1, column: 0 })
   })

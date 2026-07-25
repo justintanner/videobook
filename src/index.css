@@ -484,22 +484,23 @@ textarea:focus-visible {
 }
 
 .canvas-add-panel {
-  margin: 16px !important;
-}
-
-.canvas-workbook-actions {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  position: sticky;
+  top: 16px;
+  left: 16px;
+  z-index: 20;
+  width: max-content;
+  height: 0;
+  margin-left: 16px;
+  pointer-events: none;
 }
 
 .canvas-add-menu {
   position: relative;
+  pointer-events: auto;
 }
 
 .canvas-add-menu summary,
-.canvas-add-menu button,
-.canvas-run-workbook {
+.canvas-add-menu button {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -543,16 +544,10 @@ textarea:focus-visible {
 .canvas-add-menu summary:hover,
 .canvas-add-menu summary:focus-visible,
 .canvas-add-menu button:hover,
-.canvas-add-menu button:focus-visible,
-.canvas-run-workbook:hover,
-.canvas-run-workbook:focus-visible {
+.canvas-add-menu button:focus-visible {
   border-color: var(--green);
   color: #e1ffed;
   background: rgba(49, 137, 85, 0.5);
-}
-
-.canvas-run-workbook {
-  white-space: nowrap;
 }
 
 .canvas {
@@ -798,11 +793,14 @@ textarea:focus-visible {
 }
 
 .cell-kind-label {
-  border-color: rgba(114, 231, 170, 0.26);
-  background: rgba(5, 20, 13, 0.44);
-  box-shadow:
-    inset 0 0 32px rgba(82, 194, 128, 0.035),
-    0 10px 24px rgba(0, 0, 0, 0.16);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.cell-kind-label.cell-node-selected {
+  border: 0;
+  box-shadow: none;
 }
 
 .cell-kind-label::before {
@@ -815,15 +813,10 @@ textarea:focus-visible {
   height: 100%;
   place-items: center;
   align-content: center;
-  gap: 12px;
   padding: 24px;
   color: rgba(186, 239, 209, 0.76);
   text-align: center;
   text-transform: uppercase;
-}
-
-.cell-label-copy svg {
-  color: rgba(114, 231, 170, 0.54);
 }
 
 .cell-label-copy strong {

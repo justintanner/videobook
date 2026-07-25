@@ -19,11 +19,18 @@ describe('transparent runnable DAG e2e (offline)', () => {
 
   afterEach(async () => {
     engine?.close()
-    if (rootDir) await rm(rootDir, { recursive: true, force: true })
+    if (rootDir) {
+      await rm(rootDir, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 100,
+      })
+    }
   })
 
   it('runs source→analysis fixture→split/audio/frame without paid generation', async () => {
-    expect(SCHEMA_VERSION).toBe(8)
+    expect(SCHEMA_VERSION).toBe(9)
     expect(NOTEBOOK_CELL_TYPES).toHaveLength(18)
     expect(WORKFLOW_STAGES).toHaveLength(8)
     expect(WORKFLOW_STAGES).toEqual([
@@ -93,9 +100,9 @@ describe('transparent runnable DAG e2e (offline)', () => {
     expect(fanned.properties?.stageLabels).toBeUndefined()
     expect(fanned.properties?.featureLanes).toBeUndefined()
     expect(fanned.cells.filter((cell) => cell.type === 'label').map((cell) => cell.slot)).toEqual([
-      { row: 0, column: 0 },
+      { row: 0, column: -3 },
+      { row: 0, column: -1 },
       { row: 0, column: 1 },
-      { row: 0, column: 2 },
       { row: 0, column: 3 },
     ])
     expect(fanned.cells.filter((cell) => cell.type === 'split')).toHaveLength(2)

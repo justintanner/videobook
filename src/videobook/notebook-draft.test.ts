@@ -62,14 +62,14 @@ describe('notebook draft conversion', () => {
           ...source.cells[0]!,
           id: '018f7cf5-0d31-7d96-8c0f-800000000005',
           type: 'video',
-          slot: { row: 2, column: 3 },
+          slot: { row: 2, column: -3 },
         },
       ],
     }
 
     expect(notebookNodes(placed).map((node) => node.data.slot)).toEqual([
       { row: 0, column: 0 },
-      { row: 2, column: 3 },
+      { row: 2, column: -3 },
     ])
   })
 

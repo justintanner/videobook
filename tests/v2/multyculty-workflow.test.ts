@@ -100,18 +100,19 @@ describe("Multyculty workflow fixture", () => {
     expect(first.cells.filter((cell) => cell.type === "prompt")).toHaveLength(4);
     expect(first.cells.filter((cell) => cell.type === "video")).toHaveLength(4);
     expect(first.cells.filter((cell) => cell.type === "label").map((cell) => cell.slot)).toEqual([
-      { row: 0, column: 0 },
+      { row: 0, column: -3 },
+      { row: 0, column: -1 },
       { row: 0, column: 1 },
-      { row: 0, column: 2 },
       { row: 0, column: 3 },
     ]);
-    expect(source?.slot).toEqual({ row: 1, column: 1 });
-    expect(analysis?.slot).toEqual({ row: 2, column: 1 });
-    expect(audio?.slot).toEqual({ row: 9, column: 2 });
-    expect(assembly?.slot).toEqual({ row: 9, column: 1 });
-    expect(exp?.slot).toEqual({ row: 10, column: 1 });
+    expect(source?.slot).toEqual({ row: 1, column: 0 });
+    expect(analysis?.slot).toEqual({ row: 2, column: 0 });
+    expect(audio?.slot).toEqual({ row: 9, column: 1 });
+    expect(assembly?.slot).toEqual({ row: 9, column: 0 });
+    expect(exp?.slot).toEqual({ row: 10, column: 0 });
+    const featureColumns = [-3, -1, 1, 3];
     for (let ordinal = 1; ordinal <= 4; ordinal += 1) {
-      const column = ordinal - 1;
+      const column = featureColumns[ordinal - 1];
       expect(first.cells.find((cell) =>
         cell.inputs?.workflowRole === `split-${ordinal}`)?.slot)
         .toEqual({ row: 3, column });

@@ -22,7 +22,7 @@ type ArtifactRecord = {
   kind: string;
 };
 
-export const MULTYCULTY_FIXTURE_VERSION = 5;
+export const MULTYCULTY_FIXTURE_VERSION = 6;
 export const MULTYCULTY_FIXTURE_OWNER = "multyculty-default";
 
 const LEGACY_SPLIT_ROLES = [

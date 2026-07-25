@@ -12,19 +12,33 @@ export const notebookGrid = {
   gap: 40,
   columnPitch: 280,
   rowPitch: 280,
-  defaultColumnCount: 4,
+  defaultColumnCount: 7,
   minimumRowCount: 3,
 } as const
 
 function normalizedSlot(slot: NotebookGridSlot): NotebookGridSlot {
   return {
     row: Math.max(0, Math.round(slot.row)),
-    column: Math.max(0, Math.round(slot.column)),
+    column: Math.round(slot.column),
   }
 }
 
-function slotKey(slot: NotebookGridSlot): string {
+export function notebookGridSlotKey(slot: NotebookGridSlot): string {
   return `${slot.row}:${slot.column}`
+}
+
+function normalizedColumnCount(columnCount: number): number {
+  const count = Math.max(1, Math.round(columnCount))
+  return count % 2 === 0 ? count + 1 : count
+}
+
+function centerOutColumns(columnCount: number): number[] {
+  const radius = Math.floor(normalizedColumnCount(columnCount) / 2)
+  return Array.from({ length: radius * 2 + 1 }, (_, index) => {
+    if (index === 0) return 0
+    const distance = Math.ceil(index / 2)
+    return index % 2 === 1 ? -distance : distance
+  })
 }
 
 export function notebookGridSlot(
@@ -32,15 +46,13 @@ export function notebookGridSlot(
 ): NotebookGridSlot {
   return normalizedSlot({
     row: Math.round((position.y - notebookGrid.originY) / notebookGrid.rowPitch),
-    column: Math.round(
-      (position.x - notebookGrid.originX) / notebookGrid.columnPitch,
-    ),
+    column: Math.round(position.x / notebookGrid.columnPitch),
   })
 }
 
 export function notebookGridPosition(slot: NotebookGridSlot): XYPosition {
   return {
-    x: notebookGrid.originX + slot.column * notebookGrid.columnPitch,
+    x: slot.column * notebookGrid.columnPitch,
     y: notebookGrid.originY + slot.row * notebookGrid.rowPitch,
   }
 }
@@ -66,7 +78,8 @@ export function resolveNotebookGridMove<T extends NotebookGridData>(
   const target = normalizedSlot(requested)
   const source = moving.data.slot
   const occupied = nodes.find((node) =>
-    node.id !== id && slotKey(node.data.slot) === slotKey(target))
+    node.id !== id
+    && notebookGridSlotKey(node.data.slot) === notebookGridSlotKey(target))
 
   return nodes.map((node) => {
     const slot = node.id === id
@@ -87,21 +100,46 @@ export function nextNotebookGridSlot<T extends NotebookGridData>(
   nodes: readonly Node<T>[],
   columnCount = notebookGrid.defaultColumnCount,
 ): NotebookGridSlot {
-  const occupied = new Set(nodes.map((node) => slotKey(node.data.slot)))
-  for (let ordinal = 0; ; ordinal += 1) {
-    const slot = {
-      row: Math.floor(ordinal / columnCount),
-      column: ordinal % columnCount,
+  const occupied = new Set(nodes.map((node) => notebookGridSlotKey(node.data.slot)))
+  const columns = centerOutColumns(columnCount)
+  for (let row = 0; ; row += 1) {
+    for (const column of columns) {
+      const slot = { row, column }
+      if (!occupied.has(notebookGridSlotKey(slot))) return slot
     }
-    if (!occupied.has(slotKey(slot))) return slot
   }
 }
 
 export interface NotebookGridMetrics {
   rowCount: number
   columnCount: number
+  minColumn: number
+  maxColumn: number
+  centerX: number
   width: number
   height: number
+}
+
+export function notebookGridDropSlot(
+  position: XYPosition,
+  metrics: NotebookGridMetrics,
+): NotebookGridSlot {
+  if (position.x < metrics.minColumn * notebookGrid.columnPitch) {
+    return normalizedSlot({
+      row: Math.round((position.y - notebookGrid.originY) / notebookGrid.rowPitch),
+      column: metrics.minColumn - 1,
+    })
+  }
+  if (
+    position.x
+    > metrics.maxColumn * notebookGrid.columnPitch + notebookGrid.squareSize
+  ) {
+    return normalizedSlot({
+      row: Math.round((position.y - notebookGrid.originY) / notebookGrid.rowPitch),
+      column: metrics.maxColumn + 1,
+    })
+  }
+  return notebookGridSlot(position)
 }
 
 export function notebookGridMetrics(
@@ -114,11 +152,12 @@ export function notebookGridMetrics(
     notebookGrid.minimumRowCount - 1,
     ...populated.map((slot) => slot.row),
   )
-  const maxColumn = Math.max(
-    columnCount - 1,
-    ...populated.map((slot) => slot.column),
+  const minimumRadius = Math.floor(normalizedColumnCount(columnCount) / 2)
+  const radius = Math.max(
+    minimumRadius,
+    ...populated.map((slot) => Math.abs(slot.column)),
   )
-  const resolvedColumnCount = maxColumn + 1
+  const resolvedColumnCount = radius * 2 + 1
   const width = notebookGrid.originX * 2
     + resolvedColumnCount * notebookGrid.squareSize
     + Math.max(0, resolvedColumnCount - 1) * notebookGrid.gap
@@ -128,6 +167,9 @@ export function notebookGridMetrics(
   return {
     rowCount: maxRow + 1,
     columnCount: resolvedColumnCount,
+    minColumn: -radius,
+    maxColumn: radius,
+    centerX: notebookGrid.originX + radius * notebookGrid.columnPitch,
     width,
     height,
   }

@@ -166,7 +166,7 @@ const cellInputSchema = z.object({
   title: z.string().min(1),
   slot: z.object({
     row: z.number().int().nonnegative(),
-    column: z.number().int().nonnegative(),
+    column: z.number().int(),
   }),
   entity_id: z.string().uuid().optional(),
   prompt: z.string().optional(),
@@ -3026,7 +3026,7 @@ export function videobookDomainDefs(
         slots: z.array(z.object({
           id: z.string().uuid(),
           row: z.number().int().nonnegative(),
-          column: z.number().int().nonnegative(),
+          column: z.number().int(),
         })).min(1),
       },
       handler: async (args) => {

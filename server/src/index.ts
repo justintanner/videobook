@@ -2,6 +2,7 @@ import "./load-env.js";
 import cors from "cors";
 import express from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { SCHEMA_VERSION } from "videobook-engine";
 import { localArchiveDir } from "./archive-store.js";
 import { bookManager, fs as scopedBookEngine } from "./fs.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
@@ -23,7 +24,7 @@ app.get("/healthz", async (_req, res) => {
     ok: true,
     service: "videobook",
     engineVersion: "3.1.0",
-    schemaVersion: 8,
+    schemaVersion: SCHEMA_VERSION,
   });
 });
 

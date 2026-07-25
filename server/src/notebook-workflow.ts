@@ -37,7 +37,7 @@ export const MULTYCULTY_FEATURES = [
     caption: "FEATURE 01 · IMPORT + ANALYZE",
     promptBrief:
       "Preserve the seated subject and original composition while a refined filmstrip, waveform, and precise scene markers materialize around the source. Show the app turning one imported video into an understood edit without adding text.",
-    column: 0,
+    column: -3,
   },
   {
     ordinal: 2,
@@ -47,7 +47,7 @@ export const MULTYCULTY_FEATURES = [
     caption: "FEATURE 02 · SPLIT + EXTRACT",
     promptBrief:
       "Preserve the people, car, and location while the moment separates into elegant first-frame, last-frame, and audio-wave components connected by clean editorial motion. Show reusable scene assets without adding text.",
-    column: 1,
+    column: -1,
   },
   {
     ordinal: 3,
@@ -57,7 +57,7 @@ export const MULTYCULTY_FEATURES = [
     caption: "FEATURE 03 · PROMPT + ANIMATE",
     promptBrief:
       "Preserve the character performance and identity while an abstract prompt ribbon becomes controlled motion paths that travel from the first frame to the last frame. Show grounded animation direction without adding text.",
-    column: 2,
+    column: 1,
   },
   {
     ordinal: 4,
@@ -107,7 +107,7 @@ function featureForShot(shot: NormalizedShot): Feature | null {
 }
 
 function featureColumn(shot: NormalizedShot): number {
-  return featureForShot(shot)?.column ?? (shot.ordinal - 1) % 4;
+  return featureForShot(shot)?.column ?? ((shot.ordinal - 1) % 4) * 2 - 3;
 }
 
 function stateForDerivedCell(cell: NotebookCell | undefined): string {
@@ -699,7 +699,7 @@ export function buildSevenStageScaffold(
   const source = baseCell(engine, roleCells.get("source"), {
     type: "source",
     title: "@start · source",
-    slot: gridSlot(1, 1),
+    slot: gridSlot(1, 0),
     provider: "local",
     operation: "preprocess_source",
     tool: "ffmpeg",
@@ -712,7 +712,7 @@ export function buildSevenStageScaffold(
   const analysis = baseCell(engine, roleCells.get("analysis"), {
     type: "analysis",
     title: "@splitter · analyze",
-    slot: gridSlot(2, 1),
+    slot: gridSlot(2, 0),
     prompt: "Segment the source into four continuous 15-second narrative shots with precise timestamps and concise visual context.",
     provider: "kie",
     model: "gemini-3.5-flash",
@@ -723,7 +723,7 @@ export function buildSevenStageScaffold(
   const audio = baseCell(engine, roleCells.get("source-audio"), {
     type: "audio",
     title: "@audio · continuous source",
-    slot: gridSlot(9, 2),
+    slot: gridSlot(9, 1),
     provider: "local",
     operation: "extract_audio",
     tool: "ffmpeg",
@@ -736,7 +736,7 @@ export function buildSevenStageScaffold(
   const assembly = baseCell(engine, roleCells.get("assembly"), {
     type: "sequence",
     title: "@assemble · feature edit",
-    slot: gridSlot(9, 1),
+    slot: gridSlot(9, 0),
     provider: "local",
     operation: "assemble_sequence",
     tool: "engine_sequence",
@@ -749,7 +749,7 @@ export function buildSevenStageScaffold(
   const exp = baseCell(engine, roleCells.get("export"), {
     type: "export",
     title: "@export · Multyculty feature master",
-    slot: gridSlot(10, 1),
+    slot: gridSlot(10, 0),
     provider: "local",
     operation: "export_master",
     tool: "ffmpeg",

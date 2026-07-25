@@ -765,7 +765,7 @@ export function semanticSearchDefs(
         title: z.string().min(1),
         slot: z.object({
           row: z.number().int().nonnegative(),
-          column: z.number().int().nonnegative(),
+          column: z.number().int(),
         }).optional(),
         query: searchQuerySchema,
         hit: searchHitSchema,

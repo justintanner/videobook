@@ -10,7 +10,6 @@ import {
 } from 'react'
 import {
   Handle,
-  Panel,
   Position,
   ReactFlow,
   applyEdgeChanges,
@@ -86,6 +85,7 @@ import {
 } from '@/videobook/command-plan'
 import {
   nextNotebookGridSlot,
+  notebookGridDropSlot,
   notebookGridMetrics,
   notebookGridSlot,
   resolveNotebookGridMove,
@@ -932,7 +932,6 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
     return (
       <article className={`cell-node cell-kind-label ${selected ? 'cell-node-selected' : ''}`}>
         <div className="cell-label-copy">
-          <Square size={14} />
           <strong>{data.title}</strong>
         </div>
       </article>
@@ -998,7 +997,6 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
 
 const nodeTypes = { cell: CellNode }
 const flowProOptions = { hideAttribution: true }
-const fixedNotebookViewport = { x: 0, y: 0, zoom: 1 }
 
 type AppProps = {
   initialWorkspace: InitialWorkspacePayload | null
@@ -1266,26 +1264,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }, [bookId, call, notebook, online, prepareGenerationPlan])
 
-  const runWorkbook = useCallback(async () => {
-    if (!bookId || !notebook) return
-    setBusy(true)
-    try {
-      const plan = asCommandPlan(await call('plan_notebook_run', {
-        book_id: bookId,
-        notebook_id: notebook.id,
-        source_surface: 'ui',
-        actor: 'videobook-user',
-        force: true,
-      }))
-      setPendingCommandPlan({ plan, previews: {} })
-      setNotice('Workbook run plan ready for review')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
-    } finally {
-      setBusy(false)
-    }
-  }, [bookId, call, notebook])
-
   const [nodes, setNodes] = useState<CanvasNode[]>(() =>
     initialWorkspace?.notebook
       ? canvasNodes(
@@ -1296,13 +1274,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       : [])
   const [edges, setEdges] = useState<Edge[]>(() =>
     initialWorkspace?.notebook ? notebookEdges(initialWorkspace.notebook) : [])
-  const notebookMetrics = useMemo(
+  const notebookBaseMetrics = useMemo(
     () => notebookGridMetrics(
       nodes.map((node) => node.data.slot),
-      undefined,
-      previewSlot,
     ),
-    [nodes, previewSlot],
+    [nodes],
+  )
+  const notebookMetrics = useMemo(
+    () => previewSlot
+      ? notebookGridMetrics(
+          nodes.map((node) => node.data.slot),
+          undefined,
+          previewSlot,
+        )
+      : notebookBaseMetrics,
+    [nodes, notebookBaseMetrics, previewSlot],
   )
   const notebookFlowStyle = useMemo<CSSProperties>(
     () => ({
@@ -1310,6 +1296,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       height: notebookMetrics.height,
     }),
     [notebookMetrics.height, notebookMetrics.width],
+  )
+  const notebookViewport = useMemo(
+    () => ({ x: notebookMetrics.centerX, y: 0, zoom: 1 }),
+    [notebookMetrics.centerX],
+  )
+  const notebookLabelRows = useMemo(
+    () => [...new Set(
+      nodes
+        .filter((node) => node.data.kind === 'label')
+        .map((node) => node.data.slot.row),
+    )],
+    [nodes],
   )
   const selectedCell = useMemo(
     () => nodes.find((node) => node.id === selectedCellId) ?? null,
@@ -1450,7 +1448,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const createCell = async (type: NotebookCellType, position?: { x: number; y: number }) => {
     if (!bookId || !notebook) return
     const slot = position
-      ? notebookGridSlot(position)
+      ? notebookGridDropSlot(position, notebookBaseMetrics)
       : nextNotebookGridSlot(nodes)
     if (
       position
@@ -3185,6 +3183,31 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           {screen === 'notebook' && (
             <>
               <section className="canvas">
+                {notebook && (
+                  <div className="canvas-add-panel">
+                    <details className="canvas-add-menu">
+                      <summary><Plus size={15} />Add cell</summary>
+                      <div>
+                        {cellPalette.map((item) => {
+                          const Icon = item.icon
+                          return (
+                            <button
+                              key={item.type}
+                              type="button"
+                              draggable
+                              disabled={busy}
+                              onDragStart={(event) => event.dataTransfer.setData('application/x-videobook-cell', item.type)}
+                              onDragEnd={() => setPreviewSlot(null)}
+                              onClick={() => void createCell(item.type)}
+                            >
+                              <Icon size={15} /><span>{item.label}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </details>
+                  </div>
+                )}
                 {!notebook ? (
                   <div className="canvas-empty-state">
                     <strong>No notebook available</strong>
@@ -3201,7 +3224,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       nodes={nodes}
                       edges={edges}
                       nodeTypes={nodeTypes}
-                      defaultViewport={fixedNotebookViewport}
+                      viewport={notebookViewport}
                       onInit={(instance) => {
                         flowRef.current = instance
                       }}
@@ -3260,7 +3283,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           y: event.clientY,
                         })
                         if (point) {
-                          setPreviewSlot(notebookGridSlot(point))
+                          setPreviewSlot(notebookGridDropSlot(point, notebookBaseMetrics))
                         }
                       }}
                       minZoom={1}
@@ -3277,43 +3300,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         <NotebookGridBoard
                           metrics={notebookMetrics}
                           previewSlot={previewSlot}
+                          hiddenRows={notebookLabelRows}
                         />
-                        <Panel position="top-left" className="canvas-add-panel">
-                          <div className="canvas-workbook-actions">
-                            <details className="canvas-add-menu">
-                              <summary><Plus size={15} />Add cell</summary>
-                              <div>
-                                {cellPalette.map((item) => {
-                                  const Icon = item.icon
-                                  return (
-                                    <button
-                                      key={item.type}
-                                      type="button"
-                                      draggable
-                                      disabled={busy}
-                                      onDragStart={(event) => event.dataTransfer.setData('application/x-videobook-cell', item.type)}
-                                      onDragEnd={() => setPreviewSlot(null)}
-                                      onClick={() => void createCell(item.type)}
-                                    >
-                                      <Icon size={15} /><span>{item.label}</span>
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            </details>
-                            <button
-                              type="button"
-                              className="canvas-run-workbook"
-                              disabled={busy}
-                              onClick={() => void runWorkbook()}
-                            >
-                              {busy
-                                ? <LoaderCircle className="spin" size={15} />
-                                : <Sparkles size={15} />}
-                              Run workbook
-                            </button>
-                          </div>
-                        </Panel>
                       </ReactFlow>
                     </div>
                   </div>
