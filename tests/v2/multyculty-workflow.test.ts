@@ -105,32 +105,32 @@ describe("Multyculty workflow fixture", () => {
       { row: 0, column: 1 },
       { row: 0, column: 3 },
     ]);
-    expect(source?.slot).toEqual({ row: 1, column: 0 });
-    expect(analysis?.slot).toEqual({ row: 2, column: 0 });
-    expect(audio?.slot).toEqual({ row: 9, column: 1 });
-    expect(assembly?.slot).toEqual({ row: 9, column: 0 });
-    expect(exp?.slot).toEqual({ row: 10, column: 0 });
+    expect(source?.slot).toEqual({ row: 0, column: 0 });
+    expect(analysis?.slot).toEqual({ row: 1, column: 0 });
+    expect(audio?.slot).toEqual({ row: 8, column: 1 });
+    expect(assembly?.slot).toEqual({ row: 8, column: 0 });
+    expect(exp?.slot).toEqual({ row: 9, column: 0 });
     const featureColumns = [-3, -1, 1, 3];
     for (let ordinal = 1; ordinal <= 4; ordinal += 1) {
       const column = featureColumns[ordinal - 1];
       expect(first.cells.find((cell) =>
         cell.inputs?.workflowRole === `split-${ordinal}`)?.slot)
-        .toEqual({ row: 3, column });
+        .toEqual({ row: 2, column });
       expect(first.cells.find((cell) =>
         cell.inputs?.workflowRole === `frame-first-${ordinal}`)?.slot)
-        .toEqual({ row: 4, column });
+        .toEqual({ row: 3, column });
       expect(first.cells.find((cell) =>
         cell.inputs?.workflowRole === `frame-last-${ordinal}`)?.slot)
-        .toEqual({ row: 5, column });
+        .toEqual({ row: 4, column });
       expect(first.cells.find((cell) =>
         cell.inputs?.workflowRole === `scene-audio-${ordinal}`)?.slot)
-        .toEqual({ row: 6, column });
+        .toEqual({ row: 5, column });
       expect(first.cells.find((cell) =>
         cell.inputs?.workflowRole === `prompt-${ordinal}`)?.slot)
-        .toEqual({ row: 7, column });
+        .toEqual({ row: 6, column });
       expect(first.cells.find((cell) =>
         cell.inputs?.workflowRole === `animate-${ordinal}`)?.slot)
-        .toEqual({ row: 8, column });
+        .toEqual({ row: 7, column });
     }
     expect(first.cells.filter((cell) => cell.type === "prompt").every((cell) =>
       cell.inputs?.requiresConfirmation === true)).toBe(true);

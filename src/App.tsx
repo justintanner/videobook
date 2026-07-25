@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -19,6 +20,7 @@ import {
   type Node,
   type NodeProps,
   type ReactFlowInstance,
+  type Viewport,
 } from '@xyflow/react'
 import {
   Activity,
@@ -42,6 +44,8 @@ import {
   Trash2,
   Undo2,
   Video,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react'
 import { useMcp } from 'use-mcp/react'
 import type {
@@ -85,9 +89,13 @@ import {
 } from '@/videobook/command-plan'
 import {
   nextNotebookGridSlot,
+  normalizeNotebookGridZoom,
+  notebookGrid,
   notebookGridDropSlot,
+  notebookGridFrameSize,
   notebookGridMetrics,
   notebookGridSlot,
+  notebookGridViewport,
   resolveNotebookGridMove,
   snapNotebookGridMove,
   type NotebookGridSlot,
@@ -917,6 +925,7 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
   const thumbnailUrl = data.asset?.thumbnailUrl
   const targetInputs = data.targetInputs?.length ? data.targetInputs : ['input']
   const playableVideo = data.asset?.type === 'video' || data.asset?.type === 'final'
+  const isTopRow = data.slot.row === 0
   const canRun = data.kind === 'image'
     || data.kind === 'video'
     || data.kind === 'prompt'
@@ -946,7 +955,7 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
           type="target"
           position={Position.Top}
           id={input}
-          className="cell-target-handle"
+          className={`cell-target-handle${isTopRow ? ' cell-target-handle-top-row' : ''}`}
           style={{ left: `${((index + 1) / (targetInputs.length + 1)) * 100}%` }}
         />
       ))}
@@ -997,6 +1006,8 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
 
 const nodeTypes = { cell: CellNode }
 const flowProOptions = { hideAttribution: true }
+const notebookZoomActivationKeys = ['Control', 'Meta']
+const notebookPanOnDragButtons: number[] = []
 
 type AppProps = {
   initialWorkspace: InitialWorkspacePayload | null
@@ -1039,6 +1050,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [storage, setStorage] = useState<unknown>(null)
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
+  const [notebookView, setNotebookView] = useState({ y: 0, zoom: 1 })
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [bookMenuOpen, setBookMenuOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -1078,6 +1090,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [online, setOnline] = useState(() => window.navigator.onLine)
   const [, setNotice] = useState('Connect to the server, then load your books.')
   const flowRef = useRef<ReactFlowInstance<CanvasNode, Edge> | null>(null)
+  const notebookScrollRef = useRef<HTMLDivElement | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const recorderStreamRef = useRef<MediaStream | null>(null)
   const recorderChunksRef = useRef<Blob[]>([])
@@ -1290,25 +1303,63 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       : notebookBaseMetrics,
     [nodes, notebookBaseMetrics, previewSlot],
   )
+  const notebookFrameSize = useMemo(
+    () => notebookGridFrameSize(notebookMetrics, notebookView.zoom),
+    [notebookMetrics, notebookView.zoom],
+  )
   const notebookFlowStyle = useMemo<CSSProperties>(
     () => ({
-      width: notebookMetrics.width,
-      height: notebookMetrics.height,
+      width: notebookFrameSize.width,
+      height: notebookFrameSize.height,
     }),
-    [notebookMetrics.height, notebookMetrics.width],
+    [notebookFrameSize.height, notebookFrameSize.width],
   )
   const notebookViewport = useMemo(
-    () => ({ x: notebookMetrics.centerX, y: 0, zoom: 1 }),
-    [notebookMetrics.centerX],
+    () => notebookGridViewport(
+      notebookMetrics,
+      notebookView.zoom,
+      notebookView.y,
+    ),
+    [notebookMetrics, notebookView.y, notebookView.zoom],
   )
-  const notebookLabelRows = useMemo(
-    () => [...new Set(
-      nodes
-        .filter((node) => node.data.kind === 'label')
-        .map((node) => node.data.slot.row),
-    )],
-    [nodes],
-  )
+  const updateNotebookViewport = useCallback((viewport: Viewport) => {
+    const zoom = normalizeNotebookGridZoom(viewport.zoom)
+    setNotebookView((current) => {
+      const y = zoom === current.zoom
+        ? current.y
+        : Number.isFinite(viewport.y)
+          ? viewport.y
+          : 0
+      return current.zoom === zoom && current.y === y
+        ? current
+        : { y, zoom }
+    })
+  }, [])
+  const adjustNotebookZoom = useCallback((change: number) => {
+    setNotebookView((current) => ({
+      ...current,
+      zoom: normalizeNotebookGridZoom(current.zoom + change),
+    }))
+  }, [])
+  const resetNotebookZoom = useCallback(() => {
+    setNotebookView({ y: 0, zoom: 1 })
+  }, [])
+
+  useLayoutEffect(() => {
+    const container = notebookScrollRef.current
+    if (!container) return
+    const center = () => {
+      container.scrollLeft = Math.max(
+        0,
+        (container.scrollWidth - container.clientWidth) / 2,
+      )
+    }
+    center()
+    const observer = new ResizeObserver(center)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [notebookFrameSize.width])
+
   const selectedCell = useMemo(
     () => nodes.find((node) => node.id === selectedCellId) ?? null,
     [nodes, selectedCellId],
@@ -3208,13 +3259,44 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     </details>
                   </div>
                 )}
+                {notebook && (
+                  <div className="canvas-zoom-panel" aria-label="Notebook zoom controls">
+                    <button
+                      type="button"
+                      aria-label="Zoom out"
+                      disabled={notebookView.zoom <= notebookGrid.minimumZoom}
+                      onClick={() => adjustNotebookZoom(-notebookGrid.zoomStep)}
+                    >
+                      <ZoomOut size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      className="canvas-zoom-level"
+                      aria-label="Reset zoom"
+                      onClick={resetNotebookZoom}
+                    >
+                      {Math.round(notebookView.zoom * 100)}%
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Zoom in"
+                      disabled={notebookView.zoom >= notebookGrid.maximumZoom}
+                      onClick={() => adjustNotebookZoom(notebookGrid.zoomStep)}
+                    >
+                      <ZoomIn size={15} />
+                    </button>
+                  </div>
+                )}
                 {!notebook ? (
                   <div className="canvas-empty-state">
                     <strong>No notebook available</strong>
                     <button type="button" onClick={() => void loadBooks(bookId)}>Reload book</button>
                   </div>
                 ) : (
-                  <div className="notebook-horizontal-scroll">
+                  <div
+                    className="notebook-horizontal-scroll"
+                    ref={notebookScrollRef}
+                  >
                     <div
                       className="notebook-flow-frame"
                       style={notebookFlowStyle}
@@ -3225,6 +3307,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       edges={edges}
                       nodeTypes={nodeTypes}
                       viewport={notebookViewport}
+                      onViewportChange={updateNotebookViewport}
                       onInit={(instance) => {
                         flowRef.current = instance
                       }}
@@ -3286,12 +3369,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           setPreviewSlot(notebookGridDropSlot(point, notebookBaseMetrics))
                         }
                       }}
-                      minZoom={1}
-                      maxZoom={1}
-                      panOnDrag={false}
+                      minZoom={notebookGrid.minimumZoom}
+                      maxZoom={notebookGrid.maximumZoom}
+                      panOnDrag={notebookPanOnDragButtons}
                       panOnScroll={false}
                       zoomOnScroll={false}
-                      zoomOnPinch={false}
+                      zoomOnPinch
+                      zoomActivationKeyCode={notebookZoomActivationKeys}
                       zoomOnDoubleClick={false}
                       preventScrolling={false}
                       deleteKeyCode={null}
@@ -3300,7 +3384,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         <NotebookGridBoard
                           metrics={notebookMetrics}
                           previewSlot={previewSlot}
-                          hiddenRows={notebookLabelRows}
                         />
                       </ReactFlow>
                     </div>

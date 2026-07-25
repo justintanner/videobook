@@ -494,6 +494,55 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
+.canvas-zoom-panel {
+  position: sticky;
+  top: 16px;
+  z-index: 20;
+  display: flex;
+  width: 100%;
+  height: 0;
+  justify-content: flex-end;
+  padding-right: 24px;
+  pointer-events: none;
+}
+
+.canvas-zoom-panel button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(114, 231, 170, 0.5);
+  color: #c7ecd7;
+  background: rgba(4, 19, 12, 0.96);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.canvas-zoom-panel button + button {
+  border-left: 0;
+}
+
+.canvas-zoom-panel button:hover,
+.canvas-zoom-panel button:focus-visible {
+  color: #e1ffed;
+  background: rgba(49, 137, 85, 0.5);
+}
+
+.canvas-zoom-panel button:disabled {
+  color: rgba(139, 177, 155, 0.35);
+  cursor: default;
+  background: rgba(4, 19, 12, 0.78);
+}
+
+.canvas-zoom-panel .canvas-zoom-level {
+  width: 56px;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: 0.06em;
+}
+
 .canvas-add-menu {
   position: relative;
   pointer-events: auto;
@@ -772,6 +821,11 @@ textarea:focus-visible {
   top: -6px;
 }
 
+.cell-target-handle-top-row {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .cell-node {
   position: relative;
   display: block;
@@ -793,6 +847,7 @@ textarea:focus-visible {
 }
 
 .cell-kind-label {
+  height: 32px;
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -813,7 +868,7 @@ textarea:focus-visible {
   height: 100%;
   place-items: center;
   align-content: center;
-  padding: 24px;
+  padding: 0 12px;
   color: rgba(186, 239, 209, 0.76);
   text-align: center;
   text-transform: uppercase;
@@ -821,7 +876,7 @@ textarea:focus-visible {
 
 .cell-label-copy strong {
   max-width: 100%;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.14em;
   line-height: 1.55;

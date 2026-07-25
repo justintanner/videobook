@@ -5,6 +5,7 @@ import type {
   NotebookDocument,
 } from 'videobook-engine'
 import {
+  notebookGridHeadingPosition,
   notebookGridPosition,
 } from './notebook-grid'
 
@@ -34,7 +35,10 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
     return {
       id: cell.id,
       type: 'cell',
-      position: notebookGridPosition(cell.slot),
+      position: cell.type === 'label'
+        ? notebookGridHeadingPosition(cell.slot.column)
+        : notebookGridPosition(cell.slot),
+      draggable: cell.type !== 'label',
       data: {
         kind: cell.type,
         title: cell.title,

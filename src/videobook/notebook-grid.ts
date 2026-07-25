@@ -7,13 +7,17 @@ export interface NotebookGridData extends Record<string, unknown> {
 
 export const notebookGrid = {
   originX: 48,
-  originY: 72,
+  originY: 112,
+  headingY: 64,
   squareSize: 240,
   gap: 40,
   columnPitch: 280,
   rowPitch: 280,
   defaultColumnCount: 7,
   minimumRowCount: 3,
+  minimumZoom: 0.5,
+  maximumZoom: 2,
+  zoomStep: 0.25,
 } as const
 
 function normalizedSlot(slot: NotebookGridSlot): NotebookGridSlot {
@@ -54,6 +58,13 @@ export function notebookGridPosition(slot: NotebookGridSlot): XYPosition {
   return {
     x: slot.column * notebookGrid.columnPitch,
     y: notebookGrid.originY + slot.row * notebookGrid.rowPitch,
+  }
+}
+
+export function notebookGridHeadingPosition(column: number): XYPosition {
+  return {
+    x: Math.round(column) * notebookGrid.columnPitch,
+    y: notebookGrid.headingY,
   }
 }
 
@@ -118,6 +129,38 @@ export interface NotebookGridMetrics {
   centerX: number
   width: number
   height: number
+}
+
+export function normalizeNotebookGridZoom(zoom: number): number {
+  if (!Number.isFinite(zoom)) return 1
+  return Math.min(
+    notebookGrid.maximumZoom,
+    Math.max(notebookGrid.minimumZoom, zoom),
+  )
+}
+
+export function notebookGridFrameSize(
+  metrics: NotebookGridMetrics,
+  zoom: number,
+): { width: number; height: number } {
+  const normalizedZoom = normalizeNotebookGridZoom(zoom)
+  return {
+    width: metrics.width * normalizedZoom,
+    height: metrics.height * normalizedZoom,
+  }
+}
+
+export function notebookGridViewport(
+  metrics: NotebookGridMetrics,
+  zoom: number,
+  y = 0,
+): { x: number; y: number; zoom: number } {
+  const normalizedZoom = normalizeNotebookGridZoom(zoom)
+  return {
+    x: metrics.centerX * normalizedZoom,
+    y: Number.isFinite(y) ? y : 0,
+    zoom: normalizedZoom,
+  }
 }
 
 export function notebookGridDropSlot(

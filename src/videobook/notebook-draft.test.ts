@@ -73,6 +73,23 @@ describe('notebook draft conversion', () => {
     ])
   })
 
+  it('projects label cells into the column heading band', () => {
+    const labeled: NotebookDocument = {
+      ...source,
+      cells: [{
+        ...source.cells[0]!,
+        type: 'label',
+        slot: { row: 9, column: -2 },
+      }],
+    }
+
+    expect(notebookNodes(labeled)[0]).toMatchObject({
+      position: { x: -560, y: 64 },
+      draggable: false,
+      data: { slot: { row: 9, column: -2 } },
+    })
+  })
+
   it('maps semantic inputs to visible directed workflow handles', () => {
     const target = {
       ...source.cells[0]!,

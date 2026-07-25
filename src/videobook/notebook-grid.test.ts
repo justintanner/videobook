@@ -4,9 +4,13 @@ import {
   nextNotebookGridSlot,
   notebookGrid,
   notebookGridDropSlot,
+  notebookGridFrameSize,
+  notebookGridHeadingPosition,
   notebookGridMetrics,
   notebookGridPosition,
   notebookGridSlot,
+  notebookGridViewport,
+  normalizeNotebookGridZoom,
   resolveNotebookGridMove,
   snapNotebookGridMove,
   type NotebookGridData,
@@ -35,6 +39,14 @@ describe('notebook grid', () => {
       x: notebookGrid.columnPitch * 12,
       y: notebookGrid.originY + notebookGrid.rowPitch * 2,
     })).toEqual({ row: 2, column: 12 })
+  })
+
+  it('places column headings above the first square row', () => {
+    expect(notebookGridHeadingPosition(-3)).toEqual({
+      x: -840,
+      y: notebookGrid.headingY,
+    })
+    expect(notebookGrid.headingY).toBeLessThan(notebookGrid.originY)
   })
 
   it('snaps the moving node without changing its persisted source slot', () => {
@@ -103,7 +115,7 @@ describe('notebook grid', () => {
       maxColumn: 3,
       centerX: 888,
       width: 2016,
-      height: 2904,
+      height: 2984,
     })
     expect(metrics.centerX + notebookGrid.squareSize / 2).toBe(metrics.width / 2)
   })
@@ -120,7 +132,7 @@ describe('notebook grid', () => {
       maxColumn: 7,
       centerX: 2008,
       width: 4256,
-      height: 3744,
+      height: 3824,
     })
   })
 
@@ -132,7 +144,30 @@ describe('notebook grid', () => {
       maxColumn: 3,
       centerX: 888,
       width: 2016,
-      height: 944,
+      height: 1024,
     })
+  })
+
+  it('scales the frame while keeping column zero at its horizontal center', () => {
+    const metrics = notebookGridMetrics([{ row: 0, column: 0 }])
+    expect(notebookGridFrameSize(metrics, 1.5)).toEqual({
+      width: 3024,
+      height: 1536,
+    })
+    expect(notebookGridViewport(metrics, 1.5, -40)).toEqual({
+      x: 1332,
+      y: -40,
+      zoom: 1.5,
+    })
+    expect(
+      notebookGridViewport(metrics, 1.5).x
+        + notebookGrid.squareSize * 1.5 / 2,
+    ).toBe(notebookGridFrameSize(metrics, 1.5).width / 2)
+  })
+
+  it('clamps invalid and out-of-range zoom values', () => {
+    expect(normalizeNotebookGridZoom(0.1)).toBe(notebookGrid.minimumZoom)
+    expect(normalizeNotebookGridZoom(4)).toBe(notebookGrid.maximumZoom)
+    expect(normalizeNotebookGridZoom(Number.NaN)).toBe(1)
   })
 })

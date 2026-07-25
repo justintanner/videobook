@@ -9,16 +9,13 @@ import {
 interface NotebookGridBoardProps {
   metrics: NotebookGridMetrics
   previewSlot: NotebookGridSlot | null
-  hiddenRows?: readonly number[]
 }
 
 export function NotebookGridBoard({
   metrics,
   previewSlot,
-  hiddenRows = [],
 }: NotebookGridBoardProps) {
   const previewPosition = previewSlot ? notebookGridPosition(previewSlot) : null
-  const hidden = new Set(hiddenRows)
   const contentWidth = metrics.width - notebookGrid.originX * 2
 
   return (
@@ -32,22 +29,20 @@ export function NotebookGridBoard({
         }}
       >
         {Array.from({ length: metrics.rowCount }, (_, row) => (
-          hidden.has(row)
-            ? null
-            : Array.from({ length: metrics.columnCount }, (_, index) => {
-                const column = metrics.minColumn + index
-                return (
-                  <span
-                    className="notebook-grid-square"
-                    key={`${row}:${column}`}
-                    style={{
-                      width: notebookGrid.squareSize,
-                      height: notebookGrid.squareSize,
-                      transform: `translate(${index * notebookGrid.columnPitch}px, ${notebookGrid.originY + row * notebookGrid.rowPitch}px)`,
-                    }}
-                  />
-                )
-              })
+          Array.from({ length: metrics.columnCount }, (_, index) => {
+            const column = metrics.minColumn + index
+            return (
+              <span
+                className="notebook-grid-square"
+                key={`${row}:${column}`}
+                style={{
+                  width: notebookGrid.squareSize,
+                  height: notebookGrid.squareSize,
+                  transform: `translate(${index * notebookGrid.columnPitch}px, ${notebookGrid.originY + row * notebookGrid.rowPitch}px)`,
+                }}
+              />
+            )
+          })
         ))}
         {previewPosition && (
           <div
