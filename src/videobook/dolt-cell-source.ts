@@ -4,7 +4,7 @@ export type DoltCellValue = number | string | null
 
 export type DoltCellRow = {
   column: string
-  type: 'REAL' | 'TEXT'
+  type: 'INTEGER' | 'REAL' | 'TEXT'
   value: DoltCellValue
 }
 
@@ -17,8 +17,8 @@ export function doltCellRows(
     { column: 'cell_id', type: 'TEXT', value: cell.id },
     { column: 'type', type: 'TEXT', value: cell.type },
     { column: 'title', type: 'TEXT', value: cell.title },
-    { column: 'position_x', type: 'REAL', value: cell.position.x },
-    { column: 'position_y', type: 'REAL', value: cell.position.y },
+    { column: 'grid_row', type: 'INTEGER', value: cell.slot.row },
+    { column: 'grid_column', type: 'INTEGER', value: cell.slot.column },
     { column: 'entity_id', type: 'TEXT', value: cell.entityId ?? null },
     { column: 'prompt', type: 'TEXT', value: cell.prompt ?? null },
     { column: 'provider', type: 'TEXT', value: cell.provider ?? null },

@@ -6,7 +6,6 @@ import {
   notebookEdges,
   notebookNodes,
 } from './notebook-draft'
-import { notebookGridPosition } from './notebook-grid'
 
 const source: NotebookDocument = {
   id: '018f7cf5-0d31-7d96-8c0f-800000000001',
@@ -15,7 +14,7 @@ const source: NotebookDocument = {
     id: '018f7cf5-0d31-7d96-8c0f-800000000002',
     type: 'image',
     title: 'Opening',
-    position: { x: 10, y: 20 },
+    slot: { row: 0, column: 0 },
     prompt: 'A moon garden',
     model: 'generate_kie_gpt_image_2_text_to_image',
     entityId: '018f7cf5-0d31-7d96-8c0f-800000000003',
@@ -29,6 +28,14 @@ const source: NotebookDocument = {
       ordinal: 0,
     }],
   }],
+  grid: {
+    columns: [
+      { id: 'column-1' },
+      { id: 'column-2' },
+      { id: 'column-3' },
+      { id: 'column-4' },
+    ],
+  },
   edges: [],
   createdAt: '2026-01-01T00:00:00.000Z',
 }
@@ -38,7 +45,6 @@ describe('notebook draft conversion', () => {
     const nodes = notebookNodes(source)
     nodes[0] = {
       ...nodes[0],
-      position: { x: 30, y: 40 },
       data: { ...nodes[0]!.data, prompt: 'A silver moon garden' },
     }
     const result = notebookDocument(source, nodes, notebookEdges(source))
@@ -50,13 +56,13 @@ describe('notebook draft conversion', () => {
     })
     expect(result.cells[0]).toEqual({
       ...source.cells[0],
-      position: notebookGridPosition({ stage: 0, column: 0 }),
+      slot: { row: 0, column: 0 },
       prompt: 'A silver moon garden',
     })
   })
 
-  it('separates persisted cells whose cards overlap', () => {
-    const overlapping: NotebookDocument = {
+  it('renders persisted slots without coordinate normalization', () => {
+    const placed: NotebookDocument = {
       ...source,
       cells: [
         source.cells[0]!,
@@ -64,14 +70,14 @@ describe('notebook draft conversion', () => {
           ...source.cells[0]!,
           id: '018f7cf5-0d31-7d96-8c0f-800000000005',
           type: 'video',
-          position: { x: 30, y: 40 },
+          slot: { row: 2, column: 3 },
         },
       ],
     }
 
-    expect(notebookNodes(overlapping).map((node) => node.position)).toEqual([
-      notebookGridPosition({ stage: 0, column: 0 }),
-      notebookGridPosition({ stage: 0, column: 1 }),
+    expect(notebookNodes(placed).map((node) => node.data.slot)).toEqual([
+      { row: 0, column: 0 },
+      { row: 2, column: 3 },
     ])
   })
 
@@ -80,7 +86,7 @@ describe('notebook draft conversion', () => {
       ...source.cells[0]!,
       id: '018f7cf5-0d31-7d96-8c0f-800000000005',
       type: 'video' as const,
-      position: { x: 360, y: 400 },
+      slot: { row: 1, column: 1 },
     }
     const connected: NotebookDocument = {
       ...source,

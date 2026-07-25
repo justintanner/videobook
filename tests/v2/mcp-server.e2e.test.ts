@@ -22,6 +22,7 @@ interface BookPayload {
 interface NotebookPayload {
   id: string
   name: string
+  grid: { columns: Array<{ id: string }> }
 }
 
 interface CellPayload {
@@ -165,7 +166,15 @@ describe('v2 MCP server', () => {
     const notebooks = await callTool<NotebookPayload[]>(client, 'list_notebooks', {
       book_id: book.bookId,
     })
-    expect(notebooks).toEqual([{ id: expect.any(String), name: 'Main', created_at: expect.any(String), properties: {}, cells: [], edges: [] }])
+    expect(notebooks).toEqual([{
+      id: expect.any(String),
+      name: 'Main',
+      grid: { columns: expect.any(Array) },
+      created_at: expect.any(String),
+      properties: {},
+      cells: [],
+      edges: [],
+    }])
     const notebook = notebooks[0]!
 
     const prompt = await callTool<CellPayload>(client, 'create_notebook_cell', {
@@ -174,7 +183,7 @@ describe('v2 MCP server', () => {
       cell: {
         type: 'prompt',
         title: 'Opening prompt',
-        position: { x: 40, y: 40 },
+        slot: { row: 0, column: 0 },
         prompt: 'A green city at sunrise',
       },
     })
@@ -184,7 +193,7 @@ describe('v2 MCP server', () => {
       cell: {
         type: 'image',
         title: 'Opening image',
-        position: { x: 360, y: 40 },
+        slot: { row: 0, column: 1 },
         prompt: 'A green city at sunrise',
         model: 'generate_kie_gpt_image_2_text_to_image',
       },

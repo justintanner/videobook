@@ -636,7 +636,7 @@ describe("rename_all tool", () => {
           id: "image-1",
           type: "image",
           title: "Key frame",
-          position: { x: 0, y: 0 },
+          slot: { row: 0, column: 0 },
           inputs: {
             model: "nano-banana-pro",
             values: {
@@ -651,7 +651,7 @@ describe("rename_all tool", () => {
           id: "asset-source",
           type: "asset",
           title: "Source",
-          position: { x: 320, y: 0 },
+          slot: { row: 0, column: 1 },
           inputs: { slug: `@${assetId}` },
         }],
       edges: [{

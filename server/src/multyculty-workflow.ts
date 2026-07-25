@@ -13,8 +13,7 @@ import { normalizeSceneVideo } from "./notebook-media-ops.js";
 import {
   applyAnalysisResults,
   buildSevenStageScaffold,
-  MULTYCULTY_FEATURE_LANES,
-  WORKFLOW_STAGES,
+  MULTYCULTY_FEATURES,
 } from "./notebook-workflow.js";
 
 type ArtifactRecord = {
@@ -23,7 +22,7 @@ type ArtifactRecord = {
   kind: string;
 };
 
-export const MULTYCULTY_FIXTURE_VERSION = 3;
+export const MULTYCULTY_FIXTURE_VERSION = 4;
 export const MULTYCULTY_FIXTURE_OWNER = "multyculty-default";
 
 const LEGACY_SPLIT_ROLES = [
@@ -312,7 +311,7 @@ async function attachFixtureOutputs(
     cells: document.cells.map((cell) => {
       const role = roleOf(cell);
       const ordinal = ordinalFromLegacy(cell);
-      const lane = ordinal ? MULTYCULTY_FEATURE_LANES[ordinal - 1] : undefined;
+      const feature = ordinal ? MULTYCULTY_FEATURES[ordinal - 1] : undefined;
       const section = ordinal
         ? artifacts.find((artifact) => artifact.slug === SECTION_SLUGS[ordinal - 1])
         : undefined;
@@ -344,11 +343,11 @@ async function attachFixtureOutputs(
         inputs: {
           ...(cell.inputs ?? {}),
           fixtureOwner: MULTYCULTY_FIXTURE_OWNER,
-          ...(lane
+          ...(feature
             ? {
-                featureId: lane.id,
-                featureLabel: lane.label,
-                featureCaption: lane.caption,
+                featureId: feature.id,
+                featureLabel: feature.label,
+                featureCaption: feature.caption,
               }
             : {}),
           ...(role?.startsWith("animate-")
@@ -441,13 +440,13 @@ async function materializeLocalOutputs(
     );
     current = result.document;
   }
-  for (const lane of MULTYCULTY_FEATURE_LANES) {
+  for (const feature of MULTYCULTY_FEATURES) {
     const animation = current.cells.find((cell) =>
-      roleOf(cell) === `animate-${lane.ordinal}`);
+      roleOf(cell) === `animate-${feature.ordinal}`);
     const audio = current.cells.find((cell) =>
-      roleOf(cell) === `scene-audio-${lane.ordinal}`);
+      roleOf(cell) === `scene-audio-${feature.ordinal}`);
     if (!animation?.outputArtifactId || !audio?.outputArtifactId) {
-      throw new Error(`Multyculty lane ${lane.ordinal} is missing baseline media`);
+      throw new Error(`Multyculty feature ${feature.ordinal} is missing baseline media`);
     }
     const normalized = await normalizeSceneVideo(
       engine,
@@ -662,8 +661,6 @@ export async function seedMultycultyWorkflow(
         : cell),
     properties: {
       ...(withOutputs.properties ?? {}),
-      stageLabels: [...WORKFLOW_STAGES],
-      featureLanes: MULTYCULTY_FEATURE_LANES.map((lane) => ({ ...lane })),
       description:
         "Completed feature green path from source analysis through scene animation, canonical assembly, and export.",
       state: "finished",

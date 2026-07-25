@@ -10,6 +10,7 @@ import type {
   NotebookCellReference,
   NotebookCellType,
   NotebookDocument,
+  NotebookGridSlot,
   PinnedSearchResult,
   Sequence,
   SourceRange,
@@ -18,6 +19,7 @@ import type {
 } from "videobook-engine";
 import {
   MVP_CONTRACT_VERSION,
+  extendNotebookGrid,
   sequenceFramesToSourceTicks,
   sourceRangeEndTick,
   sourceTicksToSequenceFrames,
@@ -71,6 +73,30 @@ const cellTypeSchema = z.enum([
   "frame",
   "export",
 ]);
+
+function firstEmptyGridSlots(
+  notebook: NotebookDocument,
+  cells: readonly NotebookCell[],
+  count: number,
+): NotebookGridSlot[] {
+  const columnCount = notebook.grid.columns.length;
+  const occupied = new Set(
+    cells.map((cell) => `${cell.slot.row}:${cell.slot.column}`),
+  );
+  const slots: NotebookGridSlot[] = [];
+  for (let index = 0; slots.length < count; index += 1) {
+    const slot = {
+      row: Math.floor(index / columnCount),
+      column: index % columnCount,
+    };
+    const key = `${slot.row}:${slot.column}`;
+    if (occupied.has(key)) continue;
+    occupied.add(key);
+    slots.push(slot);
+  }
+  return slots;
+}
+
 const cellReferenceSchema = z.object({
   id: z.string().uuid(),
   kind: z.enum([
@@ -139,7 +165,10 @@ const pinnedSearchResultSchema = z.object({
 const cellInputSchema = z.object({
   type: cellTypeSchema,
   title: z.string().min(1),
-  position: z.object({ x: z.number(), y: z.number() }),
+  slot: z.object({
+    row: z.number().int().nonnegative(),
+    column: z.number().int().nonnegative(),
+  }),
   entity_id: z.string().uuid().optional(),
   prompt: z.string().optional(),
   provider: z.string().optional(),
@@ -979,7 +1008,7 @@ function cellFromInput(input: CellInput): Omit<NotebookCell, "id"> {
   return {
     type: input.type,
     title: input.title,
-    position: input.position,
+    slot: input.slot,
     ...(input.entity_id ? { entityId: input.entity_id } : {}),
     ...(input.prompt === undefined ? {} : { prompt: input.prompt }),
     ...(input.provider === undefined ? {} : { provider: input.provider }),
@@ -1002,7 +1031,7 @@ function cellPayload(cell: NotebookCell): Record<string, unknown> {
     id: cell.id,
     type: cell.type,
     title: cell.title,
-    position: cell.position,
+    slot: cell.slot,
     ...(cell.entityId ? { entity_id: cell.entityId } : {}),
     ...(cell.prompt === undefined ? {} : { prompt: cell.prompt }),
     ...(cell.provider === undefined ? {} : { provider: cell.provider }),
@@ -1047,6 +1076,7 @@ function notebookPayload(notebook: NotebookDocument): Record<string, unknown> {
   return {
     id: notebook.id,
     name: notebook.name,
+    grid: notebook.grid,
     created_at: notebook.createdAt,
     properties: notebook.properties ?? {},
     cells: notebook.cells.map(cellPayload),
@@ -1936,10 +1966,12 @@ export function videobookDomainDefs(
                 && cell.inputs?.audioSpineRole !== "transcript"
                 && cell.inputs?.audioSpineRole !== "sequence",
             );
+            const [audioSlot, transcriptSlot, sequenceSlot] =
+              firstEmptyGridSlots(notebook, retained, 3);
             const audioCell = engine.notebooks.createCell({
               type: "audio",
               title: artifact.value.slug,
-              position: { x: 0, y: 0 },
+              slot: audioSlot!,
               inputs: {
                 audioSpineRole: "audio",
                 artifactId: artifact.value.artifactId,
@@ -1949,7 +1981,7 @@ export function videobookDomainDefs(
             const transcriptCell = engine.notebooks.createCell({
               type: "transcript",
               title: transcript ? `${artifact.value.slug} transcript` : "Transcript pending",
-              position: { x: 360, y: 0 },
+              slot: transcriptSlot!,
               inputs: {
                 audioSpineRole: "transcript",
                 artifactId: artifact.value.artifactId,
@@ -1964,7 +1996,7 @@ export function videobookDomainDefs(
             const sequenceCell = engine.notebooks.createCell({
               type: "sequence",
               title: committed.value.sequence.name,
-              position: { x: 720, y: 0 },
+              slot: sequenceSlot!,
               inputs: {
                 audioSpineRole: "sequence",
                 sequenceId: committed.value.sequence.sequenceId,
@@ -2230,7 +2262,11 @@ export function videobookDomainDefs(
               : engine.notebooks.createCell({
                   type: "selects",
                   title: "Transcript selects",
-                  position: { x: 1080, y: 0 },
+                  slot: firstEmptyGridSlots(
+                    document,
+                    document.cells,
+                    1,
+                  )[0]!,
                   inputs: {
                     audioSpineRole: "selects",
                     transcriptId: transcript.value.transcriptId,
@@ -2521,7 +2557,11 @@ export function videobookDomainDefs(
               : engine.notebooks.createCell({
                   type: "selects",
                   title: "Timeline selects",
-                  position: { x: 1080, y: 0 },
+                  slot: firstEmptyGridSlots(
+                    document,
+                    document.cells,
+                    1,
+                  )[0]!,
                   inputs: {
                     audioSpineRole: "selects",
                     transcriptId: transcript.transcriptId,
@@ -2901,7 +2941,14 @@ export function videobookDomainDefs(
           engine,
           String(args.notebook_id),
           "create_notebook_cell",
-          (notebook) => ({ ...notebook, cells: [...notebook.cells, cell] }),
+          (notebook) => ({
+            ...notebook,
+            grid: extendNotebookGrid(
+              notebook.grid,
+              cell.slot.column + 1,
+            ),
+            cells: [...notebook.cells, cell],
+          }),
           { cellId: cell.id },
         );
         return result.ok ? json(cellPayload(cell)) : failure(result.error.message);
@@ -2932,6 +2979,13 @@ export function videobookDomainDefs(
             String(args.notebook_id),
             "update_notebook_cell",
             (notebook) => {
+              const grid = patch.slot
+                ? extendNotebookGrid(
+                    notebook.grid,
+                    patch.slot.column + 1,
+                  )
+                : notebook.grid;
+              const document = { ...notebook, grid };
               let found = false;
               const cells = notebook.cells.map((cell) => {
                 if (cell.id !== args.cell_id) return cell;
@@ -2940,7 +2994,7 @@ export function videobookDomainDefs(
                   ...cell,
                   ...(patch.type ? { type: patch.type as NotebookCellType } : {}),
                   ...(patch.title === undefined ? {} : { title: patch.title }),
-                  ...(patch.position === undefined ? {} : { position: patch.position }),
+                  ...(patch.slot === undefined ? {} : { slot: patch.slot }),
                   ...(patch.entity_id === undefined ? {} : { entityId: patch.entity_id }),
                   ...(patch.prompt === undefined ? {} : { prompt: patch.prompt }),
                   ...(patch.provider === undefined ? {} : { provider: patch.provider }),
@@ -2955,13 +3009,16 @@ export function videobookDomainDefs(
                   ...(patch.pinned_results === undefined
                     ? {}
                     : { pinnedResults: patch.pinned_results.map(pinnedResultFromInput) }),
-                }, notebook);
-                const validation = validateCellConfiguration(next, notebook);
+                }, document);
+                const validation = validateCellConfiguration(next, document);
                 if (!validation.ok) throw new Error(validation.message);
                 return next;
               });
               if (!found) throw new Error(`Cell not found: ${String(args.cell_id)}`);
-              return markDescendantsStale({ ...notebook, cells }, String(args.cell_id));
+              return markDescendantsStale(
+                { ...document, cells },
+                String(args.cell_id),
+              );
             },
             { cellId: args.cell_id },
           );
@@ -2975,27 +3032,43 @@ export function videobookDomainDefs(
     },
     {
       name: "move_notebook_cells",
-      description: "Persist notebook cell positions",
+      description: "Persist notebook cell grid slots",
       scope: "book",
       schema: {
         ...bookSchema,
         notebook_id: z.string().uuid(),
-        positions: z.array(z.object({ id: z.string().uuid(), x: z.number(), y: z.number() })).min(1),
+        slots: z.array(z.object({
+          id: z.string().uuid(),
+          row: z.number().int().nonnegative(),
+          column: z.number().int().nonnegative(),
+        })).min(1),
       },
       handler: async (args) => {
-        const positions = new Map((args.positions as Array<{ id: string; x: number; y: number }>).map((position) => [position.id, position]));
+        const slots = new Map(
+          (args.slots as Array<{ id: string; row: number; column: number }>)
+            .map((slot) => [slot.id, slot]),
+        );
         const result = await mutateNotebook(
           engine,
           String(args.notebook_id),
           "move_notebook_cells",
-          (notebook) => ({
-            ...notebook,
-            cells: notebook.cells.map((cell) => {
-              const position = positions.get(cell.id);
-              return position ? { ...cell, position: { x: position.x, y: position.y } } : cell;
-            }),
-          }),
-          { cellIds: [...positions.keys()] },
+          (notebook) => {
+            const requiredColumns = Math.max(
+              notebook.grid.columns.length,
+              ...[...slots.values()].map((slot) => slot.column + 1),
+            );
+            return {
+              ...notebook,
+              grid: extendNotebookGrid(notebook.grid, requiredColumns),
+              cells: notebook.cells.map((cell) => {
+                const slot = slots.get(cell.id);
+                return slot
+                  ? { ...cell, slot: { row: slot.row, column: slot.column } }
+                  : cell;
+              }),
+            };
+          },
+          { cellIds: [...slots.keys()] },
         );
         return result.ok ? json({ notebook_id: args.notebook_id, revision: result.value.hash }) : failure(result.error.message);
       },

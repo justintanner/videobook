@@ -1,16 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Node } from '@xyflow/react'
 import {
-  clampNotebookViewport,
   nextNotebookGridSlot,
   notebookGrid,
   notebookGridMetrics,
   notebookGridPosition,
-  notebookGridStageCountForViewport,
-  notebookGridStageViewport,
   notebookGridSlot,
-  normalizeNotebookGridNodes,
-  normalizeNotebookGridPositions,
+  notebookGridViewport,
   resolveNotebookGridMove,
   snapNotebookGridMove,
   type NotebookGridData,
@@ -20,131 +16,98 @@ interface TestData extends NotebookGridData {
   name: string
 }
 
-function node(id: string, stage: number, column: number): Node<TestData> {
+function node(id: string, row: number, column: number): Node<TestData> {
+  const slot = { row, column }
   return {
     id,
-    position: notebookGridPosition({ stage, column }),
-    data: { name: id, stage: stage + 1 },
+    position: notebookGridPosition(slot),
+    data: { name: id, slot },
   }
 }
 
 describe('notebook grid', () => {
-  it('quantizes freeform and negative coordinates to non-negative stage and column slots', () => {
-    expect(notebookGridSlot({ x: -800, y: -100 })).toEqual({ stage: 0, column: 0 })
+  it('maps pixels to non-negative slots with no right or bottom limit', () => {
+    expect(notebookGridSlot({ x: -800, y: -100 })).toEqual({
+      row: 0,
+      column: 0,
+    })
     expect(notebookGridSlot({
-      x: notebookGrid.originX + notebookGrid.columnPitch + 6,
-      y: notebookGrid.originY + notebookGrid.stagePitch,
-    })).toEqual({ stage: 1, column: 1 })
+      x: notebookGrid.originX + notebookGrid.columnPitch * 12,
+      y: notebookGrid.originY + notebookGrid.rowPitch * 2,
+    })).toEqual({ row: 2, column: 12 })
   })
 
-  it('keeps legacy collisions sparse by moving later cells to the next free column', () => {
-    const position = notebookGridPosition({ stage: 1, column: 2 })
-    expect(normalizeNotebookGridPositions([position, position, position])).toEqual([
-      notebookGridPosition({ stage: 1, column: 2 }),
-      notebookGridPosition({ stage: 1, column: 3 }),
-      notebookGridPosition({ stage: 1, column: 4 }),
-    ])
+  it('snaps the moving node without changing its persisted source slot', () => {
+    const source = [node('a', 0, 0), node('b', 0, 1)]
+    const snapped = snapNotebookGridMove(source, 'a', { row: 2, column: 3 })
+    expect(snapped[0]?.position).toEqual(
+      notebookGridPosition({ row: 2, column: 3 }),
+    )
+    expect(snapped[0]?.data.slot).toEqual({ row: 0, column: 0 })
   })
 
-  it('derives stage labels from normalized positions', () => {
-    const normalized = normalizeNotebookGridNodes([
-      {
-        id: 'legacy',
-        position: { x: 20, y: 900 },
-        data: { name: 'legacy', stage: 99 },
-      },
-    ])
-    expect(normalized[0]?.data.stage).toBe(3)
-    expect(normalized[0]?.position).toEqual(notebookGridPosition({ stage: 2, column: 0 }))
-  })
-
-  it('keeps gaps while an occupied target shifts only the contiguous right chain', () => {
-    const result = resolveNotebookGridMove([
+  it('moves to an empty square without compacting other cells', () => {
+    const moved = resolveNotebookGridMove([
       node('a', 0, 0),
-      node('b', 0, 1),
-      node('c', 0, 3),
-    ], 'c', { stage: 0, column: 0 })
-    expect(result.map((item) => ({ id: item.id, slot: notebookGridSlot(item.position) }))).toEqual([
-      { id: 'a', slot: { stage: 0, column: 1 } },
-      { id: 'b', slot: { stage: 0, column: 2 } },
-      { id: 'c', slot: { stage: 0, column: 0 } },
+      node('b', 1, 1),
+    ], 'a', { row: 100, column: 17 })
+    expect(moved.map((item) => ({ id: item.id, slot: item.data.slot }))).toEqual([
+      { id: 'a', slot: { row: 100, column: 17 } },
+      { id: 'b', slot: { row: 1, column: 1 } },
     ])
   })
 
-  it('snaps the moving cell live and resolves an occupied chain only after drop', () => {
-    const live = snapNotebookGridMove([
+  it('swaps both logical slots when the destination is occupied', () => {
+    const swapped = resolveNotebookGridMove([
       node('a', 0, 0),
-      node('b', 0, 1),
-      node('c', 0, 2),
-    ], 'c', { stage: 0, column: 0 })
-    expect(live.map((item) => ({ id: item.id, slot: notebookGridSlot(item.position) }))).toEqual([
-      { id: 'a', slot: { stage: 0, column: 0 } },
-      { id: 'b', slot: { stage: 0, column: 1 } },
-      { id: 'c', slot: { stage: 0, column: 0 } },
-    ])
-
-    const settled = resolveNotebookGridMove(live, 'c', { stage: 0, column: 0 })
-    expect(settled.map((item) => ({ id: item.id, slot: notebookGridSlot(item.position) }))).toEqual([
-      { id: 'a', slot: { stage: 0, column: 1 } },
-      { id: 'b', slot: { stage: 0, column: 2 } },
-      { id: 'c', slot: { stage: 0, column: 0 } },
+      node('b', 2, 3),
+    ], 'a', { row: 2, column: 3 })
+    expect(swapped.map((item) => ({ id: item.id, slot: item.data.slot }))).toEqual([
+      { id: 'a', slot: { row: 2, column: 3 } },
+      { id: 'b', slot: { row: 0, column: 0 } },
     ])
   })
 
-  it('leaves the source-stage gap and can move freely between stages', () => {
-    const result = resolveNotebookGridMove([
-      node('a', 0, 0),
-      node('b', 0, 2),
-    ], 'b', { stage: 2, column: 4 })
-    expect(result.map((item) => ({ id: item.id, slot: notebookGridSlot(item.position) }))).toEqual([
-      { id: 'a', slot: { stage: 0, column: 0 } },
-      { id: 'b', slot: { stage: 2, column: 4 } },
-    ])
-  })
-
-  it('uses the next free Stage 01 slot for palette clicks', () => {
+  it('chooses the first empty square in row-major order', () => {
     expect(nextNotebookGridSlot([
       node('a', 0, 0),
       node('b', 0, 2),
-    ])).toEqual({ stage: 0, column: 1 })
+      node('c', 0, 3),
+    ], 4)).toEqual({ row: 0, column: 1 })
   })
 
-  it('keeps a six-stage runway and grows for previews beyond the current board', () => {
-    expect(notebookGridMetrics([], null)).toMatchObject({
-      stageCount: 6,
+  it('measures a four-column square board without stage runway', () => {
+    const metrics = notebookGridMetrics([
+      { row: 0, column: 0 },
+      { row: 9, column: 3 },
+    ], 4)
+    expect(metrics).toEqual({
+      rowCount: 10,
       columnCount: 4,
-    })
-    expect(notebookGridMetrics([], { stage: 8, column: 6 })).toMatchObject({
-      stageCount: 9,
-      columnCount: 7,
+      width: 1128,
+      height: 2720,
     })
   })
 
-  it('extends the runway while scrolling down and clamps scrolling above Stage 01', () => {
-    const top = { x: 24, y: notebookGrid.topViewportY, zoom: 1 }
-    const below = { ...top, y: -1600 }
-
-    expect(notebookGridStageCountForViewport(top, 800)).toBe(6)
-    expect(notebookGridStageCountForViewport(below, 800)).toBe(9)
-    expect(clampNotebookViewport({ ...top, y: 120 })).toEqual(top)
-    expect(clampNotebookViewport(below)).toBe(below)
+  it('grows the measured square board for a drag preview in either dimension', () => {
+    expect(notebookGridMetrics(
+      [{ row: 0, column: 0 }],
+      4,
+      { row: 12, column: 7 },
+    )).toEqual({
+      rowCount: 13,
+      columnCount: 8,
+      width: 2184,
+      height: 3512,
+    })
   })
 
-  it('fits stage columns to the viewport width while keeping the book top aligned', () => {
-    const positions = [
-      notebookGridPosition({ stage: 0, column: 0 }),
-      notebookGridPosition({ stage: 6, column: 3 }),
-    ]
-    const metrics = notebookGridMetrics(positions)
-    const viewport = notebookGridStageViewport(positions, metrics.width + 48)
-
-    expect(viewport).toEqual({
-      x: 24,
-      y: 18,
+  it('fits width only and preserves natural desktop zoom', () => {
+    expect(notebookGridViewport(4, 1400)).toEqual({
+      x: 136,
+      y: 36,
       zoom: 1,
     })
-    expect(notebookGridStageViewport(positions, metrics.width / 2).zoom).toBeCloseTo(
-      (metrics.width / 2 - 48) / metrics.width,
-    )
+    expect(notebookGridViewport(4, 700).zoom).toBeCloseTo(604 / 1128)
   })
 })

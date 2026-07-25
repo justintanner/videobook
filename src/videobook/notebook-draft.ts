@@ -5,16 +5,14 @@ import type {
   NotebookDocument,
 } from 'videobook-engine'
 import {
-  notebookGridSlot,
-  normalizeNotebookGridNodes,
-  normalizeNotebookGridPositions,
+  notebookGridPosition,
 } from './notebook-grid'
 
 export interface NotebookCellData extends Record<string, unknown> {
   kind: NotebookCellType
   title: string
   subtitle: string
-  stage: number
+  slot: NotebookCell['slot']
   status: string
   preview?: string
   prompt?: string
@@ -26,25 +24,22 @@ export interface NotebookCellData extends Record<string, unknown> {
 }
 
 export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCellData>> {
-  const positions = normalizeNotebookGridPositions(document.cells.map((cell) => cell.position))
   const targetInputs = new Map<string, string[]>()
   for (const edge of document.edges) {
     const inputs = targetInputs.get(edge.target) ?? []
     if (!inputs.includes(edge.targetInput)) inputs.push(edge.targetInput)
     targetInputs.set(edge.target, inputs)
   }
-  return document.cells.map((cell, index) => {
-    const position = positions[index]!
-    const slot = notebookGridSlot(position)
+  return document.cells.map((cell) => {
     return {
       id: cell.id,
       type: 'cell',
-      position,
+      position: notebookGridPosition(cell.slot),
       data: {
         kind: cell.type,
         title: cell.title,
         subtitle: `${cell.type.toUpperCase()} · CELL`,
-        stage: slot.stage + 1,
+        slot: cell.slot,
         status: 'ready',
         targetInputs: targetInputs.get(cell.id) ?? ['input'],
         ...(cell.prompt === undefined ? {} : { prompt: cell.prompt }),
@@ -81,7 +76,7 @@ function cellFromNode(node: Node<NotebookCellData>): NotebookCell {
     id: node.id,
     type: node.data.kind,
     title: node.data.title,
-    position: node.position,
+    slot: node.data.slot,
     ...(node.data.prompt === undefined ? {} : { prompt: node.data.prompt }),
     ...(node.data.model === undefined ? {} : { model: node.data.model }),
     ...(node.data.entityId === undefined
@@ -99,11 +94,10 @@ export function notebookDocument(
   nodes: Array<Node<NotebookCellData>>,
   edges: Edge[],
 ): NotebookDocument {
-  const normalizedNodes = normalizeNotebookGridNodes(nodes)
   const baseCells = new Map(base.cells.map((cell) => [cell.id, cell]))
   return {
     ...base,
-    cells: normalizedNodes.map((node) => ({
+    cells: nodes.map((node) => ({
       ...baseCells.get(node.id),
       ...cellFromNode(node),
     })),

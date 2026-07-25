@@ -47,7 +47,7 @@ describe("notebook runner dual-frame and assembly", () => {
       id: "019f0000-0000-7000-8000-000000000001",
       type: "video",
       title: "animate",
-      position: { x: 0, y: 0 },
+      slot: { row: 0, column: 0 },
       model: "bytedance/seedance-2",
       tool: DEFAULT_ANIMATION_TOOL,
     });
@@ -73,21 +73,21 @@ describe("notebook runner dual-frame and assembly", () => {
     const firstCell = engine.notebooks.createCell({
       type: "frame",
       title: "first",
-      position: { x: 0, y: 0 },
+      slot: { row: 0, column: 0 },
       outputArtifactId: first.value.artifactId,
       inputs: { frameRole: "first" },
     });
     const lastCell = engine.notebooks.createCell({
       type: "frame",
       title: "last",
-      position: { x: 100, y: 0 },
+      slot: { row: 0, column: 1 },
       outputArtifactId: last.value.artifactId,
       inputs: { frameRole: "last" },
     });
     const animate = engine.notebooks.createCell({
       type: "video",
       title: "animate",
-      position: { x: 200, y: 0 },
+      slot: { row: 0, column: 2 },
       prompt: "Camera push in",
       provider: "kie",
       model: "bytedance/seedance-2",
@@ -175,19 +175,19 @@ describe("notebook runner dual-frame and assembly", () => {
     const videoA = engine.notebooks.createCell({
       type: "video",
       title: "a",
-      position: { x: 0, y: 0 },
+      slot: { row: 0, column: 0 },
       outputArtifactId: clipA.value.artifactId,
     });
     const videoB = engine.notebooks.createCell({
       type: "video",
       title: "b",
-      position: { x: 100, y: 0 },
+      slot: { row: 0, column: 1 },
       outputArtifactId: clipB.value.artifactId,
     });
     const sequence = engine.notebooks.createCell({
       type: "sequence",
       title: "assemble",
-      position: { x: 200, y: 0 },
+      slot: { row: 0, column: 2 },
       provider: "local",
       operation: "assemble_sequence",
       tool: "engine_sequence",
@@ -195,7 +195,7 @@ describe("notebook runner dual-frame and assembly", () => {
     const exp = engine.notebooks.createCell({
       type: "export",
       title: "export",
-      position: { x: 300, y: 0 },
+      slot: { row: 0, column: 3 },
       provider: "local",
       operation: "export_master",
       tool: "ffmpeg",

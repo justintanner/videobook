@@ -22,8 +22,8 @@ app.get("/healthz", async (_req, res) => {
   res.json({
     ok: true,
     service: "videobook",
-    engineVersion: "3.0.0",
-    schemaVersion: 5,
+    engineVersion: "3.1.0",
+    schemaVersion: 7,
   });
 });
 

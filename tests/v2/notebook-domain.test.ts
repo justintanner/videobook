@@ -59,7 +59,7 @@ describe('v2 notebook domain tools', () => {
       cell: {
         type: 'prompt',
         title: 'Opening prompt',
-        position: { x: 40, y: 40 },
+        slot: { row: 0, column: 0 },
         prompt: 'A glowing moon garden',
       },
     })) as { id: string }
@@ -68,7 +68,7 @@ describe('v2 notebook domain tools', () => {
       cell: {
         type: 'image',
         title: 'Opening image',
-        position: { x: 360, y: 40 },
+        slot: { row: 0, column: 1 },
         prompt: 'A glowing moon garden',
         model: 'generate_kie_gpt_image_2_text_to_image',
       },
@@ -83,19 +83,49 @@ describe('v2 notebook domain tools', () => {
     resultJson(await invoke('update_notebook_cell', {
       notebook_id: notebookId,
       cell_id: image.id,
-      cell: { title: 'Moon garden image', position: { x: 400, y: 80 } },
+      cell: { title: 'Moon garden image', slot: { row: 1, column: 0 } },
+    }))
+    resultJson(await invoke('move_notebook_cells', {
+      notebook_id: notebookId,
+      slots: [
+        { id: prompt.id, row: 1, column: 0 },
+        { id: image.id, row: 0, column: 0 },
+      ],
     }))
 
     const document = resultJson(await invoke('get_notebook', { notebook_id: notebookId })) as {
-      cells: Array<{ id: string; title: string; position: { x: number; y: number } }>
+      grid: { columns: Array<{ id: string }> }
+      cells: Array<{ id: string; title: string; slot: { row: number; column: number } }>
       edges: Array<{ source: string; target: string; targetInput: string }>
     }
     expect(document.cells).toHaveLength(2)
     expect(document.cells.find((cell) => cell.id === image.id)).toMatchObject({
       title: 'Moon garden image',
-      position: { x: 400, y: 80 },
+      slot: { row: 0, column: 0 },
     })
+    expect(document.cells.find((cell) => cell.id === prompt.id)?.slot)
+      .toEqual({ row: 1, column: 0 })
+    expect(document.grid.columns).toHaveLength(4)
     expect(document.edges).toEqual([{ source: prompt.id, target: image.id, targetInput: 'prompt', id: expect.any(String) }])
+
+    const originalColumnIds = document.grid.columns.map((column) => column.id)
+    resultJson(await invoke('move_notebook_cells', {
+      notebook_id: notebookId,
+      slots: [{ id: image.id, row: 37, column: 8 }],
+    }))
+    const expanded = resultJson(await invoke('get_notebook', {
+      notebook_id: notebookId,
+    })) as {
+      grid: { columns: Array<{ id: string }> }
+      cells: Array<{ id: string; slot: { row: number; column: number } }>
+    }
+    expect(expanded.grid.columns).toHaveLength(9)
+    expect(expanded.grid.columns.slice(0, 4).map((column) => column.id))
+      .toEqual(originalColumnIds)
+    expect(expanded.cells.find((cell) => cell.id === image.id)?.slot)
+      .toEqual({ row: 37, column: 8 })
+    expect(expanded.cells.find((cell) => cell.id === prompt.id)?.slot)
+      .toEqual({ row: 1, column: 0 })
   })
 
   it('cancels a queued persistent job explicitly', async () => {
@@ -230,19 +260,19 @@ describe('v2 notebook domain tools', () => {
     const referenceId = managed.value.engine.notebooks.createCell({
       type: 'note',
       title: 'Reference ID',
-      position: { x: 0, y: 0 },
+      slot: { row: 0, column: 0 },
     }).id
     const resultId = managed.value.engine.notebooks.createCell({
       type: 'note',
       title: 'Result ID',
-      position: { x: 0, y: 0 },
+      slot: { row: 0, column: 0 },
     }).id
     const cell = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
         type: 'search',
         title: 'Warm interview moments',
-        position: { x: 360, y: 320 },
+        slot: { row: 0, column: 0 },
         references: [{
           id: referenceId,
           kind: 'stream',
@@ -318,7 +348,7 @@ describe('v2 notebook domain tools', () => {
       cell: {
         type: 'image',
         title: 'Opening image',
-        position: { x: 0, y: 0 },
+        slot: { row: 0, column: 0 },
         prompt: 'A moonlit garden',
         model: 'generate_kie_gpt_image_2_text_to_image',
       },

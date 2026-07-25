@@ -111,14 +111,14 @@ describe("notebook local media and analysis fan-out", () => {
     const source = engine.notebooks.createCell({
       type: "source",
       title: "source",
-      position: { x: 0, y: 0 },
+      slot: { row: 0, column: 0 },
       outputArtifactId: sourceArtifact.value.artifactId,
       inputs: { workflowRole: "source" },
     });
     const analysis = engine.notebooks.createCell({
       type: "analysis",
       title: "analyze",
-      position: { x: 0, y: 100 },
+      slot: { row: 1, column: 0 },
       prompt: "Segment",
       provider: "kie",
       model: "gemini-3.5-flash",

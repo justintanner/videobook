@@ -773,7 +773,9 @@ async function assembleCanonicalSequence(
   if (clips.length === 0) {
     clips = document.cells
       .filter((candidate) => candidate.type === "video" && candidate.outputArtifactId)
-      .sort((left, right) => left.position.x - right.position.x)
+      .sort((left, right) =>
+        left.slot.row - right.slot.row
+        || left.slot.column - right.slot.column)
       .map((candidate) => candidate.outputArtifactId!);
   }
   if (clips.length === 0) {

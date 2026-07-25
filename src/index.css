@@ -561,11 +561,7 @@ textarea:focus-visible {
   grid-column: 1;
   min-width: 0;
   overflow: hidden;
-  background:
-    linear-gradient(rgba(96, 196, 141, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(96, 196, 141, 0.035) 1px, transparent 1px),
-    #030907;
-  background-size: 36px 36px;
+  background: #030907;
 }
 
 .canvas-welcome {
@@ -684,7 +680,7 @@ textarea:focus-visible {
   cursor: ns-resize;
 }
 
-.notebook-stage-board {
+.notebook-grid-board {
   position: absolute;
   top: 0;
   left: 0;
@@ -693,87 +689,71 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
-.notebook-feature-lane {
+.notebook-grid-column {
   position: absolute;
-  top: 8px;
-  border-right: 1px solid rgba(114, 231, 170, 0.1);
-  border-left: 1px solid rgba(114, 231, 170, 0.1);
-  background: linear-gradient(
-    180deg,
-    rgba(72, 178, 111, 0.07),
-    rgba(72, 178, 111, 0.015) 18%,
-    transparent 72%
-  );
+  top: 0;
+  left: 0;
+  z-index: 0;
+  border: 1px solid rgba(114, 231, 170, 0.1);
+  border-radius: 7px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(60, 146, 96, 0.085) 0,
+      rgba(32, 91, 57, 0.032) 18%,
+      rgba(20, 62, 39, 0.018) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(167, 246, 201, 0.06),
+    0 0 28px rgba(25, 105, 58, 0.025);
 }
 
-.notebook-feature-lane > span,
-.notebook-feature-lane > small {
-  position: absolute;
-  z-index: 2;
-  top: 8px;
-  left: 14px;
-}
-
-.notebook-feature-lane > span {
-  color: rgba(182, 245, 210, 0.72);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.notebook-feature-lane > small {
-  top: 27px;
-  max-width: 280px;
-  color: rgba(151, 235, 188, 0.38);
-  font-size: 9px;
-}
-
-.notebook-stage-row {
+.notebook-grid-header {
   position: absolute;
   top: 0;
   left: 0;
   z-index: 1;
+  display: flex;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: linear-gradient(90deg, rgba(31, 83, 54, 0.12), transparent 38%);
-}
-
-.notebook-stage-row.active {
-  border-color: var(--line-bright);
-  background: linear-gradient(90deg, rgba(42, 127, 80, 0.17), transparent 44%);
-}
-
-.notebook-stage-label {
-  position: absolute;
-  top: 50%;
-  right: 104px;
-  left: auto;
-  color: rgba(151, 235, 188, 0.42);
-  font-size: 13px;
+  border-bottom: 1px solid rgba(114, 231, 170, 0.22);
+  background: linear-gradient(
+    180deg,
+    rgba(78, 169, 116, 0.11),
+    rgba(47, 123, 78, 0.045)
+  );
+  color: rgba(182, 245, 210, 0.72);
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.22em;
-  transform: translateY(-50%);
-  writing-mode: vertical-rl;
+  letter-spacing: 0.1em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.notebook-stage-column {
-  position: absolute;
-  top: 28px;
-  bottom: 22px;
-  border: 1px dashed rgba(107, 207, 153, 0.12);
-  border-radius: 4px;
-}
-
-.notebook-stage-preview {
+.notebook-grid-square {
   position: absolute;
   top: 0;
   left: 0;
+  z-index: 1;
+  border: 1px solid rgba(107, 207, 153, 0.14);
+  border-radius: 5px;
+  background: rgba(24, 73, 46, 0.045);
+}
+
+.notebook-grid-preview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
   border: 1px dashed var(--green);
-  border-radius: 4px;
-  background: rgba(72, 178, 111, 0.07);
-  box-shadow: inset 0 0 28px rgba(92, 222, 145, 0.09);
+  border-radius: 5px;
+  background: rgba(72, 178, 111, 0.09);
+  box-shadow:
+    inset 0 0 28px rgba(92, 222, 145, 0.11),
+    0 0 20px rgba(72, 178, 111, 0.06);
 }
 
 .react-flow {
@@ -822,8 +802,8 @@ textarea:focus-visible {
 .cell-node {
   position: relative;
   display: block;
-  width: 288px;
-  height: 288px;
+  width: 240px;
+  height: 240px;
   overflow: visible;
   border: 1px solid rgba(96, 176, 132, 0.35);
   border-radius: 4px;

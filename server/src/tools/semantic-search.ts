@@ -7,6 +7,7 @@ import type {
   SearchQuery,
 } from "videobook-engine";
 import {
+  extendNotebookGrid,
   findAudioFile,
   findVideoFile,
   MVP_CONTRACT_VERSION,
@@ -763,7 +764,10 @@ export function semanticSearchDefs(
         notebook_id: z.string().uuid(),
         cell_id: z.string().uuid().optional(),
         title: z.string().min(1),
-        position: z.object({ x: z.number(), y: z.number() }).optional(),
+        slot: z.object({
+          row: z.number().int().nonnegative(),
+          column: z.number().int().nonnegative(),
+        }).optional(),
         query: searchQuerySchema,
         hit: searchHitSchema,
       },
@@ -814,9 +818,9 @@ export function semanticSearchDefs(
               id: cellId,
               type: "search",
               title: String(args.title),
-              position: isPosition(args.position)
-                ? args.position
-                : { x: 360, y: 320 },
+              slot: isSlot(args.slot)
+                ? args.slot
+                : firstEmptyNotebookSlot(notebook),
               references: [{
                 id: uuidv7(),
                 kind: "artifact",
@@ -829,7 +833,14 @@ export function semanticSearchDefs(
               }],
               pinnedResults: [pinnedResult],
             };
-            return { ...notebook, cells: [...notebook.cells, pinnedCell] };
+            return {
+              ...notebook,
+              grid: extendNotebookGrid(
+                notebook.grid,
+                pinnedCell.slot.column + 1,
+              ),
+              cells: [...notebook.cells, pinnedCell],
+            };
           },
           { cellId, artifactId: hit.artifactId },
         );
@@ -1349,8 +1360,28 @@ function hitDurationFrames(
     : stillDurationFrames;
 }
 
-function isPosition(value: unknown): value is { x: number; y: number } {
+function isSlot(value: unknown): value is { row: number; column: number } {
   if (typeof value !== "object" || value === null) return false;
-  const position = value as Record<string, unknown>;
-  return typeof position.x === "number" && typeof position.y === "number";
+  const slot = value as Record<string, unknown>;
+  return Number.isSafeInteger(slot.row)
+    && Number(slot.row) >= 0
+    && Number.isSafeInteger(slot.column)
+    && Number(slot.column) >= 0;
+}
+
+function firstEmptyNotebookSlot(notebook: {
+  grid: { columns: unknown[] };
+  cells: NotebookCell[];
+}): { row: number; column: number } {
+  const columnCount = notebook.grid.columns.length;
+  const occupied = new Set(
+    notebook.cells.map((cell) => `${cell.slot.row}:${cell.slot.column}`),
+  );
+  for (let index = 0; ; index += 1) {
+    const slot = {
+      row: Math.floor(index / columnCount),
+      column: index % columnCount,
+    };
+    if (!occupied.has(`${slot.row}:${slot.column}`)) return slot;
+  }
 }

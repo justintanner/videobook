@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createEngine, type Engine } from "videobook-engine";
-import { notebookGridPosition } from "../../src/videobook/notebook-grid.js";
 import { seedMultycultyWorkflow } from "../../server/src/multyculty-workflow.js";
 
 describe("Multyculty workflow fixture", () => {
@@ -74,16 +73,14 @@ describe("Multyculty workflow fixture", () => {
     expect(stream.ok).toBe(true);
 
     const first = await seedMultycultyWorkflow(engine);
-    expect(first.properties?.stageLabels).toEqual([
-      "SOURCE",
-      "ANALYZE",
-      "SPLIT SCENES",
-      "EXTRACT ASSETS",
-      "WRITE PROMPTS",
-      "ANIMATE SCENES",
-      "ASSEMBLE EDIT",
-      "EXPORT MASTER",
+    expect(first.grid.columns.map((column) => column.label)).toEqual([
+      "Import + Analyze",
+      "Split + Extract",
+      "Prompt + Animate",
+      "Assemble + Export",
     ]);
+    expect(first.properties?.stageLabels).toBeUndefined();
+    expect(first.properties?.featureLanes).toBeUndefined();
     const source = first.cells.find((cell) => cell.inputs?.workflowRole === "source");
     const analysis = first.cells.find((cell) => cell.inputs?.workflowRole === "analysis");
     const audio = first.cells.find((cell) => cell.inputs?.workflowRole === "source-audio");
@@ -102,6 +99,32 @@ describe("Multyculty workflow fixture", () => {
       cell.inputs?.workflowRole?.toString().startsWith("scene-audio-"))).toHaveLength(4);
     expect(first.cells.filter((cell) => cell.type === "prompt")).toHaveLength(4);
     expect(first.cells.filter((cell) => cell.type === "video")).toHaveLength(4);
+    expect(source?.slot).toEqual({ row: 0, column: 0 });
+    expect(audio?.slot).toEqual({ row: 0, column: 1 });
+    expect(analysis?.slot).toEqual({ row: 1, column: 0 });
+    expect(assembly?.slot).toEqual({ row: 8, column: 3 });
+    expect(exp?.slot).toEqual({ row: 9, column: 3 });
+    for (let ordinal = 1; ordinal <= 4; ordinal += 1) {
+      const column = ordinal - 1;
+      expect(first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `split-${ordinal}`)?.slot)
+        .toEqual({ row: 2, column });
+      expect(first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `frame-first-${ordinal}`)?.slot)
+        .toEqual({ row: 3, column });
+      expect(first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `frame-last-${ordinal}`)?.slot)
+        .toEqual({ row: 4, column });
+      expect(first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `scene-audio-${ordinal}`)?.slot)
+        .toEqual({ row: 5, column });
+      expect(first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `prompt-${ordinal}`)?.slot)
+        .toEqual({ row: 6, column });
+      expect(first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `animate-${ordinal}`)?.slot)
+        .toEqual({ row: 7, column });
+    }
     expect(first.cells.filter((cell) => cell.type === "prompt").every((cell) =>
       cell.inputs?.requiresConfirmation === true)).toBe(true);
     expect(first.cells.filter((cell) => cell.type === "video").every((cell) =>
@@ -128,10 +151,9 @@ describe("Multyculty workflow fixture", () => {
     const second = await seedMultycultyWorkflow(engine);
     expect(second.cells).toHaveLength(29);
     expect(second.cells.filter((cell) => cell.type === "split")).toHaveLength(4);
-    expect(second.properties?.stageLabels).toEqual(first.properties?.stageLabels);
+    expect(second.grid).toEqual(first.grid);
     // Source identity is preserved across rematerialization.
     expect(second.cells.find((cell) => cell.inputs?.workflowRole === "source")?.id)
       .toBe(source?.id);
-    void notebookGridPosition;
   });
 });
