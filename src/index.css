@@ -485,7 +485,7 @@ textarea:focus-visible {
 
 .canvas-add-panel {
   position: sticky;
-  top: 16px;
+  top: 62px;
   left: 16px;
   z-index: 20;
   width: max-content;
@@ -501,8 +501,8 @@ textarea:focus-visible {
   display: flex;
   width: 100%;
   height: 0;
-  justify-content: flex-end;
-  padding-right: 24px;
+  justify-content: flex-start;
+  padding-left: 16px;
   pointer-events: none;
 }
 

@@ -115,7 +115,7 @@ describe('notebook grid', () => {
       maxColumn: 3,
       centerX: 888,
       width: 2016,
-      height: 2984,
+      height: 3064,
     })
     expect(metrics.centerX + notebookGrid.squareSize / 2).toBe(metrics.width / 2)
   })
@@ -132,7 +132,7 @@ describe('notebook grid', () => {
       maxColumn: 7,
       centerX: 2008,
       width: 4256,
-      height: 3824,
+      height: 3904,
     })
   })
 
@@ -144,7 +144,7 @@ describe('notebook grid', () => {
       maxColumn: 3,
       centerX: 888,
       width: 2016,
-      height: 1024,
+      height: 1104,
     })
   })
 
@@ -152,7 +152,7 @@ describe('notebook grid', () => {
     const metrics = notebookGridMetrics([{ row: 0, column: 0 }])
     expect(notebookGridFrameSize(metrics, 1.5)).toEqual({
       width: 3024,
-      height: 1536,
+      height: 1656,
     })
     expect(notebookGridViewport(metrics, 1.5, -40)).toEqual({
       x: 1332,
