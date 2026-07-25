@@ -883,8 +883,9 @@ function CellIcon({ kind }: { kind: NotebookCellType }) {
   if (kind === 'scene' || kind === 'sequence' || kind === 'selects') {
     return <Film size={14} />
   }
-  if (kind === 'image') return <Image size={14} />
-  if (kind === 'prompt') return <CircleDot size={14} />
+  if (kind === 'image' || kind === 'frame') return <Image size={14} />
+  if (kind === 'prompt' || kind === 'analysis') return <CircleDot size={14} />
+  if (kind === 'split' || kind === 'export') return <Film size={14} />
   return <BookOpen size={14} />
 }
 
@@ -900,7 +901,15 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
   const thumbnailUrl = data.asset?.thumbnailUrl
   const targetInputs = data.targetInputs?.length ? data.targetInputs : ['input']
   const playableVideo = data.asset?.type === 'video' || data.asset?.type === 'final'
-  const canRun = data.kind === 'image' || data.kind === 'video'
+  const canRun = data.kind === 'image'
+    || data.kind === 'video'
+    || data.kind === 'analysis'
+    || data.kind === 'split'
+    || data.kind === 'audio'
+    || data.kind === 'frame'
+    || data.kind === 'sequence'
+    || data.kind === 'export'
+    || data.kind === 'source'
 
   return (
     <article className={`cell-node cell-kind-${data.kind} ${selected ? 'cell-node-selected' : ''}`}>
@@ -1406,10 +1415,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       image: 'Image generation',
       video: 'Video generation',
       sequence: 'Sequence',
+      analysis: 'Analyze',
+      split: 'Split',
+      frame: 'Frame',
+      export: 'Export',
     }
     const defaults: Partial<Record<NotebookCellType, string>> = {
       image: 'generate_kie_gpt_image_2_text_to_image',
-      video: 'generate_kie_wan_2_7_text_to_video',
+      video: 'generate_kie_seedance_2_0_video',
+      analysis: 'kie_gemini_analysis',
     }
     setBusy(true)
     try {

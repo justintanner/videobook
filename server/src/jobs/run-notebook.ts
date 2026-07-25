@@ -11,6 +11,14 @@ import { mutateNotebook } from "../notebook-mutations.js";
 import { registerJobHandler } from "../queue.js";
 import type { ToolDef, ToolResult } from "../tools/tool-def.js";
 import { getActionSpec } from "../generation-registry.js";
+import {
+  captureFrame,
+  exportSequenceMaster,
+  extractSourceAudio,
+  splitSourceRange,
+} from "../notebook-media-ops.js";
+import { applyAnalysisResults } from "../notebook-workflow.js";
+import { DEFAULT_ANIMATION_TOOL } from "../notebook-action-catalog.js";
 
 export interface RunNotebookPayload {
   type: "run_notebook";
@@ -134,8 +142,20 @@ export async function writeGenerationPlanProvenance(
 
 export const defaultNotebookGenerationModel: Record<"image" | "video", string> = {
   image: "generate_kie_gpt_image_2_text_to_image",
-  video: "generate_kie_wan_2_7_text_to_video",
+  video: DEFAULT_ANIMATION_TOOL,
 };
+
+const LOCAL_RUNNABLE_TYPES = new Set([
+  "source",
+  "analysis",
+  "split",
+  "audio",
+  "frame",
+  "sequence",
+  "export",
+  "image",
+  "video",
+]);
 
 function textResult(result: ToolResult): unknown {
   const text = result.content.find((item) => item.type === "text")?.text;
@@ -216,17 +236,55 @@ function fingerprint(
     type: cell.type,
     title: cell.title,
     prompt: cell.prompt ?? "",
+    provider: cell.provider ?? "",
     model: cell.model ?? defaultNotebookGenerationModel[cell.type as "image" | "video"] ?? "",
+    operation: cell.operation ?? "",
+    tool: cell.tool ?? "",
     inputs: cell.inputs ?? {},
     upstream: upstreamValues(document, cell).map(({ targetInput, cell: source, output }) => ({
       targetInput,
       sourceId: source.id,
       sourceType: source.type,
       prompt: source.prompt ?? "",
+      provider: source.provider ?? "",
+      model: source.model ?? "",
+      operation: source.operation ?? "",
+      tool: source.tool ?? "",
       output: output ?? null,
+      outputHash: typeof source.inputs?.objectHash === "string"
+        ? source.inputs.objectHash
+        : null,
+      sequenceRevision: typeof source.inputs?.sequenceRevision === "string"
+        ? source.inputs.sequenceRevision
+        : null,
+      range: {
+        startSeconds: source.inputs?.startSeconds ?? null,
+        endSeconds: source.inputs?.endSeconds ?? null,
+      },
     })),
   };
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+function firstUpstreamArtifact(
+  document: NotebookDocument,
+  cell: NotebookCell,
+  targetInput?: string,
+): string | null {
+  const upstream = upstreamValues(document, cell)
+    .filter((entry) => (targetInput ? entry.targetInput === targetInput : true))
+    .map((entry) => entry.output)
+    .find((value): value is string => typeof value === "string" && value.length > 0);
+  return upstream ?? null;
+}
+
+async function objectHashForArtifact(
+  engine: Engine,
+  artifactId: string,
+): Promise<string | null> {
+  const manifest = await engine.files.manifest(artifactId);
+  if (!manifest.ok) return null;
+  return manifest.value.files[0]?.objectHash ?? null;
 }
 
 function promptFor(document: NotebookDocument, cell: NotebookCell): string {
@@ -338,16 +396,210 @@ async function failedArtifact(
   return result.value.artifactId;
 }
 
+async function executeLocalOrGeneration(
+  engine: Engine,
+  bookId: string,
+  document: NotebookDocument,
+  cell: NotebookCell,
+  options: { confirmPaid?: boolean } = {},
+): Promise<{ artifactId: string; tool: string; document?: NotebookDocument }> {
+  if (cell.type === "split") {
+    const sourceId = firstUpstreamArtifact(document, cell, "source")
+      ?? firstUpstreamArtifact(document, cell)
+      ?? (typeof cell.inputs?.sourceArtifactId === "string"
+        ? cell.inputs.sourceArtifactId
+        : null);
+    if (!sourceId) throw new Error(`Split cell ${cell.id} has no source artifact`);
+    const startSeconds = Number(cell.inputs?.startSeconds ?? 0);
+    const endSeconds = Number(cell.inputs?.endSeconds ?? 0);
+    const result = await splitSourceRange(
+      engine,
+      sourceId,
+      { startSeconds, endSeconds },
+      cell.title,
+    );
+    return { artifactId: result.artifactId, tool: "ffmpeg" };
+  }
+
+  if (cell.type === "audio") {
+    const sourceId = firstUpstreamArtifact(document, cell, "source")
+      ?? firstUpstreamArtifact(document, cell)
+      ?? (typeof cell.inputs?.artifactId === "string" ? cell.inputs.artifactId : null);
+    if (!sourceId) throw new Error(`Audio cell ${cell.id} has no source artifact`);
+    const result = await extractSourceAudio(engine, sourceId, cell.title);
+    return { artifactId: result.artifactId, tool: "ffmpeg" };
+  }
+
+  if (cell.type === "frame") {
+    const segmentId = firstUpstreamArtifact(document, cell, "segment")
+      ?? firstUpstreamArtifact(document, cell);
+    if (!segmentId) throw new Error(`Frame cell ${cell.id} has no segment artifact`);
+    const role = cell.inputs?.frameRole === "last" ? "last" : "first";
+    const result = await captureFrame(engine, segmentId, {
+      role,
+      title: cell.title,
+      range: typeof cell.inputs?.startSeconds === "number"
+        && typeof cell.inputs?.endSeconds === "number"
+        ? {
+          startSeconds: Number(cell.inputs.startSeconds),
+          endSeconds: Number(cell.inputs.endSeconds),
+        }
+        : undefined,
+    });
+    return { artifactId: result.artifactId, tool: "ffmpeg" };
+  }
+
+  if (cell.type === "source") {
+    const artifactId = cell.outputArtifactId
+      ?? firstUpstreamArtifact(document, cell);
+    if (!artifactId) throw new Error(`Source cell ${cell.id} has no media artifact`);
+    const hash = await objectHashForArtifact(engine, artifactId);
+    if (!hash) throw new Error(`Source cell ${cell.id} has no material files`);
+    return { artifactId, tool: "ffmpeg" };
+  }
+
+  if (cell.type === "analysis") {
+    const sourceId = firstUpstreamArtifact(document, cell, "source")
+      ?? firstUpstreamArtifact(document, cell);
+    if (!sourceId) throw new Error(`Analysis cell ${cell.id} has no source artifact`);
+    const fixture = cell.inputs?.fixtureAnalysis
+      ?? cell.inputs?.analysisFixture
+      ?? null;
+    if (!fixture) {
+      if (!process.env.KIE_API_KEY) {
+        throw new Error(
+          "Analysis requires KIE_API_KEY or a fixtureAnalysis input for offline runs",
+        );
+      }
+      throw new Error(
+        "Live KIE analysis is key-gated; provide fixtureAnalysis for offline DAG runs",
+      );
+    }
+    const duration = Number(
+      cell.inputs?.sourceDurationSeconds
+        ?? (fixture as { sourceDurationSeconds?: number }).sourceDurationSeconds
+        ?? 60,
+    );
+    const next = await applyAnalysisResults(engine, document, cell.id, {
+      rawOutput: fixture,
+      sourceDurationSeconds: duration,
+      request: {
+        provider: cell.provider ?? "kie",
+        model: cell.model ?? "gemini-3.5-flash",
+        prompt: cell.prompt ?? "",
+        mode: "fixture",
+      },
+      sourceArtifactId: sourceId,
+    });
+    const analysis = next.cells.find((candidate) => candidate.id === cell.id);
+    if (!analysis?.outputArtifactId) {
+      throw new Error("Analysis did not produce a script artifact");
+    }
+    return {
+      artifactId: analysis.outputArtifactId,
+      tool: cell.tool ?? "kie_gemini_analysis",
+      document: next,
+    };
+  }
+
+  if (cell.type === "sequence") {
+    let clips = upstreamValues(document, cell)
+      .filter((entry) =>
+        entry.targetInput.startsWith("clip")
+        || entry.cell.type === "video"
+        || entry.targetInput === "segment")
+      .map((entry) => entry.output)
+      .filter((value): value is string => typeof value === "string");
+    const audioId = firstUpstreamArtifact(document, cell, "audio")
+      ?? firstUpstreamArtifact(document, cell, "source-audio");
+    if (clips.length === 0) {
+      clips = document.cells
+        .filter((candidate) => candidate.type === "video" && candidate.outputArtifactId)
+        .sort((left, right) => left.position.x - right.position.x)
+        .map((candidate) => candidate.outputArtifactId!);
+    }
+    if (clips.length === 0) {
+      throw new Error(`Sequence cell ${cell.id} has no clip inputs`);
+    }
+    const primary = engine.sequences.getPrimary();
+    const revision = engine.head;
+    const script = await engine.artifacts.create({
+      kind: "script",
+      name: `${cell.title} assembly`,
+    });
+    if (!script.ok) throw new Error(script.error.message);
+    await engine.files.write(
+      script.value.artifactId,
+      "assembly.json",
+      JSON.stringify({
+        sequenceId: primary.sequenceId,
+        sequenceRevision: revision,
+        clipArtifactIds: clips,
+        audioArtifactId: audioId,
+        assembledAt: new Date().toISOString(),
+      }),
+    );
+    return { artifactId: script.value.artifactId, tool: "engine_sequence" };
+  }
+
+  if (cell.type === "export") {
+    const sequenceCell = upstreamValues(document, cell)
+      .find((entry) => entry.cell.type === "sequence")
+      ?.cell;
+    if (
+      sequenceCell
+      && typeof sequenceCell.inputs?.sequenceRevision === "string"
+      && sequenceCell.inputs.sequenceRevision !== engine.head
+    ) {
+      throw new Error("Sequence revision is stale; re-run assembly before export");
+    }
+    const clips = document.cells
+      .filter((candidate) => candidate.type === "video" && candidate.outputArtifactId)
+      .sort((left, right) => left.position.x - right.position.x)
+      .map((candidate) => candidate.outputArtifactId!);
+    const audioId = document.cells.find((candidate) => candidate.type === "audio")
+      ?.outputArtifactId ?? null;
+    if (clips.length === 0) {
+      throw new Error(`Export cell ${cell.id} has no assembled clips`);
+    }
+    const result = await exportSequenceMaster(engine, clips, audioId, cell.title);
+    return { artifactId: result.artifactId, tool: "ffmpeg" };
+  }
+
+  if (cell.type === "image" || cell.type === "video") {
+    const requiresConfirmation = cell.inputs?.requiresConfirmation === true
+      || (cell.tool ?? cell.model ?? "").includes("seedance")
+      || (cell.tool ?? cell.model ?? defaultNotebookGenerationModel.video)
+        === DEFAULT_ANIMATION_TOOL;
+    if (requiresConfirmation && !options.confirmPaid) {
+      throw new Error(
+        `Paid generation for ${cell.title} requires confirmation before starting`,
+      );
+    }
+    const output = await generationTool(engine, document, cell, bookId);
+    return { artifactId: output.artifactId, tool: output.tool };
+  }
+
+  throw new Error(`Cell type ${cell.type} is not runnable`);
+}
+
 async function runCell(
   engine: Engine,
   bookId: string,
   notebookId: string,
   document: NotebookDocument,
   cell: NotebookCell,
+  options: { confirmPaid?: boolean } = {},
 ): Promise<{ document: NotebookDocument; outputArtifactId: string }> {
   const nextFingerprint = fingerprint(document, cell);
   try {
-    const output = await generationTool(engine, document, cell, bookId);
+    const output = await executeLocalOrGeneration(
+      engine,
+      bookId,
+      document,
+      cell,
+      options,
+    );
     const completedAt = new Date().toISOString();
     const state: CellExecution = {
       fingerprint: nextFingerprint,
@@ -359,7 +611,10 @@ async function runCell(
       engine,
       notebookId,
       "run_notebook_cell",
-      (current) => withExecution(current, cell.id, state, output.artifactId),
+      (current) => {
+        const base = output.document ?? current;
+        return withExecution(base, cell.id, state, output.artifactId);
+      },
       { cellId: cell.id, outputArtifactId: output.artifactId, tool: output.tool },
     );
     if (!write.ok) throw new Error(write.error.message);
@@ -373,7 +628,8 @@ async function runCell(
       fingerprint: nextFingerprint,
       outputArtifactId,
       completedAt: new Date().toISOString(),
-      tool: cell.model
+      tool: cell.tool
+        || cell.model
         || defaultNotebookGenerationModel[cell.type as "image" | "video"],
       error: message,
     };
@@ -389,35 +645,93 @@ async function runCell(
   }
 }
 
+function isCellStale(
+  engine: Engine,
+  document: NotebookDocument,
+  cell: NotebookCell,
+): boolean {
+  const execution = executionState(document)[cell.id];
+  if (!execution) return true;
+  if (execution.fingerprint !== fingerprint(document, cell)) return true;
+  if (execution.error) return true;
+  if ((execution as CellExecution & { stale?: boolean }).stale) return true;
+  if (!cell.outputArtifactId) return true;
+  if (!engine.artifacts.get(cell.outputArtifactId).ok) return true;
+  return false;
+}
+
+function ancestorsOf(
+  document: NotebookDocument,
+  cellId: string,
+): Set<string> {
+  const parents = new Map<string, string[]>();
+  for (const edge of document.edges) {
+    const list = parents.get(edge.target) ?? [];
+    list.push(edge.source);
+    parents.set(edge.target, list);
+  }
+  const seen = new Set<string>();
+  const stack = [...(parents.get(cellId) ?? [])];
+  while (stack.length > 0) {
+    const id = stack.pop();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    stack.push(...(parents.get(id) ?? []));
+  }
+  return seen;
+}
+
 export function registerRunNotebookJob(engine: Engine): void {
   registerJobHandler("run_notebook", async (payload) => {
-    const input = payload as unknown as RunNotebookPayload;
+    const input = payload as unknown as RunNotebookPayload & {
+      confirmPaid?: boolean;
+    };
     const initial = engine.notebooks.read(input.notebookId);
     if (!initial.ok) throw new Error(initial.error.message);
     const selected = input.cellIds ? new Set(input.cellIds) : null;
+    const required = new Set<string>();
+    if (selected) {
+      for (const cellId of selected) {
+        required.add(cellId);
+        for (const ancestor of ancestorsOf(initial.value, cellId)) {
+          required.add(ancestor);
+        }
+      }
+    }
     let document = initial.value;
     const ordered = topologicalOrder(document);
     const outputs: Record<string, string> = {};
     const errors: string[] = [];
+    const blocked = new Set<string>();
     for (const cell of ordered) {
-      if (cell.type !== "image" && cell.type !== "video") {
+      if (!LOCAL_RUNNABLE_TYPES.has(cell.type)) {
         const output = cell.outputArtifactId ?? cell.entityId;
         if (output) outputs[cell.id] = output;
         continue;
       }
-      if (selected && !selected.has(cell.id)) continue;
-      const execution = executionState(document)[cell.id];
-      const stale = !execution
-        || execution.fingerprint !== fingerprint(document, cell)
-        || Boolean(execution.error)
-        || !cell.outputArtifactId
-        || !engine.artifacts.get(cell.outputArtifactId).ok;
+      if (selected && !required.has(cell.id)) continue;
+      const upstreamBlocked = document.edges
+        .filter((edge) => edge.target === cell.id)
+        .some((edge) => blocked.has(edge.source));
+      if (upstreamBlocked) {
+        blocked.add(cell.id);
+        errors.push(`${cell.title}: blocked by failed upstream dependency`);
+        continue;
+      }
+      const stale = isCellStale(engine, document, cell);
       if (!input.force && !stale) {
         if (cell.outputArtifactId) outputs[cell.id] = cell.outputArtifactId;
         continue;
       }
       try {
-        const result = await runCell(engine, input.bookId, input.notebookId, document, cell);
+        const result = await runCell(
+          engine,
+          input.bookId,
+          input.notebookId,
+          document,
+          cell,
+          { confirmPaid: input.confirmPaid === true },
+        );
         document = result.document;
         outputs[cell.id] = result.outputArtifactId;
         if (
@@ -441,6 +755,7 @@ export function registerRunNotebookJob(engine: Engine): void {
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause);
         errors.push(`${cell.title}: ${message}`);
+        blocked.add(cell.id);
         if (
           input.generationPlan
           && typeof input.generationPlan.planId === "string"

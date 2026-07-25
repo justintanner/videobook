@@ -34,6 +34,14 @@ import {
 } from "./command-plan.js";
 import { estimateCostDef } from "./estimate-cost.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
+import {
+  listNotebookActions,
+  markDescendantsStale,
+  normalizeCellActionFields,
+  selectedCellDetails,
+  validateCellConfiguration,
+} from "../notebook-action-catalog.js";
+import { buildSevenStageScaffold } from "../notebook-workflow.js";
 
 const bookSchema = { book_id: z.string().uuid() };
 const cellTypeSchema = z.enum([
@@ -50,6 +58,10 @@ const cellTypeSchema = z.enum([
   "image",
   "video",
   "sequence",
+  "analysis",
+  "split",
+  "frame",
+  "export",
 ]);
 const cellReferenceSchema = z.object({
   id: z.string().uuid(),
@@ -122,7 +134,10 @@ const cellInputSchema = z.object({
   position: z.object({ x: z.number(), y: z.number() }),
   entity_id: z.string().uuid().optional(),
   prompt: z.string().optional(),
+  provider: z.string().optional(),
   model: z.string().optional(),
+  operation: z.string().optional(),
+  tool: z.string().optional(),
   inputs: z.record(z.string(), z.unknown()).optional(),
   output_artifact_id: z.string().uuid().optional(),
   references: z.array(cellReferenceSchema).optional(),
@@ -893,7 +908,10 @@ function cellFromInput(input: CellInput): Omit<NotebookCell, "id"> {
     position: input.position,
     ...(input.entity_id ? { entityId: input.entity_id } : {}),
     ...(input.prompt === undefined ? {} : { prompt: input.prompt }),
+    ...(input.provider === undefined ? {} : { provider: input.provider }),
     ...(input.model === undefined ? {} : { model: input.model }),
+    ...(input.operation === undefined ? {} : { operation: input.operation }),
+    ...(input.tool === undefined ? {} : { tool: input.tool }),
     ...(input.inputs === undefined ? {} : { inputs: input.inputs }),
     ...(input.output_artifact_id ? { outputArtifactId: input.output_artifact_id } : {}),
     ...(input.references === undefined
@@ -913,7 +931,10 @@ function cellPayload(cell: NotebookCell): Record<string, unknown> {
     position: cell.position,
     ...(cell.entityId ? { entity_id: cell.entityId } : {}),
     ...(cell.prompt === undefined ? {} : { prompt: cell.prompt }),
+    ...(cell.provider === undefined ? {} : { provider: cell.provider }),
     ...(cell.model === undefined ? {} : { model: cell.model }),
+    ...(cell.operation === undefined ? {} : { operation: cell.operation }),
+    ...(cell.tool === undefined ? {} : { tool: cell.tool }),
     ...(cell.inputs === undefined ? {} : { inputs: cell.inputs }),
     ...(cell.outputArtifactId ? { output_artifact_id: cell.outputArtifactId } : {}),
     ...(cell.references === undefined
@@ -1559,6 +1580,74 @@ export function videobookDomainDefs(
       handler: async (args) => {
         const result = engine.notebooks.read(String(args.notebook_id));
         return result.ok ? json(notebookPayload(result.value)) : failure(result.error.message);
+      },
+    },
+    {
+      name: "list_notebook_actions",
+      description: "List the deterministic notebook action catalog for runnable cells",
+      scope: "book",
+      schema: {
+        ...bookSchema,
+        cell_type: cellTypeSchema.optional(),
+      },
+      handler: async (args) => {
+        const actions = listNotebookActions().filter((action) =>
+          args.cell_type
+            ? action.cellTypes.includes(args.cell_type as NotebookCellType)
+            : true);
+        return json({ actions });
+      },
+    },
+    {
+      name: "get_notebook_cell_details",
+      description: "Return selected-cell details including raw Dolt row, edges, and action validation",
+      scope: "book",
+      schema: {
+        ...bookSchema,
+        notebook_id: z.string().uuid(),
+        cell_id: z.string().uuid(),
+      },
+      handler: async (args) => {
+        const result = engine.notebooks.read(String(args.notebook_id));
+        if (!result.ok) return failure(result.error.message);
+        try {
+          return json(selectedCellDetails(
+            String(args.notebook_id),
+            result.value,
+            String(args.cell_id),
+          ));
+        } catch (cause) {
+          return failure(cause instanceof Error ? cause.message : String(cause));
+        }
+      },
+    },
+    {
+      name: "ensure_notebook_workflow_scaffold",
+      description: "Ensure the seven-stage SOURCE→EXPORT workflow scaffold exists",
+      scope: "book",
+      schema: {
+        ...bookSchema,
+        notebook_id: z.string().uuid(),
+        source_artifact_id: z.string().uuid().optional(),
+      },
+      handler: async (args) => {
+        const result = await mutateNotebook(
+          engine,
+          String(args.notebook_id),
+          "ensure_notebook_workflow_scaffold",
+          (notebook) => buildSevenStageScaffold(
+            engine,
+            notebook,
+            typeof args.source_artifact_id === "string"
+              ? args.source_artifact_id
+              : undefined,
+          ),
+        );
+        if (!result.ok) return failure(result.error.message);
+        const read = engine.notebooks.read(String(args.notebook_id));
+        return read.ok
+          ? json(notebookPayload(read.value))
+          : failure(read.error.message);
       },
     },
     {
@@ -2674,42 +2763,61 @@ export function videobookDomainDefs(
         notebook_id: z.string().uuid(),
         cell_id: z.string().uuid(),
         cell: cellInputSchema.partial(),
+        expected_revision: z.string().min(1).optional(),
       },
       handler: async (args) => {
+        if (
+          typeof args.expected_revision === "string"
+          && args.expected_revision !== engine.head
+        ) {
+          return failure(`Stale notebook revision: expected ${args.expected_revision}`);
+        }
         const patch = args.cell as Partial<CellInput>;
-        const result = await mutateNotebook(
-          engine,
-          String(args.notebook_id),
-          "update_notebook_cell",
-          (notebook) => {
-            let found = false;
-            const cells = notebook.cells.map((cell) => {
-              if (cell.id !== args.cell_id) return cell;
-              found = true;
-              return {
-                ...cell,
-                ...(patch.type ? { type: patch.type as NotebookCellType } : {}),
-                ...(patch.title === undefined ? {} : { title: patch.title }),
-                ...(patch.position === undefined ? {} : { position: patch.position }),
-                ...(patch.entity_id === undefined ? {} : { entityId: patch.entity_id }),
-                ...(patch.prompt === undefined ? {} : { prompt: patch.prompt }),
-                ...(patch.model === undefined ? {} : { model: patch.model }),
-                ...(patch.inputs === undefined ? {} : { inputs: patch.inputs }),
-                ...(patch.output_artifact_id === undefined ? {} : { outputArtifactId: patch.output_artifact_id }),
-                ...(patch.references === undefined
-                  ? {}
-                  : { references: patch.references.map(referenceFromInput) }),
-                ...(patch.pinned_results === undefined
-                  ? {}
-                  : { pinnedResults: patch.pinned_results.map(pinnedResultFromInput) }),
-              };
-            });
-            if (!found) throw new Error(`Cell not found: ${String(args.cell_id)}`);
-            return { ...notebook, cells };
-          },
-          { cellId: args.cell_id },
-        );
-        return result.ok ? json({ cell_id: args.cell_id, revision: result.value.hash }) : failure(result.error.message);
+        try {
+          const result = await mutateNotebook(
+            engine,
+            String(args.notebook_id),
+            "update_notebook_cell",
+            (notebook) => {
+              let found = false;
+              const cells = notebook.cells.map((cell) => {
+                if (cell.id !== args.cell_id) return cell;
+                found = true;
+                const next = normalizeCellActionFields({
+                  ...cell,
+                  ...(patch.type ? { type: patch.type as NotebookCellType } : {}),
+                  ...(patch.title === undefined ? {} : { title: patch.title }),
+                  ...(patch.position === undefined ? {} : { position: patch.position }),
+                  ...(patch.entity_id === undefined ? {} : { entityId: patch.entity_id }),
+                  ...(patch.prompt === undefined ? {} : { prompt: patch.prompt }),
+                  ...(patch.provider === undefined ? {} : { provider: patch.provider }),
+                  ...(patch.model === undefined ? {} : { model: patch.model }),
+                  ...(patch.operation === undefined ? {} : { operation: patch.operation }),
+                  ...(patch.tool === undefined ? {} : { tool: patch.tool }),
+                  ...(patch.inputs === undefined ? {} : { inputs: patch.inputs }),
+                  ...(patch.output_artifact_id === undefined ? {} : { outputArtifactId: patch.output_artifact_id }),
+                  ...(patch.references === undefined
+                    ? {}
+                    : { references: patch.references.map(referenceFromInput) }),
+                  ...(patch.pinned_results === undefined
+                    ? {}
+                    : { pinnedResults: patch.pinned_results.map(pinnedResultFromInput) }),
+                }, notebook);
+                const validation = validateCellConfiguration(next, notebook);
+                if (!validation.ok) throw new Error(validation.message);
+                return next;
+              });
+              if (!found) throw new Error(`Cell not found: ${String(args.cell_id)}`);
+              return markDescendantsStale({ ...notebook, cells }, String(args.cell_id));
+            },
+            { cellId: args.cell_id },
+          );
+          return result.ok
+            ? json({ cell_id: args.cell_id, revision: result.value.hash })
+            : failure(result.error.message);
+        } catch (cause) {
+          return failure(cause instanceof Error ? cause.message : String(cause));
+        }
       },
     },
     {

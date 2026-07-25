@@ -59,7 +59,10 @@ describe('NotebookCellInspector', () => {
       'position_y',
       'entity_id',
       'prompt',
+      'provider',
       'model',
+      'operation',
+      'tool',
       'inputs_json',
       'output_artifact_id',
     ])

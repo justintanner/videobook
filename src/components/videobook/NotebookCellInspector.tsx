@@ -109,6 +109,25 @@ function DoltCellSource({
   )
 }
 
+const RUNNABLE_TYPES = new Set([
+  'source',
+  'analysis',
+  'split',
+  'audio',
+  'frame',
+  'image',
+  'video',
+  'sequence',
+  'export',
+])
+
+const PROMPT_TYPES = new Set([
+  'prompt',
+  'image',
+  'video',
+  'analysis',
+])
+
 export function NotebookCellInspector({
   notebookId,
   cell,
@@ -119,7 +138,7 @@ export function NotebookCellInspector({
   onRun,
   onDelete,
 }: NotebookCellInspectorProps) {
-  const canRun = cell.type === 'image' || cell.type === 'video'
+  const canRun = RUNNABLE_TYPES.has(cell.type)
 
   return (
     <div className="inspector-body">
@@ -133,7 +152,7 @@ export function NotebookCellInspector({
           if (title && title !== cell.title) void onUpdate({ title })
         }} />
       </label>
-      {(cell.type === 'prompt' || cell.type === 'image' || cell.type === 'video') && (
+      {PROMPT_TYPES.has(cell.type) && (
         <label>
           Prompt
           <textarea defaultValue={cell.prompt ?? ''} rows={8} onBlur={(event) => {
@@ -143,20 +162,54 @@ export function NotebookCellInspector({
           }} />
         </label>
       )}
-      {(cell.type === 'image' || cell.type === 'video') && (
-        <label>
-          Tool model
-          <input
-            defaultValue={cell.model ?? ''}
-            placeholder="Generation tool name"
-            onBlur={(event) => {
-              if (event.target.value !== (cell.model ?? '')) {
-                void onUpdate({ model: event.target.value })
-              }
-            }}
-          />
-        </label>
-      )}
+      <label>
+        Provider
+        <input
+          defaultValue={cell.provider ?? ''}
+          placeholder="Provider"
+          onBlur={(event) => {
+            if (event.target.value !== (cell.provider ?? '')) {
+              void onUpdate({ provider: event.target.value || undefined })
+            }
+          }}
+        />
+      </label>
+      <label>
+        Model
+        <input
+          defaultValue={cell.model ?? ''}
+          placeholder="Model"
+          onBlur={(event) => {
+            if (event.target.value !== (cell.model ?? '')) {
+              void onUpdate({ model: event.target.value || undefined })
+            }
+          }}
+        />
+      </label>
+      <label>
+        Operation
+        <input
+          defaultValue={cell.operation ?? ''}
+          placeholder="Operation"
+          onBlur={(event) => {
+            if (event.target.value !== (cell.operation ?? '')) {
+              void onUpdate({ operation: event.target.value || undefined })
+            }
+          }}
+        />
+      </label>
+      <label>
+        Tool
+        <input
+          defaultValue={cell.tool ?? cell.model ?? ''}
+          placeholder="Tool"
+          onBlur={(event) => {
+            if (event.target.value !== (cell.tool ?? cell.model ?? '')) {
+              void onUpdate({ tool: event.target.value || undefined })
+            }
+          }}
+        />
+      </label>
       <DoltCellSource notebookId={notebookId} cell={cell} />
       <div className="record-card-actions">
         {canRun && (

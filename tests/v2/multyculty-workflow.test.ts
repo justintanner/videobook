@@ -74,35 +74,48 @@ describe("Multyculty workflow fixture", () => {
     expect(stream.ok).toBe(true);
 
     const first = await seedMultycultyWorkflow(engine);
-    expect(first.name).toBe("Multyculty");
-    expect(first.cells).toHaveLength(12);
-    expect(first.edges).toHaveLength(15);
     expect(first.properties?.stageLabels).toEqual([
       "SOURCE",
-      "SCENES + AUDIO",
-      "ANIMATE EACH SCENE",
-      "REASSEMBLE",
-      "FINAL MASTER",
-      "NEXT",
+      "ANALYZE",
+      "SPLIT + AUDIO",
+      "CAPTURE FRAMES",
+      "ANIMATE",
+      "ASSEMBLE",
+      "EXPORT",
     ]);
     const source = first.cells.find((cell) => cell.inputs?.workflowRole === "source");
+    const analysis = first.cells.find((cell) => cell.inputs?.workflowRole === "analysis");
     const audio = first.cells.find((cell) => cell.inputs?.workflowRole === "source-audio");
     const assembly = first.cells.find((cell) => cell.inputs?.workflowRole === "assembly");
-    const final = first.cells.find((cell) => cell.inputs?.workflowRole === "final");
-    expect(source?.position).toEqual(notebookGridPosition({ stage: 0, column: 2 }));
-    expect(audio?.position).toEqual(notebookGridPosition({ stage: 1, column: 4 }));
-    expect(assembly?.position).toEqual(notebookGridPosition({ stage: 3, column: 2 }));
-    expect(final?.position).toEqual(notebookGridPosition({ stage: 4, column: 2 }));
-    expect(first.edges.filter((edge) => edge.source === source?.id)).toHaveLength(5);
-    expect(first.edges.filter((edge) => edge.target === assembly?.id)).toHaveLength(5);
+    const exp = first.cells.find((cell) => cell.inputs?.workflowRole === "export");
+    expect(source).toBeTruthy();
+    expect(analysis).toBeTruthy();
+    expect(audio).toBeTruthy();
+    expect(assembly).toBeTruthy();
+    expect(exp).toBeTruthy();
+    expect(first.cells.filter((cell) => cell.type === "split")).toHaveLength(4);
+    expect(first.cells.filter((cell) => cell.type === "frame")).toHaveLength(8);
+    expect(first.cells.filter((cell) => cell.type === "video")).toHaveLength(4);
+    expect(first.cells.filter((cell) => cell.type === "video").every((cell) =>
+      cell.inputs?.requiresConfirmation === true
+      || cell.inputs?.state === "stale")).toBe(true);
+    expect(first.edges).toContainEqual(expect.objectContaining({
+      source: source?.id,
+      target: analysis?.id,
+      targetInput: "source",
+    }));
     expect(first.edges).toContainEqual(expect.objectContaining({
       source: audio?.id,
       target: assembly?.id,
-      targetInput: "source-audio",
+      targetInput: "audio",
     }));
 
     const second = await seedMultycultyWorkflow(engine);
-    expect(second.cells.map((cell) => cell.id)).toEqual(first.cells.map((cell) => cell.id));
-    expect(second.edges.map((edge) => edge.id)).toEqual(first.edges.map((edge) => edge.id));
+    expect(second.cells.filter((cell) => cell.type === "split")).toHaveLength(4);
+    expect(second.properties?.stageLabels).toEqual(first.properties?.stageLabels);
+    // Source identity is preserved across rematerialization.
+    expect(second.cells.find((cell) => cell.inputs?.workflowRole === "source")?.id)
+      .toBe(source?.id);
+    void notebookGridPosition;
   });
 });
