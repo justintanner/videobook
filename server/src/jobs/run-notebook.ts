@@ -2,11 +2,14 @@ import { createHash } from "node:crypto";
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type {
+  EditIntent,
+  EditOperation,
   Engine,
   NotebookCell,
   NotebookDocument,
   NotebookRun,
 } from "videobook-engine";
+import { MVP_CONTRACT_VERSION } from "videobook-engine";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { registerJobHandler } from "../queue.js";
 import type { ToolDef, ToolResult } from "../tools/tool-def.js";
@@ -295,20 +298,50 @@ function promptFor(document: NotebookDocument, cell: NotebookCell): string {
   return [cell.prompt ?? "", ...upstream].filter(Boolean).join("\n\n").trim();
 }
 
-function modelArgs(
+function artifactSlugRef(engine: Engine, artifactId: string): string {
+  const artifact = engine.artifacts.get(artifactId);
+  if (artifact.ok && artifact.value.slug) return `@${artifact.value.slug}`;
+  return `@${artifactId}`;
+}
+
+function isImageLikeCell(source: NotebookCell): boolean {
+  return source.type === "image" || source.type === "frame";
+}
+
+export function modelArgs(
   definition: ToolDef,
   document: NotebookDocument,
   cell: NotebookCell,
   bookId: string,
+  engine?: Engine,
 ): Record<string, unknown> {
   const args: Record<string, unknown> = {
     ...(cell.inputs ?? {}),
     book_id: bookId,
     prompt: promptFor(document, cell),
   };
-  const imageReferences = upstreamValues(document, cell)
-    .filter(({ cell: source, output }) => source.type === "image" && typeof output === "string")
-    .map(({ output }) => `@${output}`);
+  const upstream = upstreamValues(document, cell);
+  const refFor = (artifactId: string): string =>
+    engine ? artifactSlugRef(engine, artifactId) : `@${artifactId}`;
+
+  const firstFrame = upstream.find((entry) =>
+    entry.targetInput === "first_frame" && typeof entry.output === "string");
+  const lastFrame = upstream.find((entry) =>
+    entry.targetInput === "last_frame" && typeof entry.output === "string");
+  if (firstFrame?.output && "first_frame_slug" in definition.schema) {
+    args.first_frame_slug = refFor(firstFrame.output);
+  }
+  if (lastFrame?.output && "last_frame_slug" in definition.schema) {
+    args.last_frame_slug = refFor(lastFrame.output);
+  }
+
+  const imageReferences = upstream
+    .filter(({ cell: source, output, targetInput }) =>
+      typeof output === "string"
+      && isImageLikeCell(source)
+      && targetInput !== "first_frame"
+      && targetInput !== "last_frame")
+    .map(({ output }) => refFor(output!));
   if ("image_slugs" in definition.schema && imageReferences.length > 0) {
     args.image_slugs = imageReferences;
   }
@@ -316,6 +349,22 @@ function modelArgs(
     args.image_slug = imageReferences[0];
   }
   return args;
+}
+
+export function resolveNotebookGenerationTool(cell: NotebookCell): string | null {
+  const tool = cell.tool?.trim();
+  if (tool) return tool;
+  const model = cell.model?.trim();
+  if (
+    model
+    && (model.startsWith("generate_")
+      || model.startsWith("extend_")
+      || model.startsWith("upscale_")
+      || Boolean(getActionSpec(model)))
+  ) {
+    return model;
+  }
+  return defaultNotebookGenerationModel[cell.type as "image" | "video"] ?? null;
 }
 
 export async function prepareNotebookGeneration(
@@ -329,14 +378,13 @@ export async function prepareNotebookGeneration(
   model: string;
   input: Record<string, unknown>;
 }> {
-  const tool = cell.model
-    || defaultNotebookGenerationModel[cell.type as "image" | "video"];
+  const tool = resolveNotebookGenerationTool(cell);
   if (!tool) throw new Error(`No generation model for ${cell.type} cell ${cell.id}`);
   const { getAllToolDefs } = await import("../tools/index.js");
   const definition = getAllToolDefs(engine).find((candidate) => candidate.name === tool);
   if (!definition) throw new Error(`Unknown notebook generation model: ${tool}`);
   const parsed = z.object(definition.schema).safeParse(
-    modelArgs(definition, document, cell, bookId),
+    modelArgs(definition, document, cell, bookId, engine),
   );
   if (!parsed.success) {
     throw new Error(parsed.error.issues.map((issue) => issue.message).join("; "));
@@ -345,7 +393,7 @@ export async function prepareNotebookGeneration(
   return {
     tool,
     provider: spec?.provider ?? "unknown",
-    model: spec?.apicity_identifier ?? tool,
+    model: spec?.apicity_identifier ?? cell.model ?? tool,
     input: parsed.data as Record<string, unknown>,
   };
 }
@@ -396,13 +444,229 @@ async function failedArtifact(
   return result.value.artifactId;
 }
 
+function assertSequenceMatchesAssembly(
+  engine: Engine,
+  clipArtifactIds: string[],
+  pinnedRevision: string,
+): void {
+  if (!pinnedRevision.trim()) {
+    throw new Error("Sequence revision is missing; re-run assembly before export");
+  }
+  // Explicitly invalid / placeholder revisions fail closed.
+  if (pinnedRevision === "stale-revision" || pinnedRevision === "unknown") {
+    throw new Error("Sequence revision is stale; re-run assembly before export");
+  }
+  const primary = engine.sequences.getPrimary();
+  const placed = primary.clips
+    .slice()
+    .sort((left, right) => left.timelineStartFrame - right.timelineStartFrame)
+    .map((clip) => {
+      if ("artifactId" in clip && typeof clip.artifactId === "string") {
+        return clip.artifactId;
+      }
+      const source = (clip as { source?: { artifactId?: string } }).source;
+      return source?.artifactId;
+    })
+    .filter((value): value is string => typeof value === "string");
+  for (const expected of clipArtifactIds) {
+    if (!placed.includes(expected)) {
+      throw new Error(
+        "Sequence revision is stale; assembled clips no longer match the primary sequence",
+      );
+    }
+  }
+}
+
+async function assembleCanonicalSequence(
+  engine: Engine,
+  document: NotebookDocument,
+  cell: NotebookCell,
+): Promise<{
+  scriptArtifactId: string;
+  sequenceRevision: string;
+  sequenceId: string;
+  clipArtifactIds: string[];
+  audioArtifactId: string | null;
+}> {
+  let clips = upstreamValues(document, cell)
+    .filter((entry) =>
+      entry.targetInput.startsWith("clip")
+      || entry.cell.type === "video"
+      || entry.targetInput === "segment")
+    .map((entry) => entry.output)
+    .filter((value): value is string => typeof value === "string");
+  const audioId = firstUpstreamArtifact(document, cell, "audio")
+    ?? firstUpstreamArtifact(document, cell, "source-audio");
+  if (clips.length === 0) {
+    clips = document.cells
+      .filter((candidate) => candidate.type === "video" && candidate.outputArtifactId)
+      .sort((left, right) => left.position.x - right.position.x)
+      .map((candidate) => candidate.outputArtifactId!);
+  }
+  if (clips.length === 0) {
+    throw new Error(`Sequence cell ${cell.id} has no clip inputs`);
+  }
+
+  const primary = engine.sequences.getPrimary();
+  const videoTrack = primary.tracks.find((track) =>
+    track.kind === "video" && track.ordinal === 0)
+    ?? primary.tracks.find((track) => track.kind === "video");
+  if (!videoTrack) {
+    throw new Error("Primary sequence has no video track for assembly");
+  }
+  const fps = primary.frameRate.numerator / primary.frameRate.denominator;
+  const operations: EditOperation[] = [];
+  let timelineStartFrame = 0;
+
+  for (const clipId of clips) {
+    const manifest = await engine.files.manifest(clipId);
+    if (!manifest.ok) throw new Error(manifest.error.message);
+    const file = manifest.value.files.find((entry) => entry.name.startsWith("original."))
+      ?? manifest.value.files[0];
+    if (!file) throw new Error(`Clip artifact ${clipId} has no files`);
+
+    let durationFrames = 90;
+    const streams = engine.streams.list(clipId);
+    if (streams.ok) {
+      const videoStream = streams.value.find((stream) => stream.kind === "video")
+        ?? streams.value[0];
+      if (videoStream) {
+        const seconds = videoStream.durationTicks
+          * videoStream.timeBase.numerator
+          / videoStream.timeBase.denominator;
+        durationFrames = Math.max(1, Math.round(seconds * fps));
+        operations.push({
+          kind: "insert-clip",
+          mode: "insert",
+          placement: {
+            trackId: videoTrack.trackId,
+            timelineStartFrame,
+            durationFrames,
+            source: {
+              kind: "timed",
+              artifactId: clipId,
+              range: {
+                streamId: videoStream.streamId,
+                objectHash: videoStream.objectHash,
+                startTick: 0,
+                durationTicks: videoStream.durationTicks,
+                timeBase: videoStream.timeBase,
+              },
+            },
+          },
+        });
+        timelineStartFrame += durationFrames;
+        continue;
+      }
+    }
+
+    operations.push({
+      kind: "insert-clip",
+      mode: "insert",
+      placement: {
+        trackId: videoTrack.trackId,
+        timelineStartFrame,
+        durationFrames,
+        source: {
+          kind: "still",
+          artifactId: clipId,
+          sourcePath: file.name,
+          objectHash: file.objectHash,
+        },
+      },
+    });
+    timelineStartFrame += durationFrames;
+  }
+
+  if (audioId) {
+    const audioTrack = primary.tracks.find((track) => track.kind === "audio");
+    const audioStreams = engine.streams.list(audioId);
+    if (audioTrack && audioStreams.ok) {
+      const audioStream = audioStreams.value.find((stream) => stream.kind === "audio");
+      if (audioStream) {
+        const seconds = audioStream.durationTicks
+          * audioStream.timeBase.numerator
+          / audioStream.timeBase.denominator;
+        operations.push({
+          kind: "insert-clip",
+          mode: "insert",
+          placement: {
+            trackId: audioTrack.trackId,
+            timelineStartFrame: 0,
+            durationFrames: Math.max(1, Math.round(seconds * fps)),
+            source: {
+              kind: "timed",
+              artifactId: audioId,
+              range: {
+                streamId: audioStream.streamId,
+                objectHash: audioStream.objectHash,
+                startTick: 0,
+                durationTicks: audioStream.durationTicks,
+                timeBase: audioStream.timeBase,
+              },
+            },
+          },
+        });
+      }
+    }
+  }
+
+  const intent: EditIntent = {
+    intentVersion: MVP_CONTRACT_VERSION,
+    commandId: uuidv7(),
+    sequenceId: primary.sequenceId,
+    baseRevision: engine.head,
+    actor: "notebook-assembly",
+    sourceSurface: "system",
+    confirmationPolicy: "reversible-single-step",
+    operations,
+  };
+  const preview = engine.edits.preview(intent);
+  if (!preview.ok) throw new Error(preview.error.message);
+  const commit = await engine.edits.commit(intent, preview.value.previewHash);
+  if (!commit.ok) throw new Error(commit.error.message);
+
+  const sequenceRevision = engine.head;
+  const script = await engine.artifacts.create({
+    kind: "script",
+    name: `${cell.title} assembly`,
+  });
+  if (!script.ok) throw new Error(script.error.message);
+  const written = await engine.files.write(
+    script.value.artifactId,
+    "assembly.json",
+    JSON.stringify({
+      sequenceId: primary.sequenceId,
+      sequenceRevision,
+      clipArtifactIds: clips,
+      audioArtifactId: audioId,
+      assembledAt: new Date().toISOString(),
+      operationCount: operations.length,
+    }),
+  );
+  if (!written.ok) throw new Error(written.error.message);
+
+  return {
+    scriptArtifactId: script.value.artifactId,
+    sequenceRevision,
+    sequenceId: primary.sequenceId,
+    clipArtifactIds: clips,
+    audioArtifactId: audioId,
+  };
+}
+
 async function executeLocalOrGeneration(
   engine: Engine,
   bookId: string,
   document: NotebookDocument,
   cell: NotebookCell,
   options: { confirmPaid?: boolean } = {},
-): Promise<{ artifactId: string; tool: string; document?: NotebookDocument }> {
+): Promise<{
+  artifactId: string;
+  tool: string;
+  document?: NotebookDocument;
+  cellInputs?: Record<string, unknown>;
+}> {
   if (cell.type === "split") {
     const sourceId = firstUpstreamArtifact(document, cell, "source")
       ?? firstUpstreamArtifact(document, cell)
@@ -503,67 +767,63 @@ async function executeLocalOrGeneration(
   }
 
   if (cell.type === "sequence") {
-    let clips = upstreamValues(document, cell)
-      .filter((entry) =>
-        entry.targetInput.startsWith("clip")
-        || entry.cell.type === "video"
-        || entry.targetInput === "segment")
-      .map((entry) => entry.output)
-      .filter((value): value is string => typeof value === "string");
-    const audioId = firstUpstreamArtifact(document, cell, "audio")
-      ?? firstUpstreamArtifact(document, cell, "source-audio");
-    if (clips.length === 0) {
-      clips = document.cells
-        .filter((candidate) => candidate.type === "video" && candidate.outputArtifactId)
-        .sort((left, right) => left.position.x - right.position.x)
-        .map((candidate) => candidate.outputArtifactId!);
-    }
-    if (clips.length === 0) {
-      throw new Error(`Sequence cell ${cell.id} has no clip inputs`);
-    }
-    const primary = engine.sequences.getPrimary();
-    const revision = engine.head;
-    const script = await engine.artifacts.create({
-      kind: "script",
-      name: `${cell.title} assembly`,
-    });
-    if (!script.ok) throw new Error(script.error.message);
-    await engine.files.write(
-      script.value.artifactId,
-      "assembly.json",
-      JSON.stringify({
-        sequenceId: primary.sequenceId,
-        sequenceRevision: revision,
-        clipArtifactIds: clips,
-        audioArtifactId: audioId,
-        assembledAt: new Date().toISOString(),
-      }),
+    const assembled = await assembleCanonicalSequence(
+      engine,
+      document,
+      cell,
     );
-    return { artifactId: script.value.artifactId, tool: "engine_sequence" };
+    return {
+      artifactId: assembled.scriptArtifactId,
+      tool: "engine_sequence",
+      cellInputs: {
+        sequenceRevision: assembled.sequenceRevision,
+        sequenceId: assembled.sequenceId,
+        clipArtifactIds: assembled.clipArtifactIds,
+        audioArtifactId: assembled.audioArtifactId,
+        state: "completed",
+      },
+    };
   }
 
   if (cell.type === "export") {
     const sequenceCell = upstreamValues(document, cell)
       .find((entry) => entry.cell.type === "sequence")
-      ?.cell;
-    if (
-      sequenceCell
-      && typeof sequenceCell.inputs?.sequenceRevision === "string"
-      && sequenceCell.inputs.sequenceRevision !== engine.head
-    ) {
-      throw new Error("Sequence revision is stale; re-run assembly before export");
+      ?.cell
+      ?? document.cells.find((candidate) => candidate.type === "sequence");
+    if (!sequenceCell) {
+      throw new Error(`Export cell ${cell.id} has no sequence upstream`);
     }
-    const clips = document.cells
-      .filter((candidate) => candidate.type === "video" && candidate.outputArtifactId)
-      .sort((left, right) => left.position.x - right.position.x)
-      .map((candidate) => candidate.outputArtifactId!);
-    const audioId = document.cells.find((candidate) => candidate.type === "audio")
-      ?.outputArtifactId ?? null;
-    if (clips.length === 0) {
-      throw new Error(`Export cell ${cell.id} has no assembled clips`);
+    const pinnedRevision = typeof sequenceCell.inputs?.sequenceRevision === "string"
+      ? sequenceCell.inputs.sequenceRevision
+      : null;
+    if (!pinnedRevision) {
+      throw new Error("Sequence has not been assembled; run assembly before export");
     }
-    const result = await exportSequenceMaster(engine, clips, audioId, cell.title);
-    return { artifactId: result.artifactId, tool: "ffmpeg" };
+    const clipArtifactIds = Array.isArray(sequenceCell.inputs?.clipArtifactIds)
+      ? sequenceCell.inputs.clipArtifactIds.filter((value): value is string =>
+        typeof value === "string")
+      : [];
+    const audioArtifactId = typeof sequenceCell.inputs?.audioArtifactId === "string"
+      ? sequenceCell.inputs.audioArtifactId
+      : null;
+    if (clipArtifactIds.length === 0) {
+      throw new Error(`Export cell ${cell.id} has no assembled clips on the sequence`);
+    }
+    assertSequenceMatchesAssembly(engine, clipArtifactIds, pinnedRevision);
+    const result = await exportSequenceMaster(
+      engine,
+      clipArtifactIds,
+      audioArtifactId,
+      cell.title,
+    );
+    return {
+      artifactId: result.artifactId,
+      tool: "ffmpeg",
+      cellInputs: {
+        sequenceRevision: pinnedRevision,
+        state: "completed",
+      },
+    };
   }
 
   if (cell.type === "image" || cell.type === "video") {
@@ -583,7 +843,7 @@ async function executeLocalOrGeneration(
   throw new Error(`Cell type ${cell.type} is not runnable`);
 }
 
-async function runCell(
+export async function runNotebookCell(
   engine: Engine,
   bookId: string,
   notebookId: string,
@@ -613,7 +873,21 @@ async function runCell(
       "run_notebook_cell",
       (current) => {
         const base = output.document ?? current;
-        return withExecution(base, cell.id, state, output.artifactId);
+        const withOutput = withExecution(base, cell.id, state, output.artifactId);
+        if (!output.cellInputs) return withOutput;
+        return {
+          ...withOutput,
+          cells: withOutput.cells.map((candidate) =>
+            candidate.id === cell.id
+              ? {
+                  ...candidate,
+                  inputs: {
+                    ...(candidate.inputs ?? {}),
+                    ...output.cellInputs,
+                  },
+                }
+              : candidate),
+        };
       },
       { cellId: cell.id, outputArtifactId: output.artifactId, tool: output.tool },
     );
@@ -724,7 +998,7 @@ export function registerRunNotebookJob(engine: Engine): void {
         continue;
       }
       try {
-        const result = await runCell(
+        const result = await runNotebookCell(
           engine,
           input.bookId,
           input.notebookId,

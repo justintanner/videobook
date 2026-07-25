@@ -1290,6 +1290,7 @@ export function videobookDomainDefs(
             if (typeof args.model !== "string") {
               return failure("Switching requires an allowed generation model");
             }
+            const nextModel = String(args.model);
             const updated = await mutateNotebook(
               engine,
               notebook.id,
@@ -1298,7 +1299,16 @@ export function videobookDomainDefs(
                 ...document,
                 cells: document.cells.map((cell) =>
                   cell.id === existing.cellId
-                    ? { ...cell, model: String(args.model) }
+                    ? {
+                        ...cell,
+                        model: nextModel,
+                        // Model switch can pass a generation tool name; keep tool in sync.
+                        ...(nextModel.startsWith("generate_")
+                          || nextModel.startsWith("extend_")
+                          || nextModel.startsWith("upscale_")
+                          ? { tool: nextModel }
+                          : {}),
+                      }
                     : cell),
               }),
               {
