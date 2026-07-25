@@ -17,6 +17,7 @@ import {
 import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
 import { ingestWorkspaceOutputs } from "./_persist-output.js";
 import { getApiKey } from "../api-key.js";
+import { withTransientStorageRetry } from "./_storage-retry.js";
 
 export type ProcessVideoPayload = {
   type: "process_video";
@@ -374,7 +375,10 @@ export function registerProcessVideoJob(fs: Engine): void {
       processPayload.assetId,
       ctx,
       "process",
-      async () => processVideoFiles(fs, processPayload, ctx.signal),
+      async () => withTransientStorageRetry(
+        () => processVideoFiles(fs, processPayload, ctx.signal),
+        ctx.signal,
+      ),
     );
   });
 }

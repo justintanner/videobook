@@ -312,8 +312,16 @@ export function semanticSearchDefs(
                 extension: extname(source.name).toLowerCase(),
                 ...common,
               };
-        await queue.enqueue(jobId, payload as unknown as Record<string, unknown>);
-        return json({ jobId, artifactId: artifact.value.artifactId });
+        const queued = await queue.enqueue(
+          jobId,
+          payload as unknown as Record<string, unknown>,
+        );
+        return json({
+          jobId: queued.id,
+          operationId: queued.operationId,
+          requestId: jobId,
+          artifactId: artifact.value.artifactId,
+        });
       },
     },
     {

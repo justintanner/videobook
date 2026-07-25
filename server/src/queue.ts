@@ -42,7 +42,7 @@ interface QueueIndexEntry {
 }
 
 interface Queue {
-  enqueue(jobId: string, payload: JobPayload): Promise<void>;
+  enqueue(jobId: string, payload: JobPayload): Promise<Job>;
   enqueueAndWait<T = unknown>(
     jobId: string,
     payload: JobPayload,
@@ -376,6 +376,7 @@ export const queue: Queue = {
     const { bookId, engine } = await ensureBookReady(jobId, payload);
     const result = engine.jobs.queue.enqueue(enqueueOptions(jobId, payload));
     rememberJob(jobId, { bookId, internalId: result.job.id });
+    return result.job;
   },
   async enqueueAndWait<T = unknown>(
     jobId: string,

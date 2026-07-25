@@ -6,7 +6,10 @@ import { createOpenAi } from "@apicity/openai";
 import { queue, registerJobHandler, type JobHandlerContext } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { probeVideo } from "../ffmpeg.js";
-import { withLocalLease } from "./_lease.js";
+import {
+  DOWNSTREAM_LEASE_WAIT_MS,
+  withLocalLease,
+} from "./_lease.js";
 import { chunkStarts, chunkLength, extractAudioChunk } from "./_audio-chunks.js";
 import { enqueueLazyAnalysisIfSlotted, enqueueLazyTimelineRender } from "../lazy-render.js";
 
@@ -118,7 +121,7 @@ export async function runTranscribeVideoAudio(
       await fs.history.logAction("transcribe-soft-fail", { assetId, error: reason }).catch(() => undefined);
       return { success: false, reason };
     }
-  });
+  }, { waitForActiveMs: DOWNSTREAM_LEASE_WAIT_MS });
   // A force re-process (trim, re-download) invalidated the vision analysis;
   // for slotted assets re-run it here — after speech-to-text, so the analyze
   // prompt includes the fresh transcript — which revives auto-transcribe and

@@ -4,7 +4,10 @@ import { readFile } from "node:fs/promises";
 import type { KieGeminiPart } from "@apicity/kie";
 import { registerJobHandler, queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
-import { withLocalLease } from "./_lease.js";
+import {
+  DOWNSTREAM_LEASE_WAIT_MS,
+  withLocalLease,
+} from "./_lease.js";
 import { findAudioFile } from "videobook-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
 import { enqueueLazyTimelineRender } from "../lazy-render.js";
@@ -155,7 +158,7 @@ export function registerAnalyzeVideoJob(fs: Engine): void {
     return { success: true, fallback: analysis === FALLBACK_ANALYSIS, analysis };
 
     }
-    });
+    }, { waitForActiveMs: DOWNSTREAM_LEASE_WAIT_MS });
     try {
       await enqueueLazyTimelineRender(fs, bookId, assetId);
     } catch (err) {

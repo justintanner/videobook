@@ -4,6 +4,7 @@ import type { JobHandlerContext } from "../queue.js";
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const HEARTBEAT_EXTEND_MS = 60_000;
 const DEFAULT_LEASE_MS = 15 * 60_000;
+export const DOWNSTREAM_LEASE_WAIT_MS = 60_000;
 
 type LeaseOptions = {
   durationMs?: number;
@@ -21,10 +22,12 @@ async function beginLocalLease(
   assetId: string,
   kind: ArtifactWorkKind,
   options: LeaseOptions,
+  signal?: AbortSignal,
 ): Promise<{ ownerId: string } | null> {
   const started = Date.now();
   const waitForActiveMs = options.waitForActiveMs ?? 0;
   while (true) {
+    signal?.throwIfAborted();
     const lease = await fs.jobs.artifactWork.begin(assetId, {
       kind,
       ownerKind: "job",
@@ -66,7 +69,14 @@ export async function withProviderHandoff<T>(
   }
 
   if (!ownerId) {
-    const lease = await beginLocalLease(fs, bookId, assetId, kind, options);
+    const lease = await beginLocalLease(
+      fs,
+      bookId,
+      assetId,
+      kind,
+      options,
+      ctx.signal,
+    );
     if (!lease) {
       throw new Error(
         `could not claim local lease for ${assetId}: active owner already holds it`,
@@ -111,7 +121,14 @@ export async function withLocalLease<T>(
   fn: (ownerId: string) => Promise<T>,
   options: LeaseOptions = {},
 ): Promise<T> {
-  const lease = await beginLocalLease(fs, bookId, assetId, kind, options);
+  const lease = await beginLocalLease(
+    fs,
+    bookId,
+    assetId,
+    kind,
+    options,
+    ctx.signal,
+  );
   if (!lease) {
     throw new Error(
       `could not claim local lease for ${assetId}: active owner already holds it`,

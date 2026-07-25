@@ -21,7 +21,11 @@ import {
   registerLocalClapSearchProvider,
   registerLocalClipSearchProvider,
 } from "../local-search-models.js";
-import { withLocalLease } from "./_lease.js";
+import {
+  DOWNSTREAM_LEASE_WAIT_MS,
+  withLocalLease,
+} from "./_lease.js";
+import { withTransientStorageRetry } from "./_storage-retry.js";
 
 const MANIFEST: IndexManifest = {
   manifestId: "videobook-progressive-local-v1",
@@ -95,10 +99,14 @@ export async function runSemanticIndex(
     payload.assetId,
     ctx,
     "analyze",
-    async () => indexArtifact(fs, payload.assetId, {
-      semanticVisual: true,
-      signal: ctx.signal,
-    }),
+    async () => withTransientStorageRetry(
+      () => indexArtifact(fs, payload.assetId, {
+        semanticVisual: true,
+        signal: ctx.signal,
+      }),
+      ctx.signal,
+    ),
+    { waitForActiveMs: DOWNSTREAM_LEASE_WAIT_MS },
   );
 }
 

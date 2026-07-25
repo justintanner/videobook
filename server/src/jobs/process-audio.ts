@@ -4,6 +4,7 @@ import { queue, registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
 import { registerMediaStreams } from "./process-video.js";
+import { withTransientStorageRetry } from "./_storage-retry.js";
 
 export type ProcessAudioPayload = {
   type: "process_audio";
@@ -83,7 +84,10 @@ export function registerProcessAudioJob(fs: Engine): void {
       input.assetId,
       ctx,
       "process",
-      async () => processAudioFile(fs, input, ctx.signal),
+      async () => withTransientStorageRetry(
+        () => processAudioFile(fs, input, ctx.signal),
+        ctx.signal,
+      ),
     );
   });
 }

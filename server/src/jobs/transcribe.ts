@@ -1,6 +1,9 @@
 import type { Engine } from "videobook-engine";
 import { queue, registerJobHandler } from "../queue.js";
-import { withLocalLease } from "./_lease.js";
+import {
+  DOWNSTREAM_LEASE_WAIT_MS,
+  withLocalLease,
+} from "./_lease.js";
 import { transcribeAssetToElevenLabsJson } from "./_transcribe.js";
 import {
   enqueueLazyAnalysisIfSlotted,
@@ -44,6 +47,7 @@ export function registerTranscribeJob(fs: Engine): void {
         });
         return { success: true, provider: "elevenlabs" as const };
       },
+      { waitForActiveMs: DOWNSTREAM_LEASE_WAIT_MS },
     );
     await queue.enqueue(`semantic-index-${assetId}-transcript-${Date.now()}`, {
       type: "semantic_index",

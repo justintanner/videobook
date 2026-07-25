@@ -231,6 +231,13 @@ interface CanvasCellData extends NotebookCellData {
 type CanvasNode = Node<CanvasCellData>
 
 const mcpUrl = new URL('/mcp', window.location.origin).toString()
+const ingestPollIntervalMs = 750
+const ingestPollTimeoutMs = 5 * 60_000
+const activeJobStates = new Set(['queued', 'running', 'completing'])
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
 
 const screenNavigation: Array<{
   id: Exclude<Screen, 'notebook'>
@@ -1052,6 +1059,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [secretKey, setSecretKey] = useState('KIE_API_KEY')
   const [secretValue, setSecretValue] = useState('')
   const [busy, setBusy] = useState(false)
+  const [processingArtifactId, setProcessingArtifactId] = useState<string | null>(null)
   const [online, setOnline] = useState(() => window.navigator.onLine)
   const [, setNotice] = useState('Connect to the server, then load your books.')
   const flowRef = useRef<ReactFlowInstance<CanvasNode, Edge> | null>(null)
@@ -1638,19 +1646,87 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setNotice('Saving microphone recording…')
   }
 
+  const waitForIngestProcessing = useCallback(async (
+    targetBookId: string,
+    artifactId: string,
+    jobId: number,
+  ): Promise<IngestStatus | null> => {
+    const deadline = Date.now() + ingestPollTimeoutMs
+    let quietPolls = 0
+    let failedPolls = 0
+    let lastError: unknown = null
+    while (Date.now() < deadline) {
+      try {
+        const [jobValue, ingestValue] = await Promise.all([
+          call('list_jobs', { book_id: targetBookId, limit: 200 }),
+          call('list_ingest_status', { book_id: targetBookId, limit: 200 }),
+        ])
+        const nextJobs = asJobs(jobValue)
+        const nextStatuses = asIngestStatuses(ingestValue)
+        const job = nextJobs.find((candidate) => candidate.id === jobId)
+        const status = nextStatuses.find((candidate) =>
+          candidate.artifactId === artifactId) ?? null
+        const active = nextJobs.some((candidate) =>
+          candidate.artifactId === artifactId
+          && activeJobStates.has(candidate.state))
+        setJobs(nextJobs)
+        setIngestStatuses(nextStatuses)
+        setJobSnapshotAt(Date.now())
+        failedPolls = 0
+        if (job?.state === 'failed' || job?.state === 'aborted') {
+          const error = new Error(
+            job.error?.message ?? `Processing job ${job.id} ${job.state}`,
+          )
+          error.name = 'ProcessingJobError'
+          throw error
+        }
+        if (status?.state === 'ready') return status
+        if (job?.state === 'done' && !active) {
+          quietPolls += 1
+          if (quietPolls >= 2) return status
+        } else {
+          quietPolls = 0
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === 'ProcessingJobError') {
+          throw error
+        }
+        lastError = error
+        failedPolls += 1
+        if (failedPolls >= 5) throw error
+      }
+      await delay(ingestPollIntervalMs)
+    }
+    if (lastError instanceof Error) throw lastError
+    throw new Error('Processing did not finish within five minutes')
+  }, [call])
+
   const retryIngest = async (artifactId: string) => {
     if (!bookId) return
     setBusy(true)
+    setProcessingArtifactId(artifactId)
     try {
-      await call('retry_ingest', {
+      const result = record(await call('retry_ingest', {
         book_id: bookId,
         artifact_id: artifactId,
-      })
-      await refreshBookData(bookId, notebook?.id)
-      setNotice('Ingest retry queued')
+      }))
+      const jobId = asNumber(result?.jobId)
+      if (!jobId) throw new Error('The server did not return a processing job')
+      setNotice('Processing media…')
+      const status = await waitForIngestProcessing(bookId, artifactId, jobId)
+      const missing = status?.missingOutputs ?? []
+      setNotice(missing.length > 0
+        ? `Processing finished; ${missing.join(', ')} not indexed`
+        : 'Processing complete')
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error))
     } finally {
+      try {
+        await refreshBookData(bookId, notebook?.id)
+      } catch {
+        void 0
+      }
+      setProcessingArtifactId(null)
       setBusy(false)
     }
   }
@@ -3410,7 +3486,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       disabled={busy}
                       onClick={() => void retryIngest(asset.artifactId)}
                     >
-                      <RefreshCw size={13} />Retry processing
+                      <RefreshCw size={13} />
+                      {processingArtifactId === asset.artifactId
+                        ? 'Processing…'
+                        : 'Retry processing'}
                     </button>
                   </article>
                 ))}
