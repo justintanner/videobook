@@ -1,10 +1,17 @@
 import type { Engine, Artifact, ArtifactKind } from "videobook-engine";
 import * as path from "node:path";
 import { queue } from "../queue.js";
-import { probeVideo } from "../ffmpeg.js";
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".avi", ".mkv"]);
-const AUDIO_EXTENSIONS = new Set([".mp3", ".wav", ".aac", ".flac", ".ogg"]);
+const AUDIO_EXTENSIONS = new Set([
+  ".mp3",
+  ".wav",
+  ".aac",
+  ".flac",
+  ".ogg",
+  ".m4a",
+  ".weba",
+]);
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"]);
 const SCRIPT_EXTENSIONS = new Set([".md"]);
 
@@ -155,15 +162,16 @@ export async function processExternalUpload(
     } as unknown as Record<string, unknown>);
   } else if (upload.mediaType === "audio") {
     const audioPath = path.join(upload.assetDir, targetFilename);
-    let duration: number | undefined;
-    try {
-      const probe = await probeVideo(audioPath);
-      if (Number.isFinite(probe.duration) && probe.duration > 0) {
-        duration = probe.duration;
-      }
-    } catch { /* non-fatal — list_assets backfill can recover */ }
-    await fs.metadata.artifacts.write(upload.assetId, "original", { ...provenance, ...(duration !== undefined ? { duration } : {}) }
-    );
+    const jobId = `process-audio-${upload.assetId}-${Date.now()}`;
+    await queue.enqueue(jobId, {
+      type: "process_audio",
+      audioPath,
+      sourceFilename: targetFilename,
+      assetId: upload.assetId,
+      assetDir: upload.assetDir,
+      bookId,
+      provenance,
+    } as unknown as Record<string, unknown>);
   } else {
     await fs.metadata.artifacts.write(upload.assetId, "original", provenance);
   }

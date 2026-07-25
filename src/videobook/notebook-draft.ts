@@ -84,9 +84,13 @@ export function notebookDocument(
   edges: Edge[],
 ): NotebookDocument {
   const normalizedNodes = normalizeNotebookGridNodes(nodes)
+  const baseCells = new Map(base.cells.map((cell) => [cell.id, cell]))
   return {
     ...base,
-    cells: normalizedNodes.map(cellFromNode),
+    cells: normalizedNodes.map((node) => ({
+      ...baseCells.get(node.id),
+      ...cellFromNode(node),
+    })),
     edges: edges.map((edge) => ({
       id: edge.id,
       source: edge.source,

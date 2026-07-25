@@ -5,6 +5,9 @@ import { withBookContext } from "../book-context.js";
 import { bookManager } from "../fs.js";
 import type { ToolDef } from "./tool-def.js";
 import { videobookDomainDefs } from "./videobook-domain.js";
+import { semanticSearchDefs } from "./semantic-search.js";
+import { commandPlanDefs } from "./command-plan.js";
+import { exportSequenceDefs } from "./export-sequence.js";
 import { apiStatusDef } from "./api-status.js";
 import { providerKeyStatusDef } from "./provider-key-status.js";
 import { setEnvSecretDef } from "./set-env-secret.js";
@@ -462,6 +465,9 @@ export function getAllToolDefs(
     createQartDef(fs),
     createQrbtfDef(fs),
     getWatermarkConfigDef(fs),
+    ...commandPlanDefs(fs),
+    ...exportSequenceDefs(fs),
+    ...semanticSearchDefs(fs, books),
     ...videobookDomainDefs(fs, books),
   ];
 

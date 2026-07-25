@@ -1,8 +1,11 @@
 import type { Engine } from "videobook-engine";
-import { registerJobHandler } from "../queue.js";
+import { queue, registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 import { transcribeAssetToElevenLabsJson } from "./_transcribe.js";
-import { enqueueLazyTimelineRender } from "../lazy-render.js";
+import {
+  enqueueLazyAnalysisIfSlotted,
+  enqueueLazyTimelineRender,
+} from "../lazy-render.js";
 
 type TranscribePayload = {
   type: "transcribe";
@@ -42,6 +45,16 @@ export function registerTranscribeJob(fs: Engine): void {
         return { success: true, provider: "elevenlabs" as const };
       },
     );
+    await queue.enqueue(`semantic-index-${assetId}-transcript-${Date.now()}`, {
+      type: "semantic_index",
+      assetId,
+      bookId,
+    } as unknown as Record<string, unknown>);
+    try {
+      await enqueueLazyAnalysisIfSlotted(fs, bookId, assetId);
+    } catch (err) {
+      void err;
+    }
     try {
       await enqueueLazyTimelineRender(fs, bookId, assetId);
     } catch (err) {

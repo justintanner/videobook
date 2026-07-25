@@ -4,11 +4,15 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { BookManager } from '../../server/src/book-manager.js'
 import { scopedBookEngine, withBookContext } from '../../server/src/book-context.js'
+import {
+  updateGenerationPlanState,
+  writeGenerationPlanProvenance,
+} from '../../server/src/jobs/run-notebook.js'
 import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
 
 function resultJson(result: Awaited<ReturnType<ToolDef['handler']>>): unknown {
-  expect(result.isError).toBeUndefined()
+  expect(result.isError, result.content[0]?.text).toBeUndefined()
   return JSON.parse(result.content[0]!.text) as unknown
 }
 
@@ -92,5 +96,363 @@ describe('v2 notebook domain tools', () => {
       position: { x: 400, y: 80 },
     })
     expect(document.edges).toEqual([{ source: prompt.id, target: image.id, targetInput: 'prompt', id: expect.any(String) }])
+  })
+
+  it('cancels a queued persistent job explicitly', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({ slug: 'cancel-job' })) as {
+      bookId: string
+    }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const queued = managed.value.engine.jobs.queue.enqueue({
+      type: 'semantic_index',
+      payload: {
+        type: 'semantic_index',
+        bookId: created.bookId,
+        assetId: '019f94ce-bc08-7428-8a9c-8da26066141c',
+      },
+      dedupeKey: 'cancel-me',
+    })
+    const cancelled = resultJson(await withBookContext(
+      { bookId: created.bookId, engine: managed.value.engine },
+      () => byName.get('cancel_job')!.handler({
+        book_id: created.bookId,
+        job_id: queued.job.id,
+      }),
+    )) as { id: number; state: string; error: { message: string } }
+    expect(cancelled).toMatchObject({
+      id: queued.job.id,
+      state: 'aborted',
+      error: { message: 'Cancelled by user' },
+    })
+  })
+
+  it('adds and removes empty canonical sequence tracks', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      slug: 'track-lifecycle',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+
+    const invoke = async (name: string, args: Record<string, unknown>) => {
+      const def = byName.get(name)
+      if (!def) throw new Error(`Missing ${name}`)
+      return await withBookContext(
+        { bookId: created.bookId, engine: managed.value.engine },
+        () => def.handler({ book_id: created.bookId, ...args }),
+      )
+    }
+
+    const initial = resultJson(await invoke('get_primary_sequence', {})) as {
+      revision: string
+      tracks: Array<{ trackId: string; kind: string; name: string; ordinal: number }>
+    }
+    const added = resultJson(await invoke('add_sequence_track', {
+      kind: 'video',
+      name: 'B-roll',
+    })) as typeof initial
+    const addedTrack = added.tracks.find((track) => track.name === 'B-roll')
+    expect(added.revision).not.toBe(initial.revision)
+    expect(addedTrack).toMatchObject({
+      kind: 'video',
+      ordinal: initial.tracks.filter((track) => track.kind === 'video').length,
+    })
+
+    const removed = resultJson(await invoke('remove_sequence_track', {
+      track_id: addedTrack!.trackId,
+    })) as typeof initial
+    expect(removed.revision).not.toBe(added.revision)
+    expect(removed.tracks.some((track) => track.trackId === addedTrack!.trackId)).toBe(false)
+    expect(removed.tracks).toHaveLength(initial.tracks.length)
+  })
+
+  it('round-trips semantic cells, typed references, and pinned search results', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({ slug: 'semantic-story' })) as {
+      bookId: string
+    }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const notebookId = managed.value.engine.notebooks.list()[0]!.id
+    const artifact = await managed.value.engine.artifacts.create('video', 'interview')
+    expect(artifact.ok).toBe(true)
+    if (!artifact.ok) return
+    const file = await managed.value.engine.files.write(
+      artifact.value.artifactId,
+      'original.mp4',
+      Buffer.from('semantic video bytes'),
+    )
+    expect(file.ok).toBe(true)
+    if (!file.ok) return
+    const manifest = await managed.value.engine.files.manifest(artifact.value.artifactId)
+    expect(manifest.ok).toBe(true)
+    if (!manifest.ok) return
+    const objectHash = manifest.value.files[0]?.objectHash
+    expect(objectHash).toBeTruthy()
+    if (!objectHash) return
+    const stream = await managed.value.engine.streams.register({
+      artifactId: artifact.value.artifactId,
+      sourcePath: 'original.mp4',
+      objectHash,
+      streamIndex: 0,
+      kind: 'video',
+      timeBase: { numerator: 1, denominator: 1_000 },
+      durationTicks: 12_000,
+      codec: 'h264',
+      video: {
+        width: 1920,
+        height: 1080,
+        rotationDegrees: 0,
+        pixelAspect: { numerator: 1, denominator: 1 },
+        nominalFrameRate: { numerator: 30, denominator: 1 },
+      },
+    })
+    expect(stream.ok, stream.ok ? '' : JSON.stringify(stream.error)).toBe(true)
+    if (!stream.ok) return
+
+    const invoke = async (name: string, args: Record<string, unknown>) => {
+      const def = byName.get(name)
+      if (!def) throw new Error(`Missing ${name}`)
+      return await withBookContext(
+        { bookId: created.bookId, engine: managed.value.engine },
+        () => def.handler({ book_id: created.bookId, ...args }),
+      )
+    }
+    const revision = managed.value.engine.head
+    const referenceId = managed.value.engine.notebooks.createCell({
+      type: 'note',
+      title: 'Reference ID',
+      position: { x: 0, y: 0 },
+    }).id
+    const resultId = managed.value.engine.notebooks.createCell({
+      type: 'note',
+      title: 'Result ID',
+      position: { x: 0, y: 0 },
+    }).id
+    const cell = resultJson(await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'search',
+        title: 'Warm interview moments',
+        position: { x: 360, y: 320 },
+        references: [{
+          id: referenceId,
+          kind: 'stream',
+          target_id: stream.value.streamId,
+          snapshot: { objectHash },
+          ordinal: 0,
+        }],
+        pinned_results: [{
+          id: resultId,
+          artifact_id: artifact.value.artifactId,
+          object_hash: objectHash,
+          location: {
+            kind: 'timed',
+            artifactId: artifact.value.artifactId,
+            range: {
+              streamId: stream.value.streamId,
+              objectHash,
+              startTick: 2_000,
+              durationTicks: 3_000,
+              timeBase: { numerator: 1, denominator: 1_000 },
+            },
+          },
+          representative_tick: 3_000,
+          query: { kind: 'text', text: 'warm interview' },
+          signals: [{ kind: 'visual', rank: 1, score: 0.93 }],
+          selected_revision: revision,
+          ordinal: 0,
+          created_at: 1,
+        }],
+      },
+    })) as {
+      type: string
+      references: Array<{ id: string; target_id: string }>
+      pinned_results: Array<{ id: string; selected_revision: string }>
+    }
+
+    expect(cell.type).toBe('search')
+    expect(cell.references).toEqual([expect.objectContaining({
+      id: referenceId,
+      target_id: stream.value.streamId,
+    })])
+    expect(cell.pinned_results).toEqual([expect.objectContaining({
+      id: resultId,
+      selected_revision: revision,
+    })])
+    const stored = managed.value.engine.notebooks.read(notebookId)
+    expect(stored.ok).toBe(true)
+    if (!stored.ok) return
+    expect(stored.value.cells[0]?.references?.[0]?.targetId).toBe(stream.value.streamId)
+    expect(stored.value.cells[0]?.pinnedResults?.[0]?.artifactId).toBe(artifact.value.artifactId)
+  })
+
+  it('preserves generation plans across retry, model switch, and omit', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      slug: 'generation-lifecycle',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const notebookId = managed.value.engine.notebooks.list()[0]!.id
+    const invoke = async (name: string, args: Record<string, unknown>) => {
+      const def = byName.get(name)
+      if (!def) throw new Error(`Missing ${name}`)
+      return await withBookContext(
+        { bookId: created.bookId, engine: managed.value.engine },
+        () => def.handler({ book_id: created.bookId, ...args }),
+      )
+    }
+    const image = resultJson(await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'image',
+        title: 'Opening image',
+        position: { x: 0, y: 0 },
+        prompt: 'A moonlit garden',
+        model: 'generate_kie_gpt_image_2_text_to_image',
+      },
+    })) as { id: string }
+    const plan = resultJson(await invoke('plan_notebook_generation', {
+      notebook_id: notebookId,
+      cell_id: image.id,
+      source_surface: 'ui',
+      actor: 'tester',
+      timeline_start_frame: 12,
+      duration_frames: 48,
+    })) as {
+      planId: string
+      stages: Array<{
+        kind: string
+        tool: string
+        provider: string
+        model: string
+        continuation: { destination: { timelineStartFrame: number } }
+      }>
+    }
+    expect(plan.stages[0]).toMatchObject({
+      kind: 'queued',
+      tool: 'run_notebook_cell',
+      provider: 'kie',
+      continuation: { destination: { timelineStartFrame: 12 } },
+    })
+    const output = await managed.value.engine.artifacts.create('image', 'generated output')
+    expect(output.ok).toBe(true)
+    if (!output.ok) return
+    const outputFile = await managed.value.engine.files.write(
+      output.value.artifactId,
+      'original.png',
+      Buffer.from('generated image bytes'),
+    )
+    expect(outputFile.ok).toBe(true)
+    if (!outputFile.ok) return
+    const notebook = managed.value.engine.notebooks.read(notebookId)
+    expect(notebook.ok).toBe(true)
+    if (!notebook.ok) return
+    const cell = notebook.value.cells.find((candidate) => candidate.id === image.id)
+    expect(cell).toBeTruthy()
+    if (!cell) return
+    await writeGenerationPlanProvenance(
+      managed.value.engine,
+      {
+        type: 'run_notebook',
+        bookId: created.bookId,
+        notebookId,
+        generationPlan: plan as unknown as Record<string, unknown>,
+        actor: 'tester',
+        jobId: 'generation-job-1',
+      },
+      cell,
+      output.value.artifactId,
+    )
+    await updateGenerationPlanState(
+      managed.value.engine,
+      notebookId,
+      plan.planId,
+      'awaiting-output',
+      { outputArtifactId: output.value.artifactId },
+    )
+    const provenance = await managed.value.engine.metadata.artifacts.read<{
+      planId: string
+      provider: string
+      jobId: string
+      outputArtifactId: string
+    }>(output.value.artifactId, 'command-plan')
+    expect(provenance.ok).toBe(true)
+    if (provenance.ok) {
+      expect(provenance.value).toMatchObject({
+        planId: plan.planId,
+        provider: 'kie',
+        jobId: 'generation-job-1',
+        outputArtifactId: output.value.artifactId,
+      })
+    }
+    const continuation = resultJson(await invoke('continue_notebook_generation', {
+      notebook_id: notebookId,
+      plan_id: plan.planId,
+      actor: 'tester',
+    })) as {
+      parentActionId: string
+      stages: Array<{ intent: { operations: Array<{ kind: string }> } }>
+    }
+    expect(continuation).toMatchObject({
+      parentActionId: plan.planId,
+      stages: [{
+        intent: { operations: [expect.objectContaining({ kind: 'insert-clip' })] },
+      }],
+    })
+    const retry = resultJson(await invoke('revise_notebook_generation_plan', {
+      notebook_id: notebookId,
+      plan_id: plan.planId,
+      action: 'retry',
+      source_surface: 'slash',
+      actor: 'tester',
+    })) as { planId: string; parentActionId: string }
+    expect(retry.planId).not.toBe(plan.planId)
+    expect(retry.parentActionId).toBe(plan.planId)
+    const switched = resultJson(await invoke('revise_notebook_generation_plan', {
+      notebook_id: notebookId,
+      plan_id: retry.planId,
+      action: 'switch',
+      model: 'generate_kie_wan_2_7_text_to_image',
+      source_surface: 'chat',
+      actor: 'tester',
+    })) as {
+      planId: string
+      stages: Array<{ model: string; input: { generation_tool: string } }>
+    }
+    expect(switched.stages[0]).toMatchObject({
+      model: 'Wan27ImageRequestSchema',
+      input: { generation_tool: 'generate_kie_wan_2_7_text_to_image' },
+    })
+    resultJson(await invoke('revise_notebook_generation_plan', {
+      notebook_id: notebookId,
+      plan_id: switched.planId,
+      action: 'omit',
+      source_surface: 'ui',
+      actor: 'tester',
+    }))
+    const plans = resultJson(await invoke('list_notebook_generation_plans', {
+      notebook_id: notebookId,
+    })) as Array<{ planId: string; status: string }>
+    expect(plans).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        planId: plan.planId,
+        status: 'continued',
+        outputArtifactId: output.value.artifactId,
+      }),
+      expect.objectContaining({ planId: retry.planId, status: 'planned' }),
+      expect.objectContaining({ planId: switched.planId, status: 'omitted' }),
+    ]))
   })
 })

@@ -1,12 +1,22 @@
 import type { Engine } from "videobook-engine";
 import { basename, extname, join } from "node:path";
-import { mkdir, readFile as fsReadFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile as fsReadFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { registerJobHandler, queue } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 import { enqueueLazyAnalysisIfSlotted } from "../lazy-render.js";
-import { probeVideo, runFfmpeg, extractWaveform, isThumbnailBlank, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
+import {
+  probeVideo,
+  runFfmpeg,
+  extractWaveform,
+  isThumbnailBlank,
+  H264_MEDIUM,
+  AUDIO_OPTS,
+  type ProbeResult,
+} from "../ffmpeg.js";
 import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
 import { ingestWorkspaceOutputs } from "./_persist-output.js";
+import { getApiKey } from "../api-key.js";
 
 export type ProcessVideoPayload = {
   type: "process_video";
@@ -52,6 +62,38 @@ async function writeBinaryIfChanged(
   const written = await fs.files.write(assetId, filename, data);
   if (!written.ok) {
     throw new Error(`writeFile ${filename} failed for ${assetId}: ${written.error.message}`);
+  }
+}
+
+export async function registerMediaStreams(
+  fs: Engine,
+  assetId: string,
+  sourcePath: string,
+  probe: ProbeResult,
+): Promise<void> {
+  const manifest = await fs.files.manifest(assetId);
+  if (!manifest.ok) {
+    throw new Error(`Failed to read media manifest for ${assetId}: ${manifest.error.message}`);
+  }
+  const objectHash = manifest.value.files.find((file) => file.name === sourcePath)?.objectHash;
+  if (!objectHash) throw new Error(`Media source is missing from the manifest: ${sourcePath}`);
+  for (const stream of [probe.videoStream, probe.audioStream]) {
+    if (!stream) continue;
+    const registered = await fs.streams.register({
+      artifactId: assetId,
+      sourcePath,
+      objectHash,
+      streamIndex: stream.index,
+      kind: stream.video ? "video" : "audio",
+      timeBase: stream.timeBase,
+      durationTicks: stream.durationTicks,
+      codec: stream.codec,
+      ...(stream.video ? { video: stream.video } : {}),
+      ...(stream.audio ? { audio: stream.audio } : {}),
+    });
+    if (!registered.ok) {
+      throw new Error(`Failed to register media stream for ${assetId}: ${registered.error.message}`);
+    }
   }
 }
 
@@ -125,7 +167,9 @@ export async function processVideoFiles(
       }
       activeVideoPath = join(assetDir, "original.mp4");
     }
-
+    const activeSourcePath = sourceExt === ".mp4" ? sourceFilename : "original.mp4";
+    const activeProbe = sourceExt === ".mp4" ? probe : await probeVideo(activeVideoPath, { signal });
+    await registerMediaStreams(fs, assetId, activeSourcePath, activeProbe);
     let frameCount = 0;
     {
 
@@ -140,6 +184,7 @@ export async function processVideoFiles(
           .map((file) => file.name)
           .filter((filename) =>
             filename === "original.jpg" ||
+            filename === "proxy.mp4" ||
             filename.startsWith("original_frames/") ||
             ["landscape", "portrait", "square"].some(
               (orientation) =>
@@ -161,6 +206,33 @@ export async function processVideoFiles(
         await rm(join(assetDir, `${orient}.jpg`), { force: true }).catch(() => {});
         await rm(join(assetDir, `${orient}_frames`), { recursive: true, force: true }).catch(() => {});
         await fs.metadata.artifacts.delete(assetId, `${orient}.render`);
+      }
+    }
+
+    const existingProxy = await fs.files.read(assetId, "proxy.mp4");
+    if (!existingProxy.ok) {
+      const proxyWorkspace = await mkdtemp(join(tmpdir(), "videobook-proxy-"));
+      const proxyPath = join(proxyWorkspace, "proxy.mp4");
+      try {
+        await runFfmpeg([
+          "-y",
+          "-i", activeVideoPath,
+          "-map", "0:v:0",
+          ...(activeProbe.hasAudio ? ["-map", "0:a:0"] : []),
+          "-vf",
+          "scale=1280:720:force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2",
+          "-c:v", "libx264",
+          "-preset", "veryfast",
+          "-crf", "28",
+          "-pix_fmt", "yuv420p",
+          ...(activeProbe.hasAudio ? AUDIO_OPTS : ["-an"]),
+          "-movflags", "+faststart",
+          proxyPath,
+        ], { signal });
+        const proxy = await fs.files.writeFromPath(assetId, "proxy.mp4", proxyPath);
+        if (!proxy.ok) throw new Error(proxy.error.message);
+      } finally {
+        await rm(proxyWorkspace, { recursive: true, force: true });
       }
     }
 
@@ -254,12 +326,30 @@ export async function processVideoFiles(
     // the slot-gated revival below for re-processed (trimmed/re-downloaded)
     // videos, whose analysis sidecar was just invalidated.
     if (process.env.NODE_ENV !== "test") {
+      await queue.enqueue(`semantic-index-${assetId}-${Date.now()}`, {
+        type: "semantic_index",
+        assetId,
+        bookId,
+      } as unknown as Record<string, unknown>);
       if (!skipDownstreamJobs && probe.hasAudio) {
         const transcribeJobId = `transcribe-video-audio-${assetId}-${Date.now()}`;
-        await queue.enqueue(transcribeJobId, {
-          type: "transcribe_video_audio",
-          videoPath: activeVideoPath, assetId, assetDir, bookId,
-        } as unknown as Record<string, unknown>);
+        if (getApiKey("ELEVENLABS_API_KEY")) {
+          await queue.enqueue(transcribeJobId, {
+            type: "transcribe",
+            audioPath: join(assetDir, "original.mp3"),
+            audioFilename: "original.mp3",
+            tagAudioEvents: true,
+            diarize: true,
+            assetId,
+            assetDir,
+            bookId,
+          } as unknown as Record<string, unknown>);
+        } else if (getApiKey("OPENAI_API_KEY")) {
+          await queue.enqueue(transcribeJobId, {
+            type: "transcribe_video_audio",
+            videoPath: activeVideoPath, assetId, assetDir, bookId,
+          } as unknown as Record<string, unknown>);
+        }
       } else if (!skipDownstreamJobs || reviveVisualAnalysis) {
         // Silent video: no transcribe job will run, so revive the slot-drop
         // vision analysis here; transcribe_video_audio's tail owns it for

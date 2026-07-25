@@ -23,6 +23,8 @@ const extensionToPrefix: Record<string, string> = {
   ".aac": "aud",
   ".flac": "aud",
   ".ogg": "aud",
+  ".m4a": "aud",
+  ".weba": "aud",
   ".md": "script",
 };
 
@@ -272,6 +274,19 @@ async function uploadLocal(
           assetId,
           bookId: args.bookId,
           extension: ext,
+          provenance,
+        } as unknown as Record<string, unknown>;
+        processingError = await runProcessingJob(jobId, payload, args.waitForProcessing);
+      } else if (assetId.startsWith("aud-")) {
+        const audioPath = path.join(assetPath, writtenFilename);
+        const jobId = `process-audio-${assetId}-${Date.now()}`;
+        const payload = {
+          type: "process_audio",
+          audioPath,
+          sourceFilename: writtenFilename,
+          assetId,
+          assetDir: assetPath,
+          bookId: args.bookId,
           provenance,
         } as unknown as Record<string, unknown>;
         processingError = await runProcessingJob(jobId, payload, args.waitForProcessing);

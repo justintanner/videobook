@@ -80,6 +80,19 @@ describe("list_assets tool", () => {
     const ids = data.assets.map((a: { id: string }) => a.id);
     expect(ids.some((id: string) => id.startsWith("img-"))).toBe(true);
     expect(ids.some((id: string) => id.startsWith("script-"))).toBe(true);
+    const pageResult = await client.callTool({
+      name: "list_assets",
+      arguments: { book_id: slug, sort: "newest", limit: 1, offset: 1 },
+    });
+    const pageContent = pageResult.content as Array<{ type: string; text: string }>;
+    const page = JSON.parse(pageContent[0].text);
+    expect(page.assets).toHaveLength(1);
+    expect(page.page).toEqual({
+      offset: 1,
+      limit: 1,
+      total: 3,
+      hasMore: true,
+    });
   });
 
   it("sorts newest vs oldest", async () => {

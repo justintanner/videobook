@@ -1,5 +1,5 @@
 import type { Engine } from "videobook-engine";
-import { registerJobHandler } from "../queue.js";
+import { queue, registerJobHandler } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
 import { probeImage, cropToFill } from "../image.js";
 
@@ -40,6 +40,14 @@ export function registerProcessImageJob(fs: Engine): void {
           fs.files.write(assetId, "portrait.jpg", portrait),
           fs.files.write(assetId, "square.jpg", square),
         ]);
+      }
+
+      if (process.env.NODE_ENV !== "test") {
+        await queue.enqueue(`semantic-index-${assetId}-${Date.now()}`, {
+          type: "semantic_index",
+          assetId,
+          bookId,
+        } as unknown as Record<string, unknown>);
       }
 
       // Vision analysis (describe_image) is gated to slot drop in

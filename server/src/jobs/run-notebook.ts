@@ -10,13 +10,17 @@ import type {
 import { mutateNotebook } from "../notebook-mutations.js";
 import { registerJobHandler } from "../queue.js";
 import type { ToolDef, ToolResult } from "../tools/tool-def.js";
+import { getActionSpec } from "../generation-registry.js";
 
-interface RunNotebookPayload {
+export interface RunNotebookPayload {
   type: "run_notebook";
   bookId: string;
   notebookId: string;
   cellIds?: string[];
   force?: boolean;
+  generationPlan?: Record<string, unknown>;
+  actor?: string;
+  jobId?: string;
 }
 
 interface CellExecution {
@@ -27,7 +31,108 @@ interface CellExecution {
   error?: string;
 }
 
-const defaultModel: Record<"image" | "video", string> = {
+function generationPlanStage(
+  plan: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const stages = Array.isArray(plan.stages) ? plan.stages : [];
+  const stage = stages.find((candidate) =>
+    candidate
+    && typeof candidate === "object"
+    && !Array.isArray(candidate)
+    && (candidate as Record<string, unknown>).kind === "queued");
+  return stage && typeof stage === "object" && !Array.isArray(stage)
+    ? stage as Record<string, unknown>
+    : null;
+}
+
+export async function updateGenerationPlanState(
+  engine: Engine,
+  notebookId: string,
+  planId: string,
+  status: string,
+  details: {
+    outputArtifactId?: string;
+    error?: string;
+  } = {},
+): Promise<void> {
+  const updatedAt = new Date().toISOString();
+  const result = await mutateNotebook(
+    engine,
+    notebookId,
+    "update_generation_plan",
+    (notebook) => {
+      const raw = notebook.properties?.generationPlans;
+      const plans = Array.isArray(raw) ? raw : [];
+      return {
+        ...notebook,
+        properties: {
+          ...(notebook.properties ?? {}),
+          generationPlans: plans.map((entry) => {
+            if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+              return entry;
+            }
+            const record = entry as Record<string, unknown>;
+            return record.planId === planId
+              ? {
+                  ...record,
+                  status,
+                  updatedAt,
+                  ...(details.outputArtifactId
+                    ? { outputArtifactId: details.outputArtifactId }
+                    : {}),
+                  ...(details.error ? { error: details.error } : {}),
+                }
+              : entry;
+          }),
+        },
+      };
+    },
+    {
+      planId,
+      status,
+      outputArtifactId: details.outputArtifactId,
+      error: details.error,
+    },
+  );
+  if (!result.ok) throw new Error(result.error.message);
+}
+
+export async function writeGenerationPlanProvenance(
+  engine: Engine,
+  payload: RunNotebookPayload,
+  cell: NotebookCell,
+  outputArtifactId: string,
+): Promise<void> {
+  const plan = payload.generationPlan;
+  if (!plan || typeof plan.planId !== "string") return;
+  const stage = generationPlanStage(plan);
+  const written = await engine.metadata.artifacts.write(
+    outputArtifactId,
+    "command-plan",
+    {
+      planId: plan.planId,
+      parentActionId: typeof plan.parentActionId === "string"
+        ? plan.parentActionId
+        : null,
+      notebookId: payload.notebookId,
+      cellId: cell.id,
+      actor: payload.actor ?? "videobook-user",
+      sourceSurface: plan.sourceSurface,
+      provider: stage?.provider,
+      model: stage?.model,
+      tool: stage?.tool,
+      input: stage?.input,
+      estimatedCostUsd: stage?.estimatedCostUsd,
+      estimateUnavailable: stage?.estimateUnavailable,
+      jobId: payload.jobId,
+      outputArtifactId,
+      createdAt: new Date().toISOString(),
+    },
+  );
+  if (!written.ok) throw new Error(written.error.message);
+}
+
+export const defaultNotebookGenerationModel: Record<"image" | "video", string> = {
   image: "generate_kie_gpt_image_2_text_to_image",
   video: "generate_kie_wan_2_7_text_to_video",
 };
@@ -111,7 +216,7 @@ function fingerprint(
     type: cell.type,
     title: cell.title,
     prompt: cell.prompt ?? "",
-    model: cell.model ?? defaultModel[cell.type as "image" | "video"] ?? "",
+    model: cell.model ?? defaultNotebookGenerationModel[cell.type as "image" | "video"] ?? "",
     inputs: cell.inputs ?? {},
     upstream: upstreamValues(document, cell).map(({ targetInput, cell: source, output }) => ({
       targetInput,
@@ -155,26 +260,63 @@ function modelArgs(
   return args;
 }
 
+export async function prepareNotebookGeneration(
+  engine: Engine,
+  document: NotebookDocument,
+  cell: NotebookCell,
+  bookId: string,
+): Promise<{
+  tool: string;
+  provider: string;
+  model: string;
+  input: Record<string, unknown>;
+}> {
+  const tool = cell.model
+    || defaultNotebookGenerationModel[cell.type as "image" | "video"];
+  if (!tool) throw new Error(`No generation model for ${cell.type} cell ${cell.id}`);
+  const { getAllToolDefs } = await import("../tools/index.js");
+  const definition = getAllToolDefs(engine).find((candidate) => candidate.name === tool);
+  if (!definition) throw new Error(`Unknown notebook generation model: ${tool}`);
+  const parsed = z.object(definition.schema).safeParse(
+    modelArgs(definition, document, cell, bookId),
+  );
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues.map((issue) => issue.message).join("; "));
+  }
+  const spec = getActionSpec(tool);
+  return {
+    tool,
+    provider: spec?.provider ?? "unknown",
+    model: spec?.apicity_identifier ?? tool,
+    input: parsed.data as Record<string, unknown>,
+  };
+}
+
 async function generationTool(
   engine: Engine,
   document: NotebookDocument,
   cell: NotebookCell,
   bookId: string,
 ): Promise<{ artifactId: string; tool: string }> {
-  const model = cell.model || defaultModel[cell.type as "image" | "video"];
-  if (!model) throw new Error(`No generation model for ${cell.type} cell ${cell.id}`);
+  const prepared = await prepareNotebookGeneration(engine, document, cell, bookId);
   const { getAllToolDefs } = await import("../tools/index.js");
-  const definition = getAllToolDefs(engine).find((candidate) => candidate.name === model);
-  if (!definition) throw new Error(`Unknown notebook generation model: ${model}`);
-  const parsed = z.object(definition.schema).safeParse(modelArgs(definition, document, cell, bookId));
-  if (!parsed.success) throw new Error(parsed.error.issues.map((issue) => issue.message).join("; "));
-  const response = await definition.handler(parsed.data as Record<string, unknown>);
-  if (response.isError) throw new Error(response.content[0]?.text ?? `${model} failed`);
+  const definition = getAllToolDefs(engine).find(
+    (candidate) => candidate.name === prepared.tool,
+  );
+  if (!definition) {
+    throw new Error(`Unknown notebook generation model: ${prepared.tool}`);
+  }
+  const response = await definition.handler(prepared.input);
+  if (response.isError) {
+    throw new Error(response.content[0]?.text ?? `${prepared.tool} failed`);
+  }
   const reference = artifactReference(textResult(response));
-  if (!reference) throw new Error(`${model} did not return an output artifact`);
+  if (!reference) {
+    throw new Error(`${prepared.tool} did not return an output artifact`);
+  }
   const artifact = engine.artifacts.get(reference);
   if (!artifact.ok) throw new Error(artifact.error.message);
-  return { artifactId: artifact.value.artifactId, tool: model };
+  return { artifactId: artifact.value.artifactId, tool: prepared.tool };
 }
 
 async function failedArtifact(
@@ -231,7 +373,8 @@ async function runCell(
       fingerprint: nextFingerprint,
       outputArtifactId,
       completedAt: new Date().toISOString(),
-      tool: cell.model || defaultModel[cell.type as "image" | "video"],
+      tool: cell.model
+        || defaultNotebookGenerationModel[cell.type as "image" | "video"],
       error: message,
     };
     const write = await mutateNotebook(
@@ -277,8 +420,39 @@ export function registerRunNotebookJob(engine: Engine): void {
         const result = await runCell(engine, input.bookId, input.notebookId, document, cell);
         document = result.document;
         outputs[cell.id] = result.outputArtifactId;
+        if (
+          input.generationPlan
+          && typeof input.generationPlan.planId === "string"
+        ) {
+          await writeGenerationPlanProvenance(
+            engine,
+            input,
+            cell,
+            result.outputArtifactId,
+          );
+          await updateGenerationPlanState(
+            engine,
+            input.notebookId,
+            input.generationPlan.planId,
+            "awaiting-output",
+            { outputArtifactId: result.outputArtifactId },
+          );
+        }
       } catch (cause) {
-        errors.push(`${cell.title}: ${cause instanceof Error ? cause.message : String(cause)}`);
+        const message = cause instanceof Error ? cause.message : String(cause);
+        errors.push(`${cell.title}: ${message}`);
+        if (
+          input.generationPlan
+          && typeof input.generationPlan.planId === "string"
+        ) {
+          await updateGenerationPlanState(
+            engine,
+            input.notebookId,
+            input.generationPlan.planId,
+            "failed",
+            { error: message },
+          );
+        }
         const refreshed = engine.notebooks.read(input.notebookId);
         if (refreshed.ok) document = refreshed.value;
       }
@@ -303,7 +477,15 @@ export function registerRunNotebookJob(engine: Engine): void {
       actor: "human",
       lane: "notebook",
       writeSet: [`notebook:${input.notebookId}`],
-      details: { notebookId: input.notebookId, cellIds: input.cellIds ?? [], outputs, errors },
+      details: {
+        notebookId: input.notebookId,
+        cellIds: input.cellIds ?? [],
+        outputs,
+        errors,
+        planId: input.generationPlan?.planId,
+        parentActionId: input.generationPlan?.parentActionId,
+        jobId: input.jobId,
+      },
     });
     if (errors.length > 0) throw new Error(errors.join("\n"));
     return run;

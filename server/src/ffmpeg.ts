@@ -37,6 +37,28 @@ export interface ProbeResult {
   hasAudio: boolean;
   videoCodec: string | null;
   audioCodec: string | null;
+  videoStream: ProbeStream | null;
+  audioStream: ProbeStream | null;
+}
+
+export interface ProbeStream {
+  index: number;
+  timeBase: { numerator: number; denominator: number };
+  durationTicks: number;
+  codec: string;
+  video?: {
+    width: number;
+    height: number;
+    rotationDegrees: number;
+    pixelAspect: { numerator: number; denominator: number };
+    nominalFrameRate?: { numerator: number; denominator: number };
+    averageFrameRate?: { numerator: number; denominator: number };
+  };
+  audio?: {
+    sampleRateHz: number;
+    channels: number;
+    channelLayout: string;
+  };
 }
 
 function rationalValue(value: unknown): number | null {
@@ -44,6 +66,97 @@ function rationalValue(value: unknown): number | null {
   const [numerator, denominator] = value.split("/").map(Number);
   if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) return null;
   return numerator / denominator;
+}
+
+function rationalParts(
+  value: unknown,
+  separator = "/",
+): { numerator: number; denominator: number } | null {
+  if (typeof value !== "string") return null;
+  const parts = value.split(separator);
+  if (parts.length !== 2) return null;
+  const numerator = Number(parts[0]);
+  const denominator = Number(parts[1]);
+  if (
+    !Number.isSafeInteger(numerator)
+    || !Number.isSafeInteger(denominator)
+    || numerator <= 0
+    || denominator <= 0
+  ) return null;
+  return { numerator, denominator };
+}
+
+function durationTicks(
+  stream: Record<string, unknown>,
+  timeBase: { numerator: number; denominator: number },
+  fallbackSeconds: number,
+): number {
+  const direct = Number(stream.duration_ts);
+  if (Number.isSafeInteger(direct) && direct > 0) return direct;
+  return Math.max(
+    1,
+    Math.round(fallbackSeconds * timeBase.denominator / timeBase.numerator),
+  );
+}
+
+function rotationDegrees(stream: Record<string, unknown>): number {
+  const sideData = Array.isArray(stream.side_data_list)
+    ? stream.side_data_list as Array<Record<string, unknown>>
+    : [];
+  const sideRotation = sideData
+    .map((entry) => Number(entry.rotation))
+    .find(Number.isFinite);
+  const tags = typeof stream.tags === "object" && stream.tags !== null
+    ? stream.tags as Record<string, unknown>
+    : {};
+  const taggedRotation = Number(tags.rotate);
+  return Math.round(sideRotation ?? (Number.isFinite(taggedRotation) ? taggedRotation : 0));
+}
+
+function videoProbeStream(
+  stream: Record<string, unknown> | undefined,
+  fallbackSeconds: number,
+): ProbeStream | null {
+  if (!stream) return null;
+  const timeBase = rationalParts(stream.time_base) ?? { numerator: 1, denominator: 1_000 };
+  const nominalFrameRate = rationalParts(stream.r_frame_rate);
+  const averageFrameRate = rationalParts(stream.avg_frame_rate);
+  return {
+    index: Number.isSafeInteger(Number(stream.index)) ? Number(stream.index) : 0,
+    timeBase,
+    durationTicks: durationTicks(stream, timeBase, fallbackSeconds),
+    codec: typeof stream.codec_name === "string" ? stream.codec_name : "unknown",
+    video: {
+      width: Math.max(1, Number(stream.width) || 1),
+      height: Math.max(1, Number(stream.height) || 1),
+      rotationDegrees: rotationDegrees(stream),
+      pixelAspect: rationalParts(stream.sample_aspect_ratio, ":")
+        ?? { numerator: 1, denominator: 1 },
+      ...(nominalFrameRate ? { nominalFrameRate } : {}),
+      ...(averageFrameRate ? { averageFrameRate } : {}),
+    },
+  };
+}
+
+function audioProbeStream(
+  stream: Record<string, unknown> | undefined,
+  fallbackSeconds: number,
+): ProbeStream | null {
+  if (!stream) return null;
+  const sampleRateHz = Math.max(1, Number(stream.sample_rate) || 48_000);
+  const timeBase = rationalParts(stream.time_base)
+    ?? { numerator: 1, denominator: sampleRateHz };
+  const channels = Math.max(1, Number(stream.channels) || 1);
+  const channelLayout = typeof stream.channel_layout === "string"
+    ? stream.channel_layout
+    : channels === 1 ? "mono" : channels === 2 ? "stereo" : `${channels} channels`;
+  return {
+    index: Number.isSafeInteger(Number(stream.index)) ? Number(stream.index) : 0,
+    timeBase,
+    durationTicks: durationTicks(stream, timeBase, fallbackSeconds),
+    codec: typeof stream.codec_name === "string" ? stream.codec_name : "unknown",
+    audio: { sampleRateHz, channels, channelLayout },
+  };
 }
 
 function taggedDuration(value: unknown): number | null {
@@ -159,6 +272,8 @@ export async function probeVideo(
     hasAudio,
     videoCodec,
     audioCodec,
+    videoStream: videoProbeStream(videoStream, videoDuration),
+    audioStream: audioProbeStream(audioStream, audioDuration ?? duration),
   };
 }
 

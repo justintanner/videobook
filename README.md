@@ -4,6 +4,9 @@ Videobook is a local-first notebook studio for generative media. Images, videos,
 prompts, characters, and scenes are first-class cells in an executable graph,
 while every book mutation is recorded as an immutable DoltLite revision.
 
+The coordinated application requirements for the searchable audio-notebook MVP
+are in [docs/mvp-prd.md](docs/mvp-prd.md).
+
 ## Repositories
 
 - `~/videobook` — React frontend, MCP server, providers, and job workers
@@ -31,7 +34,7 @@ storage health, and provider settings.
 
 ## Storage
 
-Each book owns an isolated `videobook-engine` v2.0.1 root under
+Each book owns an isolated `videobook-engine` v3.0.0 schema-v5 root under
 `VIDEOBOOK_LIBRARY_DIR/<book UUIDv7>/`. That root holds its embedded DoltLite
 catalog, content-addressed objects, managed files, notebook graph, timeline,
 history, and runtime tables. Media bytes can be published to B2 under immutable
@@ -50,9 +53,9 @@ selected book engine; file paths are not an authoritative data model.
 
 Requirements:
 
-- Node.js 20 or newer
+- Node.js 22 or newer
 - ffmpeg
-- 1Password CLI for the checked-in `.env.tpl` workflow
+- 1Password CLI only when loading cloud-provider credentials from `.env.tpl`
 
 Install both repositories:
 
@@ -65,7 +68,13 @@ npm install
 cd server && npm install
 ```
 
-Run the app and MCP server:
+Run locally without cloud-provider credentials:
+
+```bash
+npm run dev:local
+```
+
+Run with credentials loaded through 1Password:
 
 ```bash
 npm run dev
@@ -97,6 +106,7 @@ See `.env.tpl` for the complete set.
 ```bash
 npm run lint
 npm run test
+npm run test:clean-install
 npm run test:e2e
 npm run build
 npm run build:server
@@ -114,3 +124,15 @@ npm pack --dry-run
 
 Detailed inherited MCP command documentation remains in
 `docs/command-reference.md`.
+
+Extract a sanitized, metadata-only Videocity development corpus with:
+
+```bash
+npm run extract:videocity-benchmark -- \
+  --source-root ~/videocity \
+  --project multiculty \
+  --output /path/to/new-output-directory
+```
+
+The extractor copies no media and marks unreviewed rights and relevance data as
+ineligible for the release benchmark.

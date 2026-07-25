@@ -15,6 +15,16 @@ const app = express();
 app.use(cors());
 app.use("/archive-files", express.static(localArchiveDir(), { dotfiles: "allow" }));
 
+app.get("/healthz", async (_req, res) => {
+  await bookManager.ready();
+  res.json({
+    ok: true,
+    service: "videobook",
+    engineVersion: "3.0.0",
+    schemaVersion: 5,
+  });
+});
+
 async function engineForBook(
   bookId: string,
 ): Promise<ReturnType<typeof bookManager.get>> {

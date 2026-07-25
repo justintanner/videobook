@@ -20,6 +20,13 @@ const source: NotebookDocument = {
     entityId: '018f7cf5-0d31-7d96-8c0f-800000000003',
     inputs: { reference: 'img-moon' },
     outputArtifactId: '018f7cf5-0d31-7d96-8c0f-800000000004',
+    references: [{
+      id: '018f7cf5-0d31-7d96-8c0f-800000000006',
+      kind: 'artifact',
+      targetId: '018f7cf5-0d31-7d96-8c0f-800000000004',
+      snapshot: { revision: 'working' },
+      ordinal: 0,
+    }],
   }],
   edges: [],
   createdAt: '2026-01-01T00:00:00.000Z',

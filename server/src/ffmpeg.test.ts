@@ -79,6 +79,25 @@ describe("probeVideo", () => {
     expect(result.audioDuration!).toBeLessThan(1.5);
     expect(result.fps).toBe(30);
     expect(result.hasAudio).toBe(true);
+    expect(result.videoStream).toMatchObject({
+      index: 0,
+      codec: "h264",
+      video: {
+        width: 320,
+        height: 240,
+        pixelAspect: { numerator: 1, denominator: 1 },
+      },
+    });
+    expect(result.videoStream?.durationTicks).toBeGreaterThan(0);
+    expect(result.audioStream).toMatchObject({
+      codec: "aac",
+      audio: {
+        sampleRateHz: 44_100,
+        channels: 1,
+        channelLayout: "mono",
+      },
+    });
+    expect(result.audioStream?.durationTicks).toBeGreaterThan(0);
   });
 
   it("reports separate video and audio stream durations", async () => {
@@ -121,6 +140,8 @@ describe("probeVideo", () => {
     expect(result.videoDuration).toBeGreaterThan(0.8);
     expect(result.audioDuration).toBeNull();
     expect(result.hasAudio).toBe(false);
+    expect(result.videoStream).not.toBeNull();
+    expect(result.audioStream).toBeNull();
   });
 });
 

@@ -1,9 +1,9 @@
 import type { Engine } from "videobook-engine";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { extname, join } from "node:path";
 import { createOpenAi } from "@apicity/openai";
-import { registerJobHandler, type JobHandlerContext } from "../queue.js";
+import { queue, registerJobHandler, type JobHandlerContext } from "../queue.js";
 import { getApiKey } from "../api-key.js";
 import { probeVideo } from "../ffmpeg.js";
 import { withLocalLease } from "./_lease.js";
@@ -25,6 +25,7 @@ type TranscribeVideoAudioPayload = {
   assetId: string;
   assetDir: string;
   bookId: string;
+  sourceFilename?: string;
 };
 
 type TranscribeVideoAudioResult = {
@@ -37,7 +38,7 @@ type TranscribeVideoAudioResult = {
 type OpenAiProvider = ReturnType<typeof createOpenAi>;
 
 async function transcribeBytes(provider: OpenAiProvider, bytes: Uint8Array<ArrayBuffer>, filename: string): Promise<string> {
-  const file = new File([bytes], filename, { type: "audio/mpeg" });
+  const file = new File([bytes], filename, { type: audioMimeType(filename) });
   const result = await provider.post.v1.audio.transcriptions({
     file,
     model: "gpt-4o-mini-transcribe",
@@ -86,13 +87,23 @@ export async function runTranscribeVideoAudio(
         chunkCount = chunkStarts(probe.duration, CHUNK_SECONDS).length;
         text = await transcribeChunked(provider, videoPath, probe.duration);
       } else {
-        const readResult = await fs.files.read(assetId, "original.mp3");
+        const sourceFilename = payload.sourceFilename ?? "original.mp3";
+        const readResult = await fs.files.read(assetId, sourceFilename);
         if (!readResult.ok) throw new Error(readResult.error.message);
-        text = await transcribeBytes(provider, new Uint8Array(readResult.value), "original.mp3");
+        text = await transcribeBytes(
+          provider,
+          new Uint8Array(readResult.value),
+          sourceFilename,
+        );
       }
 
       const jsonString = JSON.stringify({ text }, null, 2);
       await fs.files.write(assetId, ".analysis.gpt4otrans.json", jsonString);
+      await queue.enqueue(`semantic-index-${assetId}-transcript-${Date.now()}`, {
+        type: "semantic_index",
+        assetId,
+        bookId,
+      } as unknown as Record<string, unknown>);
 
       return { success: true, text, chunk_count: chunkCount };
     } catch (err) {
@@ -128,4 +139,16 @@ export async function runTranscribeVideoAudio(
 export function registerTranscribeVideoAudioJob(fs: Engine): void {
   registerJobHandler("transcribe_video_audio", async (payload, ctx) =>
     runTranscribeVideoAudio(fs, payload as TranscribeVideoAudioPayload, ctx));
+}
+
+function audioMimeType(filename: string): string {
+  switch (extname(filename).toLowerCase()) {
+    case ".wav": return "audio/wav";
+    case ".ogg": return "audio/ogg";
+    case ".weba": return "audio/webm";
+    case ".m4a": return "audio/mp4";
+    case ".aac": return "audio/aac";
+    case ".flac": return "audio/flac";
+    default: return "audio/mpeg";
+  }
 }

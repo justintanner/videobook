@@ -3,14 +3,19 @@ import { lstat, mkdir, readdir, rename, rm } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import {
   createEngine,
+  dryRunV4Migration,
   err,
   isUuidV7,
   isValidBookSlug,
+  migrateV4,
   ok,
+  readV4BookIdentity,
   type ContentStore,
   type Engine,
   type EngineError,
   type Result,
+  type V4MigrationDryRun,
+  type V4MigrationResult,
 } from "videobook-engine";
 
 export interface BookSummary {
@@ -24,6 +29,16 @@ export interface BookSummary {
 export interface ManagedBook extends BookSummary {
   rootDir: string;
   engine: Engine;
+}
+
+export interface LegacyBookSummary extends V4MigrationDryRun {
+  slug: string;
+}
+
+export interface MigratedBook {
+  book: BookSummary;
+  migration: V4MigrationResult;
+  legacyArchiveRoot: string;
 }
 
 export interface BookManagerOptions {
@@ -66,6 +81,7 @@ export class BookManager {
   private readonly libraryDir: string;
   private readonly options: BookManagerOptions;
   private readonly books = new Map<string, ManagedBook>();
+  private readonly legacyBooks = new Map<string, LegacyBookSummary>();
   private readyPromise: Promise<void> | null = null;
 
   constructor(options: BookManagerOptions) {
@@ -87,6 +103,12 @@ export class BookManager {
     return sortBooks(books, options.sort ?? "newest");
   }
 
+  listLegacy(): LegacyBookSummary[] {
+    return [...this.legacyBooks.values()].sort((left, right) =>
+      left.slug.localeCompare(right.slug)
+    );
+  }
+
   get(bookId: string): Result<ManagedBook, EngineError> {
     const book = this.books.get(bookId);
     return book
@@ -106,7 +128,10 @@ export class BookManager {
     if (!isValidBookSlug(slug)) {
       return err(engineError("INVALID_INPUT", `Invalid book slug: ${slug}`));
     }
-    if (this.getBySlug(slug).ok) {
+    if (
+      this.getBySlug(slug).ok
+      || [...this.legacyBooks.values()].some((book) => book.slug === slug)
+    ) {
       return err(engineError("SLUG_CONFLICT", `Book slug already exists: ${slug}`));
     }
 
@@ -197,6 +222,71 @@ export class BookManager {
   async close(): Promise<void> {
     for (const book of this.books.values()) book.engine.close();
     this.books.clear();
+    this.legacyBooks.clear();
+  }
+
+  async migrateLegacy(
+    bookId: string,
+    expectedSourceHead: string,
+  ): Promise<Result<MigratedBook, EngineError>> {
+    await this.ready();
+    const legacy = this.legacyBooks.get(bookId);
+    if (!legacy) {
+      return err(engineError("NOT_FOUND", `Legacy book not found: ${bookId}`));
+    }
+    if (legacy.sourceHeadRevision !== expectedSourceHead) {
+      return err(engineError(
+        "STALE_REVISION",
+        "Legacy book changed after migration confirmation",
+      ));
+    }
+    const sourceRoot = this.bookRoot(bookId);
+    const temporaryRoot = join(this.libraryDir, `.migrating-${randomUUID()}`);
+    const migrated = await migrateV4({
+      sourceRoot,
+      destinationRoot: temporaryRoot,
+      dryRun: false,
+      expectedSourceBookId: bookId,
+      expectedSourceHead,
+    });
+    if (!migrated.ok) return migrated;
+    if (!("destinationBookId" in migrated.value)) {
+      return err(engineError("INTERNAL_ERROR", "Migration result is incomplete"));
+    }
+    const archiveDir = join(this.libraryDir, ".legacy-v4");
+    const archiveRoot = join(
+      archiveDir,
+      `${bookId}-${expectedSourceHead.slice(0, 12)}`,
+    );
+    try {
+      await mkdir(archiveDir, { recursive: true });
+      await rename(sourceRoot, archiveRoot);
+      try {
+        await rename(temporaryRoot, sourceRoot);
+      } catch (cause) {
+        await rename(archiveRoot, sourceRoot);
+        throw cause;
+      }
+      const engine = this.createEngine(sourceRoot);
+      await engine.ready;
+      const managed = this.toManagedBook(engine, sourceRoot, engine.book.get());
+      this.assertUnique(managed);
+      this.legacyBooks.delete(bookId);
+      this.books.set(bookId, managed);
+      return ok({
+        book: this.summary(managed),
+        migration: migrated.value,
+        legacyArchiveRoot: archiveRoot,
+      });
+    } catch (cause) {
+      await this.removeTemporaryRoot(temporaryRoot);
+      return err(engineError(
+        "IO_ERROR",
+        `Could not switch to migrated book: ${
+          cause instanceof Error ? cause.message : String(cause)
+        }`,
+      ));
+    }
   }
 
   private async load(): Promise<void> {
@@ -206,8 +296,9 @@ export class BookManager {
       if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
       const root = this.bookRoot(entry.name);
       if (!isUuidV7(entry.name) || !isInside(this.libraryDir, root)) continue;
-      const engine = this.createEngine(root);
+      let engine: Engine | undefined;
       try {
+        engine = this.createEngine(root);
         await engine.ready;
         const managed = this.toManagedBook(engine, root, engine.book.get());
         if (managed.bookId !== entry.name) {
@@ -217,7 +308,17 @@ export class BookManager {
         this.assertUnique(managed);
         this.books.set(managed.bookId, managed);
       } catch (cause) {
-        engine.close();
+        engine?.close();
+        const dryRun = dryRunV4Migration(root);
+        if (dryRun.ok) {
+          const identity = readV4BookIdentity(root);
+          if (!identity.ok) throw cause;
+          this.legacyBooks.set(dryRun.value.sourceBookId, {
+            ...dryRun.value,
+            slug: identity.value.slug,
+          });
+          continue;
+        }
         throw cause;
       }
     }

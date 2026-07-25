@@ -444,8 +444,13 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
         charImage = files.find((f) => /\.(jpg|jpeg|png|webp|gif)$/i.test(f.name)) ?? null;
       }
       
+      const proxyFile = a.kind === "video"
+        ? files.find((file) => file.name === "proxy.mp4")
+        : null;
       const media_url = charImage
         ? `/files/${book_id}/${a.slug}/${charImage.name}${cacheBust}`
+        : proxyFile
+        ? `/files/${book_id}/${a.slug}/${proxyFile.name}${cacheBust}`
         : mediaFile
         ? `/files/${book_id}/${a.slug}/${mediaFile.name}${cacheBust}`
         : null;

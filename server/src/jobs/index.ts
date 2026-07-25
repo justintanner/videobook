@@ -71,6 +71,7 @@ import { registerCompleteKieTaskJob } from "./complete-kie-task.js";
 import { registerRenderProjectJob } from "./render-project.js";
 import { registerRenderQrOutroJob } from "./render-qr-outro.js";
 import { registerProcessVideoJob } from "./process-video.js";
+import { registerProcessAudioJob } from "./process-audio.js";
 import { registerTranscribeVideoAudioJob } from "./transcribe-video-audio.js";
 import { registerAnalyzeVideoJob } from "./analyze-video.js";
 import { registerAnalyzeKeywordPlacementJob } from "./analyze-keyword-placement.js";
@@ -82,6 +83,7 @@ import { registerDescribeImageJob } from "./describe-image.js";
 
 import { registerRewriteScriptJob } from "./rewrite-script.js";
 import { registerRenderTimelineJob } from "./render-timeline.js";
+import { registerExportSequenceJob } from "./export-sequence.js";
 import { registerProcessImageJob } from "./process-image.js";
 import { registerIsolateVocalsJob } from "./isolate-vocals.js";
 import { registerCleanVideoAudioJob } from "./clean-video-audio.js";
@@ -126,6 +128,7 @@ import { registerGenerateElevenlabsT2aJob } from "./generate-elevenlabs-t2a.js";
 import { registerExtendAudioJob } from "./extend-audio.js";
 import { registerRemoveSoundJob } from "./remove-sound.js";
 import { registerRunNotebookJob } from "./run-notebook.js";
+import { registerSemanticIndexJob } from "./semantic-index.js";
 
 export function registerAllJobHandlers(fs: Engine): void {
   registerTranscribeJob(fs);
@@ -202,6 +205,7 @@ export function registerAllJobHandlers(fs: Engine): void {
   registerRenderProjectJob(fs);
   registerRenderQrOutroJob(fs);
   registerProcessVideoJob(fs);
+  registerProcessAudioJob(fs);
   registerTranscribeVideoAudioJob(fs);
   registerAnalyzeVideoJob(fs);
   registerAnalyzeKeywordPlacementJob(fs);
@@ -213,6 +217,7 @@ export function registerAllJobHandlers(fs: Engine): void {
 
   registerRewriteScriptJob(fs);
   registerRenderTimelineJob(fs);
+  registerExportSequenceJob(fs);
   registerProcessImageJob(fs);
   registerIsolateVocalsJob(fs);
   registerCleanVideoAudioJob(fs);
@@ -257,5 +262,6 @@ export function registerAllJobHandlers(fs: Engine): void {
   registerRemoveSoundJob(fs);
   registerPostToXJob(fs);
   registerRunNotebookJob(fs as Engine);
+  registerSemanticIndexJob(fs);
 
 }

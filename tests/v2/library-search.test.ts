@@ -1,0 +1,111 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import type { Engine, IndexManifest } from 'videobook-engine'
+import { BookManager } from '../../server/src/book-manager.js'
+import { semanticSearchDefs } from '../../server/src/tools/semantic-search.js'
+
+const manifest: IndexManifest = {
+  manifestId: 'library-lexical-v1',
+  provider: 'fixture',
+  modelId: 'fixture',
+  modelRevision: '1',
+  license: 'test',
+  embeddingSpace: 'library-lexical-space',
+  dimensions: 1,
+  modalities: ['metadata'],
+  supportedLanguages: ['en'],
+  preprocessingVersion: '1',
+  extractorVersion: '1',
+  createdAt: 1,
+}
+
+describe('library moment search', () => {
+  let rootDir: string | undefined
+  let books: BookManager | undefined
+
+  afterEach(async () => {
+    await books?.close()
+    if (rootDir) await rm(rootDir, { recursive: true, force: true })
+  })
+
+  it('federates book-scoped results with owning-book labels and rank fusion', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-library-search-'))
+    books = new BookManager({ libraryDir: join(rootDir, 'books') })
+    await books.ready()
+    const alpha = await books.create('alpha')
+    const beta = await books.create('beta')
+    expect(alpha.ok && beta.ok).toBe(true)
+    if (!alpha.ok || !beta.ok) return
+    const alphaBook = books.get(alpha.value.bookId)
+    const betaBook = books.get(beta.value.bookId)
+    expect(alphaBook.ok && betaBook.ok).toBe(true)
+    if (!alphaBook.ok || !betaBook.ok) return
+    await indexStill(alphaBook.value.engine, 'red van alpha')
+    await indexStill(betaBook.value.engine, 'red van beta')
+
+    const tool = semanticSearchDefs(alphaBook.value.engine, books)
+      .find((entry) => entry.name === 'search_library_moments')
+    expect(tool).toBeTruthy()
+    if (!tool) return
+    const result = await tool.handler({ query: { text: 'red van', limit: 10 } })
+    expect(result.isError).toBeUndefined()
+    const payload = JSON.parse(result.content[0]!.text) as {
+      hits: Array<{ owningBookId: string; owningBookSlug: string }>
+      coverage: { state: string; indexedArtifactCount: number }
+    }
+    expect(payload.hits.map((hit) => hit.owningBookSlug)).toEqual(['alpha', 'beta'])
+    expect(payload.hits.map((hit) => hit.owningBookId)).toEqual([
+      alpha.value.bookId,
+      beta.value.bookId,
+    ])
+    expect(payload.coverage).toMatchObject({
+      state: 'ready',
+      indexedArtifactCount: 2,
+    })
+  })
+})
+
+async function indexStill(engine: Engine, description: string): Promise<void> {
+  const artifact = await engine.artifacts.create('image', description)
+  if (!artifact.ok) throw new Error(artifact.error.message)
+  const written = await engine.files.write(
+    artifact.value.artifactId,
+    'original.jpg',
+    Buffer.from(description),
+  )
+  if (!written.ok) throw new Error(written.error.message)
+  const files = await engine.files.manifest(artifact.value.artifactId)
+  if (!files.ok) throw new Error(files.error.message)
+  const source = files.value.files[0]!
+  const registered = engine.temporalSearch.manifests.register(manifest)
+  if (!registered.ok) throw new Error(registered.error.message)
+  const committed = engine.temporalSearch.commitBatch({
+    artifactId: artifact.value.artifactId,
+    objectHash: source.objectHash,
+    manifestId: manifest.manifestId,
+    generation: 'library-generation',
+    phase: 'lexical',
+    maxUnits: 1,
+    observations: [{
+      artifactId: artifact.value.artifactId,
+      objectHash: source.objectHash,
+      sourcePath: source.name,
+      kind: 'frame',
+      segmentationVersion: '1',
+      texts: [{ kind: 'description', language: 'en', text: description }],
+      embeddings: [],
+      fingerprints: [],
+    }],
+    coveredRanges: [],
+    totalUnits: 1,
+    complete: true,
+  })
+  if (!committed.ok) throw new Error(committed.error.message)
+  const activated = engine.temporalSearch.activate(
+    manifest.manifestId,
+    'library-generation',
+  )
+  if (!activated.ok) throw new Error(activated.error.message)
+}

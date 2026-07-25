@@ -5,6 +5,7 @@ import { readdirSync, copyFileSync, mkdirSync, statSync, createReadStream } from
 import path from 'path'
 
 const MEDIAPIPE_WASM_URL_PREFIX = '/mediapipe-wasm/'
+const serverTarget = process.env.VIDEOBOOK_SERVER_URL ?? 'http://127.0.0.1:3001'
 
 function mediapipeWasm(): Plugin {
   const wasmDir = path.resolve(
@@ -61,19 +62,43 @@ export default defineConfig({
   server: {
     proxy: {
       '/mcp': {
-        target: 'http://127.0.0.1:3001',
+        target: serverTarget,
         changeOrigin: true,
       },
       '/files': {
-        target: 'http://127.0.0.1:3001',
+        target: serverTarget,
         changeOrigin: true,
       },
       '/archive-files': {
-        target: 'http://127.0.0.1:3001',
+        target: serverTarget,
         changeOrigin: true,
       },
       '/api': {
-        target: 'http://127.0.0.1:3001',
+        target: serverTarget,
+        changeOrigin: true,
+      },
+    },
+  },
+  preview: {
+    proxy: {
+      '/mcp': {
+        target: serverTarget,
+        changeOrigin: true,
+      },
+      '/files': {
+        target: serverTarget,
+        changeOrigin: true,
+      },
+      '/archive-files': {
+        target: serverTarget,
+        changeOrigin: true,
+      },
+      '/api': {
+        target: serverTarget,
+        changeOrigin: true,
+      },
+      '/healthz': {
+        target: serverTarget,
         changeOrigin: true,
       },
     },

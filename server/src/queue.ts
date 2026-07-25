@@ -215,14 +215,17 @@ function makeWrappedResolver(
   return (type) => {
     const handler = handlers.get(type);
     if (!handler) return null;
-    return async (job: Job) => withBookContext(
+    return async (job: Job, queueSignal?: AbortSignal) => withBookContext(
       { bookId, engine },
       () => runWithJobDeadline(type, async (signal) => {
+        const jobSignal = queueSignal
+          ? AbortSignal.any([signal, queueSignal])
+          : signal;
         const lease: { current: LeaseToken | null } = { current: null };
         let assetFailureHandled = false;
         let heartbeat: ReturnType<typeof setInterval> | null = null;
         const context: JobHandlerContext = {
-          signal,
+          signal: jobSignal,
           setLease(next) {
             const current = lease.current;
             if (!current) {

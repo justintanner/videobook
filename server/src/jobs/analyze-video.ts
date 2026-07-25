@@ -27,6 +27,7 @@ const FALLBACK_ANALYSIS = {
   onScreenGraphic: null,
   recommendedSubtitlePosition: "bottom",
   recommendedOsgPosition: "top-right",
+  subjectPlacement: "center",
 };
 
 const SYSTEM_PROMPT = `You are a video analysis expert. Analyze the provided video frames, metadata, and transcription (if available) to produce a comprehensive JSON analysis.
@@ -37,6 +38,7 @@ Return a JSON object with these fields:
 - "tags": Top-level tags for the entire video (array of strings)
 - "mood": The overall mood/tone of the video
 - "subjects": Array of main subjects/people/objects featured
+- "subjectPlacement": Horizontal placement of the primary subject across the sampled frames: "left", "center", or "right"
 - "actions": Array of key actions or events that occur
 - "setting": Description of the environment/location
 - "textOnScreen": Array of any visible text in the frames
@@ -139,6 +141,11 @@ export function registerAnalyzeVideoJob(fs: Engine): void {
 
     const jsonString = JSON.stringify(analysis, null, 2);
     await fs.files.write(assetId, ".original.analysis.json", jsonString);
+    await queue.enqueue(`semantic-index-${assetId}-analysis-${Date.now()}`, {
+      type: "semantic_index",
+      assetId,
+      bookId,
+    } as unknown as Record<string, unknown>);
 
     // Auto-transcribe trigger (replaces the whitelist-tool gate). Run only if
     // the analysis says there's real dialog, ElevenLabs/Kie is configured, no
