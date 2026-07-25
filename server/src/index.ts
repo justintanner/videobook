@@ -23,7 +23,7 @@ app.get("/healthz", async (_req, res) => {
     ok: true,
     service: "videobook",
     engineVersion: "3.1.0",
-    schemaVersion: 7,
+    schemaVersion: 8,
   });
 });
 

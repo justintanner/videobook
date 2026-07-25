@@ -3,7 +3,6 @@ import type {
   NotebookCell,
   NotebookDocument,
   NotebookEdge,
-  NotebookGrid,
   NotebookGridSlot,
 } from "videobook-engine";
 import {
@@ -71,13 +70,6 @@ export const MULTYCULTY_FEATURES = [
     column: 3,
   },
 ] as const;
-
-export const MULTYCULTY_GRID: NotebookGrid = {
-  columns: MULTYCULTY_FEATURES.map((feature) => ({
-    id: feature.id,
-    label: feature.label,
-  })),
-};
 
 export type WorkflowStage = (typeof WORKFLOW_STAGES)[number];
 
@@ -203,6 +195,7 @@ function uniqueEdges(edges: NotebookEdge[]): NotebookEdge[] {
 }
 
 export function workflowStageForCell(cell: NotebookCell): WorkflowStage {
+  if (cell.type === "label") return "SOURCE";
   if (cell.type === "source") return "SOURCE";
   if (cell.type === "analysis") return "ANALYZE";
   if (cell.type === "split") return "SPLIT SCENES";
@@ -256,13 +249,13 @@ function updateSplitCell(
   const base = existing ?? engine.notebooks.createCell({
     type: "split",
     title: "",
-    slot: gridSlot(2, column),
+    slot: gridSlot(3, column),
   });
   return {
     ...base,
     type: "split",
     title: `@split-${String(shot.ordinal).padStart(2, "0")} · ${shot.label}`,
-    slot: gridSlot(2, column),
+    slot: gridSlot(3, column),
     provider: "local",
     model: undefined,
     operation: "split_range",
@@ -312,13 +305,13 @@ function createBranchCells(
   const firstBase = firstExisting ?? engine.notebooks.createCell({
     type: "frame",
     title: "",
-    slot: gridSlot(3, column),
+    slot: gridSlot(4, column),
   });
   const first: NotebookCell = {
     ...firstBase,
     type: "frame",
     title: `@frame-${String(shot.ordinal).padStart(2, "0")} · first`,
-    slot: gridSlot(3, column),
+    slot: gridSlot(4, column),
     provider: "local",
     model: undefined,
     operation: "capture_frame",
@@ -341,13 +334,13 @@ function createBranchCells(
   const lastBase = lastExisting ?? engine.notebooks.createCell({
     type: "frame",
     title: "",
-    slot: gridSlot(4, column),
+    slot: gridSlot(5, column),
   });
   const last: NotebookCell = {
     ...lastBase,
     type: "frame",
     title: `@frame-${String(shot.ordinal).padStart(2, "0")} · last`,
-    slot: gridSlot(4, column),
+    slot: gridSlot(5, column),
     provider: "local",
     model: undefined,
     operation: "capture_frame",
@@ -370,13 +363,13 @@ function createBranchCells(
   const audioBase = audioExisting ?? engine.notebooks.createCell({
     type: "audio",
     title: "",
-    slot: gridSlot(5, column),
+    slot: gridSlot(6, column),
   });
   const audio: NotebookCell = {
     ...audioBase,
     type: "audio",
     title: `@audio-${String(shot.ordinal).padStart(2, "0")} · scene`,
-    slot: gridSlot(5, column),
+    slot: gridSlot(6, column),
     provider: "local",
     model: undefined,
     operation: "extract_audio",
@@ -399,7 +392,7 @@ function createBranchCells(
   const promptBase = promptExisting ?? engine.notebooks.createCell({
     type: "prompt",
     title: "",
-    slot: gridSlot(6, column),
+    slot: gridSlot(7, column),
   });
   const promptBrief = feature?.promptBrief
     ?? shot.prompt
@@ -408,7 +401,7 @@ function createBranchCells(
     ...promptBase,
     type: "prompt",
     title: `@prompt-${String(shot.ordinal).padStart(2, "0")} · ${feature?.label ?? shot.label}`,
-    slot: gridSlot(6, column),
+    slot: gridSlot(7, column),
     prompt: shot.prompt ?? promptExisting?.prompt ?? promptBrief,
     provider: "openai",
     model: "gpt-5.2",
@@ -442,13 +435,13 @@ function createBranchCells(
   const animateBase = animateExisting ?? engine.notebooks.createCell({
     type: "video",
     title: "",
-    slot: gridSlot(7, column),
+    slot: gridSlot(8, column),
   });
   const animate: NotebookCell = {
     ...animateBase,
     type: "video",
     title: `@animate-${String(shot.ordinal).padStart(2, "0")} · ${feature?.label ?? shot.label}`,
-    slot: gridSlot(7, column),
+    slot: gridSlot(8, column),
     prompt: "",
     provider: "kie",
     model: "bytedance/seedance-2",
@@ -652,9 +645,6 @@ export async function applyAnalysisResults(
   const edges = uniqueEdges([...retainedEdges, ...canonicalEdges]);
   const next: NotebookDocument = {
     ...document,
-    grid: {
-      columns: MULTYCULTY_GRID.columns.map((column) => ({ ...column })),
-    },
     cells,
     edges,
     properties: {
@@ -696,10 +686,20 @@ export function buildSevenStageScaffold(
     const role = roleOf(cell);
     if (role && !roleCells.has(role)) roleCells.set(role, cell);
   }
+  const labels = MULTYCULTY_FEATURES.map((feature) =>
+    baseCell(engine, roleCells.get(`label-${feature.ordinal}`), {
+      type: "label",
+      title: feature.label,
+      slot: gridSlot(0, feature.column),
+      inputs: {
+        workflowRole: `label-${feature.ordinal}`,
+        featureId: feature.id,
+      },
+    }));
   const source = baseCell(engine, roleCells.get("source"), {
     type: "source",
-    title: "@source",
-    slot: gridSlot(0, 0),
+    title: "@start · source",
+    slot: gridSlot(1, 1),
     provider: "local",
     operation: "preprocess_source",
     tool: "ffmpeg",
@@ -711,8 +711,8 @@ export function buildSevenStageScaffold(
   });
   const analysis = baseCell(engine, roleCells.get("analysis"), {
     type: "analysis",
-    title: "@analyze",
-    slot: gridSlot(1, 0),
+    title: "@splitter · analyze",
+    slot: gridSlot(2, 1),
     prompt: "Segment the source into four continuous 15-second narrative shots with precise timestamps and concise visual context.",
     provider: "kie",
     model: "gemini-3.5-flash",
@@ -723,7 +723,7 @@ export function buildSevenStageScaffold(
   const audio = baseCell(engine, roleCells.get("source-audio"), {
     type: "audio",
     title: "@audio · continuous source",
-    slot: gridSlot(0, 1),
+    slot: gridSlot(9, 2),
     provider: "local",
     operation: "extract_audio",
     tool: "ffmpeg",
@@ -736,7 +736,7 @@ export function buildSevenStageScaffold(
   const assembly = baseCell(engine, roleCells.get("assembly"), {
     type: "sequence",
     title: "@assemble · feature edit",
-    slot: gridSlot(8, 3),
+    slot: gridSlot(9, 1),
     provider: "local",
     operation: "assemble_sequence",
     tool: "engine_sequence",
@@ -749,7 +749,7 @@ export function buildSevenStageScaffold(
   const exp = baseCell(engine, roleCells.get("export"), {
     type: "export",
     title: "@export · Multyculty feature master",
-    slot: gridSlot(9, 3),
+    slot: gridSlot(10, 1),
     provider: "local",
     operation: "export_master",
     tool: "ffmpeg",
@@ -761,6 +761,7 @@ export function buildSevenStageScaffold(
     },
   });
   const baseRoles = new Set([
+    ...labels.map((_, index) => `label-${index + 1}`),
     "source",
     "analysis",
     "source-audio",
@@ -771,8 +772,23 @@ export function buildSevenStageScaffold(
     const role = roleOf(cell);
     return !role || !baseRoles.has(role);
   });
-  const cells = [source, analysis, audio, assembly, exp, ...otherCells];
-  const baseIds = new Set([source.id, analysis.id, audio.id, assembly.id, exp.id]);
+  const cells = [
+    ...labels,
+    source,
+    analysis,
+    audio,
+    assembly,
+    exp,
+    ...otherCells,
+  ];
+  const baseIds = new Set([
+    ...labels.map((label) => label.id),
+    source.id,
+    analysis.id,
+    audio.id,
+    assembly.id,
+    exp.id,
+  ]);
   const retainedEdges = document.edges.filter((edge) => {
     if (!baseIds.has(edge.target)) return true;
     if (edge.target === analysis.id && edge.targetInput === "source") return false;
@@ -806,9 +822,6 @@ export function buildSevenStageScaffold(
   ]);
   const next: NotebookDocument = {
     ...document,
-    grid: {
-      columns: MULTYCULTY_GRID.columns.map((column) => ({ ...column })),
-    },
     cells,
     edges,
     properties: {

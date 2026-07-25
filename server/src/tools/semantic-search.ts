@@ -7,7 +7,6 @@ import type {
   SearchQuery,
 } from "videobook-engine";
 import {
-  extendNotebookGrid,
   findAudioFile,
   findVideoFile,
   MVP_CONTRACT_VERSION,
@@ -835,10 +834,6 @@ export function semanticSearchDefs(
             };
             return {
               ...notebook,
-              grid: extendNotebookGrid(
-                notebook.grid,
-                pinnedCell.slot.column + 1,
-              ),
               cells: [...notebook.cells, pinnedCell],
             };
           },
@@ -1370,10 +1365,9 @@ function isSlot(value: unknown): value is { row: number; column: number } {
 }
 
 function firstEmptyNotebookSlot(notebook: {
-  grid: { columns: unknown[] };
   cells: NotebookCell[];
 }): { row: number; column: number } {
-  const columnCount = notebook.grid.columns.length;
+  const columnCount = 4;
   const occupied = new Set(
     notebook.cells.map((cell) => `${cell.slot.row}:${cell.slot.column}`),
   );

@@ -94,7 +94,6 @@ describe('v2 notebook domain tools', () => {
     }))
 
     const document = resultJson(await invoke('get_notebook', { notebook_id: notebookId })) as {
-      grid: { columns: Array<{ id: string }> }
       cells: Array<{ id: string; title: string; slot: { row: number; column: number } }>
       edges: Array<{ source: string; target: string; targetInput: string }>
     }
@@ -105,10 +104,9 @@ describe('v2 notebook domain tools', () => {
     })
     expect(document.cells.find((cell) => cell.id === prompt.id)?.slot)
       .toEqual({ row: 1, column: 0 })
-    expect(document.grid.columns).toHaveLength(4)
+    expect('grid' in document).toBe(false)
     expect(document.edges).toEqual([{ source: prompt.id, target: image.id, targetInput: 'prompt', id: expect.any(String) }])
 
-    const originalColumnIds = document.grid.columns.map((column) => column.id)
     resultJson(await invoke('move_notebook_cells', {
       notebook_id: notebookId,
       slots: [{ id: image.id, row: 37, column: 8 }],
@@ -116,12 +114,9 @@ describe('v2 notebook domain tools', () => {
     const expanded = resultJson(await invoke('get_notebook', {
       notebook_id: notebookId,
     })) as {
-      grid: { columns: Array<{ id: string }> }
       cells: Array<{ id: string; slot: { row: number; column: number } }>
     }
-    expect(expanded.grid.columns).toHaveLength(9)
-    expect(expanded.grid.columns.slice(0, 4).map((column) => column.id))
-      .toEqual(originalColumnIds)
+    expect('grid' in expanded).toBe(false)
     expect(expanded.cells.find((cell) => cell.id === image.id)?.slot)
       .toEqual({ row: 37, column: 8 })
     expect(expanded.cells.find((cell) => cell.id === prompt.id)?.slot)

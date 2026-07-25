@@ -130,7 +130,6 @@ describe("notebook action catalog", () => {
     }, {
       id: notebookId,
       name: "Main",
-      grid: { columns: [{ id: "main" }] },
       cells: [],
       edges: [],
       createdAt: new Date().toISOString(),

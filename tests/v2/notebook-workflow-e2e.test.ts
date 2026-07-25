@@ -23,8 +23,8 @@ describe('transparent runnable DAG e2e (offline)', () => {
   })
 
   it('runs source→analysis fixture→split/audio/frame without paid generation', async () => {
-    expect(SCHEMA_VERSION).toBe(7)
-    expect(NOTEBOOK_CELL_TYPES).toHaveLength(17)
+    expect(SCHEMA_VERSION).toBe(8)
+    expect(NOTEBOOK_CELL_TYPES).toHaveLength(18)
     expect(WORKFLOW_STAGES).toHaveLength(8)
     expect(WORKFLOW_STAGES).toEqual([
       'SOURCE',
@@ -84,7 +84,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
       request: { mode: 'fixture' },
       sourceArtifactId: sourceArtifact.value.artifactId,
     })
-    expect(fanned.grid.columns.map((column) => column.label)).toEqual([
+    expect(fanned.cells.filter((cell) => cell.type === 'label').map((cell) => cell.title)).toEqual([
       'Import + Analyze',
       'Split + Extract',
       'Prompt + Animate',
@@ -92,6 +92,12 @@ describe('transparent runnable DAG e2e (offline)', () => {
     ])
     expect(fanned.properties?.stageLabels).toBeUndefined()
     expect(fanned.properties?.featureLanes).toBeUndefined()
+    expect(fanned.cells.filter((cell) => cell.type === 'label').map((cell) => cell.slot)).toEqual([
+      { row: 0, column: 0 },
+      { row: 0, column: 1 },
+      { row: 0, column: 2 },
+      { row: 0, column: 3 },
+    ])
     expect(fanned.cells.filter((cell) => cell.type === 'split')).toHaveLength(2)
     expect(fanned.cells.filter((cell) => cell.type === 'frame')).toHaveLength(4)
     expect(fanned.cells.filter((cell) => cell.type === 'prompt')).toHaveLength(2)

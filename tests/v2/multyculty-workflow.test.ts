@@ -73,7 +73,7 @@ describe("Multyculty workflow fixture", () => {
     expect(stream.ok).toBe(true);
 
     const first = await seedMultycultyWorkflow(engine);
-    expect(first.grid.columns.map((column) => column.label)).toEqual([
+    expect(first.cells.filter((cell) => cell.type === "label").map((cell) => cell.title)).toEqual([
       "Import + Analyze",
       "Split + Extract",
       "Prompt + Animate",
@@ -91,7 +91,7 @@ describe("Multyculty workflow fixture", () => {
     expect(audio).toBeTruthy();
     expect(assembly).toBeTruthy();
     expect(exp).toBeTruthy();
-    expect(first.cells).toHaveLength(29);
+    expect(first.cells).toHaveLength(33);
     expect(first.edges).toHaveLength(60);
     expect(first.cells.filter((cell) => cell.type === "split")).toHaveLength(4);
     expect(first.cells.filter((cell) => cell.type === "frame")).toHaveLength(8);
@@ -99,31 +99,37 @@ describe("Multyculty workflow fixture", () => {
       cell.inputs?.workflowRole?.toString().startsWith("scene-audio-"))).toHaveLength(4);
     expect(first.cells.filter((cell) => cell.type === "prompt")).toHaveLength(4);
     expect(first.cells.filter((cell) => cell.type === "video")).toHaveLength(4);
-    expect(source?.slot).toEqual({ row: 0, column: 0 });
-    expect(audio?.slot).toEqual({ row: 0, column: 1 });
-    expect(analysis?.slot).toEqual({ row: 1, column: 0 });
-    expect(assembly?.slot).toEqual({ row: 8, column: 3 });
-    expect(exp?.slot).toEqual({ row: 9, column: 3 });
+    expect(first.cells.filter((cell) => cell.type === "label").map((cell) => cell.slot)).toEqual([
+      { row: 0, column: 0 },
+      { row: 0, column: 1 },
+      { row: 0, column: 2 },
+      { row: 0, column: 3 },
+    ]);
+    expect(source?.slot).toEqual({ row: 1, column: 1 });
+    expect(analysis?.slot).toEqual({ row: 2, column: 1 });
+    expect(audio?.slot).toEqual({ row: 9, column: 2 });
+    expect(assembly?.slot).toEqual({ row: 9, column: 1 });
+    expect(exp?.slot).toEqual({ row: 10, column: 1 });
     for (let ordinal = 1; ordinal <= 4; ordinal += 1) {
       const column = ordinal - 1;
       expect(first.cells.find((cell) =>
         cell.inputs?.workflowRole === `split-${ordinal}`)?.slot)
-        .toEqual({ row: 2, column });
-      expect(first.cells.find((cell) =>
-        cell.inputs?.workflowRole === `frame-first-${ordinal}`)?.slot)
         .toEqual({ row: 3, column });
       expect(first.cells.find((cell) =>
-        cell.inputs?.workflowRole === `frame-last-${ordinal}`)?.slot)
+        cell.inputs?.workflowRole === `frame-first-${ordinal}`)?.slot)
         .toEqual({ row: 4, column });
       expect(first.cells.find((cell) =>
-        cell.inputs?.workflowRole === `scene-audio-${ordinal}`)?.slot)
+        cell.inputs?.workflowRole === `frame-last-${ordinal}`)?.slot)
         .toEqual({ row: 5, column });
       expect(first.cells.find((cell) =>
-        cell.inputs?.workflowRole === `prompt-${ordinal}`)?.slot)
+        cell.inputs?.workflowRole === `scene-audio-${ordinal}`)?.slot)
         .toEqual({ row: 6, column });
       expect(first.cells.find((cell) =>
-        cell.inputs?.workflowRole === `animate-${ordinal}`)?.slot)
+        cell.inputs?.workflowRole === `prompt-${ordinal}`)?.slot)
         .toEqual({ row: 7, column });
+      expect(first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `animate-${ordinal}`)?.slot)
+        .toEqual({ row: 8, column });
     }
     expect(first.cells.filter((cell) => cell.type === "prompt").every((cell) =>
       cell.inputs?.requiresConfirmation === true)).toBe(true);
@@ -149,9 +155,10 @@ describe("Multyculty workflow fixture", () => {
     }));
 
     const second = await seedMultycultyWorkflow(engine);
-    expect(second.cells).toHaveLength(29);
+    expect(second.cells).toHaveLength(33);
     expect(second.cells.filter((cell) => cell.type === "split")).toHaveLength(4);
-    expect(second.grid).toEqual(first.grid);
+    expect(second.cells.filter((cell) => cell.type === "label").map((cell) => cell.id))
+      .toEqual(first.cells.filter((cell) => cell.type === "label").map((cell) => cell.id));
     // Source identity is preserved across rematerialization.
     expect(second.cells.find((cell) => cell.inputs?.workflowRole === "source")?.id)
       .toBe(source?.id);

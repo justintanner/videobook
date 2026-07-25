@@ -6,7 +6,6 @@ import {
   notebookGridMetrics,
   notebookGridPosition,
   notebookGridSlot,
-  notebookGridViewport,
   resolveNotebookGridMove,
   snapNotebookGridMove,
   type NotebookGridData,
@@ -73,7 +72,7 @@ describe('notebook grid', () => {
       node('a', 0, 0),
       node('b', 0, 2),
       node('c', 0, 3),
-    ], 4)).toEqual({ row: 0, column: 1 })
+    ])).toEqual({ row: 0, column: 1 })
   })
 
   it('measures a four-column square board without stage runway', () => {
@@ -84,8 +83,8 @@ describe('notebook grid', () => {
     expect(metrics).toEqual({
       rowCount: 10,
       columnCount: 4,
-      width: 1128,
-      height: 2720,
+      width: 1176,
+      height: 2904,
     })
   })
 
@@ -97,17 +96,17 @@ describe('notebook grid', () => {
     )).toEqual({
       rowCount: 13,
       columnCount: 8,
-      width: 2184,
-      height: 3512,
+      width: 2296,
+      height: 3744,
     })
   })
 
-  it('fits width only and preserves natural desktop zoom', () => {
-    expect(notebookGridViewport(4, 1400)).toEqual({
-      x: 136,
-      y: 36,
-      zoom: 1,
+  it('keeps an empty notebook large enough for vertical placement', () => {
+    expect(notebookGridMetrics([])).toEqual({
+      rowCount: 3,
+      columnCount: 4,
+      width: 1176,
+      height: 944,
     })
-    expect(notebookGridViewport(4, 700).zoom).toBeCloseTo(604 / 1128)
   })
 })

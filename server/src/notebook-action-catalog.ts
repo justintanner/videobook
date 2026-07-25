@@ -385,7 +385,7 @@ export function validateCellConfiguration(
   cell: NotebookCell,
   document: NotebookDocument,
 ): { ok: true; action: NotebookAction | null } | { ok: false; message: string } {
-  if (cell.type === "note" || cell.type === "search"
+  if (cell.type === "label" || cell.type === "note" || cell.type === "search"
     || cell.type === "selects" || cell.type === "character" || cell.type === "scene"
     || cell.type === "asset" || cell.type === "transcript" || cell.type === "source") {
     return { ok: true, action: defaultActionForCell(cell, document) };

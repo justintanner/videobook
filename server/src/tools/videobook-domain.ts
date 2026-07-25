@@ -19,7 +19,6 @@ import type {
 } from "videobook-engine";
 import {
   MVP_CONTRACT_VERSION,
-  extendNotebookGrid,
   sequenceFramesToSourceTicks,
   sourceRangeEndTick,
   sourceTicksToSequenceFrames,
@@ -55,6 +54,7 @@ import {
 
 const bookSchema = { book_id: z.string().uuid() };
 const cellTypeSchema = z.enum([
+  "label",
   "source",
   "audio",
   "transcript",
@@ -75,11 +75,10 @@ const cellTypeSchema = z.enum([
 ]);
 
 function firstEmptyGridSlots(
-  notebook: NotebookDocument,
   cells: readonly NotebookCell[],
   count: number,
 ): NotebookGridSlot[] {
-  const columnCount = notebook.grid.columns.length;
+  const columnCount = 4;
   const occupied = new Set(
     cells.map((cell) => `${cell.slot.row}:${cell.slot.column}`),
   );
@@ -1076,7 +1075,6 @@ function notebookPayload(notebook: NotebookDocument): Record<string, unknown> {
   return {
     id: notebook.id,
     name: notebook.name,
-    grid: notebook.grid,
     created_at: notebook.createdAt,
     properties: notebook.properties ?? {},
     cells: notebook.cells.map(cellPayload),
@@ -1967,7 +1965,7 @@ export function videobookDomainDefs(
                 && cell.inputs?.audioSpineRole !== "sequence",
             );
             const [audioSlot, transcriptSlot, sequenceSlot] =
-              firstEmptyGridSlots(notebook, retained, 3);
+              firstEmptyGridSlots(retained, 3);
             const audioCell = engine.notebooks.createCell({
               type: "audio",
               title: artifact.value.slug,
@@ -2263,7 +2261,6 @@ export function videobookDomainDefs(
                   type: "selects",
                   title: "Transcript selects",
                   slot: firstEmptyGridSlots(
-                    document,
                     document.cells,
                     1,
                   )[0]!,
@@ -2558,7 +2555,6 @@ export function videobookDomainDefs(
                   type: "selects",
                   title: "Timeline selects",
                   slot: firstEmptyGridSlots(
-                    document,
                     document.cells,
                     1,
                   )[0]!,
@@ -2943,10 +2939,6 @@ export function videobookDomainDefs(
           "create_notebook_cell",
           (notebook) => ({
             ...notebook,
-            grid: extendNotebookGrid(
-              notebook.grid,
-              cell.slot.column + 1,
-            ),
             cells: [...notebook.cells, cell],
           }),
           { cellId: cell.id },
@@ -2979,13 +2971,7 @@ export function videobookDomainDefs(
             String(args.notebook_id),
             "update_notebook_cell",
             (notebook) => {
-              const grid = patch.slot
-                ? extendNotebookGrid(
-                    notebook.grid,
-                    patch.slot.column + 1,
-                  )
-                : notebook.grid;
-              const document = { ...notebook, grid };
+              const document = notebook;
               let found = false;
               const cells = notebook.cells.map((cell) => {
                 if (cell.id !== args.cell_id) return cell;
@@ -3053,13 +3039,8 @@ export function videobookDomainDefs(
           String(args.notebook_id),
           "move_notebook_cells",
           (notebook) => {
-            const requiredColumns = Math.max(
-              notebook.grid.columns.length,
-              ...[...slots.values()].map((slot) => slot.column + 1),
-            );
             return {
               ...notebook,
-              grid: extendNotebookGrid(notebook.grid, requiredColumns),
               cells: notebook.cells.map((cell) => {
                 const slot = slots.get(cell.id);
                 return slot

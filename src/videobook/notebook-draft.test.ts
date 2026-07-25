@@ -28,14 +28,6 @@ const source: NotebookDocument = {
       ordinal: 0,
     }],
   }],
-  grid: {
-    columns: [
-      { id: 'column-1' },
-      { id: 'column-2' },
-      { id: 'column-3' },
-      { id: 'column-4' },
-    ],
-  },
   edges: [],
   createdAt: '2026-01-01T00:00:00.000Z',
 }

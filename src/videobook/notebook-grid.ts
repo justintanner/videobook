@@ -7,14 +7,13 @@ export interface NotebookGridData extends Record<string, unknown> {
 
 export const notebookGrid = {
   originX: 48,
-  originY: 56,
+  originY: 72,
   squareSize: 240,
-  gap: 24,
-  columnPitch: 264,
-  rowPitch: 264,
-  headerHeight: 40,
-  viewportGutter: 48,
-  topViewportY: 36,
+  gap: 40,
+  columnPitch: 280,
+  rowPitch: 280,
+  defaultColumnCount: 4,
+  minimumRowCount: 3,
 } as const
 
 function normalizedSlot(slot: NotebookGridSlot): NotebookGridSlot {
@@ -86,7 +85,7 @@ export function resolveNotebookGridMove<T extends NotebookGridData>(
 
 export function nextNotebookGridSlot<T extends NotebookGridData>(
   nodes: readonly Node<T>[],
-  columnCount: number,
+  columnCount = notebookGrid.defaultColumnCount,
 ): NotebookGridSlot {
   const occupied = new Set(nodes.map((node) => slotKey(node.data.slot)))
   for (let ordinal = 0; ; ordinal += 1) {
@@ -107,11 +106,14 @@ export interface NotebookGridMetrics {
 
 export function notebookGridMetrics(
   slots: readonly NotebookGridSlot[],
-  columnCount: number,
+  columnCount = notebookGrid.defaultColumnCount,
   preview: NotebookGridSlot | null = null,
 ): NotebookGridMetrics {
   const populated = preview ? [...slots, preview] : [...slots]
-  const maxRow = Math.max(0, ...populated.map((slot) => slot.row))
+  const maxRow = Math.max(
+    notebookGrid.minimumRowCount - 1,
+    ...populated.map((slot) => slot.row),
+  )
   const maxColumn = Math.max(
     columnCount - 1,
     ...populated.map((slot) => slot.column),
@@ -120,38 +122,14 @@ export function notebookGridMetrics(
   const width = notebookGrid.originX * 2
     + resolvedColumnCount * notebookGrid.squareSize
     + Math.max(0, resolvedColumnCount - 1) * notebookGrid.gap
-  const height = notebookGrid.originY
+  const height = notebookGrid.originY * 2
     + (maxRow + 1) * notebookGrid.squareSize
     + maxRow * notebookGrid.gap
-    + notebookGrid.viewportGutter
   return {
     rowCount: maxRow + 1,
     columnCount: resolvedColumnCount,
     width,
     height,
-  }
-}
-
-export interface NotebookGridViewport {
-  x: number
-  y: number
-  zoom: number
-}
-
-export function notebookGridViewport(
-  columnCount: number,
-  viewportWidth: number,
-): NotebookGridViewport {
-  const metrics = notebookGridMetrics([], columnCount)
-  const availableWidth = Math.max(
-    1,
-    viewportWidth - notebookGrid.viewportGutter * 2,
-  )
-  const zoom = Math.min(1, Math.max(0.35, availableWidth / metrics.width))
-  return {
-    x: (viewportWidth - metrics.width * zoom) / 2,
-    y: notebookGrid.topViewportY,
-    zoom,
   }
 }
 

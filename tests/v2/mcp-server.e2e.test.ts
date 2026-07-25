@@ -22,7 +22,6 @@ interface BookPayload {
 interface NotebookPayload {
   id: string
   name: string
-  grid: { columns: Array<{ id: string }> }
 }
 
 interface CellPayload {
@@ -169,7 +168,6 @@ describe('v2 MCP server', () => {
     expect(notebooks).toEqual([{
       id: expect.any(String),
       name: 'Main',
-      grid: { columns: expect.any(Array) },
       created_at: expect.any(String),
       properties: {},
       cells: [],

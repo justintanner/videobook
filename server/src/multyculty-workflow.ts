@@ -22,7 +22,7 @@ type ArtifactRecord = {
   kind: string;
 };
 
-export const MULTYCULTY_FIXTURE_VERSION = 4;
+export const MULTYCULTY_FIXTURE_VERSION = 5;
 export const MULTYCULTY_FIXTURE_OWNER = "multyculty-default";
 
 const LEGACY_SPLIT_ROLES = [
@@ -69,7 +69,8 @@ function roleOf(cell: NotebookCell): string | null {
 }
 
 function isCanonicalRole(role: string | null): boolean {
-  return role === "source"
+  return /^label-\d+$/.test(role ?? "")
+    || role === "source"
     || role === "analysis"
     || role === "source-audio"
     || role === "assembly"
@@ -115,8 +116,8 @@ function isCurrentFixture(document: NotebookDocument): boolean {
   const edges = document.edges.filter((edge) =>
     cellIds.has(edge.source) && cellIds.has(edge.target));
   return fixture?.version === MULTYCULTY_FIXTURE_VERSION
-    && cells.length === 29
-    && roles.size === 29
+    && cells.length === 33
+    && roles.size === 33
     && edges.length === 60
     && roles.has("source")
     && roles.has("analysis")
@@ -124,7 +125,8 @@ function isCurrentFixture(document: NotebookDocument): boolean {
     && roles.has("assembly")
     && roles.has("export")
     && [1, 2, 3, 4].every((ordinal) =>
-      roles.has(`split-${ordinal}`)
+      roles.has(`label-${ordinal}`)
+      && roles.has(`split-${ordinal}`)
       && roles.has(`frame-first-${ordinal}`)
       && roles.has(`frame-last-${ordinal}`)
       && roles.has(`scene-audio-${ordinal}`)

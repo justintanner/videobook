@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ChangeEvent,
   type FormEvent,
 } from 'react'
@@ -49,7 +50,6 @@ import type {
   NotebookCellReference,
   NotebookCellType,
   NotebookDocument,
-  NotebookGrid,
   PinnedSearchResult,
   Sequence,
   TimedSequenceClip,
@@ -86,8 +86,8 @@ import {
 } from '@/videobook/command-plan'
 import {
   nextNotebookGridSlot,
+  notebookGridMetrics,
   notebookGridSlot,
-  notebookGridViewport,
   resolveNotebookGridMove,
   snapNotebookGridMove,
   type NotebookGridSlot,
@@ -258,6 +258,7 @@ const cellPalette: Array<{
   label: string
   icon: typeof BookOpen
 }> = [
+  { type: 'label', label: 'Label', icon: Square },
   { type: 'prompt', label: 'Prompt', icon: CircleDot },
   { type: 'image', label: 'Image', icon: Image },
   { type: 'video', label: 'Video', icon: Video },
@@ -343,6 +344,7 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
     || !Number.isInteger(column)
   ) return null
   if (![
+    'label',
     'source',
     'audio',
     'transcript',
@@ -387,26 +389,12 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
   }
 }
 
-function asNotebookGrid(value: unknown): NotebookGrid | null {
-  const item = record(value)
-  if (!item || !Array.isArray(item.columns)) return null
-  const columns = item.columns.flatMap((value) => {
-    const column = record(value)
-    const id = asString(column?.id)
-    const label = asString(column?.label)
-    if (!id) return []
-    return [{ id, ...(label ? { label } : {}) }]
-  })
-  return columns.length > 0 ? { columns } : null
-}
-
 function asNotebook(value: unknown): NotebookDocument | null {
   const item = record(value)
   const id = item && asString(item.id)
   const name = item && asString(item.name)
   const createdAt = item && asString(item.created_at ?? item.createdAt)
-  const grid = item && asNotebookGrid(item.grid)
-  if (!item || !id || !name || !createdAt || !grid) return null
+  if (!item || !id || !name || !createdAt) return null
   const cells = Array.isArray(item.cells)
     ? item.cells.flatMap((cell) => {
       const parsed = asNotebookCell(cell)
@@ -428,7 +416,6 @@ function asNotebook(value: unknown): NotebookDocument | null {
   return {
     id,
     name,
-    grid,
     createdAt,
     ...(record(item.properties) ? { properties: record(item.properties)! } : {}),
     cells,
@@ -909,6 +896,7 @@ function canvasNodes(
 }
 
 function CellIcon({ kind }: { kind: NotebookCellType }) {
+  if (kind === 'label') return <Square size={14} />
   if (kind === 'source' || kind === 'asset' || kind === 'video') {
     return <Video size={14} />
   }
@@ -939,6 +927,17 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
     || data.kind === 'sequence'
     || data.kind === 'export'
     || data.kind === 'source'
+
+  if (data.kind === 'label') {
+    return (
+      <article className={`cell-node cell-kind-label ${selected ? 'cell-node-selected' : ''}`}>
+        <div className="cell-label-copy">
+          <Square size={14} />
+          <strong>{data.title}</strong>
+        </div>
+      </article>
+    )
+  }
 
   return (
     <article className={`cell-node cell-kind-${data.kind} ${selected ? 'cell-node-selected' : ''}`}>
@@ -999,6 +998,7 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
 
 const nodeTypes = { cell: CellNode }
 const flowProOptions = { hideAttribution: true }
+const fixedNotebookViewport = { x: 0, y: 0, zoom: 1 }
 
 type AppProps = {
   initialWorkspace: InitialWorkspacePayload | null
@@ -1084,19 +1084,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const recorderStreamRef = useRef<MediaStream | null>(null)
   const recorderChunksRef = useRef<Blob[]>([])
   const audioSpinePlayerRef = useRef<HTMLAudioElement | null>(null)
-  const notebookColumnCount = notebook?.grid.columns.length ?? 4
-
-  const fitNotebook = useCallback(() => {
-    window.requestAnimationFrame(() => {
-      const viewportWidth = document.querySelector<HTMLElement>('.canvas')
-        ?.clientWidth ?? window.innerWidth
-      void flowRef.current?.setViewport(
-        notebookGridViewport(notebookColumnCount, viewportWidth),
-        { duration: 220 },
-      )
-    })
-  }, [notebookColumnCount])
-
   const activeBook = useMemo(
     () => books.find((book) => book.bookId === bookId) ?? null,
     [bookId, books],
@@ -1309,6 +1296,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       : [])
   const [edges, setEdges] = useState<Edge[]>(() =>
     initialWorkspace?.notebook ? notebookEdges(initialWorkspace.notebook) : [])
+  const notebookMetrics = useMemo(
+    () => notebookGridMetrics(
+      nodes.map((node) => node.data.slot),
+      undefined,
+      previewSlot,
+    ),
+    [nodes, previewSlot],
+  )
+  const notebookFlowStyle = useMemo<CSSProperties>(
+    () => ({
+      width: notebookMetrics.width,
+      height: notebookMetrics.height,
+    }),
+    [notebookMetrics.height, notebookMetrics.width],
+  )
   const selectedCell = useMemo(
     () => nodes.find((node) => node.id === selectedCellId) ?? null,
     [nodes, selectedCellId],
@@ -1413,7 +1415,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ?? nextBooks[0]
       if (target) {
         await refreshBookData(target.bookId)
-        fitNotebook()
         setNotice(`Loaded ${target.slug}`)
       } else {
         setBookId('')
@@ -1429,13 +1430,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } finally {
       setBusy(false)
     }
-  }, [bookId, call, fitNotebook, refreshBookData])
+  }, [bookId, call, refreshBookData])
 
   const chooseBook = useCallback(async (nextBookId: string) => {
     setBusy(true)
     try {
       await refreshBookData(nextBookId)
-      fitNotebook()
       const next = books.find((book) => book.bookId === nextBookId)
       setNotice(next ? `Opened ${next.slug}` : 'Book opened')
       setScreen('notebook')
@@ -1445,14 +1445,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } finally {
       setBusy(false)
     }
-  }, [books, fitNotebook, refreshBookData])
+  }, [books, refreshBookData])
 
   const createCell = async (type: NotebookCellType, position?: { x: number; y: number }) => {
     if (!bookId || !notebook) return
-    const columnCount = notebook.grid.columns.length
     const slot = position
       ? notebookGridSlot(position)
-      : nextNotebookGridSlot(nodes, columnCount)
+      : nextNotebookGridSlot(nodes)
     if (
       position
       && nodes.some((node) =>
@@ -1463,6 +1462,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return
     }
     const labels: Record<NotebookCellType, string> = {
+      label: 'Label',
       source: 'Source',
       audio: 'Audio',
       transcript: 'Transcript',
@@ -1502,7 +1502,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         },
       })
       await refreshBookData(bookId, notebook.id)
-      if (!position) fitNotebook()
       setNotice(`Added ${labels[type].toLowerCase()} cell`)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error))
@@ -1540,7 +1539,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         cell_id: selectedCell.id,
       })
       await refreshBookData(bookId, notebook.id)
-      fitNotebook()
       setNotice('Cell deleted')
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error))
@@ -1930,7 +1928,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setTranscriptCorrection('')
       setSelectionStartWordId('')
       setMoveDestinationWordId('')
-      fitNotebook()
       setNotice('Audio notebook spine set')
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error))
@@ -3194,119 +3191,132 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     <button type="button" onClick={() => void loadBooks(bookId)}>Reload book</button>
                   </div>
                 ) : (
-                  <ReactFlow<CanvasNode, Edge>
-                    nodes={nodes}
-                    edges={edges}
-                    nodeTypes={nodeTypes}
-                    onInit={(instance) => {
-                      flowRef.current = instance
-                      fitNotebook()
-                    }}
-                    onNodesChange={(changes) => setNodes((current) => {
-                      let next = applyNodeChanges(changes, current)
-                      for (const change of changes) {
-                        if (
-                          change.type !== 'position'
-                          || !change.dragging
-                          || !change.position
-                        ) continue
-                        next = snapNotebookGridMove(
-                          next,
-                          change.id,
-                          notebookGridSlot(change.position),
-                        )
-                      }
-                      return next
-                    })}
-                    onEdgesChange={(changes) => {
-                      setEdges((current) => applyEdgeChanges(changes, current))
-                      const removed = changes.filter((change) => change.type === 'remove').map((change) => change.id)
-                      if (removed.length > 0) void removeEdges(removed)
-                    }}
-                    onNodeClick={(_event, node) => {
-                      setSelectedCellId(node.id)
-                      setInspectorOpen(true)
-                    }}
-                    onPaneClick={() => setSelectedCellId(null)}
-                    onNodeDrag={(_event, node) => {
-                      setPreviewSlot(notebookGridSlot(node.position))
-                    }}
-                    onNodeDragStop={(_event, node) => {
-                      const nextNodes = resolveNotebookGridMove(
-                        nodes,
-                        node.id,
-                        notebookGridSlot(node.position),
-                      )
-                      setNodes(nextNodes)
-                      setPreviewSlot(null)
-                      void persistSlots(nextNodes)
-                    }}
-                    onConnect={(connection) => void connectCells(connection)}
-                    onDrop={(event) => {
-                      event.preventDefault()
-                      const raw = event.dataTransfer.getData('application/x-videobook-cell')
-                      if (!cellPalette.some((item) => item.type === raw)) return
-                      const point = flowRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY })
-                      setPreviewSlot(null)
-                      void createCell(raw as NotebookCellType, point)
-                    }}
-                    onDragOver={(event) => {
-                      event.preventDefault()
-                      const point = flowRef.current?.screenToFlowPosition({
-                        x: event.clientX,
-                        y: event.clientY,
-                      })
-                      if (point) {
-                        setPreviewSlot(notebookGridSlot(point))
-                      }
-                    }}
-                    minZoom={0.35}
-                    maxZoom={1.5}
-                    deleteKeyCode={null}
-                    proOptions={flowProOptions}
-                  >
-                    <NotebookGridBoard
-                      grid={notebook.grid}
+                  <div className="notebook-horizontal-scroll">
+                    <div
+                      className="notebook-flow-frame"
+                      style={notebookFlowStyle}
+                    >
+                      <ReactFlow<CanvasNode, Edge>
+                        className="notebook-flow"
                       nodes={nodes}
-                      previewSlot={previewSlot}
-                    />
-                    <Panel position="top-left" className="canvas-add-panel">
-                      <div className="canvas-workbook-actions">
-                        <details className="canvas-add-menu">
-                          <summary><Plus size={15} />Add cell</summary>
-                          <div>
-                            {cellPalette.map((item) => {
-                              const Icon = item.icon
-                              return (
-                                <button
-                                  key={item.type}
-                                  type="button"
-                                  draggable
-                                  disabled={busy}
-                                  onDragStart={(event) => event.dataTransfer.setData('application/x-videobook-cell', item.type)}
-                                  onDragEnd={() => setPreviewSlot(null)}
-                                  onClick={() => void createCell(item.type)}
-                                >
-                                  <Icon size={15} /><span>{item.label}</span>
-                                </button>
-                              )
-                            })}
+                      edges={edges}
+                      nodeTypes={nodeTypes}
+                      defaultViewport={fixedNotebookViewport}
+                      onInit={(instance) => {
+                        flowRef.current = instance
+                      }}
+                      onNodesChange={(changes) => setNodes((current) => {
+                        let next = applyNodeChanges(changes, current)
+                        for (const change of changes) {
+                          if (
+                            change.type !== 'position'
+                            || !change.dragging
+                            || !change.position
+                          ) continue
+                          next = snapNotebookGridMove(
+                            next,
+                            change.id,
+                            notebookGridSlot(change.position),
+                          )
+                        }
+                        return next
+                      })}
+                      onEdgesChange={(changes) => {
+                        setEdges((current) => applyEdgeChanges(changes, current))
+                        const removed = changes.filter((change) => change.type === 'remove').map((change) => change.id)
+                        if (removed.length > 0) void removeEdges(removed)
+                      }}
+                      onNodeClick={(_event, node) => {
+                        setSelectedCellId(node.id)
+                        setInspectorOpen(true)
+                      }}
+                      onPaneClick={() => setSelectedCellId(null)}
+                      onNodeDrag={(_event, node) => {
+                        setPreviewSlot(notebookGridSlot(node.position))
+                      }}
+                      onNodeDragStop={(_event, node) => {
+                        const nextNodes = resolveNotebookGridMove(
+                          nodes,
+                          node.id,
+                          notebookGridSlot(node.position),
+                        )
+                        setNodes(nextNodes)
+                        setPreviewSlot(null)
+                        void persistSlots(nextNodes)
+                      }}
+                      onConnect={(connection) => void connectCells(connection)}
+                      onDrop={(event) => {
+                        event.preventDefault()
+                        const raw = event.dataTransfer.getData('application/x-videobook-cell')
+                        if (!cellPalette.some((item) => item.type === raw)) return
+                        const point = flowRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+                        setPreviewSlot(null)
+                        void createCell(raw as NotebookCellType, point)
+                      }}
+                      onDragOver={(event) => {
+                        event.preventDefault()
+                        const point = flowRef.current?.screenToFlowPosition({
+                          x: event.clientX,
+                          y: event.clientY,
+                        })
+                        if (point) {
+                          setPreviewSlot(notebookGridSlot(point))
+                        }
+                      }}
+                      minZoom={1}
+                      maxZoom={1}
+                      panOnDrag={false}
+                      panOnScroll={false}
+                      zoomOnScroll={false}
+                      zoomOnPinch={false}
+                      zoomOnDoubleClick={false}
+                      preventScrolling={false}
+                      deleteKeyCode={null}
+                      proOptions={flowProOptions}
+                    >
+                        <NotebookGridBoard
+                          metrics={notebookMetrics}
+                          previewSlot={previewSlot}
+                        />
+                        <Panel position="top-left" className="canvas-add-panel">
+                          <div className="canvas-workbook-actions">
+                            <details className="canvas-add-menu">
+                              <summary><Plus size={15} />Add cell</summary>
+                              <div>
+                                {cellPalette.map((item) => {
+                                  const Icon = item.icon
+                                  return (
+                                    <button
+                                      key={item.type}
+                                      type="button"
+                                      draggable
+                                      disabled={busy}
+                                      onDragStart={(event) => event.dataTransfer.setData('application/x-videobook-cell', item.type)}
+                                      onDragEnd={() => setPreviewSlot(null)}
+                                      onClick={() => void createCell(item.type)}
+                                    >
+                                      <Icon size={15} /><span>{item.label}</span>
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </details>
+                            <button
+                              type="button"
+                              className="canvas-run-workbook"
+                              disabled={busy}
+                              onClick={() => void runWorkbook()}
+                            >
+                              {busy
+                                ? <LoaderCircle className="spin" size={15} />
+                                : <Sparkles size={15} />}
+                              Run workbook
+                            </button>
                           </div>
-                        </details>
-                        <button
-                          type="button"
-                          className="canvas-run-workbook"
-                          disabled={busy}
-                          onClick={() => void runWorkbook()}
-                        >
-                          {busy
-                            ? <LoaderCircle className="spin" size={15} />
-                            : <Sparkles size={15} />}
-                          Run workbook
-                        </button>
-                      </div>
-                    </Panel>
-                  </ReactFlow>
+                        </Panel>
+                      </ReactFlow>
+                    </div>
+                  </div>
                 )}
                 {notebook && nodes.length === 0 && (
                   <div className="canvas-welcome">
