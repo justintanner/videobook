@@ -68,6 +68,7 @@ import {
 } from '@/components/videobook/CommandComposer'
 import { NotebookStageBoard } from '@/components/videobook/NotebookStageBoard'
 import { MomentSearch } from '@/components/videobook/MomentSearch'
+import { NotebookCellInspector } from '@/components/videobook/NotebookCellInspector'
 import {
   CanonicalSequencePlayer,
   type TimelineKeyboardAction,
@@ -1253,12 +1254,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => nodes.find((node) => node.id === selectedCellId) ?? null,
     [nodes, selectedCellId],
   )
+  const selectedNotebookCell = useMemo(
+    () => notebook?.cells.find((cell) => cell.id === selectedCellId) ?? null,
+    [notebook, selectedCellId],
+  )
 
   const applyNotebook = useCallback((next: NotebookDocument, nextAssets: AssetRecord[]) => {
     setNotebook(next)
     setNodes(canvasNodes(next, nextAssets, (cellId) => void runCell(cellId)))
     setEdges(notebookEdges(next))
-    setSelectedCellId(null)
+    setSelectedCellId((current) =>
+      current && next.cells.some((cell) => cell.id === current) ? current : null)
   }, [runCell])
 
   const refreshNotebook = useCallback(async (targetBookId: string, notebookId: string) => {
@@ -3349,42 +3355,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       <p>Cell editing appears here. Audio words remain bound to exact source ticks.</p>
                     </div>
                   </div>
-                ) : (
-                  <div className="inspector-body">
-                    <h2 className="inspector-slug">{selectedCell.data.title}</h2>
-                    <span className="workspace-notice">{selectedCell.data.kind.toUpperCase()} · {selectedCell.data.status}</span>
-                    <label>
-                      Title
-                      <input defaultValue={selectedCell.data.title} onBlur={(event) => {
-                        const title = event.target.value.trim()
-                        if (title && title !== selectedCell.data.title) void updateCell({ title })
-                      }} />
-                    </label>
-                    {(selectedCell.data.kind === 'prompt' || selectedCell.data.kind === 'image' || selectedCell.data.kind === 'video') && (
-                      <label>
-                        Prompt
-                        <textarea defaultValue={selectedCell.data.prompt ?? ''} rows={8} onBlur={(event) => {
-                          if (event.target.value !== (selectedCell.data.prompt ?? '')) void updateCell({ prompt: event.target.value })
-                        }} />
-                      </label>
-                    )}
-                    {(selectedCell.data.kind === 'image' || selectedCell.data.kind === 'video') && (
-                      <label>
-                        Tool model
-                        <input defaultValue={selectedCell.data.model ?? ''} placeholder="Generation tool name" onBlur={(event) => {
-                          if (event.target.value !== (selectedCell.data.model ?? '')) void updateCell({ model: event.target.value })
-                        }} />
-                      </label>
-                    )}
-                    {selectedCell.data.asset?.mediaUrl && (
-                      <a className="inspector-media-link" href={selectedCell.data.asset.mediaUrl} target="_blank" rel="noreferrer">Open output</a>
-                    )}
-                    <div className="record-card-actions">
-                      {(selectedCell.data.kind === 'image' || selectedCell.data.kind === 'video') && <button type="button" onClick={() => void runCell(selectedCell.id)} disabled={busy}>Run cell</button>}
-                      <button type="button" className="danger-button" onClick={() => void deleteSelectedCell()} disabled={busy}><Trash2 size={13} />Delete</button>
-                    </div>
-                  </div>
-                )}
+                ) : selectedNotebookCell ? (
+                  <NotebookCellInspector
+                    key={selectedNotebookCell.id}
+                    notebookId={notebook?.id ?? ''}
+                    cell={selectedNotebookCell}
+                    asset={selectedCell.data.asset}
+                    status={selectedCell.data.status}
+                    busy={busy}
+                    onUpdate={updateCell}
+                    onRun={runCell}
+                    onDelete={deleteSelectedCell}
+                  />
+                ) : null}
               </aside>
             </>
           )}
