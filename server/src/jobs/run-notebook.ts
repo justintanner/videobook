@@ -444,36 +444,66 @@ async function failedArtifact(
   return result.value.artifactId;
 }
 
-function assertSequenceMatchesAssembly(
-  engine: Engine,
-  clipArtifactIds: string[],
-  pinnedRevision: string,
-): void {
-  if (!pinnedRevision.trim()) {
-    throw new Error("Sequence revision is missing; re-run assembly before export");
-  }
-  // Explicitly invalid / placeholder revisions fail closed.
-  if (pinnedRevision === "stale-revision" || pinnedRevision === "unknown") {
-    throw new Error("Sequence revision is stale; re-run assembly before export");
-  }
-  const primary = engine.sequences.getPrimary();
-  const placed = primary.clips
+function orderedClipArtifactIds(
+  clips: Array<{ timelineStartFrame: number; artifactId?: string; source?: { artifactId?: string } }>,
+): string[] {
+  return clips
     .slice()
     .sort((left, right) => left.timelineStartFrame - right.timelineStartFrame)
     .map((clip) => {
-      if ("artifactId" in clip && typeof clip.artifactId === "string") {
-        return clip.artifactId;
-      }
-      const source = (clip as { source?: { artifactId?: string } }).source;
-      return source?.artifactId;
+      if (typeof clip.artifactId === "string" && clip.artifactId) return clip.artifactId;
+      return clip.source?.artifactId;
     })
     .filter((value): value is string => typeof value === "string");
-  for (const expected of clipArtifactIds) {
-    if (!placed.includes(expected)) {
-      throw new Error(
-        "Sequence revision is stale; assembled clips no longer match the primary sequence",
-      );
-    }
+}
+
+function sameArtifactOrder(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
+
+/**
+ * Export is revision-pinned: the assembly revision must exist, and the primary
+ * sequence at HEAD must still match the sequence as assembled (clip order).
+ */
+export function assertSequenceMatchesAssembly(
+  engine: Engine,
+  clipArtifactIds: string[],
+  pinnedRevision: string,
+  sequenceId: string,
+): void {
+  if (!pinnedRevision.trim()) {
+    throw new Error("Sequence has not been assembled; run assembly before export");
+  }
+  if (clipArtifactIds.length === 0) {
+    throw new Error("Export has no assembled clips on the sequence");
+  }
+
+  const atPin = engine.sequences.getAtRevision(sequenceId, pinnedRevision);
+  if (!atPin.ok) {
+    throw new Error(
+      `Sequence revision is stale; pinned revision is not readable: ${pinnedRevision}`,
+    );
+  }
+
+  const primary = engine.sequences.getPrimary();
+  const pinnedClips = orderedClipArtifactIds(atPin.value.clips);
+  const headClips = orderedClipArtifactIds(primary.clips);
+
+  if (!sameArtifactOrder(pinnedClips, clipArtifactIds)) {
+    throw new Error(
+      "Sequence revision is stale; assembly pin does not match recorded clip order",
+    );
+  }
+  if (!sameArtifactOrder(headClips, clipArtifactIds)) {
+    throw new Error(
+      "Sequence revision is stale; primary sequence changed after assembly",
+    );
+  }
+  if (!sameArtifactOrder(pinnedClips, headClips)) {
+    throw new Error(
+      "Sequence revision is stale; sequence at HEAD diverged from the assembly revision",
+    );
   }
 }
 
@@ -799,6 +829,9 @@ async function executeLocalOrGeneration(
     if (!pinnedRevision) {
       throw new Error("Sequence has not been assembled; run assembly before export");
     }
+    const sequenceId = typeof sequenceCell.inputs?.sequenceId === "string"
+      ? sequenceCell.inputs.sequenceId
+      : engine.sequences.getPrimary().sequenceId;
     const clipArtifactIds = Array.isArray(sequenceCell.inputs?.clipArtifactIds)
       ? sequenceCell.inputs.clipArtifactIds.filter((value): value is string =>
         typeof value === "string")
@@ -809,7 +842,12 @@ async function executeLocalOrGeneration(
     if (clipArtifactIds.length === 0) {
       throw new Error(`Export cell ${cell.id} has no assembled clips on the sequence`);
     }
-    assertSequenceMatchesAssembly(engine, clipArtifactIds, pinnedRevision);
+    assertSequenceMatchesAssembly(
+      engine,
+      clipArtifactIds,
+      pinnedRevision,
+      sequenceId,
+    );
     const result = await exportSequenceMaster(
       engine,
       clipArtifactIds,
@@ -821,6 +859,7 @@ async function executeLocalOrGeneration(
       tool: "ffmpeg",
       cellInputs: {
         sequenceRevision: pinnedRevision,
+        sequenceId,
         state: "completed",
       },
     };

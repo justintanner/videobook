@@ -4,7 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
-import { createEngine, type Engine, type NotebookDocument } from "videobook-engine";
+import {
+  createEngine,
+  MVP_CONTRACT_VERSION,
+  type Engine,
+  type NotebookDocument,
+} from "videobook-engine";
+import { v7 as uuidv7 } from "uuid";
 import { FFMPEG } from "../../server/src/ffmpeg.js";
 import {
   modelArgs,
@@ -233,9 +239,12 @@ describe("notebook runner dual-frame and assembly", () => {
       clipB.value.artifactId,
     ]);
     expect(engine.sequences.getPrimary().clips.length).toBeGreaterThanOrEqual(2);
+    const pinnedRevision = String(sequenceCell?.inputs?.sequenceRevision);
+    const sequenceId = String(sequenceCell?.inputs?.sequenceId
+      ?? engine.sequences.getPrimary().sequenceId);
 
-    // Stale / mismatched assembly must fail export.
-    const staleDoc: NotebookDocument = {
+    // Unknown real-looking revision hash is not readable → stale.
+    const unknownRevDoc: NotebookDocument = {
       ...assembled.document,
       cells: assembled.document.cells.map((cell) =>
         cell.id === sequence.id
@@ -243,7 +252,7 @@ describe("notebook runner dual-frame and assembly", () => {
               ...cell,
               inputs: {
                 ...(cell.inputs ?? {}),
-                sequenceRevision: "stale-revision",
+                sequenceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               },
             }
           : cell),
@@ -253,34 +262,12 @@ describe("notebook runner dual-frame and assembly", () => {
         engine,
         engine.book.get().bookId,
         document.id,
-        staleDoc,
+        unknownRevDoc,
         exp,
       ),
-    ).rejects.toThrow(/stale/i);
+    ).rejects.toThrow(/stale|not readable/i);
 
-    const mismatched: NotebookDocument = {
-      ...assembled.document,
-      cells: assembled.document.cells.map((cell) =>
-        cell.id === sequence.id
-          ? {
-              ...cell,
-              inputs: {
-                ...(cell.inputs ?? {}),
-                clipArtifactIds: ["019f0000-0000-7000-8000-00000000dead"],
-              },
-            }
-          : cell),
-    };
-    await expect(
-      runNotebookCell(
-        engine,
-        engine.book.get().bookId,
-        document.id,
-        mismatched,
-        exp,
-      ),
-    ).rejects.toThrow(/stale|no longer match/i);
-
+    // Successful export while assembly still matches HEAD sequence.
     const exported = await runNotebookCell(
       engine,
       engine.book.get().bookId,
@@ -291,5 +278,69 @@ describe("notebook runner dual-frame and assembly", () => {
     expect(exported.outputArtifactId).toBeTruthy();
     const exportArtifact = engine.artifacts.get(exported.outputArtifactId);
     expect(exportArtifact.ok).toBe(true);
+
+    // Mutate the live sequence after assembly — export must fail even though
+    // the old pin still exists in Dolt history.
+    const primary = engine.sequences.getPrimary();
+    const videoTrack = primary.tracks.find((track) => track.kind === "video");
+    expect(videoTrack).toBeTruthy();
+    if (!videoTrack) return;
+    const extraPath = join(rootDir, "extra.mp4");
+    await makeClip(extraPath, 1);
+    const extra = await engine.artifacts.create({ kind: "video", name: "extra clip" });
+    expect(extra.ok).toBe(true);
+    if (!extra.ok) return;
+    await engine.files.writeFromPath(extra.value.artifactId, "original.mp4", extraPath);
+    const extraManifest = await engine.files.manifest(extra.value.artifactId);
+    expect(extraManifest.ok).toBe(true);
+    if (!extraManifest.ok) return;
+    const extraHash = extraManifest.value.files[0]?.objectHash;
+    expect(extraHash).toBeTruthy();
+    if (!extraHash) return;
+    const intent = {
+      intentVersion: MVP_CONTRACT_VERSION,
+      commandId: uuidv7(),
+      sequenceId,
+      baseRevision: engine.head,
+      actor: "stale-test",
+      sourceSurface: "system" as const,
+      confirmationPolicy: "reversible-single-step" as const,
+      operations: [{
+        kind: "insert-clip" as const,
+        mode: "insert" as const,
+        placement: {
+          trackId: videoTrack.trackId,
+          timelineStartFrame: 10_000,
+          durationFrames: 24,
+          source: {
+            kind: "still" as const,
+            artifactId: extra.value.artifactId,
+            sourcePath: "original.mp4",
+            objectHash: extraHash,
+          },
+        },
+      }],
+    };
+    const preview = engine.edits.preview(intent);
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    const commit = await engine.edits.commit(intent, preview.value.previewHash);
+    expect(commit.ok).toBe(true);
+    if (!commit.ok) return;
+    expect(engine.head).not.toBe(pinnedRevision);
+    expect(engine.sequences.getPrimary().clips.length)
+      .toBeGreaterThan(assembled.document.cells.length > 0
+        ? 2
+        : 0);
+
+    await expect(
+      runNotebookCell(
+        engine,
+        engine.book.get().bookId,
+        document.id,
+        assembled.document,
+        exp,
+      ),
+    ).rejects.toThrow(/stale|changed after assembly|diverged/i);
   }, 90_000);
 });
