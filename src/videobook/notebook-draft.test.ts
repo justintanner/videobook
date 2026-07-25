@@ -1,3 +1,4 @@
+import { MarkerType } from '@xyflow/react'
 import { describe, expect, it } from 'vitest'
 import type { NotebookDocument } from 'videobook-engine'
 import {
@@ -72,5 +73,35 @@ describe('notebook draft conversion', () => {
       notebookGridPosition({ stage: 0, column: 0 }),
       notebookGridPosition({ stage: 0, column: 1 }),
     ])
+  })
+
+  it('maps semantic inputs to visible directed workflow handles', () => {
+    const target = {
+      ...source.cells[0]!,
+      id: '018f7cf5-0d31-7d96-8c0f-800000000005',
+      type: 'video' as const,
+      position: { x: 360, y: 400 },
+    }
+    const connected: NotebookDocument = {
+      ...source,
+      cells: [source.cells[0]!, target],
+      edges: [{
+        id: '018f7cf5-0d31-7d96-8c0f-800000000007',
+        source: source.cells[0]!.id,
+        target: target.id,
+        targetInput: 'reference-video',
+      }],
+    }
+
+    expect(notebookNodes(connected)[1]?.data.targetInputs).toEqual(['reference-video'])
+    expect(notebookEdges(connected)[0]).toMatchObject({
+      targetHandle: 'reference-video',
+      type: 'smoothstep',
+      className: 'workflow-edge',
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: '#72e7aa',
+      },
+    })
   })
 })

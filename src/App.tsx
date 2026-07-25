@@ -865,26 +865,50 @@ function canvasNodes(
   }))
 }
 
+function CellIcon({ kind }: { kind: NotebookCellType }) {
+  if (kind === 'source' || kind === 'asset' || kind === 'video') {
+    return <Video size={14} />
+  }
+  if (kind === 'audio' || kind === 'transcript') {
+    return <AudioWaveform size={14} />
+  }
+  if (kind === 'scene' || kind === 'sequence' || kind === 'selects') {
+    return <Film size={14} />
+  }
+  if (kind === 'image') return <Image size={14} />
+  if (kind === 'prompt') return <CircleDot size={14} />
+  return <BookOpen size={14} />
+}
+
+function notebookStageLabels(document: NotebookDocument | null): string[] {
+  const labels = document?.properties?.stageLabels
+  return Array.isArray(labels)
+    ? labels.map((label) => typeof label === 'string' ? label : '')
+    : []
+}
+
 function CellNode({ data, selected }: NodeProps<CanvasNode>) {
-  const Icon = data.kind === 'video'
-    ? Video
-    : data.kind === 'image'
-      ? Image
-      : data.kind === 'scene'
-        ? Film
-        : data.kind === 'prompt'
-          ? CircleDot
-          : BookOpen
   const mediaUrl = data.asset?.mediaUrl
   const thumbnailUrl = data.asset?.thumbnailUrl
+  const targetInputs = data.targetInputs?.length ? data.targetInputs : ['input']
+  const playableVideo = data.asset?.type === 'video' || data.asset?.type === 'final'
   const canRun = data.kind === 'image' || data.kind === 'video'
 
   return (
-    <article className={`cell-node ${selected ? 'cell-node-selected' : ''}`}>
-      <Handle type="target" position={Position.Top} id="input" />
+    <article className={`cell-node cell-kind-${data.kind} ${selected ? 'cell-node-selected' : ''}`}>
+      {targetInputs.map((input, index) => (
+        <Handle
+          key={input}
+          type="target"
+          position={Position.Top}
+          id={input}
+          className="cell-target-handle"
+          style={{ left: `${((index + 1) / (targetInputs.length + 1)) * 100}%` }}
+        />
+      ))}
       <section className="cell-node-shell">
         <header className="cell-node-header">
-          <span><Icon size={14} />{data.kind.toUpperCase()}</span>
+          <span><CellIcon kind={data.kind} />{data.kind.toUpperCase()}</span>
           {canRun && (
             <button
               type="button"
@@ -898,9 +922,14 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
             </button>
           )}
         </header>
-        {mediaUrl || thumbnailUrl ? (
+        {data.kind === 'audio' ? (
+          <div className="cell-copy cell-copy-audio">
+            <AudioWaveform size={38} />
+            <span>Original soundtrack<br />48 kHz · stereo</span>
+          </div>
+        ) : mediaUrl || thumbnailUrl ? (
           <div className="cell-media">
-            {data.kind === 'video' && mediaUrl ? (
+            {playableVideo && mediaUrl ? (
               <video src={mediaUrl} poster={thumbnailUrl ?? undefined} muted playsInline preload="metadata" />
             ) : (
               <img src={thumbnailUrl ?? mediaUrl ?? ''} alt={data.title} />
@@ -926,10 +955,10 @@ const nodeTypes = { cell: CellNode }
 const flowProOptions = { hideAttribution: true }
 const flowFitViewOptions: FitViewOptions<CanvasNode> = {
   padding: {
-    top: '10%',
-    right: '5%',
-    bottom: '24%',
-    left: '210px',
+    top: '7%',
+    right: '6%',
+    bottom: '17%',
+    left: '6%',
   },
   minZoom: 0.35,
   maxZoom: 0.86,
@@ -988,7 +1017,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [storage, setStorage] = useState<unknown>(null)
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
-  const [inspectorOpen, setInspectorOpen] = useState(() => window.innerWidth > 1100)
+  const [inspectorOpen, setInspectorOpen] = useState(false)
   const [bookMenuOpen, setBookMenuOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [recording, setRecording] = useState(false)
@@ -3000,7 +3029,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     deleteKeyCode={null}
                     proOptions={flowProOptions}
                   >
-                    <NotebookStageBoard nodes={nodes} previewSlot={previewSlot} />
+                    <NotebookStageBoard
+                      nodes={nodes}
+                      previewSlot={previewSlot}
+                      labels={notebookStageLabels(notebook)}
+                    />
                     <Background gap={36} size={1} color="rgba(96, 196, 141, 0.14)" />
                     <Panel position="top-left" className="canvas-add-panel">
                       <details className="canvas-add-menu">

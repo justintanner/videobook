@@ -10,15 +10,17 @@ import {
 interface NotebookStageBoardProps {
   nodes: Array<Node<NotebookCellData>>
   previewSlot: NotebookGridSlot | null
+  labels?: readonly string[]
 }
 
-function stageLabel(stage: number): string {
-  return `STAGE ${String(stage + 1).padStart(2, '0')}`
+function stageLabel(stage: number, labels: readonly string[]): string {
+  return labels[stage] || `STAGE ${String(stage + 1).padStart(2, '0')}`
 }
 
 export function NotebookStageBoard({
   nodes,
   previewSlot,
+  labels = [],
 }: NotebookStageBoardProps) {
   const metrics = notebookGridMetrics(
     nodes.map((node) => node.position),
@@ -43,7 +45,7 @@ export function NotebookStageBoard({
               transform: `translateY(${notebookGrid.originY + stage * notebookGrid.stagePitch - notebookGrid.stageHeadroom}px)`,
             }}
           >
-            <span className="notebook-stage-label">{stageLabel(stage)}</span>
+            <span className="notebook-stage-label">{stageLabel(stage, labels)}</span>
             {Array.from({ length: metrics.columnCount }, (_, column) => (
               <span
                 className="notebook-stage-column"

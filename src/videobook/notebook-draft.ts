@@ -1,4 +1,4 @@
-import type { Edge, Node } from '@xyflow/react'
+import { MarkerType, type Edge, type Node } from '@xyflow/react'
 import type {
   NotebookCell,
   NotebookCellType,
@@ -22,10 +22,17 @@ export interface NotebookCellData extends Record<string, unknown> {
   entityId?: string
   outputArtifactId?: string
   inputs?: Record<string, unknown>
+  targetInputs?: string[]
 }
 
 export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCellData>> {
   const positions = normalizeNotebookGridPositions(document.cells.map((cell) => cell.position))
+  const targetInputs = new Map<string, string[]>()
+  for (const edge of document.edges) {
+    const inputs = targetInputs.get(edge.target) ?? []
+    if (!inputs.includes(edge.targetInput)) inputs.push(edge.targetInput)
+    targetInputs.set(edge.target, inputs)
+  }
   return document.cells.map((cell, index) => {
     const position = positions[index]!
     const slot = notebookGridSlot(position)
@@ -39,6 +46,7 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
         subtitle: `${cell.type.toUpperCase()} · CELL`,
         stage: slot.stage + 1,
         status: 'ready',
+        targetInputs: targetInputs.get(cell.id) ?? ['input'],
         ...(cell.prompt === undefined ? {} : { prompt: cell.prompt }),
         ...(cell.model === undefined ? {} : { model: cell.model }),
         ...(cell.entityId === undefined ? {} : { entityId: cell.entityId }),
@@ -57,6 +65,14 @@ export function notebookEdges(document: NotebookDocument): Edge[] {
     source: edge.source,
     target: edge.target,
     targetHandle: edge.targetInput,
+    type: 'smoothstep',
+    className: 'workflow-edge',
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 18,
+      height: 18,
+      color: '#72e7aa',
+    },
   }))
 }
 
