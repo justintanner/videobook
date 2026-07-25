@@ -27,7 +27,10 @@ import { v5 as uuidv5, v7 as uuidv7 } from "uuid";
 import type { BookManager } from "../book-manager.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { queue, stopBookQueue } from "../queue.js";
-import { prepareNotebookGeneration } from "../jobs/run-notebook.js";
+import {
+  notebookCellDefinitionFingerprint,
+  prepareNotebookGeneration,
+} from "../jobs/run-notebook.js";
 import {
   buildGenerationInsertPlan,
   continueQueuedInsert,
@@ -42,6 +45,11 @@ import {
   validateCellConfiguration,
 } from "../notebook-action-catalog.js";
 import { buildSevenStageScaffold } from "../notebook-workflow.js";
+import {
+  enqueueNotebookRunPlan,
+  notebookRunPlanRecords,
+  planNotebookRun,
+} from "../notebook-run-plan.js";
 
 const bookSchema = { book_id: z.string().uuid() };
 const cellTypeSchema = z.enum([
@@ -272,8 +280,15 @@ async function notebookGenerationPlan(
   },
 ): Promise<Record<string, unknown>> {
   const cell = notebook.cells.find((candidate) => candidate.id === cellId);
-  if (!cell || (cell.type !== "image" && cell.type !== "video")) {
-    throw new Error("Choose an image or video generation cell");
+  if (
+    !cell
+    || (
+      cell.type !== "prompt"
+      && cell.type !== "image"
+      && cell.type !== "video"
+    )
+  ) {
+    throw new Error("Choose a prompt, image, or video generation cell");
   }
   const prepared = await prepareNotebookGeneration(
     engine,
@@ -305,7 +320,65 @@ async function notebookGenerationPlan(
       )
     : [];
   const estimateUnavailable = estimatedCost === undefined
-    || warnings.some((warning) => warning.includes("no cost adapter registered"));
+    || warnings.some((warning) =>
+      /not found|unavailable|no cost adapter|unknown/i.test(warning));
+  const cellDefinitionFingerprint = notebookCellDefinitionFingerprint(
+    notebook,
+    cell,
+  );
+  if (cell.type === "prompt") {
+    const planId = uuidv7();
+    const enriched: Record<string, unknown> = {
+      planVersion: 1,
+      planId,
+      sourceSurface,
+      actor,
+      bookId: engine.book.get().bookId,
+      summary: `Rewrite ${cell.title} for Seedance 2`,
+      normalizedReferences: [{
+        kind: "notebook",
+        targetId: notebook.id,
+        revision: engine.head,
+      }],
+      stages: [{
+        stageId: `${planId}:queued:0`,
+        kind: "queued",
+        summary: `Run ${prepared.tool}`,
+        jobType: "generation",
+        tool: "run_notebook_cell",
+        input: {
+          notebook_id: notebook.id,
+          cell_id: cell.id,
+          generation_tool: prepared.tool,
+          generation_input: prepared.input,
+        },
+        provider: prepared.provider,
+        model: prepared.model,
+        ...(estimateUnavailable
+          ? { estimateUnavailable: true }
+          : { estimatedCostUsd: estimatedCost }),
+        insertsOutput: false,
+      }],
+      confirmation: {
+        required: true,
+        policy: "always",
+        reason: estimateUnavailable
+          ? "Prompt rewrite pricing is unavailable and requires explicit confirmation"
+          : `This prompt rewrite can incur up to $${Number(estimatedCost).toFixed(4)}`,
+      },
+      cellDefinitionFingerprint,
+    };
+    const now = new Date().toISOString();
+    await persistNotebookGenerationPlan(engine, notebook.id, {
+      planId,
+      cellId: cell.id,
+      status: "planned",
+      plan: enriched,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return enriched;
+  }
   const sequence = engine.sequences.getPrimary();
   const track = destination.trackId
     ? sequence.tracks.find((candidate) =>
@@ -345,6 +418,7 @@ async function notebookGenerationPlan(
     : [];
   const enriched = {
     ...plan,
+    cellDefinitionFingerprint,
     normalizedReferences: [
       ...(Array.isArray(plan.normalizedReferences)
         ? plan.normalizedReferences
@@ -1201,7 +1275,7 @@ export function videobookDomainDefs(
     },
     {
       name: "plan_notebook_generation",
-      description: "Plan a notebook image or video generation with provider, model, cost, and revision-pinned insertion",
+      description: "Plan a notebook prompt, image, or video generation with provider, model, cost, and revision-pinned execution",
       scope: "book",
       schema: {
         ...bookSchema,
@@ -1251,6 +1325,75 @@ export function videobookDomainDefs(
         return notebook.ok
           ? json(notebookGenerationPlans(notebook.value))
           : failure(notebook.error.message);
+      },
+    },
+    {
+      name: "plan_notebook_run",
+      description: "Plan every missing or stale notebook cell with aggregate provider cost and media disclosure",
+      scope: "book",
+      schema: {
+        ...bookSchema,
+        notebook_id: z.string().uuid(),
+        source_surface: z.enum(["ui", "slash", "chat"]),
+        actor: z.string().min(1),
+        force: z.boolean().optional(),
+      },
+      handler: async (args) => {
+        try {
+          const notebook = engine.notebooks.read(String(args.notebook_id));
+          if (!notebook.ok) return failure(notebook.error.message);
+          return json(await planNotebookRun(
+            engine,
+            notebook.value,
+            args.source_surface as "ui" | "slash" | "chat",
+            String(args.actor),
+            { force: args.force === true },
+          ));
+        } catch (error) {
+          return failure(error instanceof Error ? error.message : String(error));
+        }
+      },
+    },
+    {
+      name: "list_notebook_run_plans",
+      description: "List durable aggregate workbook run plans and their lifecycle state",
+      scope: "book",
+      schema: {
+        ...bookSchema,
+        notebook_id: z.string().uuid(),
+      },
+      handler: async (args) => {
+        const notebook = engine.notebooks.read(String(args.notebook_id));
+        return notebook.ok
+          ? json(notebookRunPlanRecords(notebook.value))
+          : failure(notebook.error.message);
+      },
+    },
+    {
+      name: "enqueue_notebook_run",
+      description: "Revalidate and enqueue a persisted aggregate workbook plan",
+      scope: "book",
+      schema: {
+        ...bookSchema,
+        notebook_id: z.string().uuid(),
+        plan_id: z.string().uuid(),
+        actor: z.string().min(1),
+        confirm_unpriced: z.boolean(),
+      },
+      handler: async (args) => {
+        try {
+          return json(await enqueueNotebookRunPlan(
+            engine,
+            String(args.notebook_id),
+            String(args.plan_id),
+            {
+              actor: String(args.actor),
+              confirmUnpriced: args.confirm_unpriced === true,
+            },
+          ));
+        } catch (error) {
+          return failure(error instanceof Error ? error.message : String(error));
+        }
       },
     },
     {
@@ -2924,7 +3067,7 @@ export function videobookDomainDefs(
     },
     {
       name: "run_notebook_cell",
-      description: "Run a selected image or video notebook cell",
+      description: "Run one selected notebook cell and any stale prerequisites",
       scope: "book",
       schema: {
         ...bookSchema,
@@ -2935,25 +3078,50 @@ export function videobookDomainDefs(
       },
       handler: async (args) => {
         const jobId = `run-notebook-${String(args.notebook_id)}-${String(args.cell_id)}-${Date.now()}`;
-        const generationPlan = args.plan as Record<string, unknown> | undefined;
-        if (generationPlan) {
-          const notebook = engine.notebooks.read(String(args.notebook_id));
-          if (!notebook.ok) return failure(notebook.error.message);
+        const notebook = engine.notebooks.read(String(args.notebook_id));
+        if (!notebook.ok) return failure(notebook.error.message);
+        const cell = notebook.value.cells.find((candidate) =>
+          candidate.id === String(args.cell_id));
+        if (!cell) return failure("Notebook cell not found");
+        const requestedPlan = args.plan as Record<string, unknown> | undefined;
+        let generationPlan: Record<string, unknown> | undefined;
+        if (requestedPlan) {
           const record = notebookGenerationPlans(notebook.value).find((candidate) =>
-            candidate.planId === generationPlan.planId);
+            candidate.planId === requestedPlan.planId
+            && candidate.cellId === cell.id);
           if (!record) return failure("Generation plan is not preserved in this notebook");
+          const expected = record.plan.cellDefinitionFingerprint
+            ?? record.plan.cellFingerprint;
+          const actual = notebookCellDefinitionFingerprint(
+            notebook.value,
+            cell,
+          );
+          if (expected !== actual) {
+            return failure("Generation plan is stale for the selected cell");
+          }
+          generationPlan = record.plan;
           await persistNotebookGenerationPlan(engine, notebook.value.id, {
             ...record,
             status: "queued",
             updatedAt: new Date().toISOString(),
           });
         }
+        if (
+          (cell.type === "prompt"
+            || cell.type === "image"
+            || cell.type === "video")
+          && !generationPlan
+        ) {
+          return failure("Paid notebook cells require a persisted generation plan");
+        }
+        const runId = uuidv7();
         await queue.enqueue(jobId, {
           type: "run_notebook",
           bookId: String(args.book_id),
           notebookId: String(args.notebook_id),
           cellIds: [String(args.cell_id)],
           force: true,
+          runId,
           ...(generationPlan
             ? {
                 generationPlan,
@@ -2964,6 +3132,7 @@ export function videobookDomainDefs(
         });
         return json({
           job_id: jobId,
+          run_id: runId,
           ...(generationPlan ? { plan_id: generationPlan.planId } : {}),
         });
       },
@@ -2974,14 +3143,16 @@ export function videobookDomainDefs(
       scope: "book",
       schema: { ...bookSchema, notebook_id: z.string().uuid() },
       handler: async (args) => {
-        const jobId = `run-notebook-${String(args.notebook_id)}-${Date.now()}`;
+        const runId = uuidv7();
+        const jobId = `run-notebook-${String(args.notebook_id)}-${runId}`;
         await queue.enqueue(jobId, {
           type: "run_notebook",
           bookId: String(args.book_id),
           notebookId: String(args.notebook_id),
+          runId,
           force: false,
         });
-        return json({ job_id: jobId });
+        return json({ job_id: jobId, run_id: runId });
       },
     },
     {

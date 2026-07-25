@@ -487,12 +487,19 @@ textarea:focus-visible {
   margin: 16px !important;
 }
 
+.canvas-workbook-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
 .canvas-add-menu {
   position: relative;
 }
 
 .canvas-add-menu summary,
-.canvas-add-menu button {
+.canvas-add-menu button,
+.canvas-run-workbook {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -536,10 +543,16 @@ textarea:focus-visible {
 .canvas-add-menu summary:hover,
 .canvas-add-menu summary:focus-visible,
 .canvas-add-menu button:hover,
-.canvas-add-menu button:focus-visible {
+.canvas-add-menu button:focus-visible,
+.canvas-run-workbook:hover,
+.canvas-run-workbook:focus-visible {
   border-color: var(--green);
   color: #e1ffed;
   background: rgba(49, 137, 85, 0.5);
+}
+
+.canvas-run-workbook {
+  white-space: nowrap;
 }
 
 .canvas {
@@ -680,10 +693,47 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
+.notebook-feature-lane {
+  position: absolute;
+  top: 8px;
+  border-right: 1px solid rgba(114, 231, 170, 0.1);
+  border-left: 1px solid rgba(114, 231, 170, 0.1);
+  background: linear-gradient(
+    180deg,
+    rgba(72, 178, 111, 0.07),
+    rgba(72, 178, 111, 0.015) 18%,
+    transparent 72%
+  );
+}
+
+.notebook-feature-lane > span,
+.notebook-feature-lane > small {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  left: 14px;
+}
+
+.notebook-feature-lane > span {
+  color: rgba(182, 245, 210, 0.72);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.notebook-feature-lane > small {
+  top: 27px;
+  max-width: 280px;
+  color: rgba(151, 235, 188, 0.38);
+  font-size: 9px;
+}
+
 .notebook-stage-row {
   position: absolute;
   top: 0;
   left: 0;
+  z-index: 1;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 10px;

@@ -77,11 +77,12 @@ describe("Multyculty workflow fixture", () => {
     expect(first.properties?.stageLabels).toEqual([
       "SOURCE",
       "ANALYZE",
-      "SPLIT + AUDIO",
-      "CAPTURE FRAMES",
-      "ANIMATE",
-      "ASSEMBLE",
-      "EXPORT",
+      "SPLIT SCENES",
+      "EXTRACT ASSETS",
+      "WRITE PROMPTS",
+      "ANIMATE SCENES",
+      "ASSEMBLE EDIT",
+      "EXPORT MASTER",
     ]);
     const source = first.cells.find((cell) => cell.inputs?.workflowRole === "source");
     const analysis = first.cells.find((cell) => cell.inputs?.workflowRole === "analysis");
@@ -93,9 +94,16 @@ describe("Multyculty workflow fixture", () => {
     expect(audio).toBeTruthy();
     expect(assembly).toBeTruthy();
     expect(exp).toBeTruthy();
+    expect(first.cells).toHaveLength(29);
+    expect(first.edges).toHaveLength(60);
     expect(first.cells.filter((cell) => cell.type === "split")).toHaveLength(4);
     expect(first.cells.filter((cell) => cell.type === "frame")).toHaveLength(8);
+    expect(first.cells.filter((cell) =>
+      cell.inputs?.workflowRole?.toString().startsWith("scene-audio-"))).toHaveLength(4);
+    expect(first.cells.filter((cell) => cell.type === "prompt")).toHaveLength(4);
     expect(first.cells.filter((cell) => cell.type === "video")).toHaveLength(4);
+    expect(first.cells.filter((cell) => cell.type === "prompt").every((cell) =>
+      cell.inputs?.requiresConfirmation === true)).toBe(true);
     expect(first.cells.filter((cell) => cell.type === "video").every((cell) =>
       cell.inputs?.requiresConfirmation === true
       || cell.inputs?.state === "stale")).toBe(true);
@@ -109,8 +117,16 @@ describe("Multyculty workflow fixture", () => {
       target: assembly?.id,
       targetInput: "audio",
     }));
+    const prompt = first.cells.find((cell) => cell.inputs?.workflowRole === "prompt-1");
+    const animate = first.cells.find((cell) => cell.inputs?.workflowRole === "animate-1");
+    expect(first.edges).toContainEqual(expect.objectContaining({
+      source: prompt?.id,
+      target: animate?.id,
+      targetInput: "prompt",
+    }));
 
     const second = await seedMultycultyWorkflow(engine);
+    expect(second.cells).toHaveLength(29);
     expect(second.cells.filter((cell) => cell.type === "split")).toHaveLength(4);
     expect(second.properties?.stageLabels).toEqual(first.properties?.stageLabels);
     // Source identity is preserved across rematerialization.

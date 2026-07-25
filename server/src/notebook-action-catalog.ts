@@ -167,8 +167,8 @@ const LOCAL_ACTIONS: NotebookAction[] = [
     provider: "local",
     model: null,
     tool: "ffmpeg",
-    title: "Extract source audio",
-    description: "Extract first-class playable audio from the source spine",
+    title: "Extract audio",
+    description: "Extract first-class playable audio from a source or scene split",
     outputKind: "artifact",
     billable: false,
     defaults: { operation: "extract_audio", tool: "ffmpeg", provider: "local" },
@@ -178,6 +178,39 @@ const LOCAL_ACTIONS: NotebookAction[] = [
       dualFrame: false,
       localMedia: true,
       requiresConfirmation: false,
+    },
+  },
+  {
+    id: "generation.rewrite_prompt",
+    cellTypes: ["prompt"],
+    kind: "generation",
+    operation: "rewrite_prompt",
+    provider: "openai",
+    model: "gpt-5.2",
+    tool: "rewrite_prompt",
+    title: "Write animation prompt",
+    description: "Rewrite an animation prompt using scene analysis and endpoint frames",
+    outputKind: "script",
+    billable: true,
+    defaults: {
+      provider: "openai",
+      model: "gpt-5.2",
+      operation: "rewrite_prompt",
+      tool: "rewrite_prompt",
+    },
+    parameters: [
+      {
+        name: "prompt",
+        type: "string",
+        required: true,
+        description: "Feature brief and scene direction to optimize for Seedance 2",
+      },
+    ],
+    requiredInputs: ["analysis", "first_frame", "last_frame", "scene_audio"],
+    capabilities: {
+      dualFrame: true,
+      localMedia: false,
+      requiresConfirmation: true,
     },
   },
   {
@@ -340,6 +373,11 @@ export function defaultActionForCell(
       ?? actions[0]
       ?? null;
   }
+  if (cell.type === "prompt") {
+    return actions.find((action) => action.tool === "rewrite_prompt")
+      ?? actions[0]
+      ?? null;
+  }
   return actions[0] ?? null;
 }
 
@@ -347,7 +385,7 @@ export function validateCellConfiguration(
   cell: NotebookCell,
   document: NotebookDocument,
 ): { ok: true; action: NotebookAction | null } | { ok: false; message: string } {
-  if (cell.type === "note" || cell.type === "prompt" || cell.type === "search"
+  if (cell.type === "note" || cell.type === "search"
     || cell.type === "selects" || cell.type === "character" || cell.type === "scene"
     || cell.type === "asset" || cell.type === "transcript" || cell.type === "source") {
     return { ok: true, action: defaultActionForCell(cell, document) };

@@ -1,24 +1,28 @@
 import { createHash } from "node:crypto";
-import { v7 as uuidv7 } from "uuid";
+import { v5 as uuidv5, v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import type {
   EditIntent,
   EditOperation,
   Engine,
+  ClipPlacement,
   NotebookCell,
   NotebookDocument,
   NotebookRun,
+  Sequence,
 } from "videobook-engine";
 import { MVP_CONTRACT_VERSION } from "videobook-engine";
 import { mutateNotebook } from "../notebook-mutations.js";
-import { registerJobHandler } from "../queue.js";
+import { queue, registerJobHandler } from "../queue.js";
 import type { ToolDef, ToolResult } from "../tools/tool-def.js";
 import { getActionSpec } from "../generation-registry.js";
 import {
   captureFrame,
   exportSequenceMaster,
   extractSourceAudio,
+  normalizeSceneVideo,
   splitSourceRange,
+  type BurnInCaption,
 } from "../notebook-media-ops.js";
 import { applyAnalysisResults } from "../notebook-workflow.js";
 import { DEFAULT_ANIMATION_TOOL } from "../notebook-action-catalog.js";
@@ -30,23 +34,55 @@ export interface RunNotebookPayload {
   cellIds?: string[];
   force?: boolean;
   generationPlan?: Record<string, unknown>;
+  runPlanId?: string;
+  runId?: string;
+  resume?: boolean;
   actor?: string;
   jobId?: string;
 }
 
-interface CellExecution {
+export type NotebookCellExecutionStatus =
+  | "running"
+  | "awaiting-output"
+  | "completed"
+  | "stale"
+  | "error";
+
+export interface CellExecution {
   fingerprint: string;
+  status: NotebookCellExecutionStatus;
   outputArtifactId?: string;
+  providerArtifactId?: string;
+  runId?: string;
   completedAt?: string;
+  startedAt?: string;
+  updatedAt?: string;
   tool?: string;
   error?: string;
+  stale?: boolean;
 }
 
 function generationPlanStage(
   plan: Record<string, unknown>,
+  cellId?: string,
 ): Record<string, unknown> | null {
   const stages = Array.isArray(plan.stages) ? plan.stages : [];
-  const stage = stages.find((candidate) =>
+  const stage = stages.find((candidate) => {
+    if (
+      !candidate
+      || typeof candidate !== "object"
+      || Array.isArray(candidate)
+      || (candidate as Record<string, unknown>).kind !== "queued"
+    ) {
+      return false;
+    }
+    if (!cellId) return true;
+    const input = (candidate as Record<string, unknown>).input;
+    return input
+      && typeof input === "object"
+      && !Array.isArray(input)
+      && (input as Record<string, unknown>).cell_id === cellId;
+  }) ?? stages.find((candidate) =>
     candidate
     && typeof candidate === "object"
     && !Array.isArray(candidate)
@@ -116,7 +152,7 @@ export async function writeGenerationPlanProvenance(
 ): Promise<void> {
   const plan = payload.generationPlan;
   if (!plan || typeof plan.planId !== "string") return;
-  const stage = generationPlanStage(plan);
+  const stage = generationPlanStage(plan, cell.id);
   const written = await engine.metadata.artifacts.write(
     outputArtifactId,
     "command-plan",
@@ -154,6 +190,7 @@ const LOCAL_RUNNABLE_TYPES = new Set([
   "split",
   "audio",
   "frame",
+  "prompt",
   "sequence",
   "export",
   "image",
@@ -206,8 +243,15 @@ function withExecution(
     ...document,
     properties: { ...(document.properties ?? {}), execution },
     cells: document.cells.map((cell) => (
-      cell.id === cellId && outputArtifactId
-        ? { ...cell, outputArtifactId }
+      cell.id === cellId
+        ? {
+            ...cell,
+            ...(outputArtifactId ? { outputArtifactId } : {}),
+            inputs: {
+              ...(cell.inputs ?? {}),
+              state: state.status,
+            },
+          }
         : cell
     )),
   };
@@ -231,7 +275,29 @@ function upstreamValues(
     });
 }
 
-function fingerprint(
+function stableCellInputs(
+  inputs: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const volatile = new Set([
+    "state",
+    "resolvedPrompt",
+    "rawRewriteResult",
+    "providerArtifactId",
+    "normalizedFromArtifactId",
+    "normalizedDurationSeconds",
+    "sequenceRevision",
+    "sequenceId",
+    "clipArtifactIds",
+    "audioArtifactId",
+    "assemblyDurationFrames",
+    "shotCount",
+  ]);
+  return Object.fromEntries(
+    Object.entries(inputs ?? {}).filter(([key]) => !volatile.has(key)),
+  );
+}
+
+export function notebookCellFingerprint(
   document: NotebookDocument,
   cell: NotebookCell,
 ): string {
@@ -243,7 +309,7 @@ function fingerprint(
     model: cell.model ?? defaultNotebookGenerationModel[cell.type as "image" | "video"] ?? "",
     operation: cell.operation ?? "",
     tool: cell.tool ?? "",
-    inputs: cell.inputs ?? {},
+    inputs: stableCellInputs(cell.inputs),
     upstream: upstreamValues(document, cell).map(({ targetInput, cell: source, output }) => ({
       targetInput,
       sourceId: source.id,
@@ -264,6 +330,35 @@ function fingerprint(
         startSeconds: source.inputs?.startSeconds ?? null,
         endSeconds: source.inputs?.endSeconds ?? null,
       },
+    })),
+  };
+  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+export function notebookCellDefinitionFingerprint(
+  document: NotebookDocument,
+  cell: NotebookCell,
+): string {
+  const payload = {
+    type: cell.type,
+    title: cell.title,
+    prompt: cell.prompt ?? "",
+    provider: cell.provider ?? "",
+    model: cell.model ?? "",
+    operation: cell.operation ?? "",
+    tool: cell.tool ?? "",
+    inputs: stableCellInputs(cell.inputs),
+    upstream: upstreamValues(document, cell).map(({ targetInput, cell: source }) => ({
+      targetInput,
+      sourceId: source.id,
+      sourceType: source.type,
+      title: source.title,
+      prompt: source.prompt ?? "",
+      provider: source.provider ?? "",
+      model: source.model ?? "",
+      operation: source.operation ?? "",
+      tool: source.tool ?? "",
+      inputs: stableCellInputs(source.inputs),
     })),
   };
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
@@ -293,9 +388,28 @@ async function objectHashForArtifact(
 function promptFor(document: NotebookDocument, cell: NotebookCell): string {
   const upstream = upstreamValues(document, cell)
     .filter(({ cell: source }) => source.type === "prompt")
-    .map(({ cell: source }) => source.prompt ?? "")
+    .map(({ cell: source }) =>
+      typeof source.inputs?.resolvedPrompt === "string"
+        ? source.inputs.resolvedPrompt
+        : source.prompt ?? "")
     .filter(Boolean);
-  return [cell.prompt ?? "", ...upstream].filter(Boolean).join("\n\n").trim();
+  const own = cell.type === "prompt"
+    ? [
+        typeof cell.inputs?.featureBrief === "string"
+          ? cell.inputs.featureBrief
+          : "",
+        cell.prompt ?? "",
+        cell.inputs?.shotContext
+          ? `Shot context: ${JSON.stringify(cell.inputs.shotContext)}`
+          : "",
+        typeof cell.inputs?.audioContext === "string"
+          ? cell.inputs.audioContext
+          : "",
+      ]
+    : [cell.prompt ?? ""];
+  return [...new Set([...own, ...upstream].filter(Boolean))]
+    .join("\n\n")
+    .trim();
 }
 
 function artifactSlugRef(engine: Engine, artifactId: string): string {
@@ -320,6 +434,11 @@ export function modelArgs(
     book_id: bookId,
     prompt: promptFor(document, cell),
   };
+  if (cell.type === "prompt" && "model" in definition.schema) {
+    args.model = typeof cell.inputs?.targetModel === "string"
+      ? cell.inputs.targetModel
+      : "seedance2";
+  }
   const upstream = upstreamValues(document, cell);
   const refFor = (artifactId: string): string =>
     engine ? artifactSlugRef(engine, artifactId) : `@${artifactId}`;
@@ -339,14 +458,63 @@ export function modelArgs(
     .filter(({ cell: source, output, targetInput }) =>
       typeof output === "string"
       && isImageLikeCell(source)
-      && targetInput !== "first_frame"
-      && targetInput !== "last_frame")
+      && (
+        (
+          targetInput !== "first_frame"
+          && targetInput !== "last_frame"
+        )
+        || !("first_frame_slug" in definition.schema)
+      ))
     .map(({ output }) => refFor(output!));
   if ("image_slugs" in definition.schema && imageReferences.length > 0) {
     args.image_slugs = imageReferences;
   }
   if ("image_slug" in definition.schema && imageReferences[0]) {
     args.image_slug = imageReferences[0];
+  }
+  const videoReferences = upstream
+    .filter(({ cell: source, output, targetInput }) =>
+      typeof output === "string"
+      && (
+        targetInput === "reference_video"
+        || targetInput === "video"
+        || (
+          targetInput === "segment"
+          && (source.type === "video" || source.type === "split")
+        )
+      ))
+    .map(({ output }) => refFor(output!));
+  if ("video_slugs" in definition.schema && videoReferences.length > 0) {
+    args.video_slugs = videoReferences;
+  }
+  if ("video_slug" in definition.schema && videoReferences[0]) {
+    args.video_slug = videoReferences[0];
+  }
+  const replacementAudio = upstream.find((entry) =>
+    entry.targetInput === "replace_audio" && typeof entry.output === "string");
+  if (
+    replacementAudio?.output
+    && "replace_audio_with" in definition.schema
+  ) {
+    args.replace_audio_with = refFor(replacementAudio.output);
+  }
+  const audioReferences = upstream
+    .filter(({ cell: source, output, targetInput }) =>
+      typeof output === "string"
+      && source.type === "audio"
+      && (
+        targetInput === "reference_audio"
+        || targetInput === "audio"
+        || targetInput === "scene_audio"
+      ))
+    .map(({ output }) => refFor(output!));
+  if (
+    "audio_slugs" in definition.schema
+    && audioReferences.length > 0
+    && !firstFrame?.output
+    && !lastFrame?.output
+  ) {
+    args.audio_slugs = audioReferences;
   }
   return args;
 }
@@ -425,14 +593,89 @@ async function generationTool(
   return { artifactId: artifact.value.artifactId, tool: prepared.tool };
 }
 
+async function rewritePromptCell(
+  engine: Engine,
+  document: NotebookDocument,
+  cell: NotebookCell,
+  bookId: string,
+): Promise<{
+  artifactId: string;
+  tool: string;
+  resolvedPrompt: string;
+  rawResult: Record<string, unknown>;
+}> {
+  const prepared = await prepareNotebookGeneration(
+    engine,
+    document,
+    cell,
+    bookId,
+  );
+  if (prepared.tool !== "rewrite_prompt") {
+    throw new Error(`Prompt cell ${cell.id} must use rewrite_prompt`);
+  }
+  const { getAllToolDefs } = await import("../tools/index.js");
+  const definition = getAllToolDefs(engine).find((candidate) =>
+    candidate.name === prepared.tool);
+  if (!definition) throw new Error("rewrite_prompt is unavailable");
+  const response = await definition.handler(prepared.input);
+  if (response.isError) {
+    throw new Error(response.content[0]?.text ?? "rewrite_prompt failed");
+  }
+  const value = textResult(response);
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("rewrite_prompt returned an invalid result");
+  }
+  const rawResult = value as Record<string, unknown>;
+  const resolvedPrompt = typeof rawResult.rewritten_prompt === "string"
+    ? rawResult.rewritten_prompt.trim()
+    : "";
+  if (!resolvedPrompt) {
+    throw new Error("rewrite_prompt did not return rewritten_prompt");
+  }
+  const artifact = await engine.artifacts.create({
+    kind: "script",
+    name: `script ${cell.title} resolved prompt`,
+  });
+  if (!artifact.ok) throw new Error(artifact.error.message);
+  const written = await engine.files.write(
+    artifact.value.artifactId,
+    "prompt.json",
+    JSON.stringify({
+      version: 1,
+      originalPrompt: cell.prompt ?? "",
+      resolvedPrompt,
+      request: prepared.input,
+      result: rawResult,
+      featureId: cell.inputs?.featureId ?? null,
+      shotContext: cell.inputs?.shotContext ?? null,
+      audioContext: cell.inputs?.audioContext ?? null,
+      resolvedAt: new Date().toISOString(),
+    }, null, 2),
+  );
+  if (!written.ok) throw new Error(written.error.message);
+  return {
+    artifactId: artifact.value.artifactId,
+    tool: prepared.tool,
+    resolvedPrompt,
+    rawResult,
+  };
+}
+
 async function failedArtifact(
   engine: Engine,
   cell: NotebookCell,
   message: string,
 ): Promise<string> {
+  const kind = cell.type === "video"
+    ? "video"
+    : cell.type === "image" || cell.type === "frame"
+      ? "image"
+      : "script";
   const result = await engine.artifacts.create({
-    kind: cell.type === "video" ? "video" : "image",
-    name: `${cell.title} failed`,
+    kind,
+    name: kind === "script"
+      ? `script ${cell.title} failed`
+      : `${cell.title} failed`,
   });
   if (!result.ok) throw new Error(result.error.message);
   const written = await engine.files.write(
@@ -444,16 +687,19 @@ async function failedArtifact(
   return result.value.artifactId;
 }
 
-function orderedClipArtifactIds(
-  clips: Array<{ timelineStartFrame: number; artifactId?: string; source?: { artifactId?: string } }>,
+function orderedVideoClipArtifactIds(
+  sequence: Sequence,
 ): string[] {
-  return clips
+  const videoTracks = new Set(
+    sequence.tracks
+      .filter((track) => track.kind === "video")
+      .map((track) => track.trackId),
+  );
+  return sequence.clips
+    .filter((clip) => videoTracks.has(clip.trackId))
     .slice()
     .sort((left, right) => left.timelineStartFrame - right.timelineStartFrame)
-    .map((clip) => {
-      if (typeof clip.artifactId === "string" && clip.artifactId) return clip.artifactId;
-      return clip.source?.artifactId;
-    })
+    .map((clip) => clip.source.artifactId)
     .filter((value): value is string => typeof value === "string");
 }
 
@@ -462,10 +708,6 @@ function sameArtifactOrder(left: string[], right: string[]): boolean {
   return left.every((value, index) => value === right[index]);
 }
 
-/**
- * Export is revision-pinned: the assembly revision must exist, and the primary
- * sequence at HEAD must still match the sequence as assembled (clip order).
- */
 export function assertSequenceMatchesAssembly(
   engine: Engine,
   clipArtifactIds: string[],
@@ -487,8 +729,8 @@ export function assertSequenceMatchesAssembly(
   }
 
   const primary = engine.sequences.getPrimary();
-  const pinnedClips = orderedClipArtifactIds(atPin.value.clips);
-  const headClips = orderedClipArtifactIds(primary.clips);
+  const pinnedClips = orderedVideoClipArtifactIds(atPin.value);
+  const headClips = orderedVideoClipArtifactIds(primary);
 
   if (!sameArtifactOrder(pinnedClips, clipArtifactIds)) {
     throw new Error(
@@ -517,6 +759,7 @@ async function assembleCanonicalSequence(
   sequenceId: string;
   clipArtifactIds: string[];
   audioArtifactId: string | null;
+  assemblyDurationFrames: number;
 }> {
   let clips = upstreamValues(document, cell)
     .filter((entry) =>
@@ -537,15 +780,31 @@ async function assembleCanonicalSequence(
     throw new Error(`Sequence cell ${cell.id} has no clip inputs`);
   }
 
-  const primary = engine.sequences.getPrimary();
+  let primary = engine.sequences.getPrimary();
   const videoTrack = primary.tracks.find((track) =>
     track.kind === "video" && track.ordinal === 0)
     ?? primary.tracks.find((track) => track.kind === "video");
   if (!videoTrack) {
     throw new Error("Primary sequence has no video track for assembly");
   }
+  if (!primary.tracks.some((track) => track.kind === "caption")) {
+    const added = await engine.sequences.addTrack(primary.sequenceId, {
+      kind: "caption",
+      name: "Feature captions",
+    });
+    if (!added.ok) throw new Error(added.error.message);
+    primary = engine.sequences.getPrimary();
+  }
+  const activeVideoTrack = primary.tracks.find((track) =>
+    track.trackId === videoTrack.trackId);
+  if (!activeVideoTrack || activeVideoTrack.kind !== "video") {
+    throw new Error("Primary video track changed during assembly");
+  }
+  const audioTrack = primary.tracks.find((track) => track.kind === "audio");
+  const captionTrack = primary.tracks.find((track) => track.kind === "caption");
   const fps = primary.frameRate.numerator / primary.frameRate.denominator;
-  const operations: EditOperation[] = [];
+  const placements: ClipPlacement[] = [];
+  const clipDurations: number[] = [];
   let timelineStartFrame = 0;
 
   for (const clipId of clips) {
@@ -565,79 +824,143 @@ async function assembleCanonicalSequence(
           * videoStream.timeBase.numerator
           / videoStream.timeBase.denominator;
         durationFrames = Math.max(1, Math.round(seconds * fps));
-        operations.push({
-          kind: "insert-clip",
-          mode: "insert",
-          placement: {
-            trackId: videoTrack.trackId,
-            timelineStartFrame,
-            durationFrames,
-            source: {
-              kind: "timed",
-              artifactId: clipId,
-              range: {
-                streamId: videoStream.streamId,
-                objectHash: videoStream.objectHash,
-                startTick: 0,
-                durationTicks: videoStream.durationTicks,
-                timeBase: videoStream.timeBase,
-              },
+        placements.push({
+          trackId: activeVideoTrack.trackId,
+          timelineStartFrame,
+          durationFrames,
+          source: {
+            kind: "timed",
+            artifactId: clipId,
+            range: {
+              streamId: videoStream.streamId,
+              objectHash: videoStream.objectHash,
+              startTick: 0,
+              durationTicks: videoStream.durationTicks,
+              timeBase: videoStream.timeBase,
             },
           },
+          speed: { numerator: 1, denominator: 1 },
+          reverse: false,
+          audioPolicy: "mute",
+          audio: {
+            gainDb: 0,
+            muted: true,
+            fadeInFrames: 0,
+            fadeOutFrames: 0,
+          },
         });
+        clipDurations.push(durationFrames);
         timelineStartFrame += durationFrames;
         continue;
       }
     }
 
-    operations.push({
-      kind: "insert-clip",
-      mode: "insert",
-      placement: {
-        trackId: videoTrack.trackId,
-        timelineStartFrame,
-        durationFrames,
-        source: {
-          kind: "still",
-          artifactId: clipId,
-          sourcePath: file.name,
-          objectHash: file.objectHash,
-        },
+    placements.push({
+      trackId: activeVideoTrack.trackId,
+      timelineStartFrame,
+      durationFrames,
+      source: {
+        kind: "still",
+        artifactId: clipId,
+        sourcePath: file.name,
+        objectHash: file.objectHash,
       },
     });
+    clipDurations.push(durationFrames);
     timelineStartFrame += durationFrames;
   }
 
-  if (audioId) {
-    const audioTrack = primary.tracks.find((track) => track.kind === "audio");
+  if (audioId && audioTrack) {
     const audioStreams = engine.streams.list(audioId);
-    if (audioTrack && audioStreams.ok) {
+    if (audioStreams.ok) {
       const audioStream = audioStreams.value.find((stream) => stream.kind === "audio");
       if (audioStream) {
         const seconds = audioStream.durationTicks
           * audioStream.timeBase.numerator
           / audioStream.timeBase.denominator;
-        operations.push({
-          kind: "insert-clip",
-          mode: "insert",
-          placement: {
-            trackId: audioTrack.trackId,
-            timelineStartFrame: 0,
-            durationFrames: Math.max(1, Math.round(seconds * fps)),
-            source: {
-              kind: "timed",
-              artifactId: audioId,
-              range: {
-                streamId: audioStream.streamId,
-                objectHash: audioStream.objectHash,
-                startTick: 0,
-                durationTicks: audioStream.durationTicks,
-                timeBase: audioStream.timeBase,
-              },
+        placements.push({
+          trackId: audioTrack.trackId,
+          timelineStartFrame: 0,
+          durationFrames: Math.min(
+            timelineStartFrame,
+            Math.max(1, Math.round(seconds * fps)),
+          ),
+          source: {
+            kind: "timed",
+            artifactId: audioId,
+            range: {
+              streamId: audioStream.streamId,
+              objectHash: audioStream.objectHash,
+              startTick: 0,
+              durationTicks: audioStream.durationTicks,
+              timeBase: audioStream.timeBase,
             },
+          },
+          speed: { numerator: 1, denominator: 1 },
+          reverse: false,
+          audioPolicy: "preserve-pitch",
+          audio: {
+            gainDb: 0,
+            muted: false,
+            fadeInFrames: 0,
+            fadeOutFrames: 0,
           },
         });
       }
+    }
+  }
+  const targetTrackIds = [
+    activeVideoTrack.trackId,
+    ...(audioTrack ? [audioTrack.trackId] : []),
+  ];
+  const occupiedDuration = primary.clips
+    .filter((clip) => targetTrackIds.includes(clip.trackId))
+    .reduce((maximum, clip) =>
+      Math.max(maximum, clip.timelineStartFrame + clip.durationFrames), 0);
+  const previousDuration = Number(cell.inputs?.assemblyDurationFrames ?? 0);
+  const replacementDuration = Math.max(
+    1,
+    occupiedDuration,
+    previousDuration,
+    timelineStartFrame,
+  );
+  const operations: EditOperation[] = [{
+    kind: "batch-replace-range",
+    range: {
+      sequenceId: primary.sequenceId,
+      startFrame: 0,
+      durationFrames: replacementDuration,
+    },
+    trackIds: targetTrackIds,
+    placements,
+    ripple: false,
+  }];
+  const captionTexts = Array.isArray(cell.inputs?.captions)
+    ? cell.inputs.captions.filter((value): value is string =>
+      typeof value === "string" && value.trim().length > 0)
+    : [];
+  if (captionTrack) {
+    let captionStartFrame = 0;
+    for (let index = 0; index < clipDurations.length; index += 1) {
+      const durationFrames = clipDurations[index]!;
+      const text = captionTexts[index];
+      if (text) {
+        operations.push({
+          kind: "upsert-caption-cue",
+          cue: {
+            cueId: uuidv5(
+              `${primary.sequenceId}:notebook-feature-caption:${index}`,
+              uuidv5.URL,
+            ),
+            trackId: captionTrack.trackId,
+            timelineStartFrame: captionStartFrame,
+            durationFrames,
+            text,
+            styleId: "high-contrast",
+          },
+        });
+      }
+      captionStartFrame += durationFrames;
     }
   }
 
@@ -670,6 +993,8 @@ async function assembleCanonicalSequence(
       sequenceRevision,
       clipArtifactIds: clips,
       audioArtifactId: audioId,
+      assemblyDurationFrames: timelineStartFrame,
+      captionTexts,
       assembledAt: new Date().toISOString(),
       operationCount: operations.length,
     }),
@@ -682,6 +1007,7 @@ async function assembleCanonicalSequence(
     sequenceId: primary.sequenceId,
     clipArtifactIds: clips,
     audioArtifactId: audioId,
+    assemblyDurationFrames: timelineStartFrame,
   };
 }
 
@@ -696,6 +1022,7 @@ async function executeLocalOrGeneration(
   tool: string;
   document?: NotebookDocument;
   cellInputs?: Record<string, unknown>;
+  awaitingOutput?: boolean;
 }> {
   if (cell.type === "split") {
     const sourceId = firstUpstreamArtifact(document, cell, "source")
@@ -716,7 +1043,8 @@ async function executeLocalOrGeneration(
   }
 
   if (cell.type === "audio") {
-    const sourceId = firstUpstreamArtifact(document, cell, "source")
+    const sourceId = firstUpstreamArtifact(document, cell, "segment")
+      ?? firstUpstreamArtifact(document, cell, "source")
       ?? firstUpstreamArtifact(document, cell)
       ?? (typeof cell.inputs?.artifactId === "string" ? cell.inputs.artifactId : null);
     if (!sourceId) throw new Error(`Audio cell ${cell.id} has no source artifact`);
@@ -732,13 +1060,6 @@ async function executeLocalOrGeneration(
     const result = await captureFrame(engine, segmentId, {
       role,
       title: cell.title,
-      range: typeof cell.inputs?.startSeconds === "number"
-        && typeof cell.inputs?.endSeconds === "number"
-        ? {
-          startSeconds: Number(cell.inputs.startSeconds),
-          endSeconds: Number(cell.inputs.endSeconds),
-        }
-        : undefined,
     });
     return { artifactId: result.artifactId, tool: "ffmpeg" };
   }
@@ -810,6 +1131,7 @@ async function executeLocalOrGeneration(
         sequenceId: assembled.sequenceId,
         clipArtifactIds: assembled.clipArtifactIds,
         audioArtifactId: assembled.audioArtifactId,
+        assemblyDurationFrames: assembled.assemblyDurationFrames,
         state: "completed",
       },
     };
@@ -848,11 +1170,20 @@ async function executeLocalOrGeneration(
       pinnedRevision,
       sequenceId,
     );
+    const currentSequence = engine.sequences.getPrimary();
+    const frameSeconds = currentSequence.frameRate.denominator
+      / currentSequence.frameRate.numerator;
+    const captions: BurnInCaption[] = currentSequence.captions.map((caption) => ({
+      text: caption.text,
+      startSeconds: caption.timelineStartFrame * frameSeconds,
+      durationSeconds: caption.durationFrames * frameSeconds,
+    }));
     const result = await exportSequenceMaster(
       engine,
       clipArtifactIds,
       audioArtifactId,
       cell.title,
+      { captions },
     );
     return {
       artifactId: result.artifactId,
@@ -860,6 +1191,24 @@ async function executeLocalOrGeneration(
       cellInputs: {
         sequenceRevision: pinnedRevision,
         sequenceId,
+        state: "completed",
+      },
+    };
+  }
+
+  if (cell.type === "prompt") {
+    if (!options.confirmPaid) {
+      throw new Error(
+        `Paid prompt rewrite for ${cell.title} requires confirmation before starting`,
+      );
+    }
+    const output = await rewritePromptCell(engine, document, cell, bookId);
+    return {
+      artifactId: output.artifactId,
+      tool: output.tool,
+      cellInputs: {
+        resolvedPrompt: output.resolvedPrompt,
+        rawRewriteResult: output.rawResult,
         state: "completed",
       },
     };
@@ -876,7 +1225,15 @@ async function executeLocalOrGeneration(
       );
     }
     const output = await generationTool(engine, document, cell, bookId);
-    return { artifactId: output.artifactId, tool: output.tool };
+    return {
+      artifactId: output.artifactId,
+      tool: output.tool,
+      awaitingOutput: true,
+      cellInputs: {
+        providerArtifactId: output.artifactId,
+        state: "awaiting-output",
+      },
+    };
   }
 
   throw new Error(`Cell type ${cell.type} is not runnable`);
@@ -888,22 +1245,58 @@ export async function runNotebookCell(
   notebookId: string,
   document: NotebookDocument,
   cell: NotebookCell,
-  options: { confirmPaid?: boolean } = {},
-): Promise<{ document: NotebookDocument; outputArtifactId: string }> {
-  const nextFingerprint = fingerprint(document, cell);
+  options: { confirmPaid?: boolean; runId?: string } = {},
+): Promise<{
+  document: NotebookDocument;
+  outputArtifactId: string;
+  status: "completed" | "awaiting-output";
+}> {
+  const nextFingerprint = notebookCellFingerprint(document, cell);
+  const startedAt = new Date().toISOString();
+  const runningState: CellExecution = {
+    fingerprint: nextFingerprint,
+    status: "running",
+    ...(cell.outputArtifactId
+      ? { outputArtifactId: cell.outputArtifactId }
+      : {}),
+    ...(options.runId ? { runId: options.runId } : {}),
+    startedAt,
+    updatedAt: startedAt,
+    tool: cell.tool
+      || cell.model
+      || defaultNotebookGenerationModel[cell.type as "image" | "video"],
+  };
+  const started = await mutateNotebook(
+    engine,
+    notebookId,
+    "start_notebook_cell",
+    (current) => withExecution(current, cell.id, runningState),
+    { cellId: cell.id, runId: options.runId },
+  );
+  if (!started.ok) throw new Error(started.error.message);
+  const activeDocument = withExecution(document, cell.id, runningState);
+  const activeCell = activeDocument.cells.find((candidate) =>
+    candidate.id === cell.id);
+  if (!activeCell) throw new Error(`Notebook cell not found: ${cell.id}`);
   try {
     const output = await executeLocalOrGeneration(
       engine,
       bookId,
-      document,
-      cell,
+      activeDocument,
+      activeCell,
       options,
     );
-    const completedAt = new Date().toISOString();
+    const updatedAt = new Date().toISOString();
+    const status = output.awaitingOutput ? "awaiting-output" : "completed";
     const state: CellExecution = {
       fingerprint: nextFingerprint,
+      status,
       outputArtifactId: output.artifactId,
-      completedAt,
+      ...(output.awaitingOutput
+        ? { providerArtifactId: output.artifactId }
+        : { completedAt: updatedAt }),
+      ...(options.runId ? { runId: options.runId } : {}),
+      updatedAt,
       tool: output.tool,
     };
     const write = await mutateNotebook(
@@ -912,12 +1305,17 @@ export async function runNotebookCell(
       "run_notebook_cell",
       (current) => {
         const base = output.document ?? current;
-        const withOutput = withExecution(base, cell.id, state, output.artifactId);
+        const withOutput = withExecution(
+          base,
+          activeCell.id,
+          state,
+          output.artifactId,
+        );
         if (!output.cellInputs) return withOutput;
         return {
           ...withOutput,
           cells: withOutput.cells.map((candidate) =>
-            candidate.id === cell.id
+            candidate.id === activeCell.id
               ? {
                   ...candidate,
                   inputs: {
@@ -928,46 +1326,75 @@ export async function runNotebookCell(
               : candidate),
         };
       },
-      { cellId: cell.id, outputArtifactId: output.artifactId, tool: output.tool },
+      {
+        cellId: activeCell.id,
+        outputArtifactId: output.artifactId,
+        tool: output.tool,
+        status,
+        runId: options.runId,
+      },
     );
     if (!write.ok) throw new Error(write.error.message);
     const read = engine.notebooks.read(notebookId);
     if (!read.ok) throw new Error(read.error.message);
-    return { document: read.value, outputArtifactId: output.artifactId };
+    return {
+      document: read.value,
+      outputArtifactId: output.artifactId,
+      status,
+    };
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
-    const outputArtifactId = await failedArtifact(engine, cell, message);
+    const outputArtifactId = await failedArtifact(engine, activeCell, message);
     const state: CellExecution = {
       fingerprint: nextFingerprint,
+      status: "error",
       outputArtifactId,
       completedAt: new Date().toISOString(),
-      tool: cell.tool
-        || cell.model
-        || defaultNotebookGenerationModel[cell.type as "image" | "video"],
+      updatedAt: new Date().toISOString(),
+      ...(options.runId ? { runId: options.runId } : {}),
+      tool: activeCell.tool
+        || activeCell.model
+        || defaultNotebookGenerationModel[activeCell.type as "image" | "video"],
       error: message,
     };
     const write = await mutateNotebook(
       engine,
       notebookId,
       "run_notebook_cell_failed",
-      (current) => withExecution(current, cell.id, state, outputArtifactId),
-      { cellId: cell.id, outputArtifactId, error: message },
+      (current) => withExecution(
+        current,
+        activeCell.id,
+        state,
+        outputArtifactId,
+      ),
+      {
+        cellId: activeCell.id,
+        outputArtifactId,
+        error: message,
+        runId: options.runId,
+      },
     );
     if (!write.ok) throw new Error(write.error.message);
     throw new Error(message);
   }
 }
 
-function isCellStale(
+export function notebookCellIsStale(
   engine: Engine,
   document: NotebookDocument,
   cell: NotebookCell,
 ): boolean {
   const execution = executionState(document)[cell.id];
   if (!execution) return true;
-  if (execution.fingerprint !== fingerprint(document, cell)) return true;
-  if (execution.error) return true;
-  if ((execution as CellExecution & { stale?: boolean }).stale) return true;
+  if (
+    execution.status === "running"
+    || execution.status === "awaiting-output"
+  ) {
+    return false;
+  }
+  if (execution.fingerprint !== notebookCellFingerprint(document, cell)) return true;
+  if (execution.status === "error" || execution.error) return true;
+  if (execution.status === "stale" || execution.stale) return true;
   if (!cell.outputArtifactId) return true;
   if (!engine.artifacts.get(cell.outputArtifactId).ok) return true;
   return false;
@@ -994,11 +1421,334 @@ function ancestorsOf(
   return seen;
 }
 
-export function registerRunNotebookJob(engine: Engine): void {
-  registerJobHandler("run_notebook", async (payload) => {
-    const input = payload as unknown as RunNotebookPayload & {
-      confirmPaid?: boolean;
+interface AwaitNotebookOutputPayload {
+  type: "await_notebook_output";
+  bookId: string;
+  notebookId: string;
+  cellId: string;
+  providerArtifactId: string;
+  runId: string;
+  runPlanId?: string;
+  generationPlan?: Record<string, unknown>;
+  actor?: string;
+  cellIds?: string[];
+}
+
+function notebookRunPlanRecords(
+  document: NotebookDocument,
+): Array<Record<string, unknown>> {
+  const raw = document.properties?.notebookRunPlans;
+  return Array.isArray(raw)
+    ? raw.filter((entry): entry is Record<string, unknown> =>
+      Boolean(entry) && typeof entry === "object" && !Array.isArray(entry))
+    : [];
+}
+
+export async function updateNotebookRunPlanState(
+  engine: Engine,
+  notebookId: string,
+  planId: string,
+  status: string,
+  details: Record<string, unknown> = {},
+): Promise<void> {
+  const result = await mutateNotebook(
+    engine,
+    notebookId,
+    "update_notebook_run_plan",
+    (document) => ({
+      ...document,
+      properties: {
+        ...(document.properties ?? {}),
+        notebookRunPlans: notebookRunPlanRecords(document).map((record) =>
+          record.planId === planId
+            ? {
+                ...record,
+                status,
+                ...details,
+                updatedAt: new Date().toISOString(),
+              }
+            : record),
+      },
+    }),
+    { planId, status, ...details },
+  );
+  if (!result.ok) throw new Error(result.error.message);
+}
+
+function paidCell(cell: NotebookCell): boolean {
+  return cell.type === "prompt"
+    || cell.type === "image"
+    || cell.type === "video";
+}
+
+function paidCellAuthorized(
+  document: NotebookDocument,
+  cell: NotebookCell,
+  input: RunNotebookPayload,
+): boolean {
+  if (!paidCell(cell)) return true;
+  const expectedFingerprint = notebookCellDefinitionFingerprint(document, cell);
+  if (input.runPlanId) {
+    const record = notebookRunPlanRecords(document).find((candidate) =>
+      candidate.planId === input.runPlanId);
+    const fingerprints = record?.cellDefinitionFingerprints;
+    return Boolean(
+      record
+      && (record.status === "queued" || record.status === "awaiting-output")
+      && fingerprints
+      && typeof fingerprints === "object"
+      && !Array.isArray(fingerprints)
+      && (fingerprints as Record<string, unknown>)[cell.id]
+        === expectedFingerprint,
+    );
+  }
+  const planId = input.generationPlan?.planId;
+  if (typeof planId !== "string") return false;
+  const records = Array.isArray(document.properties?.generationPlans)
+    ? document.properties.generationPlans
+    : [];
+  const record = records.find((candidate) =>
+    candidate
+    && typeof candidate === "object"
+    && !Array.isArray(candidate)
+    && (candidate as Record<string, unknown>).planId === planId
+    && (candidate as Record<string, unknown>).cellId === cell.id) as
+      | Record<string, unknown>
+      | undefined;
+  const plan = record?.plan;
+  return Boolean(
+    record
+    && (record.status === "queued" || record.status === "awaiting-output")
+    && plan
+    && typeof plan === "object"
+    && !Array.isArray(plan)
+    && (
+      (plan as Record<string, unknown>).cellDefinitionFingerprint
+        ?? (plan as Record<string, unknown>).cellFingerprint
+    ) === expectedFingerprint,
+  );
+}
+
+async function finishAwaitingNotebookCell(
+  engine: Engine,
+  input: AwaitNotebookOutputPayload,
+): Promise<{ outputArtifactId: string; document: NotebookDocument }> {
+  const read = engine.notebooks.read(input.notebookId);
+  if (!read.ok) throw new Error(read.error.message);
+  const cell = read.value.cells.find((candidate) => candidate.id === input.cellId);
+  if (!cell) throw new Error(`Awaiting notebook cell not found: ${input.cellId}`);
+  const current = executionState(read.value)[cell.id];
+  if (
+    current?.status === "completed"
+    && current.outputArtifactId
+    && engine.artifacts.get(current.outputArtifactId).ok
+  ) {
+    return {
+      outputArtifactId: current.outputArtifactId,
+      document: read.value,
     };
+  }
+  let outputArtifactId = input.providerArtifactId;
+  const cellInputs: Record<string, unknown> = {
+    providerArtifactId: input.providerArtifactId,
+    state: "completed",
+  };
+  if (cell.type === "video") {
+    const audioArtifactId = firstUpstreamArtifact(
+      read.value,
+      cell,
+      "replace_audio",
+    );
+    if (audioArtifactId) {
+      const durationSeconds = Math.max(
+        1,
+        Number(cell.inputs?.duration ?? 15),
+      );
+      const normalized = await normalizeSceneVideo(
+        engine,
+        input.providerArtifactId,
+        audioArtifactId,
+        `${cell.title} normalized`,
+        durationSeconds,
+      );
+      outputArtifactId = normalized.artifactId;
+      cellInputs.normalizedFromArtifactId = input.providerArtifactId;
+      cellInputs.normalizedDurationSeconds = normalized.durationSeconds;
+    }
+  }
+  const completedAt = new Date().toISOString();
+  const state: CellExecution = {
+    fingerprint: current?.fingerprint
+      ?? notebookCellFingerprint(read.value, cell),
+    status: "completed",
+    outputArtifactId,
+    providerArtifactId: input.providerArtifactId,
+    runId: input.runId,
+    completedAt,
+    updatedAt: completedAt,
+    tool: current?.tool ?? cell.tool ?? cell.model,
+  };
+  const updated = await mutateNotebook(
+    engine,
+    input.notebookId,
+    "complete_notebook_provider_output",
+    (document) => {
+      const withOutput = withExecution(
+        document,
+        cell.id,
+        state,
+        outputArtifactId,
+      );
+      return {
+        ...withOutput,
+        cells: withOutput.cells.map((candidate) =>
+          candidate.id === cell.id
+            ? {
+                ...candidate,
+                inputs: {
+                  ...(candidate.inputs ?? {}),
+                  ...cellInputs,
+                },
+              }
+            : candidate),
+      };
+    },
+    {
+      cellId: cell.id,
+      providerArtifactId: input.providerArtifactId,
+      outputArtifactId,
+      runId: input.runId,
+    },
+  );
+  if (!updated.ok) throw new Error(updated.error.message);
+  const refreshed = engine.notebooks.read(input.notebookId);
+  if (!refreshed.ok) throw new Error(refreshed.error.message);
+  return { outputArtifactId, document: refreshed.value };
+}
+
+async function failAwaitingNotebookCell(
+  engine: Engine,
+  input: AwaitNotebookOutputPayload,
+  message: string,
+): Promise<NotebookDocument> {
+  const updatedAt = new Date().toISOString();
+  const result = await mutateNotebook(
+    engine,
+    input.notebookId,
+    "fail_notebook_provider_output",
+    (document) => {
+      const cell = document.cells.find((candidate) => candidate.id === input.cellId);
+      if (!cell) return document;
+      const current = executionState(document)[cell.id];
+      return withExecution(document, cell.id, {
+        fingerprint: current?.fingerprint
+          ?? notebookCellFingerprint(document, cell),
+        status: "error",
+        outputArtifactId: input.providerArtifactId,
+        providerArtifactId: input.providerArtifactId,
+        runId: input.runId,
+        completedAt: updatedAt,
+        updatedAt,
+        tool: current?.tool ?? cell.tool ?? cell.model,
+        error: message,
+      }, input.providerArtifactId);
+    },
+    {
+      cellId: input.cellId,
+      providerArtifactId: input.providerArtifactId,
+      runId: input.runId,
+      error: message,
+    },
+  );
+  if (!result.ok) throw new Error(result.error.message);
+  const read = engine.notebooks.read(input.notebookId);
+  if (!read.ok) throw new Error(read.error.message);
+  return read.value;
+}
+
+function runHasAwaitingCells(
+  document: NotebookDocument,
+  runId: string,
+): boolean {
+  return Object.values(executionState(document)).some((execution) =>
+    execution.runId === runId && execution.status === "awaiting-output");
+}
+
+async function enqueueNotebookResume(
+  input: AwaitNotebookOutputPayload,
+  document: NotebookDocument,
+): Promise<void> {
+  if (runHasAwaitingCells(document, input.runId)) return;
+  await queue.enqueue(`resume-notebook-${input.runId}`, {
+    type: "run_notebook",
+    bookId: input.bookId,
+    notebookId: input.notebookId,
+    runId: input.runId,
+    resume: true,
+    force: false,
+    ...(input.cellIds ? { cellIds: input.cellIds } : {}),
+    ...(input.runPlanId ? { runPlanId: input.runPlanId } : {}),
+    ...(input.generationPlan ? { generationPlan: input.generationPlan } : {}),
+    ...(input.actor ? { actor: input.actor } : {}),
+  });
+}
+
+async function awaitNotebookOutput(
+  engine: Engine,
+  input: AwaitNotebookOutputPayload,
+): Promise<void> {
+  const deadline = Date.now() + 45 * 60_000;
+  while (Date.now() < deadline) {
+    const status = await engine.status.get(input.providerArtifactId);
+    if (!status.ok) throw new Error(status.error.message);
+    if (status.value === "ready") {
+      const completed = await finishAwaitingNotebookCell(engine, input);
+      if (
+        input.generationPlan
+        && !input.runPlanId
+        && typeof input.generationPlan.planId === "string"
+      ) {
+        await updateGenerationPlanState(
+          engine,
+          input.notebookId,
+          input.generationPlan.planId,
+          "continued",
+          { outputArtifactId: completed.outputArtifactId },
+        );
+      }
+      await enqueueNotebookResume(input, completed.document);
+      return;
+    }
+    if (status.value === "error") {
+      const document = await failAwaitingNotebookCell(
+        engine,
+        input,
+        `Provider output ${input.providerArtifactId} failed`,
+      );
+      await enqueueNotebookResume(input, document);
+      return;
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 2_000));
+  }
+  const document = await failAwaitingNotebookCell(
+    engine,
+    input,
+    `Provider output ${input.providerArtifactId} timed out`,
+  );
+  await enqueueNotebookResume(input, document);
+}
+
+export function registerRunNotebookJob(engine: Engine): void {
+  registerJobHandler("await_notebook_output", async (payload) => {
+    await awaitNotebookOutput(
+      engine,
+      payload as unknown as AwaitNotebookOutputPayload,
+    );
+    return { status: "completed" };
+  });
+  registerJobHandler("run_notebook", async (payload) => {
+    const input = payload as unknown as RunNotebookPayload;
+    const runId = input.runId ?? uuidv7();
     const initial = engine.notebooks.read(input.notebookId);
     if (!initial.ok) throw new Error(initial.error.message);
     const selected = input.cellIds ? new Set(input.cellIds) : null;
@@ -1016,6 +1766,7 @@ export function registerRunNotebookJob(engine: Engine): void {
     const outputs: Record<string, string> = {};
     const errors: string[] = [];
     const blocked = new Set<string>();
+    const waiting = new Set<string>();
     for (const cell of ordered) {
       if (!LOCAL_RUNNABLE_TYPES.has(cell.type)) {
         const output = cell.outputArtifactId ?? cell.entityId;
@@ -1031,9 +1782,44 @@ export function registerRunNotebookJob(engine: Engine): void {
         errors.push(`${cell.title}: blocked by failed upstream dependency`);
         continue;
       }
-      const stale = isCellStale(engine, document, cell);
-      if (!input.force && !stale) {
+      const upstreamWaiting = document.edges
+        .filter((edge) => edge.target === cell.id)
+        .some((edge) => waiting.has(edge.source));
+      if (upstreamWaiting) {
+        waiting.add(cell.id);
+        continue;
+      }
+      const currentExecution = executionState(document)[cell.id];
+      if (
+        currentExecution?.status === "awaiting-output"
+        || currentExecution?.status === "running"
+      ) {
+        waiting.add(cell.id);
+        continue;
+      }
+      if (
+        input.resume
+        && currentExecution?.runId === runId
+        && currentExecution.status === "error"
+      ) {
+        const message = currentExecution.error ?? "provider output failed";
+        errors.push(`${cell.title}: ${message}`);
+        blocked.add(cell.id);
+        continue;
+      }
+      const stale = notebookCellIsStale(engine, document, cell);
+      const forceCell = input.force === true
+        && (!selected || selected.has(cell.id));
+      if (!forceCell && !stale) {
         if (cell.outputArtifactId) outputs[cell.id] = cell.outputArtifactId;
+        continue;
+      }
+      const paidAuthorized = paidCellAuthorized(document, cell, input);
+      if (paidCell(cell) && !paidAuthorized) {
+        const message =
+          `${cell.title}: paid execution requires a current persisted plan for this exact cell revision`;
+        errors.push(message);
+        blocked.add(cell.id);
         continue;
       }
       try {
@@ -1043,12 +1829,13 @@ export function registerRunNotebookJob(engine: Engine): void {
           input.notebookId,
           document,
           cell,
-          { confirmPaid: input.confirmPaid === true },
+          { confirmPaid: paidAuthorized, runId },
         );
         document = result.document;
         outputs[cell.id] = result.outputArtifactId;
         if (
           input.generationPlan
+          && !input.runPlanId
           && typeof input.generationPlan.planId === "string"
         ) {
           await writeGenerationPlanProvenance(
@@ -1061,8 +1848,30 @@ export function registerRunNotebookJob(engine: Engine): void {
             engine,
             input.notebookId,
             input.generationPlan.planId,
-            "awaiting-output",
+            result.status === "awaiting-output"
+              ? "awaiting-output"
+              : "continued",
             { outputArtifactId: result.outputArtifactId },
+          );
+        }
+        if (result.status === "awaiting-output") {
+          waiting.add(cell.id);
+          await queue.enqueue(
+            `await-notebook-${runId}-${cell.id}-${result.outputArtifactId}`,
+            {
+              type: "await_notebook_output",
+              bookId: input.bookId,
+              notebookId: input.notebookId,
+              cellId: cell.id,
+              providerArtifactId: result.outputArtifactId,
+              runId,
+              ...(input.runPlanId ? { runPlanId: input.runPlanId } : {}),
+              ...(input.generationPlan
+                ? { generationPlan: input.generationPlan }
+                : {}),
+              ...(input.actor ? { actor: input.actor } : {}),
+              ...(input.cellIds ? { cellIds: input.cellIds } : {}),
+            },
           );
         }
       } catch (cause) {
@@ -1071,6 +1880,7 @@ export function registerRunNotebookJob(engine: Engine): void {
         blocked.add(cell.id);
         if (
           input.generationPlan
+          && !input.runPlanId
           && typeof input.generationPlan.planId === "string"
         ) {
           await updateGenerationPlanState(
@@ -1085,9 +1895,47 @@ export function registerRunNotebookJob(engine: Engine): void {
         if (refreshed.ok) document = refreshed.value;
       }
     }
+    if (waiting.size > 0) {
+      if (input.runPlanId) {
+        await updateNotebookRunPlanState(
+          engine,
+          input.notebookId,
+          input.runPlanId,
+          "awaiting-output",
+          { runId, outputs },
+        );
+      }
+      await engine.history.recordAction({
+        operation: "run_notebook",
+        scope: "book",
+        phase: "started",
+        actor: "human",
+        lane: "notebook",
+        writeSet: [`notebook:${input.notebookId}`],
+        details: {
+          notebookId: input.notebookId,
+          runId,
+          cellIds: input.cellIds ?? [],
+          outputs,
+          waitingCellIds: [...waiting],
+          errors,
+          planId: input.runPlanId ?? input.generationPlan?.planId,
+          jobId: input.jobId,
+        },
+      });
+      return {
+        id: runId,
+        notebookId: input.notebookId,
+        status: "awaiting-output",
+        cellOrder: ordered.map((cell) => cell.id),
+        outputs,
+        waitingCellIds: [...waiting],
+        errors,
+      };
+    }
     const now = new Date().toISOString();
     const run: NotebookRun = {
-      id: uuidv7(),
+      id: runId,
       notebookId: input.notebookId,
       status: errors.length === 0 ? "completed" : "failed",
       startedAt: now,
@@ -1098,6 +1946,19 @@ export function registerRunNotebookJob(engine: Engine): void {
     };
     const recorded = await engine.notebooks.recordRun(run);
     if (!recorded.ok) throw new Error(recorded.error.message);
+    if (input.runPlanId) {
+      await updateNotebookRunPlanState(
+        engine,
+        input.notebookId,
+        input.runPlanId,
+        errors.length === 0 ? "completed" : "failed",
+        {
+          runId,
+          outputs,
+          ...(errors.length > 0 ? { error: errors.join("\n") } : {}),
+        },
+      );
+    }
     await engine.history.recordAction({
       operation: "run_notebook",
       scope: "book",
@@ -1110,7 +1971,7 @@ export function registerRunNotebookJob(engine: Engine): void {
         cellIds: input.cellIds ?? [],
         outputs,
         errors,
-        planId: input.generationPlan?.planId,
+        planId: input.runPlanId ?? input.generationPlan?.planId,
         parentActionId: input.generationPlan?.parentActionId,
         jobId: input.jobId,
       },
@@ -1118,6 +1979,88 @@ export function registerRunNotebookJob(engine: Engine): void {
     if (errors.length > 0) throw new Error(errors.join("\n"));
     return run;
   });
+}
+
+export async function reconcileAwaitingNotebookOutputs(
+  engine: Engine,
+  bookId: string,
+): Promise<number> {
+  const activeJobs = engine.jobs.queue.list({
+    states: ["queued", "running", "completing"],
+    type: "await_notebook_output",
+  });
+  const activeCells = new Set(activeJobs.flatMap((job) => {
+    const notebookId = typeof job.payload.notebookId === "string"
+      ? job.payload.notebookId
+      : null;
+    const cellId = typeof job.payload.cellId === "string"
+      ? job.payload.cellId
+      : null;
+    return notebookId && cellId ? [`${notebookId}:${cellId}`] : [];
+  }));
+  let enqueued = 0;
+  for (const notebook of engine.notebooks.list()) {
+    const execution = executionState(notebook);
+    for (const [cellId, state] of Object.entries(execution)) {
+      if (
+        state.status !== "awaiting-output"
+        || !state.providerArtifactId
+        || !state.runId
+        || activeCells.has(`${notebook.id}:${cellId}`)
+      ) {
+        continue;
+      }
+      const runPlan = notebookRunPlanRecords(notebook).find((record) =>
+        record.runId === state.runId
+        && (
+          record.status === "queued"
+          || record.status === "awaiting-output"
+        ));
+      const generationRecords = Array.isArray(
+        notebook.properties?.generationPlans,
+      )
+        ? notebook.properties.generationPlans
+        : [];
+      const generationRecord = generationRecords.find((candidate) =>
+        candidate
+        && typeof candidate === "object"
+        && !Array.isArray(candidate)
+        && (candidate as Record<string, unknown>).cellId === cellId
+        && (
+          (candidate as Record<string, unknown>).status === "queued"
+          || (candidate as Record<string, unknown>).status
+            === "awaiting-output"
+        )) as Record<string, unknown> | undefined;
+      const generationPlan = runPlan?.plan
+        && typeof runPlan.plan === "object"
+        && !Array.isArray(runPlan.plan)
+        ? runPlan.plan as Record<string, unknown>
+        : generationRecord?.plan
+          && typeof generationRecord.plan === "object"
+          && !Array.isArray(generationRecord.plan)
+          ? generationRecord.plan as Record<string, unknown>
+          : undefined;
+      await queue.enqueue(
+        `reconcile-await-notebook-${state.runId}-${cellId}-${Date.now()}`,
+        {
+          type: "await_notebook_output",
+          bookId,
+          notebookId: notebook.id,
+          cellId,
+          providerArtifactId: state.providerArtifactId,
+          runId: state.runId,
+          ...(typeof runPlan?.planId === "string"
+            ? { runPlanId: runPlan.planId }
+            : {}),
+          ...(generationPlan ? { generationPlan } : {}),
+          cellIds: [cellId],
+          actor: "notebook-reconciler",
+        },
+      );
+      enqueued += 1;
+    }
+  }
+  return enqueued;
 }
 
 export function topologicalOrder(notebook: NotebookDocument): NotebookCell[] {

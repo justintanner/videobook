@@ -4,7 +4,7 @@ import { BookManager } from '../server/src/book-manager.js'
 import { seedMultycultyWorkflow } from '../server/src/multyculty-workflow.js'
 import { videobookDomainDefs } from '../server/src/tools/videobook-domain.js'
 
-const libraryDir = resolve(process.env.VIDEOBOOK_LIBRARY_DIR ?? './runtime/books')
+const libraryDir = resolve(process.env.VIDEOBOOK_LIBRARY_DIR ?? './books')
 const books = new BookManager({
   libraryDir,
   objectPrefix: 'videobook-objects',
@@ -31,7 +31,9 @@ try {
   if (spineResult.isError) {
     throw new Error(spineResult.content[0]?.text ?? 'Could not set the audio spine')
   }
-  const seeded = await seedMultycultyWorkflow(selected.value.engine)
+  const seeded = await seedMultycultyWorkflow(selected.value.engine, {
+    materializeLocalOutputs: true,
+  })
   process.stdout.write(`${JSON.stringify({
     book: selected.value.slug,
     notebook: seeded.name,

@@ -5,7 +5,9 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { localArchiveDir } from "./archive-store.js";
 import { bookManager, fs as scopedBookEngine } from "./fs.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
+import { reconcileAwaitingNotebookOutputs } from "./jobs/run-notebook.js";
 import { uploadLocalStream } from "./local-upload.js";
+import { ensureMultycultyWorkflow } from "./multyculty-workflow.js";
 import { queue } from "./queue.js";
 import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
 import { createServer } from "./server.js";
@@ -114,7 +116,20 @@ app.get("/mcp", (_req, res) => {
 async function start(): Promise<void> {
   await bookManager.ready();
   registerAllJobHandlers(scopedBookEngine);
+  if (process.env.VIDEOBOOK_DEV_FIXTURES === "1") {
+    await ensureMultycultyWorkflow(bookManager, {
+      materializeLocalOutputs: true,
+    });
+  }
   await queue.start();
+  for (const book of bookManager.list()) {
+    const selected = bookManager.get(book.bookId);
+    if (!selected.ok) continue;
+    await reconcileAwaitingNotebookOutputs(
+      selected.value.engine,
+      selected.value.bookId,
+    );
+  }
   await loadAndArmAll();
   const port = process.env.PORT ?? 3001;
   app.listen(port, () => {

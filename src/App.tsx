@@ -66,7 +66,10 @@ import {
   CommandComposer,
   type ComposerOutcome,
 } from '@/components/videobook/CommandComposer'
-import { NotebookStageBoard } from '@/components/videobook/NotebookStageBoard'
+import {
+  NotebookStageBoard,
+  type NotebookFeatureLane,
+} from '@/components/videobook/NotebookStageBoard'
 import { MomentSearch } from '@/components/videobook/MomentSearch'
 import { NotebookCellInspector } from '@/components/videobook/NotebookCellInspector'
 import {
@@ -851,9 +854,15 @@ function cellExecutionStatus(
 ): string {
   const execution = record(document.properties?.execution)
   const item = execution && record(execution[cellId])
-  if (!item) return 'ready'
+  const cell = document.cells.find((candidate) => candidate.id === cellId)
+  if (!item) {
+    return asString(cell?.inputs?.state)
+      ?? (cell?.outputArtifactId ? 'completed' : 'ready')
+  }
   if (asString(item.error)) return 'error'
-  return asString(item.status) ?? 'ready'
+  return asString(item.status)
+    ?? asString(cell?.inputs?.state)
+    ?? 'ready'
 }
 
 function canvasNodes(
@@ -896,6 +905,31 @@ function notebookStageLabels(document: NotebookDocument | null): string[] {
     : []
 }
 
+function notebookFeatureLanes(
+  document: NotebookDocument | null,
+): NotebookFeatureLane[] {
+  const lanes = document?.properties?.featureLanes
+  if (!Array.isArray(lanes)) return []
+  return lanes.flatMap((value) => {
+    const lane = record(value)
+    const id = asString(lane?.id)
+    const label = asString(lane?.label)
+    const feature = asString(lane?.feature)
+    const startColumn = asNumber(lane?.startColumn)
+    const columnSpan = asNumber(lane?.columnSpan)
+    if (
+      !id
+      || !label
+      || !feature
+      || startColumn === null
+      || columnSpan === null
+    ) {
+      return []
+    }
+    return [{ id, label, feature, startColumn, columnSpan }]
+  })
+}
+
 function CellNode({ data, selected }: NodeProps<CanvasNode>) {
   const mediaUrl = data.asset?.mediaUrl
   const thumbnailUrl = data.asset?.thumbnailUrl
@@ -903,6 +937,7 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
   const playableVideo = data.asset?.type === 'video' || data.asset?.type === 'final'
   const canRun = data.kind === 'image'
     || data.kind === 'video'
+    || data.kind === 'prompt'
     || data.kind === 'analysis'
     || data.kind === 'split'
     || data.kind === 'audio'
@@ -1216,13 +1251,23 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const runCell = useCallback(async (cellId: string) => {
     if (!bookId || !notebook) return
     const cell = notebook.cells.find((candidate) => candidate.id === cellId)
-    if (!cell || (cell.type !== 'image' && cell.type !== 'video')) return
-    if (!online) {
+    const cloud = cell?.type === 'prompt'
+      || cell?.type === 'image'
+      || cell?.type === 'video'
+    const local = cell?.type === 'source'
+      || cell?.type === 'analysis'
+      || cell?.type === 'split'
+      || cell?.type === 'audio'
+      || cell?.type === 'frame'
+      || cell?.type === 'sequence'
+      || cell?.type === 'export'
+    if (!cell || (!cloud && !local)) return
+    if (cloud && !online) {
       setNotice('Offline: cloud generation is unavailable. Local search, editing, playback, and export remain available.')
       return
     }
     const consentKey = 'videobook.cloud-generation-consent'
-    if (window.localStorage.getItem(consentKey) !== 'accepted') {
+    if (cloud && window.localStorage.getItem(consentKey) !== 'accepted') {
       const model = typeof cell.model === 'string'
         ? cell.model
         : 'configured cloud provider'
@@ -1240,14 +1285,44 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     setBusy(true)
     try {
-      const result = await prepareGenerationPlan(cellId, 'ui')
-      setNotice(result.message)
+      if (cloud) {
+        const result = await prepareGenerationPlan(cellId, 'ui')
+        setNotice(result.message)
+      } else {
+        await call('run_notebook_cell', {
+          book_id: bookId,
+          notebook_id: notebook.id,
+          cell_id: cellId,
+          actor: 'videobook-user',
+        })
+        setNotice(`${cell.title} queued`)
+      }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error))
     } finally {
       setBusy(false)
     }
-  }, [bookId, notebook, online, prepareGenerationPlan])
+  }, [bookId, call, notebook, online, prepareGenerationPlan])
+
+  const runWorkbook = useCallback(async () => {
+    if (!bookId || !notebook) return
+    setBusy(true)
+    try {
+      const plan = asCommandPlan(await call('plan_notebook_run', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        source_surface: 'ui',
+        actor: 'videobook-user',
+        force: true,
+      }))
+      setPendingCommandPlan({ plan, previews: {} })
+      setNotice('Workbook run plan ready for review')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }, [bookId, call, notebook])
 
   const [nodes, setNodes] = useState<CanvasNode[]>(() =>
     initialWorkspace?.notebook
@@ -2229,6 +2304,51 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!bookId || !pendingCommandPlan) return
     setBusy(true)
     try {
+      const workbookStage = pendingCommandPlan.plan.stages.find((stage) =>
+        stage.kind === 'queued' && stage.input.workbook_run === true)
+      if (workbookStage?.kind === 'queued') {
+        const hasCloudStages = pendingCommandPlan.plan.stages.some((stage) =>
+          stage.kind === 'queued' && stage.jobType === 'generation')
+        if (hasCloudStages && !online) {
+          throw new Error('Offline: cloud generation is unavailable. The workbook plan remains preserved.')
+        }
+        const consentKey = 'videobook.cloud-generation-consent'
+        if (
+          hasCloudStages
+          && window.localStorage.getItem(consentKey) !== 'accepted'
+        ) {
+          const accepted = window.confirm(
+            'Cloud generation disclosure\n\n'
+            + 'Payload class: rewritten prompts, extracted first and last frames, and connected media references.\n'
+            + 'The four scene audio assets remain local and replace generated sound after animation.\n\n'
+            + 'Continue and remember this choice on this device?',
+          )
+          if (!accepted) {
+            throw new Error('Workbook generation cancelled before sending data')
+          }
+          window.localStorage.setItem(consentKey, 'accepted')
+        }
+        const notebookId = asString(workbookStage.input.notebook_id)
+          ?? notebook?.id
+        if (!notebookId) {
+          throw new Error('The workbook plan is missing its notebook')
+        }
+        const queued = record(await call('enqueue_notebook_run', {
+          book_id: bookId,
+          notebook_id: notebookId,
+          plan_id: pendingCommandPlan.plan.planId,
+          actor: 'videobook-user',
+          confirm_unpriced: true,
+        }))
+        setPendingCommandPlan(null)
+        await refreshBookData(bookId, notebookId)
+        setNotice(
+          asString(queued?.status) === 'completed'
+            ? 'Workbook is already current'
+            : 'Workbook run accepted and queued',
+        )
+        return
+      }
       let latestActionId = ''
       let queuedCount = 0
       for (const stage of pendingCommandPlan.plan.stages) {
@@ -2584,10 +2704,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           const cell = notebook.cells.find((candidate) =>
             candidate.id.toLowerCase().startsWith(token)
             || candidate.title.toLowerCase() === token.replaceAll('-', ' '))
-          if (!cell || (cell.type !== 'image' && cell.type !== 'video')) {
+          if (
+            !cell
+            || (
+              cell.type !== 'prompt'
+              && cell.type !== 'image'
+              && cell.type !== 'video'
+            )
+          ) {
             return {
               ok: false,
-              message: 'Name an image or video cell, for example: generate cell @cell-id',
+              message: 'Name a prompt, image, or video cell, for example: generate cell @cell-id',
             }
           }
           return await prepareGenerationPlan(cell.id, 'chat')
@@ -2633,8 +2760,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const token = restParts[0].replace(/^@/u, '').toLowerCase()
         const cell = notebook.cells.find((candidate) =>
           candidate.id.toLowerCase().startsWith(token))
-        if (!cell || (cell.type !== 'image' && cell.type !== 'video')) {
-          return { ok: false, message: 'Choose an image or video generation cell' }
+        if (
+          !cell
+          || (
+            cell.type !== 'prompt'
+            && cell.type !== 'image'
+            && cell.type !== 'video'
+          )
+        ) {
+          return { ok: false, message: 'Choose a prompt, image, or video generation cell' }
         }
         return await prepareGenerationPlan(cell.id, 'slash')
       }
@@ -3129,30 +3263,44 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       nodes={nodes}
                       previewSlot={previewSlot}
                       labels={notebookStageLabels(notebook)}
+                      featureLanes={notebookFeatureLanes(notebook)}
                     />
                     <Background gap={36} size={1} color="rgba(96, 196, 141, 0.14)" />
                     <Panel position="top-left" className="canvas-add-panel">
-                      <details className="canvas-add-menu">
-                        <summary><Plus size={15} />Add cell</summary>
-                        <div>
-                          {cellPalette.map((item) => {
-                            const Icon = item.icon
-                            return (
-                              <button
-                                key={item.type}
-                                type="button"
-                                draggable
-                                disabled={busy}
-                                onDragStart={(event) => event.dataTransfer.setData('application/x-videobook-cell', item.type)}
-                                onDragEnd={() => setPreviewSlot(null)}
-                                onClick={() => void createCell(item.type)}
-                              >
-                                <Icon size={15} /><span>{item.label}</span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </details>
+                      <div className="canvas-workbook-actions">
+                        <details className="canvas-add-menu">
+                          <summary><Plus size={15} />Add cell</summary>
+                          <div>
+                            {cellPalette.map((item) => {
+                              const Icon = item.icon
+                              return (
+                                <button
+                                  key={item.type}
+                                  type="button"
+                                  draggable
+                                  disabled={busy}
+                                  onDragStart={(event) => event.dataTransfer.setData('application/x-videobook-cell', item.type)}
+                                  onDragEnd={() => setPreviewSlot(null)}
+                                  onClick={() => void createCell(item.type)}
+                                >
+                                  <Icon size={15} /><span>{item.label}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </details>
+                        <button
+                          type="button"
+                          className="canvas-run-workbook"
+                          disabled={busy}
+                          onClick={() => void runWorkbook()}
+                        >
+                          {busy
+                            ? <LoaderCircle className="spin" size={15} />
+                            : <Sparkles size={15} />}
+                          Run workbook
+                        </button>
+                      </div>
                     </Panel>
                   </ReactFlow>
                 )}

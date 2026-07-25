@@ -25,7 +25,17 @@ describe('transparent runnable DAG e2e (offline)', () => {
   it('runs source→analysis fixture→split/audio/frame without paid generation', async () => {
     expect(SCHEMA_VERSION).toBe(6)
     expect(NOTEBOOK_CELL_TYPES).toHaveLength(17)
-    expect(WORKFLOW_STAGES).toHaveLength(7)
+    expect(WORKFLOW_STAGES).toHaveLength(8)
+    expect(WORKFLOW_STAGES).toEqual([
+      'SOURCE',
+      'ANALYZE',
+      'SPLIT SCENES',
+      'EXTRACT ASSETS',
+      'WRITE PROMPTS',
+      'ANIMATE SCENES',
+      'ASSEMBLE EDIT',
+      'EXPORT MASTER',
+    ])
     expect(listNotebookActions().some((action) => action.operation === 'analyze_source')).toBe(true)
 
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-dag-e2e-'))
@@ -76,6 +86,9 @@ describe('transparent runnable DAG e2e (offline)', () => {
     })
     expect(fanned.properties?.stageLabels).toEqual([...WORKFLOW_STAGES])
     expect(fanned.cells.filter((cell) => cell.type === 'split')).toHaveLength(2)
+    expect(fanned.cells.filter((cell) => cell.type === 'frame')).toHaveLength(4)
+    expect(fanned.cells.filter((cell) => cell.type === 'prompt')).toHaveLength(2)
+    expect(fanned.cells.filter((cell) => cell.type === 'video')).toHaveLength(2)
     expect(topologicalOrder(fanned).length).toBe(fanned.cells.length)
 
     const splitCell = fanned.cells.find((cell) => cell.type === 'split')!
@@ -95,7 +108,9 @@ describe('transparent runnable DAG e2e (offline)', () => {
     expect(last.artifactId).toBeTruthy()
     expect(audio.artifactId).toBeTruthy()
 
-    // Paid animation must not auto-start: video cells require confirmation.
+    // Paid prompt rewrite and animation must not auto-start.
+    expect(fanned.cells.filter((cell) => cell.type === 'prompt').every((cell) =>
+      cell.inputs?.requiresConfirmation === true)).toBe(true)
     expect(fanned.cells.filter((cell) => cell.type === 'video').every((cell) =>
       cell.inputs?.requiresConfirmation === true)).toBe(true)
   }, 90_000)

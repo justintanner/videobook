@@ -20,7 +20,7 @@ export const notebookGrid = {
   cellHeight: 288,
   stageHeadroom: 36,
   stageHeight: 352,
-  minStages: 6,
+  minStages: 8,
   stageOverscan: 2,
   topViewportY: 18,
   minColumns: 4,

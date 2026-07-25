@@ -11,6 +11,15 @@ interface NotebookStageBoardProps {
   nodes: Array<Node<NotebookCellData>>
   previewSlot: NotebookGridSlot | null
   labels?: readonly string[]
+  featureLanes?: readonly NotebookFeatureLane[]
+}
+
+export interface NotebookFeatureLane {
+  id: string
+  label: string
+  feature: string
+  startColumn: number
+  columnSpan: number
 }
 
 function stageLabel(stage: number, labels: readonly string[]): string {
@@ -21,6 +30,7 @@ export function NotebookStageBoard({
   nodes,
   previewSlot,
   labels = [],
+  featureLanes = [],
 }: NotebookStageBoardProps) {
   const metrics = notebookGridMetrics(
     nodes.map((node) => node.position),
@@ -35,6 +45,21 @@ export function NotebookStageBoard({
         style={{ width: metrics.width, height: metrics.height }}
         aria-hidden
       >
+        {featureLanes.map((lane) => (
+          <div
+            className="notebook-feature-lane"
+            key={lane.id}
+            style={{
+              left: notebookGrid.originX + lane.startColumn * notebookGrid.columnPitch,
+              width: lane.columnSpan * notebookGrid.columnPitch
+                - (notebookGrid.columnPitch - notebookGrid.columnWidth),
+              height: metrics.height,
+            }}
+          >
+            <span>{lane.label}</span>
+            <small>{lane.feature}</small>
+          </div>
+        ))}
         {Array.from({ length: metrics.stageCount }, (_, stage) => (
           <div
             className={`notebook-stage-row ${previewSlot?.stage === stage ? 'active' : ''}`}
