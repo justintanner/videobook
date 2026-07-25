@@ -351,6 +351,10 @@ textarea:focus-visible {
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.58);
 }
 
+.book-menu {
+  width: min(260px, calc(100vw - 36px));
+}
+
 .project-menu > span {
   padding: 8px 10px;
   color: var(--muted);

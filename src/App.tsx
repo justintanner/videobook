@@ -89,6 +89,7 @@ import {
   resolveNotebookGridMove,
   type NotebookGridSlot,
 } from '@/videobook/notebook-grid'
+import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
 
 type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
 
@@ -103,15 +104,6 @@ type BookSummary = {
   createdAt: number
   artifactCount: number
   notebookCount: number
-}
-
-type LegacyBookSummary = {
-  sourceBookId: string
-  sourceHeadRevision: string
-  slug: string
-  artifactCount: number
-  notebookCount: number
-  issues: Array<{ code: string; severity: string; message: string }>
 }
 
 type AssetRecord = {
@@ -212,6 +204,18 @@ type ProviderRecord = {
   maskedKey: string | null
 }
 
+type InitialWorkspace = {
+  books: BookSummary[]
+  bookId: string
+  notebook: NotebookDocument | null
+  assets: AssetRecord[]
+  ingestStatuses: IngestStatus[]
+  audioNotebook: AudioNotebookState
+  sequence: Sequence | null
+  jobs: JobRecord[]
+  commands: ServerCommand[]
+}
+
 const supportedUiActions = new Set([
   'switch_book',
   'open_notebook',
@@ -307,34 +311,6 @@ function asBooks(value: unknown): BookSummary[] {
       createdAt,
       artifactCount: asNumber(item.artifactCount) ?? 0,
       notebookCount: asNumber(item.notebookCount) ?? 0,
-    }]
-  })
-}
-
-function asLegacyBooks(value: unknown): LegacyBookSummary[] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((entry) => {
-    const item = record(entry)
-    const sourceBookId = item && asString(item.sourceBookId)
-    const sourceHeadRevision = item && asString(item.sourceHeadRevision)
-    const slug = item && asString(item.slug)
-    if (!item || !sourceBookId || !sourceHeadRevision || !slug) return []
-    const issues = Array.isArray(item.issues)
-      ? item.issues.flatMap((value) => {
-        const issue = record(value)
-        const code = issue && asString(issue.code)
-        const severity = issue && asString(issue.severity)
-        const message = issue && asString(issue.message)
-        return code && severity && message ? [{ code, severity, message }] : []
-      })
-      : []
-    return [{
-      sourceBookId,
-      sourceHeadRevision,
-      slug,
-      artifactCount: asNumber(item.artifactCount) ?? 0,
-      notebookCount: asNumber(item.notebookCount) ?? 0,
-      issues,
     }]
   })
 }
@@ -828,6 +804,25 @@ function saveValue(key: string, value: string): void {
   }
 }
 
+function asInitialWorkspace(
+  payload: InitialWorkspacePayload | null,
+): InitialWorkspace | null {
+  if (!payload) return null
+  const books = asBooks(payload.bookValue)
+  const notebooks = asNotebooks(payload.notebookValue)
+  return {
+    books,
+    bookId: payload.bookId,
+    notebook: notebooks.find((entry) => entry.id === payload.notebookId) ?? null,
+    assets: asAssets(payload.assetValue),
+    ingestStatuses: asIngestStatuses(payload.ingestStatusValue),
+    audioNotebook: asAudioNotebook(payload.audioValue),
+    sequence: asSequence(payload.sequenceValue),
+    jobs: asJobs(payload.jobValue),
+    commands: asCommands(payload.commandValue),
+  }
+}
+
 async function fileObjectHash(file: File): Promise<string> {
   const digest = await window.crypto.subtle.digest('SHA-256', await file.arrayBuffer())
   return [...new Uint8Array(digest)]
@@ -952,7 +947,15 @@ const compactFlowFitViewOptions: FitViewOptions<CanvasNode> = {
   duration: 220,
 }
 
-function App() {
+type AppProps = {
+  initialWorkspace: InitialWorkspacePayload | null
+}
+
+function App({ initialWorkspace: initialPayload }: AppProps) {
+  const initialWorkspace = useMemo(
+    () => asInitialWorkspace(initialPayload),
+    [initialPayload],
+  )
   const mcp = useMcp({
     url: mcpUrl,
     clientName: 'videobook',
@@ -960,28 +963,33 @@ function App() {
     autoReconnect: 3000,
   })
   const [screen, setScreen] = useState<Screen>('notebook')
-  const [books, setBooks] = useState<BookSummary[]>([])
-  const [legacyBooks, setLegacyBooks] = useState<LegacyBookSummary[]>([])
-  const [bookId, setBookId] = useState(() => savedValue('videobook.active-book'))
-  const [notebook, setNotebook] = useState<NotebookDocument | null>(null)
-  const [assets, setAssets] = useState<AssetRecord[]>([])
-  const [ingestStatuses, setIngestStatuses] = useState<IngestStatus[]>([])
-  const [audioNotebook, setAudioNotebook] = useState<AudioNotebookState>(() => asAudioNotebook(null))
-  const [sequence, setSequence] = useState<Sequence | null>(null)
-  const [jobs, setJobs] = useState<JobRecord[]>([])
+  const [books, setBooks] = useState<BookSummary[]>(() => initialWorkspace?.books ?? [])
+  const [bookId, setBookId] = useState(() =>
+    initialWorkspace?.bookId ?? savedValue('videobook.active-book'))
+  const [notebook, setNotebook] = useState<NotebookDocument | null>(
+    () => initialWorkspace?.notebook ?? null,
+  )
+  const [assets, setAssets] = useState<AssetRecord[]>(() => initialWorkspace?.assets ?? [])
+  const [ingestStatuses, setIngestStatuses] = useState<IngestStatus[]>(
+    () => initialWorkspace?.ingestStatuses ?? [],
+  )
+  const [audioNotebook, setAudioNotebook] = useState<AudioNotebookState>(
+    () => initialWorkspace?.audioNotebook ?? asAudioNotebook(null),
+  )
+  const [sequence, setSequence] = useState<Sequence | null>(
+    () => initialWorkspace?.sequence ?? null,
+  )
+  const [jobs, setJobs] = useState<JobRecord[]>(() => initialWorkspace?.jobs ?? [])
   const [jobSnapshotAt, setJobSnapshotAt] = useState(() => Date.now())
-  const [commands, setCommands] = useState<ServerCommand[]>([])
+  const [commands, setCommands] = useState<ServerCommand[]>(
+    () => initialWorkspace?.commands ?? [],
+  )
   const [providers, setProviders] = useState<ProviderRecord[]>([])
   const [storage, setStorage] = useState<unknown>(null)
-  const [nodes, setNodes] = useState<CanvasNode[]>([])
-  const [edges, setEdges] = useState<Edge[]>([])
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
   const [inspectorOpen, setInspectorOpen] = useState(() => window.innerWidth > 1100)
   const [bookMenuOpen, setBookMenuOpen] = useState(false)
-  const [createSlug, setCreateSlug] = useState('')
-  const [renameSlug, setRenameSlug] = useState('')
-  const [deleteSlug, setDeleteSlug] = useState('')
   const [uploading, setUploading] = useState(false)
   const [recording, setRecording] = useState(false)
   const [timelineSelectionStart, setTimelineSelectionStart] = useState('0')
@@ -1002,7 +1010,9 @@ function App() {
   const [timelineZoom, setTimelineZoom] = useState(1)
   const [exportOrientation, setExportOrientation] = useState<'landscape' | 'portrait' | 'square'>('landscape')
   const [exportCaptions, setExportCaptions] = useState<'burn-in' | 'sidecar' | 'omit'>('burn-in')
-  const [audioSpineAssetId, setAudioSpineAssetId] = useState('')
+  const [audioSpineAssetId, setAudioSpineAssetId] = useState(
+    () => initialWorkspace?.audioNotebook.spine?.artifactId ?? '',
+  )
   const [importUrl, setImportUrl] = useState('')
   const [selectedTranscriptWordId, setSelectedTranscriptWordId] = useState('')
   const [transcriptCorrection, setTranscriptCorrection] = useState('')
@@ -1014,7 +1024,7 @@ function App() {
   const [secretValue, setSecretValue] = useState('')
   const [busy, setBusy] = useState(false)
   const [online, setOnline] = useState(() => window.navigator.onLine)
-  const [notice, setNotice] = useState('Connect to the server, then load your books.')
+  const [, setNotice] = useState('Connect to the server, then load your books.')
   const flowRef = useRef<ReactFlowInstance<CanvasNode, Edge> | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const recorderStreamRef = useRef<MediaStream | null>(null)
@@ -1033,10 +1043,6 @@ function App() {
   const activeBook = useMemo(
     () => books.find((book) => book.bookId === bookId) ?? null,
     [bookId, books],
-  )
-  const selectedCell = useMemo(
-    () => nodes.find((node) => node.id === selectedCellId) ?? null,
-    [nodes, selectedCellId],
   )
   const assetById = useMemo(
     () => new Map(assets.map((asset) => [asset.artifactId, asset])),
@@ -1196,6 +1202,21 @@ function App() {
     }
   }, [bookId, notebook, online, prepareGenerationPlan])
 
+  const [nodes, setNodes] = useState<CanvasNode[]>(() =>
+    initialWorkspace?.notebook
+      ? canvasNodes(
+          initialWorkspace.notebook,
+          initialWorkspace.assets,
+          (cellId) => void runCell(cellId),
+        )
+      : [])
+  const [edges, setEdges] = useState<Edge[]>(() =>
+    initialWorkspace?.notebook ? notebookEdges(initialWorkspace.notebook) : [])
+  const selectedCell = useMemo(
+    () => nodes.find((node) => node.id === selectedCellId) ?? null,
+    [nodes, selectedCellId],
+  )
+
   const applyNotebook = useCallback((next: NotebookDocument, nextAssets: AssetRecord[]) => {
     setNotebook(next)
     setNodes(canvasNodes(next, nextAssets, (cellId) => void runCell(cellId)))
@@ -1277,16 +1298,15 @@ function App() {
   const loadBooks = useCallback(async (preferredBookId?: string) => {
     setBusy(true)
     try {
-      const [bookValue, legacyValue, commandValue] = await Promise.all([
+      const [bookValue, commandValue] = await Promise.all([
         call('list_books', { sort: 'newest' }),
-        call('list_legacy_books', {}),
         call('slash_commands', {}),
       ])
       const nextBooks = asBooks(bookValue)
       setBooks(nextBooks)
-      setLegacyBooks(asLegacyBooks(legacyValue))
       setCommands(asCommands(commandValue))
       const target = nextBooks.find((book) => book.bookId === preferredBookId)
+        ?? nextBooks.find((book) => book.slug === 'multyculty')
         ?? nextBooks.find((book) => book.bookId === bookId)
         ?? nextBooks[0]
       if (target) {
@@ -1300,7 +1320,7 @@ function App() {
         setSequence(null)
         setNodes([])
         setEdges([])
-        setNotice('Create your first book to start a notebook.')
+        setNotice('No videobook projects are available.')
       }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error))
@@ -1308,26 +1328,6 @@ function App() {
       setBusy(false)
     }
   }, [bookId, call, fitNotebook, refreshBookData])
-
-  const migrateLegacyBook = async (legacy: LegacyBookSummary) => {
-    setBusy(true)
-    try {
-      const value = record(await call('migrate_legacy_book', {
-        book_id: legacy.sourceBookId,
-        expected_source_head: legacy.sourceHeadRevision,
-      }))
-      const book = record(value?.book)
-      const migratedBookId = asString(book?.bookId)
-      if (!migratedBookId) throw new Error('The server returned an invalid migration result')
-      await loadBooks(migratedBookId)
-      setNotice(`Migrated ${legacy.slug} to schema v5; the v4 source was archived`)
-      setScreen('notebook')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
-    } finally {
-      setBusy(false)
-    }
-  }
 
   const chooseBook = useCallback(async (nextBookId: string) => {
     setBusy(true)
@@ -1344,57 +1344,6 @@ function App() {
       setBusy(false)
     }
   }, [books, fitNotebook, refreshBookData])
-
-  const createBook = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!createSlug.trim()) return
-    setBusy(true)
-    try {
-      const value = record(await call('create_book', { slug: createSlug.trim() }))
-      const nextBookId = asString(value?.bookId)
-      if (!nextBookId) throw new Error('The server did not return a book identity')
-      setCreateSlug('')
-      setBookMenuOpen(false)
-      await loadBooks(nextBookId)
-      setScreen('notebook')
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const renameBook = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!activeBook || !renameSlug.trim()) return
-    setBusy(true)
-    try {
-      await call('rename_book', { book_id: activeBook.bookId, slug: renameSlug.trim() })
-      await loadBooks(activeBook.bookId)
-      setNotice(`Renamed book to ${renameSlug.trim()}`)
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const deleteBook = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!activeBook) return
-    setBusy(true)
-    try {
-      await call('delete_book', { book_id: activeBook.bookId, confirm_slug: deleteSlug })
-      setDeleteSlug('')
-      setBookMenuOpen(false)
-      await loadBooks()
-      setNotice(`Deleted ${activeBook.slug}`)
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
-    } finally {
-      setBusy(false)
-    }
-  }
 
   const createCell = async (type: NotebookCellType, position?: { x: number; y: number }) => {
     if (!bookId || !notebook) return
@@ -2919,56 +2868,6 @@ function App() {
     }
   }
 
-  const emptyWorkspace = (
-    <section className="workspace-screen">
-      <header>
-        <div>
-          <span className="section-label">VIDEOBOOK ENGINE 3.0.0 · SCHEMA V5</span>
-          <h1>Books contain real notebooks.</h1>
-          <p>Create a book to get a Main notebook, then add connected prompt, image, and video cells.</p>
-        </div>
-        <button type="button" disabled={busy || mcp.state !== 'ready'} onClick={() => void loadBooks()}>
-          {busy ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}
-          Load books
-        </button>
-      </header>
-      <form className="project-create" onSubmit={createBook}>
-        <label>
-          New book slug
-          <input value={createSlug} onChange={(event) => setCreateSlug(event.target.value)} placeholder="summer-promo" />
-        </label>
-        <button type="submit" disabled={busy || !createSlug.trim()}>Create book</button>
-      </form>
-      {legacyBooks.length > 0 && (
-        <div className="legacy-book-list">
-          <div className="workspace-section-heading">
-            <span className="section-label">UPGRADE AVAILABLE</span>
-            <h2>Copy existing books into the v5 editing model</h2>
-            <p>The original v4 root is archived unchanged after you confirm the source revision.</p>
-          </div>
-          {legacyBooks.map((legacy) => (
-            <article className="record-card" key={legacy.sourceBookId}>
-              <span>SCHEMA V4 · {legacy.issues.some((issue) => issue.severity === 'error') ? 'BLOCKED' : 'READY'}</span>
-              <strong>{legacy.slug}</strong>
-              <small>{legacy.notebookCount} notebooks · {legacy.artifactCount} artifacts</small>
-              {legacy.issues.map((issue) => (
-                <p key={`${issue.code}:${issue.message}`}>{issue.code} · {issue.message}</p>
-              ))}
-              <button
-                type="button"
-                disabled={busy || legacy.issues.some((issue) => issue.severity === 'error')}
-                onClick={() => void migrateLegacyBook(legacy)}
-              >
-                Migrate and switch
-              </button>
-            </article>
-          ))}
-        </div>
-      )}
-      <span className="workspace-notice">{notice}</span>
-    </section>
-  )
-
   return (
     <main className={`app-shell app-screen-${screen} ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'}`}>
       <header className="topbar">
@@ -2996,8 +2895,7 @@ function App() {
               </button>
             </div>
             {bookMenuOpen && (
-              <div className="project-menu book-menu" role="menu">
-                <span>BOOKS</span>
+              <div className="project-menu book-menu" role="menu" aria-label="Videobook projects">
                 {books.map((book) => (
                   <button
                     key={book.bookId}
@@ -3012,23 +2910,7 @@ function App() {
                     {book.bookId === bookId && <Check size={13} />}
                   </button>
                 ))}
-                <form className="menu-form" onSubmit={createBook}>
-                  <input value={createSlug} onChange={(event) => setCreateSlug(event.target.value)} placeholder="new-book" aria-label="New book slug" />
-                  <button type="submit" disabled={busy || !createSlug.trim()}><Plus size={13} />Create</button>
-                </form>
-                {activeBook && (
-                  <>
-                    <form className="menu-form" onSubmit={renameBook}>
-                      <input value={renameSlug} onChange={(event) => setRenameSlug(event.target.value)} placeholder={activeBook.slug} aria-label="Rename book" />
-                      <button type="submit" disabled={busy || !renameSlug.trim()}>Rename</button>
-                    </form>
-                    <form className="menu-form menu-form-danger" onSubmit={deleteBook}>
-                      <input value={deleteSlug} onChange={(event) => setDeleteSlug(event.target.value)} placeholder={`Type ${activeBook.slug} to delete`} aria-label="Confirm book deletion" />
-                      <button type="submit" disabled={busy || deleteSlug !== activeBook.slug}><Trash2 size={13} />Delete</button>
-                    </form>
-                  </>
-                )}
-                {books.length === 0 && <button type="button" onClick={() => void loadBooks()}>Refresh book list</button>}
+                {books.length === 0 && <span>No projects available</span>}
               </div>
             )}
           </div>
@@ -3053,8 +2935,7 @@ function App() {
         </div>
       )}
 
-      {!activeBook ? emptyWorkspace : (
-        <>
+      <>
           {screen === 'notebook' && (
             <>
               <section className="canvas">
@@ -3418,7 +3299,7 @@ function App() {
               }}
             >
               <header>
-                <div><span className="section-label">SEARCHABLE SOURCE LIBRARY</span><h1>Find the exact moment.</h1><p>Search language, speech, OCR, imagery, video motion, and audio across {activeBook.slug}.</p></div>
+                <div><span className="section-label">SEARCHABLE SOURCE LIBRARY</span><h1>Find the exact moment.</h1><p>Search language, speech, OCR, imagery, video motion, and audio across {activeBook?.slug ?? 'the active project'}.</p></div>
                 <div className="library-ingest-actions">
                   <button
                     type="button"
@@ -4202,8 +4083,7 @@ function App() {
               <div className="settings-sections"><div className="settings-grid">{providers.map((provider) => <article className="provider-card" key={provider.envKey}><span className={`provider-dot provider-${provider.keyStatus}`} /><div><strong>{provider.label}</strong><p>{provider.keyStatus}{provider.maskedKey ? ` · ${provider.maskedKey}` : ''}</p></div></article>)}</div><div className="settings-diagnostics"><div className="workspace-section-heading"><h2>Selected book storage</h2><p>Catalog and object publication status from videobook-engine 3.0.0 schema v5.</p></div><div className="settings-diagnostics-grid"><article className="record-card"><pre>{storage ? JSON.stringify(storage, null, 2) : 'Refresh settings to inspect storage.'}</pre></article></div></div></div>
             </section>
           )}
-        </>
-      )}
+      </>
 
       {pendingCommandPlan && (
         <aside className="command-plan-drawer" aria-label="Command plan review">

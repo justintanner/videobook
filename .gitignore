@@ -46,6 +46,7 @@ src/lib/*.d.ts
 # Test artifacts
 test-results/
 tests/screenshots/
+.playwright-mcp/
 
 # Claude Code
 .claude/worktrees/
