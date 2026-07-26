@@ -18,6 +18,7 @@ export default defineConfig({
       'tests/dolt-native-cutover.test.ts',
       'src/videobook/notebook-draft.test.ts',
       'src/videobook/notebook-grid.test.ts',
+      'src/videobook/notebook-routing.test.ts',
       'src/videobook/command-plan.test.ts',
       'src/videobook/mvp-gates.test.ts',
       'src/videobook/search-benchmark-corpus.test.ts',

@@ -70,6 +70,9 @@ import {
   type ComposerOutcome,
 } from '@/components/videobook/CommandComposer'
 import {
+  BusRiverEdge,
+} from '@/components/videobook/BusRiverEdge'
+import {
   NotebookGridBoard,
 } from '@/components/videobook/NotebookGridBoard'
 import { MomentSearch } from '@/components/videobook/MomentSearch'
@@ -1006,6 +1009,7 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
 }
 
 const nodeTypes = { cell: CellNode }
+const edgeTypes = { busRiver: BusRiverEdge }
 const flowProOptions = { hideAttribution: true }
 const notebookZoomActivationKeys = ['Control', 'Meta']
 const notebookPanOnDragButtons: number[] = []
@@ -3317,6 +3321,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       nodes={nodes}
                       edges={edges}
                       nodeTypes={nodeTypes}
+                      edgeTypes={edgeTypes}
                       viewport={notebookViewport}
                       onViewportChange={updateNotebookViewport}
                       onInit={(instance) => {

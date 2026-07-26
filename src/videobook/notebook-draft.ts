@@ -8,6 +8,11 @@ import {
   notebookGridHeadingPosition,
   notebookGridPosition,
 } from './notebook-grid'
+import {
+  defaultNotebookBusRiverRoute,
+  notebookBusRiverRoutes,
+  type NotebookBusRiverRoute,
+} from './notebook-routing'
 
 export interface NotebookCellData extends Record<string, unknown> {
   kind: NotebookCellType
@@ -58,14 +63,18 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
   })
 }
 
-export function notebookEdges(document: NotebookDocument): Edge[] {
+export function notebookEdges(
+  document: NotebookDocument,
+): Array<Edge<NotebookBusRiverRoute, 'busRiver'>> {
+  const routes = notebookBusRiverRoutes(document)
   return document.edges.map((edge) => ({
     id: edge.id,
     source: edge.source,
     target: edge.target,
     targetHandle: edge.targetInput,
-    type: 'smoothstep',
+    type: 'busRiver',
     className: 'workflow-edge',
+    data: routes.get(edge.id) ?? defaultNotebookBusRiverRoute,
     markerEnd: {
       type: MarkerType.ArrowClosed,
       width: 18,

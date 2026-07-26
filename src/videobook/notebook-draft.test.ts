@@ -111,12 +111,21 @@ describe('notebook draft conversion', () => {
     expect(notebookNodes(connected)[1]?.data.targetInputs).toEqual(['reference-video'])
     expect(notebookEdges(connected)[0]).toMatchObject({
       targetHandle: 'reference-video',
-      type: 'smoothstep',
+      type: 'busRiver',
       className: 'workflow-edge',
+      data: {
+        sourceBusOffset: 20,
+        targetBusOffset: 20,
+        riverOffset: 20,
+        riverSide: 'right',
+      },
       markerEnd: {
         type: MarkerType.ArrowClosed,
         color: '#72e7aa',
       },
     })
+    expect(
+      notebookDocument(connected, notebookNodes(connected), notebookEdges(connected)).edges,
+    ).toEqual(connected.edges)
   })
 })
