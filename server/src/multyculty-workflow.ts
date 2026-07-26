@@ -9,7 +9,6 @@ import {
   runNotebookCell,
   topologicalOrder,
 } from "./jobs/run-notebook.js";
-import { normalizeSceneVideo } from "./notebook-media-ops.js";
 import {
   applyAnalysisResults,
   buildSevenStageScaffold,
@@ -22,7 +21,7 @@ type ArtifactRecord = {
   kind: string;
 };
 
-export const MULTYCULTY_FIXTURE_VERSION = 8;
+export const MULTYCULTY_FIXTURE_VERSION = 12;
 export const MULTYCULTY_FIXTURE_OWNER = "multyculty-default";
 
 const LEGACY_SPLIT_ROLES = [
@@ -46,12 +45,21 @@ const SECTION_SLUGS = [
   "vid-section-dunka",
 ] as const;
 
-const ANIMATION_SLUGS = [
-  "vid-animated-intro",
-  "vid-animated-culture",
-  "vid-animated-german",
-  "vid-animated-dunka",
-] as const;
+const COMPACT_FIXTURE_SLOTS = new Map<string, NotebookCell["slot"]>([
+  ["source", { row: 0, column: 0 }],
+  ["source-audio", { row: 0, column: 1 }],
+  ["analysis", { row: 1, column: 0 }],
+  ["split-1", { row: 2, column: -2 }],
+  ["split-2", { row: 2, column: 2 }],
+  ["frame-first-1", { row: 3, column: -3 }],
+  ["frame-last-1", { row: 3, column: -2 }],
+  ["scene-audio-1", { row: 3, column: -1 }],
+  ["frame-first-2", { row: 3, column: 1 }],
+  ["frame-last-2", { row: 3, column: 2 }],
+  ["scene-audio-2", { row: 3, column: 3 }],
+]);
+
+const COMPACT_FIXTURE_ROLES = new Set(COMPACT_FIXTURE_SLOTS.keys());
 
 function requiredArtifact(
   artifacts: ArtifactRecord[],
@@ -116,22 +124,17 @@ function isCurrentFixture(document: NotebookDocument): boolean {
   const edges = document.edges.filter((edge) =>
     cellIds.has(edge.source) && cellIds.has(edge.target));
   return fixture?.version === MULTYCULTY_FIXTURE_VERSION
-    && cells.length === 33
-    && roles.size === 33
-    && edges.length === 60
+    && cells.length === 11
+    && roles.size === 11
+    && edges.length === 12
     && roles.has("source")
     && roles.has("analysis")
     && roles.has("source-audio")
-    && roles.has("assembly")
-    && roles.has("export")
-    && [1, 2, 3, 4].every((ordinal) =>
-      roles.has(`label-${ordinal}`)
-      && roles.has(`split-${ordinal}`)
+    && [1, 2].every((ordinal) =>
+      roles.has(`split-${ordinal}`)
       && roles.has(`frame-first-${ordinal}`)
       && roles.has(`frame-last-${ordinal}`)
-      && roles.has(`scene-audio-${ordinal}`)
-      && roles.has(`prompt-${ordinal}`)
-      && roles.has(`animate-${ordinal}`));
+      && roles.has(`scene-audio-${ordinal}`));
 }
 
 function prepareLegacyBase(document: NotebookDocument): NotebookDocument {
@@ -268,77 +271,45 @@ function prepareLegacyBranches(
   };
 }
 
-async function promptFixtureArtifact(
-  engine: Engine,
-  cell: NotebookCell,
-): Promise<string> {
-  const artifact = await engine.artifacts.create({
-    kind: "script",
-    name: `script ${cell.title} resolved prompt`,
-  });
-  if (!artifact.ok) throw new Error(artifact.error.message);
-  const result = {
-    version: 1,
-    source: "multyculty-precomputed-fixture",
-    originalPrompt: cell.prompt ?? "",
-    resolvedPrompt: cell.prompt ?? "",
-    featureId: cell.inputs?.featureId ?? null,
-    featureBrief: cell.inputs?.featureBrief ?? null,
-    shotContext: cell.inputs?.shotContext ?? null,
-    audioContext: cell.inputs?.audioContext ?? null,
+function compactFixture(document: NotebookDocument): NotebookDocument {
+  const cells = document.cells
+    .filter((cell) => {
+      if (!isLegacyOwnedCell(cell)) return true;
+      const role = roleOf(cell);
+      return role !== null && COMPACT_FIXTURE_ROLES.has(role);
+    })
+    .map((cell) => {
+      const role = roleOf(cell);
+      const slot = role ? COMPACT_FIXTURE_SLOTS.get(role) : undefined;
+      return slot ? { ...cell, slot } : cell;
+    });
+  const cellIds = new Set(cells.map((cell) => cell.id));
+  return {
+    ...document,
+    cells,
+    edges: document.edges.filter((edge) =>
+      cellIds.has(edge.source) && cellIds.has(edge.target)),
   };
-  const written = await engine.files.write(
-    artifact.value.artifactId,
-    "prompt.json",
-    JSON.stringify(result, null, 2),
-  );
-  if (!written.ok) throw new Error(written.error.message);
-  return artifact.value.artifactId;
 }
 
-async function attachFixtureOutputs(
-  engine: Engine,
+function attachFixtureOutputs(
   document: NotebookDocument,
   artifacts: ArtifactRecord[],
-): Promise<NotebookDocument> {
-  const promptOutputs = new Map<string, string>();
-  for (const cell of document.cells) {
-    if (roleOf(cell)?.startsWith("prompt-") && !cell.outputArtifactId) {
-      promptOutputs.set(cell.id, await promptFixtureArtifact(engine, cell));
-    }
-  }
-  const finalArtifact = artifacts.find((artifact) => artifact.slug === "final");
+): NotebookDocument {
   return {
     ...document,
     cells: document.cells.map((cell) => {
       const role = roleOf(cell);
+      if (!role || !COMPACT_FIXTURE_ROLES.has(role)) return cell;
       const ordinal = ordinalFromLegacy(cell);
       const feature = ordinal ? MULTYCULTY_FEATURES[ordinal - 1] : undefined;
       const section = ordinal
         ? artifacts.find((artifact) => artifact.slug === SECTION_SLUGS[ordinal - 1])
         : undefined;
-      const animation = ordinal
-        ? artifacts.find((artifact) => artifact.slug === ANIMATION_SLUGS[ordinal - 1])
-        : undefined;
-      const promptOutput = promptOutputs.get(cell.id);
       const outputArtifactId = role?.startsWith("split-")
         ? cell.outputArtifactId ?? section?.artifactId
-        : role?.startsWith("animate-")
-          ? cell.outputArtifactId ?? animation?.artifactId
-          : role?.startsWith("prompt-")
-            ? cell.outputArtifactId ?? promptOutput
-            : role === "export"
-              ? cell.outputArtifactId ?? finalArtifact?.artifactId
-              : cell.outputArtifactId;
-      const completed = Boolean(outputArtifactId)
-        && (
-          role === "source"
-          || role === "analysis"
-          || role === "export"
-          || role?.startsWith("split-")
-          || role?.startsWith("prompt-")
-          || role?.startsWith("animate-")
-        );
+        : cell.outputArtifactId;
+      const completed = Boolean(outputArtifactId);
       return {
         ...cell,
         ...(outputArtifactId ? { outputArtifactId } : {}),
@@ -351,15 +322,6 @@ async function attachFixtureOutputs(
                 featureLabel: feature.label,
                 featureCaption: feature.caption,
               }
-            : {}),
-          ...(role?.startsWith("animate-")
-            ? {
-                fixtureBaseline: true,
-                requiresConfirmation: true,
-              }
-            : {}),
-          ...(role?.startsWith("prompt-")
-            ? { resolvedPrompt: cell.prompt ?? "" }
             : {}),
           state: completed ? "completed" : "pending",
         },
@@ -397,29 +359,11 @@ async function writeNotebook(
   return read.value;
 }
 
-async function runFixtureRole(
-  engine: Engine,
-  document: NotebookDocument,
-  role: string,
-): Promise<NotebookDocument> {
-  const cell = document.cells.find((candidate) => roleOf(candidate) === role);
-  if (!cell) throw new Error(`Multyculty fixture cell is missing: ${role}`);
-  const result = await runNotebookCell(
-    engine,
-    engine.book.get().bookId,
-    document.id,
-    document,
-    cell,
-  );
-  return result.document;
-}
-
 async function materializeLocalOutputs(
   engine: Engine,
   document: NotebookDocument,
 ): Promise<NotebookDocument> {
-  let current = await runFixtureRole(engine, document, "source");
-  current = await runFixtureRole(engine, current, "analysis");
+  let current = document;
   for (const ordered of topologicalOrder(current)) {
     if (
       ordered.inputs?.fixtureOwner !== MULTYCULTY_FIXTURE_OWNER
@@ -442,40 +386,6 @@ async function materializeLocalOutputs(
     );
     current = result.document;
   }
-  for (const feature of MULTYCULTY_FEATURES) {
-    const animation = current.cells.find((cell) =>
-      roleOf(cell) === `animate-${feature.ordinal}`);
-    const audio = current.cells.find((cell) =>
-      roleOf(cell) === `scene-audio-${feature.ordinal}`);
-    if (!animation?.outputArtifactId || !audio?.outputArtifactId) {
-      throw new Error(`Multyculty feature ${feature.ordinal} is missing baseline media`);
-    }
-    const normalized = await normalizeSceneVideo(
-      engine,
-      animation.outputArtifactId,
-      audio.outputArtifactId,
-      `${animation.title} normalized fixture`,
-      15,
-    );
-    current = await writeNotebook(engine, {
-      ...current,
-      cells: current.cells.map((cell) =>
-        cell.id === animation.id
-          ? {
-              ...cell,
-              outputArtifactId: normalized.artifactId,
-              inputs: {
-                ...(cell.inputs ?? {}),
-                normalizedFromArtifactId: animation.outputArtifactId,
-                normalizedDurationSeconds: normalized.durationSeconds,
-                state: "completed",
-              },
-            }
-          : cell),
-    });
-  }
-  current = await runFixtureRole(engine, current, "assembly");
-  current = await runFixtureRole(engine, current, "export");
   const completedAt = new Date().toISOString();
   const completedCells = current.cells.map((cell) =>
     cell.inputs?.fixtureOwner === MULTYCULTY_FIXTURE_OWNER
@@ -555,7 +465,23 @@ export async function seedMultycultyWorkflow(
   const sourceAudio = streams.value.find((stream) => stream.kind === "audio");
   if (!sourceAudio) throw new Error("The Multyculty source has no audio stream");
   const previousRevision = engine.head;
-  const preparedBase = prepareLegacyBase(notebook);
+  const fixtureCellIds = new Set(
+    notebook.cells
+      .filter(isLegacyOwnedCell)
+      .map((cell) => cell.id),
+  );
+  const maxRow = Math.max(0, ...notebook.cells.map((cell) => cell.slot.row));
+  const stagingRow = (maxRow + 1) * 2;
+  const staged = fixtureCellIds.size > 0
+    ? await writeNotebook(engine, {
+        ...notebook,
+        cells: notebook.cells.map((cell, index) =>
+          fixtureCellIds.has(cell.id)
+            ? { ...cell, slot: { row: stagingRow + index, column: 0 } }
+            : cell),
+      })
+    : notebook;
+  const preparedBase = prepareLegacyBase(staged);
   const scaffold = buildSevenStageScaffold(
     engine,
     preparedBase,
@@ -583,7 +509,7 @@ export async function seedMultycultyWorkflow(
             sourceProject: "multiculty",
             sourceTitle: "We Were WRONG About Rupert Lowe",
             sourceUrl: "https://www.youtube.com/watch?v=b-3853ow72Q",
-            selectedRangeSeconds: [1490, 1550],
+            selectedRangeSeconds: [1490, 1520],
             streamId: sourceAudio.streamId,
             objectHash: sourceAudio.objectHash,
             state: "completed",
@@ -593,15 +519,15 @@ export async function seedMultycultyWorkflow(
       if (cell.id === analysis.id) {
         return {
           ...cell,
+          prompt:
+            "Segment the source into two continuous 15-second narrative shots with precise timestamps and concise visual context.",
           inputs: {
             ...(cell.inputs ?? {}),
-            sourceDurationSeconds: 60,
+            sourceDurationSeconds: 30,
             fixtureAnalysis: {
               scenes: [
                 { title: "intro", timestamp: [0, 15] },
                 { title: "culture", timestamp: [15, 30] },
-                { title: "german", timestamp: [30, 45] },
-                { title: "dialogue", timestamp: [45, 60] },
               ],
             },
             state: "pending",
@@ -631,7 +557,7 @@ export async function seedMultycultyWorkflow(
     {
       rawOutput: configured.cells.find((cell) => cell.id === analysis.id)?.inputs
         ?.fixtureAnalysis,
-      sourceDurationSeconds: 60,
+      sourceDurationSeconds: 30,
       request: {
         mode: "multyculty-fixture",
         provider: "kie",
@@ -640,7 +566,7 @@ export async function seedMultycultyWorkflow(
       sourceArtifactId: sourceArtifact.artifactId,
     },
   );
-  const withOutputs = await attachFixtureOutputs(engine, fanned, artifacts);
+  const withOutputs = attachFixtureOutputs(compactFixture(fanned), artifacts);
   const fixtureOwnedIds = new Set(
     withOutputs.cells
       .filter((cell) =>
@@ -664,7 +590,7 @@ export async function seedMultycultyWorkflow(
     properties: {
       ...(withOutputs.properties ?? {}),
       description:
-        "Completed feature green path from source analysis through scene animation, canonical assembly, and export.",
+        "Compact offline example from source analysis through local scene media extraction.",
       state: "finished",
       multycultyFixture: {
         version: MULTYCULTY_FIXTURE_VERSION,
