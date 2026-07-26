@@ -116,7 +116,7 @@ describe("notebook local media and analysis fan-out", () => {
       inputs: { workflowRole: "source" },
     });
     const analysis = engine.notebooks.createCell({
-      type: "analysis",
+      type: "note",
       title: "analyze",
       slot: { row: 1, column: 0 },
       prompt: "Segment",
@@ -160,9 +160,9 @@ describe("notebook local media and analysis fan-out", () => {
       request: { mode: "fixture" },
       sourceArtifactId: sourceArtifact.value.artifactId,
     });
-    expect(first.cells.filter((cell) => cell.type === "split")).toHaveLength(2);
-    expect(first.cells.filter((cell) => cell.type === "frame")).toHaveLength(4);
-    expect(first.cells.filter((cell) => cell.type === "video")).toHaveLength(2);
+    expect(first.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(2);
+    expect(first.cells.filter((cell) => cell.operation === "capture_frame")).toHaveLength(4);
+    expect(first.cells.filter((cell) => cell.operation === "image_to_video")).toHaveLength(2);
     const order = topologicalOrder(first);
     expect(order.map((cell) => cell.id)).toContain(analysis.id);
 
@@ -177,8 +177,8 @@ describe("notebook local media and analysis fan-out", () => {
       request: { mode: "fixture" },
       sourceArtifactId: sourceArtifact.value.artifactId,
     });
-    expect(second.cells.filter((cell) => cell.type === "split").map((cell) => cell.id).sort())
-      .toEqual(first.cells.filter((cell) => cell.type === "split").map((cell) => cell.id).sort());
+    expect(second.cells.filter((cell) => cell.operation === "split_range").map((cell) => cell.id).sort())
+      .toEqual(first.cells.filter((cell) => cell.operation === "split_range").map((cell) => cell.id).sort());
 
     const grown = await applyAnalysisResults(engine, second, analysis.id, {
       rawOutput: {
@@ -192,7 +192,7 @@ describe("notebook local media and analysis fan-out", () => {
       request: { mode: "fixture" },
       sourceArtifactId: sourceArtifact.value.artifactId,
     });
-    expect(grown.cells.filter((cell) => cell.type === "split")).toHaveLength(3);
+    expect(grown.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(3);
     // Artifacts from the prior analysis script remain in the catalog.
     expect(engine.artifacts.list().length).toBeGreaterThanOrEqual(2);
   });

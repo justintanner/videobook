@@ -3,6 +3,7 @@ import {
   NOTEBOOK_TRACK_ROW_PITCH,
   NOTEBOOK_TRACK_SLOT_PITCH,
   NOTEBOOK_TRACK_SLOT_WIDTH,
+  generationMediaType,
   notebookNodeSizes,
   notebookTrackLayout,
   stepInputs,
@@ -39,7 +40,7 @@ export interface GutterRoute {
 }
 
 export interface TrunkEdgeData extends GroupAssignment, Record<string, unknown> {
-  kind: 'prompt' | 'ref'
+  kind: 'note' | 'ref'
   pinned: boolean
   groupActive: boolean
   groupRunning: boolean
@@ -62,7 +63,7 @@ export function computeTrunkGroups(definition: NotebookPlanDefinition): Readonly
   const tempGroups = new Map<string, TempGroup>()
 
   for (const target of definition.sequence) {
-    if (target.type !== 'image' && target.type !== 'video') continue
+    if (!generationMediaType(target)) continue
     const inputs = stepInputs(target).filter((id) => steps.has(id))
     if (inputs.length === 0) continue
 
@@ -244,7 +245,7 @@ export function computeGutterRoutes(definition: NotebookPlanDefinition): Readonl
   const multiRow: RouteCandidate[] = []
 
   for (const target of definition.sequence) {
-    if (target.type !== 'image' && target.type !== 'video') continue
+    if (!generationMediaType(target)) continue
     const targetDepth = layout.depths.get(target.id) ?? 0
     for (const source of stepInputs(target)) {
       if (!steps.has(source)) continue

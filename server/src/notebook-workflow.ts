@@ -125,11 +125,11 @@ function branchCell(
   document: NotebookDocument,
   analysisCellId: string,
   splitCellId: string,
-  type: NotebookCell["type"],
+  operation: string,
   role: string,
 ): NotebookCell | undefined {
   const exact = document.cells.find((cell) =>
-    cell.type === type && roleOf(cell) === role);
+    roleOf(cell) === role);
   if (exact) return exact;
   const frameRole = role.startsWith("frame-first-")
     ? "first"
@@ -137,7 +137,7 @@ function branchCell(
       ? "last"
       : null;
   return document.cells.find((cell) =>
-    cell.type === type
+    cell.operation === operation
     && analysisOwnerId(cell) === analysisCellId
     && splitOwnerId(cell) === splitCellId
     && (
@@ -195,15 +195,18 @@ function uniqueEdges(edges: NotebookEdge[]): NotebookEdge[] {
 }
 
 export function workflowStageForCell(cell: NotebookCell): WorkflowStage {
-  if (cell.type === "label") return "SOURCE";
   if (cell.type === "source") return "SOURCE";
-  if (cell.type === "analysis") return "ANALYZE";
-  if (cell.type === "split") return "SPLIT SCENES";
-  if (cell.type === "frame" || cell.type === "audio") return "EXTRACT ASSETS";
-  if (cell.type === "prompt") return "WRITE PROMPTS";
-  if (cell.type === "video" || cell.type === "image") return "ANIMATE SCENES";
-  if (cell.type === "sequence") return "ASSEMBLE EDIT";
-  if (cell.type === "export") return "EXPORT MASTER";
+  if (cell.operation === "analyze_source") return "ANALYZE";
+  if (cell.operation === "split_range") return "SPLIT SCENES";
+  if (cell.operation === "capture_frame" || cell.operation === "extract_audio") {
+    return "EXTRACT ASSETS";
+  }
+  if (cell.operation === "rewrite_prompt") return "WRITE PROMPTS";
+  if (cell.operation === "assemble_sequence") return "ASSEMBLE EDIT";
+  if (cell.operation === "export_master") return "EXPORT MASTER";
+  if (cell.type === "asset" && cell.provider !== "local") return "ANIMATE SCENES";
+  if (cell.type === "note") return "WRITE PROMPTS";
+  if (cell.type === "scene") return "ASSEMBLE EDIT";
   return "SOURCE";
 }
 
@@ -247,13 +250,13 @@ function updateSplitCell(
   const feature = featureForShot(shot);
   const column = featureColumn(shot);
   const base = existing ?? engine.notebooks.createCell({
-    type: "split",
+    type: "asset",
     title: "",
     slot: gridSlot(2, column),
   });
   return {
     ...base,
-    type: "split",
+    type: "asset",
     title: `@split-${String(shot.ordinal).padStart(2, "0")} · ${shot.label}`,
     slot: gridSlot(2, column),
     provider: "local",
@@ -302,17 +305,17 @@ function createBranchCells(
     document,
     analysisCellId,
     split.id,
-    "frame",
+    "capture_frame",
     branchRole("first", shot.ordinal),
   );
   const firstBase = firstExisting ?? engine.notebooks.createCell({
-    type: "frame",
+    type: "asset",
     title: "",
     slot: gridSlot(extractionRow, column - 1),
   });
   const first: NotebookCell = {
     ...firstBase,
-    type: "frame",
+    type: "asset",
     title: `@frame-${String(shot.ordinal).padStart(2, "0")} · first`,
     slot: gridSlot(extractionRow, column - 1),
     provider: "local",
@@ -331,17 +334,17 @@ function createBranchCells(
     document,
     analysisCellId,
     split.id,
-    "frame",
+    "capture_frame",
     branchRole("last", shot.ordinal),
   );
   const lastBase = lastExisting ?? engine.notebooks.createCell({
-    type: "frame",
+    type: "asset",
     title: "",
     slot: gridSlot(extractionRow, column),
   });
   const last: NotebookCell = {
     ...lastBase,
-    type: "frame",
+    type: "asset",
     title: `@frame-${String(shot.ordinal).padStart(2, "0")} · last`,
     slot: gridSlot(extractionRow, column),
     provider: "local",
@@ -360,17 +363,17 @@ function createBranchCells(
     document,
     analysisCellId,
     split.id,
-    "audio",
+    "extract_audio",
     branchRole("audio", shot.ordinal),
   );
   const audioBase = audioExisting ?? engine.notebooks.createCell({
-    type: "audio",
+    type: "asset",
     title: "",
     slot: gridSlot(extractionRow, column + 1),
   });
   const audio: NotebookCell = {
     ...audioBase,
-    type: "audio",
+    type: "asset",
     title: `@audio-${String(shot.ordinal).padStart(2, "0")} · scene`,
     slot: gridSlot(extractionRow, column + 1),
     provider: "local",
@@ -389,11 +392,11 @@ function createBranchCells(
     document,
     analysisCellId,
     split.id,
-    "prompt",
+    "rewrite_prompt",
     branchRole("prompt", shot.ordinal),
   );
   const promptBase = promptExisting ?? engine.notebooks.createCell({
-    type: "prompt",
+    type: "note",
     title: "",
     slot: gridSlot(promptRow, column),
   });
@@ -402,7 +405,7 @@ function createBranchCells(
     ?? `Animate ${shot.label} while preserving the source subjects and composition.`;
   const prompt: NotebookCell = {
     ...promptBase,
-    type: "prompt",
+    type: "note",
     title: `@prompt-${String(shot.ordinal).padStart(2, "0")} · ${feature?.label ?? shot.label}`,
     slot: gridSlot(promptRow, column),
     prompt: shot.prompt ?? promptExisting?.prompt ?? promptBrief,
@@ -432,17 +435,17 @@ function createBranchCells(
     document,
     analysisCellId,
     split.id,
-    "video",
+    "image_to_video",
     branchRole("animate", shot.ordinal),
   );
   const animateBase = animateExisting ?? engine.notebooks.createCell({
-    type: "video",
+    type: "asset",
     title: "",
     slot: gridSlot(promptRow + 1, column),
   });
   const animate: NotebookCell = {
     ...animateBase,
-    type: "video",
+    type: "asset",
     title: `@animate-${String(shot.ordinal).padStart(2, "0")} · ${feature?.label ?? shot.label}`,
     slot: gridSlot(promptRow + 1, column),
     prompt: "",
@@ -510,7 +513,7 @@ export async function applyAnalysisResults(
   const owned = document.cells.filter(
     (cell) => analysisOwnerId(cell) === analysisCellId,
   );
-  const ownedSplits = owned.filter((cell) => cell.type === "split");
+  const ownedSplits = owned.filter((cell) => cell.operation === "split_range");
   const branches: OwnedBranch[] = ownedSplits.map((cell) => ({
     cellId: cell.id,
     range: {
@@ -538,7 +541,7 @@ export async function applyAnalysisResults(
   );
   const baseCells = document.cells.filter((cell) => {
     if (removedCellIds.has(cell.id)) return false;
-    if (cell.type === "split" && analysisOwnerId(cell) === analysisCellId) {
+    if (cell.operation === "split_range" && analysisOwnerId(cell) === analysisCellId) {
       return keptSplitIds.has(cell.id);
     }
     return true;
@@ -563,7 +566,7 @@ export async function applyAnalysisResults(
   const sourceCell = document.cells.find((cell) => roleOf(cell) === "source")
     ?? document.cells.find((cell) => cell.type === "source");
   const assemblyCell = document.cells.find((cell) => roleOf(cell) === "assembly")
-    ?? document.cells.find((cell) => cell.type === "sequence");
+    ?? document.cells.find((cell) => cell.operation === "assemble_sequence");
   const branchCells: NotebookCell[] = [];
   const canonicalEdges: NotebookEdge[] = [];
 
@@ -704,7 +707,7 @@ export function buildSevenStageScaffold(
     },
   });
   const analysis = baseCell(engine, roleCells.get("analysis"), {
-    type: "analysis",
+    type: "note",
     title: "@splitter · analyze",
     slot: gridSlot(1, 0),
     prompt: "Segment the source into four continuous 15-second narrative shots with precise timestamps and concise visual context.",
@@ -715,7 +718,7 @@ export function buildSevenStageScaffold(
     inputs: { workflowRole: "analysis", state: "pending" },
   });
   const audio = baseCell(engine, roleCells.get("source-audio"), {
-    type: "audio",
+    type: "asset",
     title: "@audio · continuous source",
     slot: gridSlot(13, 1),
     provider: "local",
@@ -728,7 +731,7 @@ export function buildSevenStageScaffold(
     },
   });
   const assembly = baseCell(engine, roleCells.get("assembly"), {
-    type: "sequence",
+    type: "scene",
     title: "@assemble · feature edit",
     slot: gridSlot(13, 0),
     provider: "local",
@@ -741,7 +744,7 @@ export function buildSevenStageScaffold(
     },
   });
   const exp = baseCell(engine, roleCells.get("export"), {
-    type: "export",
+    type: "asset",
     title: "@export · Multyculty feature master",
     slot: gridSlot(14, 0),
     provider: "local",

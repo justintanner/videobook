@@ -109,25 +109,6 @@ function DoltCellSource({
   )
 }
 
-const RUNNABLE_TYPES = new Set([
-  'source',
-  'analysis',
-  'split',
-  'audio',
-  'frame',
-  'image',
-  'video',
-  'sequence',
-  'export',
-])
-
-const PROMPT_TYPES = new Set([
-  'prompt',
-  'image',
-  'video',
-  'analysis',
-])
-
 export function NotebookCellInspector({
   notebookId,
   cell,
@@ -138,7 +119,7 @@ export function NotebookCellInspector({
   onRun,
   onDelete,
 }: NotebookCellInspectorProps) {
-  const canRun = RUNNABLE_TYPES.has(cell.type)
+  const canRun = Boolean(cell.operation ?? cell.tool ?? cell.model)
 
   return (
     <div className="inspector-body">
@@ -152,7 +133,7 @@ export function NotebookCellInspector({
           if (title && title !== cell.title) void onUpdate({ title })
         }} />
       </label>
-      {PROMPT_TYPES.has(cell.type) && (
+      {cell.type === 'note' && (
         <label>
           Prompt
           <textarea defaultValue={cell.prompt ?? ''} rows={8} onBlur={(event) => {

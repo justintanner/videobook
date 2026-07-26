@@ -18,7 +18,7 @@ import {
 function cell(id: string, row: number, column: number): NotebookDocument['cells'][number] {
   return {
     id,
-    type: 'prompt',
+    type: 'note',
     title: id,
     slot: { row, column },
   }

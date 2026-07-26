@@ -7,9 +7,9 @@ function PromptNodeComponent({ data, selected }: NodeProps) {
   const node = data as NotebookNodeData
   const text = typeof node.step.properties.text === 'string' ? node.step.properties.text : ''
   return (
-    <div className={`vc-node vc-node-prompt ${selected ? 'vc-node-selected' : ''} ${node.invalidReason ? 'vc-node-invalid' : ''} ${node.routeState ? `vc-node-route-${node.routeState}` : ''}`}>
-      <div className="vc-node-kicker"><span><MessageSquareText aria-hidden /> Prompt</span><b>TXT</b></div>
-      <p>{text || 'Write a prompt in the sidebar.'}</p>
+    <div className={`vc-node vc-node-note ${selected ? 'vc-node-selected' : ''} ${node.invalidReason ? 'vc-node-invalid' : ''} ${node.routeState ? `vc-node-route-${node.routeState}` : ''}`}>
+      <div className="vc-node-kicker"><span><MessageSquareText aria-hidden /> Note</span><b>TXT</b></div>
+      <p>{text || 'Write a note in the sidebar.'}</p>
       <Handle type="source" position={Position.Bottom} className="vc-node-handle" />
     </div>
   )

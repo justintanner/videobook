@@ -39,7 +39,7 @@ import {
   promoteRunAsset,
   setInputRoute,
   snapDefinitionToTracks,
-  toolboxStepSeeds,
+  toolboxStepSeed,
 } from './model'
 import { NotebookSidebar } from './NotebookSidebar'
 import { NotebookStageBoard, type NotebookDropPreview } from './NotebookStageBoard'
@@ -49,7 +49,7 @@ import { TrunkEdge } from './TrunkEdge.js'
 import { TrunkHoverContext } from './TrunkHoverContext.js'
 
 const EDGE_TYPES = { trunk: TrunkEdge }
-import type { NotebookPlanDefinition } from './types'
+import type { NotebookPlanDefinition, NotebookToolboxKind } from './types'
 import { useCanvasCostEstimates } from './useCanvasCostEstimates'
 import { useDefinitionHistory } from './useDefinitionHistory'
 import { useNotebookFlow } from './useNotebookFlow'
@@ -79,7 +79,7 @@ interface NotebookCanvasProps {
   onDelete: (payload: { nodes: Node[]; edges: Edge[] }) => void
   onMove: (nodes: Node[]) => void
   onAddStep: (
-    type: 'prompt' | 'image' | 'video',
+    kind: NotebookToolboxKind,
     position: { x: number; y: number },
     parentId: string | null,
     depth?: number,
@@ -112,7 +112,7 @@ function NotebookCanvas({
 }: NotebookCanvasProps) {
   const reactFlow = useReactFlow()
   const canvasRef = useRef<HTMLDivElement>(null)
-  const [draggedStepType, setDraggedStepType] = useState<'prompt' | 'image' | 'video' | null>(null)
+  const [draggedStepType, setDraggedStepType] = useState<NotebookToolboxKind | null>(null)
   const [dropPreview, setDropPreview] = useState<NotebookDropPreview | null>(null)
   const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null)
   const clearDropPreview = useCallback(() => {
@@ -122,7 +122,12 @@ function NotebookCanvas({
   const previewDropAt = useCallback((position: { x: number; y: number }) => {
     if (!draggedStepType) return null
     const target = notebookDropTarget(definition, draggedStepType, position, selectedStepId)
-    const preview = { ...target, type: draggedStepType }
+    const seed = toolboxStepSeed(draggedStepType)
+    const preview = {
+      ...target,
+      type: seed.type,
+      assetKind: draggedStepType === 'image' || draggedStepType === 'video' ? draggedStepType : null,
+    }
     setDropPreview(preview)
     return preview
   }, [definition, draggedStepType, selectedStepId])
@@ -130,9 +135,9 @@ function NotebookCanvas({
     event.preventDefault()
     const position = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY })
     const stepType = event.dataTransfer.getData('application/x-videocity-notebook-step')
-    if (stepType === 'prompt' || stepType === 'image' || stepType === 'video') {
-      const target = notebookDropTarget(definition, stepType as 'prompt' | 'image' | 'video', position, selectedStepId)
-      onAddStep(stepType as 'prompt' | 'image' | 'video', target.position, target.parentId, target.depth)
+    if (stepType === 'note' || stepType === 'image' || stepType === 'video') {
+      const target = notebookDropTarget(definition, stepType, position, selectedStepId)
+      onAddStep(stepType, target.position, target.parentId, target.depth)
       clearDropPreview()
       return
     }
@@ -163,10 +168,10 @@ function NotebookCanvas({
     const canvasWidth = canvasRef.current?.clientWidth ?? 720
     void instance.setViewport(notebookInitialViewport(definition, canvasWidth))
   }, [definition])
-  const addFromToolbox = useCallback((type: 'prompt' | 'image' | 'video') => {
+  const addFromToolbox = useCallback((type: NotebookToolboxKind) => {
     const layout = notebookTrackLayout(definition)
     const selectedDepth = selectedStepId ? layout.depths.get(selectedStepId) : undefined
-    const canUseSelection = type !== 'prompt' && selectedStepId && selectedDepth !== undefined
+    const canUseSelection = type !== 'note' && selectedStepId && selectedDepth !== undefined
     if (canUseSelection) {
       const selected = definition.sequence.find((step) => step.id === selectedStepId)
       const selectedPosition = selected ? layout.positions.get(selected.id) : null
@@ -214,7 +219,7 @@ function NotebookCanvas({
           previewDropAt(position)
         } else if (isAsset) {
           const target = notebookAssetDropTarget(definition, position)
-          setDropPreview({ ...target, parentId: target.connectTargetId, type: 'asset', assetKind })
+          setDropPreview({ ...target, parentId: target.connectTargetId, type: 'source', assetKind })
         }
       }}
       onDragLeave={(event) => {
@@ -275,13 +280,13 @@ function NotebookCanvas({
         >
           <ControlButton
             className="vc-notebook-add-cell"
-            title="Add prompt cell"
+            title="Add note cell"
             draggable
-            onClick={() => addFromToolbox('prompt')}
+            onClick={() => addFromToolbox('note')}
             onDragStart={(event) => {
-              event.dataTransfer.setData('application/x-videocity-notebook-step', 'prompt')
+              event.dataTransfer.setData('application/x-videocity-notebook-step', 'note')
               event.dataTransfer.effectAllowed = 'copy'
-              setDraggedStepType('prompt')
+              setDraggedStepType('note')
             }}
             onDragEnd={clearDropPreview}
           >
@@ -289,7 +294,7 @@ function NotebookCanvas({
           </ControlButton>
           <ControlButton
             className="vc-notebook-add-cell"
-            title="Add image cell"
+            title="Add image asset"
             draggable
             onClick={() => addFromToolbox('image')}
             onDragStart={(event) => {
@@ -303,7 +308,7 @@ function NotebookCanvas({
           </ControlButton>
           <ControlButton
             className="vc-notebook-add-cell"
-            title="Add video cell"
+            title="Add video asset"
             draggable
             onClick={() => addFromToolbox('video')}
             onDragStart={(event) => {
@@ -416,14 +421,14 @@ export function Notebook({
     commit(autoLayout(current))
   }, [commit, getDefinition])
   const handleAddStep = useCallback((
-    type: 'prompt' | 'image' | 'video',
+    type: NotebookToolboxKind,
     position: { x: number; y: number },
     parentId: string | null,
     depth?: number,
   ) => {
     const current = getDefinition()
-    const seed = toolboxStepSeeds.find((candidate) => candidate.type === type)
-    if (!current || !seed) return
+    const seed = toolboxStepSeed(type)
+    if (!current) return
     const added = addStep(current, seed, position, parentId === null ? depth : undefined)
     const stepId = added.sequence.at(-1)?.id
     const connected = parentId && stepId ? connectSteps(added, parentId, stepId) : added

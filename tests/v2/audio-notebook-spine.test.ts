@@ -170,9 +170,9 @@ describe('audio notebook spine', () => {
       streamId: stream.value.streamId,
     })
     expect(loaded.value.cells.map((cell) => cell.type)).toEqual([
-      'audio',
-      'transcript',
-      'sequence',
+      'asset',
+      'note',
+      'scene',
     ])
     expect(loaded.value.edges).toHaveLength(2)
     const sequence = engine.sequences.getPrimary()
@@ -313,9 +313,9 @@ describe('audio notebook spine', () => {
     expect(selectedNotebook.ok).toBe(true)
     if (!selectedNotebook.ok) return
     expect(selectedNotebook.value.cells.map((cell) => cell.type)).toEqual([
-      'audio',
-      'transcript',
-      'sequence',
+      'asset',
+      'note',
+      'scene',
       'selects',
     ])
     expect(selectedNotebook.value.edges).toHaveLength(3)

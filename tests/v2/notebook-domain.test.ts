@@ -57,7 +57,7 @@ describe('v2 notebook domain tools', () => {
     const prompt = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
-        type: 'prompt',
+        type: 'note',
         title: 'Opening prompt',
         slot: { row: 0, column: 0 },
         prompt: 'A glowing moon garden',
@@ -66,7 +66,7 @@ describe('v2 notebook domain tools', () => {
     const image = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
-        type: 'image',
+        type: 'asset',
         title: 'Opening image',
         slot: { row: 0, column: 1 },
         prompt: 'A glowing moon garden',
@@ -265,7 +265,7 @@ describe('v2 notebook domain tools', () => {
     const cell = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
-        type: 'search',
+        type: 'selects',
         title: 'Warm interview moments',
         slot: { row: 0, column: 0 },
         references: [{
@@ -304,7 +304,7 @@ describe('v2 notebook domain tools', () => {
       pinned_results: Array<{ id: string; selected_revision: string }>
     }
 
-    expect(cell.type).toBe('search')
+    expect(cell.type).toBe('selects')
     expect(cell.references).toEqual([expect.objectContaining({
       id: referenceId,
       target_id: stream.value.streamId,
@@ -341,7 +341,7 @@ describe('v2 notebook domain tools', () => {
     const image = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
-        type: 'image',
+        type: 'asset',
         title: 'Opening image',
         slot: { row: 0, column: 0 },
         prompt: 'A moonlit garden',

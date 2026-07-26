@@ -12,7 +12,7 @@ const source: NotebookDocument = {
   name: 'Story',
   cells: [{
     id: '018f7cf5-0d31-7d96-8c0f-800000000002',
-    type: 'image',
+    type: 'asset',
     title: 'Opening',
     slot: { row: 0, column: 0 },
     prompt: 'A moon garden',
@@ -61,7 +61,7 @@ describe('notebook draft conversion', () => {
         {
           ...source.cells[0]!,
           id: '018f7cf5-0d31-7d96-8c0f-800000000005',
-          type: 'video',
+          type: 'asset',
           slot: { row: 2, column: -3 },
         },
       ],
@@ -73,12 +73,12 @@ describe('notebook draft conversion', () => {
     ])
   })
 
-  it('keeps manually created labels in ordinary draggable grid cells', () => {
+  it('keeps manually created notes in ordinary draggable grid cells', () => {
     const labeled: NotebookDocument = {
       ...source,
       cells: [{
         ...source.cells[0]!,
-        type: 'label',
+        type: 'note',
         slot: { row: 9, column: -2 },
       }],
     }
@@ -94,7 +94,7 @@ describe('notebook draft conversion', () => {
     const target = {
       ...source.cells[0]!,
       id: '018f7cf5-0d31-7d96-8c0f-800000000005',
-      type: 'video' as const,
+      type: 'asset' as const,
       slot: { row: 1, column: 1 },
     }
     const connected: NotebookDocument = {
@@ -147,7 +147,7 @@ describe('notebook draft conversion', () => {
     const target = {
       ...source.cells[0]!,
       id: '018f7cf5-0d31-7d96-8c0f-800000000005',
-      type: 'video' as const,
+      type: 'asset' as const,
       slot: { row: 2, column: 0 },
     }
     const fanIn: NotebookDocument = {

@@ -5,7 +5,7 @@ import type { ModelOption } from '@/components/gen/types'
 import { createGenerationRequestId } from '@/lib/generation-lifecycle'
 import type { OnGenerationLifecycle } from '@/lib/generation-lifecycle'
 import { resolveGoogleFlowCharacterRefs } from '@/hooks/useGoogleFlowEntities'
-import { appendRunAsset } from './model'
+import { appendRunAsset, generationMediaType } from './model'
 import { transformNotebookSubmitArgs } from './transform-submit-args'
 import type { NotebookPlanDefinition, NotebookPlanStep } from './types'
 
@@ -63,7 +63,8 @@ export async function submitNotebookGeneration(
     replaceDefinition,
     onGenerationLifecycle,
   } = args
-  const category = step.type === 'image' ? 'image' : 'video'
+  const category = generationMediaType(step)
+  if (!category) throw new Error('Only generation asset cells can run.')
   const requestId = createGenerationRequestId(category)
   const storedMode = typeof step.properties.mode === 'string' ? step.properties.mode : null
   const modeKey = option.modes

@@ -94,7 +94,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
   {
     id: "local.analyze_source",
-    cellTypes: ["analysis"],
+    cellTypes: ["note"],
     kind: "analysis",
     operation: "analyze_source",
     provider: "kie",
@@ -127,7 +127,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
   {
     id: "local.split_range",
-    cellTypes: ["split"],
+    cellTypes: ["asset"],
     kind: "local",
     operation: "split_range",
     provider: "local",
@@ -161,7 +161,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
   {
     id: "local.extract_audio",
-    cellTypes: ["audio"],
+    cellTypes: ["asset"],
     kind: "local",
     operation: "extract_audio",
     provider: "local",
@@ -182,7 +182,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
   {
     id: "generation.rewrite_prompt",
-    cellTypes: ["prompt"],
+    cellTypes: ["note"],
     kind: "generation",
     operation: "rewrite_prompt",
     provider: "openai",
@@ -215,7 +215,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
   {
     id: "local.capture_frame",
-    cellTypes: ["frame"],
+    cellTypes: ["asset"],
     kind: "local",
     operation: "capture_frame",
     provider: "local",
@@ -244,7 +244,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
   {
     id: "local.assemble_sequence",
-    cellTypes: ["sequence"],
+    cellTypes: ["scene"],
     kind: "assembly",
     operation: "assemble_sequence",
     provider: "local",
@@ -269,7 +269,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
   {
     id: "local.export_master",
-    cellTypes: ["export"],
+    cellTypes: ["asset"],
     kind: "export",
     operation: "export_master",
     provider: "local",
@@ -295,11 +295,7 @@ const DEFAULT_ANIMATION_TOOL = "generate_kie_seedance_2_0_video";
 function generationAction(spec: GenerationActionSpec): NotebookAction {
   return {
     id: `generation.${spec.canonical_name}`,
-    cellTypes: spec.media_type === "image"
-      ? ["image"]
-      : spec.media_type === "video"
-        ? ["video"]
-        : ["audio"],
+    cellTypes: ["asset"],
     kind: "generation",
     operation: spec.operation,
     provider: spec.provider,
@@ -345,7 +341,7 @@ export function actionsForCell(
 ): NotebookAction[] {
   const all = listNotebookActions(options).filter((action) =>
     action.cellTypes.includes(cell.type));
-  if (cell.type !== "video") return all;
+  if (cell.type !== "asset") return all;
   const inputs = new Set(
     document.edges
       .filter((edge) => edge.target === cell.id)
@@ -353,6 +349,7 @@ export function actionsForCell(
   );
   const hasFrames = inputs.has("first_frame") && inputs.has("last_frame");
   return all.filter((action) => {
+    if (action.kind !== "generation") return true;
     if (!action.capabilities.dualFrame) return !hasFrames || action.tool === cell.tool;
     return hasFrames || action.tool === DEFAULT_ANIMATION_TOOL || action.tool === cell.tool;
   });
@@ -363,34 +360,34 @@ export function defaultActionForCell(
   document: NotebookDocument,
 ): NotebookAction | null {
   const actions = actionsForCell(cell, document);
-  if (cell.type === "video") {
-    return actions.find((action) => action.tool === DEFAULT_ANIMATION_TOOL)
-      ?? actions[0]
+  const tool = cell.tool ?? cell.model;
+  const configured = tool
+    ? actions.find((action) =>
+      action.tool === tool || action.id === tool || action.model === tool)
+    : undefined;
+  if (configured) return configured;
+  if (cell.operation) {
+    const operation = actions.find((action) => action.operation === cell.operation);
+    if (operation) return operation;
+  }
+  if (cell.type === "source") {
+    return actions.find((action) => action.operation === "preprocess_source")
       ?? null;
   }
-  if (cell.type === "analysis") {
-    return actions.find((action) => action.operation === "analyze_source")
-      ?? actions[0]
-      ?? null;
-  }
-  if (cell.type === "prompt") {
-    return actions.find((action) => action.tool === "rewrite_prompt")
-      ?? actions[0]
-      ?? null;
-  }
-  return actions[0] ?? null;
+  return null;
 }
 
 export function validateCellConfiguration(
   cell: NotebookCell,
   document: NotebookDocument,
 ): { ok: true; action: NotebookAction | null } | { ok: false; message: string } {
-  if (cell.type === "label" || cell.type === "note" || cell.type === "search"
-    || cell.type === "selects" || cell.type === "character" || cell.type === "scene"
-    || cell.type === "asset" || cell.type === "transcript" || cell.type === "source") {
+  const actions = actionsForCell(cell, document, { includeHiddenGeneration: true });
+  const hasActionConfiguration = Boolean(
+    cell.operation ?? cell.tool ?? cell.model,
+  );
+  if (!hasActionConfiguration) {
     return { ok: true, action: defaultActionForCell(cell, document) };
   }
-  const actions = actionsForCell(cell, document, { includeHiddenGeneration: true });
   if (actions.length === 0) {
     return { ok: false, message: `No actions available for cell type ${cell.type}` };
   }
@@ -415,7 +412,20 @@ export function validateCellConfiguration(
     }
     return { ok: true, action: match };
   }
-  return { ok: true, action: defaultActionForCell(cell, document) };
+  const match = actions.find((action) => action.operation === cell.operation);
+  if (!match) {
+    return {
+      ok: false,
+      message: `Operation ${cell.operation} is not valid for cell type ${cell.type}`,
+    };
+  }
+  if (cell.provider && match.provider && cell.provider !== match.provider) {
+    return {
+      ok: false,
+      message: `Provider ${cell.provider} is incompatible with operation ${cell.operation}`,
+    };
+  }
+  return { ok: true, action: match };
 }
 
 export function normalizeCellActionFields(

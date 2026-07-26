@@ -4,7 +4,7 @@ import { effectiveToolName, inferModeKey } from '@/components/gen/modes'
 import type { FullPreviewResponse } from '@/components/gen/types'
 import type { CostEstimate } from '@/hooks/useEstimateCost'
 import { shortCostLabel } from '@/lib/format-cost'
-import { resolveEffectiveValues } from './model'
+import { generationMediaType, resolveEffectiveValues } from './model'
 import type { NotebookPlanDefinition, NotebookPlanStep } from './types'
 
 const ESTIMATE_DEBOUNCE_MS = 600
@@ -41,7 +41,7 @@ export function deriveStepEstimateCall(
   preview: FullPreviewResponse | null,
   bookId: string,
 ): DerivedCall | null {
-  if (step.type === 'prompt' || step.type === 'asset' || !preview) return null
+  if (!generationMediaType(step) || !preview) return null
   const stepModel = typeof step.properties.model === 'string' ? step.properties.model : ''
   const model = stepModel || preview.selected_model
   const option = preview.model_options.find((candidate) => candidate.key === model)
@@ -72,10 +72,11 @@ interface StepTuple {
 }
 
 function stepTuple(step: NotebookPlanStep): StepTuple | null {
-  if (step.type !== 'image' && step.type !== 'video') return null
+  const category = generationMediaType(step)
+  if (!category) return null
   const model = typeof step.properties.model === 'string' ? step.properties.model : ''
   const provider = typeof step.properties.provider === 'string' ? step.properties.provider : ''
-  return { category: step.type, model, provider }
+  return { category, model, provider }
 }
 
 // A model's tool name is provider-specific, so previews are keyed by the full

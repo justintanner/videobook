@@ -22,7 +22,7 @@ type ArtifactRecord = {
   kind: string;
 };
 
-export const MULTYCULTY_FIXTURE_VERSION = 14;
+export const MULTYCULTY_FIXTURE_VERSION = 15;
 export const MULTYCULTY_FIXTURE_OWNER = "multyculty-default";
 
 const LEGACY_SPLIT_ROLES = [
@@ -86,6 +86,50 @@ function roleOf(cell: NotebookCell): string | null {
   return typeof cell.inputs?.workflowRole === "string"
     ? cell.inputs.workflowRole
     : null;
+}
+
+function storedCellType(cell: NotebookCell): string {
+  return cell.type;
+}
+
+function primitiveCellType(type: string): NotebookCell["type"] {
+  if (type === "source") return "source";
+  if (type === "search" || type === "selects") return "selects";
+  if (type === "scene" || type === "sequence") return "scene";
+  if (
+    type === "label"
+    || type === "transcript"
+    || type === "note"
+    || type === "prompt"
+    || type === "character"
+    || type === "analysis"
+  ) {
+    return "note";
+  }
+  if (
+    type === "audio"
+    || type === "asset"
+    || type === "image"
+    || type === "video"
+    || type === "split"
+    || type === "frame"
+    || type === "export"
+  ) {
+    return "asset";
+  }
+  throw new Error(`Unsupported notebook cell type: ${type}`);
+}
+
+export function migrateLegacyNotebookCellTypes(
+  document: NotebookDocument,
+): NotebookDocument {
+  return {
+    ...document,
+    cells: document.cells.map((cell) => ({
+      ...cell,
+      type: primitiveCellType(storedCellType(cell)),
+    })),
+  };
 }
 
 function isCanonicalRole(role: string | null): boolean {
@@ -161,7 +205,7 @@ function prepareLegacyBase(document: NotebookDocument): NotebookDocument {
     if (cell.id !== exportCell?.id) return cell;
     return {
       ...cell,
-      type: "export" as const,
+      type: "asset" as const,
       provider: "local",
       model: undefined,
       operation: "export_master",
@@ -207,8 +251,10 @@ function prepareLegacyBranches(
     if (
       ordinal
       && (
-        cell.type === "split"
-        || cell.type === "scene"
+        cell.operation === "split_range"
+        || roleOf(cell)?.startsWith("split-")
+        || storedCellType(cell) === "split"
+        || storedCellType(cell) === "scene"
         || LEGACY_SPLIT_ROLES.includes(
           roleOf(cell) as (typeof LEGACY_SPLIT_ROLES)[number],
         )
@@ -223,10 +269,14 @@ function prepareLegacyBranches(
     const ordinal = ordinalFromLegacy(cell);
     if (
       ordinal
-      && cell.type === "video"
       && (
         roleOf(cell)?.startsWith("animate-")
         || /^@scene-\d+\s*\/\s*animate/i.test(cell.title)
+      )
+      && (
+        cell.operation === "image_to_video"
+        || cell.tool === "generate_kie_seedance_2_0_video"
+        || storedCellType(cell) === "video"
       )
       && !animateByOrdinal.has(ordinal)
     ) {
@@ -247,7 +297,7 @@ function prepareLegacyBranches(
       if (ordinal && splitByOrdinal.get(ordinal)?.id === cell.id) {
         return {
           ...cell,
-          type: "split" as const,
+          type: "asset" as const,
           provider: "local",
           model: undefined,
           operation: "split_range",
@@ -266,7 +316,7 @@ function prepareLegacyBranches(
         const split = splitByOrdinal.get(ordinal);
         return {
           ...cell,
-          type: "video" as const,
+          type: "asset" as const,
           inputs: {
             ...(cell.inputs ?? {}),
             analysisCellId,
@@ -463,9 +513,9 @@ async function materializeLocalOutputs(
     if (
       ordered.inputs?.fixtureOwner !== MULTYCULTY_FIXTURE_OWNER
       || (
-        ordered.type !== "split"
-        && ordered.type !== "audio"
-        && ordered.type !== "frame"
+        ordered.operation !== "split_range"
+        && ordered.operation !== "extract_audio"
+        && ordered.operation !== "capture_frame"
       )
     ) {
       continue;
@@ -599,22 +649,26 @@ export async function seedMultycultyWorkflow(
   const sourceAudio = streams.value.find((stream) => stream.kind === "audio");
   if (!sourceAudio) throw new Error("The Multyculty source has no audio stream");
   const previousRevision = engine.head;
+  const primitiveNotebook = migrateLegacyNotebookCellTypes(notebook);
   const fixtureCellIds = new Set(
     notebook.cells
       .filter(isLegacyOwnedCell)
       .map((cell) => cell.id),
   );
-  const maxRow = Math.max(0, ...notebook.cells.map((cell) => cell.slot.row));
+  const maxRow = Math.max(
+    0,
+    ...primitiveNotebook.cells.map((cell) => cell.slot.row),
+  );
   const stagingRow = (maxRow + 1) * 2;
   const staged = fixtureCellIds.size > 0
     ? await writeNotebook(engine, {
-        ...notebook,
-        cells: notebook.cells.map((cell, index) =>
+        ...primitiveNotebook,
+        cells: primitiveNotebook.cells.map((cell, index) =>
           fixtureCellIds.has(cell.id)
             ? { ...cell, slot: { row: stagingRow + index, column: 0 } }
             : cell),
       })
-    : notebook;
+    : primitiveNotebook;
   const preparedBase = prepareLegacyBase(staged);
   const scaffold = buildSevenStageScaffold(
     engine,
@@ -624,7 +678,7 @@ export async function seedMultycultyWorkflow(
   const source = scaffold.cells.find((cell) => roleOf(cell) === "source");
   const analysis = scaffold.cells.find((cell) => roleOf(cell) === "analysis");
   if (!source || !analysis) {
-    throw new Error("Multyculty scaffold missing source/analysis cells");
+    throw new Error("Multyculty scaffold missing source or analysis workflow roles");
   }
   const preparedBranches = buildSevenStageScaffold(
     engine,

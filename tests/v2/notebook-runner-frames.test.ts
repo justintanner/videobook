@@ -45,7 +45,7 @@ describe("notebook runner dual-frame and assembly", () => {
   it("resolves generation tool from cell.tool before provider model id", () => {
     const tool = resolveNotebookGenerationTool({
       id: "019f0000-0000-7000-8000-000000000001",
-      type: "video",
+      type: "asset",
       title: "animate",
       slot: { row: 0, column: 0 },
       model: "bytedance/seedance-2",
@@ -71,26 +71,29 @@ describe("notebook runner dual-frame and assembly", () => {
     if (!notebook.ok) return;
 
     const firstCell = engine.notebooks.createCell({
-      type: "frame",
+      type: "asset",
       title: "first",
       slot: { row: 0, column: 0 },
       outputArtifactId: first.value.artifactId,
+      operation: "capture_frame",
       inputs: { frameRole: "first" },
     });
     const lastCell = engine.notebooks.createCell({
-      type: "frame",
+      type: "asset",
       title: "last",
       slot: { row: 0, column: 1 },
       outputArtifactId: last.value.artifactId,
+      operation: "capture_frame",
       inputs: { frameRole: "last" },
     });
     const animate = engine.notebooks.createCell({
-      type: "video",
+      type: "asset",
       title: "animate",
       slot: { row: 0, column: 2 },
       prompt: "Camera push in",
       provider: "kie",
       model: "bytedance/seedance-2",
+      operation: "image_to_video",
       tool: DEFAULT_ANIMATION_TOOL,
       inputs: { requiresConfirmation: true },
     });
@@ -173,19 +176,19 @@ describe("notebook runner dual-frame and assembly", () => {
     if (!notebook.ok) return;
 
     const videoA = engine.notebooks.createCell({
-      type: "video",
+      type: "asset",
       title: "a",
       slot: { row: 0, column: 0 },
       outputArtifactId: clipA.value.artifactId,
     });
     const videoB = engine.notebooks.createCell({
-      type: "video",
+      type: "asset",
       title: "b",
       slot: { row: 0, column: 1 },
       outputArtifactId: clipB.value.artifactId,
     });
     const sequence = engine.notebooks.createCell({
-      type: "sequence",
+      type: "scene",
       title: "assemble",
       slot: { row: 0, column: 2 },
       provider: "local",
@@ -193,7 +196,7 @@ describe("notebook runner dual-frame and assembly", () => {
       tool: "engine_sequence",
     });
     const exp = engine.notebooks.createCell({
-      type: "export",
+      type: "asset",
       title: "export",
       slot: { row: 0, column: 3 },
       provider: "local",

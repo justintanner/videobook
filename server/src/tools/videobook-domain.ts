@@ -19,6 +19,7 @@ import type {
 } from "videobook-engine";
 import {
   MVP_CONTRACT_VERSION,
+  NOTEBOOK_CELL_TYPES,
   sequenceFramesToSourceTicks,
   sourceRangeEndTick,
   sourceTicksToSequenceFrames,
@@ -30,6 +31,7 @@ import { mutateNotebook } from "../notebook-mutations.js";
 import { queue, stopBookQueue } from "../queue.js";
 import {
   notebookCellDefinitionFingerprint,
+  notebookCellIsPaid,
   prepareNotebookGeneration,
 } from "../jobs/run-notebook.js";
 import {
@@ -53,26 +55,7 @@ import {
 } from "../notebook-run-plan.js";
 
 const bookSchema = { book_id: z.string().uuid() };
-const cellTypeSchema = z.enum([
-  "label",
-  "source",
-  "audio",
-  "transcript",
-  "note",
-  "search",
-  "selects",
-  "prompt",
-  "character",
-  "scene",
-  "asset",
-  "image",
-  "video",
-  "sequence",
-  "analysis",
-  "split",
-  "frame",
-  "export",
-]);
+const cellTypeSchema = z.enum(NOTEBOOK_CELL_TYPES);
 
 function firstEmptyGridSlots(
   cells: readonly NotebookCell[],
@@ -308,15 +291,8 @@ async function notebookGenerationPlan(
   },
 ): Promise<Record<string, unknown>> {
   const cell = notebook.cells.find((candidate) => candidate.id === cellId);
-  if (
-    !cell
-    || (
-      cell.type !== "prompt"
-      && cell.type !== "image"
-      && cell.type !== "video"
-    )
-  ) {
-    throw new Error("Choose a prompt, image, or video generation cell");
+  if (!cell || !notebookCellIsPaid(cell)) {
+    throw new Error("Choose a configured generation cell");
   }
   const prepared = await prepareNotebookGeneration(
     engine,
@@ -354,7 +330,7 @@ async function notebookGenerationPlan(
     notebook,
     cell,
   );
-  if (cell.type === "prompt") {
+  if (cell.operation === "rewrite_prompt") {
     const planId = uuidv7();
     const enriched: Record<string, unknown> = {
       planVersion: 1,
@@ -1967,7 +1943,7 @@ export function videobookDomainDefs(
             const [audioSlot, transcriptSlot, sequenceSlot] =
               firstEmptyGridSlots(retained, 3);
             const audioCell = engine.notebooks.createCell({
-              type: "audio",
+              type: "asset",
               title: artifact.value.slug,
               slot: audioSlot!,
               inputs: {
@@ -1977,7 +1953,7 @@ export function videobookDomainDefs(
               },
             });
             const transcriptCell = engine.notebooks.createCell({
-              type: "transcript",
+              type: "note",
               title: transcript ? `${artifact.value.slug} transcript` : "Transcript pending",
               slot: transcriptSlot!,
               inputs: {
@@ -1992,7 +1968,7 @@ export function videobookDomainDefs(
               targetInput: "audio",
             });
             const sequenceCell = engine.notebooks.createCell({
-              type: "sequence",
+              type: "scene",
               title: committed.value.sequence.name,
               slot: sequenceSlot!,
               inputs: {
@@ -3160,12 +3136,7 @@ export function videobookDomainDefs(
             updatedAt: new Date().toISOString(),
           });
         }
-        if (
-          (cell.type === "prompt"
-            || cell.type === "image"
-            || cell.type === "video")
-          && !generationPlan
-        ) {
+        if (notebookCellIsPaid(cell) && !generationPlan) {
           return failure("Paid notebook cells require a persisted generation plan");
         }
         const runId = uuidv7();
@@ -3193,7 +3164,7 @@ export function videobookDomainDefs(
     },
     {
       name: "run_notebook",
-      description: "Run missing or stale image and video cells topologically",
+      description: "Run missing or stale configured notebook cells topologically",
       scope: "book",
       schema: { ...bookSchema, notebook_id: z.string().uuid() },
       handler: async (args) => {

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ImageIcon, MessageSquareText, Video, View, FileQuestion, Music, User } from 'lucide-react'
+import { Clapperboard, ImageIcon, ListFilter, MessageSquareText, Video, View, FileQuestion, Music, User } from 'lucide-react'
 import { ViewportPortal } from '@xyflow/react'
 import {
   NOTEBOOK_STAGE_BAND_HEIGHT,
@@ -16,10 +16,10 @@ import {
   stageBoardMetrics,
   type NotebookDropTarget,
 } from './model'
-import type { NotebookPlanDefinition } from './types'
+import type { NotebookPlanDefinition, NotebookStepType } from './types'
 
 export interface NotebookDropPreview extends NotebookDropTarget {
-  type: 'prompt' | 'image' | 'video' | 'asset'
+  type: NotebookStepType
   assetKind?: 'image' | 'video' | 'audio' | 'character' | null
 }
 
@@ -30,10 +30,11 @@ interface NotebookStageBoardProps {
   onAddStage: () => void
 }
 
-const previewIcons = {
-  prompt: MessageSquareText,
-  image: ImageIcon,
-  video: Video,
+const previewIcons: Record<NotebookStepType, typeof View> = {
+  source: FileQuestion,
+  note: MessageSquareText,
+  selects: ListFilter,
+  scene: Clapperboard,
   asset: FileQuestion,
 }
 
@@ -55,8 +56,8 @@ export function NotebookStageBoard({
   const maxSlots = metrics.maxSlots
   const boardWidth = metrics.width
   const boardHeight = metrics.height
-  const PreviewIcon = preview?.type === 'asset'
-    ? (preview.assetKind === 'image' ? ImageIcon : preview.assetKind === 'video' ? Video : preview.assetKind === 'audio' ? Music : preview.assetKind === 'character' ? User : FileQuestion)
+  const PreviewIcon = preview?.assetKind
+    ? (preview.assetKind === 'image' ? ImageIcon : preview.assetKind === 'video' ? Video : preview.assetKind === 'audio' ? Music : User)
     : (preview ? previewIcons[preview.type] : View)
   const parent = preview?.parentId
     ? definition.sequence.find((step) => step.id === preview.parentId) ?? null
@@ -66,10 +67,10 @@ export function NotebookStageBoard({
     ? parentPosition.x + notebookNodeSizes[parent.type].width / 2
     : 0
   const sourceY = parent && parentPosition
-    ? parentPosition.y + (preview?.type === 'asset' ? 0 : notebookNodeSizes[parent.type].height)
+    ? parentPosition.y + (preview?.type === 'source' ? 0 : notebookNodeSizes[parent.type].height)
     : 0
   const targetX = preview ? preview.position.x + notebookNodeSizes[preview.type].width / 2 : 0
-  const targetY = preview ? preview.position.y + (preview.type === 'asset' ? notebookNodeSizes[preview.type].height : 0) : 0
+  const targetY = preview ? preview.position.y + (preview.type === 'source' ? notebookNodeSizes[preview.type].height : 0) : 0
 
   return (
     <>

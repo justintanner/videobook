@@ -20,7 +20,10 @@ export interface NotebookCellData extends Record<string, unknown> {
   status: string
   preview?: string
   prompt?: string
+  provider?: string
   model?: string
+  operation?: string
+  tool?: string
   entityId?: string
   outputArtifactId?: string
   inputs?: Record<string, unknown>
@@ -63,7 +66,10 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
         targetConnectionCount: targetConnectionCounts.get(cell.id) ?? 0,
         sourcePorts: sourcePorts.get(cell.id) ?? [],
         ...(cell.prompt === undefined ? {} : { prompt: cell.prompt }),
+        ...(cell.provider === undefined ? {} : { provider: cell.provider }),
         ...(cell.model === undefined ? {} : { model: cell.model }),
+        ...(cell.operation === undefined ? {} : { operation: cell.operation }),
+        ...(cell.tool === undefined ? {} : { tool: cell.tool }),
         ...(cell.entityId === undefined ? {} : { entityId: cell.entityId }),
         ...(cell.outputArtifactId === undefined
           ? {}
@@ -113,7 +119,10 @@ function cellFromNode(node: Node<NotebookCellData>): NotebookCell {
     title: node.data.title,
     slot: node.data.slot,
     ...(node.data.prompt === undefined ? {} : { prompt: node.data.prompt }),
+    ...(node.data.provider === undefined ? {} : { provider: node.data.provider }),
     ...(node.data.model === undefined ? {} : { model: node.data.model }),
+    ...(node.data.operation === undefined ? {} : { operation: node.data.operation }),
+    ...(node.data.tool === undefined ? {} : { tool: node.data.tool }),
     ...(node.data.entityId === undefined
       ? {}
       : { entityId: node.data.entityId }),

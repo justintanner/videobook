@@ -756,7 +756,7 @@ export function semanticSearchDefs(
     },
     {
       name: "pin_search_moment",
-      description: "Pin a revision-stable search moment into a notebook search cell",
+      description: "Pin a revision-stable search moment into a notebook selects cell",
       scope: "book",
       schema: {
         ...bookSchema,
@@ -815,7 +815,7 @@ export function semanticSearchDefs(
             }
             pinnedCell = {
               id: cellId,
-              type: "search",
+              type: "selects",
               title: String(args.title),
               slot: isSlot(args.slot)
                 ? args.slot

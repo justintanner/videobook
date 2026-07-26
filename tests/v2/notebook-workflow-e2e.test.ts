@@ -31,7 +31,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
 
   it('runs source→analysis fixture→split/audio/frame without paid generation', async () => {
     expect(SCHEMA_VERSION).toBe(9)
-    expect(NOTEBOOK_CELL_TYPES).toHaveLength(18)
+    expect(NOTEBOOK_CELL_TYPES).toEqual(['source', 'note', 'selects', 'scene', 'asset'])
     expect(WORKFLOW_STAGES).toHaveLength(8)
     expect(WORKFLOW_STAGES).toEqual([
       'SOURCE',
@@ -66,7 +66,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
     expect(notebook.ok).toBe(true)
     if (!notebook.ok) return
     const scaffold = buildSevenStageScaffold(engine, notebook.value, sourceArtifact.value.artifactId)
-    const analysis = scaffold.cells.find((cell) => cell.type === 'analysis')!
+    const analysis = scaffold.cells.find((cell) => cell.operation === 'analyze_source')!
     const withFixture = {
       ...scaffold,
       cells: scaffold.cells.map((cell) => cell.id === analysis.id
@@ -91,16 +91,16 @@ describe('transparent runnable DAG e2e (offline)', () => {
       request: { mode: 'fixture' },
       sourceArtifactId: sourceArtifact.value.artifactId,
     })
-    expect(fanned.cells.filter((cell) => cell.type === 'label')).toEqual([])
+    expect(fanned.cells.every((cell) => NOTEBOOK_CELL_TYPES.includes(cell.type))).toBe(true)
     expect(fanned.properties?.stageLabels).toBeUndefined()
     expect(fanned.properties?.featureLanes).toBeUndefined()
-    expect(fanned.cells.filter((cell) => cell.type === 'split')).toHaveLength(2)
-    expect(fanned.cells.filter((cell) => cell.type === 'frame')).toHaveLength(4)
-    expect(fanned.cells.filter((cell) => cell.type === 'prompt')).toHaveLength(2)
-    expect(fanned.cells.filter((cell) => cell.type === 'video')).toHaveLength(2)
+    expect(fanned.cells.filter((cell) => cell.operation === 'split_range')).toHaveLength(2)
+    expect(fanned.cells.filter((cell) => cell.operation === 'capture_frame')).toHaveLength(4)
+    expect(fanned.cells.filter((cell) => cell.operation === 'rewrite_prompt')).toHaveLength(2)
+    expect(fanned.cells.filter((cell) => cell.operation === 'image_to_video')).toHaveLength(2)
     expect(topologicalOrder(fanned).length).toBe(fanned.cells.length)
 
-    const splitCell = fanned.cells.find((cell) => cell.type === 'split')!
+    const splitCell = fanned.cells.find((cell) => cell.operation === 'split_range')!
     const split = await splitSourceRange(
       engine,
       sourceArtifact.value.artifactId,
@@ -118,9 +118,9 @@ describe('transparent runnable DAG e2e (offline)', () => {
     expect(audio.artifactId).toBeTruthy()
 
     // Paid prompt rewrite and animation must not auto-start.
-    expect(fanned.cells.filter((cell) => cell.type === 'prompt').every((cell) =>
+    expect(fanned.cells.filter((cell) => cell.operation === 'rewrite_prompt').every((cell) =>
       cell.inputs?.requiresConfirmation === true)).toBe(true)
-    expect(fanned.cells.filter((cell) => cell.type === 'video').every((cell) =>
+    expect(fanned.cells.filter((cell) => cell.operation === 'image_to_video').every((cell) =>
       cell.inputs?.requiresConfirmation === true)).toBe(true)
   }, 90_000)
 })

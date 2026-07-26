@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { AlertCircle, ImageIcon, Loader2, Video, FileQuestion } from 'lucide-react'
-import type { ConnectedMediaInput, GenRunOutput } from '../model'
+import { generationMediaType, type ConnectedMediaInput, type GenRunOutput } from '../model'
 import type { NotebookNodeData } from './nodeTypes'
 
 function MediaInputThumb({ item }: { item: ConnectedMediaInput }) {
@@ -46,16 +46,17 @@ function GenOutputThumb({
 function GenNodeComponent({ data, selected }: NodeProps) {
   const node = data as NotebookNodeData
   const { step } = node
-  const Icon = step.type === 'video' ? Video : ImageIcon
+  const mediaType = generationMediaType(step) ?? 'image'
+  const Icon = mediaType === 'video' ? Video : ImageIcon
   const model = typeof step.properties.model === 'string' && step.properties.model
     ? step.properties.model
     : 'choose model'
   const mediaInputs = node.mediaInputs ?? []
   const outputs = node.outputs ?? []
   return (
-    <div className={`vc-node vc-node-gen vc-node-${step.type} ${selected ? 'vc-node-selected' : ''} ${node.invalidReason ? 'vc-node-invalid' : ''} ${node.routeState ? `vc-node-route-${node.routeState}` : ''}`}>
+    <div className={`vc-node vc-node-gen vc-node-asset vc-node-media-${mediaType} ${selected ? 'vc-node-selected' : ''} ${node.invalidReason ? 'vc-node-invalid' : ''} ${node.routeState ? `vc-node-route-${node.routeState}` : ''}`}>
       <Handle type="target" position={Position.Top} className="vc-node-handle" />
-      <div className="vc-node-kicker"><span><Icon aria-hidden /> Gen {step.type}</span><b>{step.type === 'video' ? 'VID' : 'IMG'}</b></div>
+      <div className="vc-node-kicker"><span><Icon aria-hidden /> Asset</span><b>{mediaType === 'video' ? 'VID' : 'IMG'}</b></div>
       {mediaInputs.length > 0 ? (
         <div className="vc-node-input-strip" aria-label="Connected media inputs">
           {mediaInputs.map((item) => (

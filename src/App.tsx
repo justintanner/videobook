@@ -275,13 +275,20 @@ const cellPalette: Array<{
   label: string
   icon: typeof BookOpen
 }> = [
-  { type: 'label', label: 'Label', icon: Square },
-  { type: 'prompt', label: 'Prompt', icon: CircleDot },
-  { type: 'image', label: 'Image', icon: Image },
-  { type: 'video', label: 'Video', icon: Video },
-  { type: 'character', label: 'Character', icon: BookOpen },
+  { type: 'source', label: 'Source', icon: Video },
+  { type: 'note', label: 'Note', icon: CircleDot },
+  { type: 'selects', label: 'Selects', icon: Film },
   { type: 'scene', label: 'Scene', icon: Film },
+  { type: 'asset', label: 'Asset', icon: Image },
 ]
+
+const notebookCellTypes = new Set<string>([
+  'source',
+  'note',
+  'selects',
+  'scene',
+  'asset',
+] satisfies NotebookCellType[])
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -295,6 +302,22 @@ function asString(value: unknown): string | null {
 
 function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function isGenerationCell(
+  cell: NotebookDocument['cells'][number],
+): boolean {
+  if (cell.operation === 'rewrite_prompt') return true
+  return cell.type === 'asset'
+    && cell.provider !== undefined
+    && cell.provider !== 'local'
+    && Boolean(cell.tool ?? cell.model ?? cell.operation)
+}
+
+function isRunnableCell(
+  cell: NotebookDocument['cells'][number],
+): boolean {
+  return Boolean(cell.operation ?? cell.tool ?? cell.model)
 }
 
 function responseText(result: unknown): string | null {
@@ -360,26 +383,7 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
     || !Number.isInteger(row)
     || !Number.isInteger(column)
   ) return null
-  if (![
-    'label',
-    'source',
-    'audio',
-    'transcript',
-    'note',
-    'search',
-    'selects',
-    'prompt',
-    'character',
-    'scene',
-    'asset',
-    'image',
-    'video',
-    'sequence',
-    'analysis',
-    'split',
-    'frame',
-    'export',
-  ].includes(type ?? '')) return null
+  if (!notebookCellTypes.has(type ?? '')) return null
   const inputs = record(item.inputs)
   const references = Array.isArray(item.references)
     ? item.references as NotebookCellReference[]
@@ -396,7 +400,10 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
       ? { entityId: asString(item.entity_id ?? item.entityId)! }
       : {}),
     ...(asString(item.prompt) !== null ? { prompt: asString(item.prompt)! } : {}),
+    ...(asString(item.provider) !== null ? { provider: asString(item.provider)! } : {}),
     ...(asString(item.model) !== null ? { model: asString(item.model)! } : {}),
+    ...(asString(item.operation) !== null ? { operation: asString(item.operation)! } : {}),
+    ...(asString(item.tool) !== null ? { tool: asString(item.tool)! } : {}),
     ...(inputs ? { inputs } : {}),
     ...(references ? { references } : {}),
     ...(pinnedResults ? { pinnedResults } : {}),
@@ -913,20 +920,10 @@ function canvasNodes(
 }
 
 function CellIcon({ kind }: { kind: NotebookCellType }) {
-  if (kind === 'label') return <Square size={14} />
-  if (kind === 'source' || kind === 'asset' || kind === 'video') {
-    return <Video size={14} />
-  }
-  if (kind === 'audio' || kind === 'transcript') {
-    return <AudioWaveform size={14} />
-  }
-  if (kind === 'scene' || kind === 'sequence' || kind === 'selects') {
-    return <Film size={14} />
-  }
-  if (kind === 'image' || kind === 'frame') return <Image size={14} />
-  if (kind === 'prompt' || kind === 'analysis') return <CircleDot size={14} />
-  if (kind === 'split' || kind === 'export') return <Film size={14} />
-  return <BookOpen size={14} />
+  if (kind === 'source') return <Video size={14} />
+  if (kind === 'asset') return <Image size={14} />
+  if (kind === 'note') return <CircleDot size={14} />
+  return <Film size={14} />
 }
 
 const cellSourcePortSides = [
@@ -954,27 +951,9 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
   const targetInputs = data.targetInputs?.length ? data.targetInputs : ['input']
   const targetConnectionCount = data.targetConnectionCount ?? 0
   const playableVideo = data.asset?.type === 'video' || data.asset?.type === 'final'
+  const playableAudio = data.asset?.type === 'audio'
   const isTopRow = data.slot.row === 0
-  const canRun = data.kind === 'image'
-    || data.kind === 'video'
-    || data.kind === 'prompt'
-    || data.kind === 'analysis'
-    || data.kind === 'split'
-    || data.kind === 'audio'
-    || data.kind === 'frame'
-    || data.kind === 'sequence'
-    || data.kind === 'export'
-    || data.kind === 'source'
-
-  if (data.kind === 'label') {
-    return (
-      <article className={`cell-node cell-kind-label ${selected ? 'cell-node-selected' : ''}`}>
-        <div className="cell-label-copy">
-          <strong>{data.title}</strong>
-        </div>
-      </article>
-    )
-  }
+  const canRun = Boolean(data.operation ?? data.tool ?? data.model)
 
   return (
     <article className={`cell-node cell-kind-${data.kind} ${selected ? 'cell-node-selected' : ''}`}>
@@ -1024,7 +1003,7 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
             </button>
           )}
         </header>
-        {data.kind === 'audio' ? (
+        {playableAudio ? (
           <div className="cell-copy cell-copy-audio">
             <AudioWaveform size={38} />
             <span>Original soundtrack<br />48 kHz · stereo</span>
@@ -1038,9 +1017,9 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
             )}
           </div>
         ) : (
-          <div className={`cell-copy ${data.kind === 'prompt' ? 'cell-copy-prompt' : ''}`}>
-            {data.kind === 'prompt' ? <p>{data.prompt || data.title}</p> : <Sparkles size={28} />}
-            {data.kind !== 'prompt' && <span>{data.prompt || data.title}</span>}
+          <div className={`cell-copy ${data.kind === 'note' ? 'cell-copy-note' : ''}`}>
+            {data.kind === 'note' ? <p>{data.prompt || data.title}</p> : <Sparkles size={28} />}
+            {data.kind !== 'note' && <span>{data.prompt || data.title}</span>}
           </div>
         )}
         <footer className="cell-node-footer">
@@ -1280,17 +1259,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const runCell = useCallback(async (cellId: string) => {
     if (!bookId || !notebook) return
     const cell = notebook.cells.find((candidate) => candidate.id === cellId)
-    const cloud = cell?.type === 'prompt'
-      || cell?.type === 'image'
-      || cell?.type === 'video'
-    const local = cell?.type === 'source'
-      || cell?.type === 'analysis'
-      || cell?.type === 'split'
-      || cell?.type === 'audio'
-      || cell?.type === 'frame'
-      || cell?.type === 'sequence'
-      || cell?.type === 'export'
-    if (!cell || (!cloud && !local)) return
+    if (!cell || !isRunnableCell(cell)) return
+    const cloud = isGenerationCell(cell)
     if (cloud && !online) {
       setNotice('Offline: cloud generation is unavailable. Local search, editing, playback, and export remain available.')
       return
@@ -1607,29 +1577,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return
     }
     const labels: Record<NotebookCellType, string> = {
-      label: 'Label',
       source: 'Source',
-      audio: 'Audio',
-      transcript: 'Transcript',
       note: 'Note',
-      search: 'Search',
       selects: 'Selects',
-      prompt: 'Prompt',
-      character: 'Character',
       scene: 'Scene',
       asset: 'Asset',
-      image: 'Image generation',
-      video: 'Video generation',
-      sequence: 'Sequence',
-      analysis: 'Analyze',
-      split: 'Split',
-      frame: 'Frame',
-      export: 'Export',
-    }
-    const defaults: Partial<Record<NotebookCellType, string>> = {
-      image: 'generate_kie_gpt_image_2_text_to_image',
-      video: 'generate_kie_seedance_2_0_video',
-      analysis: 'kie_gemini_analysis',
     }
     setBusy(true)
     try {
@@ -1640,10 +1592,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           type,
           title: labels[type],
           slot,
-          ...(type === 'prompt' || type === 'image' || type === 'video'
-            ? { prompt: '' }
-            : {}),
-          ...(defaults[type] ? { model: defaults[type] } : {}),
+          ...(type === 'note' ? { prompt: '' } : {}),
         },
       })
       await refreshBookData(bookId, notebook.id)
@@ -2840,15 +2789,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             || candidate.title.toLowerCase() === token.replaceAll('-', ' '))
           if (
             !cell
-            || (
-              cell.type !== 'prompt'
-              && cell.type !== 'image'
-              && cell.type !== 'video'
-            )
+            || !isGenerationCell(cell)
           ) {
             return {
               ok: false,
-              message: 'Name a prompt, image, or video cell, for example: generate cell @cell-id',
+              message: 'Name a configured generation cell, for example: generate cell @cell-id',
             }
           }
           return await prepareGenerationPlan(cell.id, 'chat')
@@ -2896,13 +2841,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           candidate.id.toLowerCase().startsWith(token))
         if (
           !cell
-          || (
-            cell.type !== 'prompt'
-            && cell.type !== 'image'
-            && cell.type !== 'video'
-          )
+          || !isGenerationCell(cell)
         ) {
-          return { ok: false, message: 'Choose a prompt, image, or video generation cell' }
+          return { ok: false, message: 'Choose a configured generation cell' }
         }
         return await prepareGenerationPlan(cell.id, 'slash')
       }
@@ -3495,10 +3436,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   <div className="canvas-welcome">
                     <div className="canvas-welcome-mark"><Sparkles size={22} /></div>
                     <span>EMPTY NOTEBOOK</span>
-                    <strong>Build your first generation path.</strong>
-                    <p>Start with a prompt, then connect image and video cells as the story takes shape.</p>
-                    <button type="button" disabled={busy} onClick={() => void createCell('prompt')}>
-                      <Plus size={15} />Add first prompt
+                    <strong>Build your first notebook path.</strong>
+                    <p>Connect source, note, selects, scene, and asset primitives as the story takes shape.</p>
+                    <button type="button" disabled={busy} onClick={() => void createCell('note')}>
+                      <Plus size={15} />Add first note
                     </button>
                   </div>
                 )}

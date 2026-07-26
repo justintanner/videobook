@@ -55,7 +55,7 @@
   fill: rgb(52 211 153 / 0.18);
 }
 
-.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-prompt .react-flow__edge-path {
+.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-note .react-flow__edge-path {
   stroke: rgb(245 158 11 / 0.85);
 }
 
@@ -181,20 +181,20 @@
   min-height: 340px;
 }
 
-.vc-node-image {
+.vc-node-media-image {
   border-color: rgb(34 211 238 / 0.55);
 }
 
-.vc-node-image.vc-node-selected {
+.vc-node-media-image.vc-node-selected {
   border-color: rgb(34 211 238);
   box-shadow: 0 0 14px rgb(34 211 238 / 0.45);
 }
 
-.vc-node-video {
+.vc-node-media-video {
   border-color: rgb(167 139 250 / 0.55);
 }
 
-.vc-node-video.vc-node-selected {
+.vc-node-media-video.vc-node-selected {
   border-color: rgb(167 139 250);
   box-shadow: 0 0 14px rgb(167 139 250 / 0.45);
 }
@@ -239,11 +239,11 @@
   color: rgb(226 232 240 / 0.75);
 }
 
-.vc-node-image .vc-node-input-thumb {
+.vc-node-media-image .vc-node-input-thumb {
   border-color: rgb(34 211 238 / 0.55);
 }
 
-.vc-node-video .vc-node-input-thumb {
+.vc-node-media-video .vc-node-input-thumb {
   border-color: rgb(167 139 250 / 0.55);
 }
 
@@ -325,35 +325,35 @@
   background: rgb(0 0 0 / 0.55);
 }
 
-.vc-node-image .vc-node-hero > svg {
+.vc-node-media-image .vc-node-hero > svg {
   color: rgb(34 211 238 / 0.55);
 }
 
-.vc-node-video .vc-node-hero > svg {
+.vc-node-media-video .vc-node-hero > svg {
   color: rgb(167 139 250 / 0.55);
 }
 
-.vc-node-image .vc-node-meta {
+.vc-node-media-image .vc-node-meta {
   border-top-color: rgb(34 211 238 / 0.18);
 }
 
-.vc-node-video .vc-node-meta {
+.vc-node-media-video .vc-node-meta {
   border-top-color: rgb(167 139 250 / 0.18);
 }
 
-.vc-node-image .vc-node-meta span {
+.vc-node-media-image .vc-node-meta span {
   color: rgb(165 243 252 / 0.8);
 }
 
-.vc-node-video .vc-node-meta span {
+.vc-node-media-video .vc-node-meta span {
   color: rgb(221 214 254 / 0.8);
 }
 
-.vc-node-image .vc-node-meta b {
+.vc-node-media-image .vc-node-meta b {
   color: rgb(34 211 238);
 }
 
-.vc-node-video .vc-node-meta b {
+.vc-node-media-video .vc-node-meta b {
   color: rgb(167 139 250);
 }
 
@@ -363,7 +363,7 @@
   object-fit: contain;
 }
 
-.vc-node-asset img {
+.vc-node-source img {
   flex: 1 1 0;
   min-height: 0;
   width: 100%;
@@ -428,7 +428,7 @@
   font-weight: 600;
 }
 
-.vc-node-prompt {
+.vc-node-note {
   display: flex;
   width: 280px;
   min-height: 340px;
@@ -438,7 +438,7 @@
   border-color: rgb(245 158 11 / 0.58);
 }
 
-.vc-node-prompt p {
+.vc-node-note p {
   display: -webkit-box;
   overflow: hidden;
   margin: 0;
@@ -449,7 +449,7 @@
   -webkit-line-clamp: 14;
 }
 
-.vc-node-asset {
+.vc-node-source {
   display: flex;
   width: 280px;
   min-height: 340px;
@@ -460,13 +460,13 @@
   border-color: rgb(52 211 153 / 0.55);
 }
 
-.vc-node-asset > svg {
+.vc-node-source > svg {
   width: 2.5rem;
   height: 2.5rem;
   color: rgb(110 231 183 / 0.65);
 }
 
-.vc-node-asset > span {
+.vc-node-source > span {
   width: 100%;
   overflow: hidden;
   padding: 0.45rem 0.6rem;
@@ -983,7 +983,7 @@
   --vc-glow: rgb(52 211 153 / 0.28);
   --vc-text: rgb(209 250 229);
   --vc-muted: rgb(167 243 208 / 0.58);
-  --vc-prompt: rgb(251 191 36);
+  --vc-note: rgb(251 191 36);
   --vc-image: rgb(34 211 238);
   --vc-video: rgb(167 139 250);
   background:
@@ -1178,20 +1178,16 @@
   letter-spacing: 0.1em;
 }
 
-.vc-notebook-drop-card-prompt {
-  box-shadow: inset 3px 0 var(--vc-prompt), 0 0 20px var(--vc-glow);
-}
-
-.vc-notebook-drop-card-image {
-  box-shadow: inset 3px 0 var(--vc-image), 0 0 20px var(--vc-glow);
-}
-
-.vc-notebook-drop-card-video {
-  box-shadow: inset 3px 0 var(--vc-video), 0 0 20px var(--vc-glow);
+.vc-notebook-drop-card-note {
+  box-shadow: inset 3px 0 var(--vc-note), 0 0 20px var(--vc-glow);
 }
 
 .vc-notebook-drop-card-asset {
   box-shadow: inset 3px 0 rgb(244 114 182), 0 0 20px var(--vc-glow);
+}
+
+.vc-notebook-drop-card-source {
+  box-shadow: inset 3px 0 rgb(110 231 183), 0 0 20px var(--vc-glow);
 }
 
 .vc-notebook-canvas .react-flow__controls {
@@ -1270,23 +1266,23 @@
   pointer-events: none;
 }
 
-.vc-node-prompt {
-  --vc-node-accent: var(--vc-prompt);
+.vc-node-note {
+  --vc-node-accent: var(--vc-note);
   padding-top: 2.6rem;
   border-color: rgb(110 231 183 / 0.28);
 }
 
-.vc-node-image {
+.vc-node-media-image {
   --vc-node-accent: var(--vc-image);
   border-color: rgb(110 231 183 / 0.3);
 }
 
-.vc-node-video {
+.vc-node-media-video {
   --vc-node-accent: var(--vc-video);
   border-color: rgb(110 231 183 / 0.3);
 }
 
-.vc-node-asset {
+.vc-node-source {
   --vc-node-accent: rgb(110 231 183);
   border-color: rgb(110 231 183 / 0.3);
 }
@@ -1349,8 +1345,8 @@
   left: 0.55rem;
 }
 
-.vc-node-image.vc-node-selected,
-.vc-node-video.vc-node-selected,
+.vc-node-media-image.vc-node-selected,
+.vc-node-media-video.vc-node-selected,
 .vc-node-selected {
   border-color: var(--vc-line-strong);
   box-shadow: 0 0 0 1px rgb(110 231 183 / 0.3), 0 0 22px var(--vc-glow), 0 12px 28px rgb(0 0 0 / 0.4);
@@ -1381,7 +1377,7 @@
   box-shadow: 0 0 0 2px rgb(52 211 153 / 0.16), 0 0 10px rgb(52 211 153 / 0.35);
 }
 
-.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-prompt .react-flow__edge-path,
+.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-note .react-flow__edge-path,
 .vc-notebook-canvas .react-flow__edge.vc-notebook-edge-ref .react-flow__edge-path {
   stroke: rgb(74 222 128 / 0.62);
   filter: drop-shadow(0 0 2px rgb(52 211 153 / 0.24));
@@ -1439,18 +1435,18 @@
   filter: drop-shadow(0 0 5px rgb(52 211 153 / 0.62));
 }
 
-.vc-node-image .vc-node-meta,
-.vc-node-video .vc-node-meta {
+.vc-node-media-image .vc-node-meta,
+.vc-node-media-video .vc-node-meta {
   border-top-color: rgb(110 231 183 / 0.14);
 }
 
-.vc-node-image .vc-node-meta span,
-.vc-node-video .vc-node-meta span {
+.vc-node-media-image .vc-node-meta span,
+.vc-node-media-video .vc-node-meta span {
   color: var(--vc-muted);
 }
 
-.vc-node-image .vc-node-meta b,
-.vc-node-video .vc-node-meta b {
+.vc-node-media-image .vc-node-meta b,
+.vc-node-media-video .vc-node-meta b {
   color: var(--vc-node-accent);
 }
 

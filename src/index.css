@@ -888,53 +888,13 @@ textarea:focus-visible {
 }
 
 .cell-kind-source,
-.cell-kind-sequence {
+.cell-kind-asset {
   border-color: rgba(114, 231, 170, 0.58);
 }
 
-.cell-kind-label {
-  height: 32px;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.cell-kind-label.cell-node-selected {
-  border: 0;
-  box-shadow: none;
-}
-
-.cell-kind-label::before {
-  display: none;
-}
-
-.cell-label-copy {
-  display: grid;
-  width: 100%;
-  height: 100%;
-  place-items: center;
-  align-content: center;
-  padding: 0 12px;
-  color: rgba(186, 239, 209, 0.76);
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.cell-label-copy strong {
-  max-width: 100%;
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.14em;
-  line-height: 1.55;
-  overflow-wrap: anywhere;
-}
-
-.cell-kind-scene {
+.cell-kind-scene,
+.cell-kind-selects {
   border-color: rgba(89, 194, 211, 0.48);
-}
-
-.cell-kind-audio {
-  border-color: rgba(129, 183, 255, 0.5);
 }
 
 .cell-node::before {
@@ -1133,7 +1093,7 @@ textarea:focus-visible {
   letter-spacing: 0.07em;
 }
 
-.cell-copy-prompt {
+.cell-copy-note {
   display: block;
   overflow: hidden;
   padding: 16px 18px 18px;
@@ -1141,7 +1101,7 @@ textarea:focus-visible {
   text-align: left;
 }
 
-.cell-copy-prompt p {
+.cell-copy-note p {
   display: -webkit-box;
   margin: 0;
   overflow: hidden;

@@ -22,9 +22,10 @@ const option: ModelOption = {
 const step: NotebookPlanStep = {
   id: 'image-1',
   componentType: 'task',
-  type: 'image',
+  type: 'asset',
   name: 'Image',
   properties: {
+    media_type: 'image',
     model: 'nano_banana',
     provider: 'google',
     values: { prompt: 'a fox' },

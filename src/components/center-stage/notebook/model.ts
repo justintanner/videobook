@@ -7,6 +7,7 @@ import type {
   NotebookPlanDefinition,
   NotebookPlanStep,
   NotebookRunStatus,
+  NotebookToolboxKind,
   NotebookToolboxStep,
 } from './types'
 
@@ -41,10 +42,11 @@ export interface GraphLayoutBounds {
 }
 
 export const notebookNodeSizes: Record<NotebookPlanStep['type'], { width: number; height: number }> = {
-  prompt: { width: 280, height: 340 },
-  image: { width: 300, height: 340 },
-  video: { width: 300, height: 340 },
-  asset: { width: 280, height: 340 },
+  source: { width: 280, height: 340 },
+  note: { width: 280, height: 340 },
+  selects: { width: 280, height: 340 },
+  scene: { width: 300, height: 340 },
+  asset: { width: 300, height: 340 },
 }
 
 // Layout invariants — .vc-node-* CSS sizes and .vc-node-hero MUST mirror notebookNodeSizes.
@@ -104,8 +106,14 @@ function stepAssetIds(step: NotebookPlanStep): string[] {
   return stringArray(step.properties.asset_ids)
 }
 
-function isGenerationStep(step: NotebookPlanStep): step is NotebookPlanStep & { type: 'image' | 'video' } {
-  return step.type === 'image' || step.type === 'video'
+export function generationMediaType(step: NotebookPlanStep): 'image' | 'video' | null {
+  if (step.type !== 'asset') return null
+  const mediaType = step.properties.media_type
+  return mediaType === 'image' || mediaType === 'video' ? mediaType : null
+}
+
+function isGenerationStep(step: NotebookPlanStep): boolean {
+  return generationMediaType(step) !== null
 }
 
 function normalizedSlug(slug: string): string {
@@ -141,24 +149,31 @@ export function createEmptyDefinition(): NotebookPlanDefinition {
 
 export const toolboxStepSeeds: NotebookToolboxStep[] = [
   {
+    toolboxKind: 'note',
     componentType: 'task',
-    type: 'prompt',
-    name: 'Prompt',
+    type: 'note',
+    name: 'Note',
     properties: { text: '' },
   },
   {
+    toolboxKind: 'image',
     componentType: 'task',
-    type: 'image',
+    type: 'asset',
     name: 'Image',
-    properties: { model: '', provider: '', values: {}, asset_ids: [] },
+    properties: { media_type: 'image', model: '', provider: '', values: {}, asset_ids: [] },
   },
   {
+    toolboxKind: 'video',
     componentType: 'task',
-    type: 'video',
+    type: 'asset',
     name: 'Video',
-    properties: { model: '', provider: '', values: {}, asset_ids: [] },
+    properties: { media_type: 'video', model: '', provider: '', values: {}, asset_ids: [] },
   },
 ]
+
+export function toolboxStepSeed(kind: NotebookToolboxKind): NotebookToolboxStep {
+  return toolboxStepSeeds.find((step) => step.toolboxKind === kind)!
+}
 
 export function storedStepDepth(step: NotebookPlanStep): number | null {
   const depth = step.properties.depth
@@ -404,32 +419,40 @@ export function reorderStepsOnTracks(
 
 export function nextNotebookTrackPosition(
   definition: NotebookPlanDefinition,
-  type: NotebookPlanStep['type'],
+  kind: NotebookToolboxKind,
   depth = 0,
 ): StepPosition {
   const layout = notebookTrackLayout(definition)
   const slot = layout.rows.find((row) => row.depth === depth)?.stepIds.length ?? 0
-  const seed = toolboxStepSeeds.find((step) => step.type === type)
-  const step: NotebookPlanStep = seed
-    ? { ...seed, id: '', type }
-    : { id: '', componentType: 'task', type, name: type, properties: {} }
+  const seed = toolboxStepSeed(kind)
+  const step: NotebookPlanStep = {
+    id: '',
+    componentType: seed.componentType,
+    type: seed.type,
+    name: seed.name,
+    properties: seed.properties,
+  }
   return positionForTrackSlot(step, depth, slot)
 }
 
 export function notebookDropTarget(
   definition: NotebookPlanDefinition,
-  type: Extract<NotebookPlanStep['type'], 'prompt' | 'image' | 'video'>,
+  kind: NotebookToolboxKind,
   pointer: StepPosition,
   selectedStepId: string | null,
 ): NotebookDropTarget {
-  const seed = toolboxStepSeeds.find((step) => step.type === type)
-  const previewStep: NotebookPlanStep = seed
-    ? { ...seed, id: '' }
-    : { id: '', componentType: 'task', type, name: type, properties: {} }
+  const seed = toolboxStepSeed(kind)
+  const previewStep: NotebookPlanStep = {
+    id: '',
+    componentType: seed.componentType,
+    type: seed.type,
+    name: seed.name,
+    properties: seed.properties,
+  }
   const unclampedRequestedDepth = Math.max(0, Math.round((pointer.y - NOTEBOOK_TRACK_ORIGIN_Y) / NOTEBOOK_TRACK_ROW_PITCH))
   const layout = notebookTrackLayout(definition)
   const requestedDepth = Math.min(unclampedRequestedDepth, notebookBoardLastRow(definition, layout.depths))
-  const slot = nearestTrackSlot(type, pointer.x)
+  const slot = nearestTrackSlot(previewStep.type, pointer.x)
   
   const selectedDepth = selectedStepId ? layout.depths.get(selectedStepId) : undefined
   const selectedParent = selectedStepId && selectedDepth === requestedDepth - 1
@@ -442,7 +465,7 @@ export function notebookDropTarget(
     const position = layout.positions.get(id)
     if (!step || !position) return []
     const center = position.x + notebookNodeSizes[step.type].width / 2
-    const pointerCenter = pointer.x + notebookNodeSizes[type].width / 2
+    const pointerCenter = pointer.x + notebookNodeSizes[previewStep.type].width / 2
     return [{ step, distance: Math.abs(center - pointerCenter) }]
   }).sort((left, right) => left.distance - right.distance) ?? []
   const nearest = candidates[0]
@@ -461,11 +484,14 @@ export function notebookAssetDropTarget(
   pointer: StepPosition,
 ): NotebookDropTarget & { connectTargetId: string | null } {
   const layout = notebookTrackLayout(definition)
-  const type = 'asset'
-  const seed = toolboxStepSeeds.find((step) => step.type === type)
-  const previewStep: NotebookPlanStep = seed
-    ? { ...seed, id: '', type }
-    : { id: '', componentType: 'task', type, name: type, properties: {} }
+  const type = 'source'
+  const previewStep: NotebookPlanStep = {
+    id: '',
+    componentType: 'task',
+    type,
+    name: 'Source',
+    properties: {},
+  }
 
   const byId = new Map(definition.sequence.map((step) => [step.id, step]))
   let hitGen: NotebookPlanStep | null = null
@@ -590,12 +616,12 @@ export function connectedMediaInputs(
   const strip: ConnectedMediaInput[] = []
   for (const inputId of stepInputs(step)) {
     const source = steps.get(inputId)
-    if (!source || source.type === 'prompt') continue
-    const assetId = source.type === 'asset'
+    if (!source || source.type === 'note') continue
+    const assetId = source.type === 'source'
       ? normalizedSlug(stringProperty(source.properties, 'slug') ?? '')
       : latestAssetId(source)
     const asset = assetId ? mediaItems.find((item) => item.id === assetId) : undefined
-    const slug = source.type === 'asset'
+    const slug = source.type === 'source'
       ? (stringProperty(source.properties, 'slug') ?? '')
       : assetId
         ? slugWithPrefix(assetId)
@@ -604,13 +630,9 @@ export function connectedMediaInputs(
     const kind: ConnectedMediaInput['kind'] =
       kindFromSlug === 'image' || kindFromSlug === 'video' || kindFromSlug === 'audio'
         ? kindFromSlug
-        : source.type === 'image'
-          ? 'image'
-          : source.type === 'video'
-            ? 'video'
-            : 'unknown'
+        : generationMediaType(source) ?? 'unknown'
     const model = stringProperty(source.properties, 'model')
-    const label = source.type === 'asset'
+    const label = source.type === 'source'
       ? (slug || source.name)
       : (model || source.name || source.type)
     strip.push({
@@ -712,8 +734,24 @@ function assetStepId(slug: string, sequence: NotebookPlanStep[]): string {
 function findAssetStep(sequence: NotebookPlanStep[], slug: string): NotebookPlanStep | null {
   const bare = normalizedSlug(slug)
   return sequence.find((step) => (
-    step.type === 'asset' && stringProperty(step.properties, 'slug') === slugWithPrefix(bare)
+    step.type === 'source' && stringProperty(step.properties, 'slug') === slugWithPrefix(bare)
   )) ?? null
+}
+
+export function migratePlanStepType(step: NotebookPlanStep): NotebookPlanStep {
+  const type = step.type as string
+  if (type === 'prompt') return { ...step, type: 'note' }
+  if (type === 'image' || type === 'video') {
+    return {
+      ...step,
+      type: 'asset',
+      properties: { media_type: type, ...step.properties },
+    }
+  }
+  if (type === 'asset' && stringProperty(step.properties, 'slug')) {
+    return { ...step, type: 'source' }
+  }
+  return step
 }
 
 export function normalizeDefinition(definition: NotebookPlanDefinition): {
@@ -721,15 +759,23 @@ export function normalizeDefinition(definition: NotebookPlanDefinition): {
   changed: boolean
 } {
   let changed = false
+  const primitiveSequence = definition.sequence.map((step) => {
+    const primitive = migratePlanStepType(step)
+    changed ||= primitive !== step
+    return primitive
+  })
+  const primitiveDefinition = changed
+    ? { ...definition, sequence: primitiveSequence }
+    : definition
   let y = 80
-  const sequence = definition.sequence.map((step) => {
+  const sequence = primitiveDefinition.sequence.map((step) => {
     const position = positionForMissingStep(step, y)
     y += notebookNodeSizes[step.type].height + 48
     if (stepPosition(step)) return step
     changed = true
     return withPosition(step, position)
   })
-  const normalized = changed ? { ...definition, sequence } : definition
+  const normalized = changed ? { ...primitiveDefinition, sequence } : primitiveDefinition
   const tracked = snapDefinitionToTracks(normalized)
   return tracked === definition
     ? { definition, changed: false }
@@ -870,8 +916,10 @@ export function addStep(
   depth?: number,
 ): NotebookPlanDefinition {
   const step: NotebookPlanStep = {
-    ...seed,
     id: crypto.randomUUID(),
+    componentType: seed.componentType,
+    type: seed.type,
+    name: seed.name,
     properties: {
       ...seed.properties,
       position: { x: Math.round(position.x), y: Math.round(position.y) },
@@ -893,8 +941,8 @@ export function addAssetStep(
   const step: NotebookPlanStep = {
     id: stepId,
     componentType: 'task',
-    type: 'asset',
-    name: 'Asset',
+    type: 'source',
+    name: 'Source',
     properties: {
       slug: slugWithPrefix(slug),
       position: { x: Math.round(position.x), y: Math.round(position.y) },
@@ -946,7 +994,7 @@ export function updateStepProperties(
 }
 
 function sourceSlug(step: NotebookPlanStep): string | null {
-  if (step.type === 'asset') return stringProperty(step.properties, 'slug')
+  if (step.type === 'source') return stringProperty(step.properties, 'slug')
   const output = latestAssetId(step)
   return output ? slugWithPrefix(output) : null
 }
@@ -988,7 +1036,7 @@ export function connectedMediaSlugs(
   const slugs: string[] = []
   for (const inputId of stepInputs(step)) {
     const input = steps.get(inputId)
-    if (!input || input.type === 'prompt') continue
+    if (!input || input.type === 'note') continue
     const slug = sourceSlug(input)
     if (!slug) continue
     const kind = assetSlugKind(slug)
@@ -1034,7 +1082,7 @@ export function resolveEffectiveValues(
       warnings.push(`Connected node ${inputId} no longer exists.`)
       continue
     }
-    if (input.type === 'prompt') {
+    if (input.type === 'note') {
       hasPromptInput = true
       const text = stringProperty(input.properties, 'text') ?? ''
       prompts.push(text)
@@ -1176,11 +1224,11 @@ export function stepInputReadiness(
       reasons.push(`Connected node ${inputId} was removed.`)
       continue
     }
-    if (input.type === 'prompt') {
+    if (input.type === 'note') {
       if (!(stringProperty(input.properties, 'text') ?? '').trim()) reasons.push(`${input.name} is empty.`)
       continue
     }
-    const assetId = input.type === 'asset'
+    const assetId = input.type === 'source'
       ? normalizedSlug(stringProperty(input.properties, 'slug') ?? '')
       : latestAssetId(input)
     const asset = assetId ? mediaItems.find((item) => item.id === assetId) : null
@@ -1193,11 +1241,12 @@ export function stepInvalidReason(
   definition: NotebookPlanDefinition,
   step: NotebookPlanStep,
 ): string | null {
-  if (step.type === 'asset') return null
-  if (step.type === 'prompt') return (stringProperty(step.properties, 'text') ?? '').trim() ? null : 'Prompt is empty.'
+  if (step.type === 'source' || step.type === 'selects' || step.type === 'scene') return null
+  if (step.type === 'note') return (stringProperty(step.properties, 'text') ?? '').trim() ? null : 'Note is empty.'
+  if (!isGenerationStep(step)) return null
   const prompt = stringProperty(valuesOf(step), 'prompt') ?? ''
   const hasPromptInput = stepInputs(step).some((inputId) => (
-    definition.sequence.find((candidate) => candidate.id === inputId)?.type === 'prompt'
+    definition.sequence.find((candidate) => candidate.id === inputId)?.type === 'note'
   ))
   if (prompt.trim() || hasPromptInput) return null
   if (buildSceneReplaceDefaultPrompt(connectedMediaSlugs(definition, step))) return null

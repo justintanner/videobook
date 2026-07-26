@@ -8,7 +8,10 @@ import type {
 import { mutateNotebook } from "./notebook-mutations.js";
 import {
   notebookCellDefinitionFingerprint,
+  notebookCellIsPaid,
+  notebookCellIsRunnable,
   notebookCellIsStale,
+  notebookCellMediaType,
   prepareNotebookGeneration,
   topologicalOrder,
 } from "./jobs/run-notebook.js";
@@ -41,25 +44,6 @@ interface CostEstimate {
   estimatedCostUsd?: number;
   estimateUnavailable: boolean;
   warnings: string[];
-}
-
-const RUNNABLE_TYPES = new Set([
-  "source",
-  "analysis",
-  "split",
-  "audio",
-  "frame",
-  "prompt",
-  "image",
-  "video",
-  "sequence",
-  "export",
-]);
-
-function paidCell(cell: NotebookCell): boolean {
-  return cell.type === "prompt"
-    || cell.type === "image"
-    || cell.type === "video";
 }
 
 export function notebookRunPlanRecords(
@@ -175,18 +159,20 @@ function connectedMedia(
     .flatMap((edge) => {
       const source = cells.get(edge.source);
       if (!source) return [];
+      const mediaType = notebookCellMediaType(source);
       return [{
         targetInput: edge.targetInput,
         sourceCellId: source.id,
         sourceType: source.type,
+        sourceOperation: source.operation ?? null,
         artifactId: source.outputArtifactId ?? null,
-        disclosure: source.type === "audio"
+        disclosure: mediaType === "audio"
           ? edge.targetInput === "replace_audio"
             ? "local audio is used for post-generation soundtrack replacement"
             : "audio-derived context only"
-          : source.type === "frame" || source.type === "image"
+          : mediaType === "image"
             ? "image bytes are disclosed to the selected provider"
-            : source.type === "video" || source.type === "split"
+            : mediaType === "video"
               ? "video bytes are disclosed when the selected model requires them"
               : "structured notebook context",
       }];
@@ -204,12 +190,12 @@ export async function planNotebookRun(
 ): Promise<Record<string, unknown>> {
   const ordered = topologicalOrder(document);
   const runnable = ordered.filter((cell) =>
-    RUNNABLE_TYPES.has(cell.type)
+    notebookCellIsRunnable(cell)
     && (
       options.force === true
       || notebookCellIsStale(engine, document, cell)
     ));
-  const paid = runnable.filter(paidCell);
+  const paid = runnable.filter(notebookCellIsPaid);
   const planId = uuidv7();
   const stages: Array<Record<string, unknown>> = [];
   const fingerprints: Record<string, string> = {};

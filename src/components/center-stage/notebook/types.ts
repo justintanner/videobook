@@ -1,8 +1,10 @@
 import type { MediaItem } from '@/components/sidebar/types'
+import type { NotebookCellType } from 'videobook-engine'
 
 export const NOTEBOOK_SCHEMA_VERSION = 1
 
-export type NotebookStepType = 'prompt' | 'image' | 'video' | 'asset'
+export type NotebookStepType = NotebookCellType
+export type NotebookToolboxKind = 'note' | 'image' | 'video'
 
 export type JsonValue =
   | string
@@ -34,7 +36,9 @@ export interface NotebookPlanResponse {
   definition: NotebookPlanDefinition
 }
 
-export type NotebookToolboxStep = Omit<NotebookPlanStep, 'id'>
+export type NotebookToolboxStep = Omit<NotebookPlanStep, 'id'> & {
+  toolboxKind: NotebookToolboxKind
+}
 
 export type NotebookRunState = 'idle' | 'missing' | 'pending' | 'ready' | 'error'
 

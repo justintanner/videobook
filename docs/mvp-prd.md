@@ -360,7 +360,7 @@ Priority meanings:
 | VB-NBK-001 | P0 | A notebook can designate one audio or video source, generated speech artifact, or existing sequence mix as its audio spine. |
 | VB-NBK-002 | P0 | The transcript shows word-level timing, speakers when available, confidence/uncertain words, waveform position, and non-speech annotations. |
 | VB-NBK-003 | P0 | Correcting transcript text changes semantic text only; deleting, restoring, or moving timed words creates non-destructive sequence edits linked to the original source range. |
-| VB-NBK-004 | P0 | The notebook supports source, audio, transcript, note, search, selects, prompt/generation, and sequence cells with explicit typed connections. |
+| VB-NBK-004 | P0 | The notebook supports source, note, selects, scene, and asset primitives with explicit typed connections; operations and tools define behavior. |
 | VB-NBK-005 | P0 | Search results pinned to a cell preserve artifact ID, source object hash, source range, representative frame, query, rank signals, and the revision at selection time. |
 | VB-NBK-006 | P0 | A visual result can be attached to a transcript range by drag/drop, command, or plan; the attachment becomes a clip on the selected visual track. |
 | VB-NBK-007 | P0 | Notebook and timeline selections are synchronized bidirectionally and survive reload. |

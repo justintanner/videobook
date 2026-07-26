@@ -20,17 +20,17 @@ describe('trunk-edges', () => {
     let def: NotebookPlanDefinition = {
       properties: {},
       sequence: [
-        { id: 'prompt-1', componentType: 'task', type: 'prompt', name: 'p1', properties: { position: { x: 0, y: 0 } } },
-        { id: 'prompt-2', componentType: 'task', type: 'prompt', name: 'p2', properties: { position: { x: 0, y: 0 } } },
-        { id: 'prompt-3', componentType: 'task', type: 'prompt', name: 'p3', properties: { position: { x: 0, y: 0 } } },
-        { id: 'image-1', componentType: 'task', type: 'image', name: 'i1', properties: { position: { x: 0, y: 0 } } },
+        { id: 'prompt-1', componentType: 'task', type: 'note', name: 'p1', properties: { position: { x: 0, y: 0 } } },
+        { id: 'prompt-2', componentType: 'task', type: 'note', name: 'p2', properties: { position: { x: 0, y: 0 } } },
+        { id: 'prompt-3', componentType: 'task', type: 'note', name: 'p3', properties: { position: { x: 0, y: 0 } } },
+        { id: 'image-1', componentType: 'task', type: 'asset', name: 'i1', properties: { media_type: 'image', position: { x: 0, y: 0 } } },
         
-        { id: 'image-2', componentType: 'task', type: 'image', name: 'i2', properties: { position: { x: 0, y: 0 } } },
-        { id: 'video-1', componentType: 'task', type: 'video', name: 'v1', properties: { position: { x: 0, y: 0 } } },
-        { id: 'video-2', componentType: 'task', type: 'video', name: 'v2', properties: { position: { x: 0, y: 0 } } },
+        { id: 'image-2', componentType: 'task', type: 'asset', name: 'i2', properties: { media_type: 'image', position: { x: 0, y: 0 } } },
+        { id: 'video-1', componentType: 'task', type: 'asset', name: 'v1', properties: { media_type: 'video', position: { x: 0, y: 0 } } },
+        { id: 'video-2', componentType: 'task', type: 'asset', name: 'v2', properties: { media_type: 'video', position: { x: 0, y: 0 } } },
         
-        { id: 'prompt-4', componentType: 'task', type: 'prompt', name: 'p4', properties: { position: { x: 0, y: 0 } } },
-        { id: 'video-3', componentType: 'task', type: 'video', name: 'v3', properties: { position: { x: 0, y: 0 } } },
+        { id: 'prompt-4', componentType: 'task', type: 'note', name: 'p4', properties: { position: { x: 0, y: 0 } } },
+        { id: 'video-3', componentType: 'task', type: 'asset', name: 'v3', properties: { media_type: 'video', position: { x: 0, y: 0 } } },
       ],
     }
 
@@ -108,7 +108,7 @@ describe('trunk-edges', () => {
 
   it('checks data equality correctly', () => {
     const a = {
-      kind: 'prompt' as const,
+      kind: 'note' as const,
       pinned: false,
       groupId: 'in:abc',
       groupKind: 'fan-in' as const,
@@ -133,11 +133,11 @@ describe('trunk-edges', () => {
     let def: NotebookPlanDefinition = {
       properties: {},
       sequence: [
-        { id: 'prompt-1', componentType: 'task', type: 'prompt', name: 'p1', properties: { position: { x: 0, y: 0 } } },
-        { id: 'prompt-2', componentType: 'task', type: 'prompt', name: 'p2', properties: { position: { x: 348, y: 0 } } },
-        { id: 'image-1', componentType: 'task', type: 'image', name: 'i1', properties: { position: { x: 0, y: 0 } } },
-        { id: 'image-2', componentType: 'task', type: 'image', name: 'i2', properties: { position: { x: 348, y: 0 } } },
-        { id: 'video-1', componentType: 'task', type: 'video', name: 'v1', properties: { position: { x: 0, y: 0 } } },
+        { id: 'prompt-1', componentType: 'task', type: 'note', name: 'p1', properties: { position: { x: 0, y: 0 } } },
+        { id: 'prompt-2', componentType: 'task', type: 'note', name: 'p2', properties: { position: { x: 348, y: 0 } } },
+        { id: 'image-1', componentType: 'task', type: 'asset', name: 'i1', properties: { media_type: 'image', position: { x: 0, y: 0 } } },
+        { id: 'image-2', componentType: 'task', type: 'asset', name: 'i2', properties: { media_type: 'image', position: { x: 348, y: 0 } } },
+        { id: 'video-1', componentType: 'task', type: 'asset', name: 'v1', properties: { media_type: 'video', position: { x: 0, y: 0 } } },
       ],
     }
 

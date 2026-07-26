@@ -17,6 +17,7 @@ import {
   disconnectSteps,
   graphLayoutBounds,
   latestAssetId,
+  migratePlanStepType,
   moveSteps,
   notebookNodeSizes,
   notebookDropTarget,
@@ -49,23 +50,23 @@ const definition: NotebookPlanDefinition = {
     {
       id: 'prompt-1',
       componentType: 'task',
-      type: 'prompt',
+      type: 'note',
       name: 'Idea',
       properties: { text: 'A fox walks through rain.', position: { x: 10, y: 20 } },
     },
     {
       id: 'image-1',
       componentType: 'task',
-      type: 'image',
+      type: 'asset',
       name: 'Frame',
-      properties: { asset_ids: ['img-first', 'img-second'], position: { x: 10, y: 180 } },
+      properties: { media_type: 'image', asset_ids: ['img-first', 'img-second'], position: { x: 10, y: 180 } },
     },
     {
       id: 'video-1',
       componentType: 'task',
-      type: 'video',
+      type: 'asset',
       name: 'Motion',
-      properties: { values: { prompt: 'Move forward.' }, position: { x: 10, y: 440 } },
+      properties: { media_type: 'video', values: { prompt: 'Move forward.' }, position: { x: 10, y: 440 } },
     },
   ],
 }
@@ -76,16 +77,17 @@ const NOTEBOOK_E2E_DEFINITION: NotebookPlanDefinition = {
     {
       id: 'bf973996296897c56872d7bca3db81ad',
       componentType: 'task',
-      type: 'prompt',
+      type: 'note',
       name: 'Prompt',
       properties: { text: 'helllo!' },
     },
     {
       id: '2006915435b18fed7f0b149a92f99d4f',
       componentType: 'task',
-      type: 'image',
+      type: 'asset',
       name: 'Image',
       properties: {
+        media_type: 'image',
         model: 'nano_banana',
         provider: 'google',
         values: { prompt: 'helllo!' },
@@ -152,8 +154,22 @@ describe('notebook model', () => {
 
   it('creates an empty definition and the three toolbox cell seeds', () => {
     expect(createEmptyDefinition()).toEqual({ properties: {}, sequence: [] })
-    expect(toolboxStepSeeds.map((step) => step.type)).toEqual(['prompt', 'image', 'video'])
+    expect(toolboxStepSeeds.map((step) => step.type)).toEqual(['note', 'asset', 'asset'])
+    expect(toolboxStepSeeds.map((step) => step.toolboxKind)).toEqual(['note', 'image', 'video'])
     expect(toolboxStepSeeds.every((step) => step.componentType === 'task')).toBe(true)
+  })
+
+  it('migrates legacy generation-plan cell types to primitives', () => {
+    const legacy = [
+      { id: 'p', componentType: 'task', type: 'prompt', name: 'Prompt', properties: {} },
+      { id: 'i', componentType: 'task', type: 'image', name: 'Image', properties: {} },
+      { id: 'v', componentType: 'task', type: 'video', name: 'Video', properties: {} },
+      { id: 'a', componentType: 'task', type: 'asset', name: 'Asset', properties: { slug: '@img-a' } },
+    ] as unknown as NotebookPlanDefinition['sequence']
+    const migrated = legacy.map(migratePlanStepType)
+    expect(migrated.map((step) => step.type)).toEqual(['note', 'asset', 'asset', 'source'])
+    expect(migrated[1].properties.media_type).toBe('image')
+    expect(migrated[2].properties.media_type).toBe('video')
   })
 
   it('reads the latest run and appends a new immutable run asset', () => {
@@ -192,12 +208,13 @@ describe('notebook model', () => {
       properties: {},
       sequence: [
         {
-          id: 'source', componentType: 'task', type: 'image', name: 'Source',
-          properties: { asset_ids: ['img-output'] },
+          id: 'source', componentType: 'task', type: 'asset', name: 'Source',
+          properties: { media_type: 'image', asset_ids: ['img-output'] },
         },
         {
-          id: 'target', componentType: 'task', type: 'video', name: 'Target',
+          id: 'target', componentType: 'task', type: 'asset', name: 'Target',
           properties: {
+            media_type: 'video',
             values: {
               prompt: 'Animate it',
               image_slugs: ['@img-output', '@img-external'],
@@ -278,16 +295,16 @@ describe('notebook model', () => {
       properties: {},
       sequence: [
         {
-          id: 'prompt', componentType: 'task', type: 'prompt', name: 'Prompt',
+          id: 'prompt', componentType: 'task', type: 'note', name: 'Note',
           properties: { text: 'hi', position: { x: 900, y: 40 } },
         },
         {
-          id: 'asset', componentType: 'task', type: 'asset', name: 'Asset',
+          id: 'asset', componentType: 'task', type: 'source', name: 'Source',
           properties: { slug: '@img-source', position: { x: 10, y: 10 } },
         },
         {
-          id: 'target', componentType: 'task', type: 'image', name: 'Target',
-          properties: { inputs: ['prompt', 'asset'], position: { x: 40, y: 40 } },
+          id: 'target', componentType: 'task', type: 'asset', name: 'Target',
+          properties: { media_type: 'image', inputs: ['prompt', 'asset'], position: { x: 40, y: 40 } },
         },
       ],
     }
@@ -306,16 +323,16 @@ describe('notebook model', () => {
       properties: {},
       sequence: [
         {
-          id: 'right', componentType: 'task', type: 'prompt', name: 'Right',
+          id: 'right', componentType: 'task', type: 'note', name: 'Right',
           properties: { text: 'right', position: { x: 800, y: 12 } },
         },
         {
-          id: 'left', componentType: 'task', type: 'asset', name: 'Left',
+          id: 'left', componentType: 'task', type: 'source', name: 'Left',
           properties: { slug: '@img-left', position: { x: 100, y: 700 } },
         },
         {
-          id: 'child', componentType: 'task', type: 'image', name: 'Child',
-          properties: { inputs: ['left'], position: { x: 40, y: 40 } },
+          id: 'child', componentType: 'task', type: 'asset', name: 'Child',
+          properties: { media_type: 'image', inputs: ['left'], position: { x: 40, y: 40 } },
         },
       ],
     }
@@ -338,7 +355,7 @@ describe('notebook model', () => {
       sequence: ['a', 'b', 'c'].map((id, index) => ({
         id,
         componentType: 'task' as const,
-        type: 'prompt' as const,
+        type: 'note' as const,
         name: id,
         properties: { text: id, position: { x: index * 300, y: 0 } },
       })),
@@ -363,11 +380,11 @@ describe('notebook model', () => {
       properties: {},
       sequence: [
         {
-          id: 'prompt', componentType: 'task', type: 'prompt', name: 'Prompt',
+          id: 'prompt', componentType: 'task', type: 'note', name: 'Note',
           properties: { text: 'go', position: { x: 0, y: 0 } },
         },
         {
-          id: 'asset', componentType: 'task', type: 'asset', name: 'Asset',
+          id: 'asset', componentType: 'task', type: 'source', name: 'Source',
           properties: { slug: '@img-ref', position: { x: 300, y: 0 } },
         },
       ],
@@ -387,15 +404,15 @@ describe('notebook model', () => {
     }, null)
     expect(nearest).toMatchObject({ parentId: 'asset', depth: 1 })
 
-    const promptCenter = promptPosition.x + notebookNodeSizes.prompt.width / 2
-    const assetCenter = assetPosition.x + notebookNodeSizes.asset.width / 2
+    const promptCenter = promptPosition.x + notebookNodeSizes.note.width / 2
+    const assetCenter = assetPosition.x + notebookNodeSizes.source.width / 2
     const ambiguous = notebookDropTarget(graph, 'image', {
-      x: (promptCenter + assetCenter) / 2 - notebookNodeSizes.image.width / 2,
+      x: (promptCenter + assetCenter) / 2 - notebookNodeSizes.asset.width / 2,
       y: NOTEBOOK_TRACK_ORIGIN_Y + NOTEBOOK_TRACK_ROW_PITCH,
     }, null)
     // ambiguous drop now { parentId: null, depth: requested }; prompt deep-drop no longer forced to 0.
     expect(ambiguous).toMatchObject({ parentId: null, depth: 1 })
-    expect(notebookDropTarget(graph, 'prompt', { x: 800, y: 800 }, 'asset').depth).toBe(1)
+    expect(notebookDropTarget(graph, 'note', { x: 800, y: 800 }, 'asset').depth).toBe(1)
     expect(notebookTrackDepths(graph)).toEqual(new Map([['prompt', 0], ['asset', 0]]))
   })
 
@@ -404,16 +421,17 @@ describe('notebook model', () => {
       properties: {},
       sequence: [
         {
-          id: 'prompt', componentType: 'task', type: 'prompt', name: 'Prompt',
+          id: 'prompt', componentType: 'task', type: 'note', name: 'Note',
           properties: { text: 'Linked prompt' },
         },
         {
-          id: 'asset', componentType: 'task', type: 'asset', name: 'Asset',
+          id: 'asset', componentType: 'task', type: 'source', name: 'Source',
           properties: { slug: '@img-source' },
         },
         {
-          id: 'target', componentType: 'task', type: 'image', name: 'Target',
+          id: 'target', componentType: 'task', type: 'asset', name: 'Target',
           properties: {
+            media_type: 'image',
             values: { prompt: 'Ignored local prompt' },
             inputs: ['prompt', 'asset'],
             input_routes: { asset: 'first_frame_slug' },
@@ -426,7 +444,7 @@ describe('notebook model', () => {
     expect(resolved.values).toEqual({ prompt: 'Linked prompt', first_frame_slug: '@img-source' })
     expect(resolved.promptFromInputs).toBe('Linked prompt')
     expect(stepInputReadiness(graph, target, [{ id: 'img-source', status: 'ready' }])).toEqual({ ready: true, reasons: [] })
-    expect(stepInputReadiness(graph, target, [])).toEqual({ ready: false, reasons: ['Asset is not ready.'] })
+    expect(stepInputReadiness(graph, target, [])).toEqual({ ready: false, reasons: ['Source is not ready.'] })
     expect(stepInvalidReason(graph, target)).toBeNull()
     expect(stepInvalidReason(graph, { ...target, properties: { ...target.properties, values: {} } })).toBeNull()
   })
@@ -456,16 +474,16 @@ describe('notebook model', () => {
         properties: {},
         sequence: [
           {
-            id: 'scene', componentType: 'task', type: 'asset', name: 'Scene',
+            id: 'scene', componentType: 'task', type: 'source', name: 'Scene',
             properties: { slug: '@img-scene' },
           },
           {
-            id: 'replace', componentType: 'task', type: 'asset', name: 'Replace',
+            id: 'replace', componentType: 'task', type: 'source', name: 'Replace',
             properties: { slug: '@img-replace' },
           },
           {
-            id: 'target', componentType: 'task', type: 'image', name: 'Target',
-            properties: { values: {}, inputs: ['scene', 'replace'] },
+            id: 'target', componentType: 'task', type: 'asset', name: 'Target',
+            properties: { media_type: 'image', values: {}, inputs: ['scene', 'replace'] },
           },
         ],
       }
@@ -483,16 +501,17 @@ describe('notebook model', () => {
         properties: {},
         sequence: [
           {
-            id: 'scene', componentType: 'task', type: 'asset', name: 'Scene',
+            id: 'scene', componentType: 'task', type: 'source', name: 'Scene',
             properties: { slug: '@img-scene' },
           },
           {
-            id: 'replace', componentType: 'task', type: 'asset', name: 'Replace',
+            id: 'replace', componentType: 'task', type: 'source', name: 'Replace',
             properties: { slug: '@img-replace' },
           },
           {
-            id: 'target', componentType: 'task', type: 'image', name: 'Target',
+            id: 'target', componentType: 'task', type: 'asset', name: 'Target',
             properties: {
+              media_type: 'image',
               values: { prompt: 'custom swap' },
               inputs: ['scene', 'replace'],
             },
@@ -506,16 +525,16 @@ describe('notebook model', () => {
         properties: {},
         sequence: [
           {
-            id: 'prompt', componentType: 'task', type: 'prompt', name: 'Prompt',
+            id: 'prompt', componentType: 'task', type: 'note', name: 'Note',
             properties: { text: 'Linked prompt' },
           },
           {
-            id: 'scene', componentType: 'task', type: 'asset', name: 'Scene',
+            id: 'scene', componentType: 'task', type: 'source', name: 'Scene',
             properties: { slug: '@img-scene' },
           },
           {
-            id: 'target', componentType: 'task', type: 'image', name: 'Target',
-            properties: { values: {}, inputs: ['prompt', 'scene'] },
+            id: 'target', componentType: 'task', type: 'asset', name: 'Target',
+            properties: { media_type: 'image', values: {}, inputs: ['prompt', 'scene'] },
           },
         ],
       }
@@ -530,12 +549,12 @@ describe('notebook model', () => {
         properties: {},
         sequence: [
           {
-            id: 'asset', componentType: 'task', type: 'asset', name: 'Asset',
+            id: 'asset', componentType: 'task', type: 'source', name: 'Source',
             properties: { slug: '@img-hero' },
           },
           {
-            id: 'target', componentType: 'task', type: 'image', name: 'Target',
-            properties: { values: {}, inputs: ['asset'] },
+            id: 'target', componentType: 'task', type: 'asset', name: 'Target',
+            properties: { media_type: 'image', values: {}, inputs: ['asset'] },
           },
         ],
       }
@@ -550,16 +569,16 @@ describe('notebook model', () => {
         properties: {},
         sequence: [
           {
-            id: 'scene', componentType: 'task', type: 'asset', name: 'Scene',
+            id: 'scene', componentType: 'task', type: 'source', name: 'Scene',
             properties: { slug: '@vid-scene' },
           },
           {
-            id: 'replace', componentType: 'task', type: 'asset', name: 'Replace',
+            id: 'replace', componentType: 'task', type: 'source', name: 'Replace',
             properties: { slug: '@img-replace' },
           },
           {
-            id: 'target', componentType: 'task', type: 'video', name: 'Target',
-            properties: { values: {}, inputs: ['scene', 'replace'] },
+            id: 'target', componentType: 'task', type: 'asset', name: 'Target',
+            properties: { media_type: 'video', values: {}, inputs: ['scene', 'replace'] },
           },
         ],
       }
@@ -575,12 +594,12 @@ describe('notebook model', () => {
       properties: {},
       sequence: [
         {
-          id: 'asset', componentType: 'task', type: 'asset', name: 'Asset',
+          id: 'asset', componentType: 'task', type: 'source', name: 'Source',
           properties: { slug: '@img-source' },
         },
         {
-          id: 'target', componentType: 'task', type: 'video', name: 'Target',
-          properties: { mode: 'i2v', values: {}, inputs: ['asset'] },
+          id: 'target', componentType: 'task', type: 'asset', name: 'Target',
+          properties: { media_type: 'video', mode: 'i2v', values: {}, inputs: ['asset'] },
         },
       ],
     }
@@ -633,16 +652,16 @@ describe('notebook model', () => {
       properties: {},
       sequence: [
         {
-          id: 'vid', componentType: 'task', type: 'asset', name: 'Clip',
+          id: 'vid', componentType: 'task', type: 'source', name: 'Clip',
           properties: { slug: '@vid-clip' },
         },
         {
-          id: 'aud', componentType: 'task', type: 'asset', name: 'Music',
+          id: 'aud', componentType: 'task', type: 'source', name: 'Music',
           properties: { slug: '@aud-music' },
         },
         {
-          id: 'target', componentType: 'task', type: 'video', name: 'Target',
-          properties: { mode: 'text', values: {}, inputs: ['vid', 'aud'] },
+          id: 'target', componentType: 'task', type: 'asset', name: 'Target',
+          properties: { media_type: 'video', mode: 'text', values: {}, inputs: ['vid', 'aud'] },
         },
       ],
     }
@@ -663,24 +682,24 @@ describe('notebook model', () => {
       properties: {},
       sequence: [
         {
-          id: 'prompt', componentType: 'task', type: 'prompt', name: 'Prompt',
+          id: 'prompt', componentType: 'task', type: 'note', name: 'Note',
           properties: { text: 'Ignore me' },
         },
         {
-          id: 'asset-a', componentType: 'task', type: 'asset', name: 'Asset A',
+          id: 'asset-a', componentType: 'task', type: 'source', name: 'Source A',
           properties: { slug: '@img-alpha' },
         },
         {
-          id: 'upstream', componentType: 'task', type: 'image', name: 'Upstream',
-          properties: { model: 'nano_banana', asset_ids: ['img-up'] },
+          id: 'upstream', componentType: 'task', type: 'asset', name: 'Upstream',
+          properties: { media_type: 'image', model: 'nano_banana', asset_ids: ['img-up'] },
         },
         {
-          id: 'asset-b', componentType: 'task', type: 'asset', name: 'Asset B',
+          id: 'asset-b', componentType: 'task', type: 'source', name: 'Source B',
           properties: { slug: '@vid-beta' },
         },
         {
-          id: 'target', componentType: 'task', type: 'video', name: 'Target',
-          properties: { inputs: ['prompt', 'asset-a', 'upstream', 'asset-b'] },
+          id: 'target', componentType: 'task', type: 'asset', name: 'Target',
+          properties: { media_type: 'video', inputs: ['prompt', 'asset-a', 'upstream', 'asset-b'] },
         },
       ],
     }

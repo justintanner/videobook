@@ -2,6 +2,7 @@ import { applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type No
 import { useCallback, useEffect, useState, useRef } from 'react'
 import {
   connectedMediaInputs,
+  generationMediaType,
   latestAssetId,
   notebookTrackLayout,
   stepInputs,
@@ -122,7 +123,7 @@ function nodeData(
   route: ActiveRoute,
   promoteAssetRef: React.MutableRefObject<((stepId: string, assetId: string) => void) | undefined>,
 ): NotebookNodeData {
-  const assetId = step.type === 'asset'
+  const assetId = step.type === 'source'
     ? typeof step.properties.slug === 'string' ? step.properties.slug.replace(/^@/, '') : null
     : latestAssetId(step)
   const asset = assetId ? mediaItems.find((item) => item.id === assetId) : null
@@ -135,7 +136,7 @@ function nodeData(
     running: runningStepIds.has(step.id),
     error: errors.get(step.id) ?? null,
     invalidReason: stepInvalidReason(definition, step),
-    missing: step.type === 'asset' && !asset,
+    missing: step.type === 'source' && !asset,
     mediaInputs: connectedMediaInputs(definition, step, mediaItems),
     outputs: stepRunOutputs(step, mediaItems),
     routeState: route.nodeStates.get(step.id) ?? null,
@@ -177,7 +178,7 @@ function desiredEdges(
   const gutterRoutes = computeGutterRoutes(definition)
   
   return definition.sequence.flatMap((target) => {
-    if (target.type !== 'image' && target.type !== 'video') return []
+    if (!generationMediaType(target)) return []
     const inputRoutes = typeof target.properties.input_routes === 'object'
       && target.properties.input_routes !== null
       && !Array.isArray(target.properties.input_routes)
@@ -188,7 +189,7 @@ function desiredEdges(
       : []
     return inputs.filter((source) => steps.has(source)).map((source) => {
       const id = `${source}->${target.id}`
-      const classes = [steps.get(source)?.type === 'prompt' ? 'vc-notebook-edge-prompt' : 'vc-notebook-edge-ref']
+      const classes = [steps.get(source)?.type === 'note' ? 'vc-notebook-edge-note' : 'vc-notebook-edge-ref']
       if (selectedStepId) classes.push(route.edgeIds.has(id) ? 'vc-notebook-edge-active' : 'vc-notebook-edge-muted')
       if (runningStepIds.has(source) || runningStepIds.has(target.id)) classes.push('vc-notebook-edge-running')
       
@@ -201,7 +202,7 @@ function desiredEdges(
         return gutterRoutes.get(siblingEdgeId)?.multiRow !== true
       })
       const data: TrunkEdgeData = {
-        kind: steps.get(source)?.type === 'prompt' ? 'prompt' : 'ref',
+        kind: steps.get(source)?.type === 'note' ? 'note' : 'ref',
         pinned: inputRoutes[source] === 'first_frame_slug',
         groupId: groupAssignment?.groupId ?? '',
         groupKind: groupAssignment?.groupKind ?? 'fan-in',

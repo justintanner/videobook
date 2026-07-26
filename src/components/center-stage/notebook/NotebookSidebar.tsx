@@ -27,6 +27,7 @@ import { deriveStripSlots, routeDrop, canonicalCharacterId } from '@/components/
 import {
   CONNECTION_OWNED_PARAMS,
   assetSlugKind,
+  generationMediaType,
   latestAssetId,
   resolveEffectiveValues,
   sanitizeValuesForOption,
@@ -187,11 +188,11 @@ export function NotebookSidebar({
       </aside>
     )
   }
-  if (selected.type === 'prompt') {
+  if (selected.type === 'note') {
     const text = typeof selected.properties.text === 'string' ? selected.properties.text : ''
     return (
       <aside className="vc-notebook-sidebar">
-        <LoadoutHeader title="Prompt" />
+        <LoadoutHeader title="Note" />
         <div className="vc-notebook-editor">
           <label htmlFor={`step-text-${selected.id}`}>Prompt</label>
           <textarea
@@ -209,8 +210,15 @@ export function NotebookSidebar({
       </aside>
     )
   }
-  if (selected.type === 'asset') {
+  if (selected.type === 'source') {
     return <AssetSidebar step={selected} definition={definition} mediaItems={mediaItems} onOpenAsset={onOpenAsset} />
+  }
+  if (!generationMediaType(selected)) {
+    return (
+      <aside className="vc-notebook-sidebar">
+        <LoadoutHeader title={selected.type} />
+      </aside>
+    )
   }
   return (
     <GenerationSidebar
@@ -249,7 +257,7 @@ function AssetSidebar({
   const uses = definition.sequence.filter((candidate) => stepInputs(candidate).includes(step.id)).length
   return (
     <aside className="vc-notebook-sidebar">
-      <LoadoutHeader title="Asset" />
+      <LoadoutHeader title="Source" />
       <div className="vc-notebook-editor">
         {item?.thumbnailSrc ? <img className="vc-notebook-asset-preview" src={item.thumbnailSrc} alt="" /> : <ImageIcon />}
         <code>{slug}</code>
@@ -295,7 +303,7 @@ function GenerationSidebar({
   onRun,
   onManageCharacters,
 }: GenerationSidebarProps) {
-  const category: 'image' | 'video' = step.type === 'video' ? 'video' : 'image'
+  const category = generationMediaType(step) ?? 'image'
   const model = typeof step.properties.model === 'string' ? step.properties.model : ''
   const provider = typeof step.properties.provider === 'string' ? step.properties.provider : ''
   const preview = useGenPreview({ category, bookId, callTool, model, provider })
@@ -778,14 +786,14 @@ function InputList({
       {inputs.map((id) => {
         const source = sources.get(id)
         if (!source) return null
-        const slug = source.type === 'asset'
+        const slug = source.type === 'source'
           ? typeof source.properties.slug === 'string' ? source.properties.slug : ''
           : latestAssetId(source) ? `@${latestAssetId(source)}` : ''
         const item = slug ? mediaItems.find((media) => media.id === slug.replace(/^@/, '')) : null
-        const kind = source.type === 'prompt' ? null : assetSlugKind(slug)
-        const label = source.type === 'prompt'
-          ? (typeof source.properties.text === 'string' ? source.properties.text : '').slice(0, 48) || 'Empty prompt'
-          : source.type === 'asset'
+        const kind = source.type === 'note' ? null : assetSlugKind(slug)
+        const label = source.type === 'note'
+          ? (typeof source.properties.text === 'string' ? source.properties.text : '').slice(0, 48) || 'Empty note'
+          : source.type === 'source'
             ? slug
             : `${typeof source.properties.model === 'string' ? source.properties.model : source.type} · ${slug || 'no output'}`
 
@@ -826,8 +834,8 @@ function InputList({
                   <option key={opt.param} value={opt.param}>{opt.param}</option>
                 ))}
               </select>
-            ) : source.type === 'prompt' ? (
-              <span className="vc-notebook-route-fixed text-xs ml-auto opacity-60">prompt</span>
+            ) : source.type === 'note' ? (
+              <span className="vc-notebook-route-fixed text-xs ml-auto opacity-60">note</span>
             ) : null}
  <button type="button" title="Disconnect" onClick={() => onDisconnect(id, step.id)}><X className="size-4" /></button>
           </div>

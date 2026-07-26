@@ -268,7 +268,7 @@ export function CommandComposer({
           <header>
             <span>
               {promptSession.kind === 'prompt'
-                ? 'prompt cell'
+                ? 'note cell'
                 : `${promptSession.kind} prompt`}
             </span>
             <strong>{promptSession.slug}</strong>

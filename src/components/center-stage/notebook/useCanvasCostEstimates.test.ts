@@ -43,21 +43,21 @@ function definition(...sequence: NotebookPlanStep[]): NotebookPlanDefinition {
 }
 
 describe('deriveStepEstimateCall', () => {
-  it('returns null for prompt steps and when there is no preview', () => {
-    const promptStep = step({ id: 'p1', type: 'prompt', properties: { text: 'hi' } })
+  it('returns null for note steps and when there is no preview', () => {
+    const promptStep = step({ id: 'p1', type: 'note', properties: { text: 'hi' } })
     expect(deriveStepEstimateCall(definition(promptStep), promptStep, preview('nano', [option({ key: 'nano', tool_name: 't' })]), 'proj')).toBeNull()
-    const image = step({ id: 'i1', type: 'image' })
+    const image = step({ id: 'i1', type: 'asset', properties: { media_type: 'image' } })
     expect(deriveStepEstimateCall(definition(image), image, null, 'proj')).toBeNull()
   })
 
   it('returns null when the step model is not in the catalog', () => {
-    const imageStep = step({ id: 'i1', type: 'image', properties: { model: 'ghost', values: {} } })
+    const imageStep = step({ id: 'i1', type: 'asset', properties: { media_type: 'image', model: 'ghost', values: {} } })
     expect(deriveStepEstimateCall(definition(imageStep), imageStep, preview('nano', [option({ key: 'nano', tool_name: 't' })]), 'proj')).toBeNull()
   })
 
   it('merges prefilled_values under step values and appends book_id', () => {
     const opt = option({ key: 'nano', tool_name: 'generate_nano', prefilled_values: { aspect_ratio: '1:1', quality: 'high' } })
-    const imageStep = step({ id: 'i1', type: 'image', properties: { model: 'nano', values: { aspect_ratio: '16:9' } } })
+    const imageStep = step({ id: 'i1', type: 'asset', properties: { media_type: 'image', model: 'nano', values: { aspect_ratio: '16:9' } } })
     const derived = deriveStepEstimateCall(definition(imageStep), imageStep, preview('nano', [opt]), 'proj-a')
     expect(derived?.toolName).toBe('generate_nano')
     expect(derived?.input).toEqual({ aspect_ratio: '16:9', quality: 'high', book_id: 'proj-a' })
@@ -66,14 +66,14 @@ describe('deriveStepEstimateCall', () => {
 
   it('falls back to the category default model when the step has no model', () => {
     const opt = option({ key: 'default-model', tool_name: 'generate_default' })
-    const imageStep = step({ id: 'i1', type: 'image', properties: { model: '', values: {} } })
+    const imageStep = step({ id: 'i1', type: 'asset', properties: { media_type: 'image', model: '', values: {} } })
     const derived = deriveStepEstimateCall(definition(imageStep), imageStep, preview('default-model', [opt]), 'proj')
     expect(derived?.toolName).toBe('generate_default')
   })
 
   it('includes the selected provider in the estimate input', () => {
     const opt = option({ key: 'grok', tool_name: 'generate_grok', selected_provider: 'xai' })
-    const imageStep = step({ id: 'i1', type: 'image', properties: { model: 'grok', values: {} } })
+    const imageStep = step({ id: 'i1', type: 'asset', properties: { media_type: 'image', model: 'grok', values: {} } })
     const derived = deriveStepEstimateCall(definition(imageStep), imageStep, preview('grok', [opt]), 'proj')
     expect(derived?.input).toEqual({ book_id: 'proj', _provider: 'xai' })
   })
@@ -98,18 +98,18 @@ describe('deriveStepEstimateCall', () => {
         ],
       },
     })
-    const t2v = step({ id: 'v1', type: 'video', properties: { model: 'omni', values: {} } })
-    const asset = step({ id: 'asset', type: 'asset', properties: { slug: '@img-a' } })
-    const i2v = step({ id: 'v2', type: 'video', properties: { model: 'omni', values: {}, inputs: ['asset'] } })
+    const t2v = step({ id: 'v1', type: 'asset', properties: { media_type: 'video', model: 'omni', values: {} } })
+    const asset = step({ id: 'asset', type: 'source', properties: { slug: '@img-a' } })
+    const i2v = step({ id: 'v2', type: 'asset', properties: { media_type: 'video', model: 'omni', values: {}, inputs: ['asset'] } })
     expect(deriveStepEstimateCall(definition(t2v), t2v, preview('omni', [opt]), 'proj')?.toolName).toBe('generate_omni_t2v')
     expect(deriveStepEstimateCall(definition(asset, i2v), i2v, preview('omni', [opt]), 'proj')?.toolName).toBe('generate_omni_i2v')
   })
 
   it('produces the same key for identical calls and differing keys otherwise', () => {
     const opt = option({ key: 'nano', tool_name: 'generate_nano' })
-    const first = step({ id: 'i1', type: 'image', properties: { model: 'nano', values: { seed: 1 } } })
-    const second = step({ id: 'i2', type: 'image', properties: { model: 'nano', values: { seed: 1 } } })
-    const third = step({ id: 'i3', type: 'image', properties: { model: 'nano', values: { seed: 2 } } })
+    const first = step({ id: 'i1', type: 'asset', properties: { media_type: 'image', model: 'nano', values: { seed: 1 } } })
+    const second = step({ id: 'i2', type: 'asset', properties: { media_type: 'image', model: 'nano', values: { seed: 1 } } })
+    const third = step({ id: 'i3', type: 'asset', properties: { media_type: 'image', model: 'nano', values: { seed: 2 } } })
     const a = deriveStepEstimateCall(definition(first), first, preview('nano', [opt]), 'proj')
     const b = deriveStepEstimateCall(definition(second), second, preview('nano', [opt]), 'proj')
     const c = deriveStepEstimateCall(definition(third), third, preview('nano', [opt]), 'proj')
@@ -137,11 +137,12 @@ describe('deriveStepEstimateCall', () => {
         ],
       },
     })
-    const source = step({ id: 'image-1', type: 'image', properties: { asset_ids: ['img-frame'] } })
+    const source = step({ id: 'image-1', type: 'asset', properties: { media_type: 'image', asset_ids: ['img-frame'] } })
     const target = step({
       id: 'video-1',
-      type: 'video',
+      type: 'asset',
       properties: {
+        media_type: 'video',
         model: 'omni',
         values: {},
         inputs: ['image-1'],
