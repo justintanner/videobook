@@ -285,7 +285,8 @@ const cellPalette: Array<{
   { type: 'generate_video', label: 'Generate video', group: 'Generation', icon: Video },
   { type: 'generate_image', label: 'Generate image', group: 'Generation', icon: Image },
   { type: 'generate_audio', label: 'Generate audio', group: 'Generation', icon: AudioWaveform },
-  { type: 'split', label: 'Split', group: 'Edit', icon: Film },
+  { type: 'extract_audio', label: 'Extract audio', group: 'Edit', icon: AudioWaveform },
+  { type: 'split_video', label: 'Split video', group: 'Edit', icon: Film },
   { type: 'concat', label: 'Concat', group: 'Edit', icon: Film },
   { type: 'splice', label: 'Splice', group: 'Edit', icon: Film },
 ]
@@ -301,7 +302,8 @@ const notebookCellTypes = new Set<string>([
   'audio',
   'image',
   'video',
-  'split',
+  'extract_audio',
+  'split_video',
   'prompt',
   'character',
   'analyze',
@@ -941,9 +943,13 @@ function canvasNodes(
 }
 
 function CellIcon({ kind }: { kind: NotebookCellType }) {
-  if (kind === 'video' || kind === 'generate_video') return <Video size={14} />
+  if (kind === 'video' || kind === 'generate_video' || kind === 'split_video') {
+    return <Video size={14} />
+  }
   if (kind === 'image' || kind === 'generate_image') return <Image size={14} />
-  if (kind === 'audio' || kind === 'generate_audio') return <AudioWaveform size={14} />
+  if (kind === 'audio' || kind === 'extract_audio' || kind === 'generate_audio') {
+    return <AudioWaveform size={14} />
+  }
   if (kind === 'prompt') return <BookOpen size={14} />
   if (kind === 'analyze') return <Activity size={14} />
   if (kind === 'character') return <CircleDot size={14} />
@@ -977,7 +983,8 @@ function emptyCellLabel(data: CanvasCellData): string {
     return `Select ${data.kind} media`
   }
   if (data.kind === 'character') return 'Select a character'
-  if (data.kind === 'split') return 'Configure a source range'
+  if (data.kind === 'extract_audio') return 'Connect a video to extract audio'
+  if (data.kind === 'split_video') return 'Configure a video range'
   if (data.kind === 'concat') return 'Connect clip:0 and clip:1'
   if (data.kind === 'splice') return 'Connect first and second'
   return data.prompt || data.title
@@ -1010,6 +1017,10 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
   const playableVideo = data.asset?.type === 'video' || data.asset?.type === 'final'
   const playableAudio = data.asset?.type === 'audio'
   const audioCell = data.kind === 'audio' || data.kind === 'generate_audio'
+  const visualMediaCell = data.kind === 'video'
+    || data.kind === 'image'
+    || data.kind === 'generate_video'
+    || data.kind === 'generate_image'
   const textCell = data.kind === 'prompt' || data.kind === 'analyze'
   const isTopRow = data.slot.row === 0
   const canRun = Boolean(data.operation ?? data.tool ?? data.model)
@@ -1069,7 +1080,7 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
               ? <audio src={mediaUrl} controls preload="metadata" />
               : <span>{emptyCellLabel(data)}</span>}
           </div>
-        ) : mediaUrl || thumbnailUrl ? (
+        ) : visualMediaCell && (mediaUrl || thumbnailUrl) ? (
           <div className="cell-media">
             {playableVideo && mediaUrl ? (
               <video src={mediaUrl} poster={thumbnailUrl ?? undefined} muted playsInline preload="metadata" />
@@ -1537,6 +1548,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         book_id: targetBookId,
         sort: 'newest',
         limit: 200,
+        include_referenced: true,
       }),
       call('get_primary_sequence', { book_id: targetBookId }),
       call('list_jobs', { book_id: targetBookId, limit: 200 }),
@@ -1641,7 +1653,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       audio: '@audio',
       image: '@image',
       video: '@video',
-      split: '@split',
+      extract_audio: '@extract-audio',
+      split_video: '@split-video',
       prompt: '@prompt',
       character: '@character',
       analyze: '@analyze',

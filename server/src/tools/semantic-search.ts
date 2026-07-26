@@ -815,7 +815,11 @@ export function semanticSearchDefs(
             }
             const created: NotebookCell = {
               id: cellId,
-              type: hit.location.kind === "timed" ? "split" : "image",
+              type: hit.artifactKind === "audio"
+                ? "audio"
+                : hit.location.kind === "timed"
+                  ? "video"
+                  : "image",
               title: String(args.title),
               slot: isSlot(args.slot)
                 ? args.slot

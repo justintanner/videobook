@@ -219,8 +219,40 @@ describe("notebook local media and analysis fan-out", () => {
       sourceArtifactId: sourceArtifact.value.artifactId,
     });
     expect(first.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(2);
+    expect(first.cells.filter((cell) => cell.operation === "extract_audio")).toHaveLength(2);
+    const firstVideos = first.cells.filter((cell) =>
+      cell.inputs?.workflowRole?.toString().startsWith("scene-video-"));
+    expect(firstVideos).toHaveLength(2);
+    expect(firstVideos.every((cell) => cell.type === "video")).toBe(true);
     expect(first.cells.filter((cell) => cell.operation === "capture_frame")).toHaveLength(4);
     expect(first.cells.filter((cell) => cell.operation === "image_to_video")).toHaveLength(2);
+    for (let ordinal = 1; ordinal <= 2; ordinal += 1) {
+      const split = first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `split-video-${ordinal}`);
+      const video = first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `scene-video-${ordinal}`);
+      const extractAudio = first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `scene-extract-audio-${ordinal}`);
+      const audio = first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `scene-audio-${ordinal}`);
+      expect(first.edges).toContainEqual(expect.objectContaining({
+        source: split?.id,
+        target: video?.id,
+        targetInput: "media",
+      }));
+      expect(first.edges).toContainEqual(expect.objectContaining({
+        source: video?.id,
+        target: extractAudio?.id,
+        targetInput: "video",
+      }));
+      expect(first.edges).toContainEqual(expect.objectContaining({
+        source: extractAudio?.id,
+        target: audio?.id,
+        targetInput: "media",
+      }));
+      expect(video?.operation).toBeUndefined();
+      expect(audio?.operation).toBeUndefined();
+    }
     const order = topologicalOrder(first);
     expect(order.map((cell) => cell.id)).toContain(analysis.id);
 
@@ -237,6 +269,11 @@ describe("notebook local media and analysis fan-out", () => {
     });
     expect(second.cells.filter((cell) => cell.operation === "split_range").map((cell) => cell.id).sort())
       .toEqual(first.cells.filter((cell) => cell.operation === "split_range").map((cell) => cell.id).sort());
+    expect(second.cells.filter((cell) =>
+      cell.inputs?.workflowRole?.toString().startsWith("scene-video-"))
+      .map((cell) => cell.id)
+      .sort())
+      .toEqual(firstVideos.map((cell) => cell.id).sort());
 
     const grown = await applyAnalysisResults(engine, second, analysis.id, {
       rawOutput: {
@@ -251,6 +288,8 @@ describe("notebook local media and analysis fan-out", () => {
       sourceArtifactId: sourceArtifact.value.artifactId,
     });
     expect(grown.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(3);
+    expect(grown.cells.filter((cell) =>
+      cell.inputs?.workflowRole?.toString().startsWith("scene-video-"))).toHaveLength(3);
     // Artifacts from the prior analysis script remain in the catalog.
     expect(engine.artifacts.list().length).toBeGreaterThanOrEqual(2);
   });

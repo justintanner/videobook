@@ -73,6 +73,40 @@ describe('notebook draft conversion', () => {
     ])
   })
 
+  it('uses typed handles for video actions and their media outputs', () => {
+    const typed: NotebookDocument = {
+      ...source,
+      cells: [
+        {
+          ...source.cells[0]!,
+          type: 'extract_audio',
+        },
+        {
+          ...source.cells[0]!,
+          id: '018f7cf5-0d31-7d96-8c0f-800000000007',
+          type: 'split_video',
+        },
+        {
+          ...source.cells[0]!,
+          id: '018f7cf5-0d31-7d96-8c0f-800000000008',
+          type: 'audio',
+        },
+        {
+          ...source.cells[0]!,
+          id: '018f7cf5-0d31-7d96-8c0f-800000000009',
+          type: 'video',
+        },
+      ],
+    }
+
+    expect(notebookNodes(typed).map((node) => node.data.targetInputs)).toEqual([
+      ['video'],
+      ['video', 'analysis'],
+      ['media'],
+      ['media'],
+    ])
+  })
+
   it('keeps manually created notes in ordinary draggable grid cells', () => {
     const labeled: NotebookDocument = {
       ...source,

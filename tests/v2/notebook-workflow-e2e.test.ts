@@ -30,12 +30,13 @@ describe('transparent runnable DAG e2e (offline)', () => {
   })
 
   it('runs video→analysis fixture→split/audio/image without paid generation', async () => {
-    expect(SCHEMA_VERSION).toBe(10)
+    expect(SCHEMA_VERSION).toBe(11)
     expect(NOTEBOOK_CELL_TYPES).toEqual([
       'audio',
       'image',
       'video',
-      'split',
+      'extract_audio',
+      'split_video',
       'prompt',
       'character',
       'analyze',
@@ -49,7 +50,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
     expect(WORKFLOW_STAGES).toEqual([
       'VIDEO',
       'ANALYZE',
-      'SPLIT SCENES',
+      'SPLIT VIDEO',
       'EXTRACT ASSETS',
       'WRITE PROMPTS',
       'GENERATE VIDEO',
@@ -107,6 +108,8 @@ describe('transparent runnable DAG e2e (offline)', () => {
     expect(fanned.properties?.stageLabels).toBeUndefined()
     expect(fanned.properties?.featureLanes).toBeUndefined()
     expect(fanned.cells.filter((cell) => cell.operation === 'split_range')).toHaveLength(2)
+    expect(fanned.cells.filter((cell) =>
+      cell.inputs?.workflowRole?.toString().startsWith('scene-video-'))).toHaveLength(2)
     expect(fanned.cells.filter((cell) => cell.operation === 'capture_frame')).toHaveLength(4)
     expect(fanned.cells.filter((cell) => cell.operation === 'rewrite_prompt')).toHaveLength(2)
     expect(fanned.cells.filter((cell) => cell.operation === 'image_to_video')).toHaveLength(2)

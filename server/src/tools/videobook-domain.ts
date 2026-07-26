@@ -32,6 +32,7 @@ import { queue, stopBookQueue } from "../queue.js";
 import {
   notebookCellDefinitionFingerprint,
   notebookCellIsPaid,
+  notebookCellMediaType,
   prepareNotebookGeneration,
 } from "../jobs/run-notebook.js";
 import {
@@ -56,6 +57,56 @@ import {
 
 const bookSchema = { book_id: z.string().uuid() };
 const cellTypeSchema = z.enum(NOTEBOOK_CELL_TYPES);
+
+function notebookConnectionError(
+  notebook: NotebookDocument,
+  sourceId: string,
+  targetId: string,
+  targetInput: string,
+): string | null {
+  const source = notebook.cells.find((cell) => cell.id === sourceId);
+  const target = notebook.cells.find((cell) => cell.id === targetId);
+  if (!source) return `Source cell not found: ${sourceId}`;
+  if (!target) return `Target cell not found: ${targetId}`;
+  if (target.type === "extract_audio") {
+    if (targetInput !== "video") {
+      return "Extract audio cells accept only the video input";
+    }
+    return notebookCellMediaType(source) === "video"
+      && source.type !== "split_video"
+      ? null
+      : "Extract audio cells require a video-producing source";
+  }
+  if (target.type === "split_video") {
+    if (targetInput === "analysis") {
+      return source.type === "analyze"
+        ? null
+        : "Split video analysis input requires an analyze cell";
+    }
+    if (targetInput !== "video") {
+      return "Split video cells accept video and analysis inputs";
+    }
+    return notebookCellMediaType(source) === "video"
+      && source.type !== "split_video"
+      ? null
+      : "Split video cells require a video-producing source";
+  }
+  if (
+    targetInput === "media"
+    && target.type === "audio"
+    && source.type !== "extract_audio"
+  ) {
+    return "Audio media outputs require an extract audio source";
+  }
+  if (
+    targetInput === "media"
+    && target.type === "video"
+    && source.type !== "split_video"
+  ) {
+    return "Video media outputs require a split video source";
+  }
+  return null;
+}
 
 function firstEmptyGridSlots(
   cells: readonly NotebookCell[],
@@ -2226,8 +2277,8 @@ export function videobookDomainDefs(
               ordinal: 0,
             };
             const splitCell = engine.notebooks.createCell({
-              type: "split",
-              title: `@split-transcript-${document.cells.filter((cell) =>
+              type: "audio",
+              title: `@audio-transcript-${document.cells.filter((cell) =>
                 cell.inputs?.selectionKind === "transcript").length + 1}`,
               slot: firstEmptyGridSlots(document.cells, 1)[0]!,
               inputs: {
@@ -2509,8 +2560,8 @@ export function videobookDomainDefs(
               ordinal: 0,
             };
             const splitCell = engine.notebooks.createCell({
-              type: "split",
-              title: `@split-timeline-${document.cells.filter((cell) =>
+              type: "audio",
+              title: `@audio-timeline-${document.cells.filter((cell) =>
                 cell.inputs?.selectionKind === "timeline").length + 1}`,
               slot: firstEmptyGridSlots(document.cells, 1)[0]!,
               inputs: {
@@ -2887,15 +2938,18 @@ export function videobookDomainDefs(
       scope: "book",
       schema: { ...bookSchema, notebook_id: z.string().uuid(), cell: cellInputSchema },
       handler: async (args) => {
-        const cell = engine.notebooks.createCell(cellFromInput(args.cell as CellInput));
+        let cell = engine.notebooks.createCell(cellFromInput(args.cell as CellInput));
         const result = await mutateNotebook(
           engine,
           String(args.notebook_id),
           "create_notebook_cell",
-          (notebook) => ({
-            ...notebook,
-            cells: [...notebook.cells, cell],
-          }),
+          (notebook) => {
+            cell = normalizeCellActionFields(cell, notebook);
+            return {
+              ...notebook,
+              cells: [...notebook.cells, cell],
+            };
+          },
           { cellId: cell.id },
         );
         return result.ok ? json(cellPayload(cell)) : failure(result.error.message);
@@ -3047,14 +3101,27 @@ export function videobookDomainDefs(
           target: String(args.target_cell_id),
           targetInput: String(args.target_input),
         });
-        const result = await mutateNotebook(
-          engine,
-          String(args.notebook_id),
-          "connect_notebook_cells",
-          (notebook) => ({ ...notebook, edges: [...notebook.edges, edge] }),
-          { sourceCellId: edge.source, targetCellId: edge.target, edgeId: edge.id },
-        );
-        return result.ok ? json(edge) : failure(result.error.message);
+        try {
+          const result = await mutateNotebook(
+            engine,
+            String(args.notebook_id),
+            "connect_notebook_cells",
+            (notebook) => {
+              const error = notebookConnectionError(
+                notebook,
+                edge.source,
+                edge.target,
+                edge.targetInput,
+              );
+              if (error) throw new Error(error);
+              return { ...notebook, edges: [...notebook.edges, edge] };
+            },
+            { sourceCellId: edge.source, targetCellId: edge.target, edgeId: edge.id },
+          );
+          return result.ok ? json(edge) : failure(result.error.message);
+        } catch (cause) {
+          return failure(cause instanceof Error ? cause.message : String(cause));
+        }
       },
     },
     {

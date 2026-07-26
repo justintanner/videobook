@@ -20,7 +20,7 @@ import {
 export const WORKFLOW_STAGES = [
   "VIDEO",
   "ANALYZE",
-  "SPLIT SCENES",
+  "SPLIT VIDEO",
   "EXTRACT ASSETS",
   "WRITE PROMPTS",
   "GENERATE VIDEO",
@@ -75,9 +75,11 @@ export type WorkflowStage = (typeof WORKFLOW_STAGES)[number];
 type Feature = (typeof MULTYCULTY_FEATURES)[number];
 
 interface BranchCells {
-  split: NotebookCell;
+  splitVideo: NotebookCell;
+  video: NotebookCell;
   first: NotebookCell;
   last: NotebookCell;
+  extractAudio: NotebookCell;
   audio: NotebookCell;
   prompt: NotebookCell;
   animate: NotebookCell;
@@ -95,9 +97,9 @@ function analysisOwnerId(cell: NotebookCell): string | null {
     : null;
 }
 
-function splitOwnerId(cell: NotebookCell): string | null {
-  return typeof cell.inputs?.splitCellId === "string"
-    ? cell.inputs.splitCellId
+function splitVideoOwnerId(cell: NotebookCell): string | null {
+  return typeof cell.inputs?.splitVideoCellId === "string"
+    ? cell.inputs.splitVideoCellId
     : null;
 }
 
@@ -113,36 +115,32 @@ function stateForDerivedCell(cell: NotebookCell | undefined): string {
   return cell?.outputArtifactId ? "stale" : "pending";
 }
 
-function branchRole(kind: "split" | "first" | "last" | "audio" | "prompt" | "animate", ordinal: number): string {
+function branchRole(
+  kind:
+    | "split-video"
+    | "video"
+    | "first"
+    | "last"
+    | "extract-audio"
+    | "audio"
+    | "prompt"
+    | "animate",
+  ordinal: number,
+): string {
+  if (kind === "split-video") return `split-video-${ordinal}`;
+  if (kind === "video") return `scene-video-${ordinal}`;
   if (kind === "first") return `frame-first-${ordinal}`;
   if (kind === "last") return `frame-last-${ordinal}`;
+  if (kind === "extract-audio") return `scene-extract-audio-${ordinal}`;
   if (kind === "audio") return `scene-audio-${ordinal}`;
   return `${kind}-${ordinal}`;
 }
 
 function branchCell(
   document: NotebookDocument,
-  analysisCellId: string,
-  splitCellId: string,
-  operation: string,
   role: string,
 ): NotebookCell | undefined {
-  const exact = document.cells.find((cell) =>
-    roleOf(cell) === role);
-  if (exact) return exact;
-  const frameRole = role.startsWith("frame-first-")
-    ? "first"
-    : role.startsWith("frame-last-")
-      ? "last"
-      : null;
-  return document.cells.find((cell) =>
-    cell.operation === operation
-    && analysisOwnerId(cell) === analysisCellId
-    && splitOwnerId(cell) === splitCellId
-    && (
-      frameRole === null
-      || cell.inputs?.frameRole === frameRole
-    ));
+  return document.cells.find((cell) => roleOf(cell) === role);
 }
 
 function branchEdges(
@@ -166,11 +164,13 @@ function branchEdges(
       targetInput,
     }));
   };
-  add(source, branch.split, "source");
-  add(analysis, branch.split, "analysis");
-  add(branch.split, branch.first, "segment");
-  add(branch.split, branch.last, "segment");
-  add(branch.split, branch.audio, "segment");
+  add(source, branch.splitVideo, "video");
+  add(analysis, branch.splitVideo, "analysis");
+  add(branch.splitVideo, branch.video, "media");
+  add(branch.video, branch.first, "segment");
+  add(branch.video, branch.last, "segment");
+  add(branch.video, branch.extractAudio, "video");
+  add(branch.extractAudio, branch.audio, "media");
   add(analysis, branch.prompt, "analysis");
   add(branch.first, branch.prompt, "first_frame");
   add(branch.last, branch.prompt, "last_frame");
@@ -196,8 +196,12 @@ function uniqueEdges(edges: NotebookEdge[]): NotebookEdge[] {
 export function workflowStageForCell(cell: NotebookCell): WorkflowStage {
   if (cell.type === "video") return "VIDEO";
   if (cell.type === "analyze") return "ANALYZE";
-  if (cell.type === "split") return "SPLIT SCENES";
-  if (cell.type === "image" || cell.type === "audio") {
+  if (cell.type === "split_video") return "SPLIT VIDEO";
+  if (
+    cell.type === "extract_audio"
+    || cell.type === "image"
+    || cell.type === "audio"
+  ) {
     return "EXTRACT ASSETS";
   }
   if (cell.type === "prompt") return "WRITE PROMPTS";
@@ -237,7 +241,7 @@ export function buildAnalysisScriptArtifact(input: {
   return { content, legacyAnalysis };
 }
 
-function updateSplitCell(
+function updateSplitVideoCell(
   engine: Engine,
   existing: NotebookCell | undefined,
   analysisCellId: string,
@@ -246,14 +250,14 @@ function updateSplitCell(
   const feature = featureForShot(shot);
   const column = featureColumn(shot);
   const base = existing ?? engine.notebooks.createCell({
-    type: "split",
+    type: "split_video",
     title: "",
     slot: gridSlot(2, column),
   });
   return {
     ...base,
-    type: "split",
-    title: `@split-${String(shot.ordinal).padStart(2, "0")} · ${shot.label}`,
+    type: "split_video",
+    title: `@split-video-${String(shot.ordinal).padStart(2, "0")} · ${shot.label}`,
     slot: gridSlot(2, column),
     provider: "local",
     model: undefined,
@@ -262,7 +266,7 @@ function updateSplitCell(
     inputs: {
       ...(base.inputs ?? {}),
       analysisCellId,
-      workflowRole: branchRole("split", shot.ordinal),
+      workflowRole: branchRole("split-video", shot.ordinal),
       startSeconds: shot.startSeconds,
       endSeconds: shot.endSeconds,
       ordinal: shot.ordinal,
@@ -279,17 +283,19 @@ function createBranchCells(
   document: NotebookDocument,
   analysisCellId: string,
   analysisPrompt: string,
-  split: NotebookCell,
+  splitVideo: NotebookCell,
   shot: NormalizedShot,
   shotCount: number,
 ): BranchCells {
   const feature = featureForShot(shot);
   const column = featureColumn(shot);
-  const extractionRow = 3 + (shot.ordinal - 1) * 2;
-  const promptRow = 3 + shotCount * 2;
+  const videoRow = 3 + (shot.ordinal - 1) * 3;
+  const extractionRow = videoRow + 1;
+  const audioRow = videoRow + 2;
+  const promptRow = 3 + shotCount * 3;
   const commonInputs = {
     analysisCellId,
-    splitCellId: split.id,
+    splitVideoCellId: splitVideo.id,
     ordinal: shot.ordinal,
     label: shot.label,
     startSeconds: shot.startSeconds,
@@ -297,11 +303,33 @@ function createBranchCells(
     featureId: feature?.id ?? `scene-${shot.ordinal}`,
     featureLabel: feature?.label ?? shot.label,
   };
+  const videoExisting = branchCell(
+    document,
+    branchRole("video", shot.ordinal),
+  );
+  const videoBase = videoExisting ?? engine.notebooks.createCell({
+    type: "video",
+    title: "",
+    slot: gridSlot(videoRow, column),
+  });
+  const video: NotebookCell = {
+    ...videoBase,
+    type: "video",
+    title: `@scene-video-${String(shot.ordinal).padStart(2, "0")} · ${shot.label}`,
+    slot: gridSlot(videoRow, column),
+    provider: undefined,
+    model: undefined,
+    operation: undefined,
+    tool: undefined,
+    inputs: {
+      ...(videoBase.inputs ?? {}),
+      ...commonInputs,
+      workflowRole: branchRole("video", shot.ordinal),
+      state: stateForDerivedCell(videoExisting),
+    },
+  };
   const firstExisting = branchCell(
     document,
-    analysisCellId,
-    split.id,
-    "capture_frame",
     branchRole("first", shot.ordinal),
   );
   const firstBase = firstExisting ?? engine.notebooks.createCell({
@@ -328,9 +356,6 @@ function createBranchCells(
   };
   const lastExisting = branchCell(
     document,
-    analysisCellId,
-    split.id,
-    "capture_frame",
     branchRole("last", shot.ordinal),
   );
   const lastBase = lastExisting ?? engine.notebooks.createCell({
@@ -355,27 +380,51 @@ function createBranchCells(
       state: stateForDerivedCell(lastExisting),
     },
   };
-  const audioExisting = branchCell(
+  const extractAudioExisting = branchCell(
     document,
-    analysisCellId,
-    split.id,
-    "extract_audio",
-    branchRole("audio", shot.ordinal),
+    branchRole("extract-audio", shot.ordinal),
   );
-  const audioBase = audioExisting ?? engine.notebooks.createCell({
-    type: "audio",
-    title: "",
-    slot: gridSlot(extractionRow, column + 1),
-  });
-  const audio: NotebookCell = {
-    ...audioBase,
-    type: "audio",
-    title: `@audio-${String(shot.ordinal).padStart(2, "0")} · scene`,
+  const extractAudioBase = extractAudioExisting
+    ?? engine.notebooks.createCell({
+      type: "extract_audio",
+      title: "",
+      slot: gridSlot(extractionRow, column + 1),
+    });
+  const extractAudio: NotebookCell = {
+    ...extractAudioBase,
+    type: "extract_audio",
+    title: `@extract-audio-${String(shot.ordinal).padStart(2, "0")} · scene`,
     slot: gridSlot(extractionRow, column + 1),
     provider: "local",
     model: undefined,
     operation: "extract_audio",
     tool: "ffmpeg",
+    inputs: {
+      ...(extractAudioBase.inputs ?? {}),
+      ...commonInputs,
+      workflowRole: branchRole("extract-audio", shot.ordinal),
+      audioRole: "scene",
+      state: stateForDerivedCell(extractAudioExisting),
+    },
+  };
+  const audioExisting = branchCell(
+    document,
+    branchRole("audio", shot.ordinal),
+  );
+  const audioBase = audioExisting ?? engine.notebooks.createCell({
+    type: "audio",
+    title: "",
+    slot: gridSlot(audioRow, column + 1),
+  });
+  const audio: NotebookCell = {
+    ...audioBase,
+    type: "audio",
+    title: `@audio-${String(shot.ordinal).padStart(2, "0")} · scene`,
+    slot: gridSlot(audioRow, column + 1),
+    provider: undefined,
+    model: undefined,
+    operation: undefined,
+    tool: undefined,
     inputs: {
       ...(audioBase.inputs ?? {}),
       ...commonInputs,
@@ -386,9 +435,6 @@ function createBranchCells(
   };
   const promptExisting = branchCell(
     document,
-    analysisCellId,
-    split.id,
-    "rewrite_prompt",
     branchRole("prompt", shot.ordinal),
   );
   const promptBase = promptExisting ?? engine.notebooks.createCell({
@@ -429,9 +475,6 @@ function createBranchCells(
   };
   const animateExisting = branchCell(
     document,
-    analysisCellId,
-    split.id,
-    "image_to_video",
     branchRole("animate", shot.ordinal),
   );
   const animateBase = animateExisting ?? engine.notebooks.createCell({
@@ -461,7 +504,16 @@ function createBranchCells(
       state: stateForDerivedCell(animateExisting),
     },
   };
-  return { split, first, last, audio, prompt, animate };
+  return {
+    splitVideo,
+    video,
+    first,
+    last,
+    extractAudio,
+    audio,
+    prompt,
+    animate,
+  };
 }
 
 export async function applyAnalysisResults(
@@ -509,8 +561,10 @@ export async function applyAnalysisResults(
   const owned = document.cells.filter(
     (cell) => analysisOwnerId(cell) === analysisCellId,
   );
-  const ownedSplits = owned.filter((cell) => cell.operation === "split_range");
-  const branches: OwnedBranch[] = ownedSplits.map((cell) => ({
+  const ownedSplitVideos = owned.filter((cell) =>
+    cell.type === "split_video"
+    && cell.operation === "split_range");
+  const branches: OwnedBranch[] = ownedSplitVideos.map((cell) => ({
     cellId: cell.id,
     range: {
       startSeconds: Number(cell.inputs?.startSeconds ?? 0),
@@ -530,8 +584,8 @@ export async function applyAnalysisResults(
       .filter((cell) =>
         removedSplitIds.has(cell.id)
         || (
-          splitOwnerId(cell) !== null
-          && removedSplitIds.has(splitOwnerId(cell)!)
+          splitVideoOwnerId(cell) !== null
+          && removedSplitIds.has(splitVideoOwnerId(cell)!)
         ))
       .map((cell) => cell.id),
   );
@@ -572,7 +626,7 @@ export async function applyAnalysisResults(
     const existingSplit = kept
       ? document.cells.find((cell) => cell.id === kept.existing.cellId)
       : undefined;
-    const split = updateSplitCell(
+    const splitVideo = updateSplitVideoCell(
       engine,
       existingSplit,
       analysisCellId,
@@ -583,14 +637,16 @@ export async function applyAnalysisResults(
       document,
       analysisCellId,
       analysisCell.prompt ?? "",
-      split,
+      splitVideo,
       shot,
       shots.length,
     );
     branchCells.push(
-      branch.split,
+      branch.splitVideo,
+      branch.video,
       branch.first,
       branch.last,
+      branch.extractAudio,
       branch.audio,
       branch.prompt,
       branch.animate,
@@ -611,7 +667,9 @@ export async function applyAnalysisResults(
   ]);
   const canonicalTargetInputs = new Set([
     "source",
+    "video",
     "analysis",
+    "media",
     "segment",
     "first_frame",
     "last_frame",
@@ -652,7 +710,7 @@ export async function applyAnalysisResults(
     edges,
     properties: {
       ...(document.properties ?? {}),
-      workflowVersion: 4,
+      workflowVersion: 6,
       analysisRevision: scriptArtifact.value.artifactId,
     },
   };
@@ -713,13 +771,31 @@ export function buildSevenStageScaffold(
     tool: "kie_gemini_analysis",
     inputs: { workflowRole: "analysis", state: "pending" },
   });
+  const extractAudio = baseCell(
+    engine,
+    roleCells.get("source-extract-audio"),
+    {
+      type: "extract_audio",
+      title: "@extract-audio · continuous source",
+      slot: gridSlot(0, 1),
+      provider: "local",
+      operation: "extract_audio",
+      tool: "ffmpeg",
+      inputs: {
+        workflowRole: "source-extract-audio",
+        audioRole: "continuous-source",
+        state: "pending",
+      },
+    },
+  );
   const audio = baseCell(engine, roleCells.get("source-audio"), {
     type: "audio",
     title: "@audio · continuous source",
-    slot: gridSlot(13, 1),
-    provider: "local",
-    operation: "extract_audio",
-    tool: "ffmpeg",
+    slot: gridSlot(1, 1),
+    provider: undefined,
+    model: undefined,
+    operation: undefined,
+    tool: undefined,
     inputs: {
       workflowRole: "source-audio",
       audioRole: "continuous-source",
@@ -729,7 +805,7 @@ export function buildSevenStageScaffold(
   const assembly = baseCell(engine, roleCells.get("assembly"), {
     type: "concat",
     title: "@concat · feature edit",
-    slot: gridSlot(13, 0),
+    slot: gridSlot(18, 0),
     provider: "local",
     operation: "concat_video",
     tool: "ffmpeg",
@@ -742,6 +818,7 @@ export function buildSevenStageScaffold(
   const baseRoles = new Set([
     "source",
     "analysis",
+    "source-extract-audio",
     "source-audio",
     "assembly",
   ]);
@@ -755,6 +832,7 @@ export function buildSevenStageScaffold(
   const cells = [
     source,
     analysis,
+    extractAudio,
     audio,
     assembly,
     ...otherCells,
@@ -762,13 +840,17 @@ export function buildSevenStageScaffold(
   const baseIds = new Set([
     source.id,
     analysis.id,
+    extractAudio.id,
     audio.id,
     assembly.id,
   ]);
   const retainedEdges = document.edges.filter((edge) => {
     if (!baseIds.has(edge.target)) return true;
     if (edge.target === analysis.id && edge.targetInput === "source") return false;
-    if (edge.target === audio.id && edge.targetInput === "source") return false;
+    if (edge.target === extractAudio.id && edge.targetInput === "video") {
+      return false;
+    }
+    if (edge.target === audio.id && edge.targetInput === "media") return false;
     if (edge.target === assembly.id && edge.targetInput === "audio") return false;
     return true;
   });
@@ -781,8 +863,13 @@ export function buildSevenStageScaffold(
     }),
     engine.notebooks.createEdge({
       source: source.id,
+      target: extractAudio.id,
+      targetInput: "video",
+    }),
+    engine.notebooks.createEdge({
+      source: extractAudio.id,
       target: audio.id,
-      targetInput: "source",
+      targetInput: "media",
     }),
     engine.notebooks.createEdge({
       source: audio.id,
@@ -796,7 +883,7 @@ export function buildSevenStageScaffold(
     edges,
     properties: {
       ...(document.properties ?? {}),
-      workflowVersion: 4,
+      workflowVersion: 6,
     },
   };
   return {

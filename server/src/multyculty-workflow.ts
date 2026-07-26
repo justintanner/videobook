@@ -22,7 +22,7 @@ type ArtifactRecord = {
   kind: string;
 };
 
-export const MULTYCULTY_FIXTURE_VERSION = 16;
+export const MULTYCULTY_FIXTURE_VERSION = 18;
 export const MULTYCULTY_FIXTURE_OWNER = "multyculty-default";
 
 const SECTION_SLUGS = [
@@ -39,21 +39,26 @@ const ANIMATION_SLUGS = [
 
 const COMPACT_FIXTURE_SLOTS = new Map<string, NotebookCell["slot"]>([
   ["source", { row: 0, column: 0 }],
-  ["source-audio", { row: 0, column: 1 }],
+  ["source-extract-audio", { row: 0, column: 1 }],
   ["analysis", { row: 1, column: 0 }],
-  ["split-1", { row: 2, column: -2 }],
-  ["split-2", { row: 2, column: 2 }],
-  ["frame-first-1", { row: 3, column: -3 }],
-  ["frame-last-1", { row: 3, column: -2 }],
-  ["scene-audio-1", { row: 3, column: -1 }],
-  ["frame-first-2", { row: 3, column: 1 }],
-  ["frame-last-2", { row: 3, column: 2 }],
-  ["scene-audio-2", { row: 3, column: 3 }],
-  ["prompt-1", { row: 4, column: -2 }],
-  ["prompt-2", { row: 4, column: 2 }],
-  ["animate-1", { row: 5, column: -2 }],
-  ["animate-2", { row: 5, column: 2 }],
-  ["assembly", { row: 6, column: 0 }],
+  ["source-audio", { row: 1, column: 1 }],
+  ["split-video-1", { row: 2, column: -2 }],
+  ["split-video-2", { row: 2, column: 2 }],
+  ["scene-video-1", { row: 3, column: -2 }],
+  ["scene-video-2", { row: 3, column: 2 }],
+  ["frame-first-1", { row: 4, column: -3 }],
+  ["frame-last-1", { row: 4, column: -2 }],
+  ["scene-extract-audio-1", { row: 4, column: -1 }],
+  ["frame-first-2", { row: 4, column: 1 }],
+  ["frame-last-2", { row: 4, column: 2 }],
+  ["scene-extract-audio-2", { row: 4, column: 3 }],
+  ["scene-audio-1", { row: 5, column: -1 }],
+  ["scene-audio-2", { row: 5, column: 3 }],
+  ["prompt-1", { row: 5, column: -2 }],
+  ["prompt-2", { row: 5, column: 2 }],
+  ["animate-1", { row: 6, column: -2 }],
+  ["animate-2", { row: 6, column: 2 }],
+  ["assembly", { row: 7, column: 0 }],
 ]);
 
 const COMPACT_FIXTURE_ROLES = new Set(COMPACT_FIXTURE_SLOTS.keys());
@@ -76,10 +81,13 @@ function roleOf(cell: NotebookCell): string | null {
 function isCanonicalRole(role: string | null): boolean {
   return role === "source"
     || role === "analysis"
+    || role === "source-extract-audio"
     || role === "source-audio"
     || role === "assembly"
-    || /^split-\d+$/.test(role ?? "")
+    || /^split-video-\d+$/.test(role ?? "")
+    || /^scene-video-\d+$/.test(role ?? "")
     || /^frame-(first|last)-\d+$/.test(role ?? "")
+    || /^scene-extract-audio-\d+$/.test(role ?? "")
     || /^scene-audio-\d+$/.test(role ?? "")
     || /^prompt-\d+$/.test(role ?? "")
     || /^animate-\d+$/.test(role ?? "");
@@ -105,17 +113,20 @@ function isCurrentFixture(document: NotebookDocument): boolean {
   const edges = document.edges.filter((edge) =>
     cellIds.has(edge.source) && cellIds.has(edge.target));
   return fixture?.version === MULTYCULTY_FIXTURE_VERSION
-    && cells.length === 16
-    && roles.size === 16
-    && edges.length === 31
+    && cells.length === 21
+    && roles.size === 21
+    && edges.length === 36
     && roles.has("source")
     && roles.has("analysis")
+    && roles.has("source-extract-audio")
     && roles.has("source-audio")
     && roles.has("assembly")
     && [1, 2].every((ordinal) =>
-      roles.has(`split-${ordinal}`)
+      roles.has(`split-video-${ordinal}`)
+      && roles.has(`scene-video-${ordinal}`)
       && roles.has(`frame-first-${ordinal}`)
       && roles.has(`frame-last-${ordinal}`)
+      && roles.has(`scene-extract-audio-${ordinal}`)
       && roles.has(`scene-audio-${ordinal}`)
       && roles.has(`prompt-${ordinal}`)
       && roles.has(`animate-${ordinal}`));
@@ -203,7 +214,7 @@ async function attachFixtureOutputs(
             artifact.slug === ANIMATION_SLUGS[ordinal - 1])
         : undefined;
       const promptOutput = promptOutputs.get(cell.id);
-      const outputArtifactId = role?.startsWith("split-")
+      const outputArtifactId = role?.startsWith("scene-video-")
         ? cell.outputArtifactId ?? section?.artifactId
         : role.startsWith("animate-")
           ? cell.outputArtifactId ?? animation?.artifactId

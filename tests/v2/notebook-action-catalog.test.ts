@@ -44,6 +44,19 @@ describe("notebook action catalog", () => {
     });
     expect(actions.some((action) => action.tool === DEFAULT_ANIMATION_TOOL)).toBe(true);
     expect(actions.some((action) => action.tool === "ffmpeg")).toBe(true);
+    expect(actions.find((action) => action.operation === "split_range"))
+      .toMatchObject({
+        cellTypes: ["split_video"],
+        requiredInputs: ["video"],
+      });
+    expect(actions.find((action) => action.operation === "extract_audio"))
+      .toMatchObject({
+        cellTypes: ["extract_audio"],
+        requiredInputs: ["video"],
+      });
+    expect(actions.some((action) =>
+      action.operation === "extract_audio"
+      && action.cellTypes.includes("audio"))).toBe(false);
   });
 
   it("rejects invalid tools and returns 14-column raw rows via MCP", async () => {

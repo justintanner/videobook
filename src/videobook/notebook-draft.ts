@@ -32,6 +32,13 @@ export interface NotebookCellData extends Record<string, unknown> {
   sourcePorts?: string[]
 }
 
+function defaultTargetInputs(type: NotebookCellType): string[] {
+  if (type === 'extract_audio') return ['video']
+  if (type === 'split_video') return ['video', 'analysis']
+  if (type === 'audio' || type === 'video') return ['media']
+  return ['input']
+}
+
 export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCellData>> {
   const routes = notebookBusRiverRoutes(document)
   const targetInputs = new Map<string, string[]>()
@@ -62,7 +69,7 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
         subtitle: `${cell.type.toUpperCase()} · CELL`,
         slot: cell.slot,
         status: 'ready',
-        targetInputs: targetInputs.get(cell.id) ?? ['input'],
+        targetInputs: targetInputs.get(cell.id) ?? defaultTargetInputs(cell.type),
         targetConnectionCount: targetConnectionCounts.get(cell.id) ?? 0,
         sourcePorts: sourcePorts.get(cell.id) ?? [],
         ...(cell.prompt === undefined ? {} : { prompt: cell.prompt }),

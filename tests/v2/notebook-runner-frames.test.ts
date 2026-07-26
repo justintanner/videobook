@@ -163,6 +163,234 @@ describe("notebook runner frames and concat", () => {
     ).rejects.toThrow(/requires confirmation/i);
   });
 
+  it("propagates split output through a video asset cell before extraction", async () => {
+    rootDir = await mkdtemp(join(tmpdir(), "vb-runner-split-video-"));
+    engine = createEngine({ rootDir, initialBookSlug: "runner-split-video" });
+    await engine.ready;
+
+    const clipPath = join(rootDir, "source.mp4");
+    await makeClip(clipPath, 2);
+    const sourceArtifact = await engine.artifacts.create({
+      kind: "video",
+      name: "source",
+    });
+    expect(sourceArtifact.ok).toBe(true);
+    if (!sourceArtifact.ok) return;
+    await engine.files.writeFromPath(
+      sourceArtifact.value.artifactId,
+      "original.mp4",
+      clipPath,
+    );
+
+    const notebook = await engine.notebooks.create("Main");
+    expect(notebook.ok).toBe(true);
+    if (!notebook.ok) return;
+
+    const source = engine.notebooks.createCell({
+      type: "video",
+      title: "source",
+      slot: { row: 0, column: 0 },
+      outputArtifactId: sourceArtifact.value.artifactId,
+    });
+    const split = engine.notebooks.createCell({
+      type: "split_video",
+      title: "split action",
+      slot: { row: 1, column: 0 },
+      provider: "local",
+      operation: "split_range",
+      tool: "ffmpeg",
+      inputs: { startSeconds: 0, endSeconds: 1 },
+    });
+    const video = engine.notebooks.createCell({
+      type: "video",
+      title: "split video",
+      slot: { row: 2, column: 0 },
+    });
+    const firstFrame = engine.notebooks.createCell({
+      type: "image",
+      title: "first frame",
+      slot: { row: 3, column: 0 },
+      provider: "local",
+      operation: "capture_frame",
+      tool: "ffmpeg",
+      inputs: { frameRole: "first" },
+    });
+    const extractAudio = engine.notebooks.createCell({
+      type: "extract_audio",
+      title: "extract audio",
+      slot: { row: 3, column: 1 },
+      provider: "local",
+      operation: "extract_audio",
+      tool: "ffmpeg",
+    });
+    const audio = engine.notebooks.createCell({
+      type: "audio",
+      title: "scene audio",
+      slot: { row: 4, column: 1 },
+    });
+    const document: NotebookDocument = {
+      ...notebook.value,
+      cells: [source, split, video, firstFrame, extractAudio, audio],
+      edges: [
+        engine.notebooks.createEdge({
+          source: source.id,
+          target: split.id,
+          targetInput: "video",
+        }),
+        engine.notebooks.createEdge({
+          source: split.id,
+          target: video.id,
+          targetInput: "media",
+        }),
+        engine.notebooks.createEdge({
+          source: video.id,
+          target: firstFrame.id,
+          targetInput: "segment",
+        }),
+        engine.notebooks.createEdge({
+          source: video.id,
+          target: extractAudio.id,
+          targetInput: "video",
+        }),
+        engine.notebooks.createEdge({
+          source: extractAudio.id,
+          target: audio.id,
+          targetInput: "media",
+        }),
+      ],
+    };
+    await engine.notebooks.write(document);
+
+    const completedSplit = await runNotebookCell(
+      engine,
+      engine.book.get().bookId,
+      document.id,
+      document,
+      split,
+    );
+    const completedSplitCell = completedSplit.document.cells.find((cell) =>
+      cell.id === split.id);
+    const completedVideo = completedSplit.document.cells.find((cell) =>
+      cell.id === video.id);
+    expect(completedSplitCell?.outputArtifactId).toBe(completedSplit.outputArtifactId);
+    expect(completedVideo?.outputArtifactId).toBe(completedSplit.outputArtifactId);
+    expect(completedVideo?.inputs?.state).toBe("completed");
+
+    const pendingFrame = completedSplit.document.cells.find((cell) =>
+      cell.id === firstFrame.id);
+    expect(pendingFrame).toBeTruthy();
+    if (!pendingFrame) return;
+    const completedFrame = await runNotebookCell(
+      engine,
+      engine.book.get().bookId,
+      document.id,
+      completedSplit.document,
+      pendingFrame,
+    );
+    expect(completedFrame.outputArtifactId).toBeTruthy();
+    expect(completedFrame.document.cells.find((cell) =>
+      cell.id === firstFrame.id)?.outputArtifactId)
+      .toBe(completedFrame.outputArtifactId);
+
+    const pendingExtractAudio = completedFrame.document.cells.find((cell) =>
+      cell.id === extractAudio.id);
+    expect(pendingExtractAudio).toBeTruthy();
+    if (!pendingExtractAudio) return;
+    const completedExtractAudio = await runNotebookCell(
+      engine,
+      engine.book.get().bookId,
+      document.id,
+      completedFrame.document,
+      pendingExtractAudio,
+    );
+    const completedAudio = completedExtractAudio.document.cells.find((cell) =>
+      cell.id === audio.id);
+    expect(completedAudio?.outputArtifactId).toBe(
+      completedExtractAudio.outputArtifactId,
+    );
+    expect(completedAudio?.inputs?.state).toBe("completed");
+    const audioArtifact = engine.artifacts.get(
+      completedExtractAudio.outputArtifactId,
+    );
+    expect(audioArtifact.ok && audioArtifact.value.kind).toBe("audio");
+    const audioManifest = await engine.files.manifest(
+      completedExtractAudio.outputArtifactId,
+    );
+    expect(audioManifest.ok && audioManifest.value.files.some((file) =>
+      file.name === "original.m4a")).toBe(true);
+  }, 90_000);
+
+  it("rejects extract audio actions connected to non-video media", async () => {
+    rootDir = await mkdtemp(join(tmpdir(), "vb-runner-audio-input-"));
+    engine = createEngine({ rootDir, initialBookSlug: "runner-audio-input" });
+    await engine.ready;
+
+    const sourceArtifact = await engine.artifacts.create({
+      kind: "audio",
+      name: "source audio",
+    });
+    expect(sourceArtifact.ok).toBe(true);
+    if (!sourceArtifact.ok) return;
+    await engine.files.write(
+      sourceArtifact.value.artifactId,
+      "original.m4a",
+      Buffer.from("not-video"),
+    );
+    const notebook = await engine.notebooks.create("Main");
+    expect(notebook.ok).toBe(true);
+    if (!notebook.ok) return;
+
+    const source = engine.notebooks.createCell({
+      type: "audio",
+      title: "source audio",
+      slot: { row: 0, column: 0 },
+      outputArtifactId: sourceArtifact.value.artifactId,
+    });
+    const extractAudio = engine.notebooks.createCell({
+      type: "extract_audio",
+      title: "extract audio",
+      slot: { row: 1, column: 0 },
+      provider: "local",
+      operation: "extract_audio",
+      tool: "ffmpeg",
+    });
+    const output = engine.notebooks.createCell({
+      type: "audio",
+      title: "output",
+      slot: { row: 2, column: 0 },
+    });
+    const document: NotebookDocument = {
+      ...notebook.value,
+      cells: [source, extractAudio, output],
+      edges: [
+        engine.notebooks.createEdge({
+          source: source.id,
+          target: extractAudio.id,
+          targetInput: "video",
+        }),
+        engine.notebooks.createEdge({
+          source: extractAudio.id,
+          target: output.id,
+          targetInput: "media",
+        }),
+      ],
+    };
+    await engine.notebooks.write(document);
+
+    await expect(runNotebookCell(
+      engine,
+      engine.book.get().bookId,
+      document.id,
+      document,
+      extractAudio,
+    )).rejects.toThrow(/input must be video/i);
+    const read = engine.notebooks.read(document.id);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.value.cells.find((cell) => cell.id === output.id)
+      ?.outputArtifactId).toBeUndefined();
+  });
+
   it("concats ordered video cells into a playable H264 and AAC output", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-concat-"));
     engine = createEngine({ rootDir, initialBookSlug: "runner-concat" });

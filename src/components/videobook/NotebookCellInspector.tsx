@@ -4,9 +4,9 @@ import { doltCellRows } from '@/videobook/dolt-cell-source'
 
 const localActions = {
   video: [{ operation: 'preprocess_source', label: 'Preprocess source', tool: 'ffmpeg' }],
-  audio: [{ operation: 'extract_audio', label: 'Extract audio', tool: 'ffmpeg' }],
+  extract_audio: [{ operation: 'extract_audio', label: 'Extract audio', tool: 'ffmpeg' }],
   image: [{ operation: 'capture_frame', label: 'Capture frame', tool: 'ffmpeg' }],
-  split: [{ operation: 'split_range', label: 'Split source range', tool: 'ffmpeg' }],
+  split_video: [{ operation: 'split_range', label: 'Split video', tool: 'ffmpeg' }],
   prompt: [{ operation: 'rewrite_prompt', label: 'Rewrite prompt', tool: 'rewrite_prompt' }],
   analyze: [{ operation: 'analyze_source', label: 'Analyze source', tool: 'kie_gemini_analysis' }],
   concat: [{ operation: 'concat_video', label: 'Concatenate videos', tool: 'ffmpeg' }],
@@ -142,6 +142,11 @@ export function NotebookCellInspector({
   const generationCell = cell.type === 'generate_video'
     || cell.type === 'generate_image'
     || cell.type === 'generate_audio'
+  const mediaCell = cell.type === 'audio'
+    || cell.type === 'image'
+    || cell.type === 'video'
+    || cell.type === 'character'
+    || generationCell
   const actions = cell.type in localActions
     ? localActions[cell.type as keyof typeof localActions]
     : []
@@ -150,7 +155,7 @@ export function NotebookCellInspector({
     <div className="inspector-body">
       <h2 className="inspector-slug">{cell.title}</h2>
       <span className="workspace-notice">{cell.type.toUpperCase()} · {status}</span>
-      {asset && <NotebookCellMedia asset={asset} title={cell.title} />}
+      {asset && mediaCell && <NotebookCellMedia asset={asset} title={cell.title} />}
       <label>
         Title
         <input defaultValue={cell.title} onBlur={(event) => {
@@ -202,7 +207,7 @@ export function NotebookCellInspector({
           </select>
         </label>
       )}
-      {cell.type === 'split' && (
+      {cell.type === 'split_video' && (
         <div className="inspector-field-pair">
           <label>
             Start seconds

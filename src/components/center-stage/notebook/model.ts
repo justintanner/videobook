@@ -48,7 +48,8 @@ export const notebookNodeSizes: Record<NotebookPlanStep['type'], { width: number
   character: { width: 280, height: 340 },
   prompt: { width: 280, height: 340 },
   analyze: { width: 280, height: 340 },
-  split: { width: 280, height: 340 },
+  extract_audio: { width: 280, height: 340 },
+  split_video: { width: 280, height: 340 },
   generate_video: { width: 300, height: 340 },
   generate_image: { width: 300, height: 340 },
   generate_audio: { width: 300, height: 340 },
@@ -137,8 +138,11 @@ export function isBoundMediaStep(step: NotebookPlanStep): boolean {
 
 export function acceptsInputs(step: NotebookPlanStep): boolean {
   return isGenerationStep(step)
+    || step.type === 'audio'
+    || step.type === 'video'
     || step.type === 'analyze'
-    || step.type === 'split'
+    || step.type === 'extract_audio'
+    || step.type === 'split_video'
     || step.type === 'concat'
     || step.type === 'splice'
 }
@@ -197,10 +201,17 @@ export const toolboxStepSeeds: NotebookToolboxStep[] = [
     properties: {},
   },
   {
-    toolboxKind: 'split',
+    toolboxKind: 'extract_audio',
     componentType: 'task',
-    type: 'split',
-    name: 'Split',
+    type: 'extract_audio',
+    name: 'Extract audio',
+    properties: { inputs: [] },
+  },
+  {
+    toolboxKind: 'split_video',
+    componentType: 'task',
+    type: 'split_video',
+    name: 'Split video',
     properties: { inputs: [] },
   },
   {
@@ -897,6 +908,18 @@ export function canConnect(
   const source = definition.sequence.find((step) => step.id === sourceId)
   const target = definition.sequence.find((step) => step.id === targetId)
   if (!source || !target || !acceptsInputs(target)) return false
+  const videoSource = source.type === 'video'
+    || source.type === 'generate_video'
+    || source.type === 'concat'
+    || source.type === 'splice'
+  if (target.type === 'audio' && source.type !== 'extract_audio') return false
+  if (target.type === 'video' && source.type !== 'split_video') return false
+  if (target.type === 'extract_audio' && !videoSource) return false
+  if (
+    target.type === 'split_video'
+    && source.type !== 'analyze'
+    && !videoSource
+  ) return false
   if (stepInputs(target).includes(sourceId)) return false
   return !wouldCreateCycle(definition, sourceId, targetId)
 }
@@ -1320,7 +1343,13 @@ export function stepInvalidReason(
   definition: NotebookPlanDefinition,
   step: NotebookPlanStep,
 ): string | null {
-  if (isBoundMediaStep(step) || step.type === 'split' || step.type === 'concat' || step.type === 'splice') return null
+  if (
+    isBoundMediaStep(step)
+    || step.type === 'extract_audio'
+    || step.type === 'split_video'
+    || step.type === 'concat'
+    || step.type === 'splice'
+  ) return null
   if (isTextStep(step)) return (stringProperty(step.properties, 'text') ?? '').trim() ? null : `${step.name} is empty.`
   if (!isGenerationStep(step)) return null
   const prompt = stringProperty(valuesOf(step), 'prompt') ?? ''

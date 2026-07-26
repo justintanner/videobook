@@ -193,10 +193,14 @@ export function notebookCellMediaType(
   cell: NotebookCell,
 ): "image" | "video" | "audio" | null {
   if (cell.type === "image" || cell.type === "generate_image") return "image";
-  if (cell.type === "audio" || cell.type === "generate_audio") return "audio";
+  if (
+    cell.type === "audio"
+    || cell.type === "extract_audio"
+    || cell.type === "generate_audio"
+  ) return "audio";
   if (
     cell.type === "video"
-    || cell.type === "split"
+    || cell.type === "split_video"
     || cell.type === "generate_video"
     || cell.type === "concat"
     || cell.type === "splice"
@@ -462,6 +466,75 @@ function firstUpstreamArtifact(
     .map((entry) => entry.output)
     .find((value): value is string => typeof value === "string" && value.length > 0);
   return upstream ?? null;
+}
+
+function requiredVideoInputArtifact(
+  document: NotebookDocument,
+  cell: NotebookCell,
+): string {
+  const input = upstreamValues(document, cell)
+    .find((entry) => entry.targetInput === "video");
+  if (!input) {
+    throw new Error(`${cell.type} cell ${cell.id} requires a video input`);
+  }
+  if (
+    notebookCellMediaType(input.cell) !== "video"
+    || input.cell.type === "split_video"
+  ) {
+    throw new Error(`${cell.type} cell ${cell.id} input must be video`);
+  }
+  if (!input.output) {
+    throw new Error(`${cell.type} cell ${cell.id} video input is not completed`);
+  }
+  return input.output;
+}
+
+function requiredMediaOutputCellIds(
+  document: NotebookDocument,
+  cell: NotebookCell,
+  type: "audio" | "video",
+): Set<string> {
+  const connectedIds = new Set(
+    document.edges
+      .filter((edge) =>
+        edge.source === cell.id
+        && edge.targetInput === "media")
+      .map((edge) => edge.target),
+  );
+  const outputIds = new Set(
+    document.cells
+      .filter((candidate) =>
+        connectedIds.has(candidate.id)
+        && candidate.type === type)
+      .map((candidate) => candidate.id),
+  );
+  if (outputIds.size === 0) {
+    throw new Error(
+      `${cell.type} cell ${cell.id} requires a downstream ${type} media cell`,
+    );
+  }
+  return outputIds;
+}
+
+function withMediaOutput(
+  document: NotebookDocument,
+  outputCellIds: Set<string>,
+  artifactId: string,
+): NotebookDocument {
+  return {
+    ...document,
+    cells: document.cells.map((candidate) =>
+      outputCellIds.has(candidate.id)
+        ? {
+            ...candidate,
+            outputArtifactId: artifactId,
+            inputs: {
+              ...(candidate.inputs ?? {}),
+              state: "completed",
+            },
+          }
+        : candidate),
+  };
 }
 
 async function objectHashForArtifact(
@@ -1065,12 +1138,13 @@ async function executeLocalOrGeneration(
   cellInputs?: Record<string, unknown>;
   awaitingOutput?: boolean;
 }> {
-  if (cell.type === "split" && cell.operation === "split_range") {
-    const sourceId = firstUpstreamArtifact(document, cell, "source")
-      ?? (typeof cell.inputs?.sourceArtifactId === "string"
-        ? cell.inputs.sourceArtifactId
-        : null);
-    if (!sourceId) throw new Error(`Split cell ${cell.id} has no source artifact`);
+  if (cell.type === "split_video" && cell.operation === "split_range") {
+    const sourceId = requiredVideoInputArtifact(document, cell);
+    const outputCellIds = requiredMediaOutputCellIds(
+      document,
+      cell,
+      "video",
+    );
     const startSeconds = Number(cell.inputs?.startSeconds ?? 0);
     const endSeconds = Number(cell.inputs?.endSeconds ?? 0);
     const result = await splitSourceRange(
@@ -1079,17 +1153,34 @@ async function executeLocalOrGeneration(
       { startSeconds, endSeconds },
       cell.title,
     );
-    return { artifactId: result.artifactId, tool: "ffmpeg" };
+    return {
+      artifactId: result.artifactId,
+      tool: "ffmpeg",
+      document: withMediaOutput(
+        document,
+        outputCellIds,
+        result.artifactId,
+      ),
+    };
   }
 
-  if (cell.type === "audio" && cell.operation === "extract_audio") {
-    const sourceId = firstUpstreamArtifact(document, cell, "segment")
-      ?? firstUpstreamArtifact(document, cell, "source")
-      ?? firstUpstreamArtifact(document, cell)
-      ?? (typeof cell.inputs?.artifactId === "string" ? cell.inputs.artifactId : null);
-    if (!sourceId) throw new Error(`Audio cell ${cell.id} has no source artifact`);
+  if (cell.type === "extract_audio" && cell.operation === "extract_audio") {
+    const sourceId = requiredVideoInputArtifact(document, cell);
+    const outputCellIds = requiredMediaOutputCellIds(
+      document,
+      cell,
+      "audio",
+    );
     const result = await extractSourceAudio(engine, sourceId, cell.title);
-    return { artifactId: result.artifactId, tool: "ffmpeg" };
+    return {
+      artifactId: result.artifactId,
+      tool: "ffmpeg",
+      document: withMediaOutput(
+        document,
+        outputCellIds,
+        result.artifactId,
+      ),
+    };
   }
 
   if (cell.type === "image" && cell.operation === "capture_frame") {

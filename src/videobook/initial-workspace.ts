@@ -96,7 +96,12 @@ export async function loadInitialWorkspace(): Promise<InitialWorkspacePayload | 
     ingestStatusValue,
   ] = await Promise.all([
     callTool('list_notebooks', { book_id: bookId }),
-    callTool('list_assets', { book_id: bookId, sort: 'newest', limit: 200 }),
+    callTool('list_assets', {
+      book_id: bookId,
+      sort: 'newest',
+      limit: 200,
+      include_referenced: true,
+    }),
     callTool('get_primary_sequence', { book_id: bookId }),
     callTool('list_jobs', { book_id: bookId, limit: 200 }),
     callTool('list_ingest_status', { book_id: bookId, limit: 200 }),

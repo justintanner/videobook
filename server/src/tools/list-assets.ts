@@ -7,24 +7,44 @@ export function listAssetsDef(fs: Engine): ToolDef {
   return {
     name: "list_assets",
     description:
-      "List a bounded asset page with media and thumbnail URLs.",
+      "List a bounded asset page with media and thumbnail URLs, optionally including notebook-referenced assets outside the page.",
     schema: {
       book_id: z.string().describe("Project slug"),
       sort: z.enum(["newest", "oldest"]).optional().describe("Sort order by creation date"),
       limit: z.number().int().positive().max(500).optional(),
       offset: z.number().int().nonnegative().optional(),
+      include_referenced: z.boolean().optional(),
     },
     handler: async (args) => {
-      const { book_id, sort, limit, offset } = args as {
+      const { book_id, sort, limit, offset, include_referenced } = args as {
         book_id: string;
         sort?: "newest" | "oldest";
         limit?: number;
         offset?: number;
+        include_referenced?: boolean;
       };
       const allAssets = await buildAssetList(fs, book_id, sort);
       const pageOffset = offset ?? 0;
       const pageLimit = limit ?? 200;
-      const assets = allAssets.slice(pageOffset, pageOffset + pageLimit);
+      const pageAssets = allAssets.slice(pageOffset, pageOffset + pageLimit);
+      const pageArtifactIds = new Set(
+        pageAssets.map((asset) => asset.artifact_id),
+      );
+      const referencedArtifactIds = include_referenced
+        ? new Set(
+            fs.notebooks
+              .list()
+              .flatMap((notebook) =>
+                notebook.cells.flatMap((cell) =>
+                  cell.outputArtifactId ? [cell.outputArtifactId] : [])),
+          )
+        : new Set<string>();
+      const referencedAssets = include_referenced
+        ? allAssets.filter((asset) =>
+            referencedArtifactIds.has(asset.artifact_id)
+            && !pageArtifactIds.has(asset.artifact_id))
+        : [];
+      const assets = [...pageAssets, ...referencedAssets];
       return {
         content: [{
           type: "text" as const,
@@ -34,7 +54,7 @@ export function listAssetsDef(fs: Engine): ToolDef {
               offset: pageOffset,
               limit: pageLimit,
               total: allAssets.length,
-              hasMore: pageOffset + assets.length < allAssets.length,
+              hasMore: pageOffset + pageAssets.length < allAssets.length,
             },
           }),
         }],

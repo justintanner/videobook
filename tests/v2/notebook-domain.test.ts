@@ -123,6 +123,102 @@ describe('v2 notebook domain tools', () => {
       .toEqual({ row: 1, column: 0 })
   })
 
+  it('enforces video action inputs and typed media outputs', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      slug: 'typed-actions',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+
+    const invoke = async (name: string, args: Record<string, unknown>) => {
+      const def = byName.get(name)
+      if (!def) throw new Error(`Missing ${name}`)
+      return await withBookContext(
+        { bookId: created.bookId, engine: managed.value.engine },
+        () => def.handler({ book_id: created.bookId, ...args }),
+      )
+    }
+    const notebooks = resultJson(await invoke('list_notebooks', {})) as Array<{ id: string }>
+    const notebookId = notebooks[0]!.id
+    const createCell = async (
+      type: string,
+      title: string,
+      row: number,
+      column: number,
+    ) => resultJson(await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: { type, title, slot: { row, column } },
+    })) as { id: string; operation?: string }
+
+    const sourceVideo = await createCell('video', 'Source video', 0, 0)
+    const sourceAudio = await createCell('audio', 'Source audio', 0, 1)
+    const extractAudio = await createCell('extract_audio', 'Extract audio', 1, 0)
+    const audioOutput = await createCell('audio', 'Audio output', 2, 0)
+    const splitVideo = await createCell('split_video', 'Split video', 1, 1)
+    const videoOutput = await createCell('video', 'Video output', 2, 1)
+
+    expect(extractAudio.operation).toBe('extract_audio')
+    expect(splitVideo.operation).toBe('split_range')
+
+    const invalidInput = await invoke('connect_notebook_cells', {
+      notebook_id: notebookId,
+      source_cell_id: sourceAudio.id,
+      target_cell_id: extractAudio.id,
+      target_input: 'video',
+    })
+    expect(invalidInput.isError).toBe(true)
+    expect(invalidInput.content[0]?.text).toContain('video-producing source')
+
+    for (const connection of [
+      {
+        source_cell_id: sourceVideo.id,
+        target_cell_id: extractAudio.id,
+        target_input: 'video',
+      },
+      {
+        source_cell_id: extractAudio.id,
+        target_cell_id: audioOutput.id,
+        target_input: 'media',
+      },
+      {
+        source_cell_id: sourceVideo.id,
+        target_cell_id: splitVideo.id,
+        target_input: 'video',
+      },
+      {
+        source_cell_id: splitVideo.id,
+        target_cell_id: videoOutput.id,
+        target_input: 'media',
+      },
+    ]) {
+      resultJson(await invoke('connect_notebook_cells', {
+        notebook_id: notebookId,
+        ...connection,
+      }))
+    }
+
+    const invalidOutput = await invoke('connect_notebook_cells', {
+      notebook_id: notebookId,
+      source_cell_id: extractAudio.id,
+      target_cell_id: videoOutput.id,
+      target_input: 'media',
+    })
+    expect(invalidOutput.isError).toBe(true)
+    expect(invalidOutput.content[0]?.text).toContain('split video source')
+
+    const bypassedMedia = await invoke('connect_notebook_cells', {
+      notebook_id: notebookId,
+      source_cell_id: splitVideo.id,
+      target_cell_id: extractAudio.id,
+      target_input: 'video',
+    })
+    expect(bypassedMedia.isError).toBe(true)
+    expect(bypassedMedia.content[0]?.text).toContain('video-producing source')
+  })
+
   it('cancels a queued persistent job explicitly', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))
@@ -265,7 +361,7 @@ describe('v2 notebook domain tools', () => {
     const cell = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
-        type: 'split',
+        type: 'video',
         title: 'Warm interview moments',
         slot: { row: 0, column: 0 },
         references: [{
@@ -304,7 +400,7 @@ describe('v2 notebook domain tools', () => {
       pinned_results: Array<{ id: string; selected_revision: string }>
     }
 
-    expect(cell.type).toBe('split')
+    expect(cell.type).toBe('video')
     expect(cell.references).toEqual([expect.objectContaining({
       id: referenceId,
       target_id: stream.value.streamId,

@@ -316,7 +316,7 @@ describe('audio notebook spine', () => {
       'audio',
       'analyze',
       'concat',
-      'split',
+      'audio',
     ])
     expect(selectedNotebook.value.edges).toHaveLength(3)
     expect(selectedNotebook.value.properties?.currentSelection).toMatchObject({

@@ -126,13 +126,13 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
   {
     id: "local.split_range",
-    cellTypes: ["split"],
+    cellTypes: ["split_video"],
     kind: "local",
     operation: "split_range",
     provider: "local",
     model: null,
     tool: "ffmpeg",
-    title: "Split source range",
+    title: "Split video",
     description: "Trim a continuous source range into a clip artifact",
     outputKind: "artifact",
     billable: false,
@@ -151,7 +151,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
         description: "Range end in source seconds",
       },
     ],
-    requiredInputs: ["source"],
+    requiredInputs: ["video"],
     capabilities: {
       dualFrame: false,
       localMedia: true,
@@ -160,7 +160,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
   {
     id: "local.extract_audio",
-    cellTypes: ["audio"],
+    cellTypes: ["extract_audio"],
     kind: "local",
     operation: "extract_audio",
     provider: "local",
@@ -172,7 +172,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
     billable: false,
     defaults: { operation: "extract_audio", tool: "ffmpeg", provider: "local" },
     parameters: [],
-    requiredInputs: ["source"],
+    requiredInputs: ["video"],
     capabilities: {
       dualFrame: false,
       localMedia: true,
@@ -428,16 +428,16 @@ export function defaultActionForCell(
     const operation = actions.find((action) => action.operation === cell.operation);
     if (operation) return operation;
   }
-  if (cell.type === "video") {
-    return actions.find((action) => action.operation === "preprocess_source")
-      ?? null;
-  }
   if (cell.type === "analyze") {
     return actions.find((action) => action.operation === "analyze_source")
       ?? null;
   }
-  if (cell.type === "split") {
+  if (cell.type === "split_video") {
     return actions.find((action) => action.operation === "split_range")
+      ?? null;
+  }
+  if (cell.type === "extract_audio") {
+    return actions.find((action) => action.operation === "extract_audio")
       ?? null;
   }
   if (cell.type === "concat") {

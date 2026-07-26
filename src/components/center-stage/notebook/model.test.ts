@@ -151,13 +151,14 @@ describe('notebook model', () => {
     }
   })
 
-  it('creates an empty definition and the twelve toolbox cell seeds', () => {
+  it('creates an empty definition and the thirteen toolbox cell seeds', () => {
     expect(createEmptyDefinition()).toEqual({ properties: {}, sequence: [] })
     expect(toolboxStepSeeds.map((step) => step.type)).toEqual([
       'audio',
       'image',
       'video',
-      'split',
+      'extract_audio',
+      'split_video',
       'prompt',
       'character',
       'analyze',
@@ -283,6 +284,56 @@ describe('notebook model', () => {
     const pruned = removeSteps(chained, ['image-1'])
     expect(pruned.sequence.map((step) => step.id)).toEqual(['prompt-1', 'video-1'])
     expect(stepInputs(pruned.sequence[1])).toEqual([])
+  })
+
+  it('connects video actions only through their typed media assets', () => {
+    const typed: NotebookPlanDefinition = {
+      properties: {},
+      sequence: [
+        {
+          id: 'source',
+          componentType: 'task',
+          type: 'video',
+          name: 'Source',
+          properties: {},
+        },
+        {
+          id: 'extract',
+          componentType: 'task',
+          type: 'extract_audio',
+          name: 'Extract audio',
+          properties: { inputs: [] },
+        },
+        {
+          id: 'audio',
+          componentType: 'task',
+          type: 'audio',
+          name: 'Audio',
+          properties: {},
+        },
+        {
+          id: 'split',
+          componentType: 'task',
+          type: 'split_video',
+          name: 'Split video',
+          properties: { inputs: [] },
+        },
+        {
+          id: 'video',
+          componentType: 'task',
+          type: 'video',
+          name: 'Video',
+          properties: {},
+        },
+      ],
+    }
+
+    expect(canConnect(typed, 'source', 'extract')).toBe(true)
+    expect(canConnect(typed, 'extract', 'audio')).toBe(true)
+    expect(canConnect(typed, 'source', 'split')).toBe(true)
+    expect(canConnect(typed, 'split', 'video')).toBe(true)
+    expect(canConnect(typed, 'split', 'extract')).toBe(false)
+    expect(canConnect(typed, 'extract', 'video')).toBe(false)
   })
 
   it('adds and moves stable graph nodes and reuses assets by slug', () => {
