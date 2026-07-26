@@ -180,6 +180,21 @@ describe('notebook bus and river routing', () => {
     ])
   })
 
+  it('chooses one deterministic primary arrival across a card fan-in', () => {
+    const document = fanInDocument(4)
+    const reversed = { ...document, edges: [...document.edges].reverse() }
+    const primaryIds = (candidate: NotebookDocument) => {
+      const routes = notebookBusRiverRoutes(candidate)
+      return candidate.edges
+        .filter((edge) => routes.get(edge.id)?.targetPrimary)
+        .map((edge) => edge.id)
+        .sort()
+    }
+
+    expect(primaryIds(document)).toEqual(['edge-0'])
+    expect(primaryIds(reversed)).toEqual(['edge-0'])
+  })
+
   it('prefers separate vertical lanes before deterministic reuse', () => {
     expect(edgeOffsets(verticalLaneDocument(4), 'riverOffset')).toEqual([
       notebookGutterLaneOffsets[0],
@@ -294,6 +309,7 @@ describe('notebook bus and river routing', () => {
         riverOffset: 20,
         riverSide: 'right',
         directRowGutter: false,
+        targetPrimary: true,
       },
     )).toBe('M 100 200 V 206 H 240 V 764 H 400 V 760')
   })
@@ -318,6 +334,7 @@ describe('notebook bus and river routing', () => {
         riverOffset: 20,
         riverSide: 'right',
         directRowGutter: false,
+        targetPrimary: true,
       },
     )).toBe('M 224.5 120 H 240 V 764 H 400 V 760')
   })
@@ -342,6 +359,7 @@ describe('notebook bus and river routing', () => {
         riverOffset: 20,
         riverSide: 'right',
         directRowGutter: true,
+        targetPrimary: true,
       },
     )).toBe('M 100 200 V 216 H 140 V 225')
   })

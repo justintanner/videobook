@@ -85,12 +85,16 @@ export function notebookEdges(
       type: 'busRiver',
       className: 'workflow-edge',
       data: route,
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: 18,
-        height: 18,
-        color: '#72e7aa',
-      },
+      ...(route.targetPrimary
+        ? {
+            markerEnd: {
+              type: MarkerType.ArrowClosed,
+              width: 18,
+              height: 18,
+              color: '#72e7aa',
+            },
+          }
+        : {}),
     }
   })
 }

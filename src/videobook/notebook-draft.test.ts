@@ -125,6 +125,7 @@ describe('notebook draft conversion', () => {
         riverOffset: 20,
         riverSide: 'right',
         directRowGutter: false,
+        targetPrimary: true,
       },
       markerEnd: {
         type: MarkerType.ArrowClosed,
@@ -134,5 +135,50 @@ describe('notebook draft conversion', () => {
     expect(
       notebookDocument(connected, notebookNodes(connected), notebookEdges(connected)).edges,
     ).toEqual(connected.edges)
+  })
+
+  it('draws one arrowhead for a multi-input target', () => {
+    const secondSource = {
+      ...source.cells[0]!,
+      id: '018f7cf5-0d31-7d96-8c0f-800000000008',
+      slot: { row: 0, column: 1 },
+    }
+    const target = {
+      ...source.cells[0]!,
+      id: '018f7cf5-0d31-7d96-8c0f-800000000005',
+      type: 'video' as const,
+      slot: { row: 2, column: 0 },
+    }
+    const fanIn: NotebookDocument = {
+      ...source,
+      cells: [source.cells[0]!, secondSource, target],
+      edges: [
+        {
+          id: '018f7cf5-0d31-7d96-8c0f-800000000009',
+          source: source.cells[0]!.id,
+          target: target.id,
+          targetInput: 'reference-video',
+        },
+        {
+          id: '018f7cf5-0d31-7d96-8c0f-800000000010',
+          source: secondSource.id,
+          target: target.id,
+          targetInput: 'reference-audio',
+        },
+      ],
+    }
+    const rendered = notebookEdges(fanIn)
+    const reversed = notebookEdges({
+      ...fanIn,
+      edges: [...fanIn.edges].reverse(),
+    })
+
+    expect(rendered.map((edge) => edge.targetHandle)).toEqual([
+      'reference-video',
+      'reference-audio',
+    ])
+    expect(rendered.filter((edge) => edge.markerEnd)).toHaveLength(1)
+    expect(rendered.find((edge) => edge.markerEnd)?.id).toBe(fanIn.edges[0]?.id)
+    expect(reversed.find((edge) => edge.markerEnd)?.id).toBe(fanIn.edges[0]?.id)
   })
 })

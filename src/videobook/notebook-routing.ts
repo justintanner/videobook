@@ -15,6 +15,7 @@ export interface NotebookBusRiverRoute extends Record<string, unknown> {
   riverOffset: number
   riverSide: NotebookRiverSide
   directRowGutter: boolean
+  targetPrimary: boolean
 }
 
 export interface NotebookBusRiverCoordinates {
@@ -66,6 +67,7 @@ export const defaultNotebookBusRiverRoute: NotebookBusRiverRoute = {
   riverOffset: notebookGutterLaneOffsets[1],
   riverSide: 'right',
   directRowGutter: false,
+  targetPrimary: true,
 }
 
 function compareCandidates(left: RouteCandidate, right: RouteCandidate): number {
@@ -139,6 +141,25 @@ function sourcePortAssignments(
     group.forEach((candidate, index) => {
       assignments.set(candidate.id, preferredIndex(index, group.length))
     })
+  }
+  return assignments
+}
+
+function targetPrimaryAssignments(
+  candidates: readonly RouteCandidate[],
+): ReadonlySet<string> {
+  const groups = new Map<string, RouteCandidate[]>()
+  for (const candidate of candidates) {
+    const group = groups.get(candidate.targetId) ?? []
+    group.push(candidate)
+    groups.set(candidate.targetId, group)
+  }
+
+  const assignments = new Set<string>()
+  for (const group of groups.values()) {
+    group.sort(compareCandidates)
+    const primary = group[0]
+    if (primary) assignments.add(primary.id)
   }
   return assignments
 }
@@ -287,6 +308,7 @@ export function notebookBusRiverRoutes(
     }]
   })
   const sourcePorts = sourcePortAssignments(candidates)
+  const targetPrimaries = targetPrimaryAssignments(candidates)
   const bottomAssignments = bottomRiverAssignments(candidates)
   const horizontal = horizontalAssignments(candidates)
   const verticalAssignments = assignGutterOffsets(
@@ -312,6 +334,7 @@ export function notebookBusRiverRoutes(
       ),
       riverSide: candidateRiverSide,
       directRowGutter: directRowGutter(candidate),
+      targetPrimary: targetPrimaries.has(candidate.id),
     })
   }
 
