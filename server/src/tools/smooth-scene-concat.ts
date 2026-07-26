@@ -17,7 +17,7 @@ function stripVideoPrefix(assetId: string): string {
 }
 
 function concatName(firstAssetId: string, secondAssetId: string): string {
-  return `scene-concat-${stripVideoPrefix(firstAssetId)}-${stripVideoPrefix(secondAssetId)}`;
+  return `vid-scene-concat-${stripVideoPrefix(firstAssetId)}-${stripVideoPrefix(secondAssetId)}`;
 }
 
 function validVideoProbe(probe: ProbeResult): boolean {

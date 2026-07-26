@@ -219,10 +219,14 @@ export async function captureFrame(
   try {
     const probe = await probeVideo(source.path);
     const start = options.range?.startSeconds ?? 0;
-    const end = options.range?.endSeconds ?? probe.duration;
+    const sourceEnd = probe.videoDuration || probe.duration;
+    const requestedEnd = options.range?.endSeconds ?? sourceEnd;
+    const end = sourceEnd > 0
+      ? Math.min(requestedEnd, sourceEnd)
+      : requestedEnd;
     const atSeconds = options.role === "first"
       ? start
-      : Math.max(start, end - (1 / Math.max(probe.fps || 30, 1)));
+      : Math.max(start, end - (1 / Math.max(probe.avgFps ?? probe.fps, 1)));
     await runFfmpeg([
       "-y",
       "-ss",

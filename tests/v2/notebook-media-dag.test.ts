@@ -38,6 +38,30 @@ async function makeSourceMp4(path: string, durationSeconds = 6): Promise<void> {
   ]);
 }
 
+async function makeLowRateMp4(path: string): Promise<void> {
+  await execFileAsync(FFMPEG, [
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    "color=c=blue:s=160x90:r=12:d=1.2",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:duration=1.2",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "ultrafast",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-shortest",
+    path,
+  ]);
+}
+
 describe("notebook local media and analysis fan-out", () => {
   let rootDir: string | undefined;
   let engine: Engine | undefined;
@@ -96,6 +120,40 @@ describe("notebook local media and analysis fan-out", () => {
     if (!audioManifest.ok) return;
     expect(audioManifest.value.files.some((file) => file.name.endsWith(".m4a"))).toBe(true);
     expect(audio.durationSeconds).toBeGreaterThan(5);
+  }, 60_000);
+
+  it("captures the last frame when container duration rounds past video duration", async () => {
+    if (!engine || !rootDir) throw new Error("engine missing");
+    const sourcePath = join(rootDir, "low-rate.mp4");
+    await makeLowRateMp4(sourcePath);
+    const source = await engine.artifacts.create({
+      kind: "video",
+      name: "low-rate clip",
+    });
+    expect(source.ok).toBe(true);
+    if (!source.ok) return;
+    const ingested = await engine.files.writeFromPath(
+      source.value.artifactId,
+      "original.mp4",
+      sourcePath,
+    );
+    expect(ingested.ok).toBe(true);
+
+    const split = await splitSourceRange(
+      engine,
+      source.value.artifactId,
+      { startSeconds: 0.1, endSeconds: 0.9 },
+      "low-rate split",
+    );
+    const last = await captureFrame(engine, split.artifactId, {
+      role: "last",
+      title: "low-rate last frame",
+    });
+    const manifest = await engine.files.manifest(last.artifactId);
+    expect(manifest.ok).toBe(true);
+    if (!manifest.ok) return;
+    expect(manifest.value.files.some((file) =>
+      file.name.endsWith(".jpg"))).toBe(true);
   }, 60_000);
 
   it("fans out owned split/frame/video branches from fixture analysis without deleting artifacts", async () => {
