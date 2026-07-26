@@ -11,6 +11,7 @@ import {
   notebookGridSlot,
   notebookGridViewport,
   normalizeNotebookGridZoom,
+  resolveNotebookGridGroupMove,
   resolveNotebookGridMove,
   snapNotebookGridMove,
   type NotebookGridData,
@@ -78,6 +79,80 @@ describe('notebook grid', () => {
       { id: 'a', slot: { row: 2, column: 3 } },
       { id: 'b', slot: { row: 0, column: 0 } },
     ])
+  })
+
+  it('moves selected cells together while preserving their relative slots', () => {
+    const moved = resolveNotebookGridGroupMove([
+      node('a', 1, -1),
+      node('b', 2, 1),
+      node('c', 7, 4),
+    ], 'a', ['a', 'b'], { row: 4, column: 2 })
+    expect(moved.map((item) => ({
+      id: item.id,
+      slot: item.data.slot,
+      position: item.position,
+    }))).toEqual([
+      {
+        id: 'a',
+        slot: { row: 4, column: 2 },
+        position: notebookGridPosition({ row: 4, column: 2 }),
+      },
+      {
+        id: 'b',
+        slot: { row: 5, column: 4 },
+        position: notebookGridPosition({ row: 5, column: 4 }),
+      },
+      {
+        id: 'c',
+        slot: { row: 7, column: 4 },
+        position: notebookGridPosition({ row: 7, column: 4 }),
+      },
+    ])
+  })
+
+  it('clamps a group move with one shared offset at the top edge', () => {
+    const moved = resolveNotebookGridGroupMove([
+      node('a', 2, 0),
+      node('b', 1, 2),
+    ], 'a', ['a', 'b'], { row: 0, column: -3 })
+    expect(moved.map((item) => item.data.slot)).toEqual([
+      { row: 1, column: -3 },
+      { row: 0, column: -1 },
+    ])
+  })
+
+  it('allows selected cells to move through their own source footprint', () => {
+    const moved = resolveNotebookGridGroupMove([
+      node('a', 0, 0),
+      node('b', 0, 1),
+    ], 'a', ['a', 'b'], { row: 0, column: 1 })
+    expect(moved.map((item) => item.data.slot)).toEqual([
+      { row: 0, column: 1 },
+      { row: 0, column: 2 },
+    ])
+  })
+
+  it('cancels a group move when an unselected destination is occupied', () => {
+    const source = [
+      node('a', 0, 0),
+      node('b', 0, 1),
+      node('c', 0, 2),
+    ]
+    const moved = resolveNotebookGridGroupMove(
+      source.map((item) => item.id === 'a' || item.id === 'b'
+        ? { ...item, position: { x: 900, y: 900 } }
+        : item),
+      'a',
+      ['a', 'b'],
+      { row: 0, column: 1 },
+    )
+    expect(moved.map((item) => ({
+      slot: item.data.slot,
+      position: item.position,
+    }))).toEqual(source.map((item) => ({
+      slot: item.data.slot,
+      position: item.position,
+    })))
   })
 
   it('chooses empty squares from the center outward', () => {

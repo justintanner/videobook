@@ -13,6 +13,7 @@ import {
   Handle,
   Position,
   ReactFlow,
+  SelectionMode,
   applyEdgeChanges,
   applyNodeChanges,
   type Connection,
@@ -96,7 +97,7 @@ import {
   notebookGridMetrics,
   notebookGridSlot,
   notebookGridViewport,
-  resolveNotebookGridMove,
+  resolveNotebookGridGroupMove,
   snapNotebookGridMove,
   type NotebookGridSlot,
 } from '@/videobook/notebook-grid'
@@ -1371,7 +1372,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const applyNotebook = useCallback((next: NotebookDocument, nextAssets: AssetRecord[]) => {
     setNotebook(next)
-    setNodes(canvasNodes(next, nextAssets, (cellId) => void runCell(cellId)))
+    setNodes((current) => {
+      const selectedIds = new Set(
+        current.filter((node) => node.selected).map((node) => node.id),
+      )
+      return canvasNodes(next, nextAssets, (cellId) => void runCell(cellId))
+        .map((node) => selectedIds.has(node.id)
+          ? { ...node, selected: true }
+          : node)
+    })
     setEdges(notebookEdges(next))
     setSelectedCellId((current) =>
       current && next.cells.some((cell) => cell.id === current) ? current : null)
@@ -1610,7 +1619,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
       await refreshNotebook(bookId, notebook.id)
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      const message = error instanceof Error ? error.message : String(error)
+      await refreshNotebook(bookId, notebook.id).catch(() => undefined)
+      setNotice(message)
     }
   }
 
@@ -3340,10 +3351,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       onNodeDrag={(_event, node) => {
                         setPreviewSlot(notebookGridSlot(node.position))
                       }}
-                      onNodeDragStop={(_event, node) => {
-                        const nextNodes = resolveNotebookGridMove(
+                      onNodeDragStop={(_event, node, draggedNodes) => {
+                        const nextNodes = resolveNotebookGridGroupMove(
                           nodes,
                           node.id,
+                          draggedNodes.map((draggedNode) => draggedNode.id),
                           notebookGridSlot(node.position),
                         )
                         setNodes(nextNodes)
@@ -3372,6 +3384,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       minZoom={notebookGrid.minimumZoom}
                       maxZoom={notebookGrid.maximumZoom}
                       panOnDrag={notebookPanOnDragButtons}
+                      selectionOnDrag
+                      selectionMode={SelectionMode.Partial}
                       panOnScroll={false}
                       zoomOnScroll={false}
                       zoomOnPinch

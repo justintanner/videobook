@@ -107,6 +107,59 @@ export function resolveNotebookGridMove<T extends NotebookGridData>(
   })
 }
 
+export function resolveNotebookGridGroupMove<T extends NotebookGridData>(
+  nodes: readonly Node<T>[],
+  anchorId: string,
+  movingNodeIds: readonly string[],
+  requested: NotebookGridSlot,
+): Array<Node<T>> {
+  const movingIds = new Set(movingNodeIds)
+  movingIds.add(anchorId)
+  const moving = nodes.filter((node) => movingIds.has(node.id))
+  if (moving.length <= 1) {
+    return resolveNotebookGridMove(nodes, anchorId, requested)
+  }
+  const anchor = moving.find((node) => node.id === anchorId)
+  if (!anchor) return [...nodes]
+
+  const target = normalizedSlot(requested)
+  const minimumRow = Math.min(...moving.map((node) => node.data.slot.row))
+  const rowDelta = Math.max(
+    target.row - anchor.data.slot.row,
+    -minimumRow,
+  )
+  const columnDelta = target.column - anchor.data.slot.column
+  const targets = new Map(moving.map((node) => {
+    const slot = normalizedSlot({
+      row: node.data.slot.row + rowDelta,
+      column: node.data.slot.column + columnDelta,
+    })
+    return [node.id, slot]
+  }))
+  const targetKeys = new Set(
+    [...targets.values()].map(notebookGridSlotKey),
+  )
+  const occupied = nodes.some((node) =>
+    !movingIds.has(node.id)
+    && targetKeys.has(notebookGridSlotKey(node.data.slot)))
+
+  if (occupied) {
+    return nodes.map((node) => movingIds.has(node.id)
+      ? { ...node, position: notebookGridPosition(node.data.slot) }
+      : node)
+  }
+
+  return nodes.map((node) => {
+    const slot = targets.get(node.id)
+    if (!slot) return node
+    return {
+      ...node,
+      position: notebookGridPosition(slot),
+      data: { ...node.data, slot },
+    }
+  })
+}
+
 export function nextNotebookGridSlot<T extends NotebookGridData>(
   nodes: readonly Node<T>[],
   columnCount = notebookGrid.defaultColumnCount,
