@@ -818,12 +818,36 @@ textarea:focus-visible {
 }
 
 .cell-target-handle {
-  top: -6px;
+  top: -1px;
+  opacity: 0;
+}
+
+.cell-node:hover > .cell-target-handle:not(.cell-target-handle-top-row),
+.cell-node-selected > .cell-target-handle:not(.cell-target-handle-top-row) {
+  opacity: 1;
 }
 
 .cell-target-handle-top-row {
   opacity: 0;
   pointer-events: none;
+}
+
+.cell-route-handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cell-route-handle-active {
+  opacity: 1;
+}
+
+.cell-connect-handle {
+  opacity: 0;
+}
+
+.cell-node:hover > .cell-connect-handle,
+.cell-node-selected > .cell-connect-handle {
+  opacity: 1;
 }
 
 .cell-node {

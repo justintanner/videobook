@@ -4,13 +4,11 @@ import type {
   NotebookCellType,
   NotebookDocument,
 } from 'videobook-engine'
-import {
-  notebookGridHeadingPosition,
-  notebookGridPosition,
-} from './notebook-grid'
+import { notebookGridPosition } from './notebook-grid'
 import {
   defaultNotebookBusRiverRoute,
   notebookBusRiverRoutes,
+  notebookSourcePortId,
   type NotebookBusRiverRoute,
 } from './notebook-routing'
 
@@ -27,23 +25,28 @@ export interface NotebookCellData extends Record<string, unknown> {
   outputArtifactId?: string
   inputs?: Record<string, unknown>
   targetInputs?: string[]
+  sourcePorts?: string[]
 }
 
 export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCellData>> {
+  const routes = notebookBusRiverRoutes(document)
   const targetInputs = new Map<string, string[]>()
+  const sourcePorts = new Map<string, string[]>()
   for (const edge of document.edges) {
     const inputs = targetInputs.get(edge.target) ?? []
     if (!inputs.includes(edge.targetInput)) inputs.push(edge.targetInput)
     targetInputs.set(edge.target, inputs)
+    const route = routes.get(edge.id) ?? defaultNotebookBusRiverRoute
+    const port = notebookSourcePortId(route.sourceSide, route.sourcePortIndex)
+    const ports = sourcePorts.get(edge.source) ?? []
+    if (!ports.includes(port)) ports.push(port)
+    sourcePorts.set(edge.source, ports)
   }
   return document.cells.map((cell) => {
     return {
       id: cell.id,
       type: 'cell',
-      position: cell.type === 'label'
-        ? notebookGridHeadingPosition(cell.slot.column)
-        : notebookGridPosition(cell.slot),
-      draggable: cell.type !== 'label',
+      position: notebookGridPosition(cell.slot),
       data: {
         kind: cell.type,
         title: cell.title,
@@ -51,6 +54,7 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
         slot: cell.slot,
         status: 'ready',
         targetInputs: targetInputs.get(cell.id) ?? ['input'],
+        sourcePorts: sourcePorts.get(cell.id) ?? [],
         ...(cell.prompt === undefined ? {} : { prompt: cell.prompt }),
         ...(cell.model === undefined ? {} : { model: cell.model }),
         ...(cell.entityId === undefined ? {} : { entityId: cell.entityId }),
@@ -67,21 +71,28 @@ export function notebookEdges(
   document: NotebookDocument,
 ): Array<Edge<NotebookBusRiverRoute, 'busRiver'>> {
   const routes = notebookBusRiverRoutes(document)
-  return document.edges.map((edge) => ({
-    id: edge.id,
-    source: edge.source,
-    target: edge.target,
-    targetHandle: edge.targetInput,
-    type: 'busRiver',
-    className: 'workflow-edge',
-    data: routes.get(edge.id) ?? defaultNotebookBusRiverRoute,
-    markerEnd: {
-      type: MarkerType.ArrowClosed,
-      width: 18,
-      height: 18,
-      color: '#72e7aa',
-    },
-  }))
+  return document.edges.map((edge) => {
+    const route = routes.get(edge.id) ?? defaultNotebookBusRiverRoute
+    return {
+      id: edge.id,
+      source: edge.source,
+      sourceHandle: notebookSourcePortId(
+        route.sourceSide,
+        route.sourcePortIndex,
+      ),
+      target: edge.target,
+      targetHandle: edge.targetInput,
+      type: 'busRiver',
+      className: 'workflow-edge',
+      data: route,
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        width: 18,
+        height: 18,
+        color: '#72e7aa',
+      },
+    }
+  })
 }
 
 function cellFromNode(node: Node<NotebookCellData>): NotebookCell {

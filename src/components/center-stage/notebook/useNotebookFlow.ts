@@ -15,7 +15,7 @@ import {
 import { NODE_DIMENSIONS, type NotebookFlowNode, type NotebookNodeData } from './nodes/nodeTypes'
 import type { NotebookPlanDefinition } from './types'
 import type { MediaItem } from '@/components/sidebar/types'
-import { computeTrunkGroups, trunkEdgeDataEqual, type TrunkEdgeData } from './trunk-edges.js'
+import { computeGutterRoutes, computeTrunkGroups, trunkEdgeDataEqual, type TrunkEdgeData } from './trunk-edges.js'
 
 interface NotebookFlowOptions {
   definition: NotebookPlanDefinition | null
@@ -174,6 +174,7 @@ function desiredEdges(
 ): Edge[] {
   const steps = new Map(definition.sequence.map((step) => [step.id, step]))
   const trunkGroups = computeTrunkGroups(definition)
+  const gutterRoutes = computeGutterRoutes(definition)
   
   return definition.sequence.flatMap((target) => {
     if (target.type !== 'image' && target.type !== 'video') return []
@@ -192,6 +193,13 @@ function desiredEdges(
       if (runningStepIds.has(source) || runningStepIds.has(target.id)) classes.push('vc-notebook-edge-running')
       
       const groupAssignment = trunkGroups.get(id)
+      const edgeRoute = gutterRoutes.get(id) ?? { multiRow: false, outLane: 0, inLane: 0, gutterX: 0 }
+      const busSiblingIds = (groupAssignment?.siblingIds ?? []).filter((sid) => {
+        const siblingEdgeId = groupAssignment?.groupKind === 'fan-in'
+          ? `${sid}->${target.id}`
+          : `${source}->${sid}`
+        return gutterRoutes.get(siblingEdgeId)?.multiRow !== true
+      })
       const data: TrunkEdgeData = {
         kind: steps.get(source)?.type === 'prompt' ? 'prompt' : 'ref',
         pinned: inputRoutes[source] === 'first_frame_slug',
@@ -205,6 +213,8 @@ function desiredEdges(
           groupAssignment.groupKind === 'fan-in' ? route.edgeIds.has(`${sid}->${target.id}`) : route.edgeIds.has(`${source}->${sid}`)
         ),
         groupRunning: runningStepIds.has(source) || runningStepIds.has(target.id) || !!groupAssignment?.siblingIds.some(sid => runningStepIds.has(sid)),
+        route: edgeRoute,
+        busSiblingIds,
       }
       
       return {

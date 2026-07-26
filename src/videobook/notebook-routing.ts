@@ -2,14 +2,19 @@ import type { NotebookDocument } from 'videobook-engine'
 import { notebookGrid } from './notebook-grid'
 
 export const notebookGutterLaneOffsets = [10, 20, 30] as const
+export const notebookSourcePortOffsets = [0.25, 0.5, 0.75] as const
 
 export type NotebookRiverSide = 'left' | 'right'
+export type NotebookSourceSide = NotebookRiverSide | 'bottom'
 
 export interface NotebookBusRiverRoute extends Record<string, unknown> {
+  sourceSide: NotebookSourceSide
+  sourcePortIndex: number
   sourceBusOffset: number
   targetBusOffset: number
   riverOffset: number
   riverSide: NotebookRiverSide
+  directRowGutter: boolean
 }
 
 export interface NotebookBusRiverCoordinates {
@@ -30,6 +35,8 @@ export interface NotebookBusRiverPoint {
 
 interface RouteCandidate {
   id: string
+  sourceId: string
+  targetId: string
   sourceRow: number
   sourceColumn: number
   targetRow: number
@@ -39,11 +46,26 @@ interface RouteCandidate {
 
 type GutterAssignments = ReadonlyMap<string, ReadonlyMap<string, number>>
 
+interface HorizontalRouteUnit {
+  id: string
+  column: number
+  kind: 'source' | 'target'
+  candidates: RouteCandidate[]
+}
+
+interface HorizontalAssignments {
+  source: ReadonlyMap<string, number>
+  target: ReadonlyMap<string, number>
+}
+
 export const defaultNotebookBusRiverRoute: NotebookBusRiverRoute = {
+  sourceSide: 'bottom',
+  sourcePortIndex: 1,
   sourceBusOffset: notebookGutterLaneOffsets[1],
   targetBusOffset: notebookGutterLaneOffsets[1],
   riverOffset: notebookGutterLaneOffsets[1],
   riverSide: 'right',
+  directRowGutter: false,
 }
 
 function compareCandidates(left: RouteCandidate, right: RouteCandidate): number {
@@ -55,14 +77,16 @@ function compareCandidates(left: RouteCandidate, right: RouteCandidate): number 
     || left.id.localeCompare(right.id)
 }
 
-function preferredLaneOffset(index: number, count: number): number {
-  if (count === 1) return notebookGutterLaneOffsets[1]
+function preferredIndex(index: number, count: number): number {
+  if (count === 1) return 1
   if (count === 2) {
-    return index % 2 === 0
-      ? notebookGutterLaneOffsets[0]
-      : notebookGutterLaneOffsets[2]
+    return index % 2 === 0 ? 0 : 2
   }
-  return notebookGutterLaneOffsets[index % notebookGutterLaneOffsets.length]
+  return index % notebookGutterLaneOffsets.length
+}
+
+function preferredLaneOffset(index: number, count: number): number {
+  return notebookGutterLaneOffsets[preferredIndex(index, count)]
 }
 
 function assignGutterOffsets(
@@ -92,14 +116,146 @@ function assignGutterOffsets(
   return assignments
 }
 
-function riverSide(candidate: RouteCandidate): NotebookRiverSide {
-  return candidate.targetColumn >= candidate.sourceColumn ? 'right' : 'left'
+function sourceSide(candidate: RouteCandidate): NotebookSourceSide {
+  if (candidate.targetColumn < candidate.sourceColumn) return 'left'
+  if (candidate.targetColumn > candidate.sourceColumn) return 'right'
+  return 'bottom'
 }
 
-function riverGutter(candidate: RouteCandidate): number {
-  return riverSide(candidate) === 'right'
+function sourcePortAssignments(
+  candidates: readonly RouteCandidate[],
+): ReadonlyMap<string, number> {
+  const groups = new Map<string, RouteCandidate[]>()
+  for (const candidate of candidates) {
+    const key = `${candidate.sourceId}:${sourceSide(candidate)}`
+    const group = groups.get(key) ?? []
+    group.push(candidate)
+    groups.set(key, group)
+  }
+
+  const assignments = new Map<string, number>()
+  for (const group of groups.values()) {
+    group.sort(compareCandidates)
+    group.forEach((candidate, index) => {
+      assignments.set(candidate.id, preferredIndex(index, group.length))
+    })
+  }
+  return assignments
+}
+
+function bottomRiverAssignments(
+  candidates: readonly RouteCandidate[],
+): ReadonlyMap<string, NotebookRiverSide> {
+  const groups = new Map<string, RouteCandidate[]>()
+  for (const candidate of candidates) {
+    if (sourceSide(candidate) !== 'bottom') continue
+    const group = groups.get(candidate.sourceId) ?? []
+    group.push(candidate)
+    groups.set(candidate.sourceId, group)
+  }
+
+  const assignments = new Map<string, NotebookRiverSide>()
+  for (const group of groups.values()) {
+    group.sort(compareCandidates)
+    group.forEach((candidate, index) => {
+      assignments.set(
+        candidate.id,
+        group.length === 1 || index % 2 === 1 ? 'right' : 'left',
+      )
+    })
+  }
+  return assignments
+}
+
+function riverSide(
+  candidate: RouteCandidate,
+  bottomAssignments: ReadonlyMap<string, NotebookRiverSide>,
+): NotebookRiverSide {
+  const side = sourceSide(candidate)
+  return side === 'bottom'
+    ? bottomAssignments.get(candidate.id) ?? 'right'
+    : side
+}
+
+function riverGutter(
+  candidate: RouteCandidate,
+  bottomAssignments: ReadonlyMap<string, NotebookRiverSide>,
+): number {
+  return riverSide(candidate, bottomAssignments) === 'right'
     ? candidate.sourceColumn
     : candidate.sourceColumn - 1
+}
+
+function directRowGutter(candidate: RouteCandidate): boolean {
+  return candidate.targetRow === candidate.sourceRow + 1
+    && candidate.targetColumn === candidate.sourceColumn
+}
+
+function horizontalAssignments(
+  candidates: readonly RouteCandidate[],
+): HorizontalAssignments {
+  const gutters = new Map<number, Map<string, HorizontalRouteUnit>>()
+  const addUnit = (
+    gutter: number,
+    id: string,
+    column: number,
+    kind: HorizontalRouteUnit['kind'],
+    candidate: RouteCandidate,
+  ) => {
+    const units = gutters.get(gutter) ?? new Map<string, HorizontalRouteUnit>()
+    const unit = units.get(id) ?? { id, column, kind, candidates: [] }
+    unit.candidates.push(candidate)
+    units.set(id, unit)
+    gutters.set(gutter, units)
+  }
+
+  for (const candidate of candidates) {
+    if (
+      sourceSide(candidate) === 'bottom'
+      && !directRowGutter(candidate)
+    ) {
+      addUnit(
+        candidate.sourceRow,
+        `source:${candidate.id}`,
+        candidate.sourceColumn,
+        'source',
+        candidate,
+      )
+    }
+    addUnit(
+      candidate.targetRow - 1,
+      `target:${candidate.targetId}`,
+      candidate.targetColumn,
+      'target',
+      candidate,
+    )
+  }
+
+  const source = new Map<string, number>()
+  const target = new Map<string, number>()
+  for (const units of gutters.values()) {
+    const sorted = [...units.values()].sort((left, right) =>
+      left.column - right.column
+      || left.kind.localeCompare(right.kind)
+      || left.id.localeCompare(right.id))
+    sorted.forEach((unit, index) => {
+      const offset = preferredLaneOffset(index, sorted.length)
+      for (const candidate of unit.candidates) {
+        if (unit.kind === 'source') source.set(candidate.id, offset)
+        else target.set(candidate.id, offset)
+      }
+    })
+  }
+
+  for (const candidate of candidates) {
+    if (!directRowGutter(candidate)) continue
+    source.set(
+      candidate.id,
+      target.get(candidate.id) ?? notebookGutterLaneOffsets[1],
+    )
+  }
+
+  return { source, target }
 }
 
 function assignedOffset(
@@ -121,6 +277,8 @@ export function notebookBusRiverRoutes(
     if (!source || !target) return []
     return [{
       id: edge.id,
+      sourceId: source.id,
+      targetId: target.id,
       sourceRow: source.slot.row,
       sourceColumn: source.slot.column,
       targetRow: target.slot.row,
@@ -128,37 +286,32 @@ export function notebookBusRiverRoutes(
       targetInput: edge.targetInput,
     }]
   })
-  const horizontalAssignments = assignGutterOffsets(
-    candidates,
-    (candidate) => [
-      String(candidate.sourceRow),
-      String(candidate.targetRow - 1),
-    ],
-  )
+  const sourcePorts = sourcePortAssignments(candidates)
+  const bottomAssignments = bottomRiverAssignments(candidates)
+  const horizontal = horizontalAssignments(candidates)
   const verticalAssignments = assignGutterOffsets(
-    candidates,
-    (candidate) => [String(riverGutter(candidate))],
+    candidates.filter((candidate) => !directRowGutter(candidate)),
+    (candidate) => [String(riverGutter(candidate, bottomAssignments))],
   )
   const routes = new Map<string, NotebookBusRiverRoute>()
 
   for (const candidate of candidates) {
+    const candidateRiverSide = riverSide(candidate, bottomAssignments)
+    const candidateRiverGutter = riverGutter(candidate, bottomAssignments)
     routes.set(candidate.id, {
-      sourceBusOffset: assignedOffset(
-        horizontalAssignments,
-        candidate.sourceRow,
-        candidate.id,
-      ),
-      targetBusOffset: assignedOffset(
-        horizontalAssignments,
-        candidate.targetRow - 1,
-        candidate.id,
-      ),
+      sourceSide: sourceSide(candidate),
+      sourcePortIndex: sourcePorts.get(candidate.id) ?? 1,
+      sourceBusOffset: horizontal.source.get(candidate.id)
+        ?? notebookGutterLaneOffsets[1],
+      targetBusOffset: horizontal.target.get(candidate.id)
+        ?? notebookGutterLaneOffsets[1],
       riverOffset: assignedOffset(
         verticalAssignments,
-        riverGutter(candidate),
+        candidateRiverGutter,
         candidate.id,
       ),
-      riverSide: riverSide(candidate),
+      riverSide: candidateRiverSide,
+      directRowGutter: directRowGutter(candidate),
     })
   }
 
@@ -175,6 +328,31 @@ export function notebookBusRiverPoints(
     ? coordinates.sourceRightX + route.riverOffset
     : coordinates.sourceLeftX - notebookGrid.gap + route.riverOffset
 
+  if (
+    route.directRowGutter
+    && coordinates.targetTopY > coordinates.sourceBottomY
+  ) {
+    const gap = coordinates.targetTopY - coordinates.sourceBottomY
+    const busY = coordinates.sourceBottomY
+      + gap * (route.targetBusOffset / notebookGrid.gap)
+    return [
+      { x: coordinates.sourceX, y: coordinates.sourceY },
+      { x: coordinates.sourceX, y: busY },
+      { x: coordinates.targetX, y: busY },
+      { x: coordinates.targetX, y: coordinates.targetY },
+    ]
+  }
+
+  if (route.sourceSide !== 'bottom') {
+    return [
+      { x: coordinates.sourceX, y: coordinates.sourceY },
+      { x: riverX, y: coordinates.sourceY },
+      { x: riverX, y: targetBusY },
+      { x: coordinates.targetX, y: targetBusY },
+      { x: coordinates.targetX, y: coordinates.targetY },
+    ]
+  }
+
   return [
     { x: coordinates.sourceX, y: coordinates.sourceY },
     { x: coordinates.sourceX, y: sourceBusY },
@@ -190,12 +368,18 @@ export function notebookBusRiverPath(
   route: NotebookBusRiverRoute,
 ): string {
   const points = notebookBusRiverPoints(coordinates, route)
-  return [
-    `M ${points[0].x} ${points[0].y}`,
-    `V ${points[1].y}`,
-    `H ${points[2].x}`,
-    `V ${points[3].y}`,
-    `H ${points[4].x}`,
-    `V ${points[5].y}`,
-  ].join(' ')
+  return points.map((point, index) => {
+    if (index === 0) return `M ${point.x} ${point.y}`
+    const previous = points[index - 1]
+    if (point.x === previous.x) return `V ${point.y}`
+    if (point.y === previous.y) return `H ${point.x}`
+    return `L ${point.x} ${point.y}`
+  }).join(' ')
+}
+
+export function notebookSourcePortId(
+  side: NotebookSourceSide,
+  index: number,
+): string {
+  return `route-${side}-${index % notebookSourcePortOffsets.length}`
 }

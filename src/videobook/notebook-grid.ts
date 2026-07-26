@@ -7,14 +7,14 @@ export interface NotebookGridData extends Record<string, unknown> {
 
 export const notebookGrid = {
   originX: 48,
-  originY: 152,
-  headingY: 104,
+  originY: 48,
   squareSize: 240,
   gap: 40,
   columnPitch: 280,
   rowPitch: 280,
   defaultColumnCount: 7,
   minimumRowCount: 3,
+  trailingRowCount: 2,
   minimumZoom: 0.5,
   maximumZoom: 2,
   zoomStep: 0.25,
@@ -58,13 +58,6 @@ export function notebookGridPosition(slot: NotebookGridSlot): XYPosition {
   return {
     x: slot.column * notebookGrid.columnPitch,
     y: notebookGrid.originY + slot.row * notebookGrid.rowPitch,
-  }
-}
-
-export function notebookGridHeadingPosition(column: number): XYPosition {
-  return {
-    x: Math.round(column) * notebookGrid.columnPitch,
-    y: notebookGrid.headingY,
   }
 }
 
@@ -184,11 +177,59 @@ export interface NotebookGridMetrics {
   height: number
 }
 
+export interface NotebookGridMetricsOptions {
+  preview?: NotebookGridSlot | null
+  viewportWidth?: number
+  viewportHeight?: number
+  zoom?: number
+}
+
 export function normalizeNotebookGridZoom(zoom: number): number {
   if (!Number.isFinite(zoom)) return 1
   return Math.min(
     notebookGrid.maximumZoom,
     Math.max(notebookGrid.minimumZoom, zoom),
+  )
+}
+
+function gridWidth(columnCount: number): number {
+  return notebookGrid.originX * 2
+    + columnCount * notebookGrid.squareSize
+    + Math.max(0, columnCount - 1) * notebookGrid.gap
+}
+
+function fittingColumnCount(viewportWidth: number, zoom: number): number {
+  if (!Number.isFinite(viewportWidth) || viewportWidth <= 0) {
+    return notebookGrid.defaultColumnCount
+  }
+  const target = viewportWidth / normalizeNotebookGridZoom(zoom)
+  const estimate = Math.max(
+    1,
+    Math.round(
+      (target - notebookGrid.originX * 2 + notebookGrid.gap)
+      / notebookGrid.columnPitch,
+    ),
+  )
+  const lower = estimate % 2 === 0 ? Math.max(1, estimate - 1) : estimate
+  const upper = lower + 2
+  const nearest = Math.abs(gridWidth(lower) - target)
+    <= Math.abs(gridWidth(upper) - target)
+    ? lower
+    : upper
+  return Math.max(notebookGrid.defaultColumnCount, nearest)
+}
+
+function fittingRowCount(viewportHeight: number, zoom: number): number {
+  if (!Number.isFinite(viewportHeight) || viewportHeight <= 0) {
+    return notebookGrid.minimumRowCount
+  }
+  const target = viewportHeight / normalizeNotebookGridZoom(zoom)
+  return Math.max(
+    notebookGrid.minimumRowCount,
+    Math.ceil(
+      (target - notebookGrid.originY * 2 + notebookGrid.gap)
+      / notebookGrid.rowPitch,
+    ),
   )
 }
 
@@ -235,33 +276,48 @@ export function notebookGridDropSlot(
       column: metrics.maxColumn + 1,
     })
   }
+  const bottom = notebookGrid.originY
+    + (metrics.rowCount - 1) * notebookGrid.rowPitch
+    + notebookGrid.squareSize
+  if (position.y > bottom) {
+    return {
+      row: metrics.rowCount,
+      column: Math.round(position.x / notebookGrid.columnPitch),
+    }
+  }
   return notebookGridSlot(position)
 }
 
 export function notebookGridMetrics(
   slots: readonly NotebookGridSlot[],
-  columnCount = notebookGrid.defaultColumnCount,
-  preview: NotebookGridSlot | null = null,
+  options: NotebookGridMetricsOptions = {},
 ): NotebookGridMetrics {
+  const preview = options.preview ?? null
   const populated = preview ? [...slots, preview] : [...slots]
-  const maxRow = Math.max(
-    notebookGrid.minimumRowCount - 1,
-    ...populated.map((slot) => slot.row),
+  const contentRowCount = Math.max(
+    0,
+    ...populated.map((slot) => slot.row + 1),
   )
-  const minimumRadius = Math.floor(normalizedColumnCount(columnCount) / 2)
+  const rowCount = Math.max(
+    fittingRowCount(options.viewportHeight ?? 0, options.zoom ?? 1),
+    contentRowCount + notebookGrid.trailingRowCount,
+  )
+  const minimumRadius = Math.floor(
+    normalizedColumnCount(
+      fittingColumnCount(options.viewportWidth ?? 0, options.zoom ?? 1),
+    ) / 2,
+  )
   const radius = Math.max(
     minimumRadius,
     ...populated.map((slot) => Math.abs(slot.column)),
   )
   const resolvedColumnCount = radius * 2 + 1
-  const width = notebookGrid.originX * 2
-    + resolvedColumnCount * notebookGrid.squareSize
-    + Math.max(0, resolvedColumnCount - 1) * notebookGrid.gap
+  const width = gridWidth(resolvedColumnCount)
   const height = notebookGrid.originY * 2
-    + (maxRow + 1) * notebookGrid.squareSize
-    + maxRow * notebookGrid.gap
+    + rowCount * notebookGrid.squareSize
+    + Math.max(0, rowCount - 1) * notebookGrid.gap
   return {
-    rowCount: maxRow + 1,
+    rowCount,
     columnCount: resolvedColumnCount,
     minColumn: -radius,
     maxColumn: radius,

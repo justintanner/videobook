@@ -1,8 +1,24 @@
-import { notebookTrackLayout, stepInputs } from './model.js'
+import {
+  NOTEBOOK_TRACK_ORIGIN_X,
+  NOTEBOOK_TRACK_ROW_PITCH,
+  NOTEBOOK_TRACK_SLOT_PITCH,
+  NOTEBOOK_TRACK_SLOT_WIDTH,
+  notebookNodeSizes,
+  notebookTrackLayout,
+  stepInputs,
+} from './model.js'
 import type { NotebookPlanDefinition } from './types.js'
 
-export const TRUNK_BUS_GAP = 56
-export const TRUNK_BUS_STAGGER = 10
+const MAX_CARD_HEIGHT = Math.max(...Object.values(notebookNodeSizes).map((size) => size.height))
+
+/** Empty band between two rows: row pitch minus the tallest card (100px). */
+export const ROW_GUTTER = NOTEBOOK_TRACK_ROW_PITCH - MAX_CARD_HEIGHT
+
+/** Horizontal lane offsets inside a row gutter, measured from the upper card bottom. */
+export const ROW_GUTTER_LANES = [28, 50, 72] as const
+
+/** Vertical lane offsets inside a 48px column gutter, measured from the gutter's left edge. */
+export const COL_GUTTER_LANES = [14, 24, 34] as const
 
 export type TrunkGroupKind = 'fan-in' | 'fan-out'
 
@@ -15,11 +31,20 @@ export interface GroupAssignment {
   staggerIndex: number
 }
 
+export interface GutterRoute {
+  multiRow: boolean
+  outLane: number
+  inLane: number
+  gutterX: number
+}
+
 export interface TrunkEdgeData extends GroupAssignment, Record<string, unknown> {
   kind: 'prompt' | 'ref'
   pinned: boolean
   groupActive: boolean
   groupRunning: boolean
+  route: GutterRoute
+  busSiblingIds: string[]
 }
 
 interface TempGroup {
@@ -110,7 +135,7 @@ export function computeTrunkGroups(definition: NotebookPlanDefinition): Readonly
 }
 
 export function trunkBusY(targetTopY: number, staggerIndex: number): number {
-  return targetTopY - TRUNK_BUS_GAP + (staggerIndex - 1) * TRUNK_BUS_STAGGER
+  return targetTopY - ROW_GUTTER + ROW_GUTTER_LANES[staggerIndex % ROW_GUTTER_LANES.length]
 }
 
 interface Coords {
@@ -154,6 +179,111 @@ export function trunkDot(
   }
 }
 
+interface RouteCandidate {
+  id: string
+  sourceDepth: number
+  targetDepth: number
+  sourceSlot: number
+  targetSlot: number
+  gutterSlot: number
+}
+
+/** Absolute x of a vertical lane inside the gutter between slot `gutterSlot` and `gutterSlot + 1`. */
+export function columnGutterLaneX(gutterSlot: number, lane: number): number {
+  return NOTEBOOK_TRACK_ORIGIN_X
+    + gutterSlot * NOTEBOOK_TRACK_SLOT_PITCH
+    + NOTEBOOK_TRACK_SLOT_WIDTH
+    + COL_GUTTER_LANES[lane % COL_GUTTER_LANES.length]
+}
+
+function assignLanes(
+  candidates: RouteCandidate[],
+  keyOf: (candidate: RouteCandidate) => number,
+): Map<string, number> {
+  const groups = new Map<number, RouteCandidate[]>()
+  for (const candidate of candidates) {
+    const key = keyOf(candidate)
+    const list = groups.get(key) ?? []
+    list.push(candidate)
+    groups.set(key, list)
+  }
+  const lanes = new Map<string, number>()
+  for (const list of groups.values()) {
+    list.sort((a, b) =>
+      a.sourceDepth - b.sourceDepth
+      || a.sourceSlot - b.sourceSlot
+      || a.targetDepth - b.targetDepth
+      || a.targetSlot - b.targetSlot
+      || a.id.localeCompare(b.id))
+    list.forEach((candidate, idx) => lanes.set(candidate.id, idx % ROW_GUTTER_LANES.length))
+  }
+  return lanes
+}
+
+/**
+ * Assigns gutter lanes to edges. Edges spanning a single row ride the shared
+ * trunk bus inside the row gutter (see trunkBusY) and need no column gutter.
+ * Edges spanning multiple rows get a deterministic vertical lane inside a
+ * column gutter so their long verticals never cross a card or each other.
+ */
+export function computeGutterRoutes(definition: NotebookPlanDefinition): ReadonlyMap<string, GutterRoute> {
+  const layout = notebookTrackLayout(definition)
+  const steps = new Map(definition.sequence.map((step) => [step.id, step]))
+  const slotOf = (id: string): number => {
+    const step = steps.get(id)
+    const position = layout.positions.get(id)
+    if (!step || !position) return 0
+    const size = notebookNodeSizes[step.type]
+    return Math.round(
+      (position.x + size.width / 2 - NOTEBOOK_TRACK_ORIGIN_X - NOTEBOOK_TRACK_SLOT_WIDTH / 2)
+      / NOTEBOOK_TRACK_SLOT_PITCH,
+    )
+  }
+
+  const result = new Map<string, GutterRoute>()
+  const multiRow: RouteCandidate[] = []
+
+  for (const target of definition.sequence) {
+    if (target.type !== 'image' && target.type !== 'video') continue
+    const targetDepth = layout.depths.get(target.id) ?? 0
+    for (const source of stepInputs(target)) {
+      if (!steps.has(source)) continue
+      const id = `${source}->${target.id}`
+      const sourceDepth = layout.depths.get(source) ?? 0
+      if (targetDepth <= sourceDepth + 1) {
+        result.set(id, { multiRow: false, outLane: 0, inLane: 0, gutterX: 0 })
+        continue
+      }
+      const sourceSlot = slotOf(source)
+      const targetSlot = slotOf(target.id)
+      const gutterSlot = targetSlot > sourceSlot ? sourceSlot : Math.max(0, sourceSlot - 1)
+      multiRow.push({ id, sourceDepth, targetDepth, sourceSlot, targetSlot, gutterSlot })
+    }
+  }
+
+  const colLanes = assignLanes(multiRow, (candidate) => candidate.gutterSlot)
+  const outLanes = assignLanes(multiRow, (candidate) => candidate.sourceDepth)
+  const inLanes = assignLanes(multiRow, (candidate) => candidate.targetDepth - 1)
+
+  for (const candidate of multiRow) {
+    result.set(candidate.id, {
+      multiRow: true,
+      outLane: outLanes.get(candidate.id) ?? 0,
+      inLane: inLanes.get(candidate.id) ?? 0,
+      gutterX: columnGutterLaneX(candidate.gutterSlot, colLanes.get(candidate.id) ?? 0),
+    })
+  }
+
+  return result
+}
+
+/** Orthogonal polyline: row gutter below source → column gutter → row gutter above target. */
+export function gutterRoutePath(p: Coords, route: GutterRoute): string {
+  const outY = p.sourceY + ROW_GUTTER_LANES[route.outLane % ROW_GUTTER_LANES.length]
+  const inY = p.targetY - ROW_GUTTER + ROW_GUTTER_LANES[route.inLane % ROW_GUTTER_LANES.length]
+  return `M ${p.sourceX} ${p.sourceY} V ${outY} H ${route.gutterX} V ${inY} H ${p.targetX} V ${p.targetY}`
+}
+
 export function trunkEdgeDataEqual(a?: TrunkEdgeData, b?: TrunkEdgeData): boolean {
   if (a === b) return true
   if (!a || !b) return false
@@ -167,6 +297,12 @@ export function trunkEdgeDataEqual(a?: TrunkEdgeData, b?: TrunkEdgeData): boolea
     a.staggerIndex === b.staggerIndex &&
     a.groupActive === b.groupActive &&
     a.groupRunning === b.groupRunning &&
+    a.route.multiRow === b.route.multiRow &&
+    a.route.outLane === b.route.outLane &&
+    a.route.inLane === b.route.inLane &&
+    a.route.gutterX === b.route.gutterX &&
+    a.busSiblingIds.length === b.busSiblingIds.length &&
+    a.busSiblingIds.every((id, i) => id === b.busSiblingIds[i]) &&
     a.siblingIds.length === b.siblingIds.length &&
     a.siblingIds.every((id, i) => id === b.siblingIds[i])
   )

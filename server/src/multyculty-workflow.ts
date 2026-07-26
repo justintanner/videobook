@@ -9,6 +9,7 @@ import {
   runNotebookCell,
   topologicalOrder,
 } from "./jobs/run-notebook.js";
+import { normalizeSceneVideo } from "./notebook-media-ops.js";
 import {
   applyAnalysisResults,
   buildSevenStageScaffold,
@@ -21,7 +22,7 @@ type ArtifactRecord = {
   kind: string;
 };
 
-export const MULTYCULTY_FIXTURE_VERSION = 12;
+export const MULTYCULTY_FIXTURE_VERSION = 14;
 export const MULTYCULTY_FIXTURE_OWNER = "multyculty-default";
 
 const LEGACY_SPLIT_ROLES = [
@@ -45,6 +46,11 @@ const SECTION_SLUGS = [
   "vid-section-dunka",
 ] as const;
 
+const ANIMATION_SLUGS = [
+  "vid-animated-intro",
+  "vid-animated-culture",
+] as const;
+
 const COMPACT_FIXTURE_SLOTS = new Map<string, NotebookCell["slot"]>([
   ["source", { row: 0, column: 0 }],
   ["source-audio", { row: 0, column: 1 }],
@@ -57,6 +63,12 @@ const COMPACT_FIXTURE_SLOTS = new Map<string, NotebookCell["slot"]>([
   ["frame-first-2", { row: 3, column: 1 }],
   ["frame-last-2", { row: 3, column: 2 }],
   ["scene-audio-2", { row: 3, column: 3 }],
+  ["prompt-1", { row: 4, column: -2 }],
+  ["prompt-2", { row: 4, column: 2 }],
+  ["animate-1", { row: 5, column: -2 }],
+  ["animate-2", { row: 5, column: 2 }],
+  ["assembly", { row: 6, column: 0 }],
+  ["export", { row: 7, column: 0 }],
 ]);
 
 const COMPACT_FIXTURE_ROLES = new Set(COMPACT_FIXTURE_SLOTS.keys());
@@ -124,17 +136,21 @@ function isCurrentFixture(document: NotebookDocument): boolean {
   const edges = document.edges.filter((edge) =>
     cellIds.has(edge.source) && cellIds.has(edge.target));
   return fixture?.version === MULTYCULTY_FIXTURE_VERSION
-    && cells.length === 11
-    && roles.size === 11
-    && edges.length === 12
+    && cells.length === 17
+    && roles.size === 17
+    && edges.length === 32
     && roles.has("source")
     && roles.has("analysis")
     && roles.has("source-audio")
+    && roles.has("assembly")
+    && roles.has("export")
     && [1, 2].every((ordinal) =>
       roles.has(`split-${ordinal}`)
       && roles.has(`frame-first-${ordinal}`)
       && roles.has(`frame-last-${ordinal}`)
-      && roles.has(`scene-audio-${ordinal}`));
+      && roles.has(`scene-audio-${ordinal}`)
+      && roles.has(`prompt-${ordinal}`)
+      && roles.has(`animate-${ordinal}`));
 }
 
 function prepareLegacyBase(document: NotebookDocument): NotebookDocument {
@@ -281,7 +297,13 @@ function compactFixture(document: NotebookDocument): NotebookDocument {
     .map((cell) => {
       const role = roleOf(cell);
       const slot = role ? COMPACT_FIXTURE_SLOTS.get(role) : undefined;
-      return slot ? { ...cell, slot } : cell;
+      if (!slot) return cell;
+      return {
+        ...cell,
+        slot,
+        ...(role === "assembly" ? { title: "@concat · scenes" } : {}),
+        ...(role === "export" ? { title: "@final · export" } : {}),
+      };
     });
   const cellIds = new Set(cells.map((cell) => cell.id));
   return {
@@ -292,10 +314,46 @@ function compactFixture(document: NotebookDocument): NotebookDocument {
   };
 }
 
-function attachFixtureOutputs(
+async function promptFixtureArtifact(
+  engine: Engine,
+  cell: NotebookCell,
+): Promise<string> {
+  const artifact = await engine.artifacts.create({
+    kind: "script",
+    name: `script ${cell.title} resolved prompt`,
+  });
+  if (!artifact.ok) throw new Error(artifact.error.message);
+  const result = {
+    version: 1,
+    source: "multyculty-precomputed-fixture",
+    originalPrompt: cell.prompt ?? "",
+    resolvedPrompt: cell.prompt ?? "",
+    featureId: cell.inputs?.featureId ?? null,
+    featureBrief: cell.inputs?.featureBrief ?? null,
+    shotContext: cell.inputs?.shotContext ?? null,
+    audioContext: cell.inputs?.audioContext ?? null,
+  };
+  const written = await engine.files.write(
+    artifact.value.artifactId,
+    "prompt.json",
+    JSON.stringify(result, null, 2),
+  );
+  if (!written.ok) throw new Error(written.error.message);
+  return artifact.value.artifactId;
+}
+
+async function attachFixtureOutputs(
+  engine: Engine,
   document: NotebookDocument,
   artifacts: ArtifactRecord[],
-): NotebookDocument {
+): Promise<NotebookDocument> {
+  const promptOutputs = new Map<string, string>();
+  for (const cell of document.cells) {
+    if (roleOf(cell)?.startsWith("prompt-") && !cell.outputArtifactId) {
+      promptOutputs.set(cell.id, await promptFixtureArtifact(engine, cell));
+    }
+  }
+  const finalArtifact = artifacts.find((artifact) => artifact.slug === "final");
   return {
     ...document,
     cells: document.cells.map((cell) => {
@@ -306,9 +364,20 @@ function attachFixtureOutputs(
       const section = ordinal
         ? artifacts.find((artifact) => artifact.slug === SECTION_SLUGS[ordinal - 1])
         : undefined;
+      const animation = ordinal && ordinal <= ANIMATION_SLUGS.length
+        ? artifacts.find((artifact) =>
+            artifact.slug === ANIMATION_SLUGS[ordinal - 1])
+        : undefined;
+      const promptOutput = promptOutputs.get(cell.id);
       const outputArtifactId = role?.startsWith("split-")
         ? cell.outputArtifactId ?? section?.artifactId
-        : cell.outputArtifactId;
+        : role.startsWith("animate-")
+          ? cell.outputArtifactId ?? animation?.artifactId
+          : role.startsWith("prompt-")
+            ? cell.outputArtifactId ?? promptOutput
+            : role === "export"
+              ? cell.outputArtifactId ?? finalArtifact?.artifactId
+              : cell.outputArtifactId;
       const completed = Boolean(outputArtifactId);
       return {
         ...cell,
@@ -322,6 +391,15 @@ function attachFixtureOutputs(
                 featureLabel: feature.label,
                 featureCaption: feature.caption,
               }
+            : {}),
+          ...(role.startsWith("animate-")
+            ? {
+                fixtureBaseline: true,
+                requiresConfirmation: true,
+              }
+            : {}),
+          ...(role.startsWith("prompt-")
+            ? { resolvedPrompt: cell.prompt ?? "" }
             : {}),
           state: completed ? "completed" : "pending",
         },
@@ -359,6 +437,23 @@ async function writeNotebook(
   return read.value;
 }
 
+async function runFixtureRole(
+  engine: Engine,
+  document: NotebookDocument,
+  role: string,
+): Promise<NotebookDocument> {
+  const cell = document.cells.find((candidate) => roleOf(candidate) === role);
+  if (!cell) throw new Error(`Multyculty fixture cell is missing: ${role}`);
+  const result = await runNotebookCell(
+    engine,
+    engine.book.get().bookId,
+    document.id,
+    document,
+    cell,
+  );
+  return result.document;
+}
+
 async function materializeLocalOutputs(
   engine: Engine,
   document: NotebookDocument,
@@ -386,6 +481,45 @@ async function materializeLocalOutputs(
     );
     current = result.document;
   }
+  current = await attachFixtureOutputs(
+    engine,
+    current,
+    engine.artifacts.list() as ArtifactRecord[],
+  );
+  for (const feature of MULTYCULTY_FEATURES.slice(0, 2)) {
+    const animation = current.cells.find((cell) =>
+      roleOf(cell) === `animate-${feature.ordinal}`);
+    const audio = current.cells.find((cell) =>
+      roleOf(cell) === `scene-audio-${feature.ordinal}`);
+    if (!animation?.outputArtifactId || !audio?.outputArtifactId) {
+      throw new Error(`Multyculty feature ${feature.ordinal} is missing baseline media`);
+    }
+    const normalized = await normalizeSceneVideo(
+      engine,
+      animation.outputArtifactId,
+      audio.outputArtifactId,
+      `${animation.title} normalized fixture`,
+      15,
+    );
+    current = await writeNotebook(engine, {
+      ...current,
+      cells: current.cells.map((cell) =>
+        cell.id === animation.id
+          ? {
+              ...cell,
+              outputArtifactId: normalized.artifactId,
+              inputs: {
+                ...(cell.inputs ?? {}),
+                normalizedFromArtifactId: animation.outputArtifactId,
+                normalizedDurationSeconds: normalized.durationSeconds,
+                state: "completed",
+              },
+            }
+          : cell),
+    });
+  }
+  current = await runFixtureRole(engine, current, "assembly");
+  current = await runFixtureRole(engine, current, "export");
   const completedAt = new Date().toISOString();
   const completedCells = current.cells.map((cell) =>
     cell.inputs?.fixtureOwner === MULTYCULTY_FIXTURE_OWNER
@@ -566,7 +700,11 @@ export async function seedMultycultyWorkflow(
       sourceArtifactId: sourceArtifact.artifactId,
     },
   );
-  const withOutputs = attachFixtureOutputs(compactFixture(fanned), artifacts);
+  const withOutputs = await attachFixtureOutputs(
+    engine,
+    compactFixture(fanned),
+    artifacts,
+  );
   const fixtureOwnedIds = new Set(
     withOutputs.cells
       .filter((cell) =>
@@ -590,7 +728,7 @@ export async function seedMultycultyWorkflow(
     properties: {
       ...(withOutputs.properties ?? {}),
       description:
-        "Compact offline example from source analysis through local scene media extraction.",
+        "Compact offline example from source analysis through two generated scenes, concat, and final export.",
       state: "finished",
       multycultyFixture: {
         version: MULTYCULTY_FIXTURE_VERSION,

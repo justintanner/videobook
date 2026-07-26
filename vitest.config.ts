@@ -22,6 +22,7 @@ export default defineConfig({
       'src/videobook/command-plan.test.ts',
       'src/videobook/mvp-gates.test.ts',
       'src/videobook/search-benchmark-corpus.test.ts',
+      'src/components/center-stage/notebook/trunk-edges.test.ts',
     ],
     exclude: ['**/*.e2e.test.ts', '**/*.spec.ts', 'server/dist/**', ...configDefaults.exclude],
     setupFiles: ['./vitest.setup.ts'],

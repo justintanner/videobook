@@ -5,7 +5,6 @@ import {
   notebookGrid,
   notebookGridDropSlot,
   notebookGridFrameSize,
-  notebookGridHeadingPosition,
   notebookGridMetrics,
   notebookGridPosition,
   notebookGridSlot,
@@ -40,14 +39,6 @@ describe('notebook grid', () => {
       x: notebookGrid.columnPitch * 12,
       y: notebookGrid.originY + notebookGrid.rowPitch * 2,
     })).toEqual({ row: 2, column: 12 })
-  })
-
-  it('places column headings above the first square row', () => {
-    expect(notebookGridHeadingPosition(-3)).toEqual({
-      x: -840,
-      y: notebookGrid.headingY,
-    })
-    expect(notebookGrid.headingY).toBeLessThan(notebookGrid.originY)
   })
 
   it('snaps the moving node without changing its persisted source slot', () => {
@@ -182,15 +173,15 @@ describe('notebook grid', () => {
     const metrics = notebookGridMetrics([
       { row: 0, column: -3 },
       { row: 9, column: 3 },
-    ], 7)
+    ])
     expect(metrics).toEqual({
-      rowCount: 10,
+      rowCount: 12,
       columnCount: 7,
       minColumn: -3,
       maxColumn: 3,
       centerX: 888,
       width: 2016,
-      height: 3064,
+      height: 3416,
     })
     expect(metrics.centerX + notebookGrid.squareSize / 2).toBe(metrics.width / 2)
   })
@@ -198,20 +189,32 @@ describe('notebook grid', () => {
   it('grows symmetrically for drag previews on either horizontal side', () => {
     expect(notebookGridMetrics(
       [{ row: 0, column: 0 }],
-      7,
-      { row: 12, column: -7 },
+      { preview: { row: 12, column: -7 } },
     )).toEqual({
-      rowCount: 13,
+      rowCount: 15,
       columnCount: 15,
       minColumn: -7,
       maxColumn: 7,
       centerX: 2008,
       width: 4256,
-      height: 3904,
+      height: 4256,
     })
   })
 
-  it('keeps an empty notebook large enough for vertical placement', () => {
+  it('fills the viewport and leaves bottom rows for unlimited placement', () => {
+    expect(notebookGridMetrics([], {
+      viewportWidth: 2048,
+      viewportHeight: 900,
+      zoom: 0.5,
+    })).toEqual({
+      rowCount: 7,
+      columnCount: 15,
+      minColumn: -7,
+      maxColumn: 7,
+      centerX: 2008,
+      width: 4256,
+      height: 2016,
+    })
     expect(notebookGridMetrics([])).toEqual({
       rowCount: 3,
       columnCount: 7,
@@ -219,15 +222,26 @@ describe('notebook grid', () => {
       maxColumn: 3,
       centerX: 888,
       width: 2016,
-      height: 1104,
+      height: 896,
     })
+  })
+
+  it('opens a new bottom row from the lower edge drop zone', () => {
+    const metrics = notebookGridMetrics([{ row: 5, column: 0 }])
+    expect(notebookGridDropSlot({
+      x: 0,
+      y: notebookGrid.originY
+        + (metrics.rowCount - 1) * notebookGrid.rowPitch
+        + notebookGrid.squareSize
+        + 1,
+    }, metrics)).toEqual({ row: metrics.rowCount, column: 0 })
   })
 
   it('scales the frame while keeping column zero at its horizontal center', () => {
     const metrics = notebookGridMetrics([{ row: 0, column: 0 }])
     expect(notebookGridFrameSize(metrics, 1.5)).toEqual({
       width: 3024,
-      height: 1656,
+      height: 1344,
     })
     expect(notebookGridViewport(metrics, 1.5, -40)).toEqual({
       x: 1332,

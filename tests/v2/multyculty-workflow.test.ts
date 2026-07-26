@@ -21,7 +21,7 @@ describe("Multyculty workflow fixture", () => {
     if (mediaDir) await rm(mediaDir, { recursive: true, force: true });
   });
 
-  it("builds an idempotent compact source-to-media graph", async () => {
+  it("builds an idempotent compact source-to-final graph", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-multyculty-"));
     engine = createEngine({ rootDir, initialBookSlug: "multyculty" });
     await engine.ready;
@@ -32,6 +32,9 @@ describe("Multyculty workflow fixture", () => {
       ["video", "vid-source-selection"],
       ["video", "vid-section-intro"],
       ["video", "vid-section-culture"],
+      ["video", "vid-animated-intro"],
+      ["video", "vid-animated-culture"],
+      ["final", "final"],
     ] as const;
     const artifacts = new Map<string, string>();
     for (const [kind, slug] of artifactSpecs) {
@@ -59,6 +62,17 @@ describe("Multyculty workflow fixture", () => {
     );
     expect(file.ok).toBe(true);
     if (!file.ok) return;
+    for (const slug of ["vid-animated-intro", "vid-animated-culture"]) {
+      const artifactId = artifacts.get(slug);
+      expect(artifactId).toBeTruthy();
+      if (!artifactId) return;
+      const animationFile = await engine.files.writeFromPath(
+        artifactId,
+        "original.mp4",
+        sourcePath,
+      );
+      expect(animationFile.ok).toBe(true);
+    }
     const manifest = await engine.files.manifest(sourceId);
     expect(manifest.ok).toBe(true);
     if (!manifest.ok) return;
@@ -82,6 +96,22 @@ describe("Multyculty workflow fixture", () => {
     });
     expect(stream.ok).toBe(true);
 
+    const seeded = await seedMultycultyWorkflow(engine);
+    const interrupted = await engine.notebooks.write({
+      ...seeded,
+      cells: seeded.cells.map((cell) =>
+        cell.inputs?.workflowRole?.toString().startsWith("animate-")
+          ? {
+              ...cell,
+              outputArtifactId: undefined,
+              inputs: {
+                ...(cell.inputs ?? {}),
+                state: "pending",
+              },
+            }
+          : cell),
+    });
+    expect(interrupted.ok).toBe(true);
     const first = await seedMultycultyWorkflow(engine, {
       materializeLocalOutputs: true,
     });
@@ -91,22 +121,27 @@ describe("Multyculty workflow fixture", () => {
     const source = first.cells.find((cell) => cell.inputs?.workflowRole === "source");
     const analysis = first.cells.find((cell) => cell.inputs?.workflowRole === "analysis");
     const audio = first.cells.find((cell) => cell.inputs?.workflowRole === "source-audio");
+    const assembly = first.cells.find((cell) => cell.inputs?.workflowRole === "assembly");
+    const exp = first.cells.find((cell) => cell.inputs?.workflowRole === "export");
     expect(source).toBeTruthy();
     expect(analysis).toBeTruthy();
     expect(audio).toBeTruthy();
-    expect(first.cells).toHaveLength(11);
-    expect(first.edges).toHaveLength(12);
+    expect(assembly).toBeTruthy();
+    expect(exp).toBeTruthy();
+    expect(first.cells).toHaveLength(17);
+    expect(first.edges).toHaveLength(32);
     expect(first.cells.filter((cell) => cell.type === "split")).toHaveLength(2);
     expect(first.cells.filter((cell) => cell.type === "frame")).toHaveLength(4);
     expect(first.cells.filter((cell) =>
       cell.inputs?.workflowRole?.toString().startsWith("scene-audio-"))).toHaveLength(2);
-    expect(first.cells.filter((cell) => cell.type === "prompt")).toEqual([]);
-    expect(first.cells.filter((cell) => cell.type === "video")).toEqual([]);
-    expect(first.cells.filter((cell) => cell.type === "sequence")).toEqual([]);
-    expect(first.cells.filter((cell) => cell.type === "export")).toEqual([]);
+    expect(first.cells.filter((cell) => cell.type === "prompt")).toHaveLength(2);
+    expect(first.cells.filter((cell) => cell.type === "video")).toHaveLength(2);
+    expect(first.cells.filter((cell) => cell.type === "sequence")).toHaveLength(1);
+    expect(first.cells.filter((cell) => cell.type === "export")).toHaveLength(1);
     expect(first.cells.every((cell) => cell.outputArtifactId)).toBe(true);
     expect(first.properties?.multycultyFixture).toEqual(expect.objectContaining({
       materializedAt: expect.any(String),
+      noPaidCalls: true,
     }));
     expect(source?.slot).toEqual({ row: 0, column: 0 });
     expect(analysis?.slot).toEqual({ row: 1, column: 0 });
@@ -127,7 +162,22 @@ describe("Multyculty workflow fixture", () => {
       expect(first.cells.find((cell) =>
         cell.inputs?.workflowRole === `scene-audio-${ordinal}`)?.slot)
         .toEqual({ row: 3, column: column + 1 });
+      expect(first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `prompt-${ordinal}`)?.slot)
+        .toEqual({ row: 4, column });
+      expect(first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `animate-${ordinal}`)?.slot)
+        .toEqual({ row: 5, column });
     }
+    expect(assembly?.slot).toEqual({ row: 6, column: 0 });
+    expect(assembly?.title).toBe("@concat · scenes");
+    expect(exp?.slot).toEqual({ row: 7, column: 0 });
+    expect(exp?.title).toBe("@final · export");
+    expect(first.cells.filter((cell) => cell.type === "prompt").every((cell) =>
+      cell.inputs?.requiresConfirmation === true)).toBe(true);
+    expect(first.cells.filter((cell) => cell.type === "video").every((cell) =>
+      cell.inputs?.requiresConfirmation === true
+      && cell.inputs?.fixtureBaseline === true)).toBe(true);
     expect(first.edges).toContainEqual(expect.objectContaining({
       source: source?.id,
       target: analysis?.id,
@@ -151,7 +201,31 @@ describe("Multyculty workflow fixture", () => {
         target: split?.id,
         targetInput: "analysis",
       }));
+      const prompt = first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `prompt-${ordinal}`);
+      const animation = first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `animate-${ordinal}`);
+      expect(first.edges).toContainEqual(expect.objectContaining({
+        source: prompt?.id,
+        target: animation?.id,
+        targetInput: "prompt",
+      }));
+      expect(first.edges).toContainEqual(expect.objectContaining({
+        source: animation?.id,
+        target: assembly?.id,
+        targetInput: `clip:${ordinal - 1}`,
+      }));
     }
+    expect(first.edges).toContainEqual(expect.objectContaining({
+      source: audio?.id,
+      target: assembly?.id,
+      targetInput: "audio",
+    }));
+    expect(first.edges).toContainEqual(expect.objectContaining({
+      source: assembly?.id,
+      target: exp?.id,
+      targetInput: "sequence",
+    }));
 
     const downgraded = await engine.notebooks.write({
       ...first,
@@ -162,8 +236,8 @@ describe("Multyculty workflow fixture", () => {
     });
     expect(downgraded.ok).toBe(true);
     const second = await seedMultycultyWorkflow(engine);
-    expect(second.cells).toHaveLength(11);
-    expect(second.edges).toHaveLength(12);
+    expect(second.cells).toHaveLength(17);
+    expect(second.edges).toHaveLength(32);
     expect(second.cells.filter((cell) => cell.type === "split")).toHaveLength(2);
     // Source identity is preserved across rematerialization.
     expect(second.cells.find((cell) => cell.inputs?.workflowRole === "source")?.id)

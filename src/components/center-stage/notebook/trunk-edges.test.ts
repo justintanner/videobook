@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  computeGutterRoutes,
   computeTrunkGroups,
+  columnGutterLaneX,
+  gutterRoutePath,
   trunkBusY,
   trunkStubPath,
   trunkSharedPath,
   trunkDot,
   trunkEdgeDataEqual,
+  ROW_GUTTER,
+  ROW_GUTTER_LANES,
 } from './trunk-edges.js'
-import { connectSteps, snapDefinitionToTracks } from './model.js'
+import { connectSteps, setStepDepthOverride, snapDefinitionToTracks } from './model.js'
 import type { NotebookPlanDefinition } from './types.js'
 
 describe('trunk-edges', () => {
@@ -77,9 +82,9 @@ describe('trunk-edges', () => {
   })
 
   it('computes correct busY', () => {
-    expect(trunkBusY(200, 0)).toBe(200 - 56 - 10)
-    expect(trunkBusY(200, 1)).toBe(200 - 56)
-    expect(trunkBusY(200, 2)).toBe(200 - 56 + 10)
+    expect(trunkBusY(200, 0)).toBe(200 - ROW_GUTTER + ROW_GUTTER_LANES[0])
+    expect(trunkBusY(200, 1)).toBe(200 - ROW_GUTTER + ROW_GUTTER_LANES[1])
+    expect(trunkBusY(200, 2)).toBe(200 - ROW_GUTTER + ROW_GUTTER_LANES[2])
   })
 
   it('computes paths correctly', () => {
@@ -113,10 +118,63 @@ describe('trunk-edges', () => {
       staggerIndex: 0,
       groupActive: false,
       groupRunning: false,
+      route: { multiRow: false, outLane: 0, inLane: 0, gutterX: 0 },
+      busSiblingIds: ['a', 'b'],
     }
     expect(trunkEdgeDataEqual(a, a)).toBe(true)
     expect(trunkEdgeDataEqual(a, { ...a })).toBe(true)
     expect(trunkEdgeDataEqual(a, { ...a, groupActive: true })).toBe(false)
     expect(trunkEdgeDataEqual(a, { ...a, siblingIds: ['a', 'c'] })).toBe(false)
+    expect(trunkEdgeDataEqual(a, { ...a, busSiblingIds: ['a'] })).toBe(false)
+    expect(trunkEdgeDataEqual(a, { ...a, route: { ...a.route, gutterX: 426 } })).toBe(false)
+  })
+
+  it('routes multi-row edges through column gutters', () => {
+    let def: NotebookPlanDefinition = {
+      properties: {},
+      sequence: [
+        { id: 'prompt-1', componentType: 'task', type: 'prompt', name: 'p1', properties: { position: { x: 0, y: 0 } } },
+        { id: 'prompt-2', componentType: 'task', type: 'prompt', name: 'p2', properties: { position: { x: 348, y: 0 } } },
+        { id: 'image-1', componentType: 'task', type: 'image', name: 'i1', properties: { position: { x: 0, y: 0 } } },
+        { id: 'image-2', componentType: 'task', type: 'image', name: 'i2', properties: { position: { x: 348, y: 0 } } },
+        { id: 'video-1', componentType: 'task', type: 'video', name: 'v1', properties: { position: { x: 0, y: 0 } } },
+      ],
+    }
+
+    def = connectSteps(def, 'prompt-1', 'image-1')
+    def = connectSteps(def, 'prompt-2', 'image-2')
+    def = connectSteps(def, 'image-1', 'video-1')
+    def = setStepDepthOverride(def, 'image-1', 2)
+    def = setStepDepthOverride(def, 'image-2', 2)
+    def = snapDefinitionToTracks(def)
+
+    const routes = computeGutterRoutes(def)
+
+    expect(routes.get('image-1->video-1')?.multiRow).toBe(false)
+
+    const routeA = routes.get('prompt-1->image-1')
+    const routeB = routes.get('prompt-2->image-2')
+    expect(routeA?.multiRow).toBe(true)
+    expect(routeB?.multiRow).toBe(true)
+
+    // Both verticals must sit inside the 48px gutter between slots 0 and 1
+    // (x in [412, 460]) and on distinct lanes.
+    expect(routeA?.gutterX).toBe(columnGutterLaneX(0, 0))
+    expect(routeB?.gutterX).toBe(columnGutterLaneX(0, 1))
+    expect(routeA?.gutterX).not.toBe(routeB?.gutterX)
+    for (const route of [routeA, routeB]) {
+      expect(route?.gutterX).toBeGreaterThan(412)
+      expect(route?.gutterX).toBeLessThan(460)
+    }
+  })
+
+  it('builds an orthogonal gutter polyline', () => {
+    const coords = { sourceX: 100, sourceY: 50, targetX: 200, targetY: 690 }
+    const route = { multiRow: true, outLane: 0, inLane: 0, gutterX: 426 }
+    const outY = 50 + ROW_GUTTER_LANES[0]
+    const inY = 690 - ROW_GUTTER + ROW_GUTTER_LANES[0]
+    expect(gutterRoutePath(coords, route)).toBe(
+      `M 100 50 V ${outY} H 426 V ${inY} H 200 V 690`,
+    )
   })
 })

@@ -1,6 +1,13 @@
 import { memo, useContext } from 'react'
 import { BaseEdge, type EdgeProps, type Edge, useStore } from '@xyflow/react'
-import { trunkBusY, trunkStubPath, trunkSharedPath, trunkDot, type TrunkEdgeData } from './trunk-edges.js'
+import {
+  gutterRoutePath,
+  trunkBusY,
+  trunkStubPath,
+  trunkSharedPath,
+  trunkDot,
+  type TrunkEdgeData,
+} from './trunk-edges.js'
 import { TrunkHoverContext } from './TrunkHoverContext.js'
 
 export type TrunkEdgeType = Edge<TrunkEdgeData, 'trunk'>
@@ -14,7 +21,7 @@ export const TrunkEdge = memo(function TrunkEdge(props: EdgeProps<TrunkEdgeType>
   const siblingXs = useStore(
     (state) => {
       if (!data?.isPrimary) return []
-      return data.siblingIds.map((id) => {
+      return (data.busSiblingIds ?? data.siblingIds).map((id) => {
         const node = state.nodeLookup.get(id)
         if (!node) return 0
         const x = node.internals?.positionAbsolute?.x ?? node.position.x
@@ -30,10 +37,27 @@ export const TrunkEdge = memo(function TrunkEdge(props: EdgeProps<TrunkEdgeType>
   const busY = trunkBusY(targetY, data.staggerIndex)
   const coords = { sourceX, sourceY, targetX, targetY, busY }
 
-  const stub = trunkStubPath(data.groupKind, coords)
-
   const baseClasses = ['vc-trunk']
   if (isHovered) baseClasses.push('is-hovered')
+
+  if (data.route?.multiRow) {
+    const path = gutterRoutePath(coords, data.route)
+    return (
+      <g className={baseClasses.join(' ')}>
+        <BaseEdge path={path} interactionWidth={18} {...props} />
+        {data.isPrimary && (data.busSiblingIds ?? []).length > 0 && (
+          <PrimarySharedGeometry
+            data={data}
+            coords={coords}
+            siblingXs={siblingXs}
+            isHovered={isHovered}
+          />
+        )}
+      </g>
+    )
+  }
+
+  const stub = trunkStubPath(data.groupKind, coords)
 
   return (
     <g className={baseClasses.join(' ')}>
@@ -62,7 +86,8 @@ function PrimarySharedGeometry({
   isHovered: boolean
 }) {
   const shared = trunkSharedPath(data.groupKind, { ...coords, siblingXs })
-  const dotCoords = trunkDot(data.groupKind, { ...coords, groupSize: data.groupSize })
+  const busSize = (data.busSiblingIds ?? data.siblingIds).length
+  const dotCoords = trunkDot(data.groupKind, { ...coords, groupSize: busSize })
 
   const classes = ['vc-trunk-shared']
   if (data.groupActive) classes.push('is-active')

@@ -104,6 +104,11 @@ import {
   snapNotebookGridMove,
   type NotebookGridSlot,
 } from '@/videobook/notebook-grid'
+import {
+  notebookSourcePortId,
+  notebookSourcePortOffsets,
+  type NotebookSourceSide,
+} from '@/videobook/notebook-routing'
 import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
 
 type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
@@ -924,6 +929,25 @@ function CellIcon({ kind }: { kind: NotebookCellType }) {
   return <BookOpen size={14} />
 }
 
+const cellSourcePortSides = [
+  'left',
+  'right',
+  'bottom',
+] as const satisfies readonly NotebookSourceSide[]
+
+const cellSourceRoutePorts = cellSourcePortSides.flatMap((side) =>
+  notebookSourcePortOffsets.map((offset, index) => ({
+    id: notebookSourcePortId(side, index),
+    position: side === 'left'
+      ? Position.Left
+      : side === 'right'
+        ? Position.Right
+        : Position.Bottom,
+    style: side === 'bottom'
+      ? { left: `${offset * 100}%` }
+      : { top: `${offset * 100}%` },
+  })))
+
 function CellNode({ data, selected }: NodeProps<CanvasNode>) {
   const mediaUrl = data.asset?.mediaUrl
   const thumbnailUrl = data.asset?.thumbnailUrl
@@ -961,6 +985,17 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
           id={input}
           className={`cell-target-handle${isTopRow ? ' cell-target-handle-top-row' : ''}`}
           style={{ left: `${((index + 1) / (targetInputs.length + 1)) * 100}%` }}
+        />
+      ))}
+      {cellSourceRoutePorts.map((port) => (
+        <Handle
+          key={port.id}
+          type="source"
+          position={port.position}
+          id={port.id}
+          isConnectable={false}
+          className={`cell-route-handle${data.sourcePorts?.includes(port.id) ? ' cell-route-handle-active' : ''}`}
+          style={port.style}
         />
       ))}
       <section className="cell-node-shell">
@@ -1003,7 +1038,12 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
           <strong>{data.status}</strong>
         </footer>
       </section>
-      <Handle type="source" position={Position.Bottom} id="output" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="output"
+        className="cell-connect-handle"
+      />
     </article>
   )
 }
@@ -1056,6 +1096,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
   const [notebookView, setNotebookView] = useState({ y: 0, zoom: 1 })
+  const [notebookSurface, setNotebookSurface] = useState({ width: 0, height: 0 })
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [bookMenuOpen, setBookMenuOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -1295,18 +1336,39 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const notebookBaseMetrics = useMemo(
     () => notebookGridMetrics(
       nodes.map((node) => node.data.slot),
+      {
+        viewportWidth: notebookSurface.width,
+        viewportHeight: notebookSurface.height,
+        zoom: notebookView.zoom,
+      },
     ),
-    [nodes],
+    [
+      nodes,
+      notebookSurface.height,
+      notebookSurface.width,
+      notebookView.zoom,
+    ],
   )
   const notebookMetrics = useMemo(
     () => previewSlot
       ? notebookGridMetrics(
           nodes.map((node) => node.data.slot),
-          undefined,
-          previewSlot,
+          {
+            preview: previewSlot,
+            viewportWidth: notebookSurface.width,
+            viewportHeight: notebookSurface.height,
+            zoom: notebookView.zoom,
+          },
         )
       : notebookBaseMetrics,
-    [nodes, notebookBaseMetrics, previewSlot],
+    [
+      nodes,
+      notebookBaseMetrics,
+      notebookSurface.height,
+      notebookSurface.width,
+      notebookView.zoom,
+      previewSlot,
+    ],
   )
   const notebookFrameSize = useMemo(
     () => notebookGridFrameSize(notebookMetrics, notebookView.zoom),
@@ -1353,15 +1415,26 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   useLayoutEffect(() => {
     const container = notebookScrollRef.current
     if (!container) return
-    const center = () => {
+    const surface = container.parentElement
+    if (!surface) return
+    const sync = () => {
+      setNotebookSurface((current) => {
+        const next = {
+          width: surface.clientWidth,
+          height: surface.clientHeight,
+        }
+        return current.width === next.width && current.height === next.height
+          ? current
+          : next
+      })
       container.scrollLeft = Math.max(
         0,
         (container.scrollWidth - container.clientWidth) / 2,
       )
     }
-    center()
-    const observer = new ResizeObserver(center)
-    observer.observe(container)
+    sync()
+    const observer = new ResizeObserver(sync)
+    observer.observe(surface)
     return () => observer.disconnect()
   }, [notebookFrameSize.width])
 

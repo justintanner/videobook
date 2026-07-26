@@ -73,7 +73,7 @@ describe('notebook draft conversion', () => {
     ])
   })
 
-  it('projects label cells into the column heading band', () => {
+  it('keeps manually created labels in ordinary draggable grid cells', () => {
     const labeled: NotebookDocument = {
       ...source,
       cells: [{
@@ -84,13 +84,13 @@ describe('notebook draft conversion', () => {
     }
 
     expect(notebookNodes(labeled)[0]).toMatchObject({
-      position: { x: -560, y: 104 },
-      draggable: false,
+      position: { x: -560, y: 2568 },
       data: { slot: { row: 9, column: -2 } },
     })
+    expect(notebookNodes(labeled)[0]?.draggable).toBeUndefined()
   })
 
-  it('maps semantic inputs to visible directed workflow handles', () => {
+  it('maps semantic inputs and directional source ports to workflow handles', () => {
     const target = {
       ...source.cells[0]!,
       id: '018f7cf5-0d31-7d96-8c0f-800000000005',
@@ -108,16 +108,23 @@ describe('notebook draft conversion', () => {
       }],
     }
 
+    expect(notebookNodes(connected)[0]?.data.sourcePorts).toEqual([
+      'route-right-1',
+    ])
     expect(notebookNodes(connected)[1]?.data.targetInputs).toEqual(['reference-video'])
     expect(notebookEdges(connected)[0]).toMatchObject({
+      sourceHandle: 'route-right-1',
       targetHandle: 'reference-video',
       type: 'busRiver',
       className: 'workflow-edge',
       data: {
+        sourceSide: 'right',
+        sourcePortIndex: 1,
         sourceBusOffset: 20,
         targetBusOffset: 20,
         riverOffset: 20,
         riverSide: 'right',
+        directRowGutter: false,
       },
       markerEnd: {
         type: MarkerType.ArrowClosed,

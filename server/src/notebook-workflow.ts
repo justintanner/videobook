@@ -37,7 +37,7 @@ export const MULTYCULTY_FEATURES = [
     caption: "FEATURE 01 · IMPORT + ANALYZE",
     promptBrief:
       "Preserve the seated subject and original composition while a refined filmstrip, waveform, and precise scene markers materialize around the source. Show the app turning one imported video into an understood edit without adding text.",
-    column: -3,
+    column: -2,
   },
   {
     ordinal: 2,
@@ -67,7 +67,7 @@ export const MULTYCULTY_FEATURES = [
     caption: "FEATURE 04 · ASSEMBLE + EXPORT",
     promptBrief:
       "Preserve the dialogue scene and natural performance while four luminous editorial lanes converge into one synchronized landscape timeline and a polished finished master. Show completion and continuity without adding text.",
-    column: 3,
+    column: 2,
   },
 ] as const;
 
@@ -107,7 +107,7 @@ function featureForShot(shot: NormalizedShot): Feature | null {
 }
 
 function featureColumn(shot: NormalizedShot): number {
-  return featureForShot(shot)?.column ?? ((shot.ordinal - 1) % 4) * 2 - 3;
+  return featureForShot(shot)?.column ?? (shot.ordinal - 1) * 2 - 3;
 }
 
 function stateForDerivedCell(cell: NotebookCell | undefined): string {
@@ -282,9 +282,12 @@ function createBranchCells(
   analysisPrompt: string,
   split: NotebookCell,
   shot: NormalizedShot,
+  shotCount: number,
 ): BranchCells {
   const feature = featureForShot(shot);
   const column = featureColumn(shot);
+  const extractionRow = 3 + (shot.ordinal - 1) * 2;
+  const promptRow = 3 + shotCount * 2;
   const commonInputs = {
     analysisCellId,
     splitCellId: split.id,
@@ -305,13 +308,13 @@ function createBranchCells(
   const firstBase = firstExisting ?? engine.notebooks.createCell({
     type: "frame",
     title: "",
-    slot: gridSlot(3, column),
+    slot: gridSlot(extractionRow, column - 1),
   });
   const first: NotebookCell = {
     ...firstBase,
     type: "frame",
     title: `@frame-${String(shot.ordinal).padStart(2, "0")} · first`,
-    slot: gridSlot(3, column),
+    slot: gridSlot(extractionRow, column - 1),
     provider: "local",
     model: undefined,
     operation: "capture_frame",
@@ -334,13 +337,13 @@ function createBranchCells(
   const lastBase = lastExisting ?? engine.notebooks.createCell({
     type: "frame",
     title: "",
-    slot: gridSlot(4, column),
+    slot: gridSlot(extractionRow, column),
   });
   const last: NotebookCell = {
     ...lastBase,
     type: "frame",
     title: `@frame-${String(shot.ordinal).padStart(2, "0")} · last`,
-    slot: gridSlot(4, column),
+    slot: gridSlot(extractionRow, column),
     provider: "local",
     model: undefined,
     operation: "capture_frame",
@@ -363,13 +366,13 @@ function createBranchCells(
   const audioBase = audioExisting ?? engine.notebooks.createCell({
     type: "audio",
     title: "",
-    slot: gridSlot(5, column),
+    slot: gridSlot(extractionRow, column + 1),
   });
   const audio: NotebookCell = {
     ...audioBase,
     type: "audio",
     title: `@audio-${String(shot.ordinal).padStart(2, "0")} · scene`,
-    slot: gridSlot(5, column),
+    slot: gridSlot(extractionRow, column + 1),
     provider: "local",
     model: undefined,
     operation: "extract_audio",
@@ -392,7 +395,7 @@ function createBranchCells(
   const promptBase = promptExisting ?? engine.notebooks.createCell({
     type: "prompt",
     title: "",
-    slot: gridSlot(6, column),
+    slot: gridSlot(promptRow, column),
   });
   const promptBrief = feature?.promptBrief
     ?? shot.prompt
@@ -401,7 +404,7 @@ function createBranchCells(
     ...promptBase,
     type: "prompt",
     title: `@prompt-${String(shot.ordinal).padStart(2, "0")} · ${feature?.label ?? shot.label}`,
-    slot: gridSlot(6, column),
+    slot: gridSlot(promptRow, column),
     prompt: shot.prompt ?? promptExisting?.prompt ?? promptBrief,
     provider: "openai",
     model: "gpt-5.2",
@@ -435,13 +438,13 @@ function createBranchCells(
   const animateBase = animateExisting ?? engine.notebooks.createCell({
     type: "video",
     title: "",
-    slot: gridSlot(7, column),
+    slot: gridSlot(promptRow + 1, column),
   });
   const animate: NotebookCell = {
     ...animateBase,
     type: "video",
     title: `@animate-${String(shot.ordinal).padStart(2, "0")} · ${feature?.label ?? shot.label}`,
-    slot: gridSlot(7, column),
+    slot: gridSlot(promptRow + 1, column),
     prompt: "",
     provider: "kie",
     model: "bytedance/seedance-2",
@@ -583,6 +586,7 @@ export async function applyAnalysisResults(
       analysisCell.prompt ?? "",
       split,
       shot,
+      shots.length,
     );
     branchCells.push(
       branch.split,
@@ -686,16 +690,6 @@ export function buildSevenStageScaffold(
     const role = roleOf(cell);
     if (role && !roleCells.has(role)) roleCells.set(role, cell);
   }
-  const labels = MULTYCULTY_FEATURES.map((feature) =>
-    baseCell(engine, roleCells.get(`label-${feature.ordinal}`), {
-      type: "label",
-      title: feature.label,
-      slot: gridSlot(0, feature.column),
-      inputs: {
-        workflowRole: `label-${feature.ordinal}`,
-        featureId: feature.id,
-      },
-    }));
   const source = baseCell(engine, roleCells.get("source"), {
     type: "source",
     title: "@start · source",
@@ -723,7 +717,7 @@ export function buildSevenStageScaffold(
   const audio = baseCell(engine, roleCells.get("source-audio"), {
     type: "audio",
     title: "@audio · continuous source",
-    slot: gridSlot(8, 1),
+    slot: gridSlot(13, 1),
     provider: "local",
     operation: "extract_audio",
     tool: "ffmpeg",
@@ -736,7 +730,7 @@ export function buildSevenStageScaffold(
   const assembly = baseCell(engine, roleCells.get("assembly"), {
     type: "sequence",
     title: "@assemble · feature edit",
-    slot: gridSlot(8, 0),
+    slot: gridSlot(13, 0),
     provider: "local",
     operation: "assemble_sequence",
     tool: "engine_sequence",
@@ -749,7 +743,7 @@ export function buildSevenStageScaffold(
   const exp = baseCell(engine, roleCells.get("export"), {
     type: "export",
     title: "@export · Multyculty feature master",
-    slot: gridSlot(9, 0),
+    slot: gridSlot(14, 0),
     provider: "local",
     operation: "export_master",
     tool: "ffmpeg",
@@ -761,19 +755,20 @@ export function buildSevenStageScaffold(
     },
   });
   const baseRoles = new Set([
-    ...labels.map((_, index) => `label-${index + 1}`),
     "source",
     "analysis",
     "source-audio",
     "assembly",
     "export",
   ]);
+  const retiredRoles = new Set(
+    MULTYCULTY_FEATURES.map((feature) => `label-${feature.ordinal}`),
+  );
   const otherCells = document.cells.filter((cell) => {
     const role = roleOf(cell);
-    return !role || !baseRoles.has(role);
+    return !role || (!baseRoles.has(role) && !retiredRoles.has(role));
   });
   const cells = [
-    ...labels,
     source,
     analysis,
     audio,
@@ -782,7 +777,6 @@ export function buildSevenStageScaffold(
     ...otherCells,
   ];
   const baseIds = new Set([
-    ...labels.map((label) => label.id),
     source.id,
     analysis.id,
     audio.id,
