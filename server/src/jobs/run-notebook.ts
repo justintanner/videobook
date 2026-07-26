@@ -1107,9 +1107,9 @@ async function executeLocalOrGeneration(
   if (cell.type === "video") {
     const artifactId = cell.outputArtifactId
       ?? firstUpstreamArtifact(document, cell);
-    if (!artifactId) throw new Error(`Source cell ${cell.id} has no media artifact`);
+    if (!artifactId) throw new Error(`Video cell ${cell.id} has no media artifact`);
     const hash = await objectHashForArtifact(engine, artifactId);
-    if (!hash) throw new Error(`Source cell ${cell.id} has no material files`);
+    if (!hash) throw new Error(`Video cell ${cell.id} has no material files`);
     return { artifactId, tool: "ffmpeg" };
   }
 

@@ -1780,7 +1780,7 @@ export function videobookDomainDefs(
     },
     {
       name: "ensure_notebook_workflow_scaffold",
-      description: "Ensure the seven-stage SOURCE→EXPORT workflow scaffold exists",
+      description: "Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists",
       scope: "book",
       schema: {
         ...bookSchema,
