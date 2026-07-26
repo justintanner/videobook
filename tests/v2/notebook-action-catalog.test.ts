@@ -70,7 +70,7 @@ describe("notebook action catalog", () => {
     const analysis = resultJson(await invoke("create_notebook_cell", {
       notebook_id: notebookId,
       cell: {
-        type: "note",
+        type: "analyze",
         title: "Analyze",
         slot: { row: 0, column: 0 },
         prompt: "Segment the source",
@@ -82,7 +82,7 @@ describe("notebook action catalog", () => {
     })) as { id: string };
 
     const catalog = resultJson(await invoke("list_notebook_actions", {
-      cell_type: "note",
+      cell_type: "analyze",
     })) as { actions: Array<{ operation: string; model: string | null }> };
     expect(catalog.actions.some((action) => action.operation === "analyze_source")).toBe(true);
 
@@ -122,7 +122,7 @@ describe("notebook action catalog", () => {
 
     const valid = validateCellConfiguration({
       id: analysis.id,
-      type: "note",
+      type: "analyze",
       title: "Analyze",
       slot: { row: 0, column: 0 },
       operation: "analyze_source",

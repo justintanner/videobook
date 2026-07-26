@@ -36,8 +36,7 @@ export type NotebookActionKind =
   | "local"
   | "analysis"
   | "generation"
-  | "assembly"
-  | "export";
+  | "assembly";
 
 export interface NotebookActionParameter {
   name: string;
@@ -73,7 +72,7 @@ export interface NotebookAction {
 const LOCAL_ACTIONS: NotebookAction[] = [
   {
     id: "local.preprocess_source",
-    cellTypes: ["source"],
+    cellTypes: ["video"],
     kind: "local",
     operation: "preprocess_source",
     provider: "local",
@@ -94,7 +93,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
   {
     id: "local.analyze_source",
-    cellTypes: ["note"],
+    cellTypes: ["analyze"],
     kind: "analysis",
     operation: "analyze_source",
     provider: "kie",
@@ -127,7 +126,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
   {
     id: "local.split_range",
-    cellTypes: ["asset"],
+    cellTypes: ["split"],
     kind: "local",
     operation: "split_range",
     provider: "local",
@@ -161,7 +160,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
   {
     id: "local.extract_audio",
-    cellTypes: ["asset"],
+    cellTypes: ["audio"],
     kind: "local",
     operation: "extract_audio",
     provider: "local",
@@ -182,7 +181,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
   {
     id: "generation.rewrite_prompt",
-    cellTypes: ["note"],
+    cellTypes: ["prompt"],
     kind: "generation",
     operation: "rewrite_prompt",
     provider: "openai",
@@ -215,7 +214,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
   },
   {
     id: "local.capture_frame",
-    cellTypes: ["asset"],
+    cellTypes: ["image"],
     kind: "local",
     operation: "capture_frame",
     provider: "local",
@@ -243,24 +242,24 @@ const LOCAL_ACTIONS: NotebookAction[] = [
     },
   },
   {
-    id: "local.assemble_sequence",
-    cellTypes: ["scene"],
+    id: "local.concat_video",
+    cellTypes: ["concat"],
     kind: "assembly",
-    operation: "assemble_sequence",
+    operation: "concat_video",
     provider: "local",
     model: null,
-    tool: "engine_sequence",
-    title: "Assemble sequence",
-    description: "Place ordered clips onto the canonical sequence with source audio",
-    outputKind: "sequence",
+    tool: "ffmpeg",
+    title: "Concatenate videos",
+    description: "Render two or more ordered clips into a playable H.264/AAC video",
+    outputKind: "artifact",
     billable: false,
     defaults: {
-      operation: "assemble_sequence",
-      tool: "engine_sequence",
+      operation: "concat_video",
+      tool: "ffmpeg",
       provider: "local",
     },
     parameters: [],
-    requiredInputs: ["clip", "audio"],
+    requiredInputs: ["clip:0", "clip:1"],
     capabilities: {
       dualFrame: false,
       localMedia: true,
@@ -268,20 +267,62 @@ const LOCAL_ACTIONS: NotebookAction[] = [
     },
   },
   {
-    id: "local.export_master",
-    cellTypes: ["asset"],
-    kind: "export",
-    operation: "export_master",
+    id: "local.splice_video",
+    cellTypes: ["splice"],
+    kind: "assembly",
+    operation: "splice_video",
     provider: "local",
     model: null,
     tool: "ffmpeg",
-    title: "Export master",
-    description: "Render a revision-pinned H.264/AAC master from the sequence",
+    title: "Splice videos",
+    description: "Join exactly two videos with an optional matching overlap window",
     outputKind: "artifact",
     billable: false,
-    defaults: { operation: "export_master", tool: "ffmpeg", provider: "local" },
-    parameters: [],
-    requiredInputs: ["sequence"],
+    defaults: {
+      operation: "splice_video",
+      tool: "ffmpeg",
+      provider: "local",
+      overlap: 0,
+    },
+    parameters: [{
+      name: "overlap",
+      type: "number",
+      required: false,
+      default: 0,
+      description: "Matching overlap window in seconds",
+    }],
+    requiredInputs: ["first", "second"],
+    capabilities: {
+      dualFrame: false,
+      localMedia: true,
+      requiresConfirmation: false,
+    },
+  },
+  {
+    id: "local.smooth_scene_concat",
+    cellTypes: ["splice"],
+    kind: "assembly",
+    operation: "smooth_scene_concat",
+    provider: "local",
+    model: null,
+    tool: "ffmpeg",
+    title: "Smooth scene splice",
+    description: "Join exactly two videos with audio matching and a visual crossfade",
+    outputKind: "artifact",
+    billable: false,
+    defaults: {
+      operation: "smooth_scene_concat",
+      tool: "ffmpeg",
+      provider: "local",
+    },
+    parameters: [{
+      name: "transitionSeconds",
+      type: "number",
+      required: false,
+      default: null,
+      description: "Fixed crossfade duration, or automatic audio alignment when omitted",
+    }],
+    requiredInputs: ["first", "second"],
     capabilities: {
       dualFrame: false,
       localMedia: true,
@@ -291,11 +332,24 @@ const LOCAL_ACTIONS: NotebookAction[] = [
 ];
 
 const DEFAULT_ANIMATION_TOOL = "generate_kie_seedance_2_0_video";
+const DEFAULT_IMAGE_TOOL = "generate_kie_gpt_image_2_text_to_image";
+const DEFAULT_AUDIO_TOOL = "generate_elevenlabs_text_to_audio";
 
-function generationAction(spec: GenerationActionSpec): NotebookAction {
+function generationCellType(
+  spec: GenerationActionSpec,
+): NotebookCellType | null {
+  if (spec.media_type === "video") return "generate_video";
+  if (spec.media_type === "image") return "generate_image";
+  if (spec.media_type === "audio") return "generate_audio";
+  return null;
+}
+
+function generationAction(spec: GenerationActionSpec): NotebookAction | null {
+  const cellType = generationCellType(spec);
+  if (!cellType) return null;
   return {
     id: `generation.${spec.canonical_name}`,
-    cellTypes: ["asset"],
+    cellTypes: [cellType],
     kind: "generation",
     operation: spec.operation,
     provider: spec.provider,
@@ -328,8 +382,12 @@ export function listNotebookActions(options: {
     .filter((spec) =>
       options.includeHiddenGeneration
       || spec.picker_visibility === "visible"
-      || spec.canonical_name === DEFAULT_ANIMATION_TOOL)
-    .map(generationAction);
+      || spec.canonical_name === DEFAULT_ANIMATION_TOOL
+      || spec.canonical_name === DEFAULT_AUDIO_TOOL)
+    .flatMap((spec) => {
+      const action = generationAction(spec);
+      return action ? [action] : [];
+    });
   return [...LOCAL_ACTIONS, ...generation]
     .sort((left, right) => left.id.localeCompare(right.id));
 }
@@ -341,7 +399,7 @@ export function actionsForCell(
 ): NotebookAction[] {
   const all = listNotebookActions(options).filter((action) =>
     action.cellTypes.includes(cell.type));
-  if (cell.type !== "asset") return all;
+  if (cell.type !== "generate_video") return all;
   const inputs = new Set(
     document.edges
       .filter((edge) => edge.target === cell.id)
@@ -370,8 +428,35 @@ export function defaultActionForCell(
     const operation = actions.find((action) => action.operation === cell.operation);
     if (operation) return operation;
   }
-  if (cell.type === "source") {
+  if (cell.type === "video") {
     return actions.find((action) => action.operation === "preprocess_source")
+      ?? null;
+  }
+  if (cell.type === "analyze") {
+    return actions.find((action) => action.operation === "analyze_source")
+      ?? null;
+  }
+  if (cell.type === "split") {
+    return actions.find((action) => action.operation === "split_range")
+      ?? null;
+  }
+  if (cell.type === "concat") {
+    return actions.find((action) => action.operation === "concat_video")
+      ?? null;
+  }
+  if (cell.type === "splice") {
+    return actions.find((action) => action.operation === "splice_video")
+      ?? null;
+  }
+  const defaultGenerationTool = cell.type === "generate_video"
+    ? DEFAULT_ANIMATION_TOOL
+    : cell.type === "generate_image"
+      ? DEFAULT_IMAGE_TOOL
+      : cell.type === "generate_audio"
+        ? DEFAULT_AUDIO_TOOL
+        : null;
+  if (defaultGenerationTool) {
+    return actions.find((action) => action.tool === defaultGenerationTool)
       ?? null;
   }
   return null;
@@ -393,11 +478,14 @@ export function validateCellConfiguration(
   }
   const tool = cell.tool ?? cell.model;
   if (tool) {
+    const registeredSpec = getActionSpec(tool);
+    const registeredAction = registeredSpec
+      ? generationAction(registeredSpec)
+      : null;
     const match = actions.find((action) =>
       action.tool === tool || action.id === tool || action.model === tool)
-      ?? (getActionSpec(tool)
-        ? generationAction(getActionSpec(tool)!)
-        : undefined);
+      ?? registeredAction
+      ?? undefined;
     if (!match || !match.cellTypes.includes(cell.type)) {
       return {
         ok: false,

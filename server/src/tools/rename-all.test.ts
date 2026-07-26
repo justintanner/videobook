@@ -649,7 +649,7 @@ describe("rename_all tool", () => {
           },
         }, {
           id: "asset-source",
-          type: "asset",
+          type: "image",
           title: "Source",
           slot: { row: 0, column: 1 },
           inputs: { slug: `@${assetId}` },

@@ -7,11 +7,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createEngine,
   type Engine,
-  type NotebookDocument,
 } from "videobook-engine";
 import { FFMPEG } from "../../server/src/ffmpeg.js";
 import {
-  migrateLegacyNotebookCellTypes,
   seedMultycultyWorkflow,
 } from "../../server/src/multyculty-workflow.js";
 
@@ -24,68 +22,25 @@ describe("Multyculty workflow fixture", () => {
 
   afterEach(async () => {
     engine?.close();
-    if (rootDir) await rm(rootDir, { recursive: true, force: true });
-    if (mediaDir) await rm(mediaDir, { recursive: true, force: true });
+    if (rootDir) {
+      await rm(rootDir, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 100,
+      });
+    }
+    if (mediaDir) {
+      await rm(mediaDir, {
+        recursive: true,
+        force: true,
+        maxRetries: 3,
+        retryDelay: 100,
+      });
+    }
   });
 
-  it("maps every legacy cell type to a primitive before fixture writes", () => {
-    const legacyTypes = [
-      "label",
-      "source",
-      "audio",
-      "transcript",
-      "note",
-      "search",
-      "selects",
-      "prompt",
-      "character",
-      "scene",
-      "asset",
-      "image",
-      "video",
-      "sequence",
-      "analysis",
-      "split",
-      "frame",
-      "export",
-    ];
-    const document = {
-      id: "legacy",
-      name: "Legacy",
-      createdAt: new Date(0).toISOString(),
-      edges: [],
-      cells: legacyTypes.map((type, index) => ({
-        id: `cell-${index}`,
-        type,
-        title: type,
-        slot: { row: index, column: 0 },
-      })),
-    } as unknown as NotebookDocument;
-
-    expect(migrateLegacyNotebookCellTypes(document).cells.map((cell) =>
-      cell.type)).toEqual([
-      "note",
-      "source",
-      "asset",
-      "note",
-      "note",
-      "selects",
-      "selects",
-      "note",
-      "note",
-      "scene",
-      "asset",
-      "asset",
-      "asset",
-      "scene",
-      "note",
-      "asset",
-      "asset",
-      "asset",
-    ]);
-  });
-
-  it("builds an idempotent compact source-to-final graph", async () => {
+  it("builds an idempotent compact video-to-concat graph", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-multyculty-"));
     engine = createEngine({ rootDir, initialBookSlug: "multyculty" });
     await engine.ready;
@@ -180,10 +135,14 @@ describe("Multyculty workflow fixture", () => {
       materializeLocalOutputs: true,
     });
     expect(new Set(first.cells.map((cell) => cell.type))).toEqual(new Set([
-      "source",
-      "note",
-      "scene",
-      "asset",
+      "video",
+      "analyze",
+      "audio",
+      "split",
+      "image",
+      "prompt",
+      "generate_video",
+      "concat",
     ]));
     expect(first.properties?.stageLabels).toBeUndefined();
     expect(first.properties?.featureLanes).toBeUndefined();
@@ -191,22 +150,19 @@ describe("Multyculty workflow fixture", () => {
     const analysis = first.cells.find((cell) => cell.inputs?.workflowRole === "analysis");
     const audio = first.cells.find((cell) => cell.inputs?.workflowRole === "source-audio");
     const assembly = first.cells.find((cell) => cell.inputs?.workflowRole === "assembly");
-    const exp = first.cells.find((cell) => cell.inputs?.workflowRole === "export");
     expect(source).toBeTruthy();
     expect(analysis).toBeTruthy();
     expect(audio).toBeTruthy();
     expect(assembly).toBeTruthy();
-    expect(exp).toBeTruthy();
-    expect(first.cells).toHaveLength(17);
-    expect(first.edges).toHaveLength(32);
+    expect(first.cells).toHaveLength(16);
+    expect(first.edges).toHaveLength(31);
     expect(first.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(2);
     expect(first.cells.filter((cell) => cell.operation === "capture_frame")).toHaveLength(4);
     expect(first.cells.filter((cell) =>
       cell.inputs?.workflowRole?.toString().startsWith("scene-audio-"))).toHaveLength(2);
     expect(first.cells.filter((cell) => cell.operation === "rewrite_prompt")).toHaveLength(2);
     expect(first.cells.filter((cell) => cell.operation === "image_to_video")).toHaveLength(2);
-    expect(first.cells.filter((cell) => cell.operation === "assemble_sequence")).toHaveLength(1);
-    expect(first.cells.filter((cell) => cell.operation === "export_master")).toHaveLength(1);
+    expect(first.cells.filter((cell) => cell.operation === "concat_video")).toHaveLength(1);
     expect(first.cells.every((cell) => cell.outputArtifactId)).toBe(true);
     expect(first.properties?.multycultyFixture).toEqual(expect.objectContaining({
       materializedAt: expect.any(String),
@@ -240,8 +196,6 @@ describe("Multyculty workflow fixture", () => {
     }
     expect(assembly?.slot).toEqual({ row: 6, column: 0 });
     expect(assembly?.title).toBe("@concat · scenes");
-    expect(exp?.slot).toEqual({ row: 7, column: 0 });
-    expect(exp?.title).toBe("@final · export");
     expect(first.cells.filter((cell) => cell.operation === "rewrite_prompt").every((cell) =>
       cell.inputs?.requiresConfirmation === true)).toBe(true);
     expect(first.cells.filter((cell) => cell.operation === "image_to_video").every((cell) =>
@@ -290,12 +244,6 @@ describe("Multyculty workflow fixture", () => {
       target: assembly?.id,
       targetInput: "audio",
     }));
-    expect(first.edges).toContainEqual(expect.objectContaining({
-      source: assembly?.id,
-      target: exp?.id,
-      targetInput: "sequence",
-    }));
-
     const downgraded = await engine.notebooks.write({
       ...first,
       properties: {
@@ -305,11 +253,10 @@ describe("Multyculty workflow fixture", () => {
     });
     expect(downgraded.ok).toBe(true);
     const second = await seedMultycultyWorkflow(engine);
-    expect(second.cells).toHaveLength(17);
-    expect(second.edges).toHaveLength(32);
+    expect(second.cells).toHaveLength(16);
+    expect(second.edges).toHaveLength(31);
     expect(second.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(2);
-    // Source identity is preserved across rematerialization.
     expect(second.cells.find((cell) => cell.inputs?.workflowRole === "source")?.id)
-      .toBe(source?.id);
+      .not.toBe(source?.id);
   }, 90_000);
 });

@@ -362,7 +362,7 @@ describe('semantic search MCP tools', () => {
       query: { text: 'red van' },
       hit: search.hits[0],
     })) as { cell: { type: string; pinnedResults: SearchHit[] } }
-    expect(pinned.cell.type).toBe('selects')
+    expect(pinned.cell.type).toBe('split')
     expect(pinned.cell.pinnedResults).toHaveLength(1)
     const sent = resultJson(await tools.get('send_search_moment_to_sequence')!.handler({
       book_id: engine.book.get().bookId,

@@ -18,14 +18,13 @@ import {
 } from "./notebook-shots.js";
 
 export const WORKFLOW_STAGES = [
-  "SOURCE",
+  "VIDEO",
   "ANALYZE",
   "SPLIT SCENES",
   "EXTRACT ASSETS",
   "WRITE PROMPTS",
-  "ANIMATE SCENES",
-  "ASSEMBLE EDIT",
-  "EXPORT MASTER",
+  "GENERATE VIDEO",
+  "CONCAT",
 ] as const;
 
 export const MULTYCULTY_FEATURES = [
@@ -62,9 +61,9 @@ export const MULTYCULTY_FEATURES = [
   {
     ordinal: 4,
     id: "assemble-export",
-    label: "Assemble + Export",
-    feature: "Synchronized timeline assembly and master export",
-    caption: "FEATURE 04 · ASSEMBLE + EXPORT",
+    label: "Concatenate",
+    feature: "Synchronized playable video concatenation",
+    caption: "FEATURE 04 · CONCATENATE",
     promptBrief:
       "Preserve the dialogue scene and natural performance while four luminous editorial lanes converge into one synchronized landscape timeline and a polished finished master. Show completion and continuity without adding text.",
     column: 2,
@@ -195,19 +194,16 @@ function uniqueEdges(edges: NotebookEdge[]): NotebookEdge[] {
 }
 
 export function workflowStageForCell(cell: NotebookCell): WorkflowStage {
-  if (cell.type === "source") return "SOURCE";
-  if (cell.operation === "analyze_source") return "ANALYZE";
-  if (cell.operation === "split_range") return "SPLIT SCENES";
-  if (cell.operation === "capture_frame" || cell.operation === "extract_audio") {
+  if (cell.type === "video") return "VIDEO";
+  if (cell.type === "analyze") return "ANALYZE";
+  if (cell.type === "split") return "SPLIT SCENES";
+  if (cell.type === "image" || cell.type === "audio") {
     return "EXTRACT ASSETS";
   }
-  if (cell.operation === "rewrite_prompt") return "WRITE PROMPTS";
-  if (cell.operation === "assemble_sequence") return "ASSEMBLE EDIT";
-  if (cell.operation === "export_master") return "EXPORT MASTER";
-  if (cell.type === "asset" && cell.provider !== "local") return "ANIMATE SCENES";
-  if (cell.type === "note") return "WRITE PROMPTS";
-  if (cell.type === "scene") return "ASSEMBLE EDIT";
-  return "SOURCE";
+  if (cell.type === "prompt") return "WRITE PROMPTS";
+  if (cell.type === "generate_video") return "GENERATE VIDEO";
+  if (cell.type === "concat") return "CONCAT";
+  return "VIDEO";
 }
 
 export function gridSlot(row: number, column: number): NotebookGridSlot {
@@ -250,13 +246,13 @@ function updateSplitCell(
   const feature = featureForShot(shot);
   const column = featureColumn(shot);
   const base = existing ?? engine.notebooks.createCell({
-    type: "asset",
+    type: "split",
     title: "",
     slot: gridSlot(2, column),
   });
   return {
     ...base,
-    type: "asset",
+    type: "split",
     title: `@split-${String(shot.ordinal).padStart(2, "0")} · ${shot.label}`,
     slot: gridSlot(2, column),
     provider: "local",
@@ -309,13 +305,13 @@ function createBranchCells(
     branchRole("first", shot.ordinal),
   );
   const firstBase = firstExisting ?? engine.notebooks.createCell({
-    type: "asset",
+    type: "image",
     title: "",
     slot: gridSlot(extractionRow, column - 1),
   });
   const first: NotebookCell = {
     ...firstBase,
-    type: "asset",
+    type: "image",
     title: `@frame-${String(shot.ordinal).padStart(2, "0")} · first`,
     slot: gridSlot(extractionRow, column - 1),
     provider: "local",
@@ -338,13 +334,13 @@ function createBranchCells(
     branchRole("last", shot.ordinal),
   );
   const lastBase = lastExisting ?? engine.notebooks.createCell({
-    type: "asset",
+    type: "image",
     title: "",
     slot: gridSlot(extractionRow, column),
   });
   const last: NotebookCell = {
     ...lastBase,
-    type: "asset",
+    type: "image",
     title: `@frame-${String(shot.ordinal).padStart(2, "0")} · last`,
     slot: gridSlot(extractionRow, column),
     provider: "local",
@@ -367,13 +363,13 @@ function createBranchCells(
     branchRole("audio", shot.ordinal),
   );
   const audioBase = audioExisting ?? engine.notebooks.createCell({
-    type: "asset",
+    type: "audio",
     title: "",
     slot: gridSlot(extractionRow, column + 1),
   });
   const audio: NotebookCell = {
     ...audioBase,
-    type: "asset",
+    type: "audio",
     title: `@audio-${String(shot.ordinal).padStart(2, "0")} · scene`,
     slot: gridSlot(extractionRow, column + 1),
     provider: "local",
@@ -396,7 +392,7 @@ function createBranchCells(
     branchRole("prompt", shot.ordinal),
   );
   const promptBase = promptExisting ?? engine.notebooks.createCell({
-    type: "note",
+    type: "prompt",
     title: "",
     slot: gridSlot(promptRow, column),
   });
@@ -405,7 +401,7 @@ function createBranchCells(
     ?? `Animate ${shot.label} while preserving the source subjects and composition.`;
   const prompt: NotebookCell = {
     ...promptBase,
-    type: "note",
+    type: "prompt",
     title: `@prompt-${String(shot.ordinal).padStart(2, "0")} · ${feature?.label ?? shot.label}`,
     slot: gridSlot(promptRow, column),
     prompt: shot.prompt ?? promptExisting?.prompt ?? promptBrief,
@@ -439,13 +435,13 @@ function createBranchCells(
     branchRole("animate", shot.ordinal),
   );
   const animateBase = animateExisting ?? engine.notebooks.createCell({
-    type: "asset",
+    type: "generate_video",
     title: "",
     slot: gridSlot(promptRow + 1, column),
   });
   const animate: NotebookCell = {
     ...animateBase,
-    type: "asset",
+    type: "generate_video",
     title: `@animate-${String(shot.ordinal).padStart(2, "0")} · ${feature?.label ?? shot.label}`,
     slot: gridSlot(promptRow + 1, column),
     prompt: "",
@@ -564,9 +560,9 @@ export async function applyAnalysisResults(
     cell.id !== analysisCellId
     && analysisOwnerId(cell) !== analysisCellId);
   const sourceCell = document.cells.find((cell) => roleOf(cell) === "source")
-    ?? document.cells.find((cell) => cell.type === "source");
+    ?? document.cells.find((cell) => cell.type === "video");
   const assemblyCell = document.cells.find((cell) => roleOf(cell) === "assembly")
-    ?? document.cells.find((cell) => cell.operation === "assemble_sequence");
+    ?? document.cells.find((cell) => cell.operation === "concat_video");
   const branchCells: NotebookCell[] = [];
   const canonicalEdges: NotebookEdge[] = [];
 
@@ -656,7 +652,7 @@ export async function applyAnalysisResults(
     edges,
     properties: {
       ...(document.properties ?? {}),
-      workflowVersion: 3,
+      workflowVersion: 4,
       analysisRevision: scriptArtifact.value.artifactId,
     },
   };
@@ -694,7 +690,7 @@ export function buildSevenStageScaffold(
     if (role && !roleCells.has(role)) roleCells.set(role, cell);
   }
   const source = baseCell(engine, roleCells.get("source"), {
-    type: "source",
+    type: "video",
     title: "@start · source",
     slot: gridSlot(0, 0),
     provider: "local",
@@ -707,7 +703,7 @@ export function buildSevenStageScaffold(
     },
   });
   const analysis = baseCell(engine, roleCells.get("analysis"), {
-    type: "note",
+    type: "analyze",
     title: "@splitter · analyze",
     slot: gridSlot(1, 0),
     prompt: "Segment the source into four continuous 15-second narrative shots with precise timestamps and concise visual context.",
@@ -718,7 +714,7 @@ export function buildSevenStageScaffold(
     inputs: { workflowRole: "analysis", state: "pending" },
   });
   const audio = baseCell(engine, roleCells.get("source-audio"), {
-    type: "asset",
+    type: "audio",
     title: "@audio · continuous source",
     slot: gridSlot(13, 1),
     provider: "local",
@@ -731,29 +727,15 @@ export function buildSevenStageScaffold(
     },
   });
   const assembly = baseCell(engine, roleCells.get("assembly"), {
-    type: "scene",
-    title: "@assemble · feature edit",
+    type: "concat",
+    title: "@concat · feature edit",
     slot: gridSlot(13, 0),
     provider: "local",
-    operation: "assemble_sequence",
-    tool: "engine_sequence",
+    operation: "concat_video",
+    tool: "ffmpeg",
     inputs: {
       workflowRole: "assembly",
       captions: MULTYCULTY_FEATURES.map((feature) => feature.caption),
-      state: "pending",
-    },
-  });
-  const exp = baseCell(engine, roleCells.get("export"), {
-    type: "asset",
-    title: "@export · Multyculty feature master",
-    slot: gridSlot(14, 0),
-    provider: "local",
-    operation: "export_master",
-    tool: "ffmpeg",
-    inputs: {
-      workflowRole: "export",
-      orientation: "landscape",
-      captions: "burn-in",
       state: "pending",
     },
   });
@@ -762,7 +744,6 @@ export function buildSevenStageScaffold(
     "analysis",
     "source-audio",
     "assembly",
-    "export",
   ]);
   const retiredRoles = new Set(
     MULTYCULTY_FEATURES.map((feature) => `label-${feature.ordinal}`),
@@ -776,7 +757,6 @@ export function buildSevenStageScaffold(
     analysis,
     audio,
     assembly,
-    exp,
     ...otherCells,
   ];
   const baseIds = new Set([
@@ -784,14 +764,12 @@ export function buildSevenStageScaffold(
     analysis.id,
     audio.id,
     assembly.id,
-    exp.id,
   ]);
   const retainedEdges = document.edges.filter((edge) => {
     if (!baseIds.has(edge.target)) return true;
     if (edge.target === analysis.id && edge.targetInput === "source") return false;
     if (edge.target === audio.id && edge.targetInput === "source") return false;
     if (edge.target === assembly.id && edge.targetInput === "audio") return false;
-    if (edge.target === exp.id && edge.targetInput === "sequence") return false;
     return true;
   });
   const edges = uniqueEdges([
@@ -811,11 +789,6 @@ export function buildSevenStageScaffold(
       target: assembly.id,
       targetInput: "audio",
     }),
-    engine.notebooks.createEdge({
-      source: assembly.id,
-      target: exp.id,
-      targetInput: "sequence",
-    }),
   ]);
   const next: NotebookDocument = {
     ...document,
@@ -823,7 +796,7 @@ export function buildSevenStageScaffold(
     edges,
     properties: {
       ...(document.properties ?? {}),
-      workflowVersion: 3,
+      workflowVersion: 4,
     },
   };
   return {

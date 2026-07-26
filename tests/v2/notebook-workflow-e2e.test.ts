@@ -29,19 +29,31 @@ describe('transparent runnable DAG e2e (offline)', () => {
     }
   })
 
-  it('runs source→analysis fixture→split/audio/frame without paid generation', async () => {
-    expect(SCHEMA_VERSION).toBe(9)
-    expect(NOTEBOOK_CELL_TYPES).toEqual(['source', 'note', 'selects', 'scene', 'asset'])
-    expect(WORKFLOW_STAGES).toHaveLength(8)
+  it('runs video→analysis fixture→split/audio/image without paid generation', async () => {
+    expect(SCHEMA_VERSION).toBe(10)
+    expect(NOTEBOOK_CELL_TYPES).toEqual([
+      'audio',
+      'image',
+      'video',
+      'split',
+      'prompt',
+      'character',
+      'analyze',
+      'generate_video',
+      'generate_image',
+      'generate_audio',
+      'concat',
+      'splice',
+    ])
+    expect(WORKFLOW_STAGES).toHaveLength(7)
     expect(WORKFLOW_STAGES).toEqual([
-      'SOURCE',
+      'VIDEO',
       'ANALYZE',
       'SPLIT SCENES',
       'EXTRACT ASSETS',
       'WRITE PROMPTS',
-      'ANIMATE SCENES',
-      'ASSEMBLE EDIT',
-      'EXPORT MASTER',
+      'GENERATE VIDEO',
+      'CONCAT',
     ])
     expect(listNotebookActions().some((action) => action.operation === 'analyze_source')).toBe(true)
 

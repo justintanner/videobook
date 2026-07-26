@@ -578,11 +578,32 @@ textarea:focus-visible {
   top: calc(100% + 6px);
   left: 0;
   display: grid;
-  min-width: 150px;
+  width: 220px;
+  max-height: min(640px, calc(100dvh - 200px));
+  overflow-y: auto;
   padding: 6px;
   border: 1px solid var(--line);
   background: rgba(3, 14, 9, 0.98);
   box-shadow: 0 18px 42px rgba(0, 0, 0, 0.52);
+}
+
+.canvas-add-group {
+  display: grid;
+  gap: 2px;
+  padding: 5px 0;
+}
+
+.canvas-add-group + .canvas-add-group {
+  border-top: 1px solid var(--line);
+}
+
+.canvas-add-group > span {
+  padding: 4px 12px 3px;
+  color: #628772;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .canvas-add-menu button {
@@ -887,13 +908,20 @@ textarea:focus-visible {
   user-select: none;
 }
 
-.cell-kind-source,
-.cell-kind-asset {
+.cell-kind-audio,
+.cell-kind-image,
+.cell-kind-video,
+.cell-kind-character,
+.cell-kind-generate_audio,
+.cell-kind-generate_image,
+.cell-kind-generate_video {
   border-color: rgba(114, 231, 170, 0.58);
 }
 
-.cell-kind-scene,
-.cell-kind-selects {
+.cell-kind-split,
+.cell-kind-analyze,
+.cell-kind-concat,
+.cell-kind-splice {
   border-color: rgba(89, 194, 211, 0.48);
 }
 
@@ -948,7 +976,8 @@ textarea:focus-visible {
 }
 
 .cell-node-footer {
-  min-height: 42px;
+  min-height: 50px;
+  gap: 8px;
   border-top: 1px solid var(--line);
   color: #779b87;
   font-size: 12px;
@@ -956,16 +985,23 @@ textarea:focus-visible {
 }
 
 .cell-node-footer strong {
-  max-width: 188px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  color: var(--cyan);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
-.cell-node-footer strong {
-  color: var(--cyan);
-  font-size: 11px;
-  font-weight: 500;
+.cell-status {
+  flex: none;
+  padding: 3px 5px;
+  border: 1px solid rgba(114, 231, 170, 0.22);
+  color: #789d88;
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .cell-media,
@@ -1093,7 +1129,7 @@ textarea:focus-visible {
   letter-spacing: 0.07em;
 }
 
-.cell-copy-note {
+.cell-copy-text {
   display: block;
   overflow: hidden;
   padding: 16px 18px 18px;
@@ -1101,7 +1137,7 @@ textarea:focus-visible {
   text-align: left;
 }
 
-.cell-copy-note p {
+.cell-copy-text p {
   display: -webkit-box;
   margin: 0;
   overflow: hidden;
@@ -1132,6 +1168,11 @@ textarea:focus-visible {
   color: #91bfc5;
   line-height: 1.6;
   letter-spacing: 0.04em;
+}
+
+.cell-copy-audio audio {
+  width: 100%;
+  height: 32px;
 }
 
 .inspector {
@@ -1553,6 +1594,12 @@ textarea:focus-visible {
 .inspector-dolt-table tbody tr:last-child th,
 .inspector-dolt-table tbody tr:last-child td {
   border-bottom: 0;
+}
+
+.inspector-field-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .inspector-body label,

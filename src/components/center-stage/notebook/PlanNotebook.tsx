@@ -14,7 +14,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from '@xyflow/react'
-import { BookOpen, ImageIcon, Loader2, MessageSquareText, Rows3, Redo2, Undo2, Video } from 'lucide-react'
+import { BookOpen, ImageIcon, Loader2, MessageSquareText, Music, Rows3, Redo2, Undo2, User, Video } from 'lucide-react'
 import type { UseMcpResult } from 'use-mcp/react'
 import { CloseButton } from '@/components/ui/CloseButton'
 import type { MediaItem } from '@/components/sidebar/types'
@@ -47,9 +47,7 @@ import { NODE_TYPES } from './nodes/nodeTypes'
 import type { NotebookFlowNode } from './nodes/nodeTypes'
 import { TrunkEdge } from './TrunkEdge.js'
 import { TrunkHoverContext } from './TrunkHoverContext.js'
-
-const EDGE_TYPES = { trunk: TrunkEdge }
-import type { NotebookPlanDefinition, NotebookToolboxKind } from './types'
+import type { NotebookMediaCellType, NotebookPlanDefinition, NotebookToolboxKind } from './types'
 import { useCanvasCostEstimates } from './useCanvasCostEstimates'
 import { useDefinitionHistory } from './useDefinitionHistory'
 import { useNotebookFlow } from './useNotebookFlow'
@@ -57,6 +55,54 @@ import { useNotebookPlan } from './useNotebookPlan'
 import { useNotebookRun } from './useNotebookRun'
 import '@xyflow/react/dist/style.css'
 import './notebook.css'
+
+const EDGE_TYPES = { trunk: TrunkEdge }
+const notebookToolboxKinds: readonly NotebookToolboxKind[] = [
+  'audio',
+  'image',
+  'video',
+  'split',
+  'prompt',
+  'character',
+  'analyze',
+  'generate_video',
+  'generate_image',
+  'generate_audio',
+  'concat',
+  'splice',
+]
+const notebookMediaCellTypes: readonly NotebookMediaCellType[] = ['audio', 'image', 'video', 'character']
+const notebookInputTargetTypes: readonly NotebookToolboxKind[] = [
+  'analyze',
+  'split',
+  'generate_video',
+  'generate_image',
+  'generate_audio',
+  'concat',
+  'splice',
+]
+const toolboxIcons: Record<NotebookToolboxKind, typeof BookOpen> = {
+  audio: Music,
+  image: ImageIcon,
+  video: Video,
+  split: Rows3,
+  prompt: MessageSquareText,
+  character: User,
+  analyze: BookOpen,
+  generate_video: Video,
+  generate_image: ImageIcon,
+  generate_audio: Music,
+  concat: Rows3,
+  splice: Rows3,
+}
+
+function isNotebookToolboxKind(value: string): value is NotebookToolboxKind {
+  return notebookToolboxKinds.some((kind) => kind === value)
+}
+
+function isNotebookMediaCellType(value: unknown): value is NotebookMediaCellType {
+  return typeof value === 'string' && notebookMediaCellTypes.some((kind) => kind === value)
+}
 
 interface NotebookProps {
   notebookId: string
@@ -84,7 +130,13 @@ interface NotebookCanvasProps {
     parentId: string | null,
     depth?: number,
   ) => void
-  onAddAsset: (slug: string, position: { x: number; y: number }, targetId: string | null, depth?: number) => void
+  onAddAsset: (
+    slug: string,
+    position: { x: number; y: number },
+    targetId: string | null,
+    type: NotebookMediaCellType,
+    depth?: number,
+  ) => void
   onAddStage: () => void
   canUndo: boolean
   canRedo: boolean
@@ -126,7 +178,7 @@ function NotebookCanvas({
     const preview = {
       ...target,
       type: seed.type,
-      assetKind: draggedStepType === 'image' || draggedStepType === 'video' ? draggedStepType : null,
+      assetKind: isNotebookMediaCellType(draggedStepType) ? draggedStepType : null,
     }
     setDropPreview(preview)
     return preview
@@ -135,7 +187,7 @@ function NotebookCanvas({
     event.preventDefault()
     const position = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY })
     const stepType = event.dataTransfer.getData('application/x-videocity-notebook-step')
-    if (stepType === 'note' || stepType === 'image' || stepType === 'video') {
+    if (isNotebookToolboxKind(stepType)) {
       const target = notebookDropTarget(definition, stepType, position, selectedStepId)
       onAddStep(stepType, target.position, target.parentId, target.depth)
       clearDropPreview()
@@ -149,15 +201,15 @@ function NotebookCanvas({
     try {
       const payload = JSON.parse(json) as { id?: unknown; slug?: unknown; type?: unknown }
       if (
-        (payload.type !== 'image' && payload.type !== 'video' && payload.type !== 'audio')
+        !isNotebookMediaCellType(payload.type)
         || (typeof payload.id !== 'string' && typeof payload.slug !== 'string')
       ) {
         clearDropPreview()
         return
       }
       const slug = typeof payload.slug === 'string' ? payload.slug : payload.id as string
-      const target = notebookAssetDropTarget(definition, position)
-      onAddAsset(slug, target.position, target.connectTargetId, target.depth)
+      const target = notebookAssetDropTarget(definition, position, payload.type)
+      onAddAsset(slug, target.position, target.connectTargetId, payload.type, target.depth)
       clearDropPreview()
     } catch {
       clearDropPreview()
@@ -171,7 +223,9 @@ function NotebookCanvas({
   const addFromToolbox = useCallback((type: NotebookToolboxKind) => {
     const layout = notebookTrackLayout(definition)
     const selectedDepth = selectedStepId ? layout.depths.get(selectedStepId) : undefined
-    const canUseSelection = type !== 'note' && selectedStepId && selectedDepth !== undefined
+    const canUseSelection = notebookInputTargetTypes.some((candidate) => candidate === type)
+      && selectedStepId
+      && selectedDepth !== undefined
     if (canUseSelection) {
       const selected = definition.sequence.find((step) => step.id === selectedStepId)
       const selectedPosition = selected ? layout.positions.get(selected.id) : null
@@ -205,21 +259,20 @@ function NotebookCanvas({
       onDragOver={(event) => {
         event.preventDefault()
         event.dataTransfer.dropEffect = 'copy'
-        let isAsset = false
         let assetKind: NotebookDropPreview['assetKind'] = null
         for (const type of event.dataTransfer.types) {
           if (type.startsWith('application/x-videocity-asset-')) {
-            isAsset = true
-            assetKind = type.replace('application/x-videocity-asset-', '') as NotebookDropPreview['assetKind']
+            const candidate = type.replace('application/x-videocity-asset-', '')
+            assetKind = isNotebookMediaCellType(candidate) ? candidate : null
             break
           }
         }
         const position = reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY })
         if (draggedStepType) {
           previewDropAt(position)
-        } else if (isAsset) {
-          const target = notebookAssetDropTarget(definition, position)
-          setDropPreview({ ...target, parentId: target.connectTargetId, type: 'source', assetKind })
+        } else if (assetKind) {
+          const target = notebookAssetDropTarget(definition, position, assetKind)
+          setDropPreview({ ...target, parentId: target.connectTargetId, type: assetKind, assetKind })
         }
       }}
       onDragLeave={(event) => {
@@ -278,48 +331,26 @@ function NotebookCanvas({
           showZoom={false}
           showFitView={false}
         >
-          <ControlButton
-            className="vc-notebook-add-cell"
-            title="Add note cell"
-            draggable
-            onClick={() => addFromToolbox('note')}
-            onDragStart={(event) => {
-              event.dataTransfer.setData('application/x-videocity-notebook-step', 'note')
-              event.dataTransfer.effectAllowed = 'copy'
-              setDraggedStepType('note')
-            }}
-            onDragEnd={clearDropPreview}
-          >
-            <MessageSquareText />
-          </ControlButton>
-          <ControlButton
-            className="vc-notebook-add-cell"
-            title="Add image asset"
-            draggable
-            onClick={() => addFromToolbox('image')}
-            onDragStart={(event) => {
-              event.dataTransfer.setData('application/x-videocity-notebook-step', 'image')
-              event.dataTransfer.effectAllowed = 'copy'
-              setDraggedStepType('image')
-            }}
-            onDragEnd={clearDropPreview}
-          >
-            <ImageIcon />
-          </ControlButton>
-          <ControlButton
-            className="vc-notebook-add-cell"
-            title="Add video asset"
-            draggable
-            onClick={() => addFromToolbox('video')}
-            onDragStart={(event) => {
-              event.dataTransfer.setData('application/x-videocity-notebook-step', 'video')
-              event.dataTransfer.effectAllowed = 'copy'
-              setDraggedStepType('video')
-            }}
-            onDragEnd={clearDropPreview}
-          >
-            <Video />
-          </ControlButton>
+          {notebookToolboxKinds.map((kind) => {
+            const Icon = toolboxIcons[kind]
+            return (
+              <ControlButton
+                className="vc-notebook-add-cell"
+                title={`Add ${kind.replace('_', ' ')} cell`}
+                draggable
+                key={kind}
+                onClick={() => addFromToolbox(kind)}
+                onDragStart={(event) => {
+                  event.dataTransfer.setData('application/x-videocity-notebook-step', kind)
+                  event.dataTransfer.effectAllowed = 'copy'
+                  setDraggedStepType(kind)
+                }}
+                onDragEnd={clearDropPreview}
+              >
+                <Icon />
+              </ControlButton>
+            )
+          })}
         </Controls>
       </ReactFlow>
       </TrunkHoverContext.Provider>
@@ -434,10 +465,16 @@ export function Notebook({
     const connected = parentId && stepId ? connectSteps(added, parentId, stepId) : added
     commit(snapDefinitionToTracks(connected))
   }, [commit, getDefinition])
-  const handleAddAsset = useCallback((slug: string, position: { x: number; y: number }, targetId: string | null, depth?: number) => {
+  const handleAddAsset = useCallback((
+    slug: string,
+    position: { x: number; y: number },
+    targetId: string | null,
+    type: NotebookMediaCellType,
+    depth?: number,
+  ) => {
     const current = getDefinition()
     if (!current) return
-    const added = addAssetStep(current, slug, position, depth)
+    const added = addAssetStep(current, slug, position, type, depth)
     const next = targetId ? connectSteps(added.definition, added.stepId, targetId) : added.definition
     commit(snapDefinitionToTracks(next))
   }, [commit, getDefinition])

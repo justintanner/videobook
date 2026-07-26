@@ -22,7 +22,7 @@ const option: ModelOption = {
 const step: NotebookPlanStep = {
   id: 'image-1',
   componentType: 'task',
-  type: 'asset',
+  type: 'generate_image',
   name: 'Image',
   properties: {
     media_type: 'image',

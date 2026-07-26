@@ -1,10 +1,11 @@
 import type { MediaItem } from '@/components/sidebar/types'
 import type { NotebookCellType } from 'videobook-engine'
 
-export const NOTEBOOK_SCHEMA_VERSION = 1
+export const NOTEBOOK_SCHEMA_VERSION = 10
 
 export type NotebookStepType = NotebookCellType
-export type NotebookToolboxKind = 'note' | 'image' | 'video'
+export type NotebookToolboxKind = NotebookCellType
+export type NotebookMediaCellType = Extract<NotebookCellType, 'audio' | 'image' | 'video' | 'character'>
 
 export type JsonValue =
   | string

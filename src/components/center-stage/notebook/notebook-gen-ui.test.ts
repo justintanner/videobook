@@ -73,7 +73,23 @@ describe('notebook generation editor order and domain themes', () => {
     expect(notebook).toContain('Auto-arrange')
     expect(notebook).toContain('/notebook')
     expect(notebook).toContain('application/x-videocity-notebook-step')
-    expect(notebook).toContain('Add note cell')
+    for (const type of [
+      'audio',
+      'image',
+      'video',
+      'split',
+      'prompt',
+      'character',
+      'analyze',
+      'generate_video',
+      'generate_image',
+      'generate_audio',
+      'concat',
+      'splice',
+    ]) {
+      expect(notebook).toContain(`  '${type}',`)
+    }
+    expect(notebook).toContain("title={`Add ${kind.replace('_', ' ')} cell`}")
     expect(notebook).toContain("'Escape'")
     expect(notebook).toContain('vc-notebook-add-controls')
     expect(notebook).toContain('position="top-left"')
@@ -104,9 +120,10 @@ describe('notebook generation editor order and domain themes', () => {
     expect(genNode).toContain('vc-node-input-thumb')
     expect(genNode).toContain('mediaInputs')
     expect(genNode).toContain('thumbnailSrc')
-    expect(genNode).toMatch(/item\.kind === 'video' \? Video : ImageIcon/)
-    expect(sizes).toContain('asset: { width: 300, height: 340 }')
-    expect(sizes).toContain("media_type: 'image'")
-    expect(sizes).toContain("media_type: 'video'")
+    expect(genNode).toContain("item.kind === 'audio'")
+    expect(genNode).toContain("item.kind === 'character'")
+    expect(sizes).toContain('generate_video: { width: 300, height: 340 }')
+    expect(sizes).toContain('generate_image: { width: 300, height: 340 }')
+    expect(sizes).toContain('generate_audio: { width: 300, height: 340 }')
   })
 })

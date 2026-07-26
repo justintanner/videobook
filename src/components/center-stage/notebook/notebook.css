@@ -55,7 +55,7 @@
   fill: rgb(52 211 153 / 0.18);
 }
 
-.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-note .react-flow__edge-path {
+.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-text .react-flow__edge-path {
   stroke: rgb(245 158 11 / 0.85);
 }
 
@@ -363,7 +363,7 @@
   object-fit: contain;
 }
 
-.vc-node-source img {
+.vc-node-media img {
   flex: 1 1 0;
   min-height: 0;
   width: 100%;
@@ -428,7 +428,7 @@
   font-weight: 600;
 }
 
-.vc-node-note {
+.vc-node-text {
   display: flex;
   width: 280px;
   min-height: 340px;
@@ -438,7 +438,7 @@
   border-color: rgb(245 158 11 / 0.58);
 }
 
-.vc-node-note p {
+.vc-node-text p {
   display: -webkit-box;
   overflow: hidden;
   margin: 0;
@@ -449,7 +449,7 @@
   -webkit-line-clamp: 14;
 }
 
-.vc-node-source {
+.vc-node-media {
   display: flex;
   width: 280px;
   min-height: 340px;
@@ -460,13 +460,13 @@
   border-color: rgb(52 211 153 / 0.55);
 }
 
-.vc-node-source > svg {
+.vc-node-media > svg {
   width: 2.5rem;
   height: 2.5rem;
   color: rgb(110 231 183 / 0.65);
 }
 
-.vc-node-source > span {
+.vc-node-media > span {
   width: 100%;
   overflow: hidden;
   padding: 0.45rem 0.6rem;
@@ -1266,7 +1266,7 @@
   pointer-events: none;
 }
 
-.vc-node-note {
+.vc-node-text {
   --vc-node-accent: var(--vc-note);
   padding-top: 2.6rem;
   border-color: rgb(110 231 183 / 0.28);
@@ -1282,7 +1282,17 @@
   border-color: rgb(110 231 183 / 0.3);
 }
 
-.vc-node-source {
+.vc-node-media-audio {
+  --vc-node-accent: var(--vc-note);
+  border-color: rgb(110 231 183 / 0.3);
+}
+
+.vc-node-media-character {
+  --vc-node-accent: rgb(244 114 182);
+  border-color: rgb(110 231 183 / 0.3);
+}
+
+.vc-node-media {
   --vc-node-accent: rgb(110 231 183);
   border-color: rgb(110 231 183 / 0.3);
 }
@@ -1377,7 +1387,7 @@
   box-shadow: 0 0 0 2px rgb(52 211 153 / 0.16), 0 0 10px rgb(52 211 153 / 0.35);
 }
 
-.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-note .react-flow__edge-path,
+.vc-notebook-canvas .react-flow__edge.vc-notebook-edge-text .react-flow__edge-path,
 .vc-notebook-canvas .react-flow__edge.vc-notebook-edge-ref .react-flow__edge-path {
   stroke: rgb(74 222 128 / 0.62);
   filter: drop-shadow(0 0 2px rgb(52 211 153 / 0.24));

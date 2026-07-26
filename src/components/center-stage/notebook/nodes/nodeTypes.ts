@@ -24,11 +24,18 @@ export interface NotebookNodeData extends Record<string, unknown> {
 export type NotebookFlowNode = Node<NotebookNodeData, NotebookPlanStep['type']>
 
 export const NODE_TYPES = {
-  source: AssetNode,
-  note: PromptNode,
-  selects: PrimitiveNode,
-  scene: PrimitiveNode,
-  asset: GenNode,
+  audio: AssetNode,
+  image: AssetNode,
+  video: AssetNode,
+  character: AssetNode,
+  prompt: PromptNode,
+  analyze: PromptNode,
+  split: PrimitiveNode,
+  generate_video: GenNode,
+  generate_image: GenNode,
+  generate_audio: GenNode,
+  concat: PrimitiveNode,
+  splice: PrimitiveNode,
 }
 
 export const NODE_DIMENSIONS = notebookNodeSizes

@@ -1,11 +1,17 @@
 import { memo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
-import { AlertCircle, ImageIcon, Loader2, Video, FileQuestion } from 'lucide-react'
+import { AlertCircle, ImageIcon, Loader2, Video, FileQuestion, Music, User } from 'lucide-react'
 import { generationMediaType, type ConnectedMediaInput, type GenRunOutput } from '../model'
 import type { NotebookNodeData } from './nodeTypes'
 
 function MediaInputThumb({ item }: { item: ConnectedMediaInput }) {
-  const Icon = item.kind === 'video' ? Video : ImageIcon
+  const Icon = item.kind === 'video'
+    ? Video
+    : item.kind === 'audio'
+      ? Music
+      : item.kind === 'character'
+        ? User
+        : ImageIcon
   return (
     <span className="vc-node-input-thumb" title={item.label}>
       {item.thumbnailSrc
@@ -47,16 +53,16 @@ function GenNodeComponent({ data, selected }: NodeProps) {
   const node = data as NotebookNodeData
   const { step } = node
   const mediaType = generationMediaType(step) ?? 'image'
-  const Icon = mediaType === 'video' ? Video : ImageIcon
+  const Icon = mediaType === 'video' ? Video : mediaType === 'audio' ? Music : ImageIcon
   const model = typeof step.properties.model === 'string' && step.properties.model
     ? step.properties.model
     : 'choose model'
   const mediaInputs = node.mediaInputs ?? []
   const outputs = node.outputs ?? []
   return (
-    <div className={`vc-node vc-node-gen vc-node-asset vc-node-media-${mediaType} ${selected ? 'vc-node-selected' : ''} ${node.invalidReason ? 'vc-node-invalid' : ''} ${node.routeState ? `vc-node-route-${node.routeState}` : ''}`}>
+    <div className={`vc-node vc-node-gen vc-node-${step.type} vc-node-media-${mediaType} ${selected ? 'vc-node-selected' : ''} ${node.invalidReason ? 'vc-node-invalid' : ''} ${node.routeState ? `vc-node-route-${node.routeState}` : ''}`}>
       <Handle type="target" position={Position.Top} className="vc-node-handle" />
-      <div className="vc-node-kicker"><span><Icon aria-hidden /> Asset</span><b>{mediaType === 'video' ? 'VID' : 'IMG'}</b></div>
+      <div className="vc-node-kicker"><span><Icon aria-hidden /> {step.type.replace('_', ' ')}</span><b>{mediaType.slice(0, 3)}</b></div>
       {mediaInputs.length > 0 ? (
         <div className="vc-node-input-strip" aria-label="Connected media inputs">
           {mediaInputs.map((item) => (

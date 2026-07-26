@@ -6,11 +6,9 @@ import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createEngine,
-  MVP_CONTRACT_VERSION,
   type Engine,
   type NotebookDocument,
 } from "videobook-engine";
-import { v7 as uuidv7 } from "uuid";
 import { FFMPEG } from "../../server/src/ffmpeg.js";
 import {
   modelArgs,
@@ -33,7 +31,7 @@ async function makeClip(path: string, seconds = 2): Promise<void> {
   ]);
 }
 
-describe("notebook runner dual-frame and assembly", () => {
+describe("notebook runner frames and concat", () => {
   let rootDir: string | undefined;
   let engine: Engine | undefined;
 
@@ -42,10 +40,10 @@ describe("notebook runner dual-frame and assembly", () => {
     if (rootDir) await rm(rootDir, { recursive: true, force: true });
   });
 
-  it("resolves generation tool from cell.tool before provider model id", () => {
+  it("resolves generation tool from a generate_video cell before provider model id", () => {
     const tool = resolveNotebookGenerationTool({
       id: "019f0000-0000-7000-8000-000000000001",
-      type: "asset",
+      type: "generate_video",
       title: "animate",
       slot: { row: 0, column: 0 },
       model: "bytedance/seedance-2",
@@ -54,7 +52,7 @@ describe("notebook runner dual-frame and assembly", () => {
     expect(tool).toBe(DEFAULT_ANIMATION_TOOL);
   });
 
-  it("maps first_frame/last_frame upstreams into Seedance payload fields", async () => {
+  it("maps first_frame and last_frame image cells into Seedance payload fields", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-frames-"));
     engine = createEngine({ rootDir, initialBookSlug: "runner-frames" });
     await engine.ready;
@@ -71,7 +69,7 @@ describe("notebook runner dual-frame and assembly", () => {
     if (!notebook.ok) return;
 
     const firstCell = engine.notebooks.createCell({
-      type: "asset",
+      type: "image",
       title: "first",
       slot: { row: 0, column: 0 },
       outputArtifactId: first.value.artifactId,
@@ -79,7 +77,7 @@ describe("notebook runner dual-frame and assembly", () => {
       inputs: { frameRole: "first" },
     });
     const lastCell = engine.notebooks.createCell({
-      type: "asset",
+      type: "image",
       title: "last",
       slot: { row: 0, column: 1 },
       outputArtifactId: last.value.artifactId,
@@ -87,7 +85,7 @@ describe("notebook runner dual-frame and assembly", () => {
       inputs: { frameRole: "last" },
     });
     const animate = engine.notebooks.createCell({
-      type: "asset",
+      type: "generate_video",
       title: "animate",
       slot: { row: 0, column: 2 },
       prompt: "Camera push in",
@@ -144,6 +142,14 @@ describe("notebook runner dual-frame and assembly", () => {
     expect(prepared.tool).toBe(DEFAULT_ANIMATION_TOOL);
     expect(prepared.input.first_frame_slug).toBe(`@${first.value.slug}`);
     expect(prepared.input.last_frame_slug).toBe(`@${last.value.slug}`);
+    await expect(
+      prepareNotebookGeneration(
+        engine,
+        document,
+        { ...animate, type: "generate_image" },
+        engine.book.get().bookId,
+      ),
+    ).rejects.toThrow(/produces video, not generate_image/i);
 
     await expect(
       runNotebookCell(
@@ -157,9 +163,9 @@ describe("notebook runner dual-frame and assembly", () => {
     ).rejects.toThrow(/requires confirmation/i);
   });
 
-  it("places ordered clips on the primary sequence and pins sequenceRevision for export", async () => {
-    rootDir = await mkdtemp(join(tmpdir(), "vb-runner-assemble-"));
-    engine = createEngine({ rootDir, initialBookSlug: "runner-assemble" });
+  it("concats ordered video cells into a playable H264 and AAC output", async () => {
+    rootDir = await mkdtemp(join(tmpdir(), "vb-runner-concat-"));
+    engine = createEngine({ rootDir, initialBookSlug: "runner-concat" });
     await engine.ready;
 
     const clipPath = join(rootDir, "clip.mp4");
@@ -176,174 +182,99 @@ describe("notebook runner dual-frame and assembly", () => {
     if (!notebook.ok) return;
 
     const videoA = engine.notebooks.createCell({
-      type: "asset",
+      type: "video",
       title: "a",
       slot: { row: 0, column: 0 },
       outputArtifactId: clipA.value.artifactId,
     });
     const videoB = engine.notebooks.createCell({
-      type: "asset",
+      type: "video",
       title: "b",
       slot: { row: 0, column: 1 },
       outputArtifactId: clipB.value.artifactId,
     });
-    const sequence = engine.notebooks.createCell({
-      type: "scene",
-      title: "assemble",
+    const concat = engine.notebooks.createCell({
+      type: "concat",
+      title: "concat",
       slot: { row: 0, column: 2 },
       provider: "local",
-      operation: "assemble_sequence",
-      tool: "engine_sequence",
-    });
-    const exp = engine.notebooks.createCell({
-      type: "asset",
-      title: "export",
-      slot: { row: 0, column: 3 },
-      provider: "local",
-      operation: "export_master",
+      operation: "concat_video",
       tool: "ffmpeg",
     });
     const document: NotebookDocument = {
       ...notebook.value,
-      cells: [videoA, videoB, sequence, exp],
+      cells: [videoA, videoB, concat],
       edges: [
         engine.notebooks.createEdge({
           source: videoA.id,
-          target: sequence.id,
+          target: concat.id,
           targetInput: "clip:0",
         }),
         engine.notebooks.createEdge({
           source: videoB.id,
-          target: sequence.id,
+          target: concat.id,
           targetInput: "clip:1",
-        }),
-        engine.notebooks.createEdge({
-          source: sequence.id,
-          target: exp.id,
-          targetInput: "sequence",
         }),
       ],
     };
     await engine.notebooks.write(document);
 
-    const assembled = await runNotebookCell(
+    const invalidSplice = engine.notebooks.createCell({
+      type: "splice",
+      title: "splice",
+      slot: { row: 1, column: 0 },
+      operation: "splice_video",
+      tool: "ffmpeg",
+    });
+    const invalidSpliceDocument: NotebookDocument = {
+      ...document,
+      cells: [...document.cells, invalidSplice],
+      edges: [
+        ...document.edges,
+        engine.notebooks.createEdge({
+          source: videoA.id,
+          target: invalidSplice.id,
+          targetInput: "first",
+        }),
+      ],
+    };
+    await expect(
+      runNotebookCell(
+        engine,
+        engine.book.get().bookId,
+        document.id,
+        invalidSpliceDocument,
+        invalidSplice,
+      ),
+    ).rejects.toThrow(/requires exactly one completed video on first and second/i);
+
+    const completed = await runNotebookCell(
       engine,
       engine.book.get().bookId,
       document.id,
       document,
-      sequence,
+      concat,
     );
-    const sequenceCell = assembled.document.cells.find((cell) => cell.id === sequence.id);
-    expect(typeof sequenceCell?.inputs?.sequenceRevision).toBe("string");
-    expect(String(sequenceCell?.inputs?.sequenceRevision).length).toBeGreaterThan(8);
-    expect(Array.isArray(sequenceCell?.inputs?.clipArtifactIds)).toBe(true);
-    expect(sequenceCell?.inputs?.clipArtifactIds).toEqual([
+    expect(completed.outputArtifactId).toBeTruthy();
+    const completedCell = completed.document.cells.find((cell) => cell.id === concat.id);
+    expect(completedCell?.type).toBe("concat");
+    expect(completedCell?.outputArtifactId).toBe(completed.outputArtifactId);
+    expect(completedCell?.inputs?.clipArtifactIds).toEqual([
       clipA.value.artifactId,
       clipB.value.artifactId,
     ]);
-    expect(engine.sequences.getPrimary().clips.length).toBeGreaterThanOrEqual(2);
-    const pinnedRevision = String(sequenceCell?.inputs?.sequenceRevision);
-    const sequenceId = String(sequenceCell?.inputs?.sequenceId
-      ?? engine.sequences.getPrimary().sequenceId);
 
-    // Unknown real-looking revision hash is not readable → stale.
-    const unknownRevDoc: NotebookDocument = {
-      ...assembled.document,
-      cells: assembled.document.cells.map((cell) =>
-        cell.id === sequence.id
-          ? {
-              ...cell,
-              inputs: {
-                ...(cell.inputs ?? {}),
-                sequenceRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              },
-            }
-          : cell),
-    };
-    await expect(
-      runNotebookCell(
-        engine,
-        engine.book.get().bookId,
-        document.id,
-        unknownRevDoc,
-        exp,
-      ),
-    ).rejects.toThrow(/stale|not readable/i);
+    const manifest = await engine.files.manifest(completed.outputArtifactId);
+    expect(manifest.ok).toBe(true);
+    if (!manifest.ok) return;
+    expect(manifest.value.files.some((file) => file.name === "original.mp4")).toBe(true);
 
-    // Successful export while assembly still matches HEAD sequence.
-    const exported = await runNotebookCell(
-      engine,
-      engine.book.get().bookId,
-      document.id,
-      assembled.document,
-      exp,
-    );
-    expect(exported.outputArtifactId).toBeTruthy();
-    const exportArtifact = engine.artifacts.get(exported.outputArtifactId);
-    expect(exportArtifact.ok).toBe(true);
-
-    // Mutate the live sequence after assembly — export must fail even though
-    // the old pin still exists in Dolt history.
-    const primary = engine.sequences.getPrimary();
-    const videoTrack = primary.tracks.find((track) => track.kind === "video");
-    expect(videoTrack).toBeTruthy();
-    if (!videoTrack) return;
-    const extraPath = join(rootDir, "extra.mp4");
-    await makeClip(extraPath, 1);
-    const extra = await engine.artifacts.create({ kind: "video", name: "extra clip" });
-    expect(extra.ok).toBe(true);
-    if (!extra.ok) return;
-    await engine.files.writeFromPath(extra.value.artifactId, "original.mp4", extraPath);
-    const extraManifest = await engine.files.manifest(extra.value.artifactId);
-    expect(extraManifest.ok).toBe(true);
-    if (!extraManifest.ok) return;
-    const extraHash = extraManifest.value.files[0]?.objectHash;
-    expect(extraHash).toBeTruthy();
-    if (!extraHash) return;
-    const intent = {
-      intentVersion: MVP_CONTRACT_VERSION,
-      commandId: uuidv7(),
-      sequenceId,
-      baseRevision: engine.head,
-      actor: "stale-test",
-      sourceSurface: "system" as const,
-      confirmationPolicy: "reversible-single-step" as const,
-      operations: [{
-        kind: "insert-clip" as const,
-        mode: "insert" as const,
-        placement: {
-          trackId: videoTrack.trackId,
-          timelineStartFrame: 10_000,
-          durationFrames: 24,
-          source: {
-            kind: "still" as const,
-            artifactId: extra.value.artifactId,
-            sourcePath: "original.mp4",
-            objectHash: extraHash,
-          },
-        },
-      }],
-    };
-    const preview = engine.edits.preview(intent);
-    expect(preview.ok).toBe(true);
-    if (!preview.ok) return;
-    const commit = await engine.edits.commit(intent, preview.value.previewHash);
-    expect(commit.ok).toBe(true);
-    if (!commit.ok) return;
-    expect(engine.head).not.toBe(pinnedRevision);
-    expect(engine.sequences.getPrimary().clips.length)
-      .toBeGreaterThan(assembled.document.cells.length > 0
-        ? 2
-        : 0);
-
-    await expect(
-      runNotebookCell(
-        engine,
-        engine.book.get().bookId,
-        document.id,
-        assembled.document,
-        exp,
-      ),
-    ).rejects.toThrow(/stale|changed after assembly|diverged/i);
+    const streams = engine.streams.list(completed.outputArtifactId);
+    expect(streams.ok).toBe(true);
+    if (!streams.ok) return;
+    expect(streams.value.some((stream) =>
+      stream.kind === "video" && stream.codec === "h264")).toBe(true);
+    expect(streams.value.some((stream) =>
+      stream.kind === "audio" && stream.codec === "aac")).toBe(true);
   }, 90_000);
 });

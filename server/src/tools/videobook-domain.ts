@@ -1943,7 +1943,7 @@ export function videobookDomainDefs(
             const [audioSlot, transcriptSlot, sequenceSlot] =
               firstEmptyGridSlots(retained, 3);
             const audioCell = engine.notebooks.createCell({
-              type: "asset",
+              type: "audio",
               title: artifact.value.slug,
               slot: audioSlot!,
               inputs: {
@@ -1953,7 +1953,7 @@ export function videobookDomainDefs(
               },
             });
             const transcriptCell = engine.notebooks.createCell({
-              type: "note",
+              type: "analyze",
               title: transcript ? `${artifact.value.slug} transcript` : "Transcript pending",
               slot: transcriptSlot!,
               inputs: {
@@ -1968,7 +1968,7 @@ export function videobookDomainDefs(
               targetInput: "audio",
             });
             const sequenceCell = engine.notebooks.createCell({
-              type: "scene",
+              type: "concat",
               title: committed.value.sequence.name,
               slot: sequenceSlot!,
               inputs: {
@@ -2214,9 +2214,6 @@ export function videobookDomainDefs(
             const transcriptCell = document.cells.find(
               (cell) => cell.inputs?.audioSpineRole === "transcript",
             );
-            const currentSelects = document.cells.find(
-              (cell) => cell.inputs?.audioSpineRole === "selects",
-            );
             const reference = {
               id: uuidv7(),
               kind: "source-range" as const,
@@ -2226,40 +2223,32 @@ export function videobookDomainDefs(
                 artifactId: transcript.value.artifactId,
                 objectHash: transcript.value.objectHash,
               },
-              ordinal: currentSelects?.references?.length ?? 0,
+              ordinal: 0,
             };
-            const selectsCell = currentSelects
-              ? {
-                  ...currentSelects,
-                  references: [...(currentSelects.references ?? []), reference],
-                }
-              : engine.notebooks.createCell({
-                  type: "selects",
-                  title: "Transcript selects",
-                  slot: firstEmptyGridSlots(
-                    document.cells,
-                    1,
-                  )[0]!,
-                  inputs: {
-                    audioSpineRole: "selects",
-                    transcriptId: transcript.value.transcriptId,
-                  },
-                  references: [reference],
-                });
-            const cells = currentSelects
-              ? document.cells.map((cell) =>
-                  cell.id === currentSelects.id ? selectsCell : cell)
-              : [...document.cells, selectsCell];
-            const hasEdge = transcriptCell
-              ? document.edges.some((edge) =>
-                  edge.source === transcriptCell.id && edge.target === selectsCell.id)
-              : true;
-            const edges = transcriptCell && !hasEdge
+            const splitCell = engine.notebooks.createCell({
+              type: "split",
+              title: `@split-transcript-${document.cells.filter((cell) =>
+                cell.inputs?.selectionKind === "transcript").length + 1}`,
+              slot: firstEmptyGridSlots(document.cells, 1)[0]!,
+              inputs: {
+                selectionKind: "transcript",
+                transcriptId: transcript.value.transcriptId,
+                startSeconds: range.value.startTick
+                  * range.value.timeBase.numerator
+                  / range.value.timeBase.denominator,
+                endSeconds: (
+                  range.value.startTick + range.value.durationTicks
+                ) * range.value.timeBase.numerator
+                  / range.value.timeBase.denominator,
+              },
+              references: [reference],
+            });
+            const edges = transcriptCell
               ? [
                   ...document.edges,
                   engine.notebooks.createEdge({
                     source: transcriptCell.id,
-                    target: selectsCell.id,
+                    target: splitCell.id,
                     targetInput: "transcript-range",
                   }),
                 ]
@@ -2270,7 +2259,7 @@ export function videobookDomainDefs(
                 ...document.properties,
                 currentSelection: selection,
               },
-              cells,
+              cells: [...document.cells, splitCell],
               edges,
             };
           },
@@ -2508,9 +2497,6 @@ export function videobookDomainDefs(
             const transcriptCell = document.cells.find(
               (cell) => cell.inputs?.audioSpineRole === "transcript",
             );
-            const currentSelects = document.cells.find(
-              (cell) => cell.inputs?.audioSpineRole === "selects",
-            );
             const reference = {
               id: uuidv7(),
               kind: "source-range" as const,
@@ -2520,47 +2506,40 @@ export function videobookDomainDefs(
                 artifactId,
                 objectHash: mapped.sourceRange.objectHash,
               },
-              ordinal: currentSelects?.references?.length ?? 0,
+              ordinal: 0,
             };
-            const selectsCell = currentSelects
-              ? {
-                  ...currentSelects,
-                  references: [...(currentSelects.references ?? []), reference],
-                }
-              : engine.notebooks.createCell({
-                  type: "selects",
-                  title: "Timeline selects",
-                  slot: firstEmptyGridSlots(
-                    document.cells,
-                    1,
-                  )[0]!,
-                  inputs: {
-                    audioSpineRole: "selects",
-                    transcriptId: transcript.transcriptId,
-                  },
-                  references: [reference],
-                });
-            const cells = currentSelects
-              ? document.cells.map((cell) =>
-                  cell.id === currentSelects.id ? selectsCell : cell)
-              : [...document.cells, selectsCell];
-            const hasEdge = transcriptCell
-              ? document.edges.some((edge) =>
-                  edge.source === transcriptCell.id && edge.target === selectsCell.id)
-              : true;
+            const splitCell = engine.notebooks.createCell({
+              type: "split",
+              title: `@split-timeline-${document.cells.filter((cell) =>
+                cell.inputs?.selectionKind === "timeline").length + 1}`,
+              slot: firstEmptyGridSlots(document.cells, 1)[0]!,
+              inputs: {
+                selectionKind: "timeline",
+                transcriptId: transcript.transcriptId,
+                startSeconds: mapped.sourceRange.startTick
+                  * mapped.sourceRange.timeBase.numerator
+                  / mapped.sourceRange.timeBase.denominator,
+                endSeconds: (
+                  mapped.sourceRange.startTick
+                  + mapped.sourceRange.durationTicks
+                ) * mapped.sourceRange.timeBase.numerator
+                  / mapped.sourceRange.timeBase.denominator,
+              },
+              references: [reference],
+            });
             return {
               ...document,
               properties: {
                 ...document.properties,
                 currentSelection: selection,
               },
-              cells,
-              edges: transcriptCell && !hasEdge
+              cells: [...document.cells, splitCell],
+              edges: transcriptCell
                 ? [
                     ...document.edges,
                     engine.notebooks.createEdge({
                       source: transcriptCell.id,
-                      target: selectsCell.id,
+                      target: splitCell.id,
                       targetInput: "timeline-range",
                     }),
                   ]

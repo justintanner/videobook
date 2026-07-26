@@ -7,7 +7,7 @@ import { doltCellRows } from '../../src/videobook/dolt-cell-source'
 
 const cell: NotebookCell = {
   id: '01900000-0000-7000-8000-000000000001',
-  type: 'source',
+  type: 'video',
   title: '@vid-source · downloaded clip',
   slot: { row: 1, column: 2 },
   inputs: {

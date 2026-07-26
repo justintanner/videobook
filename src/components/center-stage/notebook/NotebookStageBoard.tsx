@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Clapperboard, ImageIcon, ListFilter, MessageSquareText, Video, View, FileQuestion, Music, User } from 'lucide-react'
+import { Clapperboard, ImageIcon, ListFilter, MessageSquareText, Video, View, Music, User } from 'lucide-react'
 import { ViewportPortal } from '@xyflow/react'
 import {
   NOTEBOOK_STAGE_BAND_HEIGHT,
@@ -31,11 +31,18 @@ interface NotebookStageBoardProps {
 }
 
 const previewIcons: Record<NotebookStepType, typeof View> = {
-  source: FileQuestion,
-  note: MessageSquareText,
-  selects: ListFilter,
-  scene: Clapperboard,
-  asset: FileQuestion,
+  audio: Music,
+  image: ImageIcon,
+  video: Video,
+  character: User,
+  prompt: MessageSquareText,
+  analyze: View,
+  split: ListFilter,
+  generate_video: Clapperboard,
+  generate_image: ImageIcon,
+  generate_audio: Music,
+  concat: Clapperboard,
+  splice: ListFilter,
 }
 
 function stageCode(depth: number): string {
@@ -67,10 +74,10 @@ export function NotebookStageBoard({
     ? parentPosition.x + notebookNodeSizes[parent.type].width / 2
     : 0
   const sourceY = parent && parentPosition
-    ? parentPosition.y + (preview?.type === 'source' ? 0 : notebookNodeSizes[parent.type].height)
+    ? parentPosition.y + (preview?.assetKind ? 0 : notebookNodeSizes[parent.type].height)
     : 0
   const targetX = preview ? preview.position.x + notebookNodeSizes[preview.type].width / 2 : 0
-  const targetY = preview ? preview.position.y + (preview.type === 'source' ? notebookNodeSizes[preview.type].height : 0) : 0
+  const targetY = preview ? preview.position.y + (preview.assetKind ? notebookNodeSizes[preview.type].height : 0) : 0
 
   return (
     <>

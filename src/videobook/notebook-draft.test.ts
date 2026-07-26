@@ -12,7 +12,7 @@ const source: NotebookDocument = {
   name: 'Story',
   cells: [{
     id: '018f7cf5-0d31-7d96-8c0f-800000000002',
-    type: 'asset',
+    type: 'generate_image',
     title: 'Opening',
     slot: { row: 0, column: 0 },
     prompt: 'A moon garden',
@@ -61,7 +61,7 @@ describe('notebook draft conversion', () => {
         {
           ...source.cells[0]!,
           id: '018f7cf5-0d31-7d96-8c0f-800000000005',
-          type: 'asset',
+          type: 'generate_image',
           slot: { row: 2, column: -3 },
         },
       ],
@@ -78,7 +78,7 @@ describe('notebook draft conversion', () => {
       ...source,
       cells: [{
         ...source.cells[0]!,
-        type: 'note',
+        type: 'prompt',
         slot: { row: 9, column: -2 },
       }],
     }
@@ -94,7 +94,7 @@ describe('notebook draft conversion', () => {
     const target = {
       ...source.cells[0]!,
       id: '018f7cf5-0d31-7d96-8c0f-800000000005',
-      type: 'asset' as const,
+      type: 'generate_image' as const,
       slot: { row: 1, column: 1 },
     }
     const connected: NotebookDocument = {
@@ -147,7 +147,7 @@ describe('notebook draft conversion', () => {
     const target = {
       ...source.cells[0]!,
       id: '018f7cf5-0d31-7d96-8c0f-800000000005',
-      type: 'asset' as const,
+      type: 'generate_image' as const,
       slot: { row: 2, column: 0 },
     }
     const fanIn: NotebookDocument = {

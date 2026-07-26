@@ -57,7 +57,7 @@ describe('v2 notebook domain tools', () => {
     const prompt = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
-        type: 'note',
+        type: 'prompt',
         title: 'Opening prompt',
         slot: { row: 0, column: 0 },
         prompt: 'A glowing moon garden',
@@ -66,7 +66,7 @@ describe('v2 notebook domain tools', () => {
     const image = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
-        type: 'asset',
+        type: 'generate_image',
         title: 'Opening image',
         slot: { row: 0, column: 1 },
         prompt: 'A glowing moon garden',
@@ -253,19 +253,19 @@ describe('v2 notebook domain tools', () => {
     }
     const revision = managed.value.engine.head
     const referenceId = managed.value.engine.notebooks.createCell({
-      type: 'note',
+      type: 'prompt',
       title: 'Reference ID',
       slot: { row: 0, column: 0 },
     }).id
     const resultId = managed.value.engine.notebooks.createCell({
-      type: 'note',
+      type: 'prompt',
       title: 'Result ID',
       slot: { row: 0, column: 0 },
     }).id
     const cell = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
-        type: 'selects',
+        type: 'split',
         title: 'Warm interview moments',
         slot: { row: 0, column: 0 },
         references: [{
@@ -304,7 +304,7 @@ describe('v2 notebook domain tools', () => {
       pinned_results: Array<{ id: string; selected_revision: string }>
     }
 
-    expect(cell.type).toBe('selects')
+    expect(cell.type).toBe('split')
     expect(cell.references).toEqual([expect.objectContaining({
       id: referenceId,
       target_id: stream.value.streamId,
@@ -341,7 +341,7 @@ describe('v2 notebook domain tools', () => {
     const image = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
-        type: 'asset',
+        type: 'generate_image',
         title: 'Opening image',
         slot: { row: 0, column: 0 },
         prompt: 'A moonlit garden',

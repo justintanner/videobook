@@ -273,21 +273,43 @@ const screenNavigation: Array<{
 const cellPalette: Array<{
   type: NotebookCellType
   label: string
+  group: 'Media' | 'Text & analysis' | 'Generation' | 'Edit'
   icon: typeof BookOpen
 }> = [
-  { type: 'source', label: 'Source', icon: Video },
-  { type: 'note', label: 'Note', icon: CircleDot },
-  { type: 'selects', label: 'Selects', icon: Film },
-  { type: 'scene', label: 'Scene', icon: Film },
-  { type: 'asset', label: 'Asset', icon: Image },
+  { type: 'audio', label: 'Audio', group: 'Media', icon: AudioWaveform },
+  { type: 'image', label: 'Image', group: 'Media', icon: Image },
+  { type: 'video', label: 'Video', group: 'Media', icon: Video },
+  { type: 'character', label: 'Character', group: 'Media', icon: CircleDot },
+  { type: 'prompt', label: 'Prompt', group: 'Text & analysis', icon: BookOpen },
+  { type: 'analyze', label: 'Analyze', group: 'Text & analysis', icon: Activity },
+  { type: 'generate_video', label: 'Generate video', group: 'Generation', icon: Video },
+  { type: 'generate_image', label: 'Generate image', group: 'Generation', icon: Image },
+  { type: 'generate_audio', label: 'Generate audio', group: 'Generation', icon: AudioWaveform },
+  { type: 'split', label: 'Split', group: 'Edit', icon: Film },
+  { type: 'concat', label: 'Concat', group: 'Edit', icon: Film },
+  { type: 'splice', label: 'Splice', group: 'Edit', icon: Film },
 ]
 
+const cellPaletteGroups = [
+  'Media',
+  'Text & analysis',
+  'Generation',
+  'Edit',
+] as const
+
 const notebookCellTypes = new Set<string>([
-  'source',
-  'note',
-  'selects',
-  'scene',
-  'asset',
+  'audio',
+  'image',
+  'video',
+  'split',
+  'prompt',
+  'character',
+  'analyze',
+  'generate_video',
+  'generate_image',
+  'generate_audio',
+  'concat',
+  'splice',
 ] satisfies NotebookCellType[])
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -308,10 +330,9 @@ function isGenerationCell(
   cell: NotebookDocument['cells'][number],
 ): boolean {
   if (cell.operation === 'rewrite_prompt') return true
-  return cell.type === 'asset'
-    && cell.provider !== undefined
-    && cell.provider !== 'local'
-    && Boolean(cell.tool ?? cell.model ?? cell.operation)
+  return cell.type === 'generate_video'
+    || cell.type === 'generate_image'
+    || cell.type === 'generate_audio'
 }
 
 function isRunnableCell(
@@ -920,10 +941,46 @@ function canvasNodes(
 }
 
 function CellIcon({ kind }: { kind: NotebookCellType }) {
-  if (kind === 'source') return <Video size={14} />
-  if (kind === 'asset') return <Image size={14} />
-  if (kind === 'note') return <CircleDot size={14} />
+  if (kind === 'video' || kind === 'generate_video') return <Video size={14} />
+  if (kind === 'image' || kind === 'generate_image') return <Image size={14} />
+  if (kind === 'audio' || kind === 'generate_audio') return <AudioWaveform size={14} />
+  if (kind === 'prompt') return <BookOpen size={14} />
+  if (kind === 'analyze') return <Activity size={14} />
+  if (kind === 'character') return <CircleDot size={14} />
   return <Film size={14} />
+}
+
+function cellTypeLabel(kind: NotebookCellType): string {
+  return kind.replaceAll('_', ' ').toUpperCase()
+}
+
+function cellSlug(title: string, kind: NotebookCellType): string {
+  const explicit = title.trim().match(/^@[^\s·]+/)?.[0]
+  if (explicit) return explicit
+  const slug = title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+  return `@${slug || kind.replaceAll('_', '-')}`
+}
+
+function emptyCellLabel(data: CanvasCellData): string {
+  if (
+    data.kind === 'generate_video'
+    || data.kind === 'generate_image'
+    || data.kind === 'generate_audio'
+  ) {
+    return data.tool ?? data.model ?? data.operation ?? 'Choose a generation action'
+  }
+  if (data.kind === 'video' || data.kind === 'image' || data.kind === 'audio') {
+    return `Select ${data.kind} media`
+  }
+  if (data.kind === 'character') return 'Select a character'
+  if (data.kind === 'split') return 'Configure a source range'
+  if (data.kind === 'concat') return 'Connect clip:0 and clip:1'
+  if (data.kind === 'splice') return 'Connect first and second'
+  return data.prompt || data.title
 }
 
 const cellSourcePortSides = [
@@ -952,6 +1009,8 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
   const targetConnectionCount = data.targetConnectionCount ?? 0
   const playableVideo = data.asset?.type === 'video' || data.asset?.type === 'final'
   const playableAudio = data.asset?.type === 'audio'
+  const audioCell = data.kind === 'audio' || data.kind === 'generate_audio'
+  const textCell = data.kind === 'prompt' || data.kind === 'analyze'
   const isTopRow = data.slot.row === 0
   const canRun = Boolean(data.operation ?? data.tool ?? data.model)
 
@@ -989,7 +1048,7 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
       ))}
       <section className="cell-node-shell">
         <header className="cell-node-header">
-          <span><CellIcon kind={data.kind} />{data.kind.toUpperCase()}</span>
+          <span><CellIcon kind={data.kind} />{cellTypeLabel(data.kind)}</span>
           {canRun && (
             <button
               type="button"
@@ -1003,10 +1062,12 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
             </button>
           )}
         </header>
-        {playableAudio ? (
+        {audioCell ? (
           <div className="cell-copy cell-copy-audio">
             <AudioWaveform size={38} />
-            <span>Original soundtrack<br />48 kHz · stereo</span>
+            {playableAudio && mediaUrl
+              ? <audio src={mediaUrl} controls preload="metadata" />
+              : <span>{emptyCellLabel(data)}</span>}
           </div>
         ) : mediaUrl || thumbnailUrl ? (
           <div className="cell-media">
@@ -1017,14 +1078,14 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
             )}
           </div>
         ) : (
-          <div className={`cell-copy ${data.kind === 'note' ? 'cell-copy-note' : ''}`}>
-            {data.kind === 'note' ? <p>{data.prompt || data.title}</p> : <Sparkles size={28} />}
-            {data.kind !== 'note' && <span>{data.prompt || data.title}</span>}
+          <div className={`cell-copy ${textCell ? 'cell-copy-text' : ''}`}>
+            {textCell ? <p>{data.prompt || emptyCellLabel(data)}</p> : <Sparkles size={28} />}
+            {!textCell && <span>{emptyCellLabel(data)}</span>}
           </div>
         )}
         <footer className="cell-node-footer">
-          <strong>{data.title}</strong>
-          <strong>{data.status}</strong>
+          <strong>{cellSlug(data.title, data.kind)}</strong>
+          <span className={`cell-status cell-status-${data.status}`}>{data.status}</span>
         </footer>
       </section>
       <Handle
@@ -1577,11 +1638,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return
     }
     const labels: Record<NotebookCellType, string> = {
-      source: 'Source',
-      note: 'Note',
-      selects: 'Selects',
-      scene: 'Scene',
-      asset: 'Asset',
+      audio: '@audio',
+      image: '@image',
+      video: '@video',
+      split: '@split',
+      prompt: '@prompt',
+      character: '@character',
+      analyze: '@analyze',
+      generate_video: '@generate-video',
+      generate_image: '@generate-image',
+      generate_audio: '@generate-audio',
+      concat: '@concat',
+      splice: '@splice',
     }
     setBusy(true)
     try {
@@ -1592,7 +1660,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           type,
           title: labels[type],
           slot,
-          ...(type === 'note' ? { prompt: '' } : {}),
+          ...(type === 'prompt'
+            || type === 'analyze'
+            || type === 'generate_video'
+            || type === 'generate_image'
+            || type === 'generate_audio'
+            ? { prompt: '' }
+            : {}),
         },
       })
       await refreshBookData(bookId, notebook.id)
@@ -3278,22 +3352,27 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     <details className="canvas-add-menu">
                       <summary><Plus size={15} />Add cell</summary>
                       <div>
-                        {cellPalette.map((item) => {
-                          const Icon = item.icon
-                          return (
-                            <button
-                              key={item.type}
-                              type="button"
-                              draggable
-                              disabled={busy}
-                              onDragStart={(event) => event.dataTransfer.setData('application/x-videobook-cell', item.type)}
-                              onDragEnd={() => setPreviewSlot(null)}
-                              onClick={() => void createCell(item.type)}
-                            >
-                              <Icon size={15} /><span>{item.label}</span>
-                            </button>
-                          )
-                        })}
+                        {cellPaletteGroups.map((group) => (
+                          <section key={group} className="canvas-add-group">
+                            <span>{group}</span>
+                            {cellPalette.filter((item) => item.group === group).map((item) => {
+                              const Icon = item.icon
+                              return (
+                                <button
+                                  key={item.type}
+                                  type="button"
+                                  draggable
+                                  disabled={busy}
+                                  onDragStart={(event) => event.dataTransfer.setData('application/x-videobook-cell', item.type)}
+                                  onDragEnd={() => setPreviewSlot(null)}
+                                  onClick={() => void createCell(item.type)}
+                                >
+                                  <Icon size={15} /><span>{item.label}</span>
+                                </button>
+                              )
+                            })}
+                          </section>
+                        ))}
                       </div>
                     </details>
                   </div>
@@ -3437,9 +3516,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     <div className="canvas-welcome-mark"><Sparkles size={22} /></div>
                     <span>EMPTY NOTEBOOK</span>
                     <strong>Build your first notebook path.</strong>
-                    <p>Connect source, note, selects, scene, and asset primitives as the story takes shape.</p>
-                    <button type="button" disabled={busy} onClick={() => void createCell('note')}>
-                      <Plus size={15} />Add first note
+                    <p>Connect media, analysis, generation, and edit cells as the story takes shape.</p>
+                    <button type="button" disabled={busy} onClick={() => void createCell('prompt')}>
+                      <Plus size={15} />Add first prompt
                     </button>
                   </div>
                 )}

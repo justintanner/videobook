@@ -179,7 +179,7 @@ describe('v2 MCP server', () => {
       book_id: book.bookId,
       notebook_id: notebook.id,
       cell: {
-        type: 'note',
+        type: 'prompt',
         title: 'Opening prompt',
         slot: { row: 0, column: 0 },
         prompt: 'A green city at sunrise',
@@ -189,7 +189,7 @@ describe('v2 MCP server', () => {
       book_id: book.bookId,
       notebook_id: notebook.id,
       cell: {
-        type: 'asset',
+        type: 'generate_image',
         title: 'Opening image',
         slot: { row: 0, column: 1 },
         prompt: 'A green city at sunrise',

@@ -2,6 +2,20 @@ import { Trash2 } from 'lucide-react'
 import type { NotebookCell } from 'videobook-engine'
 import { doltCellRows } from '@/videobook/dolt-cell-source'
 
+const localActions = {
+  video: [{ operation: 'preprocess_source', label: 'Preprocess source', tool: 'ffmpeg' }],
+  audio: [{ operation: 'extract_audio', label: 'Extract audio', tool: 'ffmpeg' }],
+  image: [{ operation: 'capture_frame', label: 'Capture frame', tool: 'ffmpeg' }],
+  split: [{ operation: 'split_range', label: 'Split source range', tool: 'ffmpeg' }],
+  prompt: [{ operation: 'rewrite_prompt', label: 'Rewrite prompt', tool: 'rewrite_prompt' }],
+  analyze: [{ operation: 'analyze_source', label: 'Analyze source', tool: 'kie_gemini_analysis' }],
+  concat: [{ operation: 'concat_video', label: 'Concatenate videos', tool: 'ffmpeg' }],
+  splice: [
+    { operation: 'splice_video', label: 'Match or hard join', tool: 'ffmpeg' },
+    { operation: 'smooth_scene_concat', label: 'Smooth crossfade', tool: 'ffmpeg' },
+  ],
+} as const
+
 export type NotebookCellInspectorAsset = {
   artifactId: string
   id: string
@@ -120,6 +134,17 @@ export function NotebookCellInspector({
   onDelete,
 }: NotebookCellInspectorProps) {
   const canRun = Boolean(cell.operation ?? cell.tool ?? cell.model)
+  const textCell = cell.type === 'prompt'
+    || cell.type === 'analyze'
+    || cell.type === 'generate_video'
+    || cell.type === 'generate_image'
+    || cell.type === 'generate_audio'
+  const generationCell = cell.type === 'generate_video'
+    || cell.type === 'generate_image'
+    || cell.type === 'generate_audio'
+  const actions = cell.type in localActions
+    ? localActions[cell.type as keyof typeof localActions]
+    : []
 
   return (
     <div className="inspector-body">
@@ -133,7 +158,7 @@ export function NotebookCellInspector({
           if (title && title !== cell.title) void onUpdate({ title })
         }} />
       </label>
-      {cell.type === 'note' && (
+      {textCell && (
         <label>
           Prompt
           <textarea defaultValue={cell.prompt ?? ''} rows={8} onBlur={(event) => {
@@ -142,6 +167,94 @@ export function NotebookCellInspector({
             }
           }} />
         </label>
+      )}
+      {actions.length > 0 && (
+        <label>
+          Action
+          <select
+            value={cell.operation ?? ''}
+            onChange={(event) => {
+              const action = actions.find((candidate) =>
+                candidate.operation === event.target.value)
+              void onUpdate(action
+                ? {
+                    operation: action.operation,
+                    tool: action.tool,
+                    provider: action.operation === 'analyze_source'
+                      ? 'kie'
+                      : action.operation === 'rewrite_prompt'
+                        ? 'openai'
+                        : 'local',
+                  }
+                : {
+                    operation: undefined,
+                    tool: undefined,
+                    provider: undefined,
+                  })
+            }}
+          >
+            <option value="">No action</option>
+            {actions.map((action) => (
+              <option key={action.operation} value={action.operation}>
+                {action.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {cell.type === 'split' && (
+        <div className="inspector-field-pair">
+          <label>
+            Start seconds
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue={Number(cell.inputs?.startSeconds ?? 0)}
+              onBlur={(event) => void onUpdate({
+                inputs: {
+                  ...(cell.inputs ?? {}),
+                  startSeconds: Number(event.target.value),
+                },
+              })}
+            />
+          </label>
+          <label>
+            End seconds
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue={Number(cell.inputs?.endSeconds ?? 0)}
+              onBlur={(event) => void onUpdate({
+                inputs: {
+                  ...(cell.inputs ?? {}),
+                  endSeconds: Number(event.target.value),
+                },
+              })}
+            />
+          </label>
+        </div>
+      )}
+      {cell.type === 'splice' && cell.operation === 'splice_video' && (
+        <label>
+          Overlap seconds
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={Number(cell.inputs?.overlap ?? 0)}
+            onBlur={(event) => void onUpdate({
+              inputs: {
+                ...(cell.inputs ?? {}),
+                overlap: Number(event.target.value),
+              },
+            })}
+          />
+        </label>
+      )}
+      {generationCell && !cell.tool && !cell.model && (
+        <span className="workspace-notice">Choose a generation tool before running this cell.</span>
       )}
       <label>
         Provider

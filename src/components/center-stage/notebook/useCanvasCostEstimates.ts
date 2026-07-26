@@ -73,7 +73,7 @@ interface StepTuple {
 
 function stepTuple(step: NotebookPlanStep): StepTuple | null {
   const category = generationMediaType(step)
-  if (!category) return null
+  if (!category || category === 'audio') return null
   const model = typeof step.properties.model === 'string' ? step.properties.model : ''
   const provider = typeof step.properties.provider === 'string' ? step.properties.provider : ''
   return { category, model, provider }

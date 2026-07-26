@@ -28,6 +28,8 @@ import {
   CONNECTION_OWNED_PARAMS,
   assetSlugKind,
   generationMediaType,
+  isBoundMediaStep,
+  isTextStep,
   latestAssetId,
   resolveEffectiveValues,
   sanitizeValuesForOption,
@@ -188,11 +190,11 @@ export function NotebookSidebar({
       </aside>
     )
   }
-  if (selected.type === 'note') {
+  if (isTextStep(selected)) {
     const text = typeof selected.properties.text === 'string' ? selected.properties.text : ''
     return (
       <aside className="vc-notebook-sidebar">
-        <LoadoutHeader title="Note" />
+        <LoadoutHeader title={selected.type} />
         <div className="vc-notebook-editor">
           <label htmlFor={`step-text-${selected.id}`}>Prompt</label>
           <textarea
@@ -203,17 +205,43 @@ export function NotebookSidebar({
               updateProperties(definition, selected.id, { text: event.target.value }),
               `text:${selected.id}:prompt`,
             )}
-            placeholder="Write the instruction this notebook will reuse."
+            placeholder={`Configure ${selected.type}.`}
             rows={8}
           />
         </div>
       </aside>
     )
   }
-  if (selected.type === 'source') {
+  if (isBoundMediaStep(selected)) {
     return <AssetSidebar step={selected} definition={definition} mediaItems={mediaItems} onOpenAsset={onOpenAsset} />
   }
-  if (!generationMediaType(selected)) {
+  const category = generationMediaType(selected)
+  if (category === 'audio') {
+    const values = record(selected.properties.values)
+    const prompt = typeof values.prompt === 'string' ? values.prompt : ''
+    return (
+      <aside className="vc-notebook-sidebar">
+        <LoadoutHeader title="generate audio" />
+        <div className="vc-notebook-editor">
+          <label htmlFor={`step-prompt-${selected.id}`}>Prompt</label>
+          <textarea
+            id={`step-prompt-${selected.id}`}
+            className="vc-notebook-text"
+            value={prompt}
+            onChange={(event) => updateDefinition(
+              updateProperties(definition, selected.id, {
+                values: { ...values, prompt: event.target.value },
+              }),
+              `text:${selected.id}:prompt`,
+            )}
+            placeholder="Describe the audio to generate."
+            rows={8}
+          />
+        </div>
+      </aside>
+    )
+  }
+  if (!category) {
     return (
       <aside className="vc-notebook-sidebar">
         <LoadoutHeader title={selected.type} />
@@ -227,6 +255,7 @@ export function NotebookSidebar({
       mcpState={mcpState}
       definition={definition}
       step={selected}
+      category={category}
       mediaItems={mediaItems}
       costLabel={stepCosts.get(selected.id) ?? null}
       running={runningStepIds.has(selected.id)}
@@ -257,7 +286,7 @@ function AssetSidebar({
   const uses = definition.sequence.filter((candidate) => stepInputs(candidate).includes(step.id)).length
   return (
     <aside className="vc-notebook-sidebar">
-      <LoadoutHeader title="Source" />
+      <LoadoutHeader title={step.type} />
       <div className="vc-notebook-editor">
         {item?.thumbnailSrc ? <img className="vc-notebook-asset-preview" src={item.thumbnailSrc} alt="" /> : <ImageIcon />}
         <code>{slug}</code>
@@ -276,6 +305,7 @@ interface GenerationSidebarProps {
   mcpState: UseMcpResult['state']
   definition: NotebookPlanDefinition
   step: NotebookPlanStep
+  category: 'image' | 'video'
   mediaItems: MediaItem[]
   costLabel: string | null
   running: boolean
@@ -293,6 +323,7 @@ function GenerationSidebar({
   mcpState,
   definition,
   step,
+  category,
   mediaItems,
   costLabel,
   running,
@@ -303,7 +334,6 @@ function GenerationSidebar({
   onRun,
   onManageCharacters,
 }: GenerationSidebarProps) {
-  const category = generationMediaType(step) ?? 'image'
   const model = typeof step.properties.model === 'string' ? step.properties.model : ''
   const provider = typeof step.properties.provider === 'string' ? step.properties.provider : ''
   const preview = useGenPreview({ category, bookId, callTool, model, provider })
@@ -786,14 +816,14 @@ function InputList({
       {inputs.map((id) => {
         const source = sources.get(id)
         if (!source) return null
-        const slug = source.type === 'source'
+        const slug = isBoundMediaStep(source)
           ? typeof source.properties.slug === 'string' ? source.properties.slug : ''
           : latestAssetId(source) ? `@${latestAssetId(source)}` : ''
         const item = slug ? mediaItems.find((media) => media.id === slug.replace(/^@/, '')) : null
-        const kind = source.type === 'note' ? null : assetSlugKind(slug)
-        const label = source.type === 'note'
+        const kind = isTextStep(source) ? null : assetSlugKind(slug)
+        const label = isTextStep(source)
           ? (typeof source.properties.text === 'string' ? source.properties.text : '').slice(0, 48) || 'Empty note'
-          : source.type === 'source'
+          : isBoundMediaStep(source)
             ? slug
             : `${typeof source.properties.model === 'string' ? source.properties.model : source.type} · ${slug || 'no output'}`
 
@@ -834,8 +864,8 @@ function InputList({
                   <option key={opt.param} value={opt.param}>{opt.param}</option>
                 ))}
               </select>
-            ) : source.type === 'note' ? (
-              <span className="vc-notebook-route-fixed text-xs ml-auto opacity-60">note</span>
+            ) : isTextStep(source) ? (
+              <span className="vc-notebook-route-fixed text-xs ml-auto opacity-60">text</span>
             ) : null}
  <button type="button" title="Disconnect" onClick={() => onDisconnect(id, step.id)}><X className="size-4" /></button>
           </div>

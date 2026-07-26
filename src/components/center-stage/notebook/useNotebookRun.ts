@@ -64,7 +64,7 @@ export async function submitNotebookGeneration(
     onGenerationLifecycle,
   } = args
   const category = generationMediaType(step)
-  if (!category) throw new Error('Only generation asset cells can run.')
+  if (!category || category === 'audio') throw new Error('This canvas runner supports generate_image and generate_video cells.')
   const requestId = createGenerationRequestId(category)
   const storedMode = typeof step.properties.mode === 'string' ? step.properties.mode : null
   const modeKey = option.modes

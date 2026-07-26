@@ -756,7 +756,7 @@ export function semanticSearchDefs(
     },
     {
       name: "pin_search_moment",
-      description: "Pin a revision-stable search moment into a notebook selects cell",
+      description: "Pin a revision-stable search moment into a notebook media selection cell",
       scope: "book",
       schema: {
         ...bookSchema,
@@ -813,9 +813,9 @@ export function semanticSearchDefs(
                 ),
               };
             }
-            pinnedCell = {
+            const created: NotebookCell = {
               id: cellId,
-              type: "selects",
+              type: hit.location.kind === "timed" ? "split" : "image",
               title: String(args.title),
               slot: isSlot(args.slot)
                 ? args.slot
@@ -831,10 +831,26 @@ export function semanticSearchDefs(
                 ordinal: 0,
               }],
               pinnedResults: [pinnedResult],
+              inputs: {
+                selectionKind: "semantic-search",
+                ...(hit.location.kind === "timed"
+                  ? {
+                      startSeconds: hit.location.range.startTick
+                        * hit.location.range.timeBase.numerator
+                        / hit.location.range.timeBase.denominator,
+                      endSeconds: (
+                        hit.location.range.startTick
+                        + hit.location.range.durationTicks
+                      ) * hit.location.range.timeBase.numerator
+                        / hit.location.range.timeBase.denominator,
+                    }
+                  : {}),
+              },
             };
+            pinnedCell = created;
             return {
               ...notebook,
-              cells: [...notebook.cells, pinnedCell],
+              cells: [...notebook.cells, created],
             };
           },
           { cellId, artifactId: hit.artifactId },
