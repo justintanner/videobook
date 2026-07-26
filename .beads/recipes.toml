@@ -6,3 +6,10 @@
     description = ""
     global_path = ""
     project_path = ""
+  [recipes.kimi]
+    name = "kimi"
+    path = ".kimi-code/AGENTS.md"
+    type = "file"
+    description = ""
+    global_path = ""
+    project_path = ""
