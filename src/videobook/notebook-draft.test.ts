@@ -112,6 +112,7 @@ describe('notebook draft conversion', () => {
       'route-right-1',
     ])
     expect(notebookNodes(connected)[1]?.data.targetInputs).toEqual(['reference-video'])
+    expect(notebookNodes(connected)[1]?.data.targetConnectionCount).toBe(1)
     expect(notebookEdges(connected)[0]).toMatchObject({
       sourceHandle: 'route-right-1',
       targetHandle: 'reference-video',
@@ -180,5 +181,9 @@ describe('notebook draft conversion', () => {
     expect(rendered.filter((edge) => edge.markerEnd)).toHaveLength(1)
     expect(rendered.find((edge) => edge.markerEnd)?.id).toBe(fanIn.edges[0]?.id)
     expect(reversed.find((edge) => edge.markerEnd)?.id).toBe(fanIn.edges[0]?.id)
+    expect(
+      notebookNodes(fanIn).find((node) => node.id === target.id)
+        ?.data.targetConnectionCount,
+    ).toBe(2)
   })
 })

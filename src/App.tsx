@@ -952,6 +952,7 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
   const mediaUrl = data.asset?.mediaUrl
   const thumbnailUrl = data.asset?.thumbnailUrl
   const targetInputs = data.targetInputs?.length ? data.targetInputs : ['input']
+  const targetConnectionCount = data.targetConnectionCount ?? 0
   const playableVideo = data.asset?.type === 'video' || data.asset?.type === 'final'
   const isTopRow = data.slot.row === 0
   const canRun = data.kind === 'image'
@@ -987,6 +988,15 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
           style={{ left: `${((index + 1) / (targetInputs.length + 1)) * 100}%` }}
         />
       ))}
+      {targetConnectionCount > 1 && (
+        <span
+          className="cell-target-connection-count"
+          aria-label={`${targetConnectionCount} connections`}
+          data-connection-count={targetConnectionCount}
+        >
+          {targetConnectionCount}
+        </span>
+      )}
       {cellSourceRoutePorts.map((port) => (
         <Handle
           key={port.id}

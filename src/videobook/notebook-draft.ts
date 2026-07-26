@@ -25,17 +25,23 @@ export interface NotebookCellData extends Record<string, unknown> {
   outputArtifactId?: string
   inputs?: Record<string, unknown>
   targetInputs?: string[]
+  targetConnectionCount?: number
   sourcePorts?: string[]
 }
 
 export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCellData>> {
   const routes = notebookBusRiverRoutes(document)
   const targetInputs = new Map<string, string[]>()
+  const targetConnectionCounts = new Map<string, number>()
   const sourcePorts = new Map<string, string[]>()
   for (const edge of document.edges) {
     const inputs = targetInputs.get(edge.target) ?? []
     if (!inputs.includes(edge.targetInput)) inputs.push(edge.targetInput)
     targetInputs.set(edge.target, inputs)
+    targetConnectionCounts.set(
+      edge.target,
+      (targetConnectionCounts.get(edge.target) ?? 0) + 1,
+    )
     const route = routes.get(edge.id) ?? defaultNotebookBusRiverRoute
     const port = notebookSourcePortId(route.sourceSide, route.sourcePortIndex)
     const ports = sourcePorts.get(edge.source) ?? []
@@ -54,6 +60,7 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
         slot: cell.slot,
         status: 'ready',
         targetInputs: targetInputs.get(cell.id) ?? ['input'],
+        targetConnectionCount: targetConnectionCounts.get(cell.id) ?? 0,
         sourcePorts: sourcePorts.get(cell.id) ?? [],
         ...(cell.prompt === undefined ? {} : { prompt: cell.prompt }),
         ...(cell.model === undefined ? {} : { model: cell.model }),
