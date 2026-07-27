@@ -11,10 +11,52 @@
       name="description"
       content="Notebook-first multimodal creation with revisioned images, video, prompts, characters, and scenes"
     />
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        background: #030907;
+      }
+
+      #startup-shell {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-content: center;
+        gap: 10px;
+        color: #557764;
+        background: #030907;
+        font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+        letter-spacing: 0.08em;
+        text-align: center;
+      }
+
+      #startup-shell strong {
+        color: #72e7aa;
+        font-family: 'Rajdhani', sans-serif;
+        font-size: 24px;
+        letter-spacing: 0.16em;
+      }
+
+      #startup-shell span {
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+
+      #root:not(:empty) + #startup-shell {
+        display: none;
+      }
+    </style>
     <title>VIDEOBOOK</title>
   </head>
   <body>
     <div id="root"></div>
+    <div id="startup-shell" role="status" aria-live="polite">
+      <strong>VIDEOBOOK</strong>
+      <span>Loading workspace…</span>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

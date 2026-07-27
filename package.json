@@ -7,9 +7,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "concurrently -n client,server \"wait-on tcp:127.0.0.1:3001 && vite\" \"npm run dev:server\"",
-    "dev:local": "concurrently -n client,server \"wait-on tcp:127.0.0.1:3001 && vite\" \"VIDEOBOOK_DEV_FIXTURES=1 tsx watch --exclude='**/node_modules/**' --exclude='**/dist/**' server/src/index.ts\"",
-    "dev:client": "vite",
+    "dev": "concurrently -n client,server \"wait-on tcp:127.0.0.1:3001 && vite --force\" \"npm run dev:server\"",
+    "dev:local": "concurrently -n client,server \"wait-on tcp:127.0.0.1:3001 && vite --force\" \"VIDEOBOOK_DEV_FIXTURES=1 tsx watch --exclude='**/node_modules/**' --exclude='**/dist/**' server/src/index.ts\"",
+    "dev:client": "vite --force",
     "dev:server": "VIDEOBOOK_DEV_FIXTURES=1 op run --env-file=.env.tpl -- tsx watch --exclude='**/node_modules/**' --exclude='**/dist/**' server/src/index.ts",
     "start:server": "node server/dist/index.js",
     "start:client": "vite preview --host 127.0.0.1",
