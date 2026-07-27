@@ -59,8 +59,16 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('role="tab"')
     expect(html).toContain('class="inspector-slug-field"')
     expect(html).toContain('value="vid-source"')
+    expect(html).toContain('readOnly=""')
+    expect(html).toContain('title="Click to edit slug"')
+    expect(html).toContain('aria-label="Edit slug"')
+    expect(html).not.toContain('aria-label="Save slug"')
+    expect(html).toContain('class="inspector-media-field-label">VIDEO</span>')
     expect(html).toContain('<h3>Inputs</h3>')
     expect(html.indexOf('class="inspector-slug-field"')).toBeLessThan(
+      html.indexOf('class="inspector-media-field-label"'),
+    )
+    expect(html.indexOf('class="inspector-media-field-label"')).toBeLessThan(
       html.indexOf('aria-label="Cell output media"'),
     )
     expect(html.indexOf('aria-label="Cell output media"')).toBeLessThan(
@@ -69,7 +77,8 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('Dolt source')
     expect(html).toContain('inspector-clear-slot-button')
     expect(html).toContain('Clear slot')
-    expect(html).not.toContain('Delete')
+    expect(html).toContain('inspector-delete-button')
+    expect(html).toContain('Delete')
     expect(html).not.toContain('completed')
   })
 
@@ -105,7 +114,33 @@ describe('NotebookCellInspector', () => {
       html.indexOf('<h3>Inputs</h3>'),
     )
     expect(html).toContain('inspector-clear-slot-button')
+    expect(html).toContain('inspector-delete-button')
     expect(html).toContain('disabled=""')
+  })
+
+  it('shows passive cell deletion progress', () => {
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell,
+      cells: [cell],
+      edges: [],
+      asset: undefined,
+      status: 'completed',
+      busy: true,
+      clearing: false,
+      deleting: true,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('aria-busy="true"')
+    expect(html).toContain('Deleting…')
+    expect(html).toContain('inspector-delete-button')
   })
 
   it('renders fullscreen video with playback and close controls only', () => {

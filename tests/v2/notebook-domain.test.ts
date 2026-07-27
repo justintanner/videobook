@@ -285,6 +285,20 @@ describe('v2 notebook domain tools', () => {
     })) as { edges: Array<{ target: string; targetInput: string }> }
     expect(cleared.edges.some((edge) =>
       edge.target === videoOutput.id && edge.targetInput === 'media')).toBe(false)
+
+    resultJson(await invoke('delete_notebook_cell', {
+      notebook_id: notebookId,
+      cell_id: sourceVideo.id,
+    }))
+    const deleted = resultJson(await invoke('get_notebook', {
+      notebook_id: notebookId,
+    })) as {
+      cells: Array<{ id: string }>
+      edges: Array<{ source: string; target: string }>
+    }
+    expect(deleted.cells.some((cell) => cell.id === sourceVideo.id)).toBe(false)
+    expect(deleted.edges.some((edge) =>
+      edge.source === sourceVideo.id || edge.target === sourceVideo.id)).toBe(false)
   })
 
   it('cancels a queued persistent job explicitly', async () => {

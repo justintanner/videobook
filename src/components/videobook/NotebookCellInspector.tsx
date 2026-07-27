@@ -1,4 +1,5 @@
-import { CircleX, Maximize2, Trash2 } from 'lucide-react'
+import { Check, CircleX, Maximize2, Pencil, Trash2, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import type { NotebookCell, NotebookEdge } from 'videobook-engine'
 import {
   doltCellDisplayValue,
@@ -254,22 +255,113 @@ function InputSources({
 
 function SlugField({
   cell,
+  busy,
   onUpdate,
 }: {
   cell: NotebookCell
+  busy: boolean
   onUpdate: (patch: Record<string, unknown>) => Promise<void>
 }) {
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [draft, setDraft] = useState(cell.slug)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!editing) return
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [editing])
+
+  const beginEditing = () => {
+    if (editing || busy || saving) return
+    setDraft(cell.slug)
+    setEditing(true)
+  }
+  const cancel = () => {
+    setDraft(cell.slug)
+    setEditing(false)
+  }
+  const save = async () => {
+    const slug = draft.trim()
+    if (!slug || slug === cell.slug) {
+      cancel()
+      return
+    }
+    setSaving(true)
+    try {
+      await onUpdate({ slug })
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
-    <label className="inspector-slug-field">
-      Slug
-      <span>
-        @
-        <input defaultValue={cell.slug} onBlur={(event) => {
-          const slug = event.target.value.trim()
-          if (slug && slug !== cell.slug) void onUpdate({ slug })
-        }} />
-      </span>
-    </label>
+    <div className="inspector-slug-field">
+      <label htmlFor={`inspector-slug-${cell.id}`}>Slug</label>
+      <form
+        className={`inspector-slug-control${editing ? ' editing' : ''}`}
+        aria-busy={saving}
+        onSubmit={(event) => {
+          event.preventDefault()
+          void save()
+        }}
+      >
+        <span className="inspector-slug-prefix" aria-hidden="true">@</span>
+        <input
+          ref={inputRef}
+          id={`inspector-slug-${cell.id}`}
+          value={editing ? draft : cell.slug}
+          readOnly={!editing}
+          title={editing ? undefined : 'Click to edit slug'}
+          autoComplete="off"
+          spellCheck={false}
+          disabled={busy || saving}
+          onClick={beginEditing}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return
+            event.preventDefault()
+            cancel()
+          }}
+        />
+        {editing ? (
+          <>
+            <button
+              type="submit"
+              className="inspector-slug-action inspector-slug-save"
+              aria-label="Save slug"
+              title="Save slug"
+              disabled={busy || saving || !draft.trim()}
+            >
+              <Check size={16} />
+            </button>
+            <button
+              type="button"
+              className="inspector-slug-action"
+              aria-label="Cancel slug edit"
+              title="Cancel slug edit"
+              disabled={busy || saving}
+              onClick={cancel}
+            >
+              <X size={16} />
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="inspector-slug-action"
+            aria-label="Edit slug"
+            title="Edit slug"
+            disabled={busy}
+            onClick={beginEditing}
+          >
+            <Pencil size={15} />
+          </button>
+        )}
+      </form>
+    </div>
   )
 }
 
@@ -328,9 +420,11 @@ function MediaCellInspector({
   asset,
   busy,
   clearing,
+  deleting,
   onUpdate,
   onSetInput,
   onClearSlot,
+  onDelete,
   onOpenFullscreen,
 }: Pick<
   NotebookCellInspectorProps,
@@ -340,9 +434,11 @@ function MediaCellInspector({
   | 'asset'
   | 'busy'
   | 'clearing'
+  | 'deleting'
   | 'onUpdate'
   | 'onSetInput'
   | 'onClearSlot'
+  | 'onDelete'
   | 'onOpenFullscreen'
 >) {
   const canClear = Boolean(cell.outputArtifactId)
@@ -351,7 +447,10 @@ function MediaCellInspector({
   return (
     <div className="inspector-body inspector-media-body">
       <div className="inspector-media-content">
-        <SlugField cell={cell} onUpdate={onUpdate} />
+        <SlugField cell={cell} busy={busy} onUpdate={onUpdate} />
+        <span className="inspector-media-field-label">
+          {cell.type.replaceAll('_', ' ').toUpperCase()}
+        </span>
         {asset ? (
           <NotebookCellMedia
             asset={asset}
@@ -380,6 +479,7 @@ function MediaCellInspector({
           clearing={clearing}
           onClearSlot={onClearSlot}
         />
+        <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
       </div>
     </div>
   )
@@ -420,9 +520,11 @@ export function NotebookCellInspector({
         asset={asset}
         busy={busy}
         clearing={clearing}
+        deleting={deleting}
         onUpdate={onUpdate}
         onSetInput={onSetInput}
         onClearSlot={onClearSlot}
+        onDelete={onDelete}
         onOpenFullscreen={onOpenFullscreen}
       />
     )
@@ -445,7 +547,7 @@ export function NotebookCellInspector({
 
   return (
     <div className="inspector-body">
-      <SlugField cell={cell} onUpdate={onUpdate} />
+      <SlugField cell={cell} busy={busy} onUpdate={onUpdate} />
       {statusLabel && (
         <span className="workspace-notice inspector-cell-status">{statusLabel}</span>
       )}

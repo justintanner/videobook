@@ -6,6 +6,7 @@ import { MediaLibraryAssetPreview } from '../../src/components/videobook/MediaLi
 describe('MediaLibraryAssetPreview', () => {
   it('uses video markup instead of treating an MP4 as an image', () => {
     const html = renderToStaticMarkup(createElement(MediaLibraryAssetPreview, {
+      eager: true,
       asset: {
         type: 'video',
         mediaUrl: '/files/book/vid-source/original.mp4',
@@ -18,6 +19,22 @@ describe('MediaLibraryAssetPreview', () => {
     expect(html).toContain('src="/files/book/vid-source/original.mp4"')
     expect(html).toContain('preload="metadata"')
     expect(html).not.toContain('<img')
+  })
+
+  it('defers video sources while preserving preview geometry by default', () => {
+    const html = renderToStaticMarkup(createElement(MediaLibraryAssetPreview, {
+      asset: {
+        type: 'video',
+        mediaUrl: '/files/book/vid-source/original.mp4',
+        thumbnailUrl: null,
+        duration: 30,
+      },
+    }))
+
+    expect(html).toContain('media-library-asset-preview')
+    expect(html).toContain('0:30')
+    expect(html).not.toContain('<video')
+    expect(html).not.toContain('/files/book/vid-source/original.mp4')
   })
 
   it('prefers image thumbnails and keeps image media in img elements', () => {
