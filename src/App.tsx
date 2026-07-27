@@ -2339,7 +2339,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   const updateCell = async (patch: Record<string, unknown>) => {
-    if (!bookId || !notebook || !selectedCell) return
+    if (!bookId || !notebook || !selectedCell) return false
     setBusy(true)
     try {
       await call('update_notebook_cell', {
@@ -2350,8 +2350,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
       await refreshNotebook(bookId, notebook.id)
       setNotice('Cell saved')
+      return true
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error))
+      return false
     } finally {
       setBusy(false)
     }

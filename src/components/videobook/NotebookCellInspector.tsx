@@ -21,32 +21,25 @@ import {
   notebookCellInspectorActionLabel,
   type NotebookAudioInfo,
 } from '@/videobook/notebook-cell-presentation'
+import {
+  persistAndRunNotebookCell,
+  type NotebookCellUpdate,
+} from '@/videobook/notebook-cell-actions'
 import { RichJson } from './RichJson'
 
-const localActions = {
-  extract_audio: [{ operation: 'extract_audio', label: 'Extract audio', tool: 'ffmpeg' }],
-  split_video: [{ operation: 'split_range', label: 'Split video', tool: 'ffmpeg' }],
-  prompt: [{ operation: 'rewrite_prompt', label: 'Rewrite prompt', tool: 'rewrite_prompt' }],
-  analyze: [{ operation: 'analyze_source', label: 'Analyze source', tool: 'kie_gemini_analysis' }],
-  concat: [{ operation: 'concat_video', label: 'Concatenate videos', tool: 'ffmpeg' }],
-  splice: [
-    { operation: 'splice_video', label: 'Match or hard join', tool: 'ffmpeg' },
-    { operation: 'smooth_scene_concat', label: 'Smooth crossfade', tool: 'ffmpeg' },
-  ],
-} as const
+const actionCellTypes = new Set<NotebookCell['type']>([
+  'extract_audio',
+  'split_video',
+  'prompt',
+  'analyze',
+  'concat',
+  'splice',
+])
 
 function isActionCellType(
   type: NotebookCell['type'],
-): type is keyof typeof localActions {
-  return type in localActions
-}
-
-type LocalAction = (typeof localActions)[keyof typeof localActions][number]
-
-function actionsForCellType(
-  type: NotebookCell['type'],
-): readonly LocalAction[] {
-  return isActionCellType(type) ? localActions[type] : []
+): boolean {
+  return actionCellTypes.has(type)
 }
 
 type CellFormDraft = {
@@ -178,7 +171,7 @@ type NotebookCellInspectorProps = {
   clearing: boolean
   deleting: boolean
   sourceVisible: boolean
-  onUpdate: (patch: Record<string, unknown>) => Promise<void>
+  onUpdate: NotebookCellUpdate
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
   onRun: (cellId: string) => Promise<void>
   onClearSlot: () => Promise<void>
@@ -244,7 +237,10 @@ function NotebookCellMedia({
   if (!previewUrl) return null
 
   return (
-    <section className="inspector-cell-preview" aria-label="Cell output media">
+    <section
+      className={`inspector-cell-preview${isAudio ? ' inspector-cell-preview-audio' : ''}`}
+      aria-label="Cell output media"
+    >
       <div className="inspector-cell-media">
         {isVideo && mediaUrl ? (
           <video
@@ -403,7 +399,7 @@ function SlugField({
 }: {
   cell: NotebookCell
   busy: boolean
-  onUpdate: (patch: Record<string, unknown>) => Promise<void>
+  onUpdate: NotebookCellInspectorProps['onUpdate']
 }) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -663,14 +659,12 @@ function ExecutableCellInspector({
     || cell.type === 'generate_audio'
   const previewCell = cell.type === 'character' || generationCell
   const actionCell = isActionCellType(cell.type)
-  const actions = actionsForCellType(cell.type)
-  const selectedAction = actions.find((candidate) =>
-    candidate.operation === cell.operation) ?? actions[0]
   const dirty = cellFormIsDirty(cell, draft)
   const valid = cellFormIsValid(cell, draft)
   const runLabel = action
     ? notebookCellInspectorActionLabel(cell.type, action.label)
     : null
+  const saveOnRun = actionCell && Boolean(runLabel)
 
   const updateDraft = (field: keyof CellFormDraft, value: string) => {
     setDraft((current) => ({ ...current, [field]: value }))
@@ -680,6 +674,22 @@ function ExecutableCellInspector({
     setSaving(true)
     try {
       await onUpdate(cellFormPatch(cell, draft))
+    } finally {
+      setSaving(false)
+    }
+  }
+  const saveAndRun = async () => {
+    if (!saveOnRun || busy || action?.disabled || !valid) return
+    setSaving(true)
+    try {
+      await persistAndRunNotebookCell({
+        cellId: cell.id,
+        dirty,
+        valid,
+        patch: cellFormPatch(cell, draft),
+        onUpdate,
+        onRun,
+      })
     } finally {
       setSaving(false)
     }
@@ -701,6 +711,10 @@ function ExecutableCellInspector({
         aria-busy={saving}
         onSubmit={(event) => {
           event.preventDefault()
+          if (saveOnRun) {
+            void saveAndRun()
+            return
+          }
           void save()
         }}
       >
@@ -713,13 +727,6 @@ function ExecutableCellInspector({
               onChange={(event) => updateDraft('prompt', event.target.value)}
             />
           </label>
-        )}
-        {selectedAction && (
-          <div className="inspector-fixed-action" aria-label="Action type">
-            <span>Action</span>
-            <strong>{selectedAction.label}</strong>
-            <small>Cell type is fixed</small>
-          </div>
         )}
         {cell.type === 'split_video' && (
           <div className="inspector-field-pair">
@@ -806,30 +813,49 @@ function ExecutableCellInspector({
             <CircleAlert size={14} />
             <span>
               {valid
-                ? 'Unsaved changes'
-                : 'Check timing values before saving'}
+                ? saveOnRun
+                  ? 'Changes apply when this action runs'
+                  : 'Unsaved changes'
+                : saveOnRun
+                  ? 'Check timing values before running'
+                  : 'Check timing values before saving'}
             </span>
           </div>
         )}
-        <button
-          type="submit"
-          className="inspector-save-button"
-          disabled={busy || saving || !dirty || !valid}
-        >
-          <Save size={15} />
-          <span>{saving ? 'Saving…' : 'Save changes'}</span>
-        </button>
+        {!saveOnRun && (
+          <button
+            type="submit"
+            className="inspector-save-button"
+            disabled={busy || saving || !dirty || !valid}
+          >
+            <Save size={15} />
+            <span>{saving ? 'Saving…' : 'Save changes'}</span>
+          </button>
+        )}
       </form>
       <div className="inspector-cell-actions">
         {action && runLabel && (
           <button
             type="button"
             className="inspector-run-action"
-            title={dirty ? 'Save changes before running' : undefined}
-            onClick={() => void onRun(cell.id)}
-            disabled={busy || action.disabled || dirty}
+            aria-busy={saveOnRun && saving}
+            title={!saveOnRun && dirty ? 'Save changes before running' : undefined}
+            onClick={() => {
+              if (saveOnRun) {
+                void saveAndRun()
+                return
+              }
+              void onRun(cell.id)
+            }}
+            disabled={
+              busy
+              || saving
+              || action.disabled
+              || !valid
+              || (!saveOnRun && dirty)
+            }
           >
-            {runLabel}
+            {saveOnRun && saving ? 'Applying…' : runLabel}
           </button>
         )}
         <div className="inspector-delete-row">

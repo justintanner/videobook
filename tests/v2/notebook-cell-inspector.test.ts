@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { NotebookCell } from 'videobook-engine'
 import { NotebookCellInspector } from '../../src/components/videobook/NotebookCellInspector'
 import { NotebookMediaFullscreen } from '../../src/components/videobook/NotebookMediaFullscreen'
+import { persistAndRunNotebookCell } from '../../src/videobook/notebook-cell-actions'
 import {
   doltCellDisplayValue,
   doltCellRows,
@@ -82,6 +83,56 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('completed')
   })
 
+  it('marks audio output for a compact media preview', () => {
+    const audioCell: NotebookCell = {
+      ...cell,
+      type: 'audio',
+      slug: 'aud-source',
+      inputs: {
+        audioRole: 'continuous-source',
+      },
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: audioCell,
+      cells: [audioCell],
+      edges: [],
+      asset: {
+        artifactId: audioCell.outputArtifactId!,
+        id: 'aud-source',
+        type: 'audio',
+        mediaUrl: '/files/aud-source/original.m4a',
+        thumbnailUrl: null,
+        width: null,
+        height: null,
+        duration: 60.01,
+        audioInfo: {
+          channelLayout: 'stereo',
+          channels: 2,
+          codec: 'aac',
+          durationSeconds: 60.01,
+          sampleRateHz: 48_000,
+        },
+      },
+      status: 'completed',
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('class="inspector-cell-preview inspector-cell-preview-audio"')
+    expect(html).toContain('<audio')
+    expect(html).toContain('/files/aud-source/original.m4a')
+    expect(html).toContain('Audio output · 1:00.01 · AAC · 48 kHz · stereo')
+  })
+
   it('keeps inputs visible beneath a compact pending preview', () => {
     const pendingCell: NotebookCell = {
       ...cell,
@@ -143,19 +194,23 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('inspector-delete-button')
   })
 
-  it('renders executable cells as explicit clean forms with structured actions', () => {
-    const extractCell: NotebookCell = {
+  it('renders action cells with one save-and-run control', () => {
+    const splitCell: NotebookCell = {
       ...cell,
-      type: 'extract_audio',
-      slug: 'extract-audio-source',
-      operation: 'extract_audio',
+      type: 'split_video',
+      slug: 'split-video-02',
+      operation: 'split_range',
       provider: 'local',
       tool: 'ffmpeg',
+      inputs: {
+        startSeconds: 15,
+        endSeconds: 30,
+      },
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
       notebookId: '01900000-0000-7000-8000-000000000003',
-      cell: extractCell,
-      cells: [extractCell],
+      cell: splitCell,
+      cells: [splitCell],
       edges: [],
       asset: undefined,
       status: 'completed',
@@ -173,21 +228,82 @@ describe('NotebookCellInspector', () => {
 
     expect(html).toContain('inspector-executable-body')
     expect(html).toContain('class="inspector-cell-form"')
-    expect(html).toContain('class="inspector-save-button" disabled=""')
-    expect(html).toContain('Save changes')
+    expect(html).not.toContain('class="inspector-save-button"')
+    expect(html).not.toContain('Save changes')
     expect(html).not.toContain('Unsaved changes')
-    expect(html).toContain('aria-label="Action type"')
-    expect(html).toContain('Extract audio')
-    expect(html).toContain('Cell type is fixed')
+    expect(html).not.toContain('aria-label="Action type"')
+    expect(html).not.toContain('Cell type is fixed')
     expect(html).not.toContain('<select')
     expect(html).not.toContain('placeholder="Provider"')
     expect(html).not.toContain('placeholder="Model"')
     expect(html).not.toContain('placeholder="Operation"')
     expect(html).not.toContain('placeholder="Tool"')
-    expect(html).toContain('Extract again')
+    expect(html).toContain('Start seconds')
+    expect(html).toContain('value="15"')
+    expect(html).toContain('End seconds')
+    expect(html).toContain('value="30"')
+    expect(html).toContain('Split again')
     expect(html).toContain('Delete cell')
-    expect(html.indexOf('Extract again')).toBeLessThan(html.indexOf('Delete cell'))
+    expect(html.indexOf('Split again')).toBeLessThan(html.indexOf('Delete cell'))
     expect(html).not.toContain('completed')
+  })
+
+  it('persists dirty action fields before running', async () => {
+    const calls: string[] = []
+    const result = await persistAndRunNotebookCell({
+      cellId: 'split-cell',
+      dirty: true,
+      valid: true,
+      patch: {
+        inputs: {
+          startSeconds: 15,
+          endSeconds: 30,
+        },
+      },
+      onUpdate: async () => {
+        calls.push('update')
+        return true
+      },
+      onRun: async () => {
+        calls.push('run')
+      },
+    })
+
+    expect(result).toBe(true)
+    expect(calls).toEqual(['update', 'run'])
+  })
+
+  it('does not run an action when validation or persistence fails', async () => {
+    const calls: string[] = []
+    const invalid = await persistAndRunNotebookCell({
+      cellId: 'split-cell',
+      dirty: true,
+      valid: false,
+      patch: {},
+      onUpdate: async () => {
+        calls.push('invalid-update')
+      },
+      onRun: async () => {
+        calls.push('invalid-run')
+      },
+    })
+    const failedSave = await persistAndRunNotebookCell({
+      cellId: 'split-cell',
+      dirty: true,
+      valid: true,
+      patch: {},
+      onUpdate: async () => {
+        calls.push('failed-update')
+        return false
+      },
+      onRun: async () => {
+        calls.push('failed-run')
+      },
+    })
+
+    expect(invalid).toBe(false)
+    expect(failedSave).toBe(false)
+    expect(calls).toEqual(['failed-update'])
   })
 
   it('renders fullscreen video with playback and close controls only', () => {
