@@ -58,7 +58,7 @@ describe('v2 notebook domain tools', () => {
       notebook_id: notebookId,
       cell: {
         type: 'prompt',
-        title: 'Opening prompt',
+        slug: 'prompt-opening',
         slot: { row: 0, column: 0 },
         prompt: 'A glowing moon garden',
       },
@@ -67,7 +67,7 @@ describe('v2 notebook domain tools', () => {
       notebook_id: notebookId,
       cell: {
         type: 'generate_image',
-        title: 'Opening image',
+        slug: 'generate-image-opening',
         slot: { row: 0, column: 1 },
         prompt: 'A glowing moon garden',
         model: 'generate_kie_gpt_image_2_text_to_image',
@@ -83,7 +83,7 @@ describe('v2 notebook domain tools', () => {
     resultJson(await invoke('update_notebook_cell', {
       notebook_id: notebookId,
       cell_id: image.id,
-      cell: { title: 'Moon garden image', slot: { row: 1, column: 0 } },
+      cell: { slug: 'generate-image-moon-garden', slot: { row: 1, column: 0 } },
     }))
     resultJson(await invoke('move_notebook_cells', {
       notebook_id: notebookId,
@@ -94,12 +94,12 @@ describe('v2 notebook domain tools', () => {
     }))
 
     const document = resultJson(await invoke('get_notebook', { notebook_id: notebookId })) as {
-      cells: Array<{ id: string; title: string; slot: { row: number; column: number } }>
+      cells: Array<{ id: string; slug: string; slot: { row: number; column: number } }>
       edges: Array<{ source: string; target: string; targetInput: string }>
     }
     expect(document.cells).toHaveLength(2)
     expect(document.cells.find((cell) => cell.id === image.id)).toMatchObject({
-      title: 'Moon garden image',
+      slug: 'generate-image-moon-garden',
       slot: { row: 0, column: 0 },
     })
     expect(document.cells.find((cell) => cell.id === prompt.id)?.slot)
@@ -145,20 +145,20 @@ describe('v2 notebook domain tools', () => {
     const notebookId = notebooks[0]!.id
     const createCell = async (
       type: string,
-      title: string,
+      slug: string,
       row: number,
       column: number,
     ) => resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
-      cell: { type, title, slot: { row, column } },
+      cell: { type, slug, slot: { row, column } },
     })) as { id: string; operation?: string }
 
-    const sourceVideo = await createCell('video', 'Source video', 0, 0)
-    const sourceAudio = await createCell('audio', 'Source audio', 0, 1)
-    const extractAudio = await createCell('extract_audio', 'Extract audio', 1, 0)
-    const audioOutput = await createCell('audio', 'Audio output', 2, 0)
-    const splitVideo = await createCell('split_video', 'Split video', 1, 1)
-    const videoOutput = await createCell('video', 'Video output', 2, 1)
+    const sourceVideo = await createCell('video', 'vid-source', 0, 0)
+    const sourceAudio = await createCell('audio', 'aud-source', 0, 1)
+    const extractAudio = await createCell('extract_audio', 'extract-audio-source', 1, 0)
+    const audioOutput = await createCell('audio', 'aud-output', 2, 0)
+    const splitVideo = await createCell('split_video', 'split-video-source', 1, 1)
+    const videoOutput = await createCell('video', 'vid-output', 2, 1)
 
     expect(extractAudio.operation).toBe('extract_audio')
     expect(splitVideo.operation).toBe('split_range')
@@ -224,6 +224,67 @@ describe('v2 notebook domain tools', () => {
     })
     expect(bypassedMedia.isError).toBe(true)
     expect(bypassedMedia.content[0]?.text).toContain('video-producing source')
+
+    const cached = await managed.value.engine.artifacts.create('video', 'cached output')
+    expect(cached.ok).toBe(true)
+    if (!cached.ok) return
+    resultJson(await invoke('update_notebook_cell', {
+      notebook_id: notebookId,
+      cell_id: videoOutput.id,
+      cell: { output_artifact_id: cached.value.artifactId },
+    }))
+    const rejectedReplacement = await invoke('set_notebook_cell_input', {
+      notebook_id: notebookId,
+      target_cell_id: videoOutput.id,
+      target_input: 'media',
+      source_cell_id: extractAudio.id,
+    })
+    expect(rejectedReplacement.isError).toBe(true)
+
+    const replacement = await createCell(
+      'split_video',
+      'split-video-replacement',
+      3,
+      1,
+    )
+    resultJson(await invoke('set_notebook_cell_input', {
+      notebook_id: notebookId,
+      target_cell_id: videoOutput.id,
+      target_input: 'media',
+      source_cell_id: replacement.id,
+    }))
+    const replaced = resultJson(await invoke('get_notebook', {
+      notebook_id: notebookId,
+    })) as {
+      cells: Array<{
+        id: string
+        inputs?: Record<string, unknown>
+        output_artifact_id?: string
+      }>
+      edges: Array<{ source: string; target: string; targetInput: string }>
+      properties?: { execution?: Record<string, { stale?: boolean }> }
+    }
+    expect(replaced.edges.filter((edge) =>
+      edge.target === videoOutput.id && edge.targetInput === 'media'))
+      .toEqual([expect.objectContaining({ source: replacement.id })])
+    expect(replaced.cells.find((cell) => cell.id === videoOutput.id)).toMatchObject({
+      inputs: { state: 'pending' },
+    })
+    expect(replaced.cells.find((cell) => cell.id === videoOutput.id))
+      .not.toHaveProperty('output_artifact_id')
+    expect(replaced.properties?.execution?.[videoOutput.id]?.stale).toBe(true)
+
+    resultJson(await invoke('set_notebook_cell_input', {
+      notebook_id: notebookId,
+      target_cell_id: videoOutput.id,
+      target_input: 'media',
+      source_cell_id: null,
+    }))
+    const cleared = resultJson(await invoke('get_notebook', {
+      notebook_id: notebookId,
+    })) as { edges: Array<{ target: string; targetInput: string }> }
+    expect(cleared.edges.some((edge) =>
+      edge.target === videoOutput.id && edge.targetInput === 'media')).toBe(false)
   })
 
   it('cancels a queued persistent job explicitly', async () => {
@@ -357,19 +418,19 @@ describe('v2 notebook domain tools', () => {
     const revision = managed.value.engine.head
     const referenceId = managed.value.engine.notebooks.createCell({
       type: 'prompt',
-      title: 'Reference ID',
+      slug: 'prompt-reference-id',
       slot: { row: 0, column: 0 },
     }).id
     const resultId = managed.value.engine.notebooks.createCell({
       type: 'prompt',
-      title: 'Result ID',
+      slug: 'prompt-result-id',
       slot: { row: 0, column: 0 },
     }).id
     const cell = resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: {
         type: 'video',
-        title: 'Warm interview moments',
+        slug: 'vid-warm-interview-moments',
         slot: { row: 0, column: 0 },
         references: [{
           id: referenceId,
@@ -445,7 +506,7 @@ describe('v2 notebook domain tools', () => {
       notebook_id: notebookId,
       cell: {
         type: 'generate_image',
-        title: 'Opening image',
+        slug: 'generate-image-opening',
         slot: { row: 0, column: 0 },
         prompt: 'A moonlit garden',
         model: 'generate_kie_gpt_image_2_text_to_image',

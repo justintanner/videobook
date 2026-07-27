@@ -237,7 +237,7 @@ export function MomentSearch({
       await call('pin_search_moment', {
         book_id: bookId,
         notebook_id: notebookId,
-        title: text.trim() || `${hit.artifactSlug} selects`,
+        cell_slug: `${hit.artifactSlug}-selects`,
         query: lastQuery,
         hit,
       })

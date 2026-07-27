@@ -77,6 +77,7 @@ import {
 } from '@/components/videobook/NotebookGridBoard'
 import { MomentSearch } from '@/components/videobook/MomentSearch'
 import { NotebookCellInspector } from '@/components/videobook/NotebookCellInspector'
+import { NotebookMediaFullscreen } from '@/components/videobook/NotebookMediaFullscreen'
 import {
   CanonicalSequencePlayer,
   type TimelineKeyboardAction,
@@ -113,6 +114,7 @@ import {
   formatMediaTime,
   notebookAudioPresentation,
   notebookCellActionPresentation,
+  notebookCellSlugPrefix,
   notebookCellStatusLabel,
   notebookCellSupportsExecution,
   notebookSplitFrameIds,
@@ -409,14 +411,14 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
   const item = record(value)
   const id = item && asString(item.id)
   const type = item && asString(item.type)
-  const title = item && asString(item.title)
+  const slug = item && asString(item.slug)
   const slot = item && record(item.slot)
   const row = slot && asNumber(slot.row)
   const column = slot && asNumber(slot.column)
   if (
     !item
     || !id
-    || !title
+    || !slug
     || row === null
     || column === null
     || !Number.isInteger(row)
@@ -433,10 +435,10 @@ function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | nul
   return {
     id,
     type: type as NotebookCellType,
-    title,
+    slug,
     slot: { row, column },
-    ...(asString(item.entity_id ?? item.entityId)
-      ? { entityId: asString(item.entity_id ?? item.entityId)! }
+    ...(asString(item.output_entity_id)
+      ? { outputEntityId: asString(item.output_entity_id)! }
       : {}),
     ...(asString(item.prompt) !== null ? { prompt: asString(item.prompt)! } : {}),
     ...(asString(item.provider) !== null ? { provider: asString(item.provider)! } : {}),
@@ -1018,15 +1020,16 @@ function cellTypeLabel(kind: NotebookCellType): string {
   return kind.replaceAll('_', ' ').toUpperCase()
 }
 
-function cellSlug(title: string, kind: NotebookCellType): string {
-  const explicit = title.trim().match(/^@[^\s·]+/)?.[0]
-  if (explicit) return explicit
-  const slug = title
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-  return `@${slug || kind.replaceAll('_', '-')}`
+function nextCellSlug(
+  type: NotebookCellType,
+  cells: NotebookDocument['cells'],
+): string {
+  const prefix = notebookCellSlugPrefix(type)
+  const occupied = new Set(cells.map((cell) => cell.slug))
+  for (let ordinal = 1; ; ordinal += 1) {
+    const slug = `${prefix}-${String(ordinal).padStart(2, '0')}`
+    if (!occupied.has(slug)) return slug
+  }
 }
 
 function emptyCellLabel(data: CanvasCellData): string {
@@ -1045,7 +1048,7 @@ function emptyCellLabel(data: CanvasCellData): string {
   if (data.kind === 'split_video') return 'Configure a video range'
   if (data.kind === 'concat') return 'Connect clip:0 and clip:1'
   if (data.kind === 'splice') return 'Connect first and second'
-  return data.prompt || data.title
+  return data.prompt || `@${data.slug}`
 }
 
 function assetPreviewUrl(asset: AssetRecord | undefined): string | null {
@@ -1223,7 +1226,7 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
             {playableVideo && mediaUrl ? (
               <video src={mediaUrl} poster={thumbnailUrl ?? undefined} muted playsInline preload="metadata" />
             ) : (
-              <img src={thumbnailUrl ?? mediaUrl ?? ''} alt={data.title} />
+              <img src={thumbnailUrl ?? mediaUrl ?? ''} alt={data.slug} />
             )}
           </div>
         ) : (
@@ -1233,7 +1236,7 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
           </div>
         )}
         <footer className="cell-node-footer">
-          <strong>{cellSlug(data.title, data.kind)}</strong>
+          <strong>@{data.slug}</strong>
           {statusLabel && (
             <span className={`cell-status cell-status-${statusLabel}`}>{statusLabel}</span>
           )}
@@ -1295,6 +1298,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [providers, setProviders] = useState<ProviderRecord[]>([])
   const [storage, setStorage] = useState<unknown>(null)
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null)
+  const [fullscreenCellId, setFullscreenCellId] = useState<string | null>(null)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
   const [notebookView, setNotebookView] = useState({ y: 0, zoom: 1 })
   const [notebookSurface, setNotebookSurface] = useState({ width: 0, height: 0 })
@@ -1506,7 +1510,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           cell_id: cellId,
           actor: 'videobook-user',
         })
-        setNotice(`${cell.title} queued`)
+        setNotice(`@${cell.slug} queued`)
       }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error))
@@ -1638,6 +1642,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => notebook?.cells.find((cell) => cell.id === selectedCellId) ?? null,
     [notebook, selectedCellId],
   )
+  const fullscreenCell = useMemo(
+    () => notebook?.cells.find((cell) => cell.id === fullscreenCellId) ?? null,
+    [fullscreenCellId, notebook],
+  )
+  const fullscreenNode = useMemo(
+    () => nodes.find((node) => node.id === fullscreenCellId) ?? null,
+    [fullscreenCellId, nodes],
+  )
+  const closeMediaFullscreen = useCallback(() => {
+    setFullscreenCellId(null)
+  }, [])
 
   const applyNotebook = useCallback((next: NotebookDocument, nextAssets: AssetRecord[]) => {
     setNotebook(next)
@@ -1789,21 +1804,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setNotice('Choose an empty grid square for the new cell')
       return
     }
-    const labels: Record<NotebookCellType, string> = {
-      audio: '@audio',
-      image: '@image',
-      video: '@video',
-      extract_audio: '@extract-audio',
-      split_video: '@split-video',
-      prompt: '@prompt',
-      character: '@character',
-      analyze: '@analyze',
-      generate_video: '@generate-video',
-      generate_image: '@generate-image',
-      generate_audio: '@generate-audio',
-      concat: '@concat',
-      splice: '@splice',
-    }
+    const slug = nextCellSlug(type, notebook.cells)
     setBusy(true)
     try {
       await call('create_notebook_cell', {
@@ -1811,7 +1812,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         notebook_id: notebook.id,
         cell: {
           type,
-          title: labels[type],
+          slug,
           slot,
           ...(type === 'prompt'
             || type === 'analyze'
@@ -1823,7 +1824,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         },
       })
       await refreshBookData(bookId, notebook.id)
-      setNotice(`Added ${labels[type].toLowerCase()} cell`)
+      setNotice(`Added @${slug} cell`)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error))
     } finally {
@@ -1850,6 +1851,29 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const setSelectedCellInput = async (
+    targetInput: string,
+    sourceCellId: string | null,
+  ) => {
+    if (!bookId || !notebook || !selectedNotebookCell) return
+    setBusy(true)
+    try {
+      await call('set_notebook_cell_input', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        target_cell_id: selectedNotebookCell.id,
+        target_input: targetInput,
+        source_cell_id: sourceCellId,
+      })
+      await refreshNotebook(bookId, notebook.id)
+      setNotice(sourceCellId ? 'Input source replaced' : 'Input source cleared')
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const deleteSelectedCell = async () => {
     if (!bookId || !notebook || !selectedCell) return
     setBusy(true)
@@ -1859,6 +1883,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         notebook_id: notebook.id,
         cell_id: selectedCell.id,
       })
+      if (fullscreenCellId === selectedCell.id) setFullscreenCellId(null)
       await refreshBookData(bookId, notebook.id)
       setNotice('Cell deleted')
     } catch (error) {
@@ -3013,7 +3038,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           const token = generationMatch[1].toLowerCase()
           const cell = notebook.cells.find((candidate) =>
             candidate.id.toLowerCase().startsWith(token)
-            || candidate.title.toLowerCase() === token.replaceAll('-', ' '))
+            || candidate.slug === token)
           if (
             !cell
             || !isGenerationCell(cell)
@@ -3038,6 +3063,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           book_id: bookId,
           actor: 'videobook-user',
           prompt: input,
+          ...(fullscreenCell
+            && notebook
+            && fullscreenCell.outputArtifactId
+            && (fullscreenCell.type === 'image' || fullscreenCell.type === 'video')
+            ? {
+                media_context: {
+                  notebook_id: notebook.id,
+                  cell_id: fullscreenCell.id,
+                  artifact_id: fullscreenCell.outputArtifactId,
+                },
+              }
+            : {}),
         })
         const result = record(value)
         if (result?.kind === 'clarification') {
@@ -3430,7 +3467,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   return (
-    <main className={`app-shell app-screen-${screen} ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'}`}>
+    <main className={`app-shell app-screen-${screen} ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'} ${fullscreenCell && fullscreenNode?.data.asset ? 'media-fullscreen-open' : ''}`}>
       <header className="topbar">
         <div className="topbar-book-controls">
           <div className="brand-project">
@@ -3882,12 +3919,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     key={selectedNotebookCell.id}
                     notebookId={notebook?.id ?? ''}
                     cell={selectedNotebookCell}
+                    cells={notebook?.cells ?? []}
+                    edges={notebook?.edges ?? []}
                     asset={selectedCell.data.asset}
                     status={selectedCell.data.status}
                     busy={busy}
                     onUpdate={updateCell}
+                    onSetInput={setSelectedCellInput}
                     onRun={runCell}
                     onDelete={deleteSelectedCell}
+                    onOpenFullscreen={() => setFullscreenCellId(selectedNotebookCell.id)}
                   />
                 ) : null}
               </aside>
@@ -4802,6 +4843,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             </button>
           </div>
         </aside>
+      )}
+
+      {fullscreenCell && fullscreenNode?.data.asset && (
+        <NotebookMediaFullscreen
+          asset={fullscreenNode.data.asset}
+          slug={fullscreenCell.slug}
+          onClose={closeMediaFullscreen}
+        />
       )}
 
       <CommandComposer

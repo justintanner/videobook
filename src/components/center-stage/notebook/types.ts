@@ -1,7 +1,7 @@
 import type { MediaItem } from '@/components/sidebar/types'
 import type { NotebookCellType } from 'videobook-engine'
 
-export const NOTEBOOK_SCHEMA_VERSION = 11
+export const NOTEBOOK_SCHEMA_VERSION = 12
 
 export type NotebookStepType = NotebookCellType
 export type NotebookToolboxKind = NotebookCellType

@@ -368,7 +368,7 @@ function upstreamValues(
       return [{
         targetInput: edge.targetInput,
         cell: source,
-        output: source.outputArtifactId ?? source.entityId,
+        output: source.outputArtifactId ?? source.outputEntityId,
       }];
     });
 }
@@ -401,7 +401,7 @@ export function notebookCellFingerprint(
 ): string {
   const payload = {
     type: cell.type,
-    title: cell.title,
+    slug: cell.slug,
     prompt: cell.prompt ?? "",
     provider: cell.provider ?? "",
     model: cell.model ?? "",
@@ -439,7 +439,7 @@ export function notebookCellDefinitionFingerprint(
 ): string {
   const payload = {
     type: cell.type,
-    title: cell.title,
+    slug: cell.slug,
     prompt: cell.prompt ?? "",
     provider: cell.provider ?? "",
     model: cell.model ?? "",
@@ -450,7 +450,7 @@ export function notebookCellDefinitionFingerprint(
       targetInput,
       sourceId: source.id,
       sourceType: source.type,
-      title: source.title,
+      slug: source.slug,
       prompt: source.prompt ?? "",
       provider: source.provider ?? "",
       model: source.model ?? "",
@@ -875,7 +875,7 @@ async function rewritePromptCell(
   }
   const artifact = await engine.artifacts.create({
     kind: "script",
-    name: `script ${cell.title} resolved prompt`,
+    name: `script ${cell.slug} resolved prompt`,
   });
   if (!artifact.ok) throw new Error(artifact.error.message);
   const written = await engine.files.write(
@@ -911,8 +911,8 @@ async function failedArtifact(
   const result = await engine.artifacts.create({
     kind,
     name: kind === "script"
-      ? `script ${cell.title} failed`
-      : `${cell.title} failed`,
+      ? `script ${cell.slug} failed`
+      : `${cell.slug} failed`,
   });
   if (!result.ok) throw new Error(result.error.message);
   const written = await engine.files.write(
@@ -1162,7 +1162,7 @@ async function assembleCanonicalSequence(
   const sequenceRevision = engine.head;
   const script = await engine.artifacts.create({
     kind: "script",
-    name: `${cell.title} assembly`,
+    name: `${cell.slug} assembly`,
   });
   if (!script.ok) throw new Error(script.error.message);
   const written = await engine.files.write(
@@ -1218,15 +1218,15 @@ async function executeLocalOrGeneration(
       engine,
       sourceId,
       { startSeconds, endSeconds },
-      cell.title,
+      cell.slug,
     );
     const firstFrame = await captureFrame(engine, result.artifactId, {
       role: "first",
-      title: `${cell.title} · first frame`,
+      title: `${cell.slug} · first frame`,
     });
     const lastFrame = await captureFrame(engine, result.artifactId, {
       role: "last",
-      title: `${cell.title} · last frame`,
+      title: `${cell.slug} · last frame`,
     });
     return {
       artifactId: result.artifactId,
@@ -1262,7 +1262,7 @@ async function executeLocalOrGeneration(
       cell,
       "audio",
     );
-    const result = await extractSourceAudio(engine, sourceId, cell.title);
+    const result = await extractSourceAudio(engine, sourceId, cell.slug);
     return {
       artifactId: result.artifactId,
       tool: "ffmpeg",
@@ -1338,7 +1338,7 @@ async function executeLocalOrGeneration(
       engine,
       assembled.clipArtifactIds,
       assembled.audioArtifactId,
-      cell.title,
+      cell.slug,
       { captions },
     );
     return {
@@ -1380,7 +1380,7 @@ async function executeLocalOrGeneration(
   if (cell.type === "prompt" && cell.operation === "rewrite_prompt") {
     if (!options.confirmPaid) {
       throw new Error(
-        `Paid prompt rewrite for ${cell.title} requires confirmation before starting`,
+        `Paid prompt rewrite for @${cell.slug} requires confirmation before starting`,
       );
     }
     const output = await rewritePromptCell(engine, document, cell, bookId);
@@ -1408,7 +1408,7 @@ async function executeLocalOrGeneration(
       || (cell.tool ?? cell.model) === DEFAULT_ANIMATION_TOOL;
     if (requiresConfirmation && !options.confirmPaid) {
       throw new Error(
-        `Paid generation for ${cell.title} requires confirmation before starting`,
+        `Paid generation for @${cell.slug} requires confirmation before starting`,
       );
     }
     const output = await generationTool(engine, document, cell, bookId);
@@ -1749,7 +1749,7 @@ async function finishAwaitingNotebookCell(
         engine,
         input.providerArtifactId,
         audioArtifactId,
-        `${cell.title} normalized`,
+        `${cell.slug} normalized`,
         durationSeconds,
       );
       outputArtifactId = normalized.artifactId;
@@ -1950,7 +1950,7 @@ export function registerRunNotebookJob(engine: Engine): void {
     const waiting = new Set<string>();
     for (const cell of ordered) {
       if (!notebookCellIsRunnable(cell)) {
-        const output = cell.outputArtifactId ?? cell.entityId;
+        const output = cell.outputArtifactId ?? cell.outputEntityId;
         if (output) outputs[cell.id] = output;
         continue;
       }
@@ -1960,7 +1960,7 @@ export function registerRunNotebookJob(engine: Engine): void {
         .some((edge) => blocked.has(edge.source));
       if (upstreamBlocked) {
         blocked.add(cell.id);
-        errors.push(`${cell.title}: blocked by failed upstream dependency`);
+        errors.push(`@${cell.slug}: blocked by failed upstream dependency`);
         continue;
       }
       const upstreamWaiting = document.edges
@@ -1984,7 +1984,7 @@ export function registerRunNotebookJob(engine: Engine): void {
         && currentExecution.status === "error"
       ) {
         const message = currentExecution.error ?? "provider output failed";
-        errors.push(`${cell.title}: ${message}`);
+        errors.push(`@${cell.slug}: ${message}`);
         blocked.add(cell.id);
         continue;
       }
@@ -1998,7 +1998,7 @@ export function registerRunNotebookJob(engine: Engine): void {
       const paidAuthorized = paidCellAuthorized(document, cell, input);
       if (notebookCellIsPaid(cell) && !paidAuthorized) {
         const message =
-          `${cell.title}: paid execution requires a current persisted plan for this exact cell revision`;
+          `@${cell.slug}: paid execution requires a current persisted plan for this exact cell revision`;
         errors.push(message);
         blocked.add(cell.id);
         continue;
@@ -2057,7 +2057,7 @@ export function registerRunNotebookJob(engine: Engine): void {
         }
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause);
-        errors.push(`${cell.title}: ${message}`);
+        errors.push(`@${cell.slug}: ${message}`);
         blocked.add(cell.id);
         if (
           input.generationPlan

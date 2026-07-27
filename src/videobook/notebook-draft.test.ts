@@ -13,11 +13,11 @@ const source: NotebookDocument = {
   cells: [{
     id: '018f7cf5-0d31-7d96-8c0f-800000000002',
     type: 'generate_image',
-    title: 'Opening',
+    slug: 'prompt-opening',
     slot: { row: 0, column: 0 },
     prompt: 'A moon garden',
     model: 'generate_kie_gpt_image_2_text_to_image',
-    entityId: '018f7cf5-0d31-7d96-8c0f-800000000003',
+    outputEntityId: '018f7cf5-0d31-7d96-8c0f-800000000003',
     inputs: { reference: 'img-moon' },
     outputArtifactId: '018f7cf5-0d31-7d96-8c0f-800000000004',
     references: [{

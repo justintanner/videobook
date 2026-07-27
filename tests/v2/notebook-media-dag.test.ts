@@ -168,14 +168,14 @@ describe("notebook local media and analysis fan-out", () => {
 
     const source = engine.notebooks.createCell({
       type: "video",
-      title: "source",
+      slug: "vid-source",
       slot: { row: 0, column: 0 },
       outputArtifactId: sourceArtifact.value.artifactId,
       inputs: { workflowRole: "source" },
     });
     const analysis = engine.notebooks.createCell({
       type: "analyze",
-      title: "analyze",
+      slug: "analyze-source",
       slot: { row: 1, column: 0 },
       prompt: "Segment",
       provider: "kie",

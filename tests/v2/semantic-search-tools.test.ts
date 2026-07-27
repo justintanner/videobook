@@ -358,7 +358,7 @@ describe('semantic search MCP tools', () => {
     const pinned = resultJson(await tools.get('pin_search_moment')!.handler({
       book_id: engine.book.get().bookId,
       notebook_id: notebook.value.id,
-      title: 'Red van selects',
+      cell_slug: 'vid-red-van-selects',
       query: { text: 'red van' },
       hit: search.hits[0],
     })) as { cell: { type: string; pinnedResults: SearchHit[] } }

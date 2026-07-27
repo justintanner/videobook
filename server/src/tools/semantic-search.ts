@@ -762,7 +762,7 @@ export function semanticSearchDefs(
         ...bookSchema,
         notebook_id: z.string().uuid(),
         cell_id: z.string().uuid().optional(),
-        title: z.string().min(1),
+        cell_slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)+$/),
         slot: z.object({
           row: z.number().int().nonnegative(),
           column: z.number().int(),
@@ -820,7 +820,10 @@ export function semanticSearchDefs(
                 : hit.location.kind === "timed"
                   ? "video"
                   : "image",
-              title: String(args.title),
+              slug: uniqueNotebookCellSlug(
+                notebook.cells,
+                String(args.cell_slug),
+              ),
               slot: isSlot(args.slot)
                 ? args.slot
                 : firstEmptyNotebookSlot(notebook),
@@ -1397,5 +1400,17 @@ function firstEmptyNotebookSlot(notebook: {
       column: index % columnCount,
     };
     if (!occupied.has(`${slot.row}:${slot.column}`)) return slot;
+  }
+}
+
+function uniqueNotebookCellSlug(
+  cells: NotebookCell[],
+  requested: string,
+): string {
+  const used = new Set(cells.map((cell) => cell.slug));
+  if (!used.has(requested)) return requested;
+  for (let suffix = 2; ; suffix += 1) {
+    const candidate = `${requested}-${String(suffix).padStart(2, "0")}`;
+    if (!used.has(candidate)) return candidate;
   }
 }

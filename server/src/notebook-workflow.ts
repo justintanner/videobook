@@ -251,13 +251,13 @@ function updateSplitVideoCell(
   const column = featureColumn(shot);
   const base = existing ?? engine.notebooks.createCell({
     type: "split_video",
-    title: "",
+    slug: `split-video-${String(shot.ordinal).padStart(2, "0")}`,
     slot: gridSlot(2, column),
   });
   return {
     ...base,
     type: "split_video",
-    title: `@split-video-${String(shot.ordinal).padStart(2, "0")} · ${shot.label}`,
+    slug: `split-video-${String(shot.ordinal).padStart(2, "0")}`,
     slot: gridSlot(2, column),
     provider: "local",
     model: undefined,
@@ -309,13 +309,13 @@ function createBranchCells(
   );
   const videoBase = videoExisting ?? engine.notebooks.createCell({
     type: "video",
-    title: "",
+    slug: `vid-scene-${String(shot.ordinal).padStart(2, "0")}`,
     slot: gridSlot(videoRow, column),
   });
   const video: NotebookCell = {
     ...videoBase,
     type: "video",
-    title: `@scene-video-${String(shot.ordinal).padStart(2, "0")} · ${shot.label}`,
+    slug: `vid-scene-${String(shot.ordinal).padStart(2, "0")}`,
     slot: gridSlot(videoRow, column),
     provider: undefined,
     model: undefined,
@@ -334,13 +334,13 @@ function createBranchCells(
   );
   const firstBase = firstExisting ?? engine.notebooks.createCell({
     type: "image",
-    title: "",
+    slug: `img-scene-${String(shot.ordinal).padStart(2, "0")}-first`,
     slot: gridSlot(extractionRow, column - 1),
   });
   const first: NotebookCell = {
     ...firstBase,
     type: "image",
-    title: `@frame-${String(shot.ordinal).padStart(2, "0")} · first`,
+    slug: `img-scene-${String(shot.ordinal).padStart(2, "0")}-first`,
     slot: gridSlot(extractionRow, column - 1),
     provider: undefined,
     model: undefined,
@@ -360,13 +360,13 @@ function createBranchCells(
   );
   const lastBase = lastExisting ?? engine.notebooks.createCell({
     type: "image",
-    title: "",
+    slug: `img-scene-${String(shot.ordinal).padStart(2, "0")}-last`,
     slot: gridSlot(extractionRow, column),
   });
   const last: NotebookCell = {
     ...lastBase,
     type: "image",
-    title: `@frame-${String(shot.ordinal).padStart(2, "0")} · last`,
+    slug: `img-scene-${String(shot.ordinal).padStart(2, "0")}-last`,
     slot: gridSlot(extractionRow, column),
     provider: undefined,
     model: undefined,
@@ -387,13 +387,13 @@ function createBranchCells(
   const extractAudioBase = extractAudioExisting
     ?? engine.notebooks.createCell({
       type: "extract_audio",
-      title: "",
+      slug: `extract-audio-scene-${String(shot.ordinal).padStart(2, "0")}`,
       slot: gridSlot(extractionRow, column + 1),
     });
   const extractAudio: NotebookCell = {
     ...extractAudioBase,
     type: "extract_audio",
-    title: `@extract-audio-${String(shot.ordinal).padStart(2, "0")} · scene`,
+    slug: `extract-audio-scene-${String(shot.ordinal).padStart(2, "0")}`,
     slot: gridSlot(extractionRow, column + 1),
     provider: "local",
     model: undefined,
@@ -413,13 +413,13 @@ function createBranchCells(
   );
   const audioBase = audioExisting ?? engine.notebooks.createCell({
     type: "audio",
-    title: "",
+    slug: `aud-scene-${String(shot.ordinal).padStart(2, "0")}`,
     slot: gridSlot(audioRow, column + 1),
   });
   const audio: NotebookCell = {
     ...audioBase,
     type: "audio",
-    title: `@audio-${String(shot.ordinal).padStart(2, "0")} · scene`,
+    slug: `aud-scene-${String(shot.ordinal).padStart(2, "0")}`,
     slot: gridSlot(audioRow, column + 1),
     provider: undefined,
     model: undefined,
@@ -439,7 +439,7 @@ function createBranchCells(
   );
   const promptBase = promptExisting ?? engine.notebooks.createCell({
     type: "prompt",
-    title: "",
+    slug: `prompt-scene-${String(shot.ordinal).padStart(2, "0")}`,
     slot: gridSlot(promptRow, column),
   });
   const promptBrief = feature?.promptBrief
@@ -448,7 +448,7 @@ function createBranchCells(
   const prompt: NotebookCell = {
     ...promptBase,
     type: "prompt",
-    title: `@prompt-${String(shot.ordinal).padStart(2, "0")} · ${feature?.label ?? shot.label}`,
+    slug: `prompt-scene-${String(shot.ordinal).padStart(2, "0")}`,
     slot: gridSlot(promptRow, column),
     prompt: shot.prompt ?? promptExisting?.prompt ?? promptBrief,
     provider: "openai",
@@ -479,13 +479,13 @@ function createBranchCells(
   );
   const animateBase = animateExisting ?? engine.notebooks.createCell({
     type: "generate_video",
-    title: "",
+    slug: `generate-video-scene-${String(shot.ordinal).padStart(2, "0")}`,
     slot: gridSlot(promptRow + 1, column),
   });
   const animate: NotebookCell = {
     ...animateBase,
     type: "generate_video",
-    title: `@animate-${String(shot.ordinal).padStart(2, "0")} · ${feature?.label ?? shot.label}`,
+    slug: `generate-video-scene-${String(shot.ordinal).padStart(2, "0")}`,
     slot: gridSlot(promptRow + 1, column),
     prompt: "",
     provider: "kie",
@@ -541,7 +541,7 @@ export async function applyAnalysisResults(
   });
   const scriptArtifact = await engine.artifacts.create({
     kind: "script",
-    name: `${analysisCell.title} analysis`,
+    name: `${analysisCell.slug} analysis`,
   });
   if (!scriptArtifact.ok) throw new Error(scriptArtifact.error.message);
   const written = await engine.files.write(
@@ -749,7 +749,7 @@ export function buildSevenStageScaffold(
   }
   const source = baseCell(engine, roleCells.get("source"), {
     type: "video",
-    title: "@start · source",
+    slug: "vid-source",
     slot: gridSlot(0, 0),
     provider: undefined,
     operation: undefined,
@@ -762,7 +762,7 @@ export function buildSevenStageScaffold(
   });
   const analysis = baseCell(engine, roleCells.get("analysis"), {
     type: "analyze",
-    title: "@splitter · analyze",
+    slug: "analyze-splitter",
     slot: gridSlot(1, 0),
     prompt: "Segment the source into four continuous 15-second narrative shots with precise timestamps and concise visual context.",
     provider: "kie",
@@ -776,7 +776,7 @@ export function buildSevenStageScaffold(
     roleCells.get("source-extract-audio"),
     {
       type: "extract_audio",
-      title: "@extract-audio · continuous source",
+      slug: "extract-audio-source",
       slot: gridSlot(0, 1),
       provider: "local",
       operation: "extract_audio",
@@ -790,7 +790,7 @@ export function buildSevenStageScaffold(
   );
   const audio = baseCell(engine, roleCells.get("source-audio"), {
     type: "audio",
-    title: "@audio · continuous source",
+    slug: "aud-source",
     slot: gridSlot(1, 1),
     provider: undefined,
     model: undefined,
@@ -804,7 +804,7 @@ export function buildSevenStageScaffold(
   });
   const assembly = baseCell(engine, roleCells.get("assembly"), {
     type: "concat",
-    title: "@concat · feature edit",
+    slug: "concat-feature-edit",
     slot: gridSlot(18, 0),
     provider: "local",
     operation: "concat_video",

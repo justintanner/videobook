@@ -14,7 +14,7 @@ import {
 
 export interface NotebookCellData extends Record<string, unknown> {
   kind: NotebookCellType
-  title: string
+  slug: string
   subtitle: string
   slot: NotebookCell['slot']
   status: string
@@ -24,7 +24,7 @@ export interface NotebookCellData extends Record<string, unknown> {
   model?: string
   operation?: string
   tool?: string
-  entityId?: string
+  outputEntityId?: string
   outputArtifactId?: string
   inputs?: Record<string, unknown>
   targetInputs?: string[]
@@ -35,6 +35,7 @@ export interface NotebookCellData extends Record<string, unknown> {
 function defaultTargetInputs(type: NotebookCellType): string[] {
   if (type === 'extract_audio') return ['video']
   if (type === 'split_video') return ['video', 'analysis']
+  if (type === 'image') return ['segment']
   if (type === 'audio' || type === 'video') return ['media']
   return ['input']
 }
@@ -65,7 +66,7 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
       position: notebookGridPosition(cell.slot),
       data: {
         kind: cell.type,
-        title: cell.title,
+        slug: cell.slug,
         subtitle: `${cell.type.toUpperCase()} · CELL`,
         slot: cell.slot,
         status: 'ready',
@@ -77,7 +78,9 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
         ...(cell.model === undefined ? {} : { model: cell.model }),
         ...(cell.operation === undefined ? {} : { operation: cell.operation }),
         ...(cell.tool === undefined ? {} : { tool: cell.tool }),
-        ...(cell.entityId === undefined ? {} : { entityId: cell.entityId }),
+        ...(cell.outputEntityId === undefined
+          ? {}
+          : { outputEntityId: cell.outputEntityId }),
         ...(cell.outputArtifactId === undefined
           ? {}
           : { outputArtifactId: cell.outputArtifactId }),
@@ -123,16 +126,16 @@ function cellFromNode(node: Node<NotebookCellData>): NotebookCell {
   return {
     id: node.id,
     type: node.data.kind,
-    title: node.data.title,
+    slug: node.data.slug,
     slot: node.data.slot,
     ...(node.data.prompt === undefined ? {} : { prompt: node.data.prompt }),
     ...(node.data.provider === undefined ? {} : { provider: node.data.provider }),
     ...(node.data.model === undefined ? {} : { model: node.data.model }),
     ...(node.data.operation === undefined ? {} : { operation: node.data.operation }),
     ...(node.data.tool === undefined ? {} : { tool: node.data.tool }),
-    ...(node.data.entityId === undefined
+    ...(node.data.outputEntityId === undefined
       ? {}
-      : { entityId: node.data.entityId }),
+      : { outputEntityId: node.data.outputEntityId }),
     ...(node.data.outputArtifactId === undefined
       ? {}
       : { outputArtifactId: node.data.outputArtifactId }),

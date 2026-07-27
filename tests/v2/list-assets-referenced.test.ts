@@ -41,7 +41,7 @@ describe("list_assets notebook references", () => {
     );
     const referenced = engine.notebooks.createCell({
       type: "image",
-      title: "Referenced image",
+      slug: "img-referenced",
       slot: { row: 0, column: 0 },
       outputArtifactId: older.value.artifactId,
     });

@@ -19,17 +19,39 @@ function toolResultValue(result: ToolResult): unknown {
   }
 }
 
-function collectArtifactIds(value: unknown, found = new Set<string>()): Set<string> {
+function isNotebookCellRecord(value: Record<string, unknown>): boolean {
+  return typeof value.id === "string"
+    && typeof value.type === "string"
+    && typeof value.slug === "string"
+    && typeof value.slot === "object"
+    && value.slot !== null;
+}
+
+function collectArtifactIds(
+  value: unknown,
+  found = new Set<string>(),
+  path: string[] = [],
+): Set<string> {
   if (typeof value === "string" && ARTIFACT_REFERENCE.test(value)) {
     found.add(value.replace(/^@/, ""));
     return found;
   }
   if (Array.isArray(value)) {
-    for (const item of value) collectArtifactIds(item, found);
+    for (const item of value) collectArtifactIds(item, found, path);
     return found;
   }
   if (typeof value === "object" && value !== null) {
-    for (const nested of Object.values(value)) collectArtifactIds(nested, found);
+    const record = value as Record<string, unknown>;
+    const notebookCell = isNotebookCellRecord(record);
+    for (const [key, nested] of Object.entries(record)) {
+      if (
+        key === "cell_slug"
+        || (key === "slug" && (notebookCell || path.at(-1) === "cell"))
+      ) {
+        continue;
+      }
+      collectArtifactIds(nested, found, [...path, key]);
+    }
   }
   return found;
 }

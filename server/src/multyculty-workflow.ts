@@ -22,7 +22,7 @@ type ArtifactRecord = {
   kind: string;
 };
 
-export const MULTYCULTY_FIXTURE_VERSION = 19;
+export const MULTYCULTY_FIXTURE_VERSION = 20;
 export const MULTYCULTY_FIXTURE_OWNER = "multyculty-default";
 
 const SECTION_SLUGS = [
@@ -147,7 +147,7 @@ function compactFixture(document: NotebookDocument): NotebookDocument {
       return {
         ...cell,
         slot,
-        ...(role === "assembly" ? { title: "@concat · scenes" } : {}),
+        ...(role === "assembly" ? { slug: "concat-scenes" } : {}),
       };
     });
   const cellIds = new Set(cells.map((cell) => cell.id));
@@ -165,7 +165,7 @@ async function promptFixtureArtifact(
 ): Promise<string> {
   const artifact = await engine.artifacts.create({
     kind: "script",
-    name: `script ${cell.title} resolved prompt`,
+    name: `script ${cell.slug} resolved prompt`,
   });
   if (!artifact.ok) throw new Error(artifact.error.message);
   const result = {
@@ -342,7 +342,7 @@ async function materializeLocalOutputs(
       engine,
       animation.outputArtifactId,
       audio.outputArtifactId,
-      `${animation.title} normalized fixture`,
+      `${animation.slug} normalized fixture`,
       15,
     );
     current = await writeNotebook(engine, {

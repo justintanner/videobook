@@ -30,7 +30,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
   })
 
   it('runs video→analysis fixture→split/audio/image without paid generation', async () => {
-    expect(SCHEMA_VERSION).toBe(11)
+    expect(SCHEMA_VERSION).toBe(12)
     expect(NOTEBOOK_CELL_TYPES).toEqual([
       'audio',
       'image',
@@ -127,7 +127,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
         startSeconds: Number(splitCell.inputs?.startSeconds),
         endSeconds: Number(splitCell.inputs?.endSeconds),
       },
-      splitCell.title,
+      splitCell.slug,
     )
     const first = await captureFrame(engine, split.artifactId, { role: 'first', title: 'first' })
     const last = await captureFrame(engine, split.artifactId, { role: 'last', title: 'last' })

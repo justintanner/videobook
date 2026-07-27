@@ -213,7 +213,7 @@ describe("Multyculty workflow fixture", () => {
         .toEqual({ row: 6, column });
     }
     expect(assembly?.slot).toEqual({ row: 7, column: 0 });
-    expect(assembly?.title).toBe("@concat · scenes");
+    expect(assembly?.slug).toBe("concat-scenes");
     expect(first.cells.filter((cell) => cell.operation === "rewrite_prompt").every((cell) =>
       cell.inputs?.requiresConfirmation === true)).toBe(true);
     expect(first.cells.filter((cell) => cell.operation === "image_to_video").every((cell) =>

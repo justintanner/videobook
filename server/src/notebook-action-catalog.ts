@@ -10,10 +10,14 @@ function rawCellRows(notebookId: string, cell: NotebookCell) {
     { column: "notebook_id", type: "TEXT", value: notebookId },
     { column: "cell_id", type: "TEXT", value: cell.id },
     { column: "type", type: "TEXT", value: cell.type },
-    { column: "title", type: "TEXT", value: cell.title },
+    { column: "slug", type: "TEXT", value: cell.slug },
     { column: "grid_row", type: "INTEGER", value: cell.slot.row },
     { column: "grid_column", type: "INTEGER", value: cell.slot.column },
-    { column: "entity_id", type: "TEXT", value: cell.entityId ?? null },
+    {
+      column: "output_entity_id",
+      type: "TEXT",
+      value: cell.outputEntityId ?? null,
+    },
     { column: "prompt", type: "TEXT", value: cell.prompt ?? null },
     { column: "provider", type: "TEXT", value: cell.provider ?? null },
     { column: "model", type: "TEXT", value: cell.model ?? null },
@@ -586,7 +590,7 @@ function sanitizeResolvedRequest(
 ): Record<string, unknown> {
   return {
     type: cell.type,
-    title: cell.title,
+    slug: cell.slug,
     prompt: cell.prompt ?? null,
     provider: cell.provider ?? action?.provider ?? null,
     model: cell.model ?? action?.model ?? null,

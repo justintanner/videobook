@@ -223,7 +223,7 @@ export async function planNotebookRun(
     stages.push({
       stageId: `${planId}:queued:${stages.length}`,
       kind: "queued",
-      summary: `${cell.title} · ${prepared.tool}`,
+      summary: `@${cell.slug} · ${prepared.tool}`,
       jobType: "generation",
       tool: prepared.tool,
       input: {
@@ -347,7 +347,7 @@ export async function enqueueNotebookRunPlan(
     const actual = notebookCellDefinitionFingerprint(read.value, cell);
     const expected = record.cellDefinitionFingerprints[cellId];
     if (actual !== expected) {
-      throw new Error(`Notebook run plan is stale for ${cell.title}`);
+      throw new Error(`Notebook run plan is stale for @${cell.slug}`);
     }
   }
   const notebookRun = record.plan.notebookRun;

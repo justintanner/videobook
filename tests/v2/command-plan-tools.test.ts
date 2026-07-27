@@ -649,4 +649,75 @@ describe('CommandPlan edit tools', () => {
     }
     engine.close()
   })
+
+  it('uses validated fullscreen media context for implicit chat inserts', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-media-context-'))
+    const engine = createEngine({
+      rootDir,
+      initialBookSlug: 'media-context',
+    })
+    const artifact = await engine.artifacts.create('image', 'boat')
+    expect(artifact.ok).toBe(true)
+    if (!artifact.ok) return
+    expect((await engine.files.write(
+      artifact.value.artifactId,
+      'original.png',
+      Buffer.from('boat-image'),
+    )).ok).toBe(true)
+    const notebook = await engine.notebooks.create('Main')
+    expect(notebook.ok).toBe(true)
+    if (!notebook.ok) return
+    const cell = engine.notebooks.createCell({
+      type: 'image',
+      slug: 'img-boat',
+      slot: { row: 0, column: 0 },
+      outputArtifactId: artifact.value.artifactId,
+    })
+    const written = await engine.notebooks.write({
+      ...notebook.value,
+      cells: [cell],
+      edges: [],
+    })
+    expect(written.ok).toBe(true)
+    const tools = new Map(commandPlanDefs(engine).map((tool) => [tool.name, tool]))
+    const plan = resultJson(await tools.get('plan_chat_command')!.handler({
+      book_id: engine.book.get().bookId,
+      actor: 'fullscreen-user',
+      prompt: 'insert this at frame 120 for 48 frames',
+      media_context: {
+        notebook_id: notebook.value.id,
+        cell_id: cell.id,
+        artifact_id: artifact.value.artifactId,
+      },
+    })) as { stages: Array<{ intent: EditIntent }> }
+
+    expect(plan.stages[0]!.intent.operations).toEqual([
+      expect.objectContaining({
+        kind: 'insert-clip',
+        placement: expect.objectContaining({
+          timelineStartFrame: 120,
+          durationFrames: 48,
+          source: expect.objectContaining({
+            artifactId: artifact.value.artifactId,
+          }),
+        }),
+      }),
+    ])
+
+    const mismatch = await tools.get('plan_chat_command')!.handler({
+      book_id: engine.book.get().bookId,
+      actor: 'fullscreen-user',
+      prompt: 'insert this at frame 120',
+      media_context: {
+        notebook_id: notebook.value.id,
+        cell_id: cell.id,
+        artifact_id: uuidv7(),
+      },
+    })
+    expect(mismatch.isError).toBe(true)
+    expect(mismatch.content[0]?.text).toContain(
+      'Fullscreen media context does not match the cell output',
+    )
+    engine.close()
+  })
 })

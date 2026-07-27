@@ -1,5 +1,6 @@
-import { Trash2 } from 'lucide-react'
-import type { NotebookCell } from 'videobook-engine'
+import { Maximize2, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import type { NotebookCell, NotebookEdge } from 'videobook-engine'
 import { doltCellRows } from '@/videobook/dolt-cell-source'
 import {
   isNotebookMediaCellType,
@@ -36,20 +37,60 @@ export type NotebookCellInspectorAsset = {
 type NotebookCellInspectorProps = {
   notebookId: string
   cell: NotebookCell
+  cells: NotebookCell[]
+  edges: NotebookEdge[]
   asset: NotebookCellInspectorAsset | undefined
   status: string
   busy: boolean
   onUpdate: (patch: Record<string, unknown>) => Promise<void>
+  onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
   onRun: (cellId: string) => Promise<void>
   onDelete: () => Promise<void>
+  onOpenFullscreen: () => void
+}
+
+type MediaInspectorTab = 'preview' | 'inputs' | 'source'
+
+function isPassiveMediaCell(cell: NotebookCell): boolean {
+  return cell.type === 'audio' || cell.type === 'image' || cell.type === 'video'
+}
+
+function mediaInputNames(cell: NotebookCell, edges: NotebookEdge[]): string[] {
+  const connected = edges
+    .filter((edge) => edge.target === cell.id)
+    .map((edge) => edge.targetInput)
+  const fallback = cell.type === 'image' ? 'segment' : 'media'
+  return [...new Set([...connected, fallback])]
+}
+
+function compatibleSource(
+  target: NotebookCell,
+  targetInput: string,
+  source: NotebookCell,
+): boolean {
+  if (source.id === target.id) return false
+  if (target.type === 'audio' && targetInput === 'media') {
+    return source.type === 'extract_audio'
+  }
+  if (target.type === 'video' && targetInput === 'media') {
+    return source.type === 'split_video'
+  }
+  if (target.type === 'image' && targetInput === 'segment') {
+    return source.type === 'video'
+  }
+  return true
 }
 
 function NotebookCellMedia({
   asset,
-  title,
+  slug,
+  allowFullscreen,
+  onOpenFullscreen,
 }: {
   asset: NotebookCellInspectorAsset
-  title: string
+  slug: string
+  allowFullscreen: boolean
+  onOpenFullscreen: () => void
 }) {
   const mediaUrl = asset.mediaUrl
   const previewUrl = asset.thumbnailUrl ?? mediaUrl
@@ -76,21 +117,27 @@ function NotebookCellMedia({
             src={mediaUrl}
             poster={asset.thumbnailUrl ?? undefined}
             controls
+            controlsList="nofullscreen nodownload noremoteplayback"
+            disablePictureInPicture
             playsInline
-            preload="auto"
+            preload="metadata"
           />
         ) : isAudio && mediaUrl ? (
-          <audio key={mediaUrl} src={mediaUrl} controls preload="auto" />
+          <audio key={mediaUrl} src={mediaUrl} controls preload="metadata" />
         ) : (
-          <img key={previewUrl} src={previewUrl} alt={title} />
+          <img key={previewUrl} src={previewUrl} alt={`@${slug}`} />
         )}
-        <span className="inspector-cell-ratio">{dimensions}</span>
+        {!isAudio && <span className="inspector-cell-ratio">{dimensions}</span>}
       </div>
-      {isAudio && <span className="workspace-notice">{audioSummary}</span>}
-      {mediaUrl && (
-        <div className="inspector-media-actions">
-          <a href={mediaUrl} target="_blank" rel="noreferrer">Open output</a>
-        </div>
+      {isAudio && <strong className="inspector-audio-summary">{audioSummary}</strong>}
+      {allowFullscreen && !isAudio && (
+        <button
+          type="button"
+          className="inspector-fullscreen-button"
+          onClick={onOpenFullscreen}
+        >
+          <Maximize2 size={14} />Fullscreen
+        </button>
       )}
     </section>
   )
@@ -137,16 +184,201 @@ function DoltCellSource({
   )
 }
 
+function InputSources({
+  cell,
+  cells,
+  edges,
+  busy,
+  onSetInput,
+}: {
+  cell: NotebookCell
+  cells: NotebookCell[]
+  edges: NotebookEdge[]
+  busy: boolean
+  onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
+}) {
+  const inputs = mediaInputNames(cell, edges)
+
+  return (
+    <section className="inspector-input-sources">
+      <p>Select the upstream cell that owns each media input.</p>
+      {inputs.map((input) => {
+        const edge = edges.find((candidate) =>
+          candidate.target === cell.id && candidate.targetInput === input)
+        const candidates = cells
+          .filter((candidate) =>
+            compatibleSource(cell, input, candidate) || candidate.id === edge?.source)
+          .sort((left, right) => left.slug.localeCompare(right.slug))
+        return (
+          <label key={input}>
+            <span>{input.replaceAll('_', ' ')}</span>
+            <select
+              value={edge?.source ?? ''}
+              disabled={busy}
+              onChange={(event) => {
+                void onSetInput(input, event.target.value || null)
+              }}
+            >
+              <option value="">No upstream source</option>
+              {candidates.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  @{candidate.slug} · {candidate.type.replaceAll('_', ' ')}
+                </option>
+              ))}
+            </select>
+          </label>
+        )
+      })}
+      <span className="workspace-notice">
+        Changing a source clears this preview until its producer is rerun.
+      </span>
+    </section>
+  )
+}
+
+function SlugField({
+  cell,
+  onUpdate,
+}: {
+  cell: NotebookCell
+  onUpdate: (patch: Record<string, unknown>) => Promise<void>
+}) {
+  return (
+    <label className="inspector-slug-field">
+      Slug
+      <span>
+        @
+        <input defaultValue={cell.slug} onBlur={(event) => {
+          const slug = event.target.value.trim()
+          if (slug && slug !== cell.slug) void onUpdate({ slug })
+        }} />
+      </span>
+    </label>
+  )
+}
+
+function MediaCellInspector({
+  notebookId,
+  cell,
+  cells,
+  edges,
+  asset,
+  busy,
+  onSetInput,
+  onDelete,
+  onOpenFullscreen,
+}: Pick<
+  NotebookCellInspectorProps,
+  | 'notebookId'
+  | 'cell'
+  | 'cells'
+  | 'edges'
+  | 'asset'
+  | 'busy'
+  | 'onSetInput'
+  | 'onDelete'
+  | 'onOpenFullscreen'
+>) {
+  const [tab, setTab] = useState<MediaInspectorTab>('preview')
+
+  return (
+    <div className="inspector-body inspector-media-body">
+      <h2 className="inspector-slug">@{cell.slug}</h2>
+      <span className="workspace-notice">{cell.type.toUpperCase()}</span>
+      <nav
+        className="inspector-tabs"
+        aria-label="Media cell inspector"
+        role="tablist"
+      >
+        {(['preview', 'inputs', 'source'] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            className={tab === value ? 'active' : undefined}
+            aria-selected={tab === value}
+            aria-controls={`${cell.id}-inspector-panel`}
+            onClick={() => setTab(value)}
+          >
+            {value}
+          </button>
+        ))}
+      </nav>
+      <div
+        id={`${cell.id}-inspector-panel`}
+        className="inspector-tab-panel"
+        role="tabpanel"
+      >
+        {tab === 'preview' && (
+          asset ? (
+            <NotebookCellMedia
+              asset={asset}
+              slug={cell.slug}
+              allowFullscreen={cell.type === 'image' || cell.type === 'video'}
+              onOpenFullscreen={onOpenFullscreen}
+            />
+          ) : (
+            <div className="inspector-media-empty">
+              <span>Output pending</span>
+              <p>Connect a source and rerun its producer to populate this preview.</p>
+            </div>
+          )
+        )}
+        {tab === 'inputs' && (
+          <InputSources
+            cell={cell}
+            cells={cells}
+            edges={edges}
+            busy={busy}
+            onSetInput={onSetInput}
+          />
+        )}
+        {tab === 'source' && <DoltCellSource notebookId={notebookId} cell={cell} />}
+      </div>
+      <div className="record-card-actions inspector-media-actions">
+        <button
+          type="button"
+          className="danger-button"
+          onClick={() => void onDelete()}
+          disabled={busy}
+        >
+          <Trash2 size={13} />Delete
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function NotebookCellInspector({
   notebookId,
   cell,
+  cells,
+  edges,
   asset,
   status,
   busy,
   onUpdate,
+  onSetInput,
   onRun,
   onDelete,
+  onOpenFullscreen,
 }: NotebookCellInspectorProps) {
+  if (isPassiveMediaCell(cell)) {
+    return (
+      <MediaCellInspector
+        notebookId={notebookId}
+        cell={cell}
+        cells={cells}
+        edges={edges}
+        asset={asset}
+        busy={busy}
+        onSetInput={onSetInput}
+        onDelete={onDelete}
+        onOpenFullscreen={onOpenFullscreen}
+      />
+    )
+  }
+
   const action = notebookCellActionPresentation(cell, status)
   const statusLabel = notebookCellStatusLabel(cell.type, status)
   const textCell = cell.type === 'prompt'
@@ -157,29 +389,26 @@ export function NotebookCellInspector({
   const generationCell = cell.type === 'generate_video'
     || cell.type === 'generate_image'
     || cell.type === 'generate_audio'
-  const mediaCell = cell.type === 'audio'
-    || cell.type === 'image'
-    || cell.type === 'video'
-    || cell.type === 'character'
-    || generationCell
+  const previewCell = cell.type === 'character' || generationCell
   const actions = cell.type in localActions
     ? localActions[cell.type as keyof typeof localActions]
     : []
 
   return (
     <div className="inspector-body">
-      <h2 className="inspector-slug">{cell.title}</h2>
+      <h2 className="inspector-slug">@{cell.slug}</h2>
       <span className="workspace-notice">
         {cell.type.toUpperCase()}{statusLabel ? ` · ${statusLabel}` : ''}
       </span>
-      {asset && mediaCell && <NotebookCellMedia asset={asset} title={cell.title} />}
-      <label>
-        Title
-        <input defaultValue={cell.title} onBlur={(event) => {
-          const title = event.target.value.trim()
-          if (title && title !== cell.title) void onUpdate({ title })
-        }} />
-      </label>
+      {asset && previewCell && (
+        <NotebookCellMedia
+          asset={asset}
+          slug={cell.slug}
+          allowFullscreen={false}
+          onOpenFullscreen={onOpenFullscreen}
+        />
+      )}
+      <SlugField cell={cell} onUpdate={onUpdate} />
       {textCell && (
         <label>
           Prompt
@@ -196,15 +425,15 @@ export function NotebookCellInspector({
           <select
             value={cell.operation ?? ''}
             onChange={(event) => {
-              const action = actions.find((candidate) =>
+              const nextAction = actions.find((candidate) =>
                 candidate.operation === event.target.value)
-              void onUpdate(action
+              void onUpdate(nextAction
                 ? {
-                    operation: action.operation,
-                    tool: action.tool,
-                    provider: action.operation === 'analyze_source'
+                    operation: nextAction.operation,
+                    tool: nextAction.tool,
+                    provider: nextAction.operation === 'analyze_source'
                       ? 'kie'
-                      : action.operation === 'rewrite_prompt'
+                      : nextAction.operation === 'rewrite_prompt'
                         ? 'openai'
                         : 'local',
                   }
@@ -216,9 +445,9 @@ export function NotebookCellInspector({
             }}
           >
             <option value="">No action</option>
-            {actions.map((action) => (
-              <option key={action.operation} value={action.operation}>
-                {action.label}
+            {actions.map((candidate) => (
+              <option key={candidate.operation} value={candidate.operation}>
+                {candidate.label}
               </option>
             ))}
           </select>

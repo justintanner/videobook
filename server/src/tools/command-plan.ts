@@ -637,6 +637,7 @@ async function parseChatEditClause(
   engine: Engine,
   sequence: Sequence,
   clause: string,
+  mediaContext?: { artifactId: string; slug: string },
 ): Promise<EditRequest | string> {
   const normalized = clause.trim();
   if (
@@ -652,10 +653,18 @@ async function parseChatEditClause(
       normalized,
       /\b(?:for|duration(?:\s+of)?)\s+(\d+)\s*(?:frames?)?\b/iu,
     );
-    if (!reference || startFrame === null) {
+    if ((!reference && !mediaContext) || startFrame === null) {
       return "Tell me which @asset to insert and the destination frame.";
     }
-    const resolved = await engine.resolver.resolveAll(`@${reference}`);
+    if (!reference && mediaContext) {
+      return {
+        kind: "insert",
+        artifact_id: mediaContext.artifactId,
+        timeline_start_frame: startFrame,
+        ...(durationFrames === null ? {} : { duration_frames: durationFrames }),
+      };
+    }
+    const resolved = await engine.resolver.resolveAll(`@${reference!}`);
     if (!resolved.ok || resolved.value.unresolved.length > 0) {
       return `I could not resolve @${reference}. Choose a source from the library.`;
     }
@@ -886,6 +895,7 @@ async function parseChatEditClause(
 export async function parseChatEditRequest(
   engine: Engine,
   prompt: string,
+  mediaContext?: { artifactId: string; slug: string },
 ): Promise<ChatEditParse> {
   const clauses = prompt.split(/\s*(?:;|\band\s+then\b|\bthen\b)\s*/iu)
     .filter((clause) => clause.trim().length > 0);
@@ -895,7 +905,12 @@ export async function parseChatEditRequest(
   const sequence = engine.sequences.getPrimary();
   const requests: EditRequest[] = [];
   for (const clause of clauses) {
-    const parsed = await parseChatEditClause(engine, sequence, clause);
+    const parsed = await parseChatEditClause(
+      engine,
+      sequence,
+      clause,
+      mediaContext,
+    );
     if (typeof parsed === "string") {
       return { kind: "clarification", message: parsed };
     }
@@ -1071,10 +1086,43 @@ export function commandPlanDefs(engine: Engine): ToolDef[] {
         ...bookSchema,
         actor: z.string().min(1),
         prompt: z.string().min(1),
+        media_context: z.object({
+          notebook_id: z.string().uuid(),
+          cell_id: z.string().uuid(),
+          artifact_id: z.string().uuid(),
+        }).optional(),
       },
       handler: async (args) => {
         try {
-          const parsed = await parseChatEditRequest(engine, String(args.prompt));
+          let mediaContext: { artifactId: string; slug: string } | undefined;
+          if (args.media_context) {
+            const context = args.media_context as {
+              notebook_id: string;
+              cell_id: string;
+              artifact_id: string;
+            };
+            const notebook = engine.notebooks.read(context.notebook_id);
+            if (!notebook.ok) throw new Error(notebook.error.message);
+            const cell = notebook.value.cells.find((candidate) =>
+              candidate.id === context.cell_id);
+            if (!cell || (cell.type !== "image" && cell.type !== "video")) {
+              throw new Error("Fullscreen media context must reference an image or video cell");
+            }
+            if (cell.outputArtifactId !== context.artifact_id) {
+              throw new Error("Fullscreen media context does not match the cell output");
+            }
+            const artifact = engine.artifacts.get(context.artifact_id);
+            if (!artifact.ok) throw new Error(artifact.error.message);
+            mediaContext = {
+              artifactId: artifact.value.artifactId,
+              slug: artifact.value.slug,
+            };
+          }
+          const parsed = await parseChatEditRequest(
+            engine,
+            String(args.prompt),
+            mediaContext,
+          );
           if (parsed.kind === "clarification") return json(parsed);
           return json(await buildSequenceEditPlan(
             engine,

@@ -19,6 +19,7 @@ import type {
 } from "videobook-engine";
 import {
   MVP_CONTRACT_VERSION,
+  NOTEBOOK_CELL_SLUG_PREFIXES,
   NOTEBOOK_CELL_TYPES,
   sequenceFramesToSourceTicks,
   sourceRangeEndTick,
@@ -106,7 +107,51 @@ function notebookConnectionError(
   ) {
     return "Video media outputs require a split video source";
   }
+  if (
+    targetInput === "segment"
+    && target.type === "image"
+    && source.type !== "video"
+  ) {
+    return "Image frame outputs require a video source";
+  }
   return null;
+}
+
+function markCellAndDescendantsStale(
+  notebook: NotebookDocument,
+  cellId: string,
+): NotebookDocument {
+  const marked = markDescendantsStale(notebook, cellId);
+  const rawExecution = marked.properties?.execution;
+  const execution = rawExecution
+    && typeof rawExecution === "object"
+    && !Array.isArray(rawExecution)
+    ? { ...rawExecution as Record<string, unknown> }
+    : {};
+  const current = execution[cellId];
+  execution[cellId] = current
+    && typeof current === "object"
+    && !Array.isArray(current)
+    ? { ...current as Record<string, unknown>, stale: true }
+    : { stale: true };
+  return {
+    ...marked,
+    properties: {
+      ...(marked.properties ?? {}),
+      execution,
+    },
+    cells: marked.cells.map((cell) =>
+      cell.id === cellId
+        ? {
+            ...cell,
+            outputArtifactId: undefined,
+            inputs: {
+              ...(cell.inputs ?? {}),
+              state: "pending",
+            },
+          }
+        : cell),
+  };
 }
 
 function firstEmptyGridSlots(
@@ -198,12 +243,12 @@ const pinnedSearchResultSchema = z.object({
 });
 const cellInputSchema = z.object({
   type: cellTypeSchema,
-  title: z.string().min(1),
+  slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)+$/),
   slot: z.object({
     row: z.number().int().nonnegative(),
     column: z.number().int(),
   }),
-  entity_id: z.string().uuid().optional(),
+  output_entity_id: z.string().uuid().optional(),
   prompt: z.string().optional(),
   provider: z.string().optional(),
   model: z.string().optional(),
@@ -216,6 +261,27 @@ const cellInputSchema = z.object({
 });
 
 type CellInput = z.infer<typeof cellInputSchema>;
+
+function uniqueCellSlug(
+  cells: readonly NotebookCell[],
+  type: NotebookCellType,
+  stem: string,
+): string {
+  const prefix = NOTEBOOK_CELL_SLUG_PREFIXES[type];
+  const normalized = stem
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const base = normalized.startsWith(`${prefix}-`)
+    ? normalized
+    : `${prefix}-${normalized || "cell"}`;
+  const occupied = new Set(cells.map((cell) => cell.slug));
+  if (!occupied.has(base)) return base;
+  for (let ordinal = 2; ; ordinal += 1) {
+    const candidate = `${base}-${String(ordinal).padStart(2, "0")}`;
+    if (!occupied.has(candidate)) return candidate;
+  }
+}
 
 function referenceFromInput(
   input: z.infer<typeof cellReferenceSchema>,
@@ -390,7 +456,7 @@ async function notebookGenerationPlan(
       sourceSurface,
       actor,
       bookId: engine.book.get().bookId,
-      summary: `Rewrite ${cell.title} for Seedance 2`,
+      summary: `Rewrite @${cell.slug} for Seedance 2`,
       normalizedReferences: [{
         kind: "notebook",
         targetId: notebook.id,
@@ -1034,9 +1100,11 @@ function reorderedAudioPlacements(
 function cellFromInput(input: CellInput): Omit<NotebookCell, "id"> {
   return {
     type: input.type,
-    title: input.title,
+    slug: input.slug,
     slot: input.slot,
-    ...(input.entity_id ? { entityId: input.entity_id } : {}),
+    ...(input.output_entity_id
+      ? { outputEntityId: input.output_entity_id }
+      : {}),
     ...(input.prompt === undefined ? {} : { prompt: input.prompt }),
     ...(input.provider === undefined ? {} : { provider: input.provider }),
     ...(input.model === undefined ? {} : { model: input.model }),
@@ -1057,9 +1125,11 @@ function cellPayload(cell: NotebookCell): Record<string, unknown> {
   return {
     id: cell.id,
     type: cell.type,
-    title: cell.title,
+    slug: cell.slug,
     slot: cell.slot,
-    ...(cell.entityId ? { entity_id: cell.entityId } : {}),
+    ...(cell.outputEntityId
+      ? { output_entity_id: cell.outputEntityId }
+      : {}),
     ...(cell.prompt === undefined ? {} : { prompt: cell.prompt }),
     ...(cell.provider === undefined ? {} : { provider: cell.provider }),
     ...(cell.model === undefined ? {} : { model: cell.model }),
@@ -1996,7 +2066,7 @@ export function videobookDomainDefs(
               firstEmptyGridSlots(retained, 3);
             const audioCell = engine.notebooks.createCell({
               type: "audio",
-              title: artifact.value.slug,
+              slug: uniqueCellSlug(retained, "audio", artifact.value.slug),
               slot: audioSlot!,
               inputs: {
                 audioSpineRole: "audio",
@@ -2006,7 +2076,11 @@ export function videobookDomainDefs(
             });
             const transcriptCell = engine.notebooks.createCell({
               type: "analyze",
-              title: transcript ? `${artifact.value.slug} transcript` : "Transcript pending",
+              slug: uniqueCellSlug(
+                [...retained, audioCell],
+                "analyze",
+                transcript ? `${artifact.value.slug}-transcript` : "transcript-pending",
+              ),
               slot: transcriptSlot!,
               inputs: {
                 audioSpineRole: "transcript",
@@ -2021,7 +2095,11 @@ export function videobookDomainDefs(
             });
             const sequenceCell = engine.notebooks.createCell({
               type: "concat",
-              title: committed.value.sequence.name,
+              slug: uniqueCellSlug(
+                [...retained, audioCell, transcriptCell],
+                "concat",
+                committed.value.sequence.name,
+              ),
               slot: sequenceSlot!,
               inputs: {
                 audioSpineRole: "sequence",
@@ -2279,8 +2357,11 @@ export function videobookDomainDefs(
             };
             const splitCell = engine.notebooks.createCell({
               type: "audio",
-              title: `@audio-transcript-${document.cells.filter((cell) =>
-                cell.inputs?.selectionKind === "transcript").length + 1}`,
+              slug: uniqueCellSlug(
+                document.cells,
+                "audio",
+                "transcript-selection",
+              ),
               slot: firstEmptyGridSlots(document.cells, 1)[0]!,
               inputs: {
                 selectionKind: "transcript",
@@ -2562,8 +2643,11 @@ export function videobookDomainDefs(
             };
             const splitCell = engine.notebooks.createCell({
               type: "audio",
-              title: `@audio-timeline-${document.cells.filter((cell) =>
-                cell.inputs?.selectionKind === "timeline").length + 1}`,
+              slug: uniqueCellSlug(
+                document.cells,
+                "audio",
+                "timeline-selection",
+              ),
               slot: firstEmptyGridSlots(document.cells, 1)[0]!,
               inputs: {
                 selectionKind: "timeline",
@@ -2989,9 +3073,11 @@ export function videobookDomainDefs(
                 const next = normalizeCellActionFields({
                   ...cell,
                   ...(patch.type ? { type: patch.type as NotebookCellType } : {}),
-                  ...(patch.title === undefined ? {} : { title: patch.title }),
+                  ...(patch.slug === undefined ? {} : { slug: patch.slug }),
                   ...(patch.slot === undefined ? {} : { slot: patch.slot }),
-                  ...(patch.entity_id === undefined ? {} : { entityId: patch.entity_id }),
+                  ...(patch.output_entity_id === undefined
+                    ? {}
+                    : { outputEntityId: patch.output_entity_id }),
                   ...(patch.prompt === undefined ? {} : { prompt: patch.prompt }),
                   ...(patch.provider === undefined ? {} : { provider: patch.provider }),
                   ...(patch.model === undefined ? {} : { model: patch.model }),
@@ -3140,6 +3226,93 @@ export function videobookDomainDefs(
           { edgeId },
         );
         return result.ok ? json({ edge_id: edgeId, revision: result.value.hash }) : failure(result.error.message);
+      },
+    },
+    {
+      name: "set_notebook_cell_input",
+      description: "Atomically replace or clear one named notebook cell input",
+      scope: "book",
+      schema: {
+        ...bookSchema,
+        notebook_id: z.string().uuid(),
+        target_cell_id: z.string().uuid(),
+        target_input: z.string().min(1),
+        source_cell_id: z.string().uuid().nullable(),
+        expected_revision: z.string().min(1).optional(),
+      },
+      handler: async (args) => {
+        if (
+          typeof args.expected_revision === "string"
+          && args.expected_revision !== engine.head
+        ) {
+          return failure(`Stale notebook revision: expected ${args.expected_revision}`);
+        }
+        const targetCellId = String(args.target_cell_id);
+        const targetInput = String(args.target_input);
+        const sourceCellId = typeof args.source_cell_id === "string"
+          ? args.source_cell_id
+          : null;
+        let edgeId: string | null = null;
+        try {
+          const result = await mutateNotebook(
+            engine,
+            String(args.notebook_id),
+            "set_notebook_cell_input",
+            (notebook) => {
+              const target = notebook.cells.find((cell) =>
+                cell.id === targetCellId);
+              if (!target) {
+                throw new Error(`Target cell not found: ${targetCellId}`);
+              }
+              const existing = notebook.edges.filter((edge) =>
+                edge.target === targetCellId
+                && edge.targetInput === targetInput);
+              const retained = notebook.edges.filter((edge) =>
+                edge.target !== targetCellId
+                || edge.targetInput !== targetInput);
+              let edges = retained;
+              if (sourceCellId) {
+                const error = notebookConnectionError(
+                  notebook,
+                  sourceCellId,
+                  targetCellId,
+                  targetInput,
+                );
+                if (error) throw new Error(error);
+                const matching = existing.find((edge) =>
+                  edge.source === sourceCellId);
+                const edge = matching ?? engine.notebooks.createEdge({
+                  source: sourceCellId,
+                  target: targetCellId,
+                  targetInput,
+                });
+                edgeId = edge.id;
+                edges = [...retained, edge];
+              }
+              return markCellAndDescendantsStale(
+                { ...notebook, edges },
+                targetCellId,
+              );
+            },
+            {
+              targetCellId,
+              targetInput,
+              sourceCellId,
+              edgeId,
+            },
+          );
+          return result.ok
+            ? json({
+                target_cell_id: targetCellId,
+                target_input: targetInput,
+                source_cell_id: sourceCellId,
+                edge_id: edgeId,
+                revision: result.value.hash,
+              })
+            : failure(result.error.message);
+        } catch (cause) {
+          return failure(cause instanceof Error ? cause.message : String(cause));
+        }
       },
     },
     {

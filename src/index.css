@@ -1714,6 +1714,147 @@ textarea:focus-visible {
   resize: vertical;
 }
 
+.inspector-media-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.inspector-media-body .inspector-slug {
+  margin-bottom: 8px;
+}
+
+.inspector-slug-field {
+  margin-top: 18px;
+}
+
+.inspector-slug-field > span {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  color: var(--green);
+  font-size: 15px;
+}
+
+.inspector-media-body .inspector-tabs {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.inspector-media-body .inspector-tab-panel {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  scrollbar-color: #315f45 #020b07;
+  scrollbar-width: thin;
+}
+
+.inspector-media-body .inspector-cell-preview {
+  display: grid;
+  min-height: 100%;
+  margin: 0;
+  grid-template-rows: minmax(240px, 1fr) auto;
+}
+
+.inspector-media-body .inspector-cell-media {
+  min-height: 280px;
+}
+
+.inspector-media-body .inspector-cell-media img,
+.inspector-media-body .inspector-cell-media video {
+  max-height: min(58vh, 640px);
+}
+
+.inspector-fullscreen-button {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  color: var(--green);
+  background: rgba(41, 119, 72, 0.12);
+  cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.inspector-fullscreen-button:hover,
+.inspector-fullscreen-button:focus-visible {
+  color: #d5f8e4;
+  background: rgba(55, 142, 91, 0.24);
+}
+
+.inspector-audio-summary {
+  padding: 18px;
+  border-top: 1px solid var(--line);
+  color: #d5fbff;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 16px;
+  line-height: 1.55;
+  letter-spacing: 0.04em;
+  text-align: center;
+  text-shadow: 0 0 16px rgba(99, 218, 232, 0.3);
+}
+
+.inspector-input-sources {
+  display: grid;
+  gap: 16px;
+}
+
+.inspector-input-sources > p {
+  margin: 0;
+  color: #7fae94;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.inspector-input-sources label {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: rgba(1, 9, 5, 0.78);
+}
+
+.inspector-media-body .inspector-dolt-source {
+  margin: 0;
+}
+
+.inspector-media-empty {
+  display: grid;
+  min-height: 320px;
+  place-content: center;
+  padding: 28px;
+  border: 1px dashed rgba(96, 176, 132, 0.3);
+  color: #648b75;
+  text-align: center;
+}
+
+.inspector-media-empty span {
+  color: #9bd5b3;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.inspector-media-empty p {
+  max-width: 280px;
+  margin: 12px 0 0;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.inspector-media-body > .inspector-media-actions {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  margin-top: 18px;
+  padding-top: 14px;
+}
+
 .audio-notebook-inspector > button {
   display: flex;
   width: 100%;
@@ -3217,6 +3358,76 @@ textarea:focus-visible {
 
   .moment-search-filters > div {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.notebook-media-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  padding: 24px 24px 104px;
+  place-items: center;
+  overflow: hidden;
+  background: #000;
+}
+
+.notebook-media-fullscreen img,
+.notebook-media-fullscreen video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.notebook-media-fullscreen-close {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 240;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(188, 230, 207, 0.62);
+  color: #d9f6e6;
+  background: rgba(0, 0, 0, 0.72);
+  cursor: pointer;
+}
+
+.notebook-media-fullscreen-close:hover,
+.notebook-media-fullscreen-close:focus-visible {
+  border-color: var(--green);
+  color: #fff;
+  outline: 0;
+}
+
+.media-fullscreen-open .command-composer,
+.app-screen-notebook.media-fullscreen-open .command-composer,
+.app-screen-notebook.media-fullscreen-open.inspector-visible .command-composer {
+  right: 24px;
+  left: 24px;
+  z-index: 230;
+  pointer-events: auto;
+  opacity: 1;
+  transform: none;
+}
+
+@media (max-width: 720px) {
+  .notebook-media-fullscreen {
+    padding: 10px 10px 86px;
+  }
+
+  .notebook-media-fullscreen-close {
+    top: 10px;
+    right: 10px;
+  }
+
+  .media-fullscreen-open .command-composer,
+  .app-screen-notebook.media-fullscreen-open .command-composer {
+    right: 10px;
+    left: 10px;
   }
 }
 

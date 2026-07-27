@@ -29,7 +29,7 @@ interface CellPayload {
 }
 
 interface NotebookDocumentPayload {
-  cells: Array<{ id: string; title: string }>
+  cells: Array<{ id: string; slug: string }>
   edges: Array<{ id: string; source: string; target: string; targetInput: string }>
 }
 
@@ -180,7 +180,7 @@ describe('v2 MCP server', () => {
       notebook_id: notebook.id,
       cell: {
         type: 'prompt',
-        title: 'Opening prompt',
+        slug: 'prompt-opening',
         slot: { row: 0, column: 0 },
         prompt: 'A green city at sunrise',
       },
@@ -190,7 +190,7 @@ describe('v2 MCP server', () => {
       notebook_id: notebook.id,
       cell: {
         type: 'generate_image',
-        title: 'Opening image',
+        slug: 'generate-image-opening',
         slot: { row: 0, column: 1 },
         prompt: 'A green city at sunrise',
         model: 'generate_kie_gpt_image_2_text_to_image',
@@ -209,8 +209,8 @@ describe('v2 MCP server', () => {
       notebook_id: notebook.id,
     })
     expect(document.cells).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: prompt.id, title: 'Opening prompt' }),
-      expect.objectContaining({ id: image.id, title: 'Opening image' }),
+      expect.objectContaining({ id: prompt.id, slug: 'prompt-opening' }),
+      expect.objectContaining({ id: image.id, slug: 'generate-image-opening' }),
     ]))
     expect(document.edges).toEqual([
       expect.objectContaining({ source: prompt.id, target: image.id, targetInput: 'prompt' }),

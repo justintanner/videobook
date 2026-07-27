@@ -45,7 +45,7 @@ describe("notebook runner frames and concat", () => {
     const tool = resolveNotebookGenerationTool({
       id: "019f0000-0000-7000-8000-000000000001",
       type: "generate_video",
-      title: "animate",
+      slug: "generate-video-animate",
       slot: { row: 0, column: 0 },
       model: "bytedance/seedance-2",
       tool: DEFAULT_ANIMATION_TOOL,
@@ -71,21 +71,21 @@ describe("notebook runner frames and concat", () => {
 
     const firstCell = engine.notebooks.createCell({
       type: "image",
-      title: "first",
+      slug: "img-first",
       slot: { row: 0, column: 0 },
       outputArtifactId: first.value.artifactId,
       inputs: { frameRole: "first" },
     });
     const lastCell = engine.notebooks.createCell({
       type: "image",
-      title: "last",
+      slug: "img-last",
       slot: { row: 0, column: 1 },
       outputArtifactId: last.value.artifactId,
       inputs: { frameRole: "last" },
     });
     const animate = engine.notebooks.createCell({
       type: "generate_video",
-      title: "animate",
+      slug: "generate-video-animate",
       slot: { row: 0, column: 2 },
       prompt: "Camera push in",
       provider: "kie",
@@ -187,13 +187,13 @@ describe("notebook runner frames and concat", () => {
 
     const source = engine.notebooks.createCell({
       type: "video",
-      title: "source",
+      slug: "vid-source",
       slot: { row: 0, column: 0 },
       outputArtifactId: sourceArtifact.value.artifactId,
     });
     const split = engine.notebooks.createCell({
       type: "split_video",
-      title: "split action",
+      slug: "split-video-action",
       slot: { row: 1, column: 0 },
       provider: "local",
       operation: "split_range",
@@ -202,24 +202,24 @@ describe("notebook runner frames and concat", () => {
     });
     const video = engine.notebooks.createCell({
       type: "video",
-      title: "split video",
+      slug: "vid-split",
       slot: { row: 2, column: 0 },
     });
     const firstFrame = engine.notebooks.createCell({
       type: "image",
-      title: "first frame",
+      slug: "img-first-frame",
       slot: { row: 3, column: 0 },
       inputs: { frameRole: "first" },
     });
     const lastFrame = engine.notebooks.createCell({
       type: "image",
-      title: "last frame",
+      slug: "img-last-frame",
       slot: { row: 3, column: 1 },
       inputs: { frameRole: "last" },
     });
     const extractAudio = engine.notebooks.createCell({
       type: "extract_audio",
-      title: "extract audio",
+      slug: "extract-audio-scene",
       slot: { row: 3, column: 2 },
       provider: "local",
       operation: "extract_audio",
@@ -227,7 +227,7 @@ describe("notebook runner frames and concat", () => {
     });
     const audio = engine.notebooks.createCell({
       type: "audio",
-      title: "scene audio",
+      slug: "aud-scene",
       slot: { row: 4, column: 2 },
     });
     const document: NotebookDocument = {
@@ -358,13 +358,13 @@ describe("notebook runner frames and concat", () => {
 
     const source = engine.notebooks.createCell({
       type: "audio",
-      title: "source audio",
+      slug: "aud-source",
       slot: { row: 0, column: 0 },
       outputArtifactId: sourceArtifact.value.artifactId,
     });
     const extractAudio = engine.notebooks.createCell({
       type: "extract_audio",
-      title: "extract audio",
+      slug: "extract-audio-source",
       slot: { row: 1, column: 0 },
       provider: "local",
       operation: "extract_audio",
@@ -372,7 +372,7 @@ describe("notebook runner frames and concat", () => {
     });
     const output = engine.notebooks.createCell({
       type: "audio",
-      title: "output",
+      slug: "aud-output",
       slot: { row: 2, column: 0 },
     });
     const document: NotebookDocument = {
@@ -427,19 +427,19 @@ describe("notebook runner frames and concat", () => {
 
     const videoA = engine.notebooks.createCell({
       type: "video",
-      title: "a",
+      slug: "vid-a",
       slot: { row: 0, column: 0 },
       outputArtifactId: clipA.value.artifactId,
     });
     const videoB = engine.notebooks.createCell({
       type: "video",
-      title: "b",
+      slug: "vid-b",
       slot: { row: 0, column: 1 },
       outputArtifactId: clipB.value.artifactId,
     });
     const concat = engine.notebooks.createCell({
       type: "concat",
-      title: "concat",
+      slug: "concat-output",
       slot: { row: 0, column: 2 },
       provider: "local",
       operation: "concat_video",
@@ -465,7 +465,7 @@ describe("notebook runner frames and concat", () => {
 
     const invalidSplice = engine.notebooks.createCell({
       type: "splice",
-      title: "splice",
+      slug: "splice-output",
       slot: { row: 1, column: 0 },
       operation: "splice_video",
       tool: "ffmpeg",
