@@ -22,7 +22,7 @@ type ArtifactRecord = {
   kind: string;
 };
 
-export const MULTYCULTY_FIXTURE_VERSION = 18;
+export const MULTYCULTY_FIXTURE_VERSION = 19;
 export const MULTYCULTY_FIXTURE_OWNER = "multyculty-default";
 
 const SECTION_SLUGS = [
@@ -310,7 +310,6 @@ async function materializeLocalOutputs(
       || (
         ordered.operation !== "split_range"
         && ordered.operation !== "extract_audio"
-        && ordered.operation !== "capture_frame"
       )
     ) {
       continue;

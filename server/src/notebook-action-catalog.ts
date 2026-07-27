@@ -71,27 +71,6 @@ export interface NotebookAction {
 
 const LOCAL_ACTIONS: NotebookAction[] = [
   {
-    id: "local.preprocess_source",
-    cellTypes: ["video"],
-    kind: "local",
-    operation: "preprocess_source",
-    provider: "local",
-    model: null,
-    tool: "ffmpeg",
-    title: "Preprocess source",
-    description: "Probe and prepare source media streams for downstream cells",
-    outputKind: "artifact",
-    billable: false,
-    defaults: {},
-    parameters: [],
-    requiredInputs: [],
-    capabilities: {
-      dualFrame: false,
-      localMedia: true,
-      requiresConfirmation: false,
-    },
-  },
-  {
     id: "local.analyze_source",
     cellTypes: ["analyze"],
     kind: "analysis",
@@ -210,35 +189,6 @@ const LOCAL_ACTIONS: NotebookAction[] = [
       dualFrame: true,
       localMedia: false,
       requiresConfirmation: true,
-    },
-  },
-  {
-    id: "local.capture_frame",
-    cellTypes: ["image"],
-    kind: "local",
-    operation: "capture_frame",
-    provider: "local",
-    model: null,
-    tool: "ffmpeg",
-    title: "Capture frame",
-    description: "Capture the first or last valid frame of a split",
-    outputKind: "artifact",
-    billable: false,
-    defaults: { operation: "capture_frame", tool: "ffmpeg", provider: "local" },
-    parameters: [
-      {
-        name: "frameRole",
-        type: "enum",
-        required: true,
-        enumValues: ["first", "last"],
-        description: "Whether to capture the first or last frame",
-      },
-    ],
-    requiredInputs: ["segment"],
-    capabilities: {
-      dualFrame: false,
-      localMedia: true,
-      requiresConfirmation: false,
     },
   },
   {

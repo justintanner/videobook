@@ -214,7 +214,13 @@ export function notebookCellIsPaid(cell: NotebookCell): boolean {
 }
 
 export function notebookCellIsRunnable(cell: NotebookCell): boolean {
-  return Boolean(cell.operation ?? cell.tool ?? cell.model);
+  return (
+    cell.type !== "audio"
+    && cell.type !== "image"
+    && cell.type !== "video"
+    && cell.type !== "character"
+    && Boolean(cell.operation ?? cell.tool ?? cell.model)
+  );
 }
 
 function textResult(result: ToolResult): unknown {
@@ -516,10 +522,32 @@ function requiredMediaOutputCellIds(
   return outputIds;
 }
 
+function splitFrameOutputCellIds(
+  document: NotebookDocument,
+  videoCellIds: Set<string>,
+): { first: Set<string>; last: Set<string> } {
+  const connectedIds = new Set(
+    document.edges
+      .filter((edge) =>
+        videoCellIds.has(edge.source)
+        && edge.targetInput === "segment")
+      .map((edge) => edge.target),
+  );
+  const first = new Set<string>();
+  const last = new Set<string>();
+  for (const candidate of document.cells) {
+    if (!connectedIds.has(candidate.id) || candidate.type !== "image") continue;
+    if (candidate.inputs?.frameRole === "first") first.add(candidate.id);
+    if (candidate.inputs?.frameRole === "last") last.add(candidate.id);
+  }
+  return { first, last };
+}
+
 function withMediaOutput(
   document: NotebookDocument,
   outputCellIds: Set<string>,
   artifactId: string,
+  inputs: Record<string, unknown>,
 ): NotebookDocument {
   return {
     ...document,
@@ -530,6 +558,7 @@ function withMediaOutput(
             outputArtifactId: artifactId,
             inputs: {
               ...(candidate.inputs ?? {}),
+              ...inputs,
               state: "completed",
             },
           }
@@ -537,13 +566,50 @@ function withMediaOutput(
   };
 }
 
-async function objectHashForArtifact(
-  engine: Engine,
-  artifactId: string,
-): Promise<string | null> {
-  const manifest = await engine.files.manifest(artifactId);
-  if (!manifest.ok) return null;
-  return manifest.value.files[0]?.objectHash ?? null;
+function withSplitOutputs(
+  document: NotebookDocument,
+  targets: {
+    video: Set<string>;
+    first: Set<string>;
+    last: Set<string>;
+  },
+  outputs: {
+    videoArtifactId: string;
+    firstFrameArtifactId: string;
+    lastFrameArtifactId: string;
+    durationSeconds: number;
+    firstAtSeconds: number;
+    lastAtSeconds: number;
+  },
+): NotebookDocument {
+  return {
+    ...document,
+    cells: document.cells.map((candidate) => {
+      const outputArtifactId = targets.video.has(candidate.id)
+        ? outputs.videoArtifactId
+        : targets.first.has(candidate.id)
+          ? outputs.firstFrameArtifactId
+          : targets.last.has(candidate.id)
+            ? outputs.lastFrameArtifactId
+            : null;
+      if (!outputArtifactId) return candidate;
+      return {
+        ...candidate,
+        outputArtifactId,
+        inputs: {
+          ...(candidate.inputs ?? {}),
+          ...(targets.video.has(candidate.id)
+            ? { durationSeconds: outputs.durationSeconds }
+            : {
+                atSeconds: targets.first.has(candidate.id)
+                  ? outputs.firstAtSeconds
+                  : outputs.lastAtSeconds,
+              }),
+          state: "completed",
+        },
+      };
+    }),
+  };
 }
 
 function promptFor(document: NotebookDocument, cell: NotebookCell): string {
@@ -1140,11 +1206,12 @@ async function executeLocalOrGeneration(
 }> {
   if (cell.type === "split_video" && cell.operation === "split_range") {
     const sourceId = requiredVideoInputArtifact(document, cell);
-    const outputCellIds = requiredMediaOutputCellIds(
+    const videoCellIds = requiredMediaOutputCellIds(
       document,
       cell,
       "video",
     );
+    const frameCellIds = splitFrameOutputCellIds(document, videoCellIds);
     const startSeconds = Number(cell.inputs?.startSeconds ?? 0);
     const endSeconds = Number(cell.inputs?.endSeconds ?? 0);
     const result = await splitSourceRange(
@@ -1153,14 +1220,38 @@ async function executeLocalOrGeneration(
       { startSeconds, endSeconds },
       cell.title,
     );
+    const firstFrame = await captureFrame(engine, result.artifactId, {
+      role: "first",
+      title: `${cell.title} · first frame`,
+    });
+    const lastFrame = await captureFrame(engine, result.artifactId, {
+      role: "last",
+      title: `${cell.title} · last frame`,
+    });
     return {
       artifactId: result.artifactId,
       tool: "ffmpeg",
-      document: withMediaOutput(
+      document: withSplitOutputs(
         document,
-        outputCellIds,
-        result.artifactId,
+        {
+          video: videoCellIds,
+          first: frameCellIds.first,
+          last: frameCellIds.last,
+        },
+        {
+          videoArtifactId: result.artifactId,
+          firstFrameArtifactId: firstFrame.artifactId,
+          lastFrameArtifactId: lastFrame.artifactId,
+          durationSeconds: result.durationSeconds,
+          firstAtSeconds: firstFrame.atSeconds,
+          lastAtSeconds: lastFrame.atSeconds,
+        },
       ),
+      cellInputs: {
+        durationSeconds: result.durationSeconds,
+        firstFrameArtifactId: firstFrame.artifactId,
+        lastFrameArtifactId: lastFrame.artifactId,
+      },
     };
   }
 
@@ -1179,29 +1270,10 @@ async function executeLocalOrGeneration(
         document,
         outputCellIds,
         result.artifactId,
+        { durationSeconds: result.durationSeconds },
       ),
+      cellInputs: { durationSeconds: result.durationSeconds },
     };
-  }
-
-  if (cell.type === "image" && cell.operation === "capture_frame") {
-    const segmentId = firstUpstreamArtifact(document, cell, "segment")
-      ?? firstUpstreamArtifact(document, cell);
-    if (!segmentId) throw new Error(`Image cell ${cell.id} has no segment artifact`);
-    const role = cell.inputs?.frameRole === "last" ? "last" : "first";
-    const result = await captureFrame(engine, segmentId, {
-      role,
-      title: cell.title,
-    });
-    return { artifactId: result.artifactId, tool: "ffmpeg" };
-  }
-
-  if (cell.type === "video") {
-    const artifactId = cell.outputArtifactId
-      ?? firstUpstreamArtifact(document, cell);
-    if (!artifactId) throw new Error(`Video cell ${cell.id} has no media artifact`);
-    const hash = await objectHashForArtifact(engine, artifactId);
-    if (!hash) throw new Error(`Video cell ${cell.id} has no material files`);
-    return { artifactId, tool: "ffmpeg" };
   }
 
   if (cell.type === "analyze" && cell.operation === "analyze_source") {

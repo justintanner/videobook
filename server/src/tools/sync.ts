@@ -69,6 +69,13 @@ export type SyncAsset = {
   prompt: string | null;
   renders: string[];
   duration: number | null;
+  audio_info: {
+    codec: string;
+    sample_rate_hz: number;
+    channels: number;
+    channel_layout: string;
+    duration_seconds: number;
+  } | null;
   waveform: number[] | null;
   frame_dirs: Record<string, string[]>;
   archive_id: string | null;
@@ -501,6 +508,22 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
           }
         } catch { /* non-fatal */ }
       }
+      const streams = fs.streams.list(a.artifactId);
+      const audioStream = streams.ok
+        ? streams.value.find((stream) => stream.kind === "audio" && stream.audio)
+        : undefined;
+      const audio_info = audioStream?.audio
+        ? {
+            codec: audioStream.codec,
+            sample_rate_hz: audioStream.audio.sampleRateHz,
+            channels: audioStream.audio.channels,
+            channel_layout: audioStream.audio.channelLayout,
+            duration_seconds:
+              audioStream.durationTicks
+              * audioStream.timeBase.numerator
+              / audioStream.timeBase.denominator,
+          }
+        : null;
 
       // Character assets: surface whether an ElevenLabs voice is assigned, so the
       // client can flag voiceless hosts before a Clip Show plan is attempted.
@@ -546,6 +569,7 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
         prompt,
         renders,
         duration,
+        audio_info,
         waveform,
         frame_dirs: frameDirs,
         archive_id: typeof archiveMeta?.archive_id === "string" ? archiveMeta.archive_id : null,
@@ -577,6 +601,7 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
           : notebook.name,
       renders: [],
       duration: null,
+      audio_info: null,
       waveform: null,
       frame_dirs: {},
       archive_id: null,

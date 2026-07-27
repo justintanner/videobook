@@ -17,6 +17,7 @@ import {
   runNotebookCell,
 } from "../../server/src/jobs/run-notebook.js";
 import { DEFAULT_ANIMATION_TOOL } from "../../server/src/notebook-action-catalog.js";
+import { buildAssetList } from "../../server/src/tools/sync.js";
 import type { ToolDef } from "../../server/src/tools/tool-def.js";
 
 const execFileAsync = promisify(execFile);
@@ -73,7 +74,6 @@ describe("notebook runner frames and concat", () => {
       title: "first",
       slot: { row: 0, column: 0 },
       outputArtifactId: first.value.artifactId,
-      operation: "capture_frame",
       inputs: { frameRole: "first" },
     });
     const lastCell = engine.notebooks.createCell({
@@ -81,7 +81,6 @@ describe("notebook runner frames and concat", () => {
       title: "last",
       slot: { row: 0, column: 1 },
       outputArtifactId: last.value.artifactId,
-      operation: "capture_frame",
       inputs: { frameRole: "last" },
     });
     const animate = engine.notebooks.createCell({
@@ -210,15 +209,18 @@ describe("notebook runner frames and concat", () => {
       type: "image",
       title: "first frame",
       slot: { row: 3, column: 0 },
-      provider: "local",
-      operation: "capture_frame",
-      tool: "ffmpeg",
       inputs: { frameRole: "first" },
+    });
+    const lastFrame = engine.notebooks.createCell({
+      type: "image",
+      title: "last frame",
+      slot: { row: 3, column: 1 },
+      inputs: { frameRole: "last" },
     });
     const extractAudio = engine.notebooks.createCell({
       type: "extract_audio",
       title: "extract audio",
-      slot: { row: 3, column: 1 },
+      slot: { row: 3, column: 2 },
       provider: "local",
       operation: "extract_audio",
       tool: "ffmpeg",
@@ -226,11 +228,11 @@ describe("notebook runner frames and concat", () => {
     const audio = engine.notebooks.createCell({
       type: "audio",
       title: "scene audio",
-      slot: { row: 4, column: 1 },
+      slot: { row: 4, column: 2 },
     });
     const document: NotebookDocument = {
       ...notebook.value,
-      cells: [source, split, video, firstFrame, extractAudio, audio],
+      cells: [source, split, video, firstFrame, lastFrame, extractAudio, audio],
       edges: [
         engine.notebooks.createEdge({
           source: source.id,
@@ -245,6 +247,11 @@ describe("notebook runner frames and concat", () => {
         engine.notebooks.createEdge({
           source: video.id,
           target: firstFrame.id,
+          targetInput: "segment",
+        }),
+        engine.notebooks.createEdge({
+          source: video.id,
+          target: lastFrame.id,
           targetInput: "segment",
         }),
         engine.notebooks.createEdge({
@@ -275,24 +282,20 @@ describe("notebook runner frames and concat", () => {
     expect(completedSplitCell?.outputArtifactId).toBe(completedSplit.outputArtifactId);
     expect(completedVideo?.outputArtifactId).toBe(completedSplit.outputArtifactId);
     expect(completedVideo?.inputs?.state).toBe("completed");
-
-    const pendingFrame = completedSplit.document.cells.find((cell) =>
+    const completedFirstFrame = completedSplit.document.cells.find((cell) =>
       cell.id === firstFrame.id);
-    expect(pendingFrame).toBeTruthy();
-    if (!pendingFrame) return;
-    const completedFrame = await runNotebookCell(
-      engine,
-      engine.book.get().bookId,
-      document.id,
-      completedSplit.document,
-      pendingFrame,
+    const completedLastFrame = completedSplit.document.cells.find((cell) =>
+      cell.id === lastFrame.id);
+    expect(completedFirstFrame?.outputArtifactId).toBe(
+      completedSplitCell?.inputs?.firstFrameArtifactId,
     );
-    expect(completedFrame.outputArtifactId).toBeTruthy();
-    expect(completedFrame.document.cells.find((cell) =>
-      cell.id === firstFrame.id)?.outputArtifactId)
-      .toBe(completedFrame.outputArtifactId);
+    expect(completedLastFrame?.outputArtifactId).toBe(
+      completedSplitCell?.inputs?.lastFrameArtifactId,
+    );
+    expect(completedFirstFrame?.inputs?.state).toBe("completed");
+    expect(completedLastFrame?.inputs?.state).toBe("completed");
 
-    const pendingExtractAudio = completedFrame.document.cells.find((cell) =>
+    const pendingExtractAudio = completedSplit.document.cells.find((cell) =>
       cell.id === extractAudio.id);
     expect(pendingExtractAudio).toBeTruthy();
     if (!pendingExtractAudio) return;
@@ -300,7 +303,7 @@ describe("notebook runner frames and concat", () => {
       engine,
       engine.book.get().bookId,
       document.id,
-      completedFrame.document,
+      completedSplit.document,
       pendingExtractAudio,
     );
     const completedAudio = completedExtractAudio.document.cells.find((cell) =>
@@ -309,6 +312,7 @@ describe("notebook runner frames and concat", () => {
       completedExtractAudio.outputArtifactId,
     );
     expect(completedAudio?.inputs?.state).toBe("completed");
+    expect(completedAudio?.inputs?.durationSeconds).toBeGreaterThan(0);
     const audioArtifact = engine.artifacts.get(
       completedExtractAudio.outputArtifactId,
     );
@@ -318,6 +322,18 @@ describe("notebook runner frames and concat", () => {
     );
     expect(audioManifest.ok && audioManifest.value.files.some((file) =>
       file.name === "original.m4a")).toBe(true);
+    const listedAudio = (await buildAssetList(
+      engine,
+      engine.book.get().bookId,
+    )).find((asset) =>
+      asset.artifact_id === completedExtractAudio.outputArtifactId);
+    expect(listedAudio?.audio_info).toMatchObject({
+      codec: "aac",
+      sample_rate_hz: 44_100,
+      channels: 2,
+      channel_layout: "stereo",
+      duration_seconds: expect.any(Number),
+    });
   }, 90_000);
 
   it("rejects extract audio actions connected to non-video media", async () => {

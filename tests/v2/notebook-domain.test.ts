@@ -163,6 +163,13 @@ describe('v2 notebook domain tools', () => {
     expect(extractAudio.operation).toBe('extract_audio')
     expect(splitVideo.operation).toBe('split_range')
 
+    const passiveSource = await invoke('run_notebook_cell', {
+      notebook_id: notebookId,
+      cell_id: sourceVideo.id,
+    })
+    expect(passiveSource.isError).toBe(true)
+    expect(passiveSource.content[0]?.text).toContain('passive outputs')
+
     const invalidInput = await invoke('connect_notebook_cells', {
       notebook_id: notebookId,
       source_cell_id: sourceAudio.id,

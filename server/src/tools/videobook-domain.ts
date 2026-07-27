@@ -32,6 +32,7 @@ import { queue, stopBookQueue } from "../queue.js";
 import {
   notebookCellDefinitionFingerprint,
   notebookCellIsPaid,
+  notebookCellIsRunnable,
   notebookCellMediaType,
   prepareNotebookGeneration,
 } from "../jobs/run-notebook.js";
@@ -3159,6 +3160,9 @@ export function videobookDomainDefs(
         const cell = notebook.value.cells.find((candidate) =>
           candidate.id === String(args.cell_id));
         if (!cell) return failure("Notebook cell not found");
+        if (!notebookCellIsRunnable(cell)) {
+          return failure("Media cells are passive outputs and cannot be run");
+        }
         const requestedPlan = args.plan as Record<string, unknown> | undefined;
         let generationPlan: Record<string, unknown> | undefined;
         if (requestedPlan) {

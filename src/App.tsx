@@ -109,6 +109,15 @@ import {
   notebookSourcePortOffsets,
   type NotebookSourceSide,
 } from '@/videobook/notebook-routing'
+import {
+  formatMediaTime,
+  notebookAudioSummary,
+  notebookCellActionPresentation,
+  notebookCellSupportsExecution,
+  notebookSplitFrameIds,
+  notebookSplitRange,
+  type NotebookAudioInfo,
+} from '@/videobook/notebook-cell-presentation'
 import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
 
 type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
@@ -137,6 +146,8 @@ type AssetRecord = {
   prompt: string | null
   width: number | null
   height: number | null
+  duration: number | null
+  audioInfo: NotebookAudioInfo | null
 }
 
 type IngestStatus = {
@@ -245,6 +256,10 @@ const supportedUiActions = new Set([
 
 interface CanvasCellData extends NotebookCellData {
   asset?: AssetRecord
+  splitFrames?: {
+    first: { artifactId: string | null; asset?: AssetRecord }
+    last: { artifactId: string | null; asset?: AssetRecord }
+  }
   onRun?: () => void
 }
 
@@ -340,7 +355,7 @@ function isGenerationCell(
 function isRunnableCell(
   cell: NotebookDocument['cells'][number],
 ): boolean {
-  return Boolean(cell.operation ?? cell.tool ?? cell.model)
+  return notebookCellSupportsExecution(cell)
 }
 
 function responseText(result: unknown): string | null {
@@ -492,6 +507,25 @@ function asAssets(value: unknown): AssetRecord[] {
     const artifactId = item && asString(item.artifact_id ?? item.artifactId)
     const type = item && asString(item.type)
     if (!item || !id || !artifactId || !type) return []
+    const audio = record(item.audio_info)
+    const codec = audio && asString(audio.codec)
+    const sampleRateHz = audio && asNumber(audio.sample_rate_hz)
+    const channels = audio && asNumber(audio.channels)
+    const channelLayout = audio && asString(audio.channel_layout)
+    const durationSeconds = audio && asNumber(audio.duration_seconds)
+    const audioInfo = codec
+      && sampleRateHz !== null
+      && channels !== null
+      && channelLayout
+      && durationSeconds !== null
+      ? {
+          codec,
+          sampleRateHz,
+          channels,
+          channelLayout,
+          durationSeconds,
+        }
+      : null
     return [{
       id,
       artifactId,
@@ -503,6 +537,8 @@ function asAssets(value: unknown): AssetRecord[] {
       prompt: asString(item.prompt),
       width: asNumber(item.width),
       height: asNumber(item.height),
+      duration: asNumber(item.duration),
+      audioInfo,
     }]
   })
 }
@@ -931,15 +967,36 @@ function canvasNodes(
   onRun: (cellId: string) => void,
 ): CanvasNode[] {
   const byArtifactId = new Map(assets.map((asset) => [asset.artifactId, asset]))
-  return notebookNodes(document).map((node) => ({
-    ...node,
-    data: {
-      ...node.data,
-      status: cellExecutionStatus(document, node.id),
-      asset: artifactForCell(byArtifactId, node.data.outputArtifactId),
-      onRun: () => onRun(node.id),
-    },
-  }))
+  return notebookNodes(document).map((node) => {
+    const frameIds = notebookSplitFrameIds(node.data.inputs)
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        status: cellExecutionStatus(document, node.id),
+        asset: artifactForCell(byArtifactId, node.data.outputArtifactId),
+        ...(node.data.kind === 'split_video'
+          ? {
+              splitFrames: {
+                first: {
+                  artifactId: frameIds.first,
+                  ...(frameIds.first && byArtifactId.has(frameIds.first)
+                    ? { asset: byArtifactId.get(frameIds.first)! }
+                    : {}),
+                },
+                last: {
+                  artifactId: frameIds.last,
+                  ...(frameIds.last && byArtifactId.has(frameIds.last)
+                    ? { asset: byArtifactId.get(frameIds.last)! }
+                    : {}),
+                },
+              },
+            }
+          : {}),
+        onRun: () => onRun(node.id),
+      },
+    }
+  })
 }
 
 function CellIcon({ kind }: { kind: NotebookCellType }) {
@@ -990,6 +1047,55 @@ function emptyCellLabel(data: CanvasCellData): string {
   return data.prompt || data.title
 }
 
+function assetPreviewUrl(asset: AssetRecord | undefined): string | null {
+  return asset?.thumbnailUrl ?? asset?.mediaUrl ?? null
+}
+
+function SplitFramePreview({
+  asset,
+  artifactId,
+  label,
+  time,
+}: {
+  asset: AssetRecord | undefined
+  artifactId: string | null
+  label: string
+  time: number | null
+}) {
+  const previewUrl = assetPreviewUrl(asset)
+  return (
+    <figure title={artifactId ?? label}>
+      {previewUrl
+        ? <img src={previewUrl} alt={`${label} frame`} />
+        : <Film size={24} aria-hidden />}
+      <figcaption>
+        <strong>{label}</strong>
+        <span>{time === null ? 'Frame pending' : formatMediaTime(time)}</span>
+      </figcaption>
+    </figure>
+  )
+}
+
+function SplitVideoPreview({ data }: { data: CanvasCellData }) {
+  const range = notebookSplitRange(data.inputs)
+  return (
+    <div className="cell-split-frames">
+      <SplitFramePreview
+        asset={data.splitFrames?.first.asset}
+        artifactId={data.splitFrames?.first.artifactId ?? null}
+        label="First"
+        time={range?.startSeconds ?? null}
+      />
+      <SplitFramePreview
+        asset={data.splitFrames?.last.asset}
+        artifactId={data.splitFrames?.last.artifactId ?? null}
+        label="Last"
+        time={range?.endSeconds ?? null}
+      />
+    </div>
+  )
+}
+
 const cellSourcePortSides = [
   'left',
   'right',
@@ -1023,7 +1129,19 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
     || data.kind === 'generate_image'
   const textCell = data.kind === 'prompt' || data.kind === 'analyze'
   const isTopRow = data.slot.row === 0
-  const canRun = Boolean(data.operation ?? data.tool ?? data.model)
+  const action = notebookCellActionPresentation({
+    type: data.kind,
+    model: data.model,
+    operation: data.operation,
+    outputArtifactId: data.outputArtifactId,
+    tool: data.tool,
+  }, data.status)
+  const audioSummary = notebookAudioSummary({
+    audioInfo: data.asset?.audioInfo ?? null,
+    durationSeconds: data.asset?.duration ?? null,
+    hasOutput: Boolean(data.outputArtifactId),
+    inputs: data.inputs,
+  })
 
   return (
     <article className={`cell-node cell-kind-${data.kind} ${selected ? 'cell-node-selected' : ''}`}>
@@ -1060,25 +1178,27 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
       <section className="cell-node-shell">
         <header className="cell-node-header">
           <span><CellIcon kind={data.kind} />{cellTypeLabel(data.kind)}</span>
-          {canRun && (
+          {action && (
             <button
               type="button"
               className="cell-run-button nodrag"
+              disabled={action.disabled}
               onClick={(event) => {
                 event.stopPropagation()
                 data.onRun?.()
               }}
             >
-              Run
+              {action.label}
             </button>
           )}
         </header>
-        {audioCell ? (
+        {data.kind === 'split_video' ? (
+          <SplitVideoPreview data={data} />
+        ) : audioCell ? (
           <div className="cell-copy cell-copy-audio">
             <AudioWaveform size={38} />
-            {playableAudio && mediaUrl
-              ? <audio src={mediaUrl} controls preload="metadata" />
-              : <span>{emptyCellLabel(data)}</span>}
+            {playableAudio && mediaUrl ? <audio src={mediaUrl} controls preload="metadata" /> : null}
+            <span>{data.kind === 'audio' ? audioSummary : emptyCellLabel(data)}</span>
           </div>
         ) : visualMediaCell && (mediaUrl || thumbnailUrl) ? (
           <div className="cell-media">

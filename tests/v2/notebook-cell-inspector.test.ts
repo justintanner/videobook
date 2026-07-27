@@ -30,6 +30,8 @@ describe('NotebookCellInspector', () => {
         thumbnailUrl: '/files/vid-source/original.jpg',
         width: 1920,
         height: 1080,
+        duration: 30,
+        audioInfo: null,
       },
       status: 'completed',
       busy: false,

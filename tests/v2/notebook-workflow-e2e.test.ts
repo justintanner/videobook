@@ -110,7 +110,11 @@ describe('transparent runnable DAG e2e (offline)', () => {
     expect(fanned.cells.filter((cell) => cell.operation === 'split_range')).toHaveLength(2)
     expect(fanned.cells.filter((cell) =>
       cell.inputs?.workflowRole?.toString().startsWith('scene-video-'))).toHaveLength(2)
-    expect(fanned.cells.filter((cell) => cell.operation === 'capture_frame')).toHaveLength(4)
+    expect(fanned.cells.filter((cell) =>
+      cell.inputs?.workflowRole?.toString().startsWith('frame-'))).toHaveLength(4)
+    expect(fanned.cells.filter((cell) =>
+      cell.inputs?.workflowRole?.toString().startsWith('frame-')).every((cell) =>
+      cell.operation === undefined && cell.tool === undefined)).toBe(true)
     expect(fanned.cells.filter((cell) => cell.operation === 'rewrite_prompt')).toHaveLength(2)
     expect(fanned.cells.filter((cell) => cell.operation === 'image_to_video')).toHaveLength(2)
     expect(topologicalOrder(fanned).length).toBe(fanned.cells.length)

@@ -35,8 +35,15 @@ export function listAssetsDef(fs: Engine): ToolDef {
             fs.notebooks
               .list()
               .flatMap((notebook) =>
-                notebook.cells.flatMap((cell) =>
-                  cell.outputArtifactId ? [cell.outputArtifactId] : [])),
+                notebook.cells.flatMap((cell) => [
+                  ...(cell.outputArtifactId ? [cell.outputArtifactId] : []),
+                  ...(typeof cell.inputs?.firstFrameArtifactId === "string"
+                    ? [cell.inputs.firstFrameArtifactId]
+                    : []),
+                  ...(typeof cell.inputs?.lastFrameArtifactId === "string"
+                    ? [cell.inputs.lastFrameArtifactId]
+                    : []),
+                ])),
           )
         : new Set<string>();
       const referencedAssets = include_referenced

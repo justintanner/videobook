@@ -1,11 +1,15 @@
 import { Trash2 } from 'lucide-react'
 import type { NotebookCell } from 'videobook-engine'
 import { doltCellRows } from '@/videobook/dolt-cell-source'
+import {
+  isNotebookMediaCellType,
+  notebookAudioSummary,
+  notebookCellActionPresentation,
+  type NotebookAudioInfo,
+} from '@/videobook/notebook-cell-presentation'
 
 const localActions = {
-  video: [{ operation: 'preprocess_source', label: 'Preprocess source', tool: 'ffmpeg' }],
   extract_audio: [{ operation: 'extract_audio', label: 'Extract audio', tool: 'ffmpeg' }],
-  image: [{ operation: 'capture_frame', label: 'Capture frame', tool: 'ffmpeg' }],
   split_video: [{ operation: 'split_range', label: 'Split video', tool: 'ffmpeg' }],
   prompt: [{ operation: 'rewrite_prompt', label: 'Rewrite prompt', tool: 'rewrite_prompt' }],
   analyze: [{ operation: 'analyze_source', label: 'Analyze source', tool: 'kie_gemini_analysis' }],
@@ -24,6 +28,8 @@ export type NotebookCellInspectorAsset = {
   thumbnailUrl: string | null
   width: number | null
   height: number | null
+  duration: number | null
+  audioInfo: NotebookAudioInfo | null
 }
 
 type NotebookCellInspectorProps = {
@@ -51,6 +57,12 @@ function NotebookCellMedia({
   const dimensions = asset.width && asset.height
     ? `${asset.width}×${asset.height}`
     : asset.type.toUpperCase()
+  const audioSummary = notebookAudioSummary({
+    audioInfo: asset.audioInfo,
+    durationSeconds: asset.duration,
+    hasOutput: true,
+    inputs: undefined,
+  })
 
   if (!previewUrl) return null
 
@@ -73,6 +85,7 @@ function NotebookCellMedia({
         )}
         <span className="inspector-cell-ratio">{dimensions}</span>
       </div>
+      {isAudio && <span className="workspace-notice">{audioSummary}</span>}
       {mediaUrl && (
         <div className="inspector-media-actions">
           <a href={mediaUrl} target="_blank" rel="noreferrer">Open output</a>
@@ -133,7 +146,7 @@ export function NotebookCellInspector({
   onRun,
   onDelete,
 }: NotebookCellInspectorProps) {
-  const canRun = Boolean(cell.operation ?? cell.tool ?? cell.model)
+  const action = notebookCellActionPresentation(cell, status)
   const textCell = cell.type === 'prompt'
     || cell.type === 'analyze'
     || cell.type === 'generate_video'
@@ -261,59 +274,63 @@ export function NotebookCellInspector({
       {generationCell && !cell.tool && !cell.model && (
         <span className="workspace-notice">Choose a generation tool before running this cell.</span>
       )}
-      <label>
-        Provider
-        <input
-          defaultValue={cell.provider ?? ''}
-          placeholder="Provider"
-          onBlur={(event) => {
-            if (event.target.value !== (cell.provider ?? '')) {
-              void onUpdate({ provider: event.target.value || undefined })
-            }
-          }}
-        />
-      </label>
-      <label>
-        Model
-        <input
-          defaultValue={cell.model ?? ''}
-          placeholder="Model"
-          onBlur={(event) => {
-            if (event.target.value !== (cell.model ?? '')) {
-              void onUpdate({ model: event.target.value || undefined })
-            }
-          }}
-        />
-      </label>
-      <label>
-        Operation
-        <input
-          defaultValue={cell.operation ?? ''}
-          placeholder="Operation"
-          onBlur={(event) => {
-            if (event.target.value !== (cell.operation ?? '')) {
-              void onUpdate({ operation: event.target.value || undefined })
-            }
-          }}
-        />
-      </label>
-      <label>
-        Tool
-        <input
-          defaultValue={cell.tool ?? cell.model ?? ''}
-          placeholder="Tool"
-          onBlur={(event) => {
-            if (event.target.value !== (cell.tool ?? cell.model ?? '')) {
-              void onUpdate({ tool: event.target.value || undefined })
-            }
-          }}
-        />
-      </label>
+      {!isNotebookMediaCellType(cell.type) && (
+        <>
+          <label>
+            Provider
+            <input
+              defaultValue={cell.provider ?? ''}
+              placeholder="Provider"
+              onBlur={(event) => {
+                if (event.target.value !== (cell.provider ?? '')) {
+                  void onUpdate({ provider: event.target.value || undefined })
+                }
+              }}
+            />
+          </label>
+          <label>
+            Model
+            <input
+              defaultValue={cell.model ?? ''}
+              placeholder="Model"
+              onBlur={(event) => {
+                if (event.target.value !== (cell.model ?? '')) {
+                  void onUpdate({ model: event.target.value || undefined })
+                }
+              }}
+            />
+          </label>
+          <label>
+            Operation
+            <input
+              defaultValue={cell.operation ?? ''}
+              placeholder="Operation"
+              onBlur={(event) => {
+                if (event.target.value !== (cell.operation ?? '')) {
+                  void onUpdate({ operation: event.target.value || undefined })
+                }
+              }}
+            />
+          </label>
+          <label>
+            Tool
+            <input
+              defaultValue={cell.tool ?? cell.model ?? ''}
+              placeholder="Tool"
+              onBlur={(event) => {
+                if (event.target.value !== (cell.tool ?? cell.model ?? '')) {
+                  void onUpdate({ tool: event.target.value || undefined })
+                }
+              }}
+            />
+          </label>
+        </>
+      )}
       <DoltCellSource notebookId={notebookId} cell={cell} />
       <div className="record-card-actions">
-        {canRun && (
-          <button type="button" onClick={() => void onRun(cell.id)} disabled={busy}>
-            Run cell
+        {action && (
+          <button type="button" onClick={() => void onRun(cell.id)} disabled={busy || action.disabled}>
+            {action.label}
           </button>
         )}
         <button

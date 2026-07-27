@@ -57,6 +57,12 @@ describe("notebook action catalog", () => {
     expect(actions.some((action) =>
       action.operation === "extract_audio"
       && action.cellTypes.includes("audio"))).toBe(false);
+    expect(actions.some((action) =>
+      action.cellTypes.some((type) =>
+        type === "audio"
+        || type === "image"
+        || type === "video"
+        || type === "character"))).toBe(false);
   });
 
   it("rejects invalid tools and returns 14-column raw rows via MCP", async () => {

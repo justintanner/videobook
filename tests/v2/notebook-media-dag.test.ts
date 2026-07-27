@@ -224,7 +224,13 @@ describe("notebook local media and analysis fan-out", () => {
       cell.inputs?.workflowRole?.toString().startsWith("scene-video-"));
     expect(firstVideos).toHaveLength(2);
     expect(firstVideos.every((cell) => cell.type === "video")).toBe(true);
-    expect(first.cells.filter((cell) => cell.operation === "capture_frame")).toHaveLength(4);
+    const frameCells = first.cells.filter((cell) =>
+      cell.inputs?.workflowRole?.toString().startsWith("frame-"));
+    expect(frameCells).toHaveLength(4);
+    expect(frameCells.every((cell) =>
+      cell.type === "image"
+      && cell.operation === undefined
+      && cell.tool === undefined)).toBe(true);
     expect(first.cells.filter((cell) => cell.operation === "image_to_video")).toHaveLength(2);
     for (let ordinal = 1; ordinal <= 2; ordinal += 1) {
       const split = first.cells.find((cell) =>
