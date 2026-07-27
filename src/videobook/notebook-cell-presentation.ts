@@ -38,6 +38,12 @@ export type NotebookAudioInfo = {
   sampleRateHz: number
 }
 
+export type NotebookAudioPresentation = {
+  details: string[]
+  duration: string | null
+  role: string
+}
+
 export type NotebookSplitFrameIds = {
   first: string | null
   last: string | null
@@ -81,6 +87,13 @@ export function notebookCellActionPresentation(
   }
 }
 
+export function notebookCellStatusLabel(
+  type: NotebookCellType,
+  status: string,
+): string | null {
+  return isNotebookMediaCellType(type) ? null : status
+}
+
 export function formatMediaTime(seconds: number): string {
   const hundredths = Math.round(Math.max(0, seconds) * 100)
   const minutes = Math.floor(hundredths / 6000)
@@ -93,12 +106,12 @@ export function formatMediaTime(seconds: number): string {
     : `${minutes}:${formattedSeconds}.${String(fraction).padStart(2, '0')}`
 }
 
-export function notebookAudioSummary(input: {
+export function notebookAudioPresentation(input: {
   audioInfo: NotebookAudioInfo | null
   durationSeconds: number | null
   hasOutput: boolean
   inputs: Record<string, unknown> | undefined
-}): string {
+}): NotebookAudioPresentation {
   const start = finiteNumber(input.inputs?.startSeconds)
   const end = finiteNumber(input.inputs?.endSeconds)
   const inputDuration = finiteNumber(input.inputs?.durationSeconds)
@@ -113,14 +126,26 @@ export function notebookAudioSummary(input: {
       : input.hasOutput
         ? 'Audio output'
         : 'Select audio media'
-  const details = [
+  return {
     role,
-    duration !== null && duration > 0 ? formatMediaTime(duration) : null,
-    input.audioInfo?.codec.toUpperCase() ?? null,
-    input.audioInfo ? `${input.audioInfo.sampleRateHz / 1000} kHz` : null,
-    input.audioInfo?.channelLayout ?? null,
-  ].filter((value): value is string => Boolean(value))
-  return details.join(' · ')
+    duration: duration !== null && duration > 0 ? formatMediaTime(duration) : null,
+    details: [
+      input.audioInfo?.codec.toUpperCase() ?? null,
+      input.audioInfo ? `${input.audioInfo.sampleRateHz / 1000} kHz` : null,
+      input.audioInfo?.channelLayout ?? null,
+    ].filter((value): value is string => Boolean(value)),
+  }
+}
+
+export function notebookAudioSummary(
+  input: Parameters<typeof notebookAudioPresentation>[0],
+): string {
+  const presentation = notebookAudioPresentation(input)
+  return [
+    presentation.role,
+    presentation.duration,
+    ...presentation.details,
+  ].filter((value): value is string => Boolean(value)).join(' · ')
 }
 
 export function notebookSplitFrameIds(

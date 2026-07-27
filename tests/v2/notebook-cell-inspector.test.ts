@@ -44,6 +44,8 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('preload="auto"')
     expect(html).toContain('controls=""')
     expect(html).toContain('/files/vid-source/original.mp4')
+    expect(html).toContain('>VIDEO</span>')
+    expect(html).not.toContain('completed')
   })
 
   it('projects every persisted cells-table column with raw null and JSON values', () => {

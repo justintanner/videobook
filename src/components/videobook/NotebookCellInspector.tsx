@@ -5,6 +5,7 @@ import {
   isNotebookMediaCellType,
   notebookAudioSummary,
   notebookCellActionPresentation,
+  notebookCellStatusLabel,
   type NotebookAudioInfo,
 } from '@/videobook/notebook-cell-presentation'
 
@@ -147,6 +148,7 @@ export function NotebookCellInspector({
   onDelete,
 }: NotebookCellInspectorProps) {
   const action = notebookCellActionPresentation(cell, status)
+  const statusLabel = notebookCellStatusLabel(cell.type, status)
   const textCell = cell.type === 'prompt'
     || cell.type === 'analyze'
     || cell.type === 'generate_video'
@@ -167,7 +169,9 @@ export function NotebookCellInspector({
   return (
     <div className="inspector-body">
       <h2 className="inspector-slug">{cell.title}</h2>
-      <span className="workspace-notice">{cell.type.toUpperCase()} · {status}</span>
+      <span className="workspace-notice">
+        {cell.type.toUpperCase()}{statusLabel ? ` · ${statusLabel}` : ''}
+      </span>
       {asset && mediaCell && <NotebookCellMedia asset={asset} title={cell.title} />}
       <label>
         Title

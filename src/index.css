@@ -1175,6 +1175,36 @@ textarea:focus-visible {
   letter-spacing: 0.04em;
 }
 
+.cell-audio-summary {
+  display: grid;
+  width: 100%;
+  justify-items: center;
+  gap: 3px;
+}
+
+.cell-copy-audio .cell-audio-role {
+  color: #91bfc5;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.cell-audio-duration {
+  color: #d5fbff;
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 16px rgba(99, 218, 232, 0.44);
+}
+
+.cell-copy-audio .cell-audio-details {
+  color: #6f999f;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .cell-copy-audio audio {
   width: 100%;
   height: 32px;

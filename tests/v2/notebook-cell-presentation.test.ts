@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatMediaTime,
+  notebookAudioPresentation,
   notebookAudioSummary,
   notebookCellActionPresentation,
+  notebookCellStatusLabel,
   notebookCellSupportsExecution,
   notebookSplitFrameIds,
   notebookSplitRange,
@@ -44,6 +46,14 @@ describe('notebook cell presentation', () => {
     }, 'pending')).toEqual({ disabled: false, label: 'Run' })
   })
 
+  it('hides execution status for passive media but not generators', () => {
+    expect(notebookCellStatusLabel('video', 'completed')).toBeNull()
+    expect(notebookCellStatusLabel('image', 'completed')).toBeNull()
+    expect(notebookCellStatusLabel('audio', 'completed')).toBeNull()
+    expect(notebookCellStatusLabel('generate_video', 'completed')).toBe('completed')
+    expect(notebookCellStatusLabel('split_video', 'completed')).toBe('completed')
+  })
+
   it('projects canonical split frame references and range values', () => {
     const inputs = {
       startSeconds: 15,
@@ -65,7 +75,7 @@ describe('notebook cell presentation', () => {
   it('formats persisted audio stream information', () => {
     expect(formatMediaTime(60.005)).toBe('1:00.01')
     expect(formatMediaTime(59.999)).toBe('1:00')
-    expect(notebookAudioSummary({
+    const input = {
       audioInfo: {
         channelLayout: 'stereo',
         channels: 2,
@@ -76,7 +86,15 @@ describe('notebook cell presentation', () => {
       durationSeconds: 15,
       hasOutput: true,
       inputs: { audioRole: 'scene' },
-    })).toBe('Scene audio · 0:15 · AAC · 48 kHz · stereo')
+    }
+    expect(notebookAudioPresentation(input)).toEqual({
+      role: 'Scene audio',
+      duration: '0:15',
+      details: ['AAC', '48 kHz', 'stereo'],
+    })
+    expect(notebookAudioSummary(input)).toBe(
+      'Scene audio · 0:15 · AAC · 48 kHz · stereo',
+    )
     expect(notebookAudioSummary({
       audioInfo: null,
       durationSeconds: null,

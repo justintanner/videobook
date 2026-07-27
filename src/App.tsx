@@ -111,8 +111,9 @@ import {
 } from '@/videobook/notebook-routing'
 import {
   formatMediaTime,
-  notebookAudioSummary,
+  notebookAudioPresentation,
   notebookCellActionPresentation,
+  notebookCellStatusLabel,
   notebookCellSupportsExecution,
   notebookSplitFrameIds,
   notebookSplitRange,
@@ -1096,6 +1097,26 @@ function SplitVideoPreview({ data }: { data: CanvasCellData }) {
   )
 }
 
+function AudioCellSummary({ data }: { data: CanvasCellData }) {
+  const presentation = notebookAudioPresentation({
+    audioInfo: data.asset?.audioInfo ?? null,
+    durationSeconds: data.asset?.duration ?? null,
+    hasOutput: Boolean(data.outputArtifactId),
+    inputs: data.inputs,
+  })
+  return (
+    <div className="cell-audio-summary">
+      <span className="cell-audio-role">{presentation.role}</span>
+      {presentation.duration && (
+        <strong className="cell-audio-duration">{presentation.duration}</strong>
+      )}
+      {presentation.details.length > 0 && (
+        <span className="cell-audio-details">{presentation.details.join(' · ')}</span>
+      )}
+    </div>
+  )
+}
+
 const cellSourcePortSides = [
   'left',
   'right',
@@ -1136,12 +1157,7 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
     outputArtifactId: data.outputArtifactId,
     tool: data.tool,
   }, data.status)
-  const audioSummary = notebookAudioSummary({
-    audioInfo: data.asset?.audioInfo ?? null,
-    durationSeconds: data.asset?.duration ?? null,
-    hasOutput: Boolean(data.outputArtifactId),
-    inputs: data.inputs,
-  })
+  const statusLabel = notebookCellStatusLabel(data.kind, data.status)
 
   return (
     <article className={`cell-node cell-kind-${data.kind} ${selected ? 'cell-node-selected' : ''}`}>
@@ -1198,7 +1214,9 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
           <div className="cell-copy cell-copy-audio">
             <AudioWaveform size={38} />
             {playableAudio && mediaUrl ? <audio src={mediaUrl} controls preload="metadata" /> : null}
-            <span>{data.kind === 'audio' ? audioSummary : emptyCellLabel(data)}</span>
+            {data.kind === 'audio'
+              ? <AudioCellSummary data={data} />
+              : <span>{emptyCellLabel(data)}</span>}
           </div>
         ) : visualMediaCell && (mediaUrl || thumbnailUrl) ? (
           <div className="cell-media">
@@ -1216,7 +1234,9 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
         )}
         <footer className="cell-node-footer">
           <strong>{cellSlug(data.title, data.kind)}</strong>
-          <span className={`cell-status cell-status-${data.status}`}>{data.status}</span>
+          {statusLabel && (
+            <span className={`cell-status cell-status-${statusLabel}`}>{statusLabel}</span>
+          )}
         </footer>
       </section>
       <Handle
