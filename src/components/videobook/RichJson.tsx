@@ -46,11 +46,17 @@ function tokenizeJson(value: unknown): JsonToken[] {
   return tokens
 }
 
-export function RichJson({ value }: { value: unknown }) {
+export function RichJson({
+  value,
+  ariaLabel = 'Formatted action source',
+}: {
+  value: unknown
+  ariaLabel?: string
+}) {
   const tokens = tokenizeJson(value)
 
   return (
-    <pre className="inspector-source-json" aria-label="Formatted action source">
+    <pre className="inspector-source-json" aria-label={ariaLabel}>
       {tokens.map((token, index): ReactNode => (
         <span className={`json-${token.kind}`} key={`${index}-${token.value}`}>
           {token.value}

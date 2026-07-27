@@ -1,5 +1,7 @@
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -7,7 +9,9 @@ import {
   useState,
   type CSSProperties,
   type ChangeEvent,
+  type DragEvent,
   type FormEvent,
+  type KeyboardEvent,
 } from 'react'
 import {
   Handle,
@@ -27,6 +31,7 @@ import {
   Activity,
   AudioWaveform,
   BookOpen,
+  Braces,
   Check,
   ChevronDown,
   CircleDot,
@@ -39,12 +44,15 @@ import {
   PanelRightOpen,
   Plus,
   RefreshCw,
+  Search,
   Settings,
   Sparkles,
   Square,
   Trash2,
   Undo2,
+  Upload,
   Video,
+  X,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
@@ -153,6 +161,53 @@ type AssetRecord = {
   audioInfo: NotebookAudioInfo | null
 }
 
+type PassiveMediaKind = 'audio' | 'image' | 'video'
+
+type MediaSlotOperation = 'attach' | 'clear' | 'upload'
+
+type MediaSlotState = {
+  operation: MediaSlotOperation | null
+  error: string | null
+}
+
+type LibraryAssetRecord = AssetRecord & {
+  owningBookId: string
+  owningBookSlug: string
+}
+
+type LibrarySearchPage = {
+  offset: number
+  limit: number
+  total: number
+  hasMore: boolean
+}
+
+type LibrarySearchResult = {
+  assets: LibraryAssetRecord[]
+  page: LibrarySearchPage
+  booksWithErrors: Array<{ bookId: string; message: string }>
+}
+
+type MediaLibraryPickerState = {
+  cellId: string
+  query: string
+  draftQuery: string
+  assets: LibraryAssetRecord[]
+  page: LibrarySearchPage
+  booksWithErrors: Array<{ bookId: string; message: string }>
+  loading: boolean
+  loadingMore: boolean
+  error: string | null
+  activeArtifactId: string | null
+}
+
+type MediaSlotContextValue = {
+  states: Record<string, MediaSlotState>
+  onFile: (cellId: string, file: File) => void
+  onFileError: (cellId: string, message: string) => void
+  onOpenLibrary: (cellId: string) => void
+}
+
 type IngestStatus = {
   artifactId: string
   state: string
@@ -259,6 +314,7 @@ const supportedUiActions = new Set([
 
 interface CanvasCellData extends NotebookCellData {
   asset?: AssetRecord
+  deleting?: boolean
   splitFrames?: {
     first: { artifactId: string | null; asset?: AssetRecord }
     last: { artifactId: string | null; asset?: AssetRecord }
@@ -268,7 +324,16 @@ interface CanvasCellData extends NotebookCellData {
 
 type CanvasNode = Node<CanvasCellData>
 
-const mcpUrl = new URL('/mcp', window.location.origin).toString()
+const MediaSlotContext = createContext<MediaSlotContextValue>({
+  states: {},
+  onFile: () => undefined,
+  onFileError: () => undefined,
+  onOpenLibrary: () => undefined,
+})
+
+const mcpUrl = typeof window === 'undefined'
+  ? 'http://localhost/mcp'
+  : new URL('/mcp', window.location.origin).toString()
 const ingestPollIntervalMs = 750
 const ingestPollTimeoutMs = 5 * 60_000
 const activeJobStates = new Set(['queued', 'running', 'completing'])
@@ -497,6 +562,47 @@ function asNotebooks(value: unknown): NotebookDocument[] {
     : []
 }
 
+function asAsset(value: unknown): AssetRecord | null {
+  const item = record(value)
+  const id = item && asString(item.id)
+  const artifactId = item && asString(item.artifact_id ?? item.artifactId)
+  const type = item && asString(item.type)
+  if (!item || !id || !artifactId || !type) return null
+  const audio = record(item.audio_info)
+  const codec = audio && asString(audio.codec)
+  const sampleRateHz = audio && asNumber(audio.sample_rate_hz)
+  const channels = audio && asNumber(audio.channels)
+  const channelLayout = audio && asString(audio.channel_layout)
+  const durationSeconds = audio && asNumber(audio.duration_seconds)
+  const audioInfo = codec
+    && sampleRateHz !== null
+    && channels !== null
+    && channelLayout
+    && durationSeconds !== null
+    ? {
+        codec,
+        sampleRateHz,
+        channels,
+        channelLayout,
+        durationSeconds,
+      }
+    : null
+  return {
+    id,
+    artifactId,
+    type,
+    createdAt: asString(item.created_at ?? item.createdAt) ?? '',
+    mediaUrl: asString(item.media_url ?? item.mediaUrl),
+    thumbnailUrl: asString(item.thumbnail_url ?? item.thumbnailUrl),
+    status: asString(item.status) ?? 'ready',
+    prompt: asString(item.prompt),
+    width: asNumber(item.width),
+    height: asNumber(item.height),
+    duration: asNumber(item.duration),
+    audioInfo,
+  }
+}
+
 function asAssets(value: unknown): AssetRecord[] {
   const container = record(value)
   const source = Array.isArray(value)
@@ -505,45 +611,44 @@ function asAssets(value: unknown): AssetRecord[] {
       ? container.assets
       : []
   return source.flatMap((entry) => {
-    const item = record(entry)
-    const id = item && asString(item.id)
-    const artifactId = item && asString(item.artifact_id ?? item.artifactId)
-    const type = item && asString(item.type)
-    if (!item || !id || !artifactId || !type) return []
-    const audio = record(item.audio_info)
-    const codec = audio && asString(audio.codec)
-    const sampleRateHz = audio && asNumber(audio.sample_rate_hz)
-    const channels = audio && asNumber(audio.channels)
-    const channelLayout = audio && asString(audio.channel_layout)
-    const durationSeconds = audio && asNumber(audio.duration_seconds)
-    const audioInfo = codec
-      && sampleRateHz !== null
-      && channels !== null
-      && channelLayout
-      && durationSeconds !== null
-      ? {
-          codec,
-          sampleRateHz,
-          channels,
-          channelLayout,
-          durationSeconds,
-        }
-      : null
-    return [{
-      id,
-      artifactId,
-      type,
-      createdAt: asString(item.created_at ?? item.createdAt) ?? '',
-      mediaUrl: asString(item.media_url ?? item.mediaUrl),
-      thumbnailUrl: asString(item.thumbnail_url ?? item.thumbnailUrl),
-      status: asString(item.status) ?? 'ready',
-      prompt: asString(item.prompt),
-      width: asNumber(item.width),
-      height: asNumber(item.height),
-      duration: asNumber(item.duration),
-      audioInfo,
-    }]
+    const asset = asAsset(entry)
+    return asset ? [asset] : []
   })
+}
+
+function asLibrarySearchResult(value: unknown): LibrarySearchResult {
+  const container = record(value)
+  const source = Array.isArray(container?.assets) ? container.assets : []
+  const pageValue = record(container?.page)
+  const offset = asNumber(pageValue?.offset) ?? 0
+  const limit = asNumber(pageValue?.limit) ?? 24
+  const total = asNumber(pageValue?.total) ?? 0
+  const errors = Array.isArray(container?.books_with_errors)
+    ? container.books_with_errors
+    : []
+  return {
+    assets: source.flatMap((entry) => {
+      const item = record(entry)
+      const asset = asAsset(item)
+      const owningBookId = item && asString(item.owning_book_id)
+      const owningBookSlug = item && asString(item.owning_book_slug)
+      return asset && owningBookId && owningBookSlug
+        ? [{ ...asset, owningBookId, owningBookSlug }]
+        : []
+    }),
+    page: {
+      offset,
+      limit,
+      total,
+      hasMore: pageValue?.hasMore === true,
+    },
+    booksWithErrors: errors.flatMap((entry) => {
+      const item = record(entry)
+      const errorBookId = item && asString(item.book_id)
+      const message = item && asString(item.message)
+      return errorBookId && message ? [{ bookId: errorBookId, message }] : []
+    }),
+  }
 }
 
 function asIngestStatuses(value: unknown): IngestStatus[] {
@@ -914,6 +1019,64 @@ function saveValue(key: string, value: string): void {
   }
 }
 
+const mediaFileExtensions: Record<PassiveMediaKind, ReadonlySet<string>> = {
+  audio: new Set(['aac', 'flac', 'm4a', 'mp3', 'ogg', 'wav', 'weba']),
+  image: new Set(['gif', 'jpeg', 'jpg', 'png', 'svg', 'webp']),
+  video: new Set(['avi', 'mkv', 'mov', 'mp4', 'webm']),
+}
+
+const mediaFileAccept: Record<PassiveMediaKind, string> = {
+  audio: 'audio/*,.aac,.flac,.m4a,.mp3,.ogg,.wav,.weba',
+  image: 'image/*,.gif,.jpeg,.jpg,.png,.svg,.webp',
+  video: 'video/*,.avi,.mkv,.mov,.mp4,.webm',
+}
+
+const emptyLibraryPage: LibrarySearchPage = {
+  offset: 0,
+  limit: 24,
+  total: 0,
+  hasMore: false,
+}
+
+function passiveMediaKind(kind: NotebookCellType): PassiveMediaKind | null {
+  return kind === 'audio' || kind === 'image' || kind === 'video' ? kind : null
+}
+
+function mediaKindForFile(
+  file: Pick<File, 'name' | 'type'>,
+): PassiveMediaKind | null {
+  const mimeKind = file.type.split('/', 1)[0]
+  if (mimeKind === 'audio' || mimeKind === 'image' || mimeKind === 'video') {
+    return mimeKind
+  }
+  const extension = file.name.toLowerCase().split('.').pop() ?? ''
+  for (const kind of ['audio', 'image', 'video'] as const) {
+    if (mediaFileExtensions[kind].has(extension)) return kind
+  }
+  return null
+}
+
+function mediaLibraryKinds(kind: PassiveMediaKind): string[] {
+  return kind === 'video' ? ['video', 'final'] : [kind]
+}
+
+function isEmptyPassiveMediaSlot(
+  kind: NotebookCellType,
+  outputArtifactId: string | undefined,
+  targetConnectionCount: number,
+): boolean {
+  return passiveMediaKind(kind) !== null
+    && outputArtifactId === undefined
+    && targetConnectionCount === 0
+}
+
+function isCompatibleLibraryAsset(
+  kind: PassiveMediaKind,
+  assetType: string,
+): boolean {
+  return mediaLibraryKinds(kind).includes(assetType)
+}
+
 function asInitialWorkspace(
   payload: InitialWorkspacePayload | null,
 ): InitialWorkspace | null {
@@ -1120,6 +1283,293 @@ function AudioCellSummary({ data }: { data: CanvasCellData }) {
   )
 }
 
+function MediaSlotTile({
+  cellId,
+  kind,
+  state,
+  onFile,
+  onFileError,
+  onOpenLibrary,
+}: {
+  cellId: string
+  kind: PassiveMediaKind
+  state: MediaSlotState | undefined
+  onFile: (cellId: string, file: File) => void
+  onFileError: (cellId: string, message: string) => void
+  onOpenLibrary: (cellId: string) => void
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const busy = state?.operation !== null && state?.operation !== undefined
+
+  const acceptFiles = (files: FileList | null) => {
+    const selected = files ? [...files] : []
+    if (selected.length !== 1) {
+      onFileError(cellId, 'Choose one file for this media slot.')
+      return
+    }
+    onFile(cellId, selected[0]!)
+  }
+
+  const acceptsOsFiles = (event: DragEvent<HTMLElement>) =>
+    event.dataTransfer.types.includes('Files')
+
+  return (
+    <section
+      className={`cell-media-slot nodrag nowheel${dragging ? ' cell-media-slot-dragging' : ''}`}
+      aria-label={`Empty ${kind} media slot`}
+      onDragEnter={(event) => {
+        if (!acceptsOsFiles(event)) return
+        event.preventDefault()
+        event.stopPropagation()
+        setDragging(true)
+      }}
+      onDragLeave={(event) => {
+        if (!acceptsOsFiles(event)) return
+        event.preventDefault()
+        event.stopPropagation()
+        setDragging(false)
+      }}
+      onDragOver={(event) => {
+        if (!acceptsOsFiles(event)) return
+        event.preventDefault()
+        event.stopPropagation()
+        event.dataTransfer.dropEffect = 'copy'
+      }}
+      onDrop={(event) => {
+        if (!acceptsOsFiles(event)) return
+        event.preventDefault()
+        event.stopPropagation()
+        setDragging(false)
+        if (!busy) acceptFiles(event.dataTransfer.files)
+      }}
+    >
+      <button
+        type="button"
+        className="cell-media-slot-upload"
+        disabled={busy}
+        onClick={(event) => {
+          event.stopPropagation()
+          inputRef.current?.click()
+        }}
+      >
+        {busy ? <LoaderCircle size={24} className="spin" /> : <Upload size={24} />}
+        <strong>{busy ? 'Attaching media…' : `Add ${kind}`}</strong>
+        <span>Drop one file or choose from this device</span>
+      </button>
+      <button
+        type="button"
+        className="cell-media-slot-library"
+        disabled={busy}
+        onClick={(event) => {
+          event.stopPropagation()
+          onOpenLibrary(cellId)
+        }}
+      >
+        <Search size={13} />Search library
+      </button>
+      <input
+        ref={inputRef}
+        className="cell-media-slot-input"
+        type="file"
+        accept={mediaFileAccept[kind]}
+        disabled={busy}
+        onChange={(event) => {
+          acceptFiles(event.target.files)
+          event.target.value = ''
+        }}
+      />
+      {state?.error && <span className="cell-media-slot-error" role="alert">{state.error}</span>}
+    </section>
+  )
+}
+
+function LibraryAssetPreview({ asset }: { asset: LibraryAssetRecord }) {
+  const previewUrl = asset.thumbnailUrl ?? asset.mediaUrl
+  if (previewUrl && asset.type !== 'audio') {
+    return <img src={previewUrl} alt="" />
+  }
+  return (
+    <span className="media-library-asset-placeholder">
+      {asset.type === 'audio' ? <AudioWaveform size={28} /> : <Film size={28} />}
+      {asset.duration !== null && <small>{formatMediaTime(asset.duration)}</small>}
+    </span>
+  )
+}
+
+function focusableDialogElements(container: HTMLElement): HTMLElement[] {
+  return [...container.querySelectorAll<HTMLElement>(
+    'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+  )].filter((element) => !element.hidden)
+}
+
+function MediaLibraryDialog({
+  state,
+  kind,
+  targetBookId,
+  onClose,
+  onDraftQuery,
+  onSearch,
+  onLoadMore,
+  onAttach,
+}: {
+  state: MediaLibraryPickerState
+  kind: PassiveMediaKind
+  targetBookId: string
+  onClose: () => void
+  onDraftQuery: (query: string) => void
+  onSearch: () => void
+  onLoadMore: () => void
+  onAttach: (asset: LibraryAssetRecord) => void
+}) {
+  const dialogRef = useRef<HTMLElement | null>(null)
+  const busy = state.activeArtifactId !== null
+
+  return (
+    <div
+      className="media-library-backdrop"
+      onMouseDown={(event) => {
+        if (event.currentTarget === event.target && !busy) onClose()
+      }}
+    >
+      <section
+        ref={dialogRef}
+        className="media-library-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="media-library-title"
+        aria-describedby="media-library-description"
+        onKeyDown={(event: KeyboardEvent<HTMLElement>) => {
+          if (event.key === 'Escape' && !busy) {
+            event.preventDefault()
+            onClose()
+            return
+          }
+          if (event.key !== 'Tab' || !dialogRef.current) return
+          const focusable = focusableDialogElements(dialogRef.current)
+          if (focusable.length === 0) return
+          const first = focusable[0]!
+          const last = focusable[focusable.length - 1]!
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault()
+            last.focus()
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault()
+            first.focus()
+          }
+        }}
+      >
+        <header>
+          <div>
+            <span>ALL BOOKS</span>
+            <h2 id="media-library-title">Choose {kind} media</h2>
+            <p id="media-library-description">
+              Recent compatible assets appear first. Assets from another book are copied safely.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="media-library-close"
+            aria-label="Close media library"
+            disabled={busy}
+            onClick={onClose}
+          >
+            <X size={17} />
+          </button>
+        </header>
+        <form
+          className="media-library-search"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (!busy) onSearch()
+          }}
+        >
+          <label htmlFor="media-library-query">Search library</label>
+          <div>
+            <input
+              id="media-library-query"
+              type="search"
+              value={state.draftQuery}
+              placeholder={`Search ${kind} assets`}
+              autoFocus
+              disabled={busy}
+              onChange={(event) => onDraftQuery(event.target.value)}
+            />
+            <button type="submit" disabled={busy || state.loading}>
+              <Search size={14} />Search
+            </button>
+          </div>
+        </form>
+        <div className="media-library-results" aria-busy={state.loading || state.loadingMore}>
+          {state.error && <p className="media-library-error" role="alert">{state.error}</p>}
+          {state.booksWithErrors.length > 0 && (
+            <p className="media-library-warning" role="status">
+              {state.booksWithErrors.length} book
+              {state.booksWithErrors.length === 1 ? '' : 's'} could not be searched.
+            </p>
+          )}
+          {state.loading && state.assets.length === 0 ? (
+            <div className="media-library-loading">
+              <LoaderCircle size={24} className="spin" />Loading recent media…
+            </div>
+          ) : state.assets.length === 0 ? (
+            <div className="media-library-empty">
+              <Library size={24} />
+              <strong>No compatible media found</strong>
+              <span>Try another search or upload a file directly into the slot.</span>
+            </div>
+          ) : (
+            <div className="media-library-grid">
+              {state.assets.map((asset) => {
+                const active = state.activeArtifactId === asset.artifactId
+                return (
+                  <button
+                    key={`${asset.owningBookId}:${asset.artifactId}`}
+                    type="button"
+                    className="media-library-asset"
+                    disabled={busy}
+                    aria-label={`Use @${asset.id} from ${asset.owningBookSlug}`}
+                    onClick={() => onAttach(asset)}
+                  >
+                    <LibraryAssetPreview asset={asset} />
+                    <span className="media-library-asset-copy">
+                      <strong>@{asset.id}</strong>
+                      <small>
+                        {asset.owningBookSlug}
+                        {asset.owningBookId === targetBookId ? ' · this book' : ' · copy'}
+                      </small>
+                    </span>
+                    {active && (
+                      <span className="media-library-asset-busy">
+                        <LoaderCircle size={16} className="spin" />Attaching…
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+        <footer>
+          <span>
+            {state.assets.length} of {state.page.total} compatible assets
+          </span>
+          {state.page.hasMore && (
+            <button
+              type="button"
+              disabled={busy || state.loadingMore}
+              onClick={onLoadMore}
+            >
+              {state.loadingMore ? <LoaderCircle size={14} className="spin" /> : <Plus size={14} />}
+              {state.loadingMore ? 'Loading…' : 'Load more'}
+            </button>
+          )}
+        </footer>
+      </section>
+    </div>
+  )
+}
+
 const cellSourcePortSides = [
   'left',
   'right',
@@ -1139,11 +1589,18 @@ const cellSourceRoutePorts = cellSourcePortSides.flatMap((side) =>
       : { top: `${offset * 100}%` },
   })))
 
-function CellNode({ data, selected }: NodeProps<CanvasNode>) {
+function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
+  const slotContext = useContext(MediaSlotContext)
   const mediaUrl = data.asset?.mediaUrl
   const thumbnailUrl = data.asset?.thumbnailUrl
   const targetInputs = data.targetInputs?.length ? data.targetInputs : ['input']
   const targetConnectionCount = data.targetConnectionCount ?? 0
+  const slotKind = passiveMediaKind(data.kind)
+  const emptyMediaSlot = slotKind !== null && isEmptyPassiveMediaSlot(
+    data.kind,
+    data.outputArtifactId,
+    targetConnectionCount,
+  )
   const playableVideo = data.asset?.type === 'video' || data.asset?.type === 'final'
   const playableAudio = data.asset?.type === 'audio'
   const audioCell = data.kind === 'audio' || data.kind === 'generate_audio'
@@ -1163,7 +1620,14 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
   const statusLabel = notebookCellStatusLabel(data.kind, data.status)
 
   return (
-    <article className={`cell-node cell-kind-${data.kind} ${selected ? 'cell-node-selected' : ''}`}>
+    <article
+      className={[
+        'cell-node',
+        `cell-kind-${data.kind}`,
+        selected ? 'cell-node-selected' : '',
+        data.deleting ? 'cell-node-deleting' : '',
+      ].filter(Boolean).join(' ')}
+    >
       {targetInputs.map((input, index) => (
         <Handle
           key={input}
@@ -1211,7 +1675,16 @@ function CellNode({ data, selected }: NodeProps<CanvasNode>) {
             </button>
           )}
         </header>
-        {data.kind === 'split_video' ? (
+        {emptyMediaSlot && slotKind ? (
+          <MediaSlotTile
+            cellId={id}
+            kind={slotKind}
+            state={slotContext.states[id]}
+            onFile={slotContext.onFile}
+            onFileError={slotContext.onFileError}
+            onOpenLibrary={slotContext.onOpenLibrary}
+          />
+        ) : data.kind === 'split_video' ? (
           <SplitVideoPreview data={data} />
         ) : audioCell ? (
           <div className="cell-copy cell-copy-audio">
@@ -1298,11 +1771,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [providers, setProviders] = useState<ProviderRecord[]>([])
   const [storage, setStorage] = useState<unknown>(null)
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null)
+  const [deletingCellId, setDeletingCellId] = useState<string | null>(null)
+  const [mediaSlotStates, setMediaSlotStates] = useState<Record<string, MediaSlotState>>({})
+  const [mediaLibraryPicker, setMediaLibraryPicker] = useState<MediaLibraryPickerState | null>(null)
   const [fullscreenCellId, setFullscreenCellId] = useState<string | null>(null)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
   const [notebookView, setNotebookView] = useState({ y: 0, zoom: 1 })
   const [notebookSurface, setNotebookSurface] = useState({ width: 0, height: 0 })
   const [inspectorOpen, setInspectorOpen] = useState(false)
+  const [sourceViewCellId, setSourceViewCellId] = useState<string | null>(null)
   const [bookMenuOpen, setBookMenuOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [recording, setRecording] = useState(false)
@@ -1346,6 +1823,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const recorderStreamRef = useRef<MediaStream | null>(null)
   const recorderChunksRef = useRef<Blob[]>([])
   const audioSpinePlayerRef = useRef<HTMLAudioElement | null>(null)
+  const mediaLibraryRequestRef = useRef(0)
+  const mediaLibraryOpenerRef = useRef<HTMLElement | null>(null)
   const activeBook = useMemo(
     () => books.find((book) => book.bookId === bookId) ?? null,
     [bookId, books],
@@ -1429,6 +1908,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (mcp.state !== 'ready') throw new Error('MCP server is not ready')
     return parseResult(await mcp.callTool(tool, args))
   }, [mcp])
+
+  const setMediaSlotOperation = useCallback((
+    cellId: string,
+    operation: MediaSlotOperation | null,
+    error: string | null = null,
+  ) => {
+    setMediaSlotStates((current) => ({
+      ...current,
+      [cellId]: { operation, error },
+    }))
+  }, [])
+
+  const setMediaSlotError = useCallback((cellId: string, message: string) => {
+    setMediaSlotOperation(cellId, null, message)
+  }, [setMediaSlotOperation])
 
   useEffect(() => {
     const updateOnlineState = () => setOnline(window.navigator.onLine)
@@ -1642,6 +2136,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => notebook?.cells.find((cell) => cell.id === selectedCellId) ?? null,
     [notebook, selectedCellId],
   )
+  const selectedMediaSlotState = selectedNotebookCell
+    ? mediaSlotStates[selectedNotebookCell.id]
+    : undefined
   const fullscreenCell = useMemo(
     () => notebook?.cells.find((cell) => cell.id === fullscreenCellId) ?? null,
     [fullscreenCellId, notebook],
@@ -1656,6 +2153,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const applyNotebook = useCallback((next: NotebookDocument, nextAssets: AssetRecord[]) => {
     setNotebook(next)
+    const cellIds = new Set(next.cells.map((cell) => cell.id))
+    setMediaSlotStates((current) => Object.fromEntries(
+      Object.entries(current).filter(([cellId]) => cellIds.has(cellId)),
+    ))
+    setMediaLibraryPicker((current) =>
+      current && cellIds.has(current.cellId) ? current : null)
     setNodes((current) => {
       const selectedIds = new Set(
         current.filter((node) => node.selected).map((node) => node.id),
@@ -1876,19 +2379,29 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const deleteSelectedCell = async () => {
     if (!bookId || !notebook || !selectedCell) return
+    const cellId = selectedCell.id
+    setDeletingCellId(cellId)
+    setNodes((current) => current.map((node) => node.id === cellId
+      ? { ...node, data: { ...node.data, deleting: true } }
+      : node))
     setBusy(true)
     try {
+      await delay(180)
       await call('delete_notebook_cell', {
         book_id: bookId,
         notebook_id: notebook.id,
-        cell_id: selectedCell.id,
+        cell_id: cellId,
       })
-      if (fullscreenCellId === selectedCell.id) setFullscreenCellId(null)
+      if (fullscreenCellId === cellId) setFullscreenCellId(null)
       await refreshBookData(bookId, notebook.id)
       setNotice('Cell deleted')
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error))
     } finally {
+      setNodes((current) => current.map((node) => node.id === cellId
+        ? { ...node, data: { ...node.data, deleting: false } }
+        : node))
+      setDeletingCellId(null)
       setBusy(false)
     }
   }
@@ -1945,6 +2458,245 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setNotice('Connection removed')
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  const clearSelectedMediaSlot = async () => {
+    if (!bookId || !notebook || !selectedNotebookCell) return
+    if (!passiveMediaKind(selectedNotebookCell.type)) return
+    const cellId = selectedNotebookCell.id
+    setMediaSlotOperation(cellId, 'clear')
+    try {
+      await call('set_notebook_media_slot', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        cell_id: cellId,
+        artifact_ref: null,
+      })
+      if (fullscreenCellId === cellId) setFullscreenCellId(null)
+      await refreshNotebook(bookId, notebook.id)
+      setMediaSlotOperation(cellId, null)
+      setNotice('Media slot cleared')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setMediaSlotError(cellId, message)
+      setNotice(message)
+    }
+  }
+
+  const uploadMediaSlotFile = async (cellId: string, file: File) => {
+    if (!bookId || !notebook) return
+    const cell = notebook.cells.find((candidate) => candidate.id === cellId)
+    const kind = cell && passiveMediaKind(cell.type)
+    if (!cell || !kind) return
+    if (
+      cell.outputArtifactId
+      || notebook.edges.some((edge) => edge.target === cellId)
+    ) {
+      setMediaSlotError(cellId, 'Clear this slot before attaching different media.')
+      return
+    }
+    const fileKind = mediaKindForFile(file)
+    if (fileKind !== kind) {
+      setMediaSlotError(cellId, `Choose one ${kind} file for this slot.`)
+      return
+    }
+
+    setMediaSlotOperation(cellId, 'upload')
+    try {
+      const objectHash = await fileObjectHash(file)
+      const duplicateValue = record(await call('check_duplicate_bytes', {
+        book_id: bookId,
+        object_hash: objectHash,
+      }))
+      const matches = Array.isArray(duplicateValue?.matches)
+        ? duplicateValue.matches
+        : []
+      const duplicate = matches
+        .map((value) => record(value))
+        .find((value) => {
+          const duplicateKind = value && asString(value.kind)
+          return duplicateKind !== null && isCompatibleLibraryAsset(kind, duplicateKind)
+        })
+      let artifactRef = duplicate && asString(duplicate.slug)
+      const reusedExisting = Boolean(artifactRef)
+
+      if (!artifactRef) {
+        const response = await fetch(
+          `/api/books/${encodeURIComponent(bookId)}/upload?filename=${encodeURIComponent(file.name)}`,
+          { method: 'POST', body: file },
+        )
+        const payload = record(await response.json())
+        if (!response.ok) {
+          throw new Error(asString(payload?.error) ?? `Upload failed: ${file.name}`)
+        }
+        artifactRef = asString(payload?.assetId)
+        if (!artifactRef) throw new Error('Upload did not return an asset slug')
+      }
+
+      await call('set_notebook_media_slot', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        cell_id: cellId,
+        artifact_ref: artifactRef,
+      })
+      await refreshBookData(bookId, notebook.id)
+      setMediaSlotOperation(cellId, null)
+      setNotice(reusedExisting
+        ? `Reused @${artifactRef} in media slot`
+        : `Uploaded and attached @${artifactRef}`)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setMediaSlotError(cellId, message)
+      setNotice(message)
+    }
+  }
+
+  const closeMediaLibrary = () => {
+    mediaLibraryRequestRef.current += 1
+    setMediaLibraryPicker(null)
+    const opener = mediaLibraryOpenerRef.current
+    mediaLibraryOpenerRef.current = null
+    if (opener?.isConnected) window.setTimeout(() => opener.focus(), 0)
+  }
+
+  const loadMediaLibrary = async (
+    cellId: string,
+    query: string,
+    offset: number,
+    append: boolean,
+  ) => {
+    const cell = notebook?.cells.find((candidate) => candidate.id === cellId)
+    const kind = cell && passiveMediaKind(cell.type)
+    if (!kind) return
+    const requestId = mediaLibraryRequestRef.current + 1
+    mediaLibraryRequestRef.current = requestId
+    setMediaLibraryPicker((current) => {
+      if (!current || current.cellId !== cellId) return current
+      return {
+        ...current,
+        query,
+        assets: append ? current.assets : [],
+        page: append ? current.page : emptyLibraryPage,
+        booksWithErrors: append ? current.booksWithErrors : [],
+        loading: !append,
+        loadingMore: append,
+        error: null,
+      }
+    })
+    try {
+      const result = asLibrarySearchResult(await call('search_library_assets', {
+        ...(query.trim() ? { query: query.trim() } : {}),
+        kinds: [kind],
+        limit: emptyLibraryPage.limit,
+        offset,
+      }))
+      if (mediaLibraryRequestRef.current !== requestId) return
+      setMediaLibraryPicker((current) => {
+        if (!current || current.cellId !== cellId) return current
+        const compatible = result.assets.filter((asset) =>
+          isCompatibleLibraryAsset(kind, asset.type))
+        const combined = append ? [...current.assets, ...compatible] : compatible
+        const unique = new Map(combined.map((asset) => [
+          `${asset.owningBookId}:${asset.artifactId}`,
+          asset,
+        ]))
+        return {
+          ...current,
+          assets: [...unique.values()],
+          page: result.page,
+          booksWithErrors: result.booksWithErrors,
+          loading: false,
+          loadingMore: false,
+        }
+      })
+    } catch (error) {
+      if (mediaLibraryRequestRef.current !== requestId) return
+      const message = error instanceof Error ? error.message : String(error)
+      setMediaLibraryPicker((current) =>
+        current && current.cellId === cellId
+          ? {
+              ...current,
+              loading: false,
+              loadingMore: false,
+              error: message,
+            }
+          : current)
+    }
+  }
+
+  const openMediaLibrary = (cellId: string) => {
+    if (!notebook) return
+    const cell = notebook.cells.find((candidate) => candidate.id === cellId)
+    const kind = cell && passiveMediaKind(cell.type)
+    if (
+      !cell
+      || !kind
+      || cell.outputArtifactId
+      || notebook.edges.some((edge) => edge.target === cellId)
+    ) return
+    mediaLibraryOpenerRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    setMediaSlotOperation(cellId, null)
+    setMediaLibraryPicker({
+      cellId,
+      query: '',
+      draftQuery: '',
+      assets: [],
+      page: emptyLibraryPage,
+      booksWithErrors: [],
+      loading: true,
+      loadingMore: false,
+      error: null,
+      activeArtifactId: null,
+    })
+    void loadMediaLibrary(cellId, '', 0, false)
+  }
+
+  const attachLibraryAsset = async (asset: LibraryAssetRecord) => {
+    if (!bookId || !notebook || !mediaLibraryPicker) return
+    const cellId = mediaLibraryPicker.cellId
+    const cell = notebook.cells.find((candidate) => candidate.id === cellId)
+    const kind = cell && passiveMediaKind(cell.type)
+    if (!cell || !kind || !isCompatibleLibraryAsset(kind, asset.type)) return
+    setMediaSlotOperation(cellId, 'attach')
+    setMediaLibraryPicker((current) =>
+      current && current.cellId === cellId
+        ? { ...current, activeArtifactId: asset.artifactId, error: null }
+        : current)
+    try {
+      if (asset.owningBookId === bookId) {
+        await call('set_notebook_media_slot', {
+          book_id: bookId,
+          notebook_id: notebook.id,
+          cell_id: cellId,
+          artifact_ref: asset.artifactId,
+        })
+      } else {
+        await call('attach_library_asset', {
+          source_book_id: asset.owningBookId,
+          source_artifact_id: asset.artifactId,
+          target_book_id: bookId,
+          notebook_id: notebook.id,
+          cell_id: cellId,
+          expected_output_artifact_id: cell.outputArtifactId ?? null,
+        })
+      }
+      await refreshBookData(bookId, notebook.id)
+      setMediaSlotOperation(cellId, null)
+      setNotice(asset.owningBookId === bookId
+        ? `Attached @${asset.id}`
+        : `Copied and attached @${asset.id} from ${asset.owningBookSlug}`)
+      closeMediaLibrary()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setMediaSlotError(cellId, message)
+      setMediaLibraryPicker((current) =>
+        current && current.cellId === cellId
+          ? { ...current, activeArtifactId: null, error: message }
+          : current)
+      setNotice(message)
     }
   }
 
@@ -3466,6 +4218,40 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const mediaSlotContextValue: MediaSlotContextValue = {
+    states: mediaSlotStates,
+    onFile: (cellId, file) => void uploadMediaSlotFile(cellId, file),
+    onFileError: setMediaSlotError,
+    onOpenLibrary: openMediaLibrary,
+  }
+  const mediaLibraryCell = mediaLibraryPicker
+    ? notebook?.cells.find((cell) => cell.id === mediaLibraryPicker.cellId)
+    : undefined
+  const mediaLibraryKind = mediaLibraryCell
+    ? passiveMediaKind(mediaLibraryCell.type)
+    : null
+  const updateMediaLibraryDraft = (query: string) => {
+    setMediaLibraryPicker((current) => current ? { ...current, draftQuery: query } : current)
+  }
+  const searchMediaLibrary = () => {
+    if (!mediaLibraryPicker) return
+    void loadMediaLibrary(
+      mediaLibraryPicker.cellId,
+      mediaLibraryPicker.draftQuery,
+      0,
+      false,
+    )
+  }
+  const loadMoreMediaLibrary = () => {
+    if (!mediaLibraryPicker) return
+    void loadMediaLibrary(
+      mediaLibraryPicker.cellId,
+      mediaLibraryPicker.query,
+      mediaLibraryPicker.page.offset + mediaLibraryPicker.page.limit,
+      true,
+    )
+  }
+
   return (
     <main className={`app-shell app-screen-${screen} ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'} ${fullscreenCell && fullscreenNode?.data.asset ? 'media-fullscreen-open' : ''}`}>
       <header className="topbar">
@@ -3609,8 +4395,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       className="notebook-flow-frame"
                       style={notebookFlowStyle}
                     >
-                      <ReactFlow<CanvasNode, Edge>
-                        className="notebook-flow"
+                      <MediaSlotContext.Provider value={mediaSlotContextValue}>
+                        <ReactFlow<CanvasNode, Edge>
+                          className="notebook-flow"
                       nodes={nodes}
                       edges={edges}
                       nodeTypes={nodeTypes}
@@ -3643,9 +4430,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       }}
                       onNodeClick={(_event, node) => {
                         setSelectedCellId(node.id)
+                        setSourceViewCellId(null)
                         setInspectorOpen(true)
                       }}
-                      onPaneClick={() => setSelectedCellId(null)}
+                      onPaneClick={() => {
+                        setSelectedCellId(null)
+                        setSourceViewCellId(null)
+                      }}
                       onNodeDrag={(_event, node) => {
                         setPreviewSlot(notebookGridSlot(node.position))
                       }}
@@ -3663,6 +4454,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       onConnect={(connection) => void connectCells(connection)}
                       onDrop={(event) => {
                         event.preventDefault()
+                        if (event.dataTransfer.types.includes('Files')) {
+                          setPreviewSlot(null)
+                          return
+                        }
                         const raw = event.dataTransfer.getData('application/x-videobook-cell')
                         if (!cellPalette.some((item) => item.type === raw)) return
                         const point = flowRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY })
@@ -3671,6 +4466,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       }}
                       onDragOver={(event) => {
                         event.preventDefault()
+                        if (event.dataTransfer.types.includes('Files')) {
+                          setPreviewSlot(null)
+                          return
+                        }
                         const point = flowRef.current?.screenToFlowPosition({
                           x: event.clientX,
                           y: event.clientY,
@@ -3697,7 +4496,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           metrics={notebookMetrics}
                           previewSlot={previewSlot}
                         />
-                      </ReactFlow>
+                        </ReactFlow>
+                      </MediaSlotContext.Provider>
                     </div>
                   </div>
                 )}
@@ -3724,12 +4524,50 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   </button>
                 )}
               </section>
-              <aside className={`inspector ${inspectorOpen ? '' : 'inspector-closed'}`}>
+              <aside
+                className={[
+                  'inspector',
+                  inspectorOpen ? '' : 'inspector-closed',
+                  deletingCellId === selectedCell?.id ? 'inspector-deleting' : '',
+                ].filter(Boolean).join(' ')}
+              >
                 <header>
-                  <span>{selectedCell ? `${selectedCell.data.kind.toUpperCase()} CELL` : 'INSPECTOR'}</span>
-                  <button type="button" aria-label="Close inspector" onClick={() => setInspectorOpen(false)}>
-                    <PanelRightClose size={16} />
-                  </button>
+                  {selectedCell ? (
+                    <span
+                      key={selectedCell.id}
+                      className="inspector-cell-title"
+                      title={cellTypeLabel(selectedCell.data.kind)}
+                    >
+                      <CellIcon kind={selectedCell.data.kind} />
+                      <strong>{cellTypeLabel(selectedCell.data.kind)}</strong>
+                    </span>
+                  ) : (
+                    <span>INSPECTOR</span>
+                  )}
+                  <div className="inspector-header-actions">
+                    {selectedCell && (
+                      <button
+                        type="button"
+                        className={sourceViewCellId === selectedCell.id
+                          ? 'inspector-source-toggle active'
+                          : 'inspector-source-toggle'}
+                        title={sourceViewCellId === selectedCell.id
+                          ? 'View cell'
+                          : 'View source'}
+                        aria-label={sourceViewCellId === selectedCell.id
+                          ? 'View cell'
+                          : 'View source'}
+                        aria-pressed={sourceViewCellId === selectedCell.id}
+                        onClick={() => setSourceViewCellId((current) =>
+                          current === selectedCell.id ? null : selectedCell.id)}
+                      >
+                        <Braces size={15} />
+                      </button>
+                    )}
+                    <button type="button" aria-label="Close inspector" onClick={() => setInspectorOpen(false)}>
+                      <PanelRightClose size={16} />
+                    </button>
+                  </div>
                 </header>
                 {!selectedCell ? (
                   <div className="inspector-body audio-notebook-inspector">
@@ -3923,11 +4761,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     edges={notebook?.edges ?? []}
                     asset={selectedCell.data.asset}
                     status={selectedCell.data.status}
-                    busy={busy}
+                    busy={busy || Boolean(selectedMediaSlotState?.operation)}
+                    deleting={deletingCellId === selectedNotebookCell.id}
+                    clearing={selectedMediaSlotState?.operation === 'clear'}
+                    sourceVisible={sourceViewCellId === selectedNotebookCell.id}
                     onUpdate={updateCell}
                     onSetInput={setSelectedCellInput}
                     onRun={runCell}
                     onDelete={deleteSelectedCell}
+                    onClearSlot={clearSelectedMediaSlot}
                     onOpenFullscreen={() => setFullscreenCellId(selectedNotebookCell.id)}
                   />
                 ) : null}
@@ -4843,6 +5685,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             </button>
           </div>
         </aside>
+      )}
+
+      {mediaLibraryPicker && mediaLibraryKind && (
+        <MediaLibraryDialog
+          state={mediaLibraryPicker}
+          kind={mediaLibraryKind}
+          targetBookId={bookId}
+          onClose={closeMediaLibrary}
+          onDraftQuery={updateMediaLibraryDraft}
+          onSearch={searchMediaLibrary}
+          onLoadMore={loadMoreMediaLibrary}
+          onAttach={(asset) => void attachLibraryAsset(asset)}
+        />
       )}
 
       {fullscreenCell && fullscreenNode?.data.asset && (

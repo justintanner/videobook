@@ -11,6 +11,7 @@ import { exportSequenceDefs } from "./export-sequence.js";
 import { apiStatusDef } from "./api-status.js";
 import { providerKeyStatusDef } from "./provider-key-status.js";
 import { setEnvSecretDef } from "./set-env-secret.js";
+import { mediaLibraryDefs } from "./media-library.js";
 import { listElevenLabsVoicesDef } from "./list-elevenlabs-voices.js";
 import {
   createGoogleFlowVoiceDef,
@@ -341,7 +342,7 @@ export function getAllToolDefs(
     renameAllDef(fs),
     markAssetSeenDef(fs),
     duplicateAssetDef(fs),
-    exportAssetDef(fs),
+    exportAssetDef(fs, books),
     assetHistoryDef(fs),
     restoreAssetVersionDef(fs),
     readFileAtCommitDef(fs),
@@ -468,6 +469,7 @@ export function getAllToolDefs(
     ...commandPlanDefs(fs),
     ...exportSequenceDefs(fs),
     ...semanticSearchDefs(fs, books),
+    ...mediaLibraryDefs(books),
     ...videobookDomainDefs(fs, books),
   ];
 

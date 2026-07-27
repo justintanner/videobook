@@ -1,4 +1,7 @@
 import type { Engine } from "videobook-engine";
+import type { BookManager } from "../book-manager.js";
+import { bookManager } from "../fs.js";
+import { registerCopyLibraryAssetJob } from "./copy-library-asset.js";
 import { registerTranscribeJob } from "./transcribe.js";
 import { registerTranslateTranscriptJob } from "./translate-transcript.js";
 import { registerDownloadVideoJob } from "./download-video.js";
@@ -130,7 +133,10 @@ import { registerRemoveSoundJob } from "./remove-sound.js";
 import { registerRunNotebookJob } from "./run-notebook.js";
 import { registerSemanticIndexJob } from "./semantic-index.js";
 
-export function registerAllJobHandlers(fs: Engine): void {
+export function registerAllJobHandlers(
+  fs: Engine,
+  books: BookManager = bookManager,
+): void {
   registerTranscribeJob(fs);
   registerTranslateTranscriptJob(fs);
   registerDownloadVideoJob(fs);
@@ -263,5 +269,6 @@ export function registerAllJobHandlers(fs: Engine): void {
   registerPostToXJob(fs);
   registerRunNotebookJob(fs as Engine);
   registerSemanticIndexJob(fs);
+  registerCopyLibraryAssetJob(books);
 
 }

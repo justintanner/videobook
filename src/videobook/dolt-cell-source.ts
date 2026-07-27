@@ -8,6 +8,11 @@ export type DoltCellRow = {
   value: DoltCellValue
 }
 
+export type DoltCellDisplayValue =
+  | { kind: 'json', value: unknown }
+  | { kind: 'null' }
+  | { kind: 'raw', value: number | string }
+
 export function doltCellRows(
   notebookId: string,
   cell: NotebookCell,
@@ -40,4 +45,17 @@ export function doltCellRows(
       value: cell.outputArtifactId ?? null,
     },
   ]
+}
+
+export function doltCellDisplayValue(row: DoltCellRow): DoltCellDisplayValue {
+  if (row.value === null) return { kind: 'null' }
+  if (!row.column.endsWith('_json') || typeof row.value !== 'string') {
+    return { kind: 'raw', value: row.value }
+  }
+
+  try {
+    return { kind: 'json', value: JSON.parse(row.value) as unknown }
+  } catch {
+    return { kind: 'raw', value: row.value }
+  }
 }

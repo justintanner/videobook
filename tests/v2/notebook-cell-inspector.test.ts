@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest'
 import type { NotebookCell } from 'videobook-engine'
 import { NotebookCellInspector } from '../../src/components/videobook/NotebookCellInspector'
 import { NotebookMediaFullscreen } from '../../src/components/videobook/NotebookMediaFullscreen'
-import { doltCellRows } from '../../src/videobook/dolt-cell-source'
+import {
+  doltCellDisplayValue,
+  doltCellRows,
+} from '../../src/videobook/dolt-cell-source'
 
 const cell: NotebookCell = {
   id: '01900000-0000-7000-8000-000000000001',
@@ -38,9 +41,13 @@ describe('NotebookCellInspector', () => {
       },
       status: 'completed',
       busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
       onUpdate: async () => undefined,
       onSetInput: async () => undefined,
       onRun: async () => undefined,
+      onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
     }))
@@ -49,11 +56,56 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('preload="metadata"')
     expect(html).toContain('controls=""')
     expect(html).toContain('/files/vid-source/original.mp4')
-    expect(html).toContain('>VIDEO</span>')
-    expect(html).toContain('>preview</button>')
-    expect(html).toContain('>inputs</button>')
-    expect(html).toContain('>source</button>')
+    expect(html).not.toContain('role="tab"')
+    expect(html).toContain('class="inspector-slug-field"')
+    expect(html).toContain('value="vid-source"')
+    expect(html).toContain('<h3>Inputs</h3>')
+    expect(html.indexOf('class="inspector-slug-field"')).toBeLessThan(
+      html.indexOf('aria-label="Cell output media"'),
+    )
+    expect(html.indexOf('aria-label="Cell output media"')).toBeLessThan(
+      html.indexOf('<h3>Inputs</h3>'),
+    )
+    expect(html).not.toContain('Dolt source')
+    expect(html).toContain('inspector-clear-slot-button')
+    expect(html).toContain('Clear slot')
+    expect(html).not.toContain('Delete')
     expect(html).not.toContain('completed')
+  })
+
+  it('keeps inputs visible beneath a compact pending preview', () => {
+    const pendingCell: NotebookCell = {
+      ...cell,
+      outputArtifactId: undefined,
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: pendingCell,
+      cells: [pendingCell],
+      edges: [],
+      asset: undefined,
+      status: 'pending',
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('Output pending')
+    expect(html.indexOf('class="inspector-slug-field"')).toBeLessThan(
+      html.indexOf('Output pending'),
+    )
+    expect(html.indexOf('Output pending')).toBeLessThan(
+      html.indexOf('<h3>Inputs</h3>'),
+    )
+    expect(html).toContain('inspector-clear-slot-button')
+    expect(html).toContain('disabled=""')
   })
 
   it('renders fullscreen video with playback and close controls only', () => {
@@ -108,5 +160,110 @@ describe('NotebookCellInspector', () => {
     expect(rows.find((row) => row.column === 'inputs_json')?.value).toBe(
       '{"operation":"download_video","selectedRangeSeconds":[1490,1550]}',
     )
+  })
+
+  it('classifies only valid _json columns as nested JSON', () => {
+    expect(doltCellDisplayValue({
+      column: 'inputs_json',
+      type: 'TEXT',
+      value: '{"operation":"download_video","selectedRangeSeconds":[1490,1550]}',
+    })).toEqual({
+      kind: 'json',
+      value: {
+        operation: 'download_video',
+        selectedRangeSeconds: [1490, 1550],
+      },
+    })
+    expect(doltCellDisplayValue({
+      column: 'inputs_json',
+      type: 'TEXT',
+      value: '{malformed',
+    })).toEqual({
+      kind: 'raw',
+      value: '{malformed',
+    })
+    expect(doltCellDisplayValue({
+      column: 'slug',
+      type: 'TEXT',
+      value: '{"raw":"scalar"}',
+    })).toEqual({
+      kind: 'raw',
+      value: '{"raw":"scalar"}',
+    })
+    expect(doltCellDisplayValue({
+      column: 'prompt',
+      type: 'TEXT',
+      value: null,
+    })).toEqual({
+      kind: 'null',
+    })
+  })
+
+  it('shares the Dolt table renderer with non-passive cells', () => {
+    const promptCell: NotebookCell = {
+      ...cell,
+      type: 'prompt',
+      prompt: undefined,
+      outputArtifactId: undefined,
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: promptCell,
+      cells: [promptCell],
+      edges: [],
+      asset: undefined,
+      status: 'completed',
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: true,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('aria-label="Raw Dolt cells row"')
+    expect(html).toContain('<th>Column</th><th>Type</th><th>Raw value</th>')
+    expect(html).toContain('aria-label="inputs_json JSON"')
+    expect(html).toContain('class="json-key"')
+    expect(html).toContain('<code class="dolt-null">NULL</code>')
+    expect(html).not.toContain('inspector-delete-button')
+    expect(html).not.toContain('class="inspector-slug-field"')
+    expect(html).not.toContain('Clear slot')
+  })
+
+  it('keeps non-passive editing controls out of the source view', () => {
+    const promptCell: NotebookCell = {
+      ...cell,
+      type: 'prompt',
+      prompt: undefined,
+      outputArtifactId: undefined,
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: promptCell,
+      cells: [promptCell],
+      edges: [],
+      asset: undefined,
+      status: 'completed',
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('class="inspector-slug-field"')
+    expect(html).toContain('inspector-delete-button')
+    expect(html).toContain('Delete')
+    expect(html).not.toContain('Dolt source')
   })
 })

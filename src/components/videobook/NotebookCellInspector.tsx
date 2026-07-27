@@ -1,7 +1,9 @@
-import { Maximize2, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { CircleX, Maximize2, Trash2 } from 'lucide-react'
 import type { NotebookCell, NotebookEdge } from 'videobook-engine'
-import { doltCellRows } from '@/videobook/dolt-cell-source'
+import {
+  doltCellDisplayValue,
+  doltCellRows,
+} from '@/videobook/dolt-cell-source'
 import {
   isNotebookMediaCellType,
   notebookAudioSummary,
@@ -9,6 +11,7 @@ import {
   notebookCellStatusLabel,
   type NotebookAudioInfo,
 } from '@/videobook/notebook-cell-presentation'
+import { RichJson } from './RichJson'
 
 const localActions = {
   extract_audio: [{ operation: 'extract_audio', label: 'Extract audio', tool: 'ffmpeg' }],
@@ -42,14 +45,16 @@ type NotebookCellInspectorProps = {
   asset: NotebookCellInspectorAsset | undefined
   status: string
   busy: boolean
+  clearing: boolean
+  deleting: boolean
+  sourceVisible: boolean
   onUpdate: (patch: Record<string, unknown>) => Promise<void>
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
   onRun: (cellId: string) => Promise<void>
+  onClearSlot: () => Promise<void>
   onDelete: () => Promise<void>
   onOpenFullscreen: () => void
 }
-
-type MediaInspectorTab = 'preview' | 'inputs' | 'source'
 
 function isPassiveMediaCell(cell: NotebookCell): boolean {
   return cell.type === 'audio' || cell.type === 'image' || cell.type === 'video'
@@ -167,17 +172,27 @@ function DoltCellSource({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.column}>
-              <th scope="row">{row.column}</th>
-              <td>{row.type}</td>
-              <td>
-                <code className={row.value === null ? 'dolt-null' : undefined}>
-                  {row.value === null ? 'NULL' : String(row.value)}
-                </code>
-              </td>
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const displayValue = doltCellDisplayValue(row)
+            return (
+              <tr key={row.column}>
+                <th scope="row">{row.column}</th>
+                <td>{row.type}</td>
+                <td>
+                  {displayValue.kind === 'json' ? (
+                    <RichJson
+                      value={displayValue.value}
+                      ariaLabel={`${row.column} JSON`}
+                    />
+                  ) : (
+                    <code className={displayValue.kind === 'null' ? 'dolt-null' : undefined}>
+                      {displayValue.kind === 'null' ? 'NULL' : String(displayValue.value)}
+                    </code>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </section>
@@ -201,6 +216,7 @@ function InputSources({
 
   return (
     <section className="inspector-input-sources">
+      <h3>Inputs</h3>
       <p>Select the upstream cell that owns each media input.</p>
       {inputs.map((input) => {
         const edge = edges.find((candidate) =>
@@ -257,93 +273,113 @@ function SlugField({
   )
 }
 
+function ClearSlotButton({
+  busy,
+  canClear,
+  clearing,
+  onClearSlot,
+}: {
+  busy: boolean
+  canClear: boolean
+  clearing: boolean
+  onClearSlot: () => Promise<void>
+}) {
+  return (
+    <button
+      type="button"
+      className="inspector-clear-slot-button"
+      aria-busy={clearing}
+      onClick={() => void onClearSlot()}
+      disabled={busy || clearing || !canClear}
+    >
+      <CircleX size={13} />
+      <span>{clearing ? 'Clearing…' : 'Clear slot'}</span>
+    </button>
+  )
+}
+
+function DeleteCellButton({
+  busy,
+  deleting,
+  onDelete,
+}: {
+  busy: boolean
+  deleting: boolean
+  onDelete: () => Promise<void>
+}) {
+  return (
+    <button
+      type="button"
+      className="danger-button inspector-delete-button"
+      aria-busy={deleting}
+      onClick={() => void onDelete()}
+      disabled={busy}
+    >
+      <Trash2 size={13} />
+      <span>{deleting ? 'Deleting…' : 'Delete'}</span>
+    </button>
+  )
+}
+
 function MediaCellInspector({
-  notebookId,
   cell,
   cells,
   edges,
   asset,
   busy,
+  clearing,
+  onUpdate,
   onSetInput,
-  onDelete,
+  onClearSlot,
   onOpenFullscreen,
 }: Pick<
   NotebookCellInspectorProps,
-  | 'notebookId'
   | 'cell'
   | 'cells'
   | 'edges'
   | 'asset'
   | 'busy'
+  | 'clearing'
+  | 'onUpdate'
   | 'onSetInput'
-  | 'onDelete'
+  | 'onClearSlot'
   | 'onOpenFullscreen'
 >) {
-  const [tab, setTab] = useState<MediaInspectorTab>('preview')
+  const canClear = Boolean(cell.outputArtifactId)
+    || edges.some((edge) => edge.target === cell.id)
 
   return (
     <div className="inspector-body inspector-media-body">
-      <h2 className="inspector-slug">@{cell.slug}</h2>
-      <span className="workspace-notice">{cell.type.toUpperCase()}</span>
-      <nav
-        className="inspector-tabs"
-        aria-label="Media cell inspector"
-        role="tablist"
-      >
-        {(['preview', 'inputs', 'source'] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            className={tab === value ? 'active' : undefined}
-            aria-selected={tab === value}
-            aria-controls={`${cell.id}-inspector-panel`}
-            onClick={() => setTab(value)}
-          >
-            {value}
-          </button>
-        ))}
-      </nav>
-      <div
-        id={`${cell.id}-inspector-panel`}
-        className="inspector-tab-panel"
-        role="tabpanel"
-      >
-        {tab === 'preview' && (
-          asset ? (
-            <NotebookCellMedia
-              asset={asset}
-              slug={cell.slug}
-              allowFullscreen={cell.type === 'image' || cell.type === 'video'}
-              onOpenFullscreen={onOpenFullscreen}
-            />
-          ) : (
-            <div className="inspector-media-empty">
-              <span>Output pending</span>
-              <p>Connect a source and rerun its producer to populate this preview.</p>
-            </div>
-          )
-        )}
-        {tab === 'inputs' && (
-          <InputSources
-            cell={cell}
-            cells={cells}
-            edges={edges}
-            busy={busy}
-            onSetInput={onSetInput}
+      <div className="inspector-media-content">
+        <SlugField cell={cell} onUpdate={onUpdate} />
+        {asset ? (
+          <NotebookCellMedia
+            asset={asset}
+            slug={cell.slug}
+            allowFullscreen={cell.type === 'image' || cell.type === 'video'}
+            onOpenFullscreen={onOpenFullscreen}
           />
+        ) : (
+          <div className="inspector-media-empty">
+            <span>Output pending</span>
+            <p>Connect a source and rerun its producer to populate this preview.</p>
+          </div>
         )}
-        {tab === 'source' && <DoltCellSource notebookId={notebookId} cell={cell} />}
+        <InputSources
+          cell={cell}
+          cells={cells}
+          edges={edges}
+          busy={busy}
+          onSetInput={onSetInput}
+        />
       </div>
       <div className="record-card-actions inspector-media-actions">
-        <button
-          type="button"
-          className="danger-button"
-          onClick={() => void onDelete()}
-          disabled={busy}
-        >
-          <Trash2 size={13} />Delete
-        </button>
+        <ClearSlotButton
+          busy={busy}
+          canClear={canClear}
+          clearing={clearing}
+          onClearSlot={onClearSlot}
+        />
       </div>
     </div>
   )
@@ -357,23 +393,36 @@ export function NotebookCellInspector({
   asset,
   status,
   busy,
+  clearing,
+  deleting,
+  sourceVisible,
   onUpdate,
   onSetInput,
   onRun,
+  onClearSlot,
   onDelete,
   onOpenFullscreen,
 }: NotebookCellInspectorProps) {
+  if (sourceVisible) {
+    return (
+      <div className="inspector-body inspector-source-body">
+        <DoltCellSource notebookId={notebookId} cell={cell} />
+      </div>
+    )
+  }
+
   if (isPassiveMediaCell(cell)) {
     return (
       <MediaCellInspector
-        notebookId={notebookId}
         cell={cell}
         cells={cells}
         edges={edges}
         asset={asset}
         busy={busy}
+        clearing={clearing}
+        onUpdate={onUpdate}
         onSetInput={onSetInput}
-        onDelete={onDelete}
+        onClearSlot={onClearSlot}
         onOpenFullscreen={onOpenFullscreen}
       />
     )
@@ -396,10 +445,10 @@ export function NotebookCellInspector({
 
   return (
     <div className="inspector-body">
-      <h2 className="inspector-slug">@{cell.slug}</h2>
-      <span className="workspace-notice">
-        {cell.type.toUpperCase()}{statusLabel ? ` · ${statusLabel}` : ''}
-      </span>
+      <SlugField cell={cell} onUpdate={onUpdate} />
+      {statusLabel && (
+        <span className="workspace-notice inspector-cell-status">{statusLabel}</span>
+      )}
       {asset && previewCell && (
         <NotebookCellMedia
           asset={asset}
@@ -408,7 +457,6 @@ export function NotebookCellInspector({
           onOpenFullscreen={onOpenFullscreen}
         />
       )}
-      <SlugField cell={cell} onUpdate={onUpdate} />
       {textCell && (
         <label>
           Prompt
@@ -559,21 +607,13 @@ export function NotebookCellInspector({
           </label>
         </>
       )}
-      <DoltCellSource notebookId={notebookId} cell={cell} />
       <div className="record-card-actions">
         {action && (
           <button type="button" onClick={() => void onRun(cell.id)} disabled={busy || action.disabled}>
             {action.label}
           </button>
         )}
-        <button
-          type="button"
-          className="danger-button"
-          onClick={() => void onDelete()}
-          disabled={busy}
-        >
-          <Trash2 size={13} />Delete
-        </button>
+        <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
       </div>
     </div>
   )
