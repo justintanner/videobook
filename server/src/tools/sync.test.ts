@@ -263,6 +263,23 @@ describe("buildAssetList", () => {
     expect(assets[0].media_url).toContain("original.mp3");
   });
 
+  it("finds m4a audio as primary media file", async () => {
+    const { buildAssetList } = await import("./sync.js");
+    const createResult = await fs.artifacts.create("aud", "m4a-audio-test");
+    if (!createResult.ok) throw new Error(createResult.error.message);
+
+    await writeNativeFile(
+      fs,
+      join(createResult.value.path, "original.m4a"),
+      "fake-m4a-data",
+    );
+
+    const assets = await buildAssetList(fs, "test-proj");
+    expect(assets).toHaveLength(1);
+    expect(assets[0].media_url).toContain("original.m4a");
+    expect(assets[0].status).toBe("ready");
+  });
+
   it("backfills duration for audio assets missing metadata duration", async () => {
     const { buildAssetList } = await import("./sync.js");
     const { runFfmpeg } = await import("../ffmpeg.js");

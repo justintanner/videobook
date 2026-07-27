@@ -1577,6 +1577,23 @@ const cellSourceRoutePorts = cellSourcePortSides.flatMap((side) =>
       : { top: `${offset * 100}%` },
   })))
 
+function CellStatusBadge({ status }: { status: string | null }) {
+  if (!status) return null
+  const label = status.replaceAll('-', ' ').replaceAll('_', ' ')
+
+  return (
+    <span
+      className={`cell-status cell-status-${status}`}
+      aria-label={`Status: ${label}`}
+      title={label}
+    >
+      {status === 'completed'
+        ? <Check size={11} strokeWidth={2.4} aria-hidden="true" />
+        : <span>{label}</span>}
+    </span>
+  )
+}
+
 function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const slotContext = useContext(MediaSlotContext)
   const mediaUrl = data.asset?.mediaUrl
@@ -1698,9 +1715,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         )}
         <footer className="cell-node-footer">
           <strong>@{data.slug}</strong>
-          {statusLabel && (
-            <span className={`cell-status cell-status-${statusLabel}`}>{statusLabel}</span>
-          )}
+          <CellStatusBadge status={statusLabel} />
         </footer>
       </section>
       <Handle
@@ -4528,6 +4543,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     >
                       <CellIcon kind={selectedCell.data.kind} />
                       <strong>{cellTypeLabel(selectedCell.data.kind)}</strong>
+                      <CellStatusBadge
+                        status={notebookCellStatusLabel(
+                          selectedCell.data.kind,
+                          selectedCell.data.status,
+                        )}
+                      />
                     </span>
                   ) : (
                     <span>INSPECTOR</span>

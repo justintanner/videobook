@@ -327,6 +327,8 @@ describe("notebook runner frames and concat", () => {
       engine.book.get().bookId,
     )).find((asset) =>
       asset.artifact_id === completedExtractAudio.outputArtifactId);
+    expect(listedAudio?.media_url).toContain("original.m4a");
+    expect(listedAudio?.status).toBe("ready");
     expect(listedAudio?.audio_info).toMatchObject({
       codec: "aac",
       sample_rate_hz: 44_100,

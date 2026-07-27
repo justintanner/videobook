@@ -162,6 +162,15 @@ describe('v2 notebook domain tools', () => {
 
     expect(extractAudio.operation).toBe('extract_audio')
     expect(splitVideo.operation).toBe('split_range')
+    const retypedAction = await invoke('update_notebook_cell', {
+      notebook_id: notebookId,
+      cell_id: extractAudio.id,
+      cell: { type: 'split_video' },
+    })
+    expect(retypedAction.isError).toBe(true)
+    expect(retypedAction.content[0]?.text).toContain(
+      'Cell type cannot be changed after creation',
+    )
 
     const passiveSource = await invoke('run_notebook_cell', {
       notebook_id: notebookId,

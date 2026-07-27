@@ -36,6 +36,18 @@ const activeStatuses = new Set([
   'running',
 ])
 
+const inspectorActionVerbs: Partial<Record<NotebookCellType, string>> = {
+  analyze: 'Analyze',
+  concat: 'Concatenate',
+  extract_audio: 'Extract',
+  generate_audio: 'Generate',
+  generate_image: 'Generate',
+  generate_video: 'Generate',
+  prompt: 'Rewrite',
+  splice: 'Splice',
+  split_video: 'Split',
+}
+
 type ActionCell = Pick<
   NotebookCell,
   'model' | 'operation' | 'outputArtifactId' | 'tool' | 'type'
@@ -105,6 +117,15 @@ export function notebookCellActionPresentation(
       ? 'Re-run'
       : 'Run',
   }
+}
+
+export function notebookCellInspectorActionLabel(
+  type: NotebookCellType,
+  label: NotebookCellActionPresentation['label'],
+): string {
+  const verb = inspectorActionVerbs[type]
+  if (!verb) return label
+  return label === 'Re-run' ? `${verb} again` : verb
 }
 
 export function notebookCellStatusLabel(

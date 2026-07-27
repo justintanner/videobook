@@ -102,6 +102,15 @@ export type OsgSummary = {
   endSeconds: number | null;
 };
 
+function findAssetMediaFile(
+  files: ArtifactManifestFile[],
+  asset: Pick<Artifact, "kind" | "slug">,
+): ArtifactManifestFile | null {
+  return asset.kind === "audio"
+    ? findAudioFile(files, asset.slug)
+    : findPrimaryMediaFile(files, asset.slug);
+}
+
 /** Read the OSG overlay summary from the asset's render metadata. OSG is stored
  *  identically across orientations, so the first orientation that carries an
  *  osgAssetId wins. Returns null when no overlay is configured. */
@@ -417,7 +426,7 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
       const files: ArtifactManifestFile[] = manifestResult.ok ? manifestResult.value.files : [];
       const directories = manifestResult.ok ? manifestResult.value.directories : undefined;
 
-      const mediaFile = findPrimaryMediaFile(files, a.slug);
+      const mediaFile = findAssetMediaFile(files, a);
       const fileNames = new Set(files.map((f) => f.name));
       const hasThumbnail = fileNames.has("original.jpg");
       const renders = renderedOrientationsFor(files, a.slug);
@@ -1074,7 +1083,7 @@ export async function performSync(fs: Engine, book_id: string): Promise<SyncResu
           if (asset.kind === "character") {
              hasMedia = files.some(f => /\\.(jpg|jpeg|png|webp|gif)$/i.test(f.name));
           } else {
-             hasMedia = findPrimaryMediaFile(files, failure.artifactSlug) !== null;
+             hasMedia = findAssetMediaFile(files, asset) !== null;
           }
           if (hasMedia) {
              await fs.jobs.failures.clear(failure.artifactSlug);

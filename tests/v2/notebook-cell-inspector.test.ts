@@ -78,7 +78,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('inspector-clear-slot-button')
     expect(html).toContain('Clear slot')
     expect(html).toContain('inspector-delete-button')
-    expect(html).toContain('Delete')
+    expect(html).toContain('Delete cell')
     expect(html).not.toContain('completed')
   })
 
@@ -141,6 +141,53 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('aria-busy="true"')
     expect(html).toContain('Deleting…')
     expect(html).toContain('inspector-delete-button')
+  })
+
+  it('renders executable cells as explicit clean forms with structured actions', () => {
+    const extractCell: NotebookCell = {
+      ...cell,
+      type: 'extract_audio',
+      slug: 'extract-audio-source',
+      operation: 'extract_audio',
+      provider: 'local',
+      tool: 'ffmpeg',
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: extractCell,
+      cells: [extractCell],
+      edges: [],
+      asset: undefined,
+      status: 'completed',
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('inspector-executable-body')
+    expect(html).toContain('class="inspector-cell-form"')
+    expect(html).toContain('class="inspector-save-button" disabled=""')
+    expect(html).toContain('Save changes')
+    expect(html).not.toContain('Unsaved changes')
+    expect(html).toContain('aria-label="Action type"')
+    expect(html).toContain('Extract audio')
+    expect(html).toContain('Cell type is fixed')
+    expect(html).not.toContain('<select')
+    expect(html).not.toContain('placeholder="Provider"')
+    expect(html).not.toContain('placeholder="Model"')
+    expect(html).not.toContain('placeholder="Operation"')
+    expect(html).not.toContain('placeholder="Tool"')
+    expect(html).toContain('Extract again')
+    expect(html).toContain('Delete cell')
+    expect(html.indexOf('Extract again')).toBeLessThan(html.indexOf('Delete cell'))
+    expect(html).not.toContain('completed')
   })
 
   it('renders fullscreen video with playback and close controls only', () => {
@@ -262,6 +309,10 @@ describe('NotebookCellInspector', () => {
 
     expect(html).toContain('aria-label="Raw Dolt cells row"')
     expect(html).toContain('<th>Column</th><th>Type</th><th>Raw value</th>')
+    expect(html).toContain('class="inspector-dolt-json-meta"')
+    expect(html).toContain('<code class="dolt-json-kind">JSON</code>')
+    expect(html).toContain('class="inspector-dolt-json-value"')
+    expect(html).toContain('<td colSpan="3">')
     expect(html).toContain('aria-label="inputs_json JSON"')
     expect(html).toContain('class="json-key"')
     expect(html).toContain('<code class="dolt-null">NULL</code>')
@@ -298,7 +349,8 @@ describe('NotebookCellInspector', () => {
 
     expect(html).toContain('class="inspector-slug-field"')
     expect(html).toContain('inspector-delete-button')
-    expect(html).toContain('Delete')
+    expect(html).toContain('Delete cell')
+    expect(html).toContain('class="inspector-save-button" disabled=""')
     expect(html).not.toContain('Dolt source')
   })
 })

@@ -4,6 +4,7 @@ import {
   notebookAudioPresentation,
   notebookAudioSummary,
   notebookCellActionPresentation,
+  notebookCellInspectorActionLabel,
   notebookCellStatusLabel,
   notebookCellSupportsExecution,
   notebookSplitFrameIds,
@@ -44,6 +45,12 @@ describe('notebook cell presentation', () => {
       operation: 'split_range',
       tool: 'ffmpeg',
     }, 'pending')).toEqual({ disabled: false, label: 'Run' })
+  })
+
+  it('uses operation-aware action copy in the inspector', () => {
+    expect(notebookCellInspectorActionLabel('extract_audio', 'Re-run')).toBe('Extract again')
+    expect(notebookCellInspectorActionLabel('split_video', 'Run')).toBe('Split')
+    expect(notebookCellInspectorActionLabel('generate_video', 'Gen')).toBe('Generate')
   })
 
   it('hides execution status for passive media but not generators', () => {

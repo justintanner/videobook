@@ -1,5 +1,14 @@
-import { Check, CircleX, Maximize2, Pencil, Trash2, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import {
+  Check,
+  CircleAlert,
+  CircleX,
+  Maximize2,
+  Pencil,
+  Save,
+  Trash2,
+  X,
+} from 'lucide-react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import type { NotebookCell, NotebookEdge } from 'videobook-engine'
 import {
   doltCellDisplayValue,
@@ -9,7 +18,7 @@ import {
   isNotebookMediaCellType,
   notebookAudioSummary,
   notebookCellActionPresentation,
-  notebookCellStatusLabel,
+  notebookCellInspectorActionLabel,
   type NotebookAudioInfo,
 } from '@/videobook/notebook-cell-presentation'
 import { RichJson } from './RichJson'
@@ -25,6 +34,126 @@ const localActions = {
     { operation: 'smooth_scene_concat', label: 'Smooth crossfade', tool: 'ffmpeg' },
   ],
 } as const
+
+function isActionCellType(
+  type: NotebookCell['type'],
+): type is keyof typeof localActions {
+  return type in localActions
+}
+
+type LocalAction = (typeof localActions)[keyof typeof localActions][number]
+
+function actionsForCellType(
+  type: NotebookCell['type'],
+): readonly LocalAction[] {
+  return isActionCellType(type) ? localActions[type] : []
+}
+
+type CellFormDraft = {
+  prompt: string
+  provider: string
+  model: string
+  operation: string
+  tool: string
+  startSeconds: string
+  endSeconds: string
+  overlap: string
+}
+
+const cellFormDraftFields = [
+  'prompt',
+  'provider',
+  'model',
+  'operation',
+  'tool',
+  'startSeconds',
+  'endSeconds',
+  'overlap',
+] as const satisfies readonly (keyof CellFormDraft)[]
+
+function draftNumber(value: unknown): string {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? String(value)
+    : '0'
+}
+
+function cellFormDraft(cell: NotebookCell): CellFormDraft {
+  return {
+    prompt: cell.prompt ?? '',
+    provider: cell.provider ?? '',
+    model: cell.model ?? '',
+    operation: cell.operation ?? '',
+    tool: cell.tool ?? '',
+    startSeconds: draftNumber(cell.inputs?.startSeconds),
+    endSeconds: draftNumber(cell.inputs?.endSeconds),
+    overlap: draftNumber(cell.inputs?.overlap),
+  }
+}
+
+function cellFormIsDirty(cell: NotebookCell, draft: CellFormDraft): boolean {
+  const persisted = cellFormDraft(cell)
+  return cellFormDraftFields.some((field) => draft[field] !== persisted[field])
+}
+
+function validTimingValue(value: string): boolean {
+  if (!value.trim()) return false
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= 0
+}
+
+function cellFormIsValid(cell: NotebookCell, draft: CellFormDraft): boolean {
+  if (cell.type === 'split_video') {
+    return validTimingValue(draft.startSeconds)
+      && validTimingValue(draft.endSeconds)
+  }
+  if (cell.type === 'splice' && draft.operation === 'splice_video') {
+    return validTimingValue(draft.overlap)
+  }
+  return true
+}
+
+function cellFormPatch(
+  cell: NotebookCell,
+  draft: CellFormDraft,
+): Record<string, unknown> {
+  const persisted = cellFormDraft(cell)
+  const patch: Record<string, unknown> = {}
+  if (draft.prompt !== persisted.prompt) patch.prompt = draft.prompt
+  if (!isActionCellType(cell.type)) {
+    if (draft.provider !== persisted.provider) {
+      patch.provider = draft.provider || undefined
+    }
+    if (draft.model !== persisted.model) patch.model = draft.model || undefined
+    if (draft.operation !== persisted.operation) {
+      patch.operation = draft.operation || undefined
+    }
+    if (draft.tool !== persisted.tool) patch.tool = draft.tool || undefined
+  }
+  if (
+    cell.type === 'split_video'
+    && (
+      draft.startSeconds !== persisted.startSeconds
+      || draft.endSeconds !== persisted.endSeconds
+    )
+  ) {
+    patch.inputs = {
+      ...(cell.inputs ?? {}),
+      startSeconds: Number(draft.startSeconds),
+      endSeconds: Number(draft.endSeconds),
+    }
+  }
+  if (
+    cell.type === 'splice'
+    && draft.operation === 'splice_video'
+    && draft.overlap !== persisted.overlap
+  ) {
+    patch.inputs = {
+      ...(cell.inputs ?? {}),
+      overlap: Number(draft.overlap),
+    }
+  }
+  return patch
+}
 
 export type NotebookCellInspectorAsset = {
   artifactId: string
@@ -175,21 +304,35 @@ function DoltCellSource({
         <tbody>
           {rows.map((row) => {
             const displayValue = doltCellDisplayValue(row)
+
+            if (displayValue.kind === 'json') {
+              return (
+                <Fragment key={row.column}>
+                  <tr className="inspector-dolt-json-meta">
+                    <th scope="row">{row.column}</th>
+                    <td>{row.type}</td>
+                    <td><code className="dolt-json-kind">JSON</code></td>
+                  </tr>
+                  <tr className="inspector-dolt-json-value">
+                    <td colSpan={3}>
+                      <RichJson
+                        value={displayValue.value}
+                        ariaLabel={`${row.column} JSON`}
+                      />
+                    </td>
+                  </tr>
+                </Fragment>
+              )
+            }
+
             return (
               <tr key={row.column}>
                 <th scope="row">{row.column}</th>
                 <td>{row.type}</td>
                 <td>
-                  {displayValue.kind === 'json' ? (
-                    <RichJson
-                      value={displayValue.value}
-                      ariaLabel={`${row.column} JSON`}
-                    />
-                  ) : (
-                    <code className={displayValue.kind === 'null' ? 'dolt-null' : undefined}>
-                      {displayValue.kind === 'null' ? 'NULL' : String(displayValue.value)}
-                    </code>
-                  )}
+                  <code className={displayValue.kind === 'null' ? 'dolt-null' : undefined}>
+                    {displayValue.kind === 'null' ? 'NULL' : String(displayValue.value)}
+                  </code>
                 </td>
               </tr>
             )
@@ -408,7 +551,7 @@ function DeleteCellButton({
       disabled={busy}
     >
       <Trash2 size={13} />
-      <span>{deleting ? 'Deleting…' : 'Delete'}</span>
+      <span>{deleting ? 'Deleting…' : 'Delete cell'}</span>
     </button>
   )
 }
@@ -485,6 +628,218 @@ function MediaCellInspector({
   )
 }
 
+function ExecutableCellInspector({
+  cell,
+  asset,
+  status,
+  busy,
+  deleting,
+  onUpdate,
+  onRun,
+  onDelete,
+  onOpenFullscreen,
+}: Pick<
+  NotebookCellInspectorProps,
+  | 'cell'
+  | 'asset'
+  | 'status'
+  | 'busy'
+  | 'deleting'
+  | 'onUpdate'
+  | 'onRun'
+  | 'onDelete'
+  | 'onOpenFullscreen'
+>) {
+  const [draft, setDraft] = useState(() => cellFormDraft(cell))
+  const [saving, setSaving] = useState(false)
+  const action = notebookCellActionPresentation(cell, status)
+  const textCell = cell.type === 'prompt'
+    || cell.type === 'analyze'
+    || cell.type === 'generate_video'
+    || cell.type === 'generate_image'
+    || cell.type === 'generate_audio'
+  const generationCell = cell.type === 'generate_video'
+    || cell.type === 'generate_image'
+    || cell.type === 'generate_audio'
+  const previewCell = cell.type === 'character' || generationCell
+  const actionCell = isActionCellType(cell.type)
+  const actions = actionsForCellType(cell.type)
+  const selectedAction = actions.find((candidate) =>
+    candidate.operation === cell.operation) ?? actions[0]
+  const dirty = cellFormIsDirty(cell, draft)
+  const valid = cellFormIsValid(cell, draft)
+  const runLabel = action
+    ? notebookCellInspectorActionLabel(cell.type, action.label)
+    : null
+
+  const updateDraft = (field: keyof CellFormDraft, value: string) => {
+    setDraft((current) => ({ ...current, [field]: value }))
+  }
+  const save = async () => {
+    if (!dirty || !valid) return
+    setSaving(true)
+    try {
+      await onUpdate(cellFormPatch(cell, draft))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="inspector-body inspector-executable-body">
+      <SlugField cell={cell} busy={busy} onUpdate={onUpdate} />
+      {asset && previewCell && (
+        <NotebookCellMedia
+          asset={asset}
+          slug={cell.slug}
+          allowFullscreen={false}
+          onOpenFullscreen={onOpenFullscreen}
+        />
+      )}
+      <form
+        className="inspector-cell-form"
+        aria-busy={saving}
+        onSubmit={(event) => {
+          event.preventDefault()
+          void save()
+        }}
+      >
+        {textCell && (
+          <label>
+            Prompt
+            <textarea
+              value={draft.prompt}
+              rows={8}
+              onChange={(event) => updateDraft('prompt', event.target.value)}
+            />
+          </label>
+        )}
+        {selectedAction && (
+          <div className="inspector-fixed-action" aria-label="Action type">
+            <span>Action</span>
+            <strong>{selectedAction.label}</strong>
+            <small>Cell type is fixed</small>
+          </div>
+        )}
+        {cell.type === 'split_video' && (
+          <div className="inspector-field-pair">
+            <label>
+              Start seconds
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={draft.startSeconds}
+                onChange={(event) => updateDraft('startSeconds', event.target.value)}
+              />
+            </label>
+            <label>
+              End seconds
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={draft.endSeconds}
+                onChange={(event) => updateDraft('endSeconds', event.target.value)}
+              />
+            </label>
+          </div>
+        )}
+        {cell.type === 'splice' && draft.operation === 'splice_video' && (
+          <label>
+            Overlap seconds
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={draft.overlap}
+              onChange={(event) => updateDraft('overlap', event.target.value)}
+            />
+          </label>
+        )}
+        {generationCell && !draft.tool && !draft.model && (
+          <span className="workspace-notice">
+            Choose a generation tool before running this cell.
+          </span>
+        )}
+        {!isNotebookMediaCellType(cell.type) && !actionCell && (
+          <>
+            <label>
+              Provider
+              <input
+                value={draft.provider}
+                placeholder="Provider"
+                onChange={(event) => updateDraft('provider', event.target.value)}
+              />
+            </label>
+            <label>
+              Model
+              <input
+                value={draft.model}
+                placeholder="Model"
+                onChange={(event) => updateDraft('model', event.target.value)}
+              />
+            </label>
+            <label>
+              Operation
+              <input
+                value={draft.operation}
+                placeholder="Operation"
+                onChange={(event) => updateDraft('operation', event.target.value)}
+              />
+            </label>
+            <label>
+              Tool
+              <input
+                value={draft.tool}
+                placeholder="Tool"
+                onChange={(event) => updateDraft('tool', event.target.value)}
+              />
+            </label>
+          </>
+        )}
+        {dirty && (
+          <div
+            className={`inspector-dirty-notice${valid ? '' : ' invalid'}`}
+            role="status"
+          >
+            <CircleAlert size={14} />
+            <span>
+              {valid
+                ? 'Unsaved changes'
+                : 'Check timing values before saving'}
+            </span>
+          </div>
+        )}
+        <button
+          type="submit"
+          className="inspector-save-button"
+          disabled={busy || saving || !dirty || !valid}
+        >
+          <Save size={15} />
+          <span>{saving ? 'Saving…' : 'Save changes'}</span>
+        </button>
+      </form>
+      <div className="inspector-cell-actions">
+        {action && runLabel && (
+          <button
+            type="button"
+            className="inspector-run-action"
+            title={dirty ? 'Save changes before running' : undefined}
+            onClick={() => void onRun(cell.id)}
+            disabled={busy || action.disabled || dirty}
+          >
+            {runLabel}
+          </button>
+        )}
+        <div className="inspector-delete-row">
+          <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function NotebookCellInspector({
   notebookId,
   cell,
@@ -530,193 +885,17 @@ export function NotebookCellInspector({
     )
   }
 
-  const action = notebookCellActionPresentation(cell, status)
-  const statusLabel = notebookCellStatusLabel(cell.type, status)
-  const textCell = cell.type === 'prompt'
-    || cell.type === 'analyze'
-    || cell.type === 'generate_video'
-    || cell.type === 'generate_image'
-    || cell.type === 'generate_audio'
-  const generationCell = cell.type === 'generate_video'
-    || cell.type === 'generate_image'
-    || cell.type === 'generate_audio'
-  const previewCell = cell.type === 'character' || generationCell
-  const actions = cell.type in localActions
-    ? localActions[cell.type as keyof typeof localActions]
-    : []
-
   return (
-    <div className="inspector-body">
-      <SlugField cell={cell} busy={busy} onUpdate={onUpdate} />
-      {statusLabel && (
-        <span className="workspace-notice inspector-cell-status">{statusLabel}</span>
-      )}
-      {asset && previewCell && (
-        <NotebookCellMedia
-          asset={asset}
-          slug={cell.slug}
-          allowFullscreen={false}
-          onOpenFullscreen={onOpenFullscreen}
-        />
-      )}
-      {textCell && (
-        <label>
-          Prompt
-          <textarea defaultValue={cell.prompt ?? ''} rows={8} onBlur={(event) => {
-            if (event.target.value !== (cell.prompt ?? '')) {
-              void onUpdate({ prompt: event.target.value })
-            }
-          }} />
-        </label>
-      )}
-      {actions.length > 0 && (
-        <label>
-          Action
-          <select
-            value={cell.operation ?? ''}
-            onChange={(event) => {
-              const nextAction = actions.find((candidate) =>
-                candidate.operation === event.target.value)
-              void onUpdate(nextAction
-                ? {
-                    operation: nextAction.operation,
-                    tool: nextAction.tool,
-                    provider: nextAction.operation === 'analyze_source'
-                      ? 'kie'
-                      : nextAction.operation === 'rewrite_prompt'
-                        ? 'openai'
-                        : 'local',
-                  }
-                : {
-                    operation: undefined,
-                    tool: undefined,
-                    provider: undefined,
-                  })
-            }}
-          >
-            <option value="">No action</option>
-            {actions.map((candidate) => (
-              <option key={candidate.operation} value={candidate.operation}>
-                {candidate.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {cell.type === 'split_video' && (
-        <div className="inspector-field-pair">
-          <label>
-            Start seconds
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue={Number(cell.inputs?.startSeconds ?? 0)}
-              onBlur={(event) => void onUpdate({
-                inputs: {
-                  ...(cell.inputs ?? {}),
-                  startSeconds: Number(event.target.value),
-                },
-              })}
-            />
-          </label>
-          <label>
-            End seconds
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue={Number(cell.inputs?.endSeconds ?? 0)}
-              onBlur={(event) => void onUpdate({
-                inputs: {
-                  ...(cell.inputs ?? {}),
-                  endSeconds: Number(event.target.value),
-                },
-              })}
-            />
-          </label>
-        </div>
-      )}
-      {cell.type === 'splice' && cell.operation === 'splice_video' && (
-        <label>
-          Overlap seconds
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={Number(cell.inputs?.overlap ?? 0)}
-            onBlur={(event) => void onUpdate({
-              inputs: {
-                ...(cell.inputs ?? {}),
-                overlap: Number(event.target.value),
-              },
-            })}
-          />
-        </label>
-      )}
-      {generationCell && !cell.tool && !cell.model && (
-        <span className="workspace-notice">Choose a generation tool before running this cell.</span>
-      )}
-      {!isNotebookMediaCellType(cell.type) && (
-        <>
-          <label>
-            Provider
-            <input
-              defaultValue={cell.provider ?? ''}
-              placeholder="Provider"
-              onBlur={(event) => {
-                if (event.target.value !== (cell.provider ?? '')) {
-                  void onUpdate({ provider: event.target.value || undefined })
-                }
-              }}
-            />
-          </label>
-          <label>
-            Model
-            <input
-              defaultValue={cell.model ?? ''}
-              placeholder="Model"
-              onBlur={(event) => {
-                if (event.target.value !== (cell.model ?? '')) {
-                  void onUpdate({ model: event.target.value || undefined })
-                }
-              }}
-            />
-          </label>
-          <label>
-            Operation
-            <input
-              defaultValue={cell.operation ?? ''}
-              placeholder="Operation"
-              onBlur={(event) => {
-                if (event.target.value !== (cell.operation ?? '')) {
-                  void onUpdate({ operation: event.target.value || undefined })
-                }
-              }}
-            />
-          </label>
-          <label>
-            Tool
-            <input
-              defaultValue={cell.tool ?? cell.model ?? ''}
-              placeholder="Tool"
-              onBlur={(event) => {
-                if (event.target.value !== (cell.tool ?? cell.model ?? '')) {
-                  void onUpdate({ tool: event.target.value || undefined })
-                }
-              }}
-            />
-          </label>
-        </>
-      )}
-      <div className="record-card-actions">
-        {action && (
-          <button type="button" onClick={() => void onRun(cell.id)} disabled={busy || action.disabled}>
-            {action.label}
-          </button>
-        )}
-        <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
-      </div>
-    </div>
+    <ExecutableCellInspector
+      cell={cell}
+      asset={asset}
+      status={status}
+      busy={busy}
+      deleting={deleting}
+      onUpdate={onUpdate}
+      onRun={onRun}
+      onDelete={onDelete}
+      onOpenFullscreen={onOpenFullscreen}
+    />
   )
 }

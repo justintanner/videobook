@@ -3070,9 +3070,11 @@ export function videobookDomainDefs(
               const cells = notebook.cells.map((cell) => {
                 if (cell.id !== args.cell_id) return cell;
                 found = true;
+                if (patch.type && patch.type !== cell.type) {
+                  throw new Error("Cell type cannot be changed after creation");
+                }
                 const next = normalizeCellActionFields({
                   ...cell,
-                  ...(patch.type ? { type: patch.type as NotebookCellType } : {}),
                   ...(patch.slug === undefined ? {} : { slug: patch.slug }),
                   ...(patch.slot === undefined ? {} : { slot: patch.slot }),
                   ...(patch.output_entity_id === undefined
