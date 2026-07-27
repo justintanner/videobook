@@ -85,6 +85,7 @@ import {
 } from '@/components/videobook/NotebookGridBoard'
 import { MomentSearch } from '@/components/videobook/MomentSearch'
 import { NotebookCellInspector } from '@/components/videobook/NotebookCellInspector'
+import { MediaLibraryAssetPreview } from '@/components/videobook/MediaLibraryAssetPreview'
 import { NotebookMediaFullscreen } from '@/components/videobook/NotebookMediaFullscreen'
 import {
   CanonicalSequencePlayer,
@@ -1384,19 +1385,6 @@ function MediaSlotTile({
   )
 }
 
-function LibraryAssetPreview({ asset }: { asset: LibraryAssetRecord }) {
-  const previewUrl = asset.thumbnailUrl ?? asset.mediaUrl
-  if (previewUrl && asset.type !== 'audio') {
-    return <img src={previewUrl} alt="" />
-  }
-  return (
-    <span className="media-library-asset-placeholder">
-      {asset.type === 'audio' ? <AudioWaveform size={28} /> : <Film size={28} />}
-      {asset.duration !== null && <small>{formatMediaTime(asset.duration)}</small>}
-    </span>
-  )
-}
-
 function focusableDialogElements(container: HTMLElement): HTMLElement[] {
   return [...container.querySelectorAll<HTMLElement>(
     'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
@@ -1531,7 +1519,7 @@ function MediaLibraryDialog({
                     aria-label={`Use @${asset.id} from ${asset.owningBookSlug}`}
                     onClick={() => onAttach(asset)}
                   >
-                    <LibraryAssetPreview asset={asset} />
+                    <MediaLibraryAssetPreview asset={asset} />
                     <span className="media-library-asset-copy">
                       <strong>@{asset.id}</strong>
                       <small>
