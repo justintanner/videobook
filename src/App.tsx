@@ -352,7 +352,6 @@ const supportedUiActions = new Set([
 interface CanvasCellData extends NotebookCellData {
   asset?: AssetRecord
   deleting?: boolean
-  updated?: boolean
   splitFrames?: {
     first: { artifactId: string | null; asset?: AssetRecord }
     last: { artifactId: string | null; asset?: AssetRecord }
@@ -378,7 +377,6 @@ const ingestPollIntervalMs = 750
 const ingestPollTimeoutMs = 5 * 60_000
 const notebookRunPollIntervalMs = 500
 const notebookRunPollTimeoutMs = 5 * 60_000
-const outputUpdateAnimationMs = 1200
 const activeJobStates = new Set(['queued', 'running', 'completing'])
 
 function delay(ms: number): Promise<void> {
@@ -1766,7 +1764,6 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         selected ? 'cell-node-selected' : '',
         running ? 'cell-node-running' : '',
         versionedAudio ? 'cell-node-version-stack' : '',
-        data.updated ? 'cell-node-updated' : '',
         data.deleting ? 'cell-node-deleting' : '',
       ].filter(Boolean).join(' ')}
       aria-busy={running}
@@ -1842,7 +1839,6 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <SplitVideoPreview data={data} />
         ) : audioCell ? (
           <div className="cell-copy cell-copy-audio">
-            <AudioWaveform size={38} />
             {playableAudio && mediaUrl ? <audio src={mediaUrl} controls preload="metadata" /> : null}
             {data.kind === 'audio'
               ? <AudioCellSummary data={data} />
@@ -1927,9 +1923,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [queuedCellIds, setQueuedCellIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
-  const [updatedCellIds, setUpdatedCellIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  )
   const [deletingCellId, setDeletingCellId] = useState<string | null>(null)
   const [mediaSlotStates, setMediaSlotStates] = useState<Record<string, MediaSlotState>>({})
   const [mediaLibraryPicker, setMediaLibraryPicker] = useState<MediaLibraryPickerState | null>(null)
@@ -1985,7 +1978,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const audioSpinePlayerRef = useRef<HTMLAudioElement | null>(null)
   const mediaLibraryRequestRef = useRef(0)
   const mediaLibraryOpenerRef = useRef<HTMLElement | null>(null)
-  const outputUpdateTimersRef = useRef(new Map<string, number>())
   const activeBook = useMemo(
     () => books.find((book) => book.bookId === bookId) ?? null,
     [bookId, books],
@@ -2094,37 +2086,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     })
   }, [])
 
-  const animateUpdatedCells = useCallback((cellIds: string[]) => {
-    if (cellIds.length === 0) return
-    setUpdatedCellIds((current) => new Set([...current, ...cellIds]))
-    for (const cellId of cellIds) {
-      const currentTimer = outputUpdateTimersRef.current.get(cellId)
-      if (currentTimer !== undefined) window.clearTimeout(currentTimer)
-      const timer = window.setTimeout(() => {
-        outputUpdateTimersRef.current.delete(cellId)
-        setUpdatedCellIds((current) => {
-          if (!current.has(cellId)) return current
-          const next = new Set(current)
-          next.delete(cellId)
-          return next
-        })
-      }, outputUpdateAnimationMs)
-      outputUpdateTimersRef.current.set(cellId, timer)
-    }
-  }, [])
-
   useEffect(() => {
-    const outputUpdateTimers = outputUpdateTimersRef.current
     const updateOnlineState = () => setOnline(window.navigator.onLine)
     window.addEventListener('online', updateOnlineState)
     window.addEventListener('offline', updateOnlineState)
     return () => {
       window.removeEventListener('online', updateOnlineState)
       window.removeEventListener('offline', updateOnlineState)
-      for (const timer of outputUpdateTimers.values()) {
-        window.clearTimeout(timer)
-      }
-      outputUpdateTimers.clear()
     }
   }, [])
 
@@ -2180,10 +2148,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const retained = new Set([...current].filter((cellId) => cellIds.has(cellId)))
       return retained.size === current.size ? current : retained
     })
-    setUpdatedCellIds((current) => {
-      const retained = new Set([...current].filter((cellId) => cellIds.has(cellId)))
-      return retained.size === current.size ? current : retained
-    })
     setMediaSlotStates((current) => Object.fromEntries(
       Object.entries(current).filter(([cellId]) => cellIds.has(cellId)),
     ))
@@ -2235,9 +2199,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const result = await prepareGenerationPlan(cellId, 'ui')
         setNotice(result.message)
       } else {
-        const outputCellIds = notebook.edges
-          .filter((edge) => edge.source === cellId && edge.targetInput === 'media')
-          .map((edge) => edge.target)
         const accepted = await startNotebookCellRun({
           start: () => call('run_notebook_cell', {
             book_id: bookId,
@@ -2291,7 +2252,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             const nextAssets = asAssets(assetValue)
             setAssets(nextAssets)
             applyNotebook(nextNotebook, nextAssets)
-            animateUpdatedCells(outputCellIds)
             completed = true
             break
           }
@@ -2316,7 +2276,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setBusy(false)
     }
   }, [
-    animateUpdatedCells,
     applyNotebook,
     assets,
     bookId,
@@ -2332,13 +2291,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     for (const cellId of queuedCellIds) {
       next = notebookNodesWithCellStatus(next, cellId, 'queued')
     }
-    if (updatedCellIds.size > 0) {
-      next = next.map((node) => updatedCellIds.has(node.id)
-        ? { ...node, data: { ...node.data, updated: true } }
-        : node)
-    }
     return next
-  }, [nodes, queuedCellIds, updatedCellIds])
+  }, [nodes, queuedCellIds])
   const focusedEdges = useMemo(
     () => notebookEdgesWithCellFocus(edges, selectedCellId),
     [edges, selectedCellId],

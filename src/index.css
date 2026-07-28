@@ -916,6 +916,7 @@ textarea:focus-visible {
   color: var(--ink);
   background: rgba(4, 14, 9, 0.97);
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.38);
+  isolation: isolate;
   perspective: 900px;
   transform-origin: center;
   transition:
@@ -939,7 +940,7 @@ textarea:focus-visible {
 .cell-node-version-stack::after {
   position: absolute;
   inset: 7px -7px -7px 7px;
-  z-index: 1;
+  z-index: -1;
   border: 1px solid rgba(114, 231, 170, 0.3);
   border-radius: 4px;
   background: rgba(4, 18, 11, 0.92);
@@ -1039,52 +1040,6 @@ textarea:focus-visible {
   background: rgba(4, 14, 9, 0.99);
 }
 
-.cell-node-updated .cell-node-shell {
-  animation: cell-output-refresh 900ms cubic-bezier(0.2, 0.72, 0.22, 1);
-}
-
-.cell-node-updated .cell-node-shell::after {
-  position: absolute;
-  inset: 0;
-  z-index: 18;
-  background:
-    linear-gradient(
-      112deg,
-      transparent 0 34%,
-      rgba(143, 246, 189, 0.08) 43%,
-      rgba(143, 246, 189, 0.34) 50%,
-      rgba(99, 199, 216, 0.12) 57%,
-      transparent 66% 100%
-    );
-  content: '';
-  pointer-events: none;
-  transform: translateX(-105%);
-  animation: cell-output-sheen 820ms ease-out forwards;
-}
-
-@keyframes cell-output-refresh {
-  0% {
-    filter: brightness(0.82) saturate(0.72);
-    transform: scale(0.965);
-  }
-
-  44% {
-    filter: brightness(1.24) saturate(1.18);
-    transform: scale(1.012);
-  }
-
-  100% {
-    filter: none;
-    transform: scale(1);
-  }
-}
-
-@keyframes cell-output-sheen {
-  to {
-    transform: translateX(105%);
-  }
-}
-
 .cell-running-overlay {
   position: absolute;
   inset: 0;
@@ -1093,62 +1048,36 @@ textarea:focus-visible {
   grid-template-rows: auto auto;
   place-content: center;
   justify-items: center;
-  gap: 12px;
-  overflow: hidden;
+  gap: 10px;
   color: #d4f6e2;
-  background: rgba(2, 12, 8, 0.76);
-  backdrop-filter: blur(2px);
+  background: rgba(2, 12, 8, 0.72);
   pointer-events: none;
-}
-
-.cell-running-overlay::before {
-  position: absolute;
-  width: 190%;
-  height: 190%;
-  background:
-    conic-gradient(
-      from 0deg,
-      transparent 0 34%,
-      rgba(114, 231, 170, 0.34) 43%,
-      transparent 52% 84%,
-      rgba(99, 199, 216, 0.2) 92%,
-      transparent 100%
-    );
-  content: '';
-  animation: cell-running-sweep 2400ms linear infinite;
-  opacity: 0.46;
 }
 
 .cell-running-overlay::after {
   position: absolute;
   inset: 0;
   border: 1px solid rgba(114, 231, 170, 0.38);
-  box-shadow:
-    inset 0 0 32px rgba(114, 231, 170, 0.12),
-    inset 0 0 0 1px rgba(99, 199, 216, 0.08);
+  box-shadow: inset 0 0 18px rgba(114, 231, 170, 0.08);
   content: '';
-  animation: cell-running-breathe 1200ms ease-in-out infinite alternate;
 }
 
 .cell-running-indicator {
   position: relative;
   z-index: 1;
   display: grid;
-  width: 64px;
-  height: 64px;
+  width: 48px;
+  height: 48px;
   place-items: center;
-  border: 1px solid rgba(114, 231, 170, 0.52);
+  border: 1px solid rgba(114, 231, 170, 0.42);
   border-radius: 50%;
   color: #a8edc4;
-  background: rgba(4, 24, 14, 0.88);
-  box-shadow:
-    0 0 0 7px rgba(114, 231, 170, 0.06),
-    0 0 28px rgba(114, 231, 170, 0.2);
-  animation: cell-running-pulse 900ms ease-in-out infinite alternate;
+  background: rgba(4, 24, 14, 0.82);
+  box-shadow: 0 0 14px rgba(114, 231, 170, 0.12);
 }
 
 .cell-running-indicator svg {
-  animation: spin 800ms linear infinite;
+  animation: spin 1100ms linear infinite;
 }
 
 .cell-running-overlay strong {
@@ -1157,33 +1086,7 @@ textarea:focus-visible {
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  text-shadow: 0 0 12px rgba(114, 231, 170, 0.36);
-}
-
-@keyframes cell-running-sweep {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes cell-running-breathe {
-  from {
-    opacity: 0.58;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes cell-running-pulse {
-  from {
-    transform: scale(0.94);
-  }
-
-  to {
-    transform: scale(1.04);
-  }
+  text-shadow: 0 0 8px rgba(114, 231, 170, 0.22);
 }
 
 .cell-node-header,
