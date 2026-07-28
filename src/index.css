@@ -936,6 +936,21 @@ textarea:focus-visible {
   border-color: rgba(114, 231, 170, 0.58);
 }
 
+.cell-node-version-stack::after {
+  position: absolute;
+  inset: 7px -7px -7px 7px;
+  z-index: 1;
+  border: 1px solid rgba(114, 231, 170, 0.3);
+  border-radius: 4px;
+  background: rgba(4, 18, 11, 0.92);
+  box-shadow:
+    5px 5px 0 -1px rgba(4, 13, 9, 0.96),
+    5px 5px 0 0 rgba(114, 231, 170, 0.18),
+    0 12px 30px rgba(0, 0, 0, 0.34);
+  content: '';
+  pointer-events: none;
+}
+
 .cell-kind-split_video,
 .cell-kind-analyze,
 .cell-kind-concat,
@@ -1022,6 +1037,52 @@ textarea:focus-visible {
   overflow: hidden;
   border-radius: inherit;
   background: rgba(4, 14, 9, 0.99);
+}
+
+.cell-node-updated .cell-node-shell {
+  animation: cell-output-refresh 900ms cubic-bezier(0.2, 0.72, 0.22, 1);
+}
+
+.cell-node-updated .cell-node-shell::after {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  background:
+    linear-gradient(
+      112deg,
+      transparent 0 34%,
+      rgba(143, 246, 189, 0.08) 43%,
+      rgba(143, 246, 189, 0.34) 50%,
+      rgba(99, 199, 216, 0.12) 57%,
+      transparent 66% 100%
+    );
+  content: '';
+  pointer-events: none;
+  transform: translateX(-105%);
+  animation: cell-output-sheen 820ms ease-out forwards;
+}
+
+@keyframes cell-output-refresh {
+  0% {
+    filter: brightness(0.82) saturate(0.72);
+    transform: scale(0.965);
+  }
+
+  44% {
+    filter: brightness(1.24) saturate(1.18);
+    transform: scale(1.012);
+  }
+
+  100% {
+    filter: none;
+    transform: scale(1);
+  }
+}
+
+@keyframes cell-output-sheen {
+  to {
+    transform: translateX(105%);
+  }
 }
 
 .cell-running-overlay {
@@ -1141,6 +1202,24 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: 7px;
+}
+
+.cell-version-count {
+  display: inline-flex;
+  min-width: 28px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 6px;
+  border: 1px solid rgba(114, 231, 170, 0.36);
+  border-radius: 999px;
+  color: #9de1b8;
+  background: rgba(37, 104, 66, 0.2);
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0;
 }
 
 .cell-node-footer {

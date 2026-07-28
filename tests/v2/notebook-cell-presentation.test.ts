@@ -6,8 +6,10 @@ import {
   notebookCellActionPresentation,
   notebookCellInspectorActionLabel,
   notebookCellIsActiveStatus,
+  notebookCellRunObservation,
   notebookCellStatusLabel,
   notebookCellSupportsExecution,
+  notebookOutputVersionArtifactIds,
   notebookSplitFrameIds,
   notebookSplitRange,
 } from '../../src/videobook/notebook-cell-presentation'
@@ -57,6 +59,51 @@ describe('notebook cell presentation', () => {
     ].every(notebookCellIsActiveStatus)).toBe(true)
     expect(notebookCellIsActiveStatus('completed')).toBe(false)
     expect(notebookCellIsActiveStatus('error')).toBe(false)
+  })
+
+  it('observes only the matching notebook run lifecycle', () => {
+    const pending = {
+      properties: {
+        execution: {
+          cell: { runId: 'previous-run', status: 'completed' },
+        },
+      },
+    }
+    expect(notebookCellRunObservation(pending, 'cell', 'current-run')).toEqual({
+      error: null,
+      state: 'pending',
+      status: null,
+    })
+
+    const running = {
+      properties: {
+        execution: {
+          cell: { runId: 'current-run', status: 'running' },
+        },
+      },
+    }
+    expect(notebookCellRunObservation(running, 'cell', 'current-run')).toEqual({
+      error: null,
+      state: 'active',
+      status: 'running',
+    })
+
+    const failed = {
+      properties: {
+        execution: {
+          cell: {
+            runId: 'current-run',
+            status: 'error',
+            error: 'ffmpeg failed',
+          },
+        },
+      },
+    }
+    expect(notebookCellRunObservation(failed, 'cell', 'current-run')).toEqual({
+      error: 'ffmpeg failed',
+      state: 'error',
+      status: 'error',
+    })
   })
 
   it('uses operation-aware action copy in the inspector', () => {
@@ -123,5 +170,18 @@ describe('notebook cell presentation', () => {
         durationSeconds: 30,
       },
     })).toBe('Continuous source · 0:30')
+  })
+
+  it('presents the active output as the latest unique saved version', () => {
+    expect(notebookOutputVersionArtifactIds({
+      outputVersionArtifactIds: ['audio-one', 'audio-two', 'audio-two', null],
+    }, 'audio-three')).toEqual([
+      'audio-one',
+      'audio-two',
+      'audio-three',
+    ])
+    expect(notebookOutputVersionArtifactIds(undefined, 'audio-current')).toEqual([
+      'audio-current',
+    ])
   })
 })

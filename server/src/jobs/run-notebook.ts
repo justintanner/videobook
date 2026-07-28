@@ -389,6 +389,7 @@ function stableCellInputs(
     "audioArtifactId",
     "assemblyDurationFrames",
     "shotCount",
+    "outputVersionArtifactIds",
   ]);
   return Object.fromEntries(
     Object.entries(inputs ?? {}).filter(([key]) => !volatile.has(key)),
@@ -551,18 +552,30 @@ function withMediaOutput(
 ): NotebookDocument {
   return {
     ...document,
-    cells: document.cells.map((candidate) =>
-      outputCellIds.has(candidate.id)
-        ? {
-            ...candidate,
-            outputArtifactId: artifactId,
-            inputs: {
-              ...(candidate.inputs ?? {}),
-              ...inputs,
-              state: "completed",
-            },
-          }
-        : candidate),
+    cells: document.cells.map((candidate) => {
+      if (!outputCellIds.has(candidate.id)) return candidate;
+      const persisted = Array.isArray(candidate.inputs?.outputVersionArtifactIds)
+        ? candidate.inputs.outputVersionArtifactIds.filter(
+            (value): value is string =>
+              typeof value === "string" && value.length > 0,
+          )
+        : [];
+      const outputVersionArtifactIds = [...new Set([
+        ...persisted,
+        ...(candidate.outputArtifactId ? [candidate.outputArtifactId] : []),
+        artifactId,
+      ])];
+      return {
+        ...candidate,
+        outputArtifactId: artifactId,
+        inputs: {
+          ...(candidate.inputs ?? {}),
+          ...inputs,
+          outputVersionArtifactIds,
+          state: "completed",
+        },
+      };
+    }),
   };
 }
 

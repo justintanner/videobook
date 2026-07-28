@@ -2,12 +2,21 @@ export type NotebookCellUpdate = (
   patch: Record<string, unknown>,
 ) => Promise<boolean | void>
 
-export async function startNotebookCellRun(input: {
-  start: () => Promise<unknown>
-  onAccepted: () => void
-}): Promise<void> {
-  await input.start()
-  input.onAccepted()
+export async function startNotebookCellRun<Result>(input: {
+  start: () => Promise<Result>
+  onStarting?: () => void
+  onAccepted?: () => void
+  onRejected?: () => void
+}): Promise<Result> {
+  input.onStarting?.()
+  try {
+    const result = await input.start()
+    input.onAccepted?.()
+    return result
+  } catch (error) {
+    input.onRejected?.()
+    throw error
+  }
 }
 
 export async function persistAndRunNotebookCell(input: {

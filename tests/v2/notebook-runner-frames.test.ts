@@ -336,6 +336,28 @@ describe("notebook runner frames and concat", () => {
       channel_layout: "stereo",
       duration_seconds: expect.any(Number),
     });
+
+    const extractAudioRerun = completedExtractAudio.document.cells.find((cell) =>
+      cell.id === extractAudio.id);
+    expect(extractAudioRerun).toBeTruthy();
+    if (!extractAudioRerun) return;
+    const rerun = await runNotebookCell(
+      engine,
+      engine.book.get().bookId,
+      document.id,
+      completedExtractAudio.document,
+      extractAudioRerun,
+    );
+    const rerunAudio = rerun.document.cells.find((cell) =>
+      cell.id === audio.id);
+    expect(rerun.outputArtifactId).not.toBe(
+      completedExtractAudio.outputArtifactId,
+    );
+    expect(rerunAudio?.outputArtifactId).toBe(rerun.outputArtifactId);
+    expect(rerunAudio?.inputs?.outputVersionArtifactIds).toEqual([
+      completedExtractAudio.outputArtifactId,
+      rerun.outputArtifactId,
+    ]);
   }, 90_000);
 
   it("rejects extract audio actions connected to non-video media", async () => {

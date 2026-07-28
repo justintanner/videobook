@@ -1,4 +1,8 @@
-import type { NotebookCell, NotebookCellType } from 'videobook-engine'
+import type {
+  NotebookCell,
+  NotebookCellType,
+  NotebookDocument,
+} from 'videobook-engine'
 
 const mediaCellTypes = new Set<NotebookCellType>([
   'audio',
@@ -77,12 +81,24 @@ export type NotebookSplitFrameIds = {
   last: string | null
 }
 
+export type NotebookCellRunObservation = {
+  error: string | null
+  state: 'active' | 'completed' | 'error' | 'pending'
+  status: string | null
+}
+
 function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
 function stringValue(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
 }
 
 export function isNotebookMediaCellType(type: NotebookCellType): boolean {
@@ -104,6 +120,31 @@ export function notebookCellSupportsExecution(cell: ActionCell): boolean {
 
 export function notebookCellIsActiveStatus(status: string): boolean {
   return activeStatuses.has(status)
+}
+
+export function notebookCellRunObservation(
+  document: Pick<NotebookDocument, 'properties'>,
+  cellId: string,
+  runId: string,
+): NotebookCellRunObservation {
+  const execution = objectValue(document.properties?.execution)
+  const cell = execution && objectValue(execution[cellId])
+  if (!cell || stringValue(cell.runId) !== runId) {
+    return { error: null, state: 'pending', status: null }
+  }
+  const status = stringValue(cell.status)
+  const error = stringValue(cell.error)
+  if (error || status === 'error') {
+    return { error, state: 'error', status }
+  }
+  if (status === 'completed') {
+    return { error: null, state: 'completed', status }
+  }
+  return {
+    error: null,
+    state: status && notebookCellIsActiveStatus(status) ? 'active' : 'pending',
+    status,
+  }
 }
 
 export function notebookCellActionPresentation(
@@ -191,6 +232,21 @@ export function notebookAudioSummary(
     presentation.duration,
     ...presentation.details,
   ].filter((value): value is string => Boolean(value)).join(' · ')
+}
+
+export function notebookOutputVersionArtifactIds(
+  inputs: Record<string, unknown> | undefined,
+  outputArtifactId: string | undefined,
+): string[] {
+  const persisted = Array.isArray(inputs?.outputVersionArtifactIds)
+    ? inputs.outputVersionArtifactIds.filter(
+        (value): value is string => typeof value === 'string' && value.length > 0,
+      )
+    : []
+  return [...new Set([
+    ...persisted,
+    ...(outputArtifactId ? [outputArtifactId] : []),
+  ])]
 }
 
 export function notebookSplitFrameIds(

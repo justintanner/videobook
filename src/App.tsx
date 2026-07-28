@@ -36,6 +36,7 @@ import {
   CircleDot,
   Film,
   Image,
+  Layers2,
   Library,
   LoaderCircle,
   Mic,
@@ -142,9 +143,11 @@ import {
   notebookAudioPresentation,
   notebookCellActionPresentation,
   notebookCellIsActiveStatus,
+  notebookCellRunObservation,
   notebookCellSlugPrefix,
   notebookCellStatusLabel,
   notebookCellSupportsExecution,
+  notebookOutputVersionArtifactIds,
   notebookSplitFrameIds,
   notebookSplitRange,
   type NotebookAudioInfo,
@@ -349,11 +352,11 @@ const supportedUiActions = new Set([
 interface CanvasCellData extends NotebookCellData {
   asset?: AssetRecord
   deleting?: boolean
+  updated?: boolean
   splitFrames?: {
     first: { artifactId: string | null; asset?: AssetRecord }
     last: { artifactId: string | null; asset?: AssetRecord }
   }
-  onRun?: () => void
 }
 
 type CanvasNode = Node<CanvasCellData>
@@ -364,12 +367,18 @@ const MediaSlotContext = createContext<MediaSlotContextValue>({
   onFileError: () => undefined,
   onOpenLibrary: () => undefined,
 })
+const CellRunContext = createContext<(cellId: string) => Promise<void>>(
+  async () => undefined,
+)
 
 const mcpUrl = typeof window === 'undefined'
   ? 'http://localhost/mcp'
   : new URL('/mcp', window.location.origin).toString()
 const ingestPollIntervalMs = 750
 const ingestPollTimeoutMs = 5 * 60_000
+const notebookRunPollIntervalMs = 500
+const notebookRunPollTimeoutMs = 5 * 60_000
+const outputUpdateAnimationMs = 1200
 const activeJobStates = new Set(['queued', 'running', 'completing'])
 
 function delay(ms: number): Promise<void> {
@@ -1164,7 +1173,6 @@ function cellExecutionStatus(
 function canvasNodes(
   document: NotebookDocument,
   assets: AssetRecord[],
-  onRun: (cellId: string) => void,
 ): CanvasNode[] {
   const byArtifactId = new Map(assets.map((asset) => [asset.artifactId, asset]))
   return notebookNodes(document).map((node) => {
@@ -1193,7 +1201,6 @@ function canvasNodes(
               },
             }
           : {}),
-        onRun: () => onRun(node.id),
       },
     }
   })
@@ -1716,6 +1723,7 @@ function CellStatusBadge({ status }: { status: string | null }) {
 
 function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const slotContext = useContext(MediaSlotContext)
+  const runCell = useContext(CellRunContext)
   const mediaUrl = data.asset?.mediaUrl
   const thumbnailUrl = data.asset?.thumbnailUrl
   const targetInputs = data.targetInputs?.length ? data.targetInputs : ['input']
@@ -1744,6 +1752,11 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   }, data.status)
   const statusLabel = notebookCellStatusLabel(data.kind, data.status)
   const running = notebookCellIsActiveStatus(data.status)
+  const outputVersions = notebookOutputVersionArtifactIds(
+    data.inputs,
+    data.outputArtifactId,
+  )
+  const versionedAudio = data.kind === 'audio' && outputVersions.length > 1
 
   return (
     <article
@@ -1752,9 +1765,12 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         `cell-kind-${data.kind}`,
         selected ? 'cell-node-selected' : '',
         running ? 'cell-node-running' : '',
+        versionedAudio ? 'cell-node-version-stack' : '',
+        data.updated ? 'cell-node-updated' : '',
         data.deleting ? 'cell-node-deleting' : '',
       ].filter(Boolean).join(' ')}
       aria-busy={running}
+      data-version-count={outputVersions.length}
     >
       {targetInputs.map((input, index) => (
         <Handle
@@ -1796,11 +1812,21 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
               disabled={action.disabled}
               onClick={(event) => {
                 event.stopPropagation()
-                data.onRun?.()
+                void runCell(id)
               }}
             >
               {action.label}
             </button>
+          )}
+          {!action && versionedAudio && (
+            <span
+              className="cell-version-count"
+              aria-label={`${outputVersions.length} audio versions`}
+              title={`${outputVersions.length} saved versions · latest is active`}
+            >
+              <Layers2 size={12} aria-hidden="true" />
+              {outputVersions.length}
+            </span>
           )}
         </header>
         {emptyMediaSlot && slotKind ? (
@@ -1901,6 +1927,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [queuedCellIds, setQueuedCellIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
+  const [updatedCellIds, setUpdatedCellIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
   const [deletingCellId, setDeletingCellId] = useState<string | null>(null)
   const [mediaSlotStates, setMediaSlotStates] = useState<Record<string, MediaSlotState>>({})
   const [mediaLibraryPicker, setMediaLibraryPicker] = useState<MediaLibraryPickerState | null>(null)
@@ -1956,6 +1985,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const audioSpinePlayerRef = useRef<HTMLAudioElement | null>(null)
   const mediaLibraryRequestRef = useRef(0)
   const mediaLibraryOpenerRef = useRef<HTMLElement | null>(null)
+  const outputUpdateTimersRef = useRef(new Map<string, number>())
   const activeBook = useMemo(
     () => books.find((book) => book.bookId === bookId) ?? null,
     [bookId, books],
@@ -2055,13 +2085,46 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setMediaSlotOperation(cellId, null, message)
   }, [setMediaSlotOperation])
 
+  const setCellQueued = useCallback((cellId: string, queued: boolean) => {
+    setQueuedCellIds((current) => {
+      const next = new Set(current)
+      if (queued) next.add(cellId)
+      else next.delete(cellId)
+      return next.size === current.size ? current : next
+    })
+  }, [])
+
+  const animateUpdatedCells = useCallback((cellIds: string[]) => {
+    if (cellIds.length === 0) return
+    setUpdatedCellIds((current) => new Set([...current, ...cellIds]))
+    for (const cellId of cellIds) {
+      const currentTimer = outputUpdateTimersRef.current.get(cellId)
+      if (currentTimer !== undefined) window.clearTimeout(currentTimer)
+      const timer = window.setTimeout(() => {
+        outputUpdateTimersRef.current.delete(cellId)
+        setUpdatedCellIds((current) => {
+          if (!current.has(cellId)) return current
+          const next = new Set(current)
+          next.delete(cellId)
+          return next
+        })
+      }, outputUpdateAnimationMs)
+      outputUpdateTimersRef.current.set(cellId, timer)
+    }
+  }, [])
+
   useEffect(() => {
+    const outputUpdateTimers = outputUpdateTimersRef.current
     const updateOnlineState = () => setOnline(window.navigator.onLine)
     window.addEventListener('online', updateOnlineState)
     window.addEventListener('offline', updateOnlineState)
     return () => {
       window.removeEventListener('online', updateOnlineState)
       window.removeEventListener('offline', updateOnlineState)
+      for (const timer of outputUpdateTimers.values()) {
+        window.clearTimeout(timer)
+      }
+      outputUpdateTimers.clear()
     }
   }, [])
 
@@ -2097,6 +2160,49 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     timelineSelectionStart,
   ])
 
+  const [nodes, setNodes] = useState<CanvasNode[]>(() =>
+    initialWorkspace?.notebook
+      ? canvasNodes(
+          initialWorkspace.notebook,
+          initialWorkspace.assets,
+        )
+      : [])
+  const [edges, setEdges] = useState<NotebookFlowEdge[]>(() =>
+    initialWorkspace?.notebook ? notebookEdges(initialWorkspace.notebook) : [])
+
+  const applyNotebook = useCallback((
+    next: NotebookDocument,
+    nextAssets: AssetRecord[],
+  ) => {
+    setNotebook(next)
+    const cellIds = new Set(next.cells.map((cell) => cell.id))
+    setQueuedCellIds((current) => {
+      const retained = new Set([...current].filter((cellId) => cellIds.has(cellId)))
+      return retained.size === current.size ? current : retained
+    })
+    setUpdatedCellIds((current) => {
+      const retained = new Set([...current].filter((cellId) => cellIds.has(cellId)))
+      return retained.size === current.size ? current : retained
+    })
+    setMediaSlotStates((current) => Object.fromEntries(
+      Object.entries(current).filter(([cellId]) => cellIds.has(cellId)),
+    ))
+    setMediaLibraryPicker((current) =>
+      current && cellIds.has(current.cellId) ? current : null)
+    setNodes((current) => {
+      const selectedIds = new Set(
+        current.filter((node) => node.selected).map((node) => node.id),
+      )
+      return canvasNodes(next, nextAssets)
+        .map((node) => selectedIds.has(node.id)
+          ? { ...node, selected: true }
+          : node)
+    })
+    setEdges(notebookEdges(next))
+    setSelectedCellId((current) =>
+      current && next.cells.some((cell) => cell.id === current) ? current : null)
+  }, [])
+
   const runCell = useCallback(async (cellId: string) => {
     if (!bookId || !notebook) return
     const cell = notebook.cells.find((candidate) => candidate.id === cellId)
@@ -2129,47 +2235,110 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const result = await prepareGenerationPlan(cellId, 'ui')
         setNotice(result.message)
       } else {
-        await startNotebookCellRun({
+        const outputCellIds = notebook.edges
+          .filter((edge) => edge.source === cellId && edge.targetInput === 'media')
+          .map((edge) => edge.target)
+        const accepted = await startNotebookCellRun({
           start: () => call('run_notebook_cell', {
             book_id: bookId,
             notebook_id: notebook.id,
             cell_id: cellId,
             actor: 'videobook-user',
           }),
-          onAccepted: () => {
-            setQueuedCellIds((current) => {
-              const next = new Set(current)
-              next.add(cellId)
-              return next
-            })
-          },
+          onStarting: () => setCellQueued(cellId, true),
+          onRejected: () => setCellQueued(cellId, false),
         })
+        const runId = asString(record(accepted)?.run_id)
+        const jobOperationId = asString(record(accepted)?.job_id)
+        if (!runId || !jobOperationId) {
+          throw new Error('The server did not return a notebook run')
+        }
         setNotice(`@${cell.slug} queued`)
+        const deadline = Date.now() + notebookRunPollTimeoutMs
+        let completed = false
+        while (Date.now() < deadline) {
+          const [notebookValue, jobValue] = await Promise.all([
+            call('get_notebook', {
+              book_id: bookId,
+              notebook_id: notebook.id,
+            }),
+            call('list_jobs', { book_id: bookId, limit: 200 }),
+          ])
+          const nextNotebook = asNotebook(notebookValue)
+          if (!nextNotebook) {
+            throw new Error('The server returned an invalid notebook')
+          }
+          const nextJobs = asJobs(jobValue)
+          const observation = notebookCellRunObservation(
+            nextNotebook,
+            cellId,
+            runId,
+          )
+          setJobs(nextJobs)
+          setJobSnapshotAt(Date.now())
+          if (observation.state !== 'pending') setCellQueued(cellId, false)
+          applyNotebook(nextNotebook, assets)
+          if (observation.state === 'error') {
+            throw new Error(observation.error ?? `@${cell.slug} failed`)
+          }
+          if (observation.state === 'completed') {
+            const assetValue = await call('list_assets', {
+              book_id: bookId,
+              sort: 'newest',
+              limit: 200,
+              include_referenced: true,
+            })
+            const nextAssets = asAssets(assetValue)
+            setAssets(nextAssets)
+            applyNotebook(nextNotebook, nextAssets)
+            animateUpdatedCells(outputCellIds)
+            completed = true
+            break
+          }
+          const job = nextJobs.find((candidate) =>
+            candidate.operationId === jobOperationId)
+          if (job?.state === 'failed' || job?.state === 'aborted') {
+            throw new Error(
+              job.error?.message ?? `Notebook run ${job.state}`,
+            )
+          }
+          await delay(notebookRunPollIntervalMs)
+        }
+        if (!completed) {
+          throw new Error('Notebook run did not finish within five minutes')
+        }
+        setNotice(`@${cell.slug} updated`)
       }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error))
     } finally {
+      setCellQueued(cellId, false)
       setBusy(false)
     }
-  }, [bookId, call, notebook, online, prepareGenerationPlan])
+  }, [
+    animateUpdatedCells,
+    applyNotebook,
+    assets,
+    bookId,
+    call,
+    notebook,
+    online,
+    prepareGenerationPlan,
+    setCellQueued,
+  ])
 
-  const [nodes, setNodes] = useState<CanvasNode[]>(() =>
-    initialWorkspace?.notebook
-      ? canvasNodes(
-          initialWorkspace.notebook,
-          initialWorkspace.assets,
-          (cellId) => void runCell(cellId),
-        )
-      : [])
-  const [edges, setEdges] = useState<NotebookFlowEdge[]>(() =>
-    initialWorkspace?.notebook ? notebookEdges(initialWorkspace.notebook) : [])
   const presentedNodes = useMemo(() => {
     let next = nodes
     for (const cellId of queuedCellIds) {
       next = notebookNodesWithCellStatus(next, cellId, 'queued')
     }
+    if (updatedCellIds.size > 0) {
+      next = next.map((node) => updatedCellIds.has(node.id)
+        ? { ...node, data: { ...node.data, updated: true } }
+        : node)
+    }
     return next
-  }, [nodes, queuedCellIds])
+  }, [nodes, queuedCellIds, updatedCellIds])
   const focusedEdges = useMemo(
     () => notebookEdgesWithCellFocus(edges, selectedCellId),
     [edges, selectedCellId],
@@ -2301,30 +2470,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const closeMediaFullscreen = useCallback(() => {
     setFullscreenCellId(null)
   }, [])
-
-  const applyNotebook = useCallback((next: NotebookDocument, nextAssets: AssetRecord[]) => {
-    setNotebook(next)
-    setQueuedCellIds((current) =>
-      current.size === 0 ? current : new Set<string>())
-    const cellIds = new Set(next.cells.map((cell) => cell.id))
-    setMediaSlotStates((current) => Object.fromEntries(
-      Object.entries(current).filter(([cellId]) => cellIds.has(cellId)),
-    ))
-    setMediaLibraryPicker((current) =>
-      current && cellIds.has(current.cellId) ? current : null)
-    setNodes((current) => {
-      const selectedIds = new Set(
-        current.filter((node) => node.selected).map((node) => node.id),
-      )
-      return canvasNodes(next, nextAssets, (cellId) => void runCell(cellId))
-        .map((node) => selectedIds.has(node.id)
-          ? { ...node, selected: true }
-          : node)
-    })
-    setEdges(notebookEdges(next))
-    setSelectedCellId((current) =>
-      current && next.cells.some((cell) => cell.id === current) ? current : null)
-  }, [runCell])
 
   const refreshNotebook = useCallback(async (targetBookId: string, notebookId: string) => {
     const [value, audioValue] = await Promise.all([
@@ -4731,7 +4876,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       style={notebookFlowStyle}
                     >
                       <MediaSlotContext.Provider value={mediaSlotContextValue}>
-                        <ReactFlow<CanvasNode, NotebookFlowEdge>
+                        <CellRunContext.Provider value={runCell}>
+                          <ReactFlow<CanvasNode, NotebookFlowEdge>
                           className="notebook-flow"
                       nodes={presentedNodes}
                       edges={focusedEdges}
@@ -4828,11 +4974,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       deleteKeyCode={null}
                       proOptions={flowProOptions}
                     >
-                        <NotebookGridBoard
-                          metrics={notebookMetrics}
-                          previewSlot={previewSlot}
-                        />
-                        </ReactFlow>
+                            <NotebookGridBoard
+                              metrics={notebookMetrics}
+                              previewSlot={previewSlot}
+                            />
+                          </ReactFlow>
+                        </CellRunContext.Provider>
                       </MediaSlotContext.Provider>
                     </div>
                   </div>
