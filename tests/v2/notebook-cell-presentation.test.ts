@@ -4,6 +4,7 @@ import {
   notebookAudioPresentation,
   notebookAudioSummary,
   notebookCellActionPresentation,
+  notebookCellExecutionObservation,
   notebookCellInspectorActionLabel,
   notebookCellIsActiveStatus,
   notebookCellRunObservation,
@@ -103,6 +104,29 @@ describe('notebook cell presentation', () => {
       error: 'ffmpeg failed',
       state: 'error',
       status: 'error',
+    })
+  })
+
+  it('reads persisted execution details independently of a run id', () => {
+    const document = {
+      properties: {
+        execution: {
+          cell: {
+            runId: 'failed-run',
+            status: 'error',
+            error: 'ffmpeg failed',
+          },
+        },
+      },
+    }
+
+    expect(notebookCellExecutionObservation(document, 'cell')).toEqual({
+      error: 'ffmpeg failed',
+      status: 'error',
+    })
+    expect(notebookCellExecutionObservation(document, 'missing')).toEqual({
+      error: null,
+      status: null,
     })
   })
 

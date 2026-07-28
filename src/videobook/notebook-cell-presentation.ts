@@ -87,6 +87,11 @@ export type NotebookCellRunObservation = {
   status: string | null
 }
 
+export type NotebookCellExecutionObservation = Pick<
+  NotebookCellRunObservation,
+  'error' | 'status'
+>
+
 function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
@@ -120,6 +125,18 @@ export function notebookCellSupportsExecution(cell: ActionCell): boolean {
 
 export function notebookCellIsActiveStatus(status: string): boolean {
   return activeStatuses.has(status)
+}
+
+export function notebookCellExecutionObservation(
+  document: Pick<NotebookDocument, 'properties'>,
+  cellId: string,
+): NotebookCellExecutionObservation {
+  const execution = objectValue(document.properties?.execution)
+  const cell = execution && objectValue(execution[cellId])
+  return {
+    error: stringValue(cell?.error),
+    status: stringValue(cell?.status),
+  }
 }
 
 export function notebookCellRunObservation(

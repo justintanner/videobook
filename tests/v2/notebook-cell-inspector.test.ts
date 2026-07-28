@@ -44,6 +44,7 @@ describe('NotebookCellInspector', () => {
         audioInfo: null,
       },
       status: 'completed',
+      error: null,
       busy: false,
       clearing: false,
       deleting: false,
@@ -128,6 +129,7 @@ describe('NotebookCellInspector', () => {
         },
       },
       status: 'completed',
+      error: null,
       busy: false,
       clearing: false,
       deleting: false,
@@ -198,6 +200,7 @@ describe('NotebookCellInspector', () => {
         currentAsset,
       ],
       status: 'completed',
+      error: null,
       busy: false,
       clearing: false,
       deleting: false,
@@ -232,6 +235,7 @@ describe('NotebookCellInspector', () => {
       edges: [],
       asset: undefined,
       status: 'pending',
+      error: null,
       busy: false,
       clearing: false,
       deleting: false,
@@ -264,6 +268,7 @@ describe('NotebookCellInspector', () => {
       edges: [],
       asset: undefined,
       status: 'completed',
+      error: null,
       busy: true,
       clearing: false,
       deleting: true,
@@ -301,6 +306,7 @@ describe('NotebookCellInspector', () => {
       edges: [],
       asset: undefined,
       status: 'completed',
+      error: null,
       busy: false,
       clearing: false,
       deleting: false,
@@ -333,6 +339,49 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('Delete cell')
     expect(html.indexOf('Split again')).toBeLessThan(html.indexOf('Delete cell'))
     expect(html).not.toContain('completed')
+    expect(html).not.toContain('inspector-run-error')
+  })
+
+  it('shows the persisted failure message for an action cell', () => {
+    const splitCell: NotebookCell = {
+      ...cell,
+      type: 'split_video',
+      slug: 'split-video-02',
+      operation: 'split_range',
+      provider: 'local',
+      tool: 'ffmpeg',
+      inputs: {
+        startSeconds: 15,
+        endSeconds: 30,
+      },
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: splitCell,
+      cells: [splitCell],
+      edges: [],
+      asset: undefined,
+      status: 'error',
+      error: 'ffmpeg exited with code 1\nEnd time exceeds the source duration',
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('class="inspector-run-error"')
+    expect(html).toContain('role="alert"')
+    expect(html).toContain('aria-label="Cell run error"')
+    expect(html).toContain('Run failed')
+    expect(html).toContain('ffmpeg exited with code 1')
+    expect(html).toContain('End time exceeds the source duration')
+    expect(html.indexOf('Run failed')).toBeLessThan(html.indexOf('Start seconds'))
   })
 
   it('persists dirty action fields before running', async () => {
@@ -530,6 +579,7 @@ describe('NotebookCellInspector', () => {
       edges: [],
       asset: undefined,
       status: 'completed',
+      error: null,
       busy: false,
       clearing: false,
       deleting: false,
@@ -570,6 +620,7 @@ describe('NotebookCellInspector', () => {
       edges: [],
       asset: undefined,
       status: 'completed',
+      error: null,
       busy: false,
       clearing: false,
       deleting: false,

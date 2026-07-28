@@ -142,6 +142,7 @@ import {
   formatMediaTime,
   notebookAudioPresentation,
   notebookCellActionPresentation,
+  notebookCellExecutionObservation,
   notebookCellIsActiveStatus,
   notebookCellRunObservation,
   notebookCellSlugPrefix,
@@ -2414,6 +2415,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => notebook?.cells.find((cell) => cell.id === selectedCellId) ?? null,
     [notebook, selectedCellId],
   )
+  const selectedCellError = notebook && selectedNotebookCell
+    ? notebookCellExecutionObservation(notebook, selectedNotebookCell.id).error
+    : null
   const selectedCellVersionAssets = useMemo(() => {
     if (!selectedNotebookCell || selectedNotebookCell.type !== 'audio') return []
     return notebookOutputVersionArtifactIds(
@@ -5219,6 +5223,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     asset={selectedCell.data.asset}
                     versionAssets={selectedCellVersionAssets}
                     status={selectedCell.data.status}
+                    error={selectedCellError}
                     busy={busy || Boolean(selectedMediaSlotState?.operation)}
                     deleting={deletingCellId === selectedNotebookCell.id}
                     clearing={selectedMediaSlotState?.operation === 'clear'}

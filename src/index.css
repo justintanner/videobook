@@ -2183,6 +2183,38 @@ textarea:focus-visible {
   display: grid;
 }
 
+.inspector-run-error {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  margin: 0 0 20px;
+  padding: 12px;
+  border: 1px solid rgba(210, 111, 111, 0.42);
+  color: #d59a9a;
+  background: rgba(112, 39, 39, 0.14);
+}
+
+.inspector-run-error svg {
+  margin-top: 1px;
+}
+
+.inspector-run-error strong {
+  display: block;
+  color: #e4b0b0;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.inspector-run-error p {
+  margin: 6px 0 0;
+  color: #d4aaaa;
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .inspector-dirty-notice {
   display: flex;
   min-height: 36px;

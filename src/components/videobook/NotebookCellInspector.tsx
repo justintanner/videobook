@@ -170,6 +170,7 @@ type NotebookCellInspectorProps = {
   asset: NotebookCellInspectorAsset | undefined
   versionAssets?: readonly NotebookCellInspectorAsset[]
   status: string
+  error: string | null
   busy: boolean
   clearing: boolean
   deleting: boolean
@@ -759,6 +760,7 @@ function ExecutableCellInspector({
   cell,
   asset,
   status,
+  error,
   busy,
   deleting,
   onUpdate,
@@ -770,6 +772,7 @@ function ExecutableCellInspector({
   | 'cell'
   | 'asset'
   | 'status'
+  | 'error'
   | 'busy'
   | 'deleting'
   | 'onUpdate'
@@ -829,6 +832,19 @@ function ExecutableCellInspector({
   return (
     <div className="inspector-body inspector-executable-body">
       <SlugField cell={cell} busy={busy} onUpdate={onUpdate} />
+      {status === 'error' && (
+        <section
+          className="inspector-run-error"
+          role="alert"
+          aria-label="Cell run error"
+        >
+          <CircleAlert size={16} aria-hidden="true" />
+          <div>
+            <strong>Run failed</strong>
+            <p>{error ?? 'This action failed, but no error details were recorded.'}</p>
+          </div>
+        </section>
+      )}
       {asset && previewCell && (
         <NotebookCellMedia
           asset={asset}
@@ -1003,6 +1019,7 @@ export function NotebookCellInspector({
   asset,
   versionAssets,
   status,
+  error,
   busy,
   clearing,
   deleting,
@@ -1047,6 +1064,7 @@ export function NotebookCellInspector({
       cell={cell}
       asset={asset}
       status={status}
+      error={error}
       busy={busy}
       deleting={deleting}
       onUpdate={onUpdate}
