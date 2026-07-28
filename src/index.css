@@ -24,7 +24,7 @@
   --surface-deep: #030907;
   --green: #72e7aa;
   --cyan: #63c7d8;
-  --selection-accent: #b4bcc3;
+  --selection-accent: #4fb77d;
   --danger: #f07e7e;
 }
 
@@ -836,9 +836,9 @@ textarea:focus-visible {
 }
 
 .notebook-flow .workflow-edge-cell-focus .react-flow__edge-path {
-  stroke: rgba(180, 188, 195, 0.68);
-  stroke-width: 1.65;
-  filter: drop-shadow(0 0 4px rgba(180, 188, 195, 0.14));
+  stroke: rgba(79, 183, 125, 0.98);
+  stroke-width: 2.15;
+  filter: drop-shadow(0 0 6px rgba(79, 183, 125, 0.52));
 }
 
 .cell-target-connection-count {
@@ -957,11 +957,9 @@ textarea:focus-visible {
 }
 
 .cell-node-selected {
-  border-color: rgba(180, 188, 195, 0.84);
-  outline: 1px solid rgba(180, 188, 195, 0.34);
-  outline-offset: 2px;
+  border-color: rgba(79, 183, 125, 0.98);
   box-shadow:
-    0 0 18px rgba(180, 188, 195, 0.14),
+    0 0 26px rgba(79, 183, 125, 0.42),
     0 18px 38px rgba(0, 0, 0, 0.42);
   animation: cell-selection-settle 220ms ease-out;
 }
@@ -971,9 +969,9 @@ textarea:focus-visible {
 }
 
 .cell-node-selected > .react-flow__handle {
-  border-color: #171a1c;
+  border-color: #0d2418;
   background: var(--selection-accent);
-  box-shadow: 0 0 6px rgba(180, 188, 195, 0.2);
+  box-shadow: 0 0 9px rgba(79, 183, 125, 0.55);
 }
 
 .cell-node-deleting {

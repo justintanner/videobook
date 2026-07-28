@@ -12,7 +12,7 @@ import {
   type NotebookBusRiverRoute,
 } from './notebook-routing'
 
-export const notebookFocusedEdgeColor = 'rgba(180, 188, 195, 0.68)'
+export const notebookFocusedEdgeColor = 'rgba(79, 183, 125, 0.98)'
 
 export type NotebookFlowEdge = Edge<NotebookBusRiverRoute, 'busRiver'>
 

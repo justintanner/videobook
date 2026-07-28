@@ -223,8 +223,8 @@ describe('notebook draft conversion', () => {
     ).toBe(2)
   })
 
-  it('uses the subtle silver focus color for route markers', () => {
-    expect(notebookFocusedEdgeColor).toBe('rgba(180, 188, 195, 0.68)')
+  it('uses the bright emerald focus color for route markers', () => {
+    expect(notebookFocusedEdgeColor).toBe('rgba(79, 183, 125, 0.98)')
   })
 
   it('focuses only routes incident to the selected cell', () => {
