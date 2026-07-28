@@ -3118,6 +3118,7 @@ export function videobookDomainDefs(
       name: "move_notebook_cells",
       description: "Persist notebook cell grid slots",
       scope: "book",
+      recordsOwnActivity: true,
       schema: {
         ...bookSchema,
         notebook_id: z.string().uuid(),

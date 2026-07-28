@@ -153,6 +153,17 @@ export function resolveNotebookGridGroupMove<T extends NotebookGridData>(
   })
 }
 
+export function changedNotebookGridNodes<T extends NotebookGridData>(
+  previous: readonly Node<T>[],
+  next: readonly Node<T>[],
+): Array<Node<T>> {
+  const previousSlots = new Map(
+    previous.map((node) => [node.id, notebookGridSlotKey(node.data.slot)]),
+  )
+  return next.filter((node) =>
+    previousSlots.get(node.id) !== notebookGridSlotKey(node.data.slot))
+}
+
 export function nextNotebookGridSlot<T extends NotebookGridData>(
   nodes: readonly Node<T>[],
   columnCount = notebookGrid.defaultColumnCount,

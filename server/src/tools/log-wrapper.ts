@@ -116,7 +116,9 @@ export function withLogging(def: ToolDef, engine: Engine): ToolDef {
     ...def,
     handler: async (args) => {
       const startedAt = performance.now();
-      const shouldRecord = def.scope !== "global" && isBookToolActivity(def.name, args);
+      const shouldRecord = def.recordsOwnActivity !== true
+        && def.scope !== "global"
+        && isBookToolActivity(def.name, args);
       const actionName = actionNameForTool(def.name);
       const actionId = uuidv7();
       if (shouldRecord) {

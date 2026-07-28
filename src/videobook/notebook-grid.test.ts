@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Node } from '@xyflow/react'
 import {
+  changedNotebookGridNodes,
   nextNotebookGridSlot,
   notebookGrid,
   notebookGridDropSlot,
@@ -144,6 +145,18 @@ describe('notebook grid', () => {
       slot: item.data.slot,
       position: item.position,
     })))
+  })
+
+  it('returns only cells whose persisted slots changed', () => {
+    const source = [
+      node('a', 0, 0),
+      node('b', 2, 3),
+      node('c', 4, -1),
+    ]
+    const moved = resolveNotebookGridMove(source, 'a', { row: 2, column: 3 })
+    expect(changedNotebookGridNodes(source, moved).map((item) => item.id))
+      .toEqual(['a', 'b'])
+    expect(changedNotebookGridNodes(source, source)).toEqual([])
   })
 
   it('chooses empty squares from the center outward', () => {

@@ -119,6 +119,7 @@ import {
   type EditCommandStage,
 } from '@/videobook/command-plan'
 import {
+  changedNotebookGridNodes,
   nextNotebookGridSlot,
   normalizeNotebookGridZoom,
   notebookGrid,
@@ -4781,9 +4782,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           draggedNodes.map((draggedNode) => draggedNode.id),
                           notebookGridSlot(node.position),
                         )
+                        const movedNodes = changedNotebookGridNodes(nodes, nextNodes)
                         setNodes(nextNodes)
                         setPreviewSlot(null)
-                        void persistSlots(nextNodes)
+                        if (movedNodes.length > 0) void persistSlots(movedNodes)
                       }}
                       onConnect={(connection) => void connectCells(connection)}
                       onDrop={(event) => {
