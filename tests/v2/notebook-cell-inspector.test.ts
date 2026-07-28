@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest'
 import type { NotebookCell } from 'videobook-engine'
 import { NotebookCellInspector } from '../../src/components/videobook/NotebookCellInspector'
 import { NotebookMediaFullscreen } from '../../src/components/videobook/NotebookMediaFullscreen'
-import { persistAndRunNotebookCell } from '../../src/videobook/notebook-cell-actions'
+import {
+  persistAndRunNotebookCell,
+  startNotebookCellRun,
+} from '../../src/videobook/notebook-cell-actions'
 import {
   doltCellDisplayValue,
   doltCellRows,
@@ -281,6 +284,38 @@ describe('NotebookCellInspector', () => {
 
     expect(result).toBe(true)
     expect(calls).toEqual(['update', 'run'])
+  })
+
+  it('marks a cell queued only after its run is accepted', async () => {
+    const calls: string[] = []
+
+    await startNotebookCellRun({
+      start: async () => {
+        calls.push('start')
+        return { job_id: 'run-notebook-cell' }
+      },
+      onAccepted: () => {
+        calls.push('queued')
+      },
+    })
+
+    expect(calls).toEqual(['start', 'queued'])
+  })
+
+  it('does not mark a cell queued when its run is rejected', async () => {
+    const calls: string[] = []
+
+    await expect(startNotebookCellRun({
+      start: async () => {
+        calls.push('start')
+        throw new Error('queue rejected')
+      },
+      onAccepted: () => {
+        calls.push('queued')
+      },
+    })).rejects.toThrow('queue rejected')
+
+    expect(calls).toEqual(['start'])
   })
 
   it('does not run an action when validation or persistence fails', async () => {

@@ -95,9 +95,11 @@ import {
   notebookEdges,
   notebookEdgesWithCellFocus,
   notebookNodes,
+  notebookNodesWithCellStatus,
   type NotebookCellData,
   type NotebookFlowEdge,
 } from '@/videobook/notebook-draft'
+import { startNotebookCellRun } from '@/videobook/notebook-cell-actions'
 import {
   validateCommandPlan,
   type CommandPlan,
@@ -1781,6 +1783,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [providers, setProviders] = useState<ProviderRecord[]>([])
   const [storage, setStorage] = useState<unknown>(null)
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null)
+  const [queuedCellIds, setQueuedCellIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
   const [deletingCellId, setDeletingCellId] = useState<string | null>(null)
   const [mediaSlotStates, setMediaSlotStates] = useState<Record<string, MediaSlotState>>({})
   const [mediaLibraryPicker, setMediaLibraryPicker] = useState<MediaLibraryPickerState | null>(null)
@@ -2008,11 +2013,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const result = await prepareGenerationPlan(cellId, 'ui')
         setNotice(result.message)
       } else {
-        await call('run_notebook_cell', {
-          book_id: bookId,
-          notebook_id: notebook.id,
-          cell_id: cellId,
-          actor: 'videobook-user',
+        await startNotebookCellRun({
+          start: () => call('run_notebook_cell', {
+            book_id: bookId,
+            notebook_id: notebook.id,
+            cell_id: cellId,
+            actor: 'videobook-user',
+          }),
+          onAccepted: () => {
+            setQueuedCellIds((current) => {
+              const next = new Set(current)
+              next.add(cellId)
+              return next
+            })
+          },
         })
         setNotice(`@${cell.slug} queued`)
       }
@@ -2033,6 +2047,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       : [])
   const [edges, setEdges] = useState<NotebookFlowEdge[]>(() =>
     initialWorkspace?.notebook ? notebookEdges(initialWorkspace.notebook) : [])
+  const presentedNodes = useMemo(() => {
+    let next = nodes
+    for (const cellId of queuedCellIds) {
+      next = notebookNodesWithCellStatus(next, cellId, 'queued')
+    }
+    return next
+  }, [nodes, queuedCellIds])
   const focusedEdges = useMemo(
     () => notebookEdgesWithCellFocus(edges, selectedCellId),
     [edges, selectedCellId],
@@ -2143,8 +2164,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [notebookFrameSize.width])
 
   const selectedCell = useMemo(
-    () => nodes.find((node) => node.id === selectedCellId) ?? null,
-    [nodes, selectedCellId],
+    () => presentedNodes.find((node) => node.id === selectedCellId) ?? null,
+    [presentedNodes, selectedCellId],
   )
   const selectedNotebookCell = useMemo(
     () => notebook?.cells.find((cell) => cell.id === selectedCellId) ?? null,
@@ -2167,6 +2188,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const applyNotebook = useCallback((next: NotebookDocument, nextAssets: AssetRecord[]) => {
     setNotebook(next)
+    setQueuedCellIds((current) =>
+      current.size === 0 ? current : new Set<string>())
     const cellIds = new Set(next.cells.map((cell) => cell.id))
     setMediaSlotStates((current) => Object.fromEntries(
       Object.entries(current).filter(([cellId]) => cellIds.has(cellId)),
@@ -4414,7 +4437,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       <MediaSlotContext.Provider value={mediaSlotContextValue}>
                         <ReactFlow<CanvasNode, NotebookFlowEdge>
                           className="notebook-flow"
-                      nodes={nodes}
+                      nodes={presentedNodes}
                       edges={focusedEdges}
                       nodeTypes={nodeTypes}
                       edgeTypes={edgeTypes}

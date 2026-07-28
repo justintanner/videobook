@@ -94,6 +94,26 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
   })
 }
 
+export function notebookNodesWithCellStatus<Data extends NotebookCellData>(
+  nodes: Array<Node<Data>>,
+  cellId: string,
+  status: string,
+): Array<Node<Data>> {
+  let changed = false
+  const next = nodes.map((node) => {
+    if (node.id !== cellId || node.data.status === status) return node
+    changed = true
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        status,
+      } as Data,
+    }
+  })
+  return changed ? next : nodes
+}
+
 export function notebookEdges(
   document: NotebookDocument,
 ): NotebookFlowEdge[] {

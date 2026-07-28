@@ -2,6 +2,14 @@ export type NotebookCellUpdate = (
   patch: Record<string, unknown>,
 ) => Promise<boolean | void>
 
+export async function startNotebookCellRun(input: {
+  start: () => Promise<unknown>
+  onAccepted: () => void
+}): Promise<void> {
+  await input.start()
+  input.onAccepted()
+}
+
 export async function persistAndRunNotebookCell(input: {
   cellId: string
   dirty: boolean
