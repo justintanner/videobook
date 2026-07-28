@@ -2,6 +2,7 @@ import {
   Check,
   CircleAlert,
   CircleX,
+  Layers2,
   Maximize2,
   Pencil,
   Save,
@@ -16,9 +17,10 @@ import {
 } from '@/videobook/dolt-cell-source'
 import {
   isNotebookMediaCellType,
-  notebookAudioSummary,
+  notebookAudioPresentation,
   notebookCellActionPresentation,
   notebookCellInspectorActionLabel,
+  notebookOutputVersionArtifactIds,
   type NotebookAudioInfo,
 } from '@/videobook/notebook-cell-presentation'
 import {
@@ -166,6 +168,7 @@ type NotebookCellInspectorProps = {
   cells: NotebookCell[]
   edges: NotebookEdge[]
   asset: NotebookCellInspectorAsset | undefined
+  versionAssets?: readonly NotebookCellInspectorAsset[]
   status: string
   busy: boolean
   clearing: boolean
@@ -227,7 +230,7 @@ function NotebookCellMedia({
   const dimensions = asset.width && asset.height
     ? `${asset.width}×${asset.height}`
     : asset.type.toUpperCase()
-  const audioSummary = notebookAudioSummary({
+  const audioPresentation = notebookAudioPresentation({
     audioInfo: asset.audioInfo,
     durationSeconds: asset.duration,
     hasOutput: true,
@@ -260,7 +263,23 @@ function NotebookCellMedia({
         )}
         {!isAudio && <span className="inspector-cell-ratio">{dimensions}</span>}
       </div>
-      {isAudio && <strong className="inspector-audio-summary">{audioSummary}</strong>}
+      {isAudio && (
+        <div className="inspector-audio-summary">
+          <span className="inspector-audio-role">{audioPresentation.role}</span>
+          <dl className="inspector-audio-facts">
+            <div>
+              <dt>Duration</dt>
+              <dd>{audioPresentation.duration ?? 'Unknown'}</dd>
+            </div>
+            {audioPresentation.details.length > 0 && (
+              <div>
+                <dt>Format</dt>
+                <dd>{audioPresentation.details.join(' · ')}</dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      )}
       {allowFullscreen && !isAudio && (
         <button
           type="button"
@@ -552,11 +571,62 @@ function DeleteCellButton({
   )
 }
 
+function AudioVersionSelector({
+  artifactIds,
+  availableArtifactIds,
+  currentArtifactId,
+  selectedArtifactId,
+  onSelect,
+}: {
+  artifactIds: readonly string[]
+  availableArtifactIds: ReadonlySet<string>
+  currentArtifactId: string | undefined
+  selectedArtifactId: string
+  onSelect: (artifactId: string) => void
+}) {
+  const selectedVersion = artifactIds.indexOf(selectedArtifactId) + 1
+  const viewingCurrent = selectedArtifactId === currentArtifactId
+
+  return (
+    <section className="inspector-audio-versions" aria-label="Audio versions">
+      <span className="inspector-audio-version-label">
+        <Layers2 size={13} aria-hidden="true" />
+        Version
+      </span>
+      <select
+        value={selectedArtifactId}
+        aria-label="Audio version"
+        onChange={(event) => onSelect(event.target.value)}
+      >
+        {artifactIds.map((artifactId, index) => (
+          <option
+            key={artifactId}
+            value={artifactId}
+            disabled={!availableArtifactIds.has(artifactId)}
+          >
+            Version {index + 1} of {artifactIds.length}
+            {artifactId === currentArtifactId ? ' · current' : ''}
+          </option>
+        ))}
+      </select>
+      <span
+        className={`inspector-audio-version-state${viewingCurrent ? ' current' : ''}`}
+        aria-live="polite"
+      >
+        {viewingCurrent
+          ? 'Current output'
+          : `Viewing version ${selectedVersion}`}
+      </span>
+    </section>
+  )
+}
+
 function MediaCellInspector({
   cell,
   cells,
   edges,
   asset,
+  versionAssets,
   busy,
   clearing,
   deleting,
@@ -571,6 +641,7 @@ function MediaCellInspector({
   | 'cells'
   | 'edges'
   | 'asset'
+  | 'versionAssets'
   | 'busy'
   | 'clearing'
   | 'deleting'
@@ -582,6 +653,54 @@ function MediaCellInspector({
 >) {
   const canClear = Boolean(cell.outputArtifactId)
     || edges.some((edge) => edge.target === cell.id)
+  const audioVersionArtifactIds = cell.type === 'audio'
+    ? notebookOutputVersionArtifactIds(cell.inputs, cell.outputArtifactId)
+    : []
+  const audioVersionKey = audioVersionArtifactIds.join(':')
+  const currentAudioVersionArtifactId = cell.outputArtifactId
+    ?? audioVersionArtifactIds.at(-1)
+    ?? ''
+  const [audioVersionSelection, setAudioVersionSelection] = useState<{
+    artifactId: string
+    cellId: string
+    currentArtifactId: string
+    versionKey: string
+  } | null>(null)
+  const selectedAudioVersionArtifactId = (
+    audioVersionSelection?.cellId === cell.id
+    && audioVersionSelection.currentArtifactId === currentAudioVersionArtifactId
+    && audioVersionSelection.versionKey === audioVersionKey
+  )
+    ? audioVersionSelection.artifactId
+    : currentAudioVersionArtifactId
+  const audioVersionAssetById = new Map(
+    (versionAssets ?? []).map((versionAsset) => [
+      versionAsset.artifactId,
+      versionAsset,
+    ]),
+  )
+  if (asset) audioVersionAssetById.set(asset.artifactId, asset)
+  const selectedVersionAvailable = audioVersionAssetById.has(
+    selectedAudioVersionArtifactId,
+  )
+  const effectiveAudioVersionArtifactId = (
+    audioVersionArtifactIds.includes(selectedAudioVersionArtifactId)
+    && selectedVersionAvailable
+  )
+    ? selectedAudioVersionArtifactId
+    : currentAudioVersionArtifactId
+  const previewAsset = cell.type === 'audio'
+    ? audioVersionAssetById.get(effectiveAudioVersionArtifactId) ?? asset
+    : asset
+  const availableAudioVersionArtifactIds = new Set(audioVersionAssetById.keys())
+  const selectAudioVersion = (artifactId: string) => {
+    setAudioVersionSelection({
+      artifactId,
+      cellId: cell.id,
+      currentArtifactId: currentAudioVersionArtifactId,
+      versionKey: audioVersionKey,
+    })
+  }
 
   return (
     <div className="inspector-body inspector-media-body">
@@ -590,9 +709,18 @@ function MediaCellInspector({
         <span className="inspector-media-field-label">
           {cell.type.replaceAll('_', ' ').toUpperCase()}
         </span>
-        {asset ? (
+        {audioVersionArtifactIds.length > 1 && previewAsset && (
+          <AudioVersionSelector
+            artifactIds={audioVersionArtifactIds}
+            availableArtifactIds={availableAudioVersionArtifactIds}
+            currentArtifactId={cell.outputArtifactId}
+            selectedArtifactId={effectiveAudioVersionArtifactId}
+            onSelect={selectAudioVersion}
+          />
+        )}
+        {previewAsset ? (
           <NotebookCellMedia
-            asset={asset}
+            asset={previewAsset}
             slug={cell.slug}
             allowFullscreen={cell.type === 'image' || cell.type === 'video'}
             onOpenFullscreen={onOpenFullscreen}
@@ -873,6 +1001,7 @@ export function NotebookCellInspector({
   cells,
   edges,
   asset,
+  versionAssets,
   status,
   busy,
   clearing,
@@ -900,6 +1029,7 @@ export function NotebookCellInspector({
         cells={cells}
         edges={edges}
         asset={asset}
+        versionAssets={versionAssets}
         busy={busy}
         clearing={clearing}
         deleting={deleting}

@@ -1755,6 +1755,10 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     data.outputArtifactId,
   )
   const versionedAudio = data.kind === 'audio' && outputVersions.length > 1
+  const activeAudioVersion = Math.max(
+    1,
+    outputVersions.indexOf(data.outputArtifactId ?? '') + 1,
+  )
 
   return (
     <article
@@ -1818,11 +1822,11 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           {!action && versionedAudio && (
             <span
               className="cell-version-count"
-              aria-label={`${outputVersions.length} audio versions`}
-              title={`${outputVersions.length} saved versions · latest is active`}
+              aria-label={`Current audio version ${activeAudioVersion} of ${outputVersions.length}`}
+              title={`Current output · version ${activeAudioVersion} of ${outputVersions.length}`}
             >
               <Layers2 size={12} aria-hidden="true" />
-              {outputVersions.length}
+              v{activeAudioVersion}/{outputVersions.length}
             </span>
           )}
         </header>
@@ -2410,6 +2414,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => notebook?.cells.find((cell) => cell.id === selectedCellId) ?? null,
     [notebook, selectedCellId],
   )
+  const selectedCellVersionAssets = useMemo(() => {
+    if (!selectedNotebookCell || selectedNotebookCell.type !== 'audio') return []
+    return notebookOutputVersionArtifactIds(
+      selectedNotebookCell.inputs,
+      selectedNotebookCell.outputArtifactId,
+    ).flatMap((artifactId) => {
+      const versionAsset = assetById.get(artifactId)
+      return versionAsset ? [versionAsset] : []
+    })
+  }, [assetById, selectedNotebookCell])
   const selectedMediaSlotState = selectedNotebookCell
     ? mediaSlotStates[selectedNotebookCell.id]
     : undefined
@@ -5203,6 +5217,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     cells={notebook?.cells ?? []}
                     edges={notebook?.edges ?? []}
                     asset={selectedCell.data.asset}
+                    versionAssets={selectedCellVersionAssets}
                     status={selectedCell.data.status}
                     busy={busy || Boolean(selectedMediaSlotState?.operation)}
                     deleting={deletingCellId === selectedNotebookCell.id}

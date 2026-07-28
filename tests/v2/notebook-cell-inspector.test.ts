@@ -143,7 +143,81 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('class="inspector-cell-preview inspector-cell-preview-audio"')
     expect(html).toContain('<audio')
     expect(html).toContain('/files/aud-source/original.m4a')
-    expect(html).toContain('Audio output · 1:00.01 · AAC · 48 kHz · stereo')
+    expect(html).toContain('class="inspector-audio-role">Audio output</span>')
+    expect(html).toContain('<dt>Duration</dt><dd>1:00.01</dd>')
+    expect(html).toContain('<dt>Format</dt><dd>AAC · 48 kHz · stereo</dd>')
+    expect(html).not.toContain('aria-label="Audio version"')
+  })
+
+  it('labels and selects the current saved audio version', () => {
+    const audioCell: NotebookCell = {
+      ...cell,
+      type: 'audio',
+      slug: 'aud-source',
+      inputs: {
+        audioRole: 'continuous-source',
+        outputVersionArtifactIds: ['audio-one', 'audio-two'],
+      },
+      outputArtifactId: 'audio-two',
+    }
+    const currentAsset = {
+      artifactId: 'audio-two',
+      id: 'aud-source-2',
+      type: 'audio',
+      mediaUrl: '/files/aud-source-2/original.m4a',
+      thumbnailUrl: null,
+      width: null,
+      height: null,
+      duration: 30,
+      audioInfo: {
+        channelLayout: 'stereo',
+        channels: 2,
+        codec: 'aac',
+        durationSeconds: 30,
+        sampleRateHz: 48_000,
+      },
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: audioCell,
+      cells: [audioCell],
+      edges: [],
+      asset: currentAsset,
+      versionAssets: [
+        {
+          ...currentAsset,
+          artifactId: 'audio-one',
+          id: 'aud-source-1',
+          mediaUrl: '/files/aud-source-1/original.m4a',
+          duration: 15,
+          audioInfo: {
+            ...currentAsset.audioInfo,
+            durationSeconds: 15,
+          },
+        },
+        currentAsset,
+      ],
+      status: 'completed',
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('aria-label="Audio versions"')
+    expect(html).toContain('aria-label="Audio version"')
+    expect(html).toContain('Version 1 of 2')
+    expect(html).toContain('Version 2 of 2 · current')
+    expect(html).toContain('Current output')
+    expect(html).toContain('value="audio-two" selected=""')
+    expect(html).toContain('/files/aud-source-2/original.m4a')
+    expect(html).toContain('<dt>Duration</dt><dd>0:30</dd>')
   })
 
   it('keeps inputs visible beneath a compact pending preview', () => {
