@@ -219,6 +219,7 @@ export function notebookCellIsRunnable(cell: NotebookCell): boolean {
     && cell.type !== "image"
     && cell.type !== "video"
     && cell.type !== "character"
+    && cell.type !== "analysis"
     && Boolean(cell.operation ?? cell.tool ?? cell.model)
   );
 }

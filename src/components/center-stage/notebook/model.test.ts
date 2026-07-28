@@ -151,7 +151,7 @@ describe('notebook model', () => {
     }
   })
 
-  it('creates an empty definition and the thirteen toolbox cell seeds', () => {
+  it('creates an empty definition and the fourteen cell seeds', () => {
     expect(createEmptyDefinition()).toEqual({ properties: {}, sequence: [] })
     expect(toolboxStepSeeds.map((step) => step.type)).toEqual([
       'audio',
@@ -162,6 +162,7 @@ describe('notebook model', () => {
       'prompt',
       'character',
       'analyze',
+      'analysis',
       'generate_video',
       'generate_image',
       'generate_audio',

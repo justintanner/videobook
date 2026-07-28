@@ -26,6 +26,7 @@ const cellSlugPrefixes = {
   split_video: 'split-video',
   prompt: 'prompt',
   analyze: 'analyze',
+  analysis: 'analysis',
   generate_video: 'generate-video',
   generate_image: 'generate-image',
   generate_audio: 'generate-audio',
@@ -68,6 +69,19 @@ export type NotebookAudioInfo = {
   codec: string
   durationSeconds: number
   sampleRateHz: number
+}
+
+export type NotebookAnalysisShot = {
+  ordinal: number
+  label: string
+  startSeconds: number
+  endSeconds: number
+  durationSeconds: number
+}
+
+export type NotebookAnalysisInfo = {
+  sourceDurationSeconds: number
+  shots: NotebookAnalysisShot[]
 }
 
 export type NotebookAudioPresentation = {
@@ -119,7 +133,8 @@ export function notebookCellSlugPrefix(type: NotebookCellType): string {
 }
 
 export function notebookCellSupportsExecution(cell: ActionCell): boolean {
-  return !isNotebookMediaCellType(cell.type)
+  return cell.type !== 'analysis'
+    && !isNotebookMediaCellType(cell.type)
     && Boolean(cell.operation ?? cell.tool ?? cell.model)
 }
 

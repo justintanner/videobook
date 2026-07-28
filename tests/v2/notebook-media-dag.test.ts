@@ -62,6 +62,19 @@ async function makeLowRateMp4(path: string): Promise<void> {
   ]);
 }
 
+async function makeAudioOnlyMp4(path: string): Promise<void> {
+  await execFileAsync(FFMPEG, [
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:duration=1",
+    "-c:a",
+    "aac",
+    path,
+  ]);
+}
+
 describe("notebook local media and analysis fan-out", () => {
   let rootDir: string | undefined;
   let engine: Engine | undefined;
@@ -156,6 +169,60 @@ describe("notebook local media and analysis fan-out", () => {
       file.name.endsWith(".jpg"))).toBe(true);
   }, 60_000);
 
+  it("rejects split ranges that start at the end of the source video", async () => {
+    if (!engine || !rootDir) throw new Error("engine missing");
+    const sourcePath = join(rootDir, "short-source.mp4");
+    await makeSourceMp4(sourcePath, 2);
+    const source = await engine.artifacts.create({
+      kind: "video",
+      name: "short source",
+    });
+    expect(source.ok).toBe(true);
+    if (!source.ok) return;
+    const ingested = await engine.files.writeFromPath(
+      source.value.artifactId,
+      "original.mp4",
+      sourcePath,
+    );
+    expect(ingested.ok).toBe(true);
+
+    await expect(splitSourceRange(
+      engine,
+      source.value.artifactId,
+      { startSeconds: 2, endSeconds: 3 },
+      "out-of-range split",
+    )).rejects.toThrow(/starts at or after the source video duration/);
+  }, 60_000);
+
+  it("rejects video operations on an audio-only media artifact", async () => {
+    if (!engine || !rootDir) throw new Error("engine missing");
+    const sourcePath = join(rootDir, "audio-only.mp4");
+    await makeAudioOnlyMp4(sourcePath);
+    const source = await engine.artifacts.create({
+      kind: "video",
+      name: "audio-only source",
+    });
+    expect(source.ok).toBe(true);
+    if (!source.ok) return;
+    const ingested = await engine.files.writeFromPath(
+      source.value.artifactId,
+      "original.mp4",
+      sourcePath,
+    );
+    expect(ingested.ok).toBe(true);
+
+    await expect(splitSourceRange(
+      engine,
+      source.value.artifactId,
+      { startSeconds: 0, endSeconds: 1 },
+      "audio-only split",
+    )).rejects.toThrow(/source has no video stream/);
+    await expect(captureFrame(engine, source.value.artifactId, {
+      role: "first",
+      title: "audio-only frame",
+    })).rejects.toThrow(/source has no video stream/);
+  }, 60_000);
+
   it("fans out owned split/frame/video branches from fixture analysis without deleting artifacts", async () => {
     if (!engine) throw new Error("engine missing");
     const notebook = await engine.notebooks.create("Workflow");
@@ -184,29 +251,37 @@ describe("notebook local media and analysis fan-out", () => {
       tool: "kie_gemini_analysis",
       inputs: { workflowRole: "analysis" },
     });
+    const analysisOutput = engine.notebooks.createCell({
+      type: "analysis",
+      slug: "analysis-source",
+      slot: { row: 2, column: 0 },
+      inputs: {
+        workflowRole: "analysis-output",
+        analysisRole: "result",
+        producerCellId: analysis.id,
+      },
+    });
+    const sourceEdge = engine.notebooks.createEdge({
+      source: source.id,
+      target: analysis.id,
+      targetInput: "source",
+    });
+    const resultEdge = engine.notebooks.createEdge({
+      source: analysis.id,
+      target: analysisOutput.id,
+      targetInput: "result",
+    });
     const written = await engine.notebooks.write({
       ...notebook.value,
-      cells: [source, analysis],
-      edges: [
-        engine.notebooks.createEdge({
-          source: source.id,
-          target: analysis.id,
-          targetInput: "source",
-        }),
-      ],
+      cells: [source, analysis, analysisOutput],
+      edges: [sourceEdge, resultEdge],
     });
     expect(written.ok).toBe(true);
 
     const first = await applyAnalysisResults(engine, {
       ...notebook.value,
-      cells: [source, analysis],
-      edges: [
-        engine.notebooks.createEdge({
-          source: source.id,
-          target: analysis.id,
-          targetInput: "source",
-        }),
-      ],
+      cells: [source, analysis, analysisOutput],
+      edges: [sourceEdge, resultEdge],
     }, analysis.id, {
       rawOutput: {
         scenes: [
@@ -219,6 +294,25 @@ describe("notebook local media and analysis fan-out", () => {
       sourceArtifactId: sourceArtifact.value.artifactId,
     });
     expect(first.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(2);
+    const firstAnalysisOutput = first.cells.find((cell) =>
+      cell.id === analysisOutput.id);
+    expect(firstAnalysisOutput?.outputArtifactId).toBeTruthy();
+    expect(firstAnalysisOutput?.inputs?.outputVersionArtifactIds).toEqual([
+      firstAnalysisOutput?.outputArtifactId,
+    ]);
+    const firstAnalysisMetadata = await engine.metadata.artifacts.read<{
+      analysisInfo?: {
+        sourceDurationSeconds?: number;
+        shots?: Array<{ ordinal: number }>;
+      };
+    }>(firstAnalysisOutput!.outputArtifactId!, "original");
+    expect(firstAnalysisMetadata.ok).toBe(true);
+    if (firstAnalysisMetadata.ok) {
+      expect(firstAnalysisMetadata.value.analysisInfo).toMatchObject({
+        sourceDurationSeconds: 16,
+        shots: [{ ordinal: 1 }, { ordinal: 2 }],
+      });
+    }
     expect(first.cells.filter((cell) => cell.operation === "extract_audio")).toHaveLength(2);
     const firstVideos = first.cells.filter((cell) =>
       cell.inputs?.workflowRole?.toString().startsWith("scene-video-"));
@@ -241,6 +335,11 @@ describe("notebook local media and analysis fan-out", () => {
         cell.inputs?.workflowRole === `scene-extract-audio-${ordinal}`);
       const audio = first.cells.find((cell) =>
         cell.inputs?.workflowRole === `scene-audio-${ordinal}`);
+      expect(first.edges).toContainEqual(expect.objectContaining({
+        source: analysisOutput.id,
+        target: split?.id,
+        targetInput: "analysis",
+      }));
       expect(first.edges).toContainEqual(expect.objectContaining({
         source: split?.id,
         target: video?.id,
@@ -275,6 +374,14 @@ describe("notebook local media and analysis fan-out", () => {
     });
     expect(second.cells.filter((cell) => cell.operation === "split_range").map((cell) => cell.id).sort())
       .toEqual(first.cells.filter((cell) => cell.operation === "split_range").map((cell) => cell.id).sort());
+    const secondAnalysisOutput = second.cells.find((cell) =>
+      cell.id === analysisOutput.id);
+    expect(secondAnalysisOutput?.outputArtifactId)
+      .not.toBe(firstAnalysisOutput?.outputArtifactId);
+    expect(secondAnalysisOutput?.inputs?.outputVersionArtifactIds).toEqual([
+      firstAnalysisOutput?.outputArtifactId,
+      secondAnalysisOutput?.outputArtifactId,
+    ]);
     expect(second.cells.filter((cell) =>
       cell.inputs?.workflowRole?.toString().startsWith("scene-video-"))
       .map((cell) => cell.id)
@@ -414,5 +521,60 @@ describe("notebook local media and analysis fan-out", () => {
       artifact.artifactId === removedArtifact.value.artifactId)).toBe(true);
     const shrunkWritten = await engine.notebooks.write(shrunk);
     expect(shrunkWritten.ok).toBe(true);
+  });
+
+  it("requires exactly one paired Analysis result", async () => {
+    if (!engine) throw new Error("engine missing");
+    const notebook = await engine.notebooks.create("Analysis invariant");
+    expect(notebook.ok).toBe(true);
+    if (!notebook.ok) return;
+    const analyze = engine.notebooks.createCell({
+      type: "analyze",
+      slug: "analyze-invariant",
+      slot: { row: 0, column: 0 },
+    });
+    const run = (document: typeof notebook.value) =>
+      applyAnalysisResults(engine!, document, analyze.id, {
+        rawOutput: {
+          scenes: [{ title: "one", timestamp: [0, 8] }],
+        },
+        sourceDurationSeconds: 8,
+        request: { mode: "fixture" },
+        sourceArtifactId: "",
+      });
+    await expect(run({
+      ...notebook.value,
+      cells: [analyze],
+      edges: [],
+    })).rejects.toThrow(/exactly one connected Analysis result cell/);
+
+    const first = engine.notebooks.createCell({
+      type: "analysis",
+      slug: "analysis-invariant-one",
+      slot: { row: 1, column: 0 },
+      inputs: {
+        analysisRole: "result",
+        producerCellId: analyze.id,
+      },
+    });
+    const second = engine.notebooks.createCell({
+      type: "analysis",
+      slug: "analysis-invariant-two",
+      slot: { row: 2, column: 0 },
+      inputs: {
+        analysisRole: "result",
+        producerCellId: analyze.id,
+      },
+    });
+    await expect(run({
+      ...notebook.value,
+      cells: [analyze, first, second],
+      edges: [first, second].map((cell) =>
+        engine!.notebooks.createEdge({
+          source: analyze.id,
+          target: cell.id,
+          targetInput: "result",
+        })),
+    })).rejects.toThrow(/exactly one connected Analysis result cell/);
   });
 });

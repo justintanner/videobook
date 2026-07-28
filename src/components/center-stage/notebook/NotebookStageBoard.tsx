@@ -37,6 +37,7 @@ const previewIcons: Record<NotebookStepType, typeof View> = {
   character: User,
   prompt: MessageSquareText,
   analyze: View,
+  analysis: View,
   extract_audio: Music,
   split_video: ListFilter,
   generate_video: Clapperboard,

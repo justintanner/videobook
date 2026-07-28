@@ -50,6 +50,17 @@ export type AssetWorkProjection = {
   deadlineAt: number | null;
 };
 
+export type SyncAnalysisInfo = {
+  source_duration_seconds: number;
+  shots: Array<{
+    ordinal: number;
+    label: string;
+    start_seconds: number;
+    end_seconds: number;
+    duration_seconds: number;
+  }>;
+};
+
 export type SyncAsset = {
   id: string;
   artifact_id: string;
@@ -76,6 +87,7 @@ export type SyncAsset = {
     channel_layout: string;
     duration_seconds: number;
   } | null;
+  analysis_info: SyncAnalysisInfo | null;
   waveform: number[] | null;
   frame_dirs: Record<string, string[]>;
   archive_id: string | null;
@@ -101,6 +113,46 @@ export type OsgSummary = {
   startSeconds: number | null;
   endSeconds: number | null;
 };
+
+function analysisInfoFromMetadata(
+  metadata: Record<string, unknown> | null,
+): SyncAnalysisInfo | null {
+  const value = metadata?.analysisInfo;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const sourceDurationSeconds = record.sourceDurationSeconds;
+  if (
+    typeof sourceDurationSeconds !== "number"
+    || !Number.isFinite(sourceDurationSeconds)
+    || !Array.isArray(record.shots)
+  ) {
+    return null;
+  }
+  const shots = record.shots.flatMap((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const shot = value as Record<string, unknown>;
+    if (
+      typeof shot.ordinal !== "number"
+      || typeof shot.label !== "string"
+      || typeof shot.startSeconds !== "number"
+      || typeof shot.endSeconds !== "number"
+      || typeof shot.durationSeconds !== "number"
+    ) {
+      return [];
+    }
+    return [{
+      ordinal: shot.ordinal,
+      label: shot.label,
+      start_seconds: shot.startSeconds,
+      end_seconds: shot.endSeconds,
+      duration_seconds: shot.durationSeconds,
+    }];
+  });
+  return {
+    source_duration_seconds: sourceDurationSeconds,
+    shots,
+  };
+}
 
 function findAssetMediaFile(
   files: ArtifactManifestFile[],
@@ -579,6 +631,7 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
         renders,
         duration,
         audio_info,
+        analysis_info: analysisInfoFromMetadata(meta),
         waveform,
         frame_dirs: frameDirs,
         archive_id: typeof archiveMeta?.archive_id === "string" ? archiveMeta.archive_id : null,
@@ -611,6 +664,7 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
       renders: [],
       duration: null,
       audio_info: null,
+      analysis_info: null,
       waveform: null,
       frame_dirs: {},
       archive_id: null,

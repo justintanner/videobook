@@ -116,6 +116,48 @@ function analysisOwnerId(cell: NotebookCell): string | null {
     : null;
 }
 
+function analysisOutputCell(
+  document: NotebookDocument,
+  producerCellId: string,
+): NotebookCell {
+  const resultEdges = document.edges.filter((edge) =>
+    edge.source === producerCellId && edge.targetInput === "result");
+  if (resultEdges.length !== 1) {
+    throw new Error(
+      `Analyze cell ${producerCellId} requires exactly one connected Analysis result cell`,
+    );
+  }
+  const result = document.cells.find((cell) =>
+    cell.id === resultEdges[0]!.target);
+  if (
+    result?.type !== "analysis"
+    || result.inputs?.analysisRole !== "result"
+    || result.inputs?.producerCellId !== producerCellId
+  ) {
+    throw new Error(
+      `Analyze cell ${producerCellId} has an invalid Analysis result connection`,
+    );
+  }
+  return result;
+}
+
+function outputVersionArtifactIds(
+  cell: NotebookCell,
+  artifactId: string,
+): string[] {
+  const persisted = Array.isArray(cell.inputs?.outputVersionArtifactIds)
+    ? cell.inputs.outputVersionArtifactIds.filter(
+        (value): value is string =>
+          typeof value === "string" && value.length > 0,
+      )
+    : [];
+  return [...new Set([
+    ...persisted,
+    ...(cell.outputArtifactId ? [cell.outputArtifactId] : []),
+    artifactId,
+  ])];
+}
+
 function splitVideoOwnerId(cell: NotebookCell): string | null {
   return typeof cell.inputs?.splitVideoCellId === "string"
     ? cell.inputs.splitVideoCellId
@@ -706,6 +748,7 @@ export async function applyAnalysisResults(
 ): Promise<NotebookDocument> {
   const analysisCell = document.cells.find((cell) => cell.id === analysisCellId);
   if (!analysisCell) throw new Error(`Analysis cell not found: ${analysisCellId}`);
+  const resultCell = analysisOutputCell(document, analysisCellId);
   const shots = normalizeShots(
     parseAnalysisShots(input.rawOutput),
     input.sourceDurationSeconds,
@@ -727,6 +770,18 @@ export async function applyAnalysisResults(
     script.content,
   );
   if (!written.ok) throw new Error(written.error.message);
+  const metadata = await engine.metadata.artifacts.write(
+    scriptArtifact.value.artifactId,
+    "original",
+    {
+      duration: input.sourceDurationSeconds,
+      analysisInfo: {
+        sourceDurationSeconds: input.sourceDurationSeconds,
+        shots,
+      },
+    },
+  );
+  if (!metadata.ok) throw new Error(metadata.error.message);
   if (input.sourceArtifactId) {
     await engine.files.write(
       input.sourceArtifactId,
@@ -787,8 +842,25 @@ export async function applyAnalysisResults(
       state: "completed",
     },
   };
+  const updatedResult: NotebookCell = {
+    ...resultCell,
+    outputArtifactId: scriptArtifact.value.artifactId,
+    inputs: {
+      ...(resultCell.inputs ?? {}),
+      analysisRole: "result",
+      producerCellId: analysisCellId,
+      shotCount: shots.length,
+      sourceDurationSeconds: input.sourceDurationSeconds,
+      outputVersionArtifactIds: outputVersionArtifactIds(
+        resultCell,
+        scriptArtifact.value.artifactId,
+      ),
+      state: "completed",
+    },
+  };
   const cellsWithoutOwnedBranches = baseCells.filter((cell) =>
     cell.id !== analysisCellId
+    && cell.id !== resultCell.id
     && analysisOwnerId(cell) !== analysisCellId);
   const sourceCell = document.cells.find((cell) => roleOf(cell) === "source")
     ?? document.cells.find((cell) => cell.type === "video");
@@ -848,7 +920,7 @@ export async function applyAnalysisResults(
     canonicalEdges.push(...branchEdges(
       engine,
       sourceCell,
-      updatedAnalysis,
+      updatedResult,
       assemblyCell,
       branch,
       shot.ordinal,
@@ -894,6 +966,7 @@ export async function applyAnalysisResults(
   });
   const cells = [
     updatedAnalysis,
+    updatedResult,
     ...cellsWithoutOwnedBranches,
     ...branchCells,
   ];
@@ -904,7 +977,7 @@ export async function applyAnalysisResults(
     edges,
     properties: {
       ...(document.properties ?? {}),
-      workflowVersion: 6,
+      workflowVersion: 7,
       analysisRevision: scriptArtifact.value.artifactId,
     },
   };
@@ -965,6 +1038,25 @@ export function buildSevenStageScaffold(
     tool: "kie_gemini_analysis",
     inputs: { workflowRole: "analysis", state: "pending" },
   });
+  const analysisOutput = baseCell(
+    engine,
+    roleCells.get("analysis-output"),
+    {
+      type: "analysis",
+      slug: "analysis-splitter",
+      slot: gridSlot(2, 0),
+      provider: undefined,
+      model: undefined,
+      operation: undefined,
+      tool: undefined,
+      inputs: {
+        workflowRole: "analysis-output",
+        analysisRole: "result",
+        producerCellId: analysis.id,
+        state: "pending",
+      },
+    },
+  );
   const extractAudio = baseCell(
     engine,
     roleCells.get("source-extract-audio"),
@@ -1012,6 +1104,7 @@ export function buildSevenStageScaffold(
   const baseRoles = new Set([
     "source",
     "analysis",
+    "analysis-output",
     "source-extract-audio",
     "source-audio",
     "assembly",
@@ -1026,6 +1119,7 @@ export function buildSevenStageScaffold(
   const cells = [
     source,
     analysis,
+    analysisOutput,
     extractAudio,
     audio,
     assembly,
@@ -1034,6 +1128,7 @@ export function buildSevenStageScaffold(
   const baseIds = new Set([
     source.id,
     analysis.id,
+    analysisOutput.id,
     extractAudio.id,
     audio.id,
     assembly.id,
@@ -1041,6 +1136,12 @@ export function buildSevenStageScaffold(
   const retainedEdges = document.edges.filter((edge) => {
     if (!baseIds.has(edge.target)) return true;
     if (edge.target === analysis.id && edge.targetInput === "source") return false;
+    if (
+      edge.target === analysisOutput.id
+      && edge.targetInput === "result"
+    ) {
+      return false;
+    }
     if (edge.target === extractAudio.id && edge.targetInput === "video") {
       return false;
     }
@@ -1054,6 +1155,11 @@ export function buildSevenStageScaffold(
       source: source.id,
       target: analysis.id,
       targetInput: "source",
+    }),
+    engine.notebooks.createEdge({
+      source: analysis.id,
+      target: analysisOutput.id,
+      targetInput: "result",
     }),
     engine.notebooks.createEdge({
       source: source.id,
@@ -1077,7 +1183,7 @@ export function buildSevenStageScaffold(
     edges,
     properties: {
       ...(document.properties ?? {}),
-      workflowVersion: 6,
+      workflowVersion: 7,
     },
   };
   return {

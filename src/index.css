@@ -954,6 +954,7 @@ textarea:focus-visible {
 
 .cell-kind-split_video,
 .cell-kind-analyze,
+.cell-kind-analysis,
 .cell-kind-concat,
 .cell-kind-splice {
   border-color: rgba(89, 194, 211, 0.48);
@@ -1428,6 +1429,69 @@ textarea:focus-visible {
   white-space: pre-wrap;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 6;
+}
+
+.cell-copy-analysis {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  color: #b9dfcb;
+  text-align: left;
+}
+
+.analysis-cell-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.analysis-cell-summary strong {
+  color: #b7e8ca;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.analysis-cell-summary span,
+.analysis-cell-overflow {
+  color: #719c82;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.analysis-cell-shots {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.analysis-cell-shots li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(114, 231, 170, 0.1);
+  font-size: 10px;
+}
+
+.analysis-cell-shots li span {
+  overflow: hidden;
+  color: #91bea3;
+  font-size: inherit;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analysis-cell-shots time {
+  color: #668d76;
+  font-variant-numeric: tabular-nums;
 }
 
 .cell-copy-audio {
@@ -2428,6 +2492,85 @@ textarea:focus-visible {
   border-color: rgba(114, 231, 170, 0.28);
   color: #9fd9b7;
   background: rgba(52, 137, 86, 0.14);
+}
+
+.inspector-analysis-body {
+  overflow: auto;
+}
+
+.inspector-analysis-content {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.inspector-analysis-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.inspector-analysis-summary div {
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: rgba(4, 18, 11, 0.72);
+}
+
+.inspector-analysis-summary dt {
+  color: #789e87;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inspector-analysis-summary dd {
+  margin: 5px 0 0;
+  color: #bfe9d0;
+  font-size: 13px;
+}
+
+.inspector-analysis-shots {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inspector-analysis-shots li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 9px;
+  padding: 10px;
+  border: 1px solid rgba(114, 231, 170, 0.14);
+  background: rgba(3, 13, 8, 0.68);
+}
+
+.inspector-analysis-shot-number {
+  color: #5e9172;
+  font-size: 10px;
+}
+
+.inspector-analysis-shots li div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.inspector-analysis-shots strong {
+  overflow: hidden;
+  color: #b7e8ca;
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-analysis-shots time {
+  color: #739583;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
 }
 
 .inspector-media-body .inspector-cell-media img,

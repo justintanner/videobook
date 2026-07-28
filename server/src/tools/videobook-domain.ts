@@ -70,6 +70,19 @@ function notebookConnectionError(
   const target = notebook.cells.find((cell) => cell.id === targetId);
   if (!source) return `Source cell not found: ${sourceId}`;
   if (!target) return `Target cell not found: ${targetId}`;
+  if (target.type === "analysis") {
+    if (targetInput !== "result") {
+      return "Analysis result cells accept only the result input";
+    }
+    if (source.type !== "analyze") {
+      return "Analysis result cells require an Analyze source";
+    }
+    const existing = notebook.edges.find((edge) =>
+      edge.source === source.id && edge.targetInput === "result");
+    return existing && existing.target !== target.id
+      ? "Analyze cells can have only one Analysis result"
+      : null;
+  }
   if (target.type === "extract_audio") {
     if (targetInput !== "video") {
       return "Extract audio cells accept only the video input";
@@ -81,9 +94,9 @@ function notebookConnectionError(
   }
   if (target.type === "split_video") {
     if (targetInput === "analysis") {
-      return source.type === "analyze"
+      return source.type === "analysis"
         ? null
-        : "Split video analysis input requires an analyze cell";
+        : "Split video analysis input requires an Analysis result cell";
     }
     if (targetInput !== "video") {
       return "Split video cells accept video and analysis inputs";
@@ -92,6 +105,11 @@ function notebookConnectionError(
       && source.type !== "split_video"
       ? null
       : "Split video cells require a video-producing source";
+  }
+  if (target.type === "prompt" && targetInput === "analysis") {
+    return source.type === "analysis"
+      ? null
+      : "Prompt analysis input requires an Analysis result cell";
   }
   if (
     targetInput === "media"
@@ -280,6 +298,20 @@ function uniqueCellSlug(
   for (let ordinal = 2; ; ordinal += 1) {
     const candidate = `${base}-${String(ordinal).padStart(2, "0")}`;
     if (!occupied.has(candidate)) return candidate;
+  }
+}
+
+function firstEmptyRowBelow(
+  cells: readonly NotebookCell[],
+  slot: NotebookGridSlot,
+): NotebookGridSlot {
+  const occupied = new Set(
+    cells.map((cell) => `${cell.slot.row}:${cell.slot.column}`),
+  );
+  for (let row = slot.row + 1; ; row += 1) {
+    if (!occupied.has(`${row}:${slot.column}`)) {
+      return { row, column: slot.column };
+    }
   }
 }
 
@@ -3024,20 +3056,58 @@ export function videobookDomainDefs(
       schema: { ...bookSchema, notebook_id: z.string().uuid(), cell: cellInputSchema },
       handler: async (args) => {
         let cell = engine.notebooks.createCell(cellFromInput(args.cell as CellInput));
+        let outputCell: NotebookCell | null = null;
+        let outputEdge: NotebookDocument["edges"][number] | null = null;
         const result = await mutateNotebook(
           engine,
           String(args.notebook_id),
           "create_notebook_cell",
           (notebook) => {
             cell = normalizeCellActionFields(cell, notebook);
+            if (cell.type === "analyze") {
+              const cells = [...notebook.cells, cell];
+              outputCell = engine.notebooks.createCell({
+                type: "analysis",
+                slug: uniqueCellSlug(
+                  cells,
+                  "analysis",
+                  cell.slug.replace(/^analyze-/, ""),
+                ),
+                slot: firstEmptyRowBelow(cells, cell.slot),
+                inputs: {
+                  analysisRole: "result",
+                  producerCellId: cell.id,
+                  state: "pending",
+                },
+              });
+              outputEdge = engine.notebooks.createEdge({
+                source: cell.id,
+                target: outputCell.id,
+                targetInput: "result",
+              });
+            }
             return {
               ...notebook,
-              cells: [...notebook.cells, cell],
+              cells: [
+                ...notebook.cells,
+                cell,
+                ...(outputCell ? [outputCell] : []),
+              ],
+              edges: [
+                ...notebook.edges,
+                ...(outputEdge ? [outputEdge] : []),
+              ],
             };
           },
           { cellId: cell.id },
         );
-        return result.ok ? json(cellPayload(cell)) : failure(result.error.message);
+        return result.ok
+          ? json({
+              ...cellPayload(cell),
+              ...(outputCell ? { output_cell: cellPayload(outputCell) } : {}),
+              ...(outputEdge ? { output_edge: outputEdge } : {}),
+            })
+          : failure(result.error.message);
       },
     },
     {

@@ -98,7 +98,36 @@ describe("notebook action catalog", () => {
         operation: "analyze_source",
         tool: "kie_gemini_analysis",
       },
-    })) as { id: string };
+    })) as {
+      id: string;
+      output_cell: {
+        id: string;
+        type: string;
+        slug: string;
+        slot: { row: number; column: number };
+        inputs: Record<string, unknown>;
+      };
+      output_edge: {
+        source: string;
+        target: string;
+        targetInput: string;
+      };
+    };
+    expect(analysis.output_cell).toMatchObject({
+      type: "analysis",
+      slug: "analysis-source",
+      slot: { row: 1, column: 0 },
+      inputs: {
+        analysisRole: "result",
+        producerCellId: analysis.id,
+        state: "pending",
+      },
+    });
+    expect(analysis.output_edge).toMatchObject({
+      source: analysis.id,
+      target: analysis.output_cell.id,
+      targetInput: "result",
+    });
 
     const catalog = resultJson(await invoke("list_notebook_actions", {
       cell_type: "analyze",

@@ -223,6 +223,88 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('<dt>Duration</dt><dd>0:30</dd>')
   })
 
+  it('shows versioned normalized shots for Analysis outputs', () => {
+    const analysisCell: NotebookCell = {
+      ...cell,
+      type: 'analysis',
+      slug: 'analysis-source',
+      inputs: {
+        analysisRole: 'result',
+        producerCellId: '01900000-0000-7000-8000-000000000010',
+        outputVersionArtifactIds: ['analysis-one', 'analysis-two'],
+      },
+      outputArtifactId: 'analysis-two',
+    }
+    const currentAsset = {
+      artifactId: 'analysis-two',
+      id: 'analysis-source-2',
+      type: 'script',
+      mediaUrl: null,
+      thumbnailUrl: null,
+      width: null,
+      height: null,
+      duration: 16,
+      audioInfo: null,
+      analysisInfo: {
+        sourceDurationSeconds: 16,
+        shots: [
+          {
+            ordinal: 2,
+            label: 'Second shot',
+            startSeconds: 8,
+            endSeconds: 16,
+            durationSeconds: 8,
+          },
+          {
+            ordinal: 1,
+            label: 'Opening shot',
+            startSeconds: 0,
+            endSeconds: 8,
+            durationSeconds: 8,
+          },
+        ],
+      },
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: analysisCell,
+      cells: [analysisCell],
+      edges: [],
+      asset: currentAsset,
+      versionAssets: [
+        {
+          ...currentAsset,
+          artifactId: 'analysis-one',
+          id: 'analysis-source-1',
+        },
+        currentAsset,
+      ],
+      status: 'completed',
+      error: null,
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('aria-label="Analysis versions"')
+    expect(html).toContain('aria-label="Analysis version"')
+    expect(html).toContain('Version 2 of 2 · current')
+    expect(html).toContain('<dt>Shots</dt><dd>2</dd>')
+    expect(html).toContain('<dt>Source duration</dt><dd>0:16</dd>')
+    expect(html.indexOf('Opening shot')).toBeLessThan(
+      html.indexOf('Second shot'),
+    )
+    expect(html).not.toContain('RichJson')
+    expect(html).not.toContain('Restore')
+  })
+
   it('keeps inputs visible beneath a compact pending preview', () => {
     const pendingCell: NotebookCell = {
       ...cell,
@@ -307,8 +389,8 @@ describe('NotebookCellInspector', () => {
     const analysisSource: NotebookCell = {
       ...cell,
       id: '01900000-0000-7000-8000-000000000005',
-      type: 'analyze',
-      slug: 'analyze-splitter',
+      type: 'analysis',
+      slug: 'analysis-splitter',
       outputArtifactId: '01900000-0000-7000-8000-000000000006',
     }
     const edges: NotebookEdge[] = [
@@ -357,7 +439,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('<span>video</span>')
     expect(html).toContain('<span>analysis</span>')
     expect(html).toContain('@vid-continuous-source · video')
-    expect(html).toContain('@analyze-splitter · analyze')
+    expect(html).toContain('@analysis-splitter · analysis')
     expect(html).toContain(`value="${videoSource.id}" selected=""`)
     expect(html).toContain(`value="${analysisSource.id}" selected=""`)
     expect(html).not.toContain('placeholder="Provider"')

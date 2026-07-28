@@ -39,6 +39,7 @@ export interface NotebookCellData extends Record<string, unknown> {
 function defaultTargetInputs(type: NotebookCellType): string[] {
   if (type === 'extract_audio') return ['video']
   if (type === 'split_video') return ['video', 'analysis']
+  if (type === 'analysis') return ['result']
   if (type === 'image') return ['segment']
   if (type === 'audio' || type === 'video') return ['media']
   return ['input']

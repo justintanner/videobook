@@ -138,6 +138,7 @@ describe("Multyculty workflow fixture", () => {
     expect(new Set(first.cells.map((cell) => cell.type))).toEqual(new Set([
       "video",
       "analyze",
+      "analysis",
       "extract_audio",
       "audio",
       "split_video",
@@ -150,17 +151,20 @@ describe("Multyculty workflow fixture", () => {
     expect(first.properties?.featureLanes).toBeUndefined();
     const source = first.cells.find((cell) => cell.inputs?.workflowRole === "source");
     const analysis = first.cells.find((cell) => cell.inputs?.workflowRole === "analysis");
+    const analysisOutput = first.cells.find((cell) =>
+      cell.inputs?.workflowRole === "analysis-output");
     const sourceExtractAudio = first.cells.find((cell) =>
       cell.inputs?.workflowRole === "source-extract-audio");
     const audio = first.cells.find((cell) => cell.inputs?.workflowRole === "source-audio");
     const assembly = first.cells.find((cell) => cell.inputs?.workflowRole === "assembly");
     expect(source).toBeTruthy();
     expect(analysis).toBeTruthy();
+    expect(analysisOutput).toBeTruthy();
     expect(sourceExtractAudio).toBeTruthy();
     expect(audio).toBeTruthy();
     expect(assembly).toBeTruthy();
-    expect(first.cells).toHaveLength(21);
-    expect(first.edges).toHaveLength(36);
+    expect(first.cells).toHaveLength(22);
+    expect(first.edges).toHaveLength(37);
     expect(first.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(2);
     expect(first.cells.filter((cell) => cell.operation === "extract_audio")).toHaveLength(3);
     expect(first.cells.filter((cell) =>
@@ -180,6 +184,7 @@ describe("Multyculty workflow fixture", () => {
       materializedAt: expect.any(String),
       noPaidCalls: true,
     }));
+    expect(source?.outputArtifactId).toBe(sourceId);
     expect(source?.slot).toEqual({ row: 0, column: 0 });
     expect(sourceExtractAudio?.slot).toEqual({ row: 0, column: 1 });
     expect(analysis?.slot).toEqual({ row: 1, column: 0 });
@@ -250,7 +255,7 @@ describe("Multyculty workflow fixture", () => {
         targetInput: "video",
       }));
       expect(first.edges).toContainEqual(expect.objectContaining({
-        source: analysis?.id,
+        source: analysisOutput?.id,
         target: split?.id,
         targetInput: "analysis",
       }));
@@ -323,10 +328,10 @@ describe("Multyculty workflow fixture", () => {
     const rerunLayout = rerun.cells
       .map((cell) => ({ id: cell.id, slot: cell.slot }))
       .sort((left, right) => left.id.localeCompare(right.id));
-    expect(rerun.cells).toHaveLength(21);
+    expect(rerun.cells).toHaveLength(22);
     expect(rerunLayout).toEqual(firstLayout);
     expect(new Set(rerun.cells.map((cell) =>
-      `${cell.slot.row}:${cell.slot.column}`)).size).toBe(21);
+      `${cell.slot.row}:${cell.slot.column}`)).size).toBe(22);
     const rerunWritten = await engine.notebooks.write(rerun);
     expect(rerunWritten.ok).toBe(true);
     const downgraded = await engine.notebooks.write({
@@ -338,8 +343,8 @@ describe("Multyculty workflow fixture", () => {
     });
     expect(downgraded.ok).toBe(true);
     const second = await seedMultycultyWorkflow(engine);
-    expect(second.cells).toHaveLength(21);
-    expect(second.edges).toHaveLength(36);
+    expect(second.cells).toHaveLength(22);
+    expect(second.edges).toHaveLength(37);
     expect(second.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(2);
     expect(second.cells.find((cell) => cell.inputs?.workflowRole === "source")?.id)
       .not.toBe(source?.id);

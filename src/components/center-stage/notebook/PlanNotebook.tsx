@@ -75,6 +75,7 @@ const notebookToolboxKinds: readonly NotebookToolboxKind[] = [
 const notebookMediaCellTypes: readonly NotebookMediaCellType[] = ['audio', 'image', 'video', 'character']
 const notebookInputTargetTypes: readonly NotebookToolboxKind[] = [
   'analyze',
+  'analysis',
   'extract_audio',
   'split_video',
   'generate_video',
@@ -92,6 +93,7 @@ const toolboxIcons: Record<NotebookToolboxKind, typeof BookOpen> = {
   prompt: MessageSquareText,
   character: User,
   analyze: BookOpen,
+  analysis: BookOpen,
   generate_video: Video,
   generate_image: ImageIcon,
   generate_audio: Music,

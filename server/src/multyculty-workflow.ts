@@ -22,7 +22,7 @@ type ArtifactRecord = {
   kind: string;
 };
 
-export const MULTYCULTY_FIXTURE_VERSION = 20;
+export const MULTYCULTY_FIXTURE_VERSION = 22;
 export const MULTYCULTY_FIXTURE_OWNER = "multyculty-default";
 
 const SECTION_SLUGS = [
@@ -42,6 +42,7 @@ const COMPACT_FIXTURE_SLOTS = new Map<string, NotebookCell["slot"]>([
   ["source-extract-audio", { row: 0, column: 1 }],
   ["analysis", { row: 1, column: 0 }],
   ["source-audio", { row: 1, column: 1 }],
+  ["analysis-output", { row: 2, column: 0 }],
   ["split-video-1", { row: 2, column: -2 }],
   ["split-video-2", { row: 2, column: 2 }],
   ["scene-video-1", { row: 3, column: -2 }],
@@ -81,6 +82,7 @@ function roleOf(cell: NotebookCell): string | null {
 function isCanonicalRole(role: string | null): boolean {
   return role === "source"
     || role === "analysis"
+    || role === "analysis-output"
     || role === "source-extract-audio"
     || role === "source-audio"
     || role === "assembly"
@@ -113,11 +115,12 @@ function isCurrentFixture(document: NotebookDocument): boolean {
   const edges = document.edges.filter((edge) =>
     cellIds.has(edge.source) && cellIds.has(edge.target));
   return fixture?.version === MULTYCULTY_FIXTURE_VERSION
-    && cells.length === 21
-    && roles.size === 21
-    && edges.length === 36
+    && cells.length === 22
+    && roles.size === 22
+    && edges.length === 37
     && roles.has("source")
     && roles.has("analysis")
+    && roles.has("analysis-output")
     && roles.has("source-extract-audio")
     && roles.has("source-audio")
     && roles.has("assembly")
@@ -192,6 +195,7 @@ async function attachFixtureOutputs(
   document: NotebookDocument,
   artifacts: ArtifactRecord[],
 ): Promise<NotebookDocument> {
+  const sourceArtifact = requiredArtifact(artifacts, "vid-source-selection");
   const promptOutputs = new Map<string, string>();
   for (const cell of document.cells) {
     if (roleOf(cell)?.startsWith("prompt-") && !cell.outputArtifactId) {
@@ -214,15 +218,17 @@ async function attachFixtureOutputs(
             artifact.slug === ANIMATION_SLUGS[ordinal - 1])
         : undefined;
       const promptOutput = promptOutputs.get(cell.id);
-      const outputArtifactId = role?.startsWith("scene-video-")
-        ? cell.outputArtifactId ?? section?.artifactId
-        : role.startsWith("animate-")
-          ? cell.outputArtifactId ?? animation?.artifactId
-          : role.startsWith("prompt-")
-            ? cell.outputArtifactId ?? promptOutput
-            : role === "assembly"
-              ? cell.outputArtifactId ?? finalArtifact?.artifactId
-              : cell.outputArtifactId;
+      const outputArtifactId = role === "source"
+        ? sourceArtifact.artifactId
+        : role?.startsWith("scene-video-")
+          ? cell.outputArtifactId ?? section?.artifactId
+          : role.startsWith("animate-")
+            ? cell.outputArtifactId ?? animation?.artifactId
+            : role.startsWith("prompt-")
+              ? cell.outputArtifactId ?? promptOutput
+              : role === "assembly"
+                ? cell.outputArtifactId ?? finalArtifact?.artifactId
+                : cell.outputArtifactId;
       const completed = Boolean(outputArtifactId);
       return {
         ...cell,

@@ -48,6 +48,7 @@ export const notebookNodeSizes: Record<NotebookPlanStep['type'], { width: number
   character: { width: 280, height: 340 },
   prompt: { width: 280, height: 340 },
   analyze: { width: 280, height: 340 },
+  analysis: { width: 280, height: 340 },
   extract_audio: { width: 280, height: 340 },
   split_video: { width: 280, height: 340 },
   generate_video: { width: 300, height: 340 },
@@ -126,7 +127,9 @@ function isGenerationStep(step: NotebookPlanStep): boolean {
 }
 
 export function isTextStep(step: NotebookPlanStep): boolean {
-  return step.type === 'prompt' || step.type === 'analyze'
+  return step.type === 'prompt'
+    || step.type === 'analyze'
+    || step.type === 'analysis'
 }
 
 export function isBoundMediaStep(step: NotebookPlanStep): boolean {
@@ -141,6 +144,7 @@ export function acceptsInputs(step: NotebookPlanStep): boolean {
     || step.type === 'audio'
     || step.type === 'video'
     || step.type === 'analyze'
+    || step.type === 'analysis'
     || step.type === 'extract_audio'
     || step.type === 'split_video'
     || step.type === 'concat'
@@ -234,6 +238,13 @@ export const toolboxStepSeeds: NotebookToolboxStep[] = [
     type: 'analyze',
     name: 'Analyze',
     properties: { text: '', inputs: [] },
+  },
+  {
+    toolboxKind: 'analysis',
+    componentType: 'task',
+    type: 'analysis',
+    name: 'Analysis',
+    properties: { inputs: [] },
   },
   {
     toolboxKind: 'generate_video',
@@ -914,10 +925,11 @@ export function canConnect(
     || source.type === 'splice'
   if (target.type === 'audio' && source.type !== 'extract_audio') return false
   if (target.type === 'video' && source.type !== 'split_video') return false
+  if (target.type === 'analysis' && source.type !== 'analyze') return false
   if (target.type === 'extract_audio' && !videoSource) return false
   if (
     target.type === 'split_video'
-    && source.type !== 'analyze'
+    && source.type !== 'analysis'
     && !videoSource
   ) return false
   if (stepInputs(target).includes(sourceId)) return false

@@ -116,6 +116,13 @@ export async function splitSourceRange(
   range: MediaRange,
   title: string,
 ): Promise<{ artifactId: string; durationSeconds: number }> {
+  if (
+    !Number.isFinite(range.startSeconds)
+    || !Number.isFinite(range.endSeconds)
+    || range.startSeconds < 0
+  ) {
+    throw new Error("Split range must use finite, non-negative seconds");
+  }
   if (!(range.endSeconds > range.startSeconds)) {
     throw new Error("Split range must have positive duration");
   }
@@ -126,7 +133,25 @@ export async function splitSourceRange(
   const outDir = await mkdtemp(join(tmpdir(), "vb-split-"));
   const outPath = join(outDir, "split.mp4");
   try {
-    const duration = range.endSeconds - range.startSeconds;
+    const sourceProbe = await probeVideo(source.path);
+    if (!sourceProbe.videoStream) {
+      throw new Error(
+        `Cannot split artifact ${sourceArtifactId}: source has no video stream`,
+      );
+    }
+    const sourceDuration = sourceProbe.videoDuration || sourceProbe.duration;
+    if (!(sourceDuration > 0)) {
+      throw new Error(
+        `Cannot split artifact ${sourceArtifactId}: source video duration is unavailable`,
+      );
+    }
+    if (range.startSeconds >= sourceDuration) {
+      throw new Error(
+        `Cannot split artifact ${sourceArtifactId}: requested range ${range.startSeconds}-${range.endSeconds}s starts at or after the source video duration of ${sourceDuration}s`,
+      );
+    }
+    const duration = Math.min(range.endSeconds, sourceDuration)
+      - range.startSeconds;
     await runFfmpeg([
       "-y",
       "-ss",
@@ -135,6 +160,10 @@ export async function splitSourceRange(
       source.path,
       "-t",
       String(duration),
+      "-map",
+      "0:v:0",
+      "-map",
+      "0:a:0?",
       ...H264_MEDIUM,
       ...AUDIO_OPTS,
       "-movflags",
@@ -142,6 +171,11 @@ export async function splitSourceRange(
       outPath,
     ]);
     const probe = await probeVideo(outPath);
+    if (!probe.videoStream) {
+      throw new Error(
+        `Cannot split artifact ${sourceArtifactId}: FFmpeg output has no video stream`,
+      );
+    }
     const artifactId = await ingestOutput(
       engine,
       "video",
@@ -218,8 +252,23 @@ export async function captureFrame(
   const outPath = join(outDir, "frame.jpg");
   try {
     const probe = await probeVideo(source.path);
+    if (!probe.videoStream) {
+      throw new Error(
+        `Cannot capture frame from artifact ${sourceArtifactId}: source has no video stream`,
+      );
+    }
     const start = options.range?.startSeconds ?? 0;
     const sourceEnd = probe.videoDuration || probe.duration;
+    if (!(sourceEnd > 0)) {
+      throw new Error(
+        `Cannot capture frame from artifact ${sourceArtifactId}: source video duration is unavailable`,
+      );
+    }
+    if (!Number.isFinite(start) || start < 0 || start >= sourceEnd) {
+      throw new Error(
+        `Cannot capture frame from artifact ${sourceArtifactId}: requested start ${start}s is outside the source video duration of ${sourceEnd}s`,
+      );
+    }
     const requestedEnd = options.range?.endSeconds ?? sourceEnd;
     const end = sourceEnd > 0
       ? Math.min(requestedEnd, sourceEnd)
@@ -233,6 +282,8 @@ export async function captureFrame(
       String(atSeconds),
       "-i",
       source.path,
+      "-map",
+      "0:v:0",
       "-frames:v",
       "1",
       "-q:v",

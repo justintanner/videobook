@@ -151,6 +151,7 @@ import {
   notebookOutputVersionArtifactIds,
   notebookSplitFrameIds,
   notebookSplitRange,
+  type NotebookAnalysisInfo,
   type NotebookAudioInfo,
 } from '@/videobook/notebook-cell-presentation'
 import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
@@ -183,6 +184,7 @@ type AssetRecord = {
   height: number | null
   duration: number | null
   audioInfo: NotebookAudioInfo | null
+  analysisInfo: NotebookAnalysisInfo | null
 }
 
 type PassiveMediaKind = 'audio' | 'image' | 'video'
@@ -432,6 +434,7 @@ const notebookCellTypes = new Set<string>([
   'prompt',
   'character',
   'analyze',
+  'analysis',
   'generate_video',
   'generate_image',
   'generate_audio',
@@ -629,6 +632,38 @@ function asAsset(value: unknown): AssetRecord | null {
         durationSeconds,
       }
     : null
+  const analysis = record(item.analysis_info ?? item.analysisInfo)
+  const sourceDurationSeconds = analysis
+    && asNumber(analysis.source_duration_seconds ?? analysis.sourceDurationSeconds)
+  const analysisShots = Array.isArray(analysis?.shots)
+    ? analysis.shots.flatMap((value) => {
+        const shot = record(value)
+        const ordinal = shot && asNumber(shot.ordinal)
+        const label = shot && asString(shot.label)
+        const startSeconds = shot
+          && asNumber(shot.start_seconds ?? shot.startSeconds)
+        const endSeconds = shot
+          && asNumber(shot.end_seconds ?? shot.endSeconds)
+        const durationSeconds = shot
+          && asNumber(shot.duration_seconds ?? shot.durationSeconds)
+        return ordinal !== null
+          && label !== null
+          && startSeconds !== null
+          && endSeconds !== null
+          && durationSeconds !== null
+          ? [{
+              ordinal,
+              label,
+              startSeconds,
+              endSeconds,
+              durationSeconds,
+            }]
+          : []
+      })
+    : []
+  const analysisInfo = sourceDurationSeconds !== null
+    ? { sourceDurationSeconds, shots: analysisShots }
+    : null
   return {
     id,
     artifactId,
@@ -642,6 +677,7 @@ function asAsset(value: unknown): AssetRecord | null {
     height: asNumber(item.height),
     duration: asNumber(item.duration),
     audioInfo,
+    analysisInfo,
   }
 }
 
@@ -1215,6 +1251,7 @@ function CellIcon({ kind }: { kind: NotebookCellType }) {
   }
   if (kind === 'prompt') return <BookOpen size={14} />
   if (kind === 'analyze') return <Activity size={14} />
+  if (kind === 'analysis') return <Braces size={14} />
   if (kind === 'character') return <CircleDot size={14} />
   return <Film size={14} />
 }
@@ -1248,6 +1285,7 @@ function emptyCellLabel(data: CanvasCellData): string {
   }
   if (data.kind === 'character') return 'Select a character'
   if (data.kind === 'extract_audio') return 'Connect a video to extract audio'
+  if (data.kind === 'analysis') return 'Run the connected Analyze cell'
   if (data.kind === 'split_video') return 'Configure a video range'
   if (data.kind === 'concat') return 'Connect clip:0 and clip:1'
   if (data.kind === 'splice') return 'Connect first and second'
@@ -1720,6 +1758,43 @@ function CellStatusBadge({ status }: { status: string | null }) {
   )
 }
 
+function AnalysisCellSummary({ data }: { data: CanvasCellData }) {
+  const info = data.asset?.analysisInfo
+  const shotCount = info?.shots.length
+    ?? asNumber(data.inputs?.shotCount)
+    ?? 0
+  const duration = info?.sourceDurationSeconds
+    ?? asNumber(data.inputs?.sourceDurationSeconds)
+  const shots = info?.shots.slice(0, 3) ?? []
+  const overflow = Math.max(0, shotCount - shots.length)
+
+  return (
+    <div className="cell-copy cell-copy-analysis">
+      <div className="analysis-cell-summary">
+        <strong>{shotCount > 0 ? `${shotCount} shots` : 'Analysis pending'}</strong>
+        {duration !== null && (
+          <span>{formatMediaTime(duration)}</span>
+        )}
+      </div>
+      {shots.length > 0 && (
+        <ol className="analysis-cell-shots">
+          {shots.map((shot) => (
+            <li key={shot.ordinal}>
+              <span>{shot.label}</span>
+              <time>
+                {formatMediaTime(shot.startSeconds)}–{formatMediaTime(shot.endSeconds)}
+              </time>
+            </li>
+          ))}
+        </ol>
+      )}
+      {overflow > 0 && (
+        <span className="analysis-cell-overflow">+{overflow} more</span>
+      )}
+    </div>
+  )
+}
+
 function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const slotContext = useContext(MediaSlotContext)
   const runCell = useContext(CellRunContext)
@@ -1755,8 +1830,10 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     data.inputs,
     data.outputArtifactId,
   )
-  const versionedAudio = data.kind === 'audio' && outputVersions.length > 1
-  const activeAudioVersion = Math.max(
+  const versionedOutput = (
+    data.kind === 'audio' || data.kind === 'analysis'
+  ) && outputVersions.length > 1
+  const activeOutputVersion = Math.max(
     1,
     outputVersions.indexOf(data.outputArtifactId ?? '') + 1,
   )
@@ -1768,7 +1845,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         `cell-kind-${data.kind}`,
         selected ? 'cell-node-selected' : '',
         running ? 'cell-node-running' : '',
-        versionedAudio ? 'cell-node-version-stack' : '',
+        versionedOutput ? 'cell-node-version-stack' : '',
         data.deleting ? 'cell-node-deleting' : '',
       ].filter(Boolean).join(' ')}
       aria-busy={running}
@@ -1820,14 +1897,14 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
               {action.label}
             </button>
           )}
-          {!action && versionedAudio && (
+          {!action && versionedOutput && (
             <span
               className="cell-version-count"
-              aria-label={`Current audio version ${activeAudioVersion} of ${outputVersions.length}`}
-              title={`Current output · version ${activeAudioVersion} of ${outputVersions.length}`}
+              aria-label={`Current output version ${activeOutputVersion} of ${outputVersions.length}`}
+              title={`Current output · version ${activeOutputVersion} of ${outputVersions.length}`}
             >
               <Layers2 size={12} aria-hidden="true" />
-              v{activeAudioVersion}/{outputVersions.length}
+              v{activeOutputVersion}/{outputVersions.length}
             </span>
           )}
         </header>
@@ -1842,6 +1919,8 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           />
         ) : data.kind === 'split_video' ? (
           <SplitVideoPreview data={data} />
+        ) : data.kind === 'analysis' ? (
+          <AnalysisCellSummary data={data} />
         ) : audioCell ? (
           <div className="cell-copy cell-copy-audio">
             {playableAudio && mediaUrl ? <audio src={mediaUrl} controls preload="metadata" /> : null}
@@ -2419,7 +2498,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     ? notebookCellExecutionObservation(notebook, selectedNotebookCell.id).error
     : null
   const selectedCellVersionAssets = useMemo(() => {
-    if (!selectedNotebookCell || selectedNotebookCell.type !== 'audio') return []
+    if (
+      !selectedNotebookCell
+      || (
+        selectedNotebookCell.type !== 'audio'
+        && selectedNotebookCell.type !== 'analysis'
+      )
+    ) {
+      return []
+    }
     return notebookOutputVersionArtifactIds(
       selectedNotebookCell.inputs,
       selectedNotebookCell.outputArtifactId,

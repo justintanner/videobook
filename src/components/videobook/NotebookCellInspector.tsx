@@ -16,11 +16,13 @@ import {
   doltCellRows,
 } from '@/videobook/dolt-cell-source'
 import {
+  formatMediaTime,
   isNotebookMediaCellType,
   notebookAudioPresentation,
   notebookCellActionPresentation,
   notebookCellInspectorActionLabel,
   notebookOutputVersionArtifactIds,
+  type NotebookAnalysisInfo,
   type NotebookAudioInfo,
 } from '@/videobook/notebook-cell-presentation'
 import {
@@ -160,6 +162,7 @@ export type NotebookCellInspectorAsset = {
   height: number | null
   duration: number | null
   audioInfo: NotebookAudioInfo | null
+  analysisInfo?: NotebookAnalysisInfo | null
 }
 
 type NotebookCellInspectorProps = {
@@ -183,13 +186,17 @@ type NotebookCellInspectorProps = {
   onOpenFullscreen: () => void
 }
 
-function isPassiveMediaCell(cell: NotebookCell): boolean {
-  return cell.type === 'audio' || cell.type === 'image' || cell.type === 'video'
+function isPassiveOutputCell(cell: NotebookCell): boolean {
+  return cell.type === 'audio'
+    || cell.type === 'image'
+    || cell.type === 'video'
+    || cell.type === 'analysis'
 }
 
 function defaultInputNames(cell: NotebookCell): string[] {
   if (cell.type === 'extract_audio') return ['video']
   if (cell.type === 'split_video') return ['video', 'analysis']
+  if (cell.type === 'analysis') return ['result']
   if (cell.type === 'image') return ['segment']
   if (cell.type === 'audio' || cell.type === 'video') return ['media']
   return []
@@ -215,13 +222,19 @@ function compatibleSource(
   source: NotebookCell,
 ): boolean {
   if (source.id === target.id) return false
+  if (target.type === 'analysis') {
+    return targetInput === 'result' && source.type === 'analyze'
+  }
   if (target.type === 'extract_audio') {
     return targetInput === 'video' && isVideoProducingSource(source)
   }
   if (target.type === 'split_video') {
-    if (targetInput === 'analysis') return source.type === 'analyze'
+    if (targetInput === 'analysis') return source.type === 'analysis'
     if (targetInput === 'video') return isVideoProducingSource(source)
     return false
+  }
+  if (target.type === 'prompt' && targetInput === 'analysis') {
+    return source.type === 'analysis'
   }
   if (target.type === 'audio' && targetInput === 'media') {
     return source.type === 'extract_audio'
@@ -596,31 +609,36 @@ function DeleteCellButton({
   )
 }
 
-function AudioVersionSelector({
+function OutputVersionSelector({
   artifactIds,
   availableArtifactIds,
   currentArtifactId,
   selectedArtifactId,
+  outputLabel,
   onSelect,
 }: {
   artifactIds: readonly string[]
   availableArtifactIds: ReadonlySet<string>
   currentArtifactId: string | undefined
   selectedArtifactId: string
+  outputLabel: string
   onSelect: (artifactId: string) => void
 }) {
   const selectedVersion = artifactIds.indexOf(selectedArtifactId) + 1
   const viewingCurrent = selectedArtifactId === currentArtifactId
 
   return (
-    <section className="inspector-audio-versions" aria-label="Audio versions">
+    <section
+      className="inspector-audio-versions"
+      aria-label={`${outputLabel} versions`}
+    >
       <span className="inspector-audio-version-label">
         <Layers2 size={13} aria-hidden="true" />
         Version
       </span>
       <select
         value={selectedArtifactId}
-        aria-label="Audio version"
+        aria-label={`${outputLabel} version`}
         onChange={(event) => onSelect(event.target.value)}
       >
         {artifactIds.map((artifactId, index) => (
@@ -735,11 +753,12 @@ function MediaCellInspector({
           {cell.type.replaceAll('_', ' ').toUpperCase()}
         </span>
         {audioVersionArtifactIds.length > 1 && previewAsset && (
-          <AudioVersionSelector
+          <OutputVersionSelector
             artifactIds={audioVersionArtifactIds}
             availableArtifactIds={availableAudioVersionArtifactIds}
             currentArtifactId={cell.outputArtifactId}
             selectedArtifactId={effectiveAudioVersionArtifactId}
+            outputLabel="Audio"
             onSelect={selectAudioVersion}
           />
         )}
@@ -773,6 +792,130 @@ function MediaCellInspector({
             clearing={clearing}
             onClearSlot={onClearSlot}
           />
+          <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
+        </section>
+      </div>
+    </div>
+  )
+}
+
+function AnalysisCellInspector({
+  cell,
+  asset,
+  versionAssets,
+  busy,
+  deleting,
+  onUpdate,
+  onDelete,
+}: Pick<
+  NotebookCellInspectorProps,
+  | 'cell'
+  | 'asset'
+  | 'versionAssets'
+  | 'busy'
+  | 'deleting'
+  | 'onUpdate'
+  | 'onDelete'
+>) {
+  const artifactIds = notebookOutputVersionArtifactIds(
+    cell.inputs,
+    cell.outputArtifactId,
+  )
+  const versionKey = artifactIds.join(':')
+  const currentArtifactId = cell.outputArtifactId ?? artifactIds.at(-1) ?? ''
+  const [selection, setSelection] = useState<{
+    artifactId: string
+    cellId: string
+    currentArtifactId: string
+    versionKey: string
+  } | null>(null)
+  const selectedArtifactId = (
+    selection?.cellId === cell.id
+    && selection.currentArtifactId === currentArtifactId
+    && selection.versionKey === versionKey
+  )
+    ? selection.artifactId
+    : currentArtifactId
+  const assetById = new Map(
+    (versionAssets ?? []).map((versionAsset) => [
+      versionAsset.artifactId,
+      versionAsset,
+    ]),
+  )
+  if (asset) assetById.set(asset.artifactId, asset)
+  const effectiveArtifactId = (
+    artifactIds.includes(selectedArtifactId)
+    && assetById.has(selectedArtifactId)
+  )
+    ? selectedArtifactId
+    : currentArtifactId
+  const previewAsset = assetById.get(effectiveArtifactId) ?? asset
+  const info = previewAsset?.analysisInfo
+  const shots = info?.shots
+    .slice()
+    .sort((left, right) => left.ordinal - right.ordinal) ?? []
+
+  return (
+    <div className="inspector-body inspector-analysis-body">
+      <div className="inspector-analysis-content">
+        <SlugField cell={cell} busy={busy} onUpdate={onUpdate} />
+        <span className="inspector-media-field-label">ANALYSIS</span>
+        {artifactIds.length > 1 && (
+          <OutputVersionSelector
+            artifactIds={artifactIds}
+            availableArtifactIds={new Set(assetById.keys())}
+            currentArtifactId={cell.outputArtifactId}
+            selectedArtifactId={effectiveArtifactId}
+            outputLabel="Analysis"
+            onSelect={(artifactId) => {
+              setSelection({
+                artifactId,
+                cellId: cell.id,
+                currentArtifactId,
+                versionKey,
+              })
+            }}
+          />
+        )}
+        {info ? (
+          <>
+            <dl className="inspector-analysis-summary">
+              <div>
+                <dt>Shots</dt>
+                <dd>{shots.length}</dd>
+              </div>
+              <div>
+                <dt>Source duration</dt>
+                <dd>{formatMediaTime(info.sourceDurationSeconds)}</dd>
+              </div>
+            </dl>
+            <ol className="inspector-analysis-shots">
+              {shots.map((shot) => (
+                <li key={shot.ordinal}>
+                  <span className="inspector-analysis-shot-number">
+                    {String(shot.ordinal).padStart(2, '0')}
+                  </span>
+                  <div>
+                    <strong>{shot.label}</strong>
+                    <time>
+                      {formatMediaTime(shot.startSeconds)}
+                      {' – '}
+                      {formatMediaTime(shot.endSeconds)}
+                      {' · '}
+                      {formatMediaTime(shot.durationSeconds)}
+                    </time>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </>
+        ) : (
+          <div className="inspector-media-empty">
+            <span>Analysis pending</span>
+            <p>Run the connected Analyze cell to populate normalized shots.</p>
+          </div>
+        )}
+        <section className="inspector-cell-actions" aria-label="Cell actions">
           <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
         </section>
       </div>
@@ -1106,7 +1249,21 @@ export function NotebookCellInspector({
     )
   }
 
-  if (isPassiveMediaCell(cell)) {
+  if (cell.type === 'analysis') {
+    return (
+      <AnalysisCellInspector
+        cell={cell}
+        asset={asset}
+        versionAssets={versionAssets}
+        busy={busy}
+        deleting={deleting}
+        onUpdate={onUpdate}
+        onDelete={onDelete}
+      />
+    )
+  }
+
+  if (isPassiveOutputCell(cell)) {
     return (
       <MediaCellInspector
         cell={cell}
