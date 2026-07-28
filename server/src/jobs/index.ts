@@ -132,6 +132,7 @@ import { registerExtendAudioJob } from "./extend-audio.js";
 import { registerRemoveSoundJob } from "./remove-sound.js";
 import { registerRunNotebookJob } from "./run-notebook.js";
 import { registerSemanticIndexJob } from "./semantic-index.js";
+import { registerPrepareSearchReferenceJob } from "./prepare-search-reference.js";
 
 export function registerAllJobHandlers(
   fs: Engine,
@@ -269,6 +270,7 @@ export function registerAllJobHandlers(
   registerPostToXJob(fs);
   registerRunNotebookJob(fs as Engine);
   registerSemanticIndexJob(fs);
+  registerPrepareSearchReferenceJob(fs);
   registerCopyLibraryAssetJob(books);
 
 }

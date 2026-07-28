@@ -11,6 +11,7 @@ import {
 import { commandPlanDefs } from '../../server/src/tools/command-plan.js'
 import { semanticSearchDefs } from '../../server/src/tools/semantic-search.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
+import { searchReferenceStore } from '../../server/src/search-reference-store.js'
 
 function resultJson(result: Awaited<ReturnType<ToolDef['handler']>>): unknown {
   expect(result.isError, result.content[0]?.text).toBeUndefined()
@@ -151,6 +152,22 @@ describe('semantic search MCP tools', () => {
       signals: expect.arrayContaining([expect.objectContaining({ kind: 'visual' })]),
     })
     expect(search.coverage.state).toBe('ready')
+    const reference = searchReferenceStore.put({
+      kind: 'image',
+      name: 'portable-reference.png',
+      reference: {
+        kind: 'image',
+        embeddingSpace: manifest.embeddingSpace,
+        vector: [1, 0, 0],
+      },
+    })
+    const reverse = resultJson(await tools.get('search_moments')!.handler({
+      book_id: engine.book.get().bookId,
+      query: { artifactKinds: ['video'], limit: 5 },
+      reference_id: reference.reference_id,
+    })) as { hits: SearchHit[] }
+    expect(reverse.hits[0]?.artifactId).toBe(artifact.value.artifactId)
+    searchReferenceStore.release(reference.reference_id)
     const status = resultJson(await tools.get('get_search_index_status')!.handler({
       book_id: engine.book.get().bookId,
     })) as { manifests: IndexManifest[]; providers: string[]; stats: { segments: number } }

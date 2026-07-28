@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
   Artifact,
   Engine,
+  IndexManifest,
   NotebookCell,
   NotebookDocument,
 } from 'videobook-engine'
@@ -14,6 +15,22 @@ import {
   searchLibraryAssets,
   setNotebookMediaSlot,
 } from '../../server/src/media-library.js'
+import { searchReferenceStore } from '../../server/src/search-reference-store.js'
+
+const reverseSearchManifest: IndexManifest = {
+  manifestId: 'media-library-reverse-v1',
+  provider: 'fixture',
+  modelId: 'fixture',
+  modelRevision: '1',
+  license: 'test',
+  embeddingSpace: 'media-library-reverse-space',
+  dimensions: 3,
+  modalities: ['visual'],
+  supportedLanguages: ['en'],
+  preprocessingVersion: '1',
+  extractorVersion: '1',
+  createdAt: 1,
+}
 
 async function readyArtifact(
   engine: Engine,
@@ -64,6 +81,51 @@ async function writeNotebook(
 ): Promise<void> {
   const written = await engine.notebooks.write(document)
   if (!written.ok) throw new Error(written.error.message)
+}
+
+async function indexReadyArtifact(
+  engine: Engine,
+  artifact: Artifact,
+): Promise<void> {
+  const files = await engine.files.manifest(artifact.artifactId)
+  if (!files.ok) throw new Error(files.error.message)
+  const source = files.value.files[0]!
+  const registered = engine.temporalSearch.manifests.register(
+    reverseSearchManifest,
+  )
+  if (!registered.ok) throw new Error(registered.error.message)
+  const committed = engine.temporalSearch.commitBatch({
+    artifactId: artifact.artifactId,
+    objectHash: source.objectHash,
+    manifestId: reverseSearchManifest.manifestId,
+    generation: 'media-library-reverse-generation',
+    phase: 'lexical',
+    maxUnits: 1,
+    observations: [{
+      artifactId: artifact.artifactId,
+      objectHash: source.objectHash,
+      sourcePath: source.name,
+      kind: 'frame',
+      segmentationVersion: '1',
+      texts: [],
+      embeddings: [{
+        modality: 'visual',
+        embeddingSpace: reverseSearchManifest.embeddingSpace,
+        vector: [1, 0, 0],
+        sourceHash: source.objectHash,
+      }],
+      fingerprints: [],
+    }],
+    coveredRanges: [],
+    totalUnits: 1,
+    complete: true,
+  })
+  if (!committed.ok) throw new Error(committed.error.message)
+  const activated = engine.temporalSearch.activate(
+    reverseSearchManifest.manifestId,
+    'media-library-reverse-generation',
+  )
+  if (!activated.ok) throw new Error(activated.error.message)
 }
 
 describe('media Library slots', () => {
@@ -221,6 +283,53 @@ describe('media Library slots', () => {
       hasMore: false,
     })
     expect(images.books_with_errors).toEqual([])
+  })
+
+  it('returns indexed matches without admitting unrelated assets during reverse search', async () => {
+    const alpha = await books.create('reverse-alpha')
+    const beta = await books.create('reverse-beta')
+    expect(alpha.ok && beta.ok).toBe(true)
+    if (!alpha.ok || !beta.ok) return
+    const alphaBook = books.get(alpha.value.bookId)
+    const betaBook = books.get(beta.value.bookId)
+    expect(alphaBook.ok && betaBook.ok).toBe(true)
+    if (!alphaBook.ok || !betaBook.ok) return
+    const indexed = await readyArtifact(
+      alphaBook.value.engine,
+      'image',
+      'indexed match',
+      'original.png',
+      'indexed image',
+    )
+    await indexReadyArtifact(alphaBook.value.engine, indexed)
+    await readyArtifact(
+      betaBook.value.engine,
+      'image',
+      'unindexed asset',
+      'original.png',
+      'unindexed image',
+    )
+    const reference = searchReferenceStore.put({
+      kind: 'image',
+      name: 'reference.png',
+      reference: {
+        kind: 'image',
+        embeddingSpace: reverseSearchManifest.embeddingSpace,
+        vector: [1, 0, 0],
+      },
+    })
+
+    const result = await searchLibraryAssets(books, {
+      referenceId: reference.reference_id,
+      kinds: ['image'],
+      limit: 10,
+    })
+    searchReferenceStore.release(reference.reference_id)
+
+    expect(result.assets.map((asset) => asset.artifact_id)).toEqual([
+      indexed.artifactId,
+    ])
+    expect(result.assets[0]?.search_match?.score).toBeGreaterThan(0)
   })
 
   it('copies a foreign asset through Engine files and attaches its canonical target UUID', async () => {

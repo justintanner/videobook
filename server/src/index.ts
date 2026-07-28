@@ -1,8 +1,15 @@
 import "./load-env.js";
 import cors from "cors";
 import express from "express";
+import { createWriteStream } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { extname, join } from "node:path";
+import { Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SCHEMA_VERSION } from "videobook-engine";
+import { v7 as uuidv7 } from "uuid";
 import { localArchiveDir } from "./archive-store.js";
 import { bookManager, fs as scopedBookEngine } from "./fs.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
@@ -10,10 +17,26 @@ import { reconcileAwaitingNotebookOutputs } from "./jobs/run-notebook.js";
 import { uploadLocalStream } from "./local-upload.js";
 import { ensureMultycultyWorkflow } from "./multyculty-workflow.js";
 import { queue } from "./queue.js";
+import { searchReferenceStore } from "./search-reference-store.js";
 import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
 import { createServer } from "./server.js";
 
 const app = express();
+const SEARCH_REFERENCE_LIMIT_BYTES = 500 * 1024 * 1024;
+
+function limitUploadBytes(maxBytes: number): Transform {
+  let received = 0;
+  return new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      received += chunk.byteLength;
+      if (received > maxBytes) {
+        callback(new Error("Search reference exceeds the 500 MB limit"));
+        return;
+      }
+      callback(null, chunk);
+    },
+  });
+}
 
 app.use(cors());
 app.use("/archive-files", express.static(localArchiveDir(), { dotfiles: "allow" }));
@@ -75,6 +98,63 @@ app.post("/api/books/:bookId/upload", async (req, res) => {
     return;
   }
   res.json(result.value);
+});
+
+app.post("/api/search-references", async (req, res) => {
+  const filename = typeof req.query.filename === "string" ? req.query.filename : "";
+  const bookId = typeof req.query.bookId === "string" ? req.query.bookId : "";
+  const kind = req.query.kind === "image" || req.query.kind === "video"
+    ? req.query.kind
+    : null;
+  if (!filename || !bookId || !kind) {
+    res.status(400).json({ error: "filename, bookId, and kind are required" });
+    return;
+  }
+  const book = await engineForBook(bookId);
+  if (!book.ok) {
+    res.status(404).json({ error: book.error.message });
+    return;
+  }
+  const declaredLength = Number(req.headers["content-length"] ?? 0);
+  if (declaredLength > SEARCH_REFERENCE_LIMIT_BYTES) {
+    res.status(413).json({ error: "Search reference exceeds the 500 MB limit" });
+    return;
+  }
+  const uploadRoot = await mkdtemp(join(tmpdir(), "videobook-search-upload-"));
+  const suffix = extname(filename).toLowerCase().replace(/[^a-z0-9.]/g, "");
+  const uploadPath = join(uploadRoot, `reference${suffix}`);
+  try {
+    await pipeline(
+      req,
+      limitUploadBytes(SEARCH_REFERENCE_LIMIT_BYTES),
+      createWriteStream(uploadPath, { flags: "wx" }),
+    );
+    const result = await queue.enqueueAndWait(
+      `prepare-search-reference-${uuidv7()}`,
+      {
+        type: "prepare_search_reference",
+        bookId,
+        mediaKind: kind,
+        name: filename,
+        uploadPath,
+        cleanupRoot: uploadRoot,
+      },
+      15 * 60_000,
+    );
+    res.json(result);
+  } catch (cause) {
+    await rm(uploadRoot, { recursive: true, force: true });
+    const message = cause instanceof Error ? cause.message : String(cause);
+    res.status(message.includes("500 MB limit") ? 413 : 400).json({
+      error: message,
+    });
+  }
+});
+
+app.delete("/api/search-references/:referenceId", (req, res) => {
+  res.json({
+    released: searchReferenceStore.release(req.params.referenceId),
+  });
 });
 
 app.use(express.json({ limit: "500mb" }));

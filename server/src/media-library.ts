@@ -5,10 +5,14 @@ import type {
   Engine,
   NotebookCell,
   NotebookDocument,
+  PreparedSearchOptions,
+  SearchHit,
 } from "videobook-engine";
 import type { BookManager, ManagedBook } from "./book-manager.js";
+import { registerLocalClipSearchProvider } from "./local-search-models.js";
 import { markDescendantsStale } from "./notebook-action-catalog.js";
 import { mutateNotebook } from "./notebook-mutations.js";
+import { searchReferenceStore } from "./search-reference-store.js";
 import { buildAssetList, type SyncAsset } from "./tools/sync.js";
 
 type MediaCellType = "audio" | "image" | "video";
@@ -16,6 +20,10 @@ type MediaCellType = "audio" | "image" | "video";
 export interface LibraryAsset extends SyncAsset {
   owning_book_id: string;
   owning_book_slug: string;
+  search_match?: {
+    score: number;
+    location: SearchHit["location"];
+  };
 }
 
 export interface LibraryAssetSearchResult {
@@ -230,6 +238,8 @@ export async function searchLibraryAssets(
   books: BookManager,
   input: {
     query?: string;
+    referenceId?: string;
+    referenceRange?: PreparedSearchOptions["range"];
     kinds: MediaCellType[];
     limit?: number;
     offset?: number;
@@ -238,16 +248,26 @@ export async function searchLibraryAssets(
   await books.ready();
   const query = input.query?.trim().toLowerCase() ?? "";
   const requested = new Set(input.kinds);
+  const prepared = input.referenceId
+    ? searchReferenceStore.get(input.referenceId).reference
+    : undefined;
+  const artifactKinds = [
+    ...(requested.has("audio") ? ["audio" as const] : []),
+    ...(requested.has("image") ? ["image" as const] : []),
+    ...(requested.has("video") ? ["video" as const, "final" as const] : []),
+  ];
+  const summaries = books.list({ sort: "newest" });
   const results = await Promise.allSettled(
-    books.list({ sort: "newest" }).map(async (summary) => {
+    summaries.map(async (summary) => {
       const book = books.get(summary.bookId);
       if (!book.ok) throw new Error(book.error.message);
-      const assets = await buildAssetList(
-        book.value.engine,
+      const engine = book.value.engine;
+      const builtAssets = await buildAssetList(
+        engine,
         summary.bookId,
         "newest",
       );
-      return assets
+      const assets = builtAssets
         .filter((asset) =>
           asset.status === "ready"
           && kindMatches(requested, asset.type))
@@ -255,18 +275,59 @@ export async function searchLibraryAssets(
           ...asset,
           owning_book_id: summary.bookId,
           owning_book_slug: summary.slug,
-        }))
-        .filter((asset) => matchesQuery(asset, query));
+        }));
+      let hits: SearchHit[] = [];
+      let searchError: string | undefined;
+      if (query || prepared) {
+        registerLocalClipSearchProvider(engine);
+        const searchQuery = {
+          ...(query ? { text: query } : {}),
+          modalities: query
+            ? ["visual" as const, "metadata" as const]
+            : ["visual" as const],
+          artifactKinds,
+          limit: 100,
+        };
+        const result = prepared
+          ? await engine.temporalSearch.queryPrepared(
+              searchQuery,
+              prepared,
+              input.referenceRange ? { range: input.referenceRange } : {},
+            )
+          : await engine.temporalSearch.query(searchQuery);
+        if (result.ok) {
+          hits = result.value.hits;
+        } else {
+          searchError = result.error.message;
+        }
+      }
+      return { assets, hits, searchError };
     }),
   );
   const errors: LibraryAssetSearchResult["books_with_errors"] = [];
   const assets: LibraryAsset[] = [];
+  const semanticHits: Array<{
+    key: string;
+    hit: SearchHit;
+  }> = [];
   results.forEach((result, index) => {
     if (result.status === "fulfilled") {
-      assets.push(...result.value);
+      assets.push(...result.value.assets);
+      semanticHits.push(
+        ...result.value.hits.map((hit) => ({
+          key: `${summaries[index]?.bookId ?? "unknown"}:${hit.artifactId}`,
+          hit,
+        })),
+      );
+      if (result.value.searchError) {
+        errors.push({
+          book_id: summaries[index]?.bookId ?? "unknown",
+          message: result.value.searchError,
+        });
+      }
       return;
     }
-    const book = books.list({ sort: "newest" })[index];
+    const book = summaries[index];
     errors.push({
       book_id: book?.bookId ?? "unknown",
       message: result.reason instanceof Error
@@ -274,24 +335,84 @@ export async function searchLibraryAssets(
         : String(result.reason),
     });
   });
-  assets.sort((left, right) => {
-    const rank = searchRank(left, query) - searchRank(right, query);
-    if (rank !== 0) return rank;
-    const created = Date.parse(right.created_at) - Date.parse(left.created_at);
-    return created !== 0
-      ? created
-      : left.artifact_id.localeCompare(right.artifact_id);
-  });
+  const metadataRank = new Map(
+    assets
+      .filter((asset) => !prepared && matchesQuery(asset, query))
+      .sort((left, right) => {
+        const rank = searchRank(left, query) - searchRank(right, query);
+        if (rank !== 0) return rank;
+        const created = Date.parse(right.created_at) - Date.parse(left.created_at);
+        return created !== 0
+          ? created
+          : left.artifact_id.localeCompare(right.artifact_id);
+      })
+      .map((asset, index) => [
+        `${asset.owning_book_id}:${asset.artifact_id}`,
+        index + 1,
+      ]),
+  );
+  semanticHits.sort((left, right) =>
+    right.hit.score - left.hit.score
+    || left.key.localeCompare(right.key));
+  const semanticRank = new Map<string, number>();
+  const semanticMatch = new Map<string, SearchHit>();
+  for (const item of semanticHits) {
+    if (semanticRank.has(item.key)) continue;
+    semanticRank.set(item.key, semanticRank.size + 1);
+    semanticMatch.set(item.key, item.hit);
+  }
+  const ranked = assets
+    .flatMap((asset) => {
+      const key = `${asset.owning_book_id}:${asset.artifact_id}`;
+      const metadata = metadataRank.get(key);
+      const semantic = semanticRank.get(key);
+      if ((query || prepared) && metadata === undefined && semantic === undefined) {
+        return [];
+      }
+      const hit = semanticMatch.get(key);
+      return [{
+        asset: hit
+          ? {
+              ...asset,
+              search_match: {
+                score: hit.score,
+                location: hit.location,
+              },
+            }
+          : asset,
+        score:
+          (metadata === undefined ? 0 : 1 / (60 + metadata))
+          + (semantic === undefined ? 0 : 1 / (60 + semantic)),
+      }];
+    })
+    .sort((left, right) => {
+      const rank = right.score - left.score;
+      if (rank !== 0) return rank;
+      const created =
+        Date.parse(right.asset.created_at) - Date.parse(left.asset.created_at);
+      return created !== 0
+        ? created
+        : left.asset.artifact_id.localeCompare(right.asset.artifact_id);
+    })
+    .map((item) => item.asset);
+  if (!query && !prepared) {
+    ranked.sort((left, right) => {
+      const created = Date.parse(right.created_at) - Date.parse(left.created_at);
+      return created !== 0
+        ? created
+        : left.artifact_id.localeCompare(right.artifact_id);
+    });
+  }
   const offset = input.offset ?? 0;
   const limit = input.limit ?? 50;
-  const page = assets.slice(offset, offset + limit);
+  const page = ranked.slice(offset, offset + limit);
   return {
     assets: page,
     page: {
       offset,
       limit,
-      total: assets.length,
-      hasMore: offset + page.length < assets.length,
+      total: ranked.length,
+      hasMore: offset + page.length < ranked.length,
     },
     books_with_errors: errors,
   };

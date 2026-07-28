@@ -1,13 +1,28 @@
-import { useMemo, useState, type FormEvent } from 'react'
-import { Film, Image, Pin, Search, Send, Volume2 } from 'lucide-react'
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+  type FormEvent,
+} from 'react'
+import { Film, Image, Pin, Search, Send } from 'lucide-react'
 import type {
-  ArtifactStream,
   SearchHit,
   SearchModality,
   SearchPage,
   SearchQuery,
-  SearchReference,
 } from 'videobook-engine'
+import { ReverseSearchReference } from '@/components/videobook/ReverseSearchReference'
+import {
+  asSearchReferenceDescriptor,
+  referenceKind,
+  releaseSearchReference,
+  searchReferenceRange,
+  uploadSearchReference,
+  type ReverseSearchMode,
+  type SearchReferenceDescriptor,
+} from '@/videobook/search-reference'
 
 export interface MomentSearchAsset {
   artifactId: string
@@ -29,10 +44,16 @@ interface MomentSearchProps {
   onNotebookChanged: () => Promise<void>
 }
 
-type SearchMode = 'text' | 'image' | 'frame' | 'video' | 'audio'
+export interface MomentSearchHandle {
+  searchSimilar: (asset: MomentSearchAsset) => void
+}
+
+type SearchMode = 'text' | ReverseSearchMode
 type PresentedSearchHit = SearchHit & {
   owningBookId?: string
   owningBookSlug?: string
+  mediaUrl?: string | null
+  thumbnailUrl?: string | null
 }
 type PresentedSearchPage = Omit<SearchPage, 'hits'> & {
   hits: PresentedSearchHit[]
@@ -61,14 +82,20 @@ type ReplacePreviewPayload = {
 }
 
 const modes: Array<{ id: SearchMode; label: string; icon: typeof Search }> = [
-  { id: 'text', label: 'Describe', icon: Search },
-  { id: 'image', label: 'Image', icon: Image },
-  { id: 'frame', label: 'Frame', icon: Film },
-  { id: 'video', label: 'Video', icon: Film },
-  { id: 'audio', label: 'Audio', icon: Volume2 },
+  { id: 'text', label: 'Text', icon: Search },
+  { id: 'image-reverse', label: 'Image reverse', icon: Image },
+  { id: 'video-reverse', label: 'Vid reverse', icon: Film },
 ]
 
-export function MomentSearch({
+type LastSearchRequest = {
+  query: SearchQuery
+  tool: 'search_moments' | 'search_library_moments'
+  referenceId?: string
+  referenceRange?: { start_seconds: number; duration_seconds?: number }
+}
+
+export const MomentSearch = forwardRef<MomentSearchHandle, MomentSearchProps>(
+function MomentSearch({
   bookId,
   notebookId,
   canAttachToTranscript,
@@ -78,14 +105,16 @@ export function MomentSearch({
   call,
   onNotice,
   onNotebookChanged,
-}: MomentSearchProps) {
+}: MomentSearchProps, ref) {
   const [mode, setMode] = useState<SearchMode>('text')
   const [scope, setScope] = useState<'book' | 'library'>('book')
   const [text, setText] = useState('')
   const [modality, setModality] = useState<SearchModality>('auto')
   const [assetId, setAssetId] = useState('')
   const [startSeconds, setStartSeconds] = useState('0')
-  const [durationSeconds, setDurationSeconds] = useState('5')
+  const [durationSeconds, setDurationSeconds] = useState('')
+  const [reference, setReference] = useState<SearchReferenceDescriptor | null>(null)
+  const [preparingReference, setPreparingReference] = useState(false)
   const [artifactKind, setArtifactKind] = useState('')
   const [minimumDuration, setMinimumDuration] = useState('')
   const [maximumDuration, setMaximumDuration] = useState('')
@@ -97,6 +126,7 @@ export function MomentSearch({
   const [createdBefore, setCreatedBefore] = useState('')
   const [page, setPage] = useState<PresentedSearchPage | null>(null)
   const [lastQuery, setLastQuery] = useState<SearchQuery | null>(null)
+  const [lastSearchRequest, setLastSearchRequest] = useState<LastSearchRequest | null>(null)
   const [selectedHitIndex, setSelectedHitIndex] = useState(0)
   const [rangeOverrides, setRangeOverrides] = useState<Record<string, RangeOverride>>({})
   const [replaceHit, setReplaceHit] = useState<PresentedSearchHit | null>(null)
@@ -107,25 +137,32 @@ export function MomentSearch({
 
   const selectableAssets = useMemo(
     () => assets.filter((asset) => {
-      if (mode === 'audio') return asset.type === 'audio' || asset.type === 'video'
-      if (mode === 'video' || mode === 'frame') return asset.type === 'video'
-      if (mode === 'image') return asset.type === 'image'
+      if (mode === 'video-reverse') {
+        return asset.type === 'video' || asset.type === 'final'
+      }
+      if (mode === 'image-reverse') return asset.type === 'image'
       return false
     }),
     [assets, mode],
   )
 
-  const search = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  useEffect(() => () => {
+    void releaseSearchReference(reference)
+  }, [reference])
+
+  const executeSearch = async (
+    nextReference = reference,
+    nextMode = mode,
+    nextStartSeconds = startSeconds,
+    nextDurationSeconds = durationSeconds,
+  ) => {
     setWorking(true)
     try {
-      const reference = mode === 'text'
-        ? undefined
-        : await referenceFor(mode, assetId, startSeconds, durationSeconds, bookId, call)
       const query: SearchQuery = {
-        ...(text.trim() ? { text: text.trim() } : {}),
-        ...(reference ? { reference } : {}),
-        modalities: modality === 'auto' ? ['auto'] : [modality],
+        ...(nextMode === 'text' && text.trim() ? { text: text.trim() } : {}),
+        modalities: nextMode === 'text'
+          ? modality === 'auto' ? ['auto'] : [modality]
+          : ['visual'],
         ...(artifactKind ? { artifactKinds: [artifactKind as SearchHit['artifactKind']] } : {}),
         ...(durationFilter(minimumDuration, maximumDuration)
           ? { durationMs: durationFilter(minimumDuration, maximumDuration)! }
@@ -148,15 +185,38 @@ export function MomentSearch({
           : {}),
         limit: 30,
       }
-      if (!query.text && !query.reference) {
-        throw new Error('Describe a moment or choose reference media')
+      if (nextMode === 'text' && !query.text) {
+        throw new Error('Describe the moment you want to find')
       }
-      const value = scope === 'library'
-        ? await call('search_library_moments', { query })
-        : await call('search_moments', { book_id: bookId, query })
+      if (nextMode !== 'text' && !nextReference) {
+        throw new Error(`Choose a ${referenceKind(nextMode)} reference`)
+      }
+      const tool = nextMode !== 'text' || scope === 'library'
+        ? 'search_library_moments'
+        : 'search_moments'
+      const referenceRange = nextMode === 'video-reverse' && nextReference
+        ? searchReferenceRange(
+            nextStartSeconds,
+            nextDurationSeconds,
+            nextReference,
+          )
+        : undefined
+      const request: LastSearchRequest = {
+        query,
+        tool,
+        ...(nextReference ? { referenceId: nextReference.referenceId } : {}),
+        ...(referenceRange ? { referenceRange } : {}),
+      }
+      const value = await call(tool, {
+        ...(tool === 'search_moments' ? { book_id: bookId } : {}),
+        query,
+        ...(request.referenceId ? { reference_id: request.referenceId } : {}),
+        ...(request.referenceRange ? { reference_range: request.referenceRange } : {}),
+      })
       if (!isSearchPage(value)) throw new Error('The server returned an invalid search page')
       setPage(value)
       setLastQuery(query)
+      setLastSearchRequest(request)
       setSelectedHitIndex(0)
       setRangeOverrides({})
       onNotice(`Found ${value.hits.length} moments · ${value.coverage.state}`)
@@ -167,13 +227,77 @@ export function MomentSearch({
     }
   }
 
+  const search = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    void executeSearch()
+  }
+
+  const prepareFileReference = async (file: File) => {
+    if (mode === 'text') return
+    setPreparingReference(true)
+    try {
+      const next = await uploadSearchReference(file, bookId, referenceKind(mode))
+      setReference(next)
+      setAssetId('')
+      setStartSeconds('0')
+      setDurationSeconds('')
+      await executeSearch(next, mode, '0', '')
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setPreparingReference(false)
+    }
+  }
+
+  const prepareExistingReference = async (
+    searchMode: ReverseSearchMode,
+    sourceBookId: string,
+    sourceArtifactId: string,
+    previewUrl?: string | null,
+    sourceRange?: { startSeconds: number; durationSeconds: number },
+  ) => {
+    setPreparingReference(true)
+    try {
+      const value = await call('prepare_search_reference', {
+        source_book_id: sourceBookId,
+        source_artifact_id: sourceArtifactId,
+        kind: referenceKind(searchMode),
+        ...(sourceRange
+          ? {
+              source_start_seconds: sourceRange.startSeconds,
+              source_duration_seconds: sourceRange.durationSeconds,
+            }
+          : {}),
+      })
+      const next = asSearchReferenceDescriptor(value, previewUrl)
+      setMode(searchMode)
+      setReference(next)
+      setAssetId(sourceArtifactId)
+      setStartSeconds('0')
+      setDurationSeconds('')
+      await executeSearch(next, searchMode, '0', '')
+    } catch (error) {
+      onNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setPreparingReference(false)
+    }
+  }
+
   const loadMore = async () => {
-    if (!lastQuery || !page?.nextCursor) return
+    if (!lastSearchRequest || !page?.nextCursor) return
     setWorking(true)
     try {
-      const value = await call('search_moments', {
-        book_id: bookId,
-        query: { ...lastQuery, cursor: page.nextCursor },
+      const value = await call(lastSearchRequest.tool, {
+        ...(lastSearchRequest.tool === 'search_moments'
+          ? { book_id: bookId }
+          : {}),
+        query: { ...lastSearchRequest.query, cursor: page.nextCursor },
+        ...(lastSearchRequest.referenceId
+          ? { reference_id: lastSearchRequest.referenceId }
+          : {}),
+        ...(lastSearchRequest.referenceRange
+          ? { reference_range: lastSearchRequest.referenceRange }
+          : {}),
       })
       if (!isSearchPage(value)) throw new Error('The server returned an invalid search page')
       setPage({
@@ -373,6 +497,22 @@ export function MomentSearch({
     }
   }
 
+  useImperativeHandle(ref, () => ({
+    searchSimilar: (asset) => {
+      const searchMode: ReverseSearchMode = asset.type === 'image'
+        ? 'image-reverse'
+        : 'video-reverse'
+      void prepareExistingReference(
+        searchMode,
+        bookId,
+        asset.artifactId,
+        searchMode === 'image-reverse'
+          ? asset.thumbnailUrl ?? asset.mediaUrl
+          : asset.mediaUrl,
+      )
+    },
+  }))
+
   return (
     <section className="moment-search">
       <form className="moment-search-form" onSubmit={search}>
@@ -386,9 +526,13 @@ export function MomentSearch({
                 role="tab"
                 aria-selected={mode === item.id}
                 className={mode === item.id ? 'active' : ''}
+                disabled={disabled || working || preparingReference}
                 onClick={() => {
                   setMode(item.id)
                   setAssetId('')
+                  setReference(null)
+                  setStartSeconds('0')
+                  setDurationSeconds('')
                 }}
               >
                 <Icon size={14} />{item.label}
@@ -396,74 +540,97 @@ export function MomentSearch({
             )
           })}
         </div>
-        <label className="moment-search-query">
-          Find a moment
-          <input
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            placeholder={mode === 'text'
-              ? 'e.g. the red van crosses the yard at sunset'
-              : 'Optional text to refine the reference'}
-          />
-        </label>
-        {mode !== 'text' && (
-          <label>
-            Reference
-            <select value={assetId} onChange={(event) => setAssetId(event.target.value)}>
-              <option value="">Choose {mode} source</option>
-              {selectableAssets.map((asset) => (
-                <option key={asset.artifactId} value={asset.artifactId}>{asset.id}</option>
-              ))}
-            </select>
-          </label>
-        )}
-        {(mode === 'frame' || mode === 'video' || mode === 'audio') && (
+        {mode === 'text' ? (
           <>
-            <label>
-              Start seconds
+            <label className="moment-search-query">
+              Find a moment
               <input
-                type="number"
-                min="0"
-                step="0.1"
-                value={startSeconds}
-                onChange={(event) => setStartSeconds(event.target.value)}
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+                placeholder="e.g. the red van crosses the yard at sunset"
               />
             </label>
-            {mode !== 'frame' && (
-              <label>
-                Duration seconds
-                <input
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  value={durationSeconds}
-                  onChange={(event) => setDurationSeconds(event.target.value)}
-                />
-              </label>
-            )}
+            <label>
+              Signal
+              <select
+                value={modality}
+                onChange={(event) => setModality(event.target.value as SearchModality)}
+              >
+                <option value="auto">Hybrid</option>
+                <option value="visual">Visual</option>
+                <option value="speech">Speech</option>
+                <option value="ocr">OCR</option>
+                <option value="audio">Audio</option>
+                <option value="metadata">Metadata</option>
+              </select>
+            </label>
+            <label>
+              Scope
+              <select
+                value={scope}
+                onChange={(event) =>
+                  setScope(event.target.value as 'book' | 'library')}
+              >
+                <option value="book">Current book</option>
+                <option value="library">All books</option>
+              </select>
+            </label>
           </>
-        )}
-        <label>
-          Signal
-          <select
-            value={modality}
-            onChange={(event) => setModality(event.target.value as SearchModality)}
+        ) : (
+          <ReverseSearchReference
+            mode={mode}
+            reference={reference}
+            preparing={preparingReference}
+            disabled={disabled || working}
+            startSeconds={startSeconds}
+            durationSeconds={durationSeconds}
+            onFile={(file) => void prepareFileReference(file)}
+            onClear={() => {
+              setReference(null)
+              setAssetId('')
+            }}
+            onStartSeconds={setStartSeconds}
+            onDurationSeconds={setDurationSeconds}
           >
-            <option value="auto">Hybrid</option>
-            <option value="visual">Visual</option>
-            <option value="speech">Speech</option>
-            <option value="ocr">OCR</option>
-            <option value="audio">Audio</option>
-            <option value="metadata">Metadata</option>
-          </select>
-        </label>
-        <label>
-          Scope
-          <select value={scope} onChange={(event) => setScope(event.target.value as 'book' | 'library')}>
-            <option value="book">Current book</option>
-            <option value="library">All books</option>
-          </select>
-        </label>
+            <div className="reverse-search-existing">
+              <label>
+                Existing {referenceKind(mode)} asset
+                <select
+                  value={assetId}
+                  disabled={disabled || preparingReference || working}
+                  onChange={(event) => setAssetId(event.target.value)}
+                >
+                  <option value="">Choose from this book</option>
+                  {selectableAssets.map((asset) => (
+                    <option key={asset.artifactId} value={asset.artifactId}>
+                      {asset.id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                disabled={disabled || preparingReference || working || !assetId}
+                onClick={() => {
+                  const asset = selectableAssets.find((item) =>
+                    item.artifactId === assetId)
+                  if (!asset) return
+                  void prepareExistingReference(
+                    mode,
+                    bookId,
+                    asset.artifactId,
+                    mode === 'image-reverse'
+                      ? asset.thumbnailUrl ?? asset.mediaUrl
+                      : asset.mediaUrl,
+                  )
+                }}
+              >
+                Use selected
+              </button>
+              <span>Reverse search always searches all books.</span>
+            </div>
+          </ReverseSearchReference>
+        )}
         <details className="moment-search-filters">
           <summary>Filters</summary>
           <div>
@@ -529,12 +696,18 @@ export function MomentSearch({
         </details>
         <button
           type="submit"
-          disabled={disabled || working || (mode !== 'text' && !assetId)}
+          disabled={
+            disabled
+            || working
+            || preparingReference
+            || (mode === 'text' ? !text.trim() : !reference)
+          }
         >
           <Search size={15} />{working ? 'Searching…' : 'Search moments'}
         </button>
         <button
           type="button"
+          hidden={mode !== 'text'}
           disabled={disabled || working || !text.trim() || !activeSequenceRange}
           onClick={() => void suggestCoverage()}
         >
@@ -636,6 +809,8 @@ export function MomentSearch({
       >
         {page?.hits.map((hit, index) => {
           const asset = assets.find((item) => item.artifactId === hit.artifactId)
+          const mediaUrl = asset?.mediaUrl ?? hit.mediaUrl ?? null
+          const thumbnailUrl = asset?.thumbnailUrl ?? hit.thumbnailUrl ?? null
           const rangeKey = locationKey(hit)
           const rangeOverride = rangeOverrides[rangeKey]
           const presentedHit = adjustedSearchHit(hit, rangeOverride)
@@ -647,22 +822,22 @@ export function MomentSearch({
               onClick={() => setSelectedHitIndex(index)}
             >
               <div className="moment-card-media">
-                {asset?.mediaUrl && asset.type === 'video' ? (
+                {mediaUrl && (asset?.type === 'video' || hit.artifactKind === 'video' || hit.artifactKind === 'final') ? (
                   <video
-                    src={momentMediaUrl(asset.mediaUrl, presentedHit)}
-                    poster={asset.thumbnailUrl ?? undefined}
+                    src={momentMediaUrl(mediaUrl, presentedHit)}
+                    poster={thumbnailUrl ?? undefined}
                     controls
                     playsInline
                     preload="metadata"
                   />
-                ) : asset?.mediaUrl && asset.type === 'audio' ? (
+                ) : mediaUrl && (asset?.type === 'audio' || hit.artifactKind === 'audio') ? (
                   <audio
-                    src={momentMediaUrl(asset.mediaUrl, presentedHit)}
+                    src={momentMediaUrl(mediaUrl, presentedHit)}
                     controls
                     preload="metadata"
                   />
-                ) : asset?.mediaUrl ? (
-                  <img src={asset.thumbnailUrl ?? asset.mediaUrl} alt={hit.artifactSlug} />
+                ) : mediaUrl ? (
+                  <img src={thumbnailUrl ?? mediaUrl} alt={hit.artifactSlug} />
                 ) : (
                   <Film size={28} />
                 )}
@@ -723,10 +898,44 @@ export function MomentSearch({
                   </div>
                 )}
                 <div className="moment-card-actions">
-                  {asset?.mediaUrl && (
-                    <a href={momentMediaUrl(asset.mediaUrl, presentedHit)} target="_blank" rel="noreferrer">
+                  {mediaUrl && (
+                    <a href={momentMediaUrl(mediaUrl, presentedHit)} target="_blank" rel="noreferrer">
                       Open source
                     </a>
+                  )}
+                  {(hit.artifactKind === 'image'
+                    || hit.artifactKind === 'video'
+                    || hit.artifactKind === 'final') && (
+                    <button
+                      type="button"
+                      disabled={working || preparingReference}
+                      onClick={() => {
+                        const searchMode = hit.artifactKind === 'image'
+                          ? 'image-reverse'
+                          : 'video-reverse'
+                        const bounds = hit.location.kind === 'timed'
+                          ? momentBounds(presentedHit)
+                          : null
+                        void prepareExistingReference(
+                          searchMode,
+                          hit.owningBookId ?? bookId,
+                          hit.artifactId,
+                          searchMode === 'image-reverse'
+                            ? thumbnailUrl ?? mediaUrl
+                            : mediaUrl
+                              ? momentMediaUrl(mediaUrl, presentedHit)
+                              : null,
+                          searchMode === 'video-reverse' && bounds
+                            ? {
+                                startSeconds: bounds.start,
+                                durationSeconds: bounds.end - bounds.start,
+                              }
+                            : undefined,
+                        )
+                      }}
+                    >
+                      <Search size={13} />Similar
+                    </button>
                   )}
                   <button
                     type="button"
@@ -796,66 +1005,7 @@ export function MomentSearch({
       )}
     </section>
   )
-}
-
-async function referenceFor(
-  mode: Exclude<SearchMode, 'text'>,
-  artifactId: string,
-  startValue: string,
-  durationValue: string,
-  bookId: string,
-  call: MomentSearchProps['call'],
-): Promise<SearchReference> {
-  if (!artifactId) throw new Error('Choose reference media')
-  if (mode === 'image') return { kind: 'image', artifact: artifactId }
-  const value = await call('list_media_streams', {
-    book_id: bookId,
-    artifact_id: artifactId,
-  })
-  if (!Array.isArray(value)) throw new Error('The server returned invalid media streams')
-  const streams = value as ArtifactStream[]
-  const kind = mode === 'audio' ? 'audio' : 'video'
-  const stream = streams.find((item) => item.kind === kind)
-  if (!stream) throw new Error(`The selected source has no ${kind} stream`)
-  const startSeconds = requiredNumber(startValue, 'Start time', 0)
-  const startTick = secondsToTicks(startSeconds, stream)
-  if (mode === 'frame') {
-    return {
-      kind: 'frame',
-      source: {
-        streamId: stream.streamId,
-        objectHash: stream.objectHash,
-        tick: startTick,
-        timeBase: stream.timeBase,
-      },
-    }
-  }
-  const durationSeconds = requiredNumber(durationValue, 'Duration', 0.001)
-  return {
-    kind: mode,
-    range: {
-      streamId: stream.streamId,
-      objectHash: stream.objectHash,
-      startTick,
-      durationTicks: Math.max(1, secondsToTicks(durationSeconds, stream)),
-      timeBase: stream.timeBase,
-    },
-  }
-}
-
-function requiredNumber(value: string, label: string, minimum: number): number {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed) || parsed < minimum) {
-    throw new Error(`${label} must be at least ${minimum}`)
-  }
-  return parsed
-}
-
-function secondsToTicks(seconds: number, stream: ArtifactStream): number {
-  return Math.round(
-    seconds * stream.timeBase.denominator / stream.timeBase.numerator,
-  )
-}
+})
 
 function isSearchPage(value: unknown): value is PresentedSearchPage {
   if (typeof value !== 'object' || value === null) return false

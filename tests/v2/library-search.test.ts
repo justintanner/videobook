@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { Engine, IndexManifest } from 'videobook-engine'
 import { BookManager } from '../../server/src/book-manager.js'
 import { semanticSearchDefs } from '../../server/src/tools/semantic-search.js'
+import { searchReferenceStore } from '../../server/src/search-reference-store.js'
 
 const manifest: IndexManifest = {
   manifestId: 'library-lexical-v1',
@@ -13,8 +14,8 @@ const manifest: IndexManifest = {
   modelRevision: '1',
   license: 'test',
   embeddingSpace: 'library-lexical-space',
-  dimensions: 1,
-  modalities: ['metadata'],
+  dimensions: 3,
+  modalities: ['visual', 'metadata'],
   supportedLanguages: ['en'],
   preprocessingVersion: '1',
   extractorVersion: '1',
@@ -64,6 +65,25 @@ describe('library moment search', () => {
       state: 'ready',
       indexedArtifactCount: 2,
     })
+    const reference = searchReferenceStore.put({
+      kind: 'image',
+      name: 'alpha-reference.png',
+      reference: {
+        kind: 'image',
+        embeddingSpace: manifest.embeddingSpace,
+        vector: [1, 0, 0],
+      },
+    })
+    const reverseResult = await tool.handler({
+      query: { artifactKinds: ['image'], limit: 10 },
+      reference_id: reference.reference_id,
+    })
+    expect(reverseResult.isError).toBeUndefined()
+    const reversePayload = JSON.parse(reverseResult.content[0]!.text) as {
+      hits: Array<{ owningBookSlug: string }>
+    }
+    expect(reversePayload.hits[0]?.owningBookSlug).toBe('alpha')
+    searchReferenceStore.release(reference.reference_id)
   })
 })
 
@@ -95,7 +115,12 @@ async function indexStill(engine: Engine, description: string): Promise<void> {
       kind: 'frame',
       segmentationVersion: '1',
       texts: [{ kind: 'description', language: 'en', text: description }],
-      embeddings: [],
+      embeddings: [{
+        modality: 'visual',
+        embeddingSpace: manifest.embeddingSpace,
+        vector: description.includes('alpha') ? [1, 0, 0] : [0, 1, 0],
+        sourceHash: source.objectHash,
+      }],
       fingerprints: [],
     }],
     coveredRanges: [],

@@ -83,9 +83,13 @@ import { CellRunningOverlay } from '@/components/videobook/CellRunningOverlay'
 import {
   NotebookGridBoard,
 } from '@/components/videobook/NotebookGridBoard'
-import { MomentSearch } from '@/components/videobook/MomentSearch'
+import {
+  MomentSearch,
+  type MomentSearchHandle,
+} from '@/components/videobook/MomentSearch'
 import { NotebookCellInspector } from '@/components/videobook/NotebookCellInspector'
 import { MediaLibraryAssetPreview } from '@/components/videobook/MediaLibraryAssetPreview'
+import { ReverseSearchReference } from '@/components/videobook/ReverseSearchReference'
 import { NotebookMediaFullscreen } from '@/components/videobook/NotebookMediaFullscreen'
 import {
   CanonicalSequencePlayer,
@@ -100,6 +104,15 @@ import {
   type NotebookFlowEdge,
 } from '@/videobook/notebook-draft'
 import { startNotebookCellRun } from '@/videobook/notebook-cell-actions'
+import {
+  asSearchReferenceDescriptor,
+  referenceKind,
+  releaseSearchReference,
+  searchReferenceRange,
+  uploadSearchReference,
+  type ReverseSearchMode,
+  type SearchReferenceDescriptor,
+} from '@/videobook/search-reference'
 import {
   validateCommandPlan,
   type CommandPlan,
@@ -168,6 +181,7 @@ type AssetRecord = {
 }
 
 type PassiveMediaKind = 'audio' | 'image' | 'video'
+type MediaSearchMode = 'text' | ReverseSearchMode
 
 type MediaSlotOperation = 'attach' | 'clear' | 'upload'
 
@@ -196,8 +210,13 @@ type LibrarySearchResult = {
 
 type MediaLibraryPickerState = {
   cellId: string
+  mode: MediaSearchMode
   query: string
   draftQuery: string
+  reference: SearchReferenceDescriptor | null
+  referenceStartSeconds: string
+  referenceDurationSeconds: string
+  preparingReference: boolean
   assets: LibraryAssetRecord[]
   page: LibrarySearchPage
   booksWithErrors: Array<{ bookId: string; message: string }>
@@ -206,6 +225,14 @@ type MediaLibraryPickerState = {
   error: string | null
   activeArtifactId: string | null
 }
+
+type MediaLibrarySearchCriteria = Pick<
+  MediaLibraryPickerState,
+  | 'mode'
+  | 'reference'
+  | 'referenceStartSeconds'
+  | 'referenceDurationSeconds'
+>
 
 type MediaSlotContextValue = {
   states: Record<string, MediaSlotState>
@@ -1401,22 +1428,43 @@ function MediaLibraryDialog({
   kind,
   targetBookId,
   onClose,
+  onMode,
   onDraftQuery,
   onSearch,
   onLoadMore,
   onAttach,
+  onReferenceFile,
+  onClearReference,
+  onReferenceStart,
+  onReferenceDuration,
+  onSimilar,
 }: {
   state: MediaLibraryPickerState
   kind: PassiveMediaKind
   targetBookId: string
   onClose: () => void
+  onMode: (mode: MediaSearchMode) => void
   onDraftQuery: (query: string) => void
   onSearch: () => void
   onLoadMore: () => void
   onAttach: (asset: LibraryAssetRecord) => void
+  onReferenceFile: (file: File) => void
+  onClearReference: () => void
+  onReferenceStart: (value: string) => void
+  onReferenceDuration: (value: string) => void
+  onSimilar: (asset: LibraryAssetRecord) => void
 }) {
   const dialogRef = useRef<HTMLElement | null>(null)
-  const busy = state.activeArtifactId !== null
+  const busy = state.activeArtifactId !== null || state.preparingReference
+  const searchModes: Array<{
+    id: MediaSearchMode
+    label: string
+    icon: typeof Search
+  }> = [
+    { id: 'text', label: 'Text', icon: Search },
+    { id: 'image-reverse', label: 'Image reverse', icon: Image },
+    { id: 'video-reverse', label: 'Vid reverse', icon: Film },
+  ]
 
   return (
     <div
@@ -1470,29 +1518,78 @@ function MediaLibraryDialog({
             <X size={17} />
           </button>
         </header>
-        <form
-          className="media-library-search"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (!busy) onSearch()
-          }}
-        >
-          <label htmlFor="media-library-query">Search library</label>
-          <div>
-            <input
-              id="media-library-query"
-              type="search"
-              value={state.draftQuery}
-              placeholder={`Search ${kind} assets`}
-              autoFocus
-              disabled={busy}
-              onChange={(event) => onDraftQuery(event.target.value)}
-            />
-            <button type="submit" disabled={busy || state.loading}>
-              <Search size={14} />Search
+        <div className="media-library-modes" role="tablist" aria-label="Search mode">
+          {searchModes.map((item) => {
+            const Icon = item.icon
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={state.mode === item.id}
+                className={state.mode === item.id ? 'active' : ''}
+                disabled={busy}
+                onClick={() => onMode(item.id)}
+              >
+                <Icon size={14} />{item.label}
+              </button>
+            )
+          })}
+        </div>
+        <div className="media-library-search-panel">
+          {state.mode === 'text' ? (
+            <form
+              className="media-library-search"
+              onSubmit={(event) => {
+                event.preventDefault()
+                if (!busy) onSearch()
+              }}
+            >
+              <label htmlFor="media-library-query">Search library</label>
+              <div>
+                <input
+                  id="media-library-query"
+                  type="search"
+                  value={state.draftQuery}
+                  placeholder={`Search ${kind} assets`}
+                  autoFocus
+                  disabled={busy}
+                  onChange={(event) => onDraftQuery(event.target.value)}
+                />
+                <button type="submit" disabled={busy || state.loading}>
+                  <Search size={14} />Search
+                </button>
+              </div>
+            </form>
+          ) : (
+            <ReverseSearchReference
+              mode={state.mode}
+              reference={state.reference}
+              preparing={state.preparingReference}
+              disabled={state.activeArtifactId !== null}
+              startSeconds={state.referenceStartSeconds}
+              durationSeconds={state.referenceDurationSeconds}
+              onFile={onReferenceFile}
+              onClear={onClearReference}
+              onStartSeconds={onReferenceStart}
+              onDurationSeconds={onReferenceDuration}
+            >
+              <p className="media-library-similar-hint">
+                Or choose Similar on an existing visual asset below. Reverse search spans all books.
+              </p>
+            </ReverseSearchReference>
+          )}
+          {state.mode !== 'text' && state.reference && (
+            <button
+              type="button"
+              className="media-library-reverse-submit"
+              disabled={busy || state.loading}
+              onClick={onSearch}
+            >
+              <Search size={14} />Search similar media
             </button>
-          </div>
-        </form>
+          )}
+        </div>
         <div className="media-library-results" aria-busy={state.loading || state.loadingMore}>
           {state.error && <p className="media-library-error" role="alert">{state.error}</p>}
           {state.booksWithErrors.length > 0 && (
@@ -1516,13 +1613,9 @@ function MediaLibraryDialog({
               {state.assets.map((asset) => {
                 const active = state.activeArtifactId === asset.artifactId
                 return (
-                  <button
+                  <article
                     key={`${asset.owningBookId}:${asset.artifactId}`}
-                    type="button"
                     className="media-library-asset"
-                    disabled={busy}
-                    aria-label={`Use @${asset.id} from ${asset.owningBookSlug}`}
-                    onClick={() => onAttach(asset)}
                   >
                     <MediaLibraryAssetPreview asset={asset} />
                     <span className="media-library-asset-copy">
@@ -1537,7 +1630,28 @@ function MediaLibraryDialog({
                         <LoaderCircle size={16} className="spin" />Attaching…
                       </span>
                     )}
-                  </button>
+                    <span className="media-library-asset-actions">
+                      {(asset.type === 'image'
+                        || asset.type === 'video'
+                        || asset.type === 'final') && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => onSimilar(asset)}
+                        >
+                          <Search size={13} />Similar
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-label={`Use @${asset.id} from ${asset.owningBookSlug}`}
+                        onClick={() => onAttach(asset)}
+                      >
+                        Use
+                      </button>
+                    </span>
+                  </article>
                 )
               })}
             </div>
@@ -1789,6 +1903,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [deletingCellId, setDeletingCellId] = useState<string | null>(null)
   const [mediaSlotStates, setMediaSlotStates] = useState<Record<string, MediaSlotState>>({})
   const [mediaLibraryPicker, setMediaLibraryPicker] = useState<MediaLibraryPickerState | null>(null)
+  const momentSearchRef = useRef<MomentSearchHandle | null>(null)
   const [fullscreenCellId, setFullscreenCellId] = useState<string | null>(null)
   const [previewSlot, setPreviewSlot] = useState<NotebookGridSlot | null>(null)
   const [notebookView, setNotebookView] = useState({ y: 0, zoom: 1 })
@@ -2593,6 +2708,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const closeMediaLibrary = () => {
     mediaLibraryRequestRef.current += 1
+    void releaseSearchReference(mediaLibraryPicker?.reference ?? null)
     setMediaLibraryPicker(null)
     const opener = mediaLibraryOpenerRef.current
     mediaLibraryOpenerRef.current = null
@@ -2604,10 +2720,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     query: string,
     offset: number,
     append: boolean,
+    criteria?: MediaLibrarySearchCriteria,
   ) => {
     const cell = notebook?.cells.find((candidate) => candidate.id === cellId)
     const kind = cell && passiveMediaKind(cell.type)
     if (!kind) return
+    const activeCriteria = criteria
+      ?? (mediaLibraryPicker?.cellId === cellId
+        ? {
+            mode: mediaLibraryPicker.mode,
+            reference: mediaLibraryPicker.reference,
+            referenceStartSeconds: mediaLibraryPicker.referenceStartSeconds,
+            referenceDurationSeconds: mediaLibraryPicker.referenceDurationSeconds,
+          }
+        : {
+            mode: 'text' as const,
+            reference: null,
+            referenceStartSeconds: '0',
+            referenceDurationSeconds: '',
+          })
     const requestId = mediaLibraryRequestRef.current + 1
     mediaLibraryRequestRef.current = requestId
     setMediaLibraryPicker((current) => {
@@ -2625,7 +2756,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     })
     try {
       const result = asLibrarySearchResult(await call('search_library_assets', {
-        ...(query.trim() ? { query: query.trim() } : {}),
+        ...(activeCriteria.mode === 'text' && query.trim()
+          ? { query: query.trim() }
+          : {}),
+        ...(activeCriteria.mode !== 'text' && activeCriteria.reference
+          ? { reference_id: activeCriteria.reference.referenceId }
+          : {}),
+        ...(activeCriteria.mode === 'video-reverse' && activeCriteria.reference
+          ? {
+              reference_range: searchReferenceRange(
+                activeCriteria.referenceStartSeconds,
+                activeCriteria.referenceDurationSeconds,
+                activeCriteria.reference,
+              ),
+            }
+          : {}),
         kinds: [kind],
         limit: emptyLibraryPage.limit,
         offset,
@@ -2680,8 +2825,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setMediaSlotOperation(cellId, null)
     setMediaLibraryPicker({
       cellId,
+      mode: 'text',
       query: '',
       draftQuery: '',
+      reference: null,
+      referenceStartSeconds: '0',
+      referenceDurationSeconds: '',
+      preparingReference: false,
       assets: [],
       page: emptyLibraryPage,
       booksWithErrors: [],
@@ -2690,7 +2840,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       error: null,
       activeArtifactId: null,
     })
-    void loadMediaLibrary(cellId, '', 0, false)
+    void loadMediaLibrary(cellId, '', 0, false, {
+      mode: 'text',
+      reference: null,
+      referenceStartSeconds: '0',
+      referenceDurationSeconds: '',
+    })
   }
 
   const attachLibraryAsset = async (asset: LibraryAssetRecord) => {
@@ -4272,6 +4427,146 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const updateMediaLibraryDraft = (query: string) => {
     setMediaLibraryPicker((current) => current ? { ...current, draftQuery: query } : current)
   }
+  const changeMediaLibraryMode = (mode: MediaSearchMode) => {
+    if (!mediaLibraryPicker || mediaLibraryPicker.mode === mode) return
+    const cellId = mediaLibraryPicker.cellId
+    void releaseSearchReference(mediaLibraryPicker.reference)
+    setMediaLibraryPicker((current) => current && current.cellId === cellId
+      ? {
+          ...current,
+          mode,
+          reference: null,
+          referenceStartSeconds: '0',
+          referenceDurationSeconds: '',
+          preparingReference: false,
+          page: mode === 'text'
+            ? current.page
+            : {
+                ...emptyLibraryPage,
+                total: current.assets.length,
+              },
+          error: null,
+        }
+      : current)
+    if (mode === 'text') {
+      void loadMediaLibrary(
+        cellId,
+        mediaLibraryPicker.draftQuery,
+        0,
+        false,
+        {
+          mode,
+          reference: null,
+          referenceStartSeconds: '0',
+          referenceDurationSeconds: '',
+        },
+      )
+    }
+  }
+  const prepareMediaLibraryFile = async (file: File) => {
+    if (!mediaLibraryPicker || mediaLibraryPicker.mode === 'text' || !bookId) return
+    const picker = mediaLibraryPicker
+    const mode = picker.mode as ReverseSearchMode
+    setMediaLibraryPicker((current) => current && current.cellId === picker.cellId
+      ? { ...current, preparingReference: true, error: null }
+      : current)
+    try {
+      const reference = await uploadSearchReference(
+        file,
+        bookId,
+        referenceKind(mode),
+      )
+      await releaseSearchReference(picker.reference)
+      const criteria: MediaLibrarySearchCriteria = {
+        mode,
+        reference,
+        referenceStartSeconds: '0',
+        referenceDurationSeconds: '',
+      }
+      setMediaLibraryPicker((current) => current && current.cellId === picker.cellId
+        ? {
+            ...current,
+            ...criteria,
+            preparingReference: false,
+          }
+        : current)
+      await loadMediaLibrary(picker.cellId, '', 0, false, criteria)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setMediaLibraryPicker((current) => current && current.cellId === picker.cellId
+        ? {
+            ...current,
+            preparingReference: false,
+            error: message,
+          }
+        : current)
+    }
+  }
+  const prepareMediaLibrarySimilar = async (asset: LibraryAssetRecord) => {
+    if (!mediaLibraryPicker) return
+    const picker = mediaLibraryPicker
+    const mode: ReverseSearchMode = asset.type === 'image'
+      ? 'image-reverse'
+      : 'video-reverse'
+    setMediaLibraryPicker((current) => current && current.cellId === picker.cellId
+      ? {
+          ...current,
+          mode,
+          preparingReference: true,
+          error: null,
+        }
+      : current)
+    try {
+      const value = await call('prepare_search_reference', {
+        source_book_id: asset.owningBookId,
+        source_artifact_id: asset.artifactId,
+        kind: referenceKind(mode),
+      })
+      const reference = asSearchReferenceDescriptor(
+        value,
+        mode === 'image-reverse'
+          ? asset.thumbnailUrl ?? asset.mediaUrl
+          : asset.mediaUrl,
+      )
+      await releaseSearchReference(picker.reference)
+      const criteria: MediaLibrarySearchCriteria = {
+        mode,
+        reference,
+        referenceStartSeconds: '0',
+        referenceDurationSeconds: '',
+      }
+      setMediaLibraryPicker((current) => current && current.cellId === picker.cellId
+        ? {
+            ...current,
+            ...criteria,
+            preparingReference: false,
+          }
+        : current)
+      await loadMediaLibrary(picker.cellId, '', 0, false, criteria)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setMediaLibraryPicker((current) => current && current.cellId === picker.cellId
+        ? {
+            ...current,
+            preparingReference: false,
+            error: message,
+          }
+        : current)
+    }
+  }
+  const clearMediaLibraryReference = () => {
+    if (!mediaLibraryPicker) return
+    void releaseSearchReference(mediaLibraryPicker.reference)
+    setMediaLibraryPicker((current) => current
+      ? {
+          ...current,
+          reference: null,
+          referenceStartSeconds: '0',
+          referenceDurationSeconds: '',
+          error: null,
+        }
+      : current)
+  }
   const searchMediaLibrary = () => {
     if (!mediaLibraryPicker) return
     void loadMediaLibrary(
@@ -4870,6 +5165,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 </button>
               </form>
               <MomentSearch
+                ref={momentSearchRef}
                 bookId={bookId}
                 notebookId={notebook?.id}
                 canAttachToTranscript={canAttachToTranscript}
@@ -4898,6 +5194,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           : <img src={asset.thumbnailUrl ?? asset.mediaUrl} alt={asset.id} />
                       : <div className="asset-placeholder"><Library size={28} /></div>}
                     <strong>{asset.id}</strong><small>{asset.prompt ?? asset.createdAt}</small>
+                    {(asset.type === 'image'
+                      || asset.type === 'video'
+                      || asset.type === 'final') && (
+                      <button
+                        type="button"
+                        className="asset-similar-button"
+                        disabled={busy}
+                        onClick={() => momentSearchRef.current?.searchSimilar(asset)}
+                      >
+                        <Search size={13} />Similar
+                      </button>
+                    )}
                     {ingestStatusById.get(asset.artifactId) && (
                       <>
                         <span className={`ingest-phase ingest-phase-${ingestStatusById.get(asset.artifactId)!.state}`}>
@@ -5738,10 +6046,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           kind={mediaLibraryKind}
           targetBookId={bookId}
           onClose={closeMediaLibrary}
+          onMode={changeMediaLibraryMode}
           onDraftQuery={updateMediaLibraryDraft}
           onSearch={searchMediaLibrary}
           onLoadMore={loadMoreMediaLibrary}
           onAttach={(asset) => void attachLibraryAsset(asset)}
+          onReferenceFile={(file) => void prepareMediaLibraryFile(file)}
+          onClearReference={clearMediaLibraryReference}
+          onReferenceStart={(value) => setMediaLibraryPicker((current) =>
+            current ? { ...current, referenceStartSeconds: value } : current)}
+          onReferenceDuration={(value) => setMediaLibraryPicker((current) =>
+            current ? { ...current, referenceDurationSeconds: value } : current)}
+          onSimilar={(asset) => void prepareMediaLibrarySimilar(asset)}
         />
       )}
 

@@ -3,6 +3,7 @@ import type {
   EditIntent,
   IndexManifest,
   NotebookCell,
+  PreparedSearchOptions,
   SearchHit,
   SearchQuery,
 } from "videobook-engine";
@@ -22,8 +23,10 @@ import {
 import { FFMPEG } from "../ffmpeg.js";
 import type { BookManager } from "../book-manager.js";
 import { queue } from "../queue.js";
+import { searchReferenceStore } from "../search-reference-store.js";
 import { extname, join } from "node:path";
 import type { ToolDef, ToolResult } from "./tool-def.js";
+import { buildAssetList } from "./sync.js";
 
 const bookSchema = { book_id: z.string().uuid() };
 const rationalSchema = z.object({
@@ -118,6 +121,13 @@ const searchQuerySchema = z.object({
   limit: z.number().int().positive().max(100).optional(),
   cursor: z.string().min(1).optional(),
 });
+const preparedReferenceFields = {
+  reference_id: z.string().uuid().optional(),
+  reference_range: z.object({
+    start_seconds: z.number().nonnegative(),
+    duration_seconds: z.number().positive().optional(),
+  }).optional(),
+};
 const searchHitSchema = z.object({
   artifactId: z.string().uuid(),
   artifactSlug: z.string().min(1),
@@ -328,11 +338,25 @@ export function semanticSearchDefs(
       name: "search_moments",
       description: "Search indexed book moments with text, media references, and filters",
       scope: "book",
-      schema: { ...bookSchema, query: searchQuerySchema },
+      schema: {
+        ...bookSchema,
+        query: searchQuerySchema,
+        ...preparedReferenceFields,
+      },
       handler: async (args) => {
         registerLocalClipSearchProvider(engine);
         registerLocalClapSearchProvider(engine, FFMPEG);
-        const result = await engine.temporalSearch.query(args.query as SearchQuery);
+        const query = args.query as SearchQuery;
+        const referenceId = typeof args.reference_id === "string"
+          ? args.reference_id
+          : undefined;
+        const result = referenceId
+          ? await engine.temporalSearch.queryPrepared(
+              query,
+              searchReferenceStore.get(referenceId).reference,
+              preparedSearchOptions(args.reference_range),
+            )
+          : await engine.temporalSearch.query(query);
         return result.ok ? json(result.value) : failure(result.error.message);
       },
     },
@@ -1296,10 +1320,20 @@ function librarySearchDef(books: BookManager): ToolDef {
     name: "search_library_moments",
     description: "Federate a moment search across every schema-v5 book",
     scope: "global",
-    schema: { query: searchQuerySchema },
+    schema: {
+      query: searchQuerySchema,
+      ...preparedReferenceFields,
+    },
     handler: async (args) => {
       await books.ready();
       const query = args.query as SearchQuery;
+      const referenceId = typeof args.reference_id === "string"
+        ? args.reference_id
+        : undefined;
+      const prepared = referenceId
+        ? searchReferenceStore.get(referenceId).reference
+        : undefined;
+      const preparedOptions = preparedSearchOptions(args.reference_range);
       const pages = await Promise.all(books.list().map(async (summary) => {
         const managed = books.get(summary.bookId);
         if (!managed.ok) {
@@ -1307,14 +1341,41 @@ function librarySearchDef(books: BookManager): ToolDef {
         }
         registerLocalClipSearchProvider(managed.value.engine);
         registerLocalClapSearchProvider(managed.value.engine, FFMPEG);
-        const result = await managed.value.engine.temporalSearch.query({
+        const bookQuery = {
           ...query,
           cursor: undefined,
           limit: Math.min(query.limit ?? 30, 100),
-        });
-        return result.ok
-          ? { summary, page: result.value }
-          : { summary, error: result.error.message };
+        };
+        const result = prepared
+          ? await managed.value.engine.temporalSearch.queryPrepared(
+              bookQuery,
+              prepared,
+              preparedOptions,
+            )
+          : await managed.value.engine.temporalSearch.query(bookQuery);
+        if (!result.ok) return { summary, error: result.error.message };
+        const assets = await buildAssetList(
+          managed.value.engine,
+          summary.bookId,
+          "newest",
+        ).catch(() => []);
+        const assetById = new Map(
+          assets.map((asset) => [asset.artifact_id, asset]),
+        );
+        return {
+          summary,
+          page: {
+            ...result.value,
+            hits: result.value.hits.map((hit) => {
+              const asset = assetById.get(hit.artifactId);
+              return {
+                ...hit,
+                mediaUrl: asset?.media_url ?? null,
+                thumbnailUrl: asset?.thumbnail_url ?? null,
+              };
+            }),
+          },
+        };
       }));
       const hits = pages.flatMap((entry) =>
         entry.page?.hits.map((hit, index) => ({
@@ -1353,6 +1414,20 @@ function librarySearchDef(books: BookManager): ToolDef {
           })),
         },
       });
+    },
+  };
+}
+
+function preparedSearchOptions(value: unknown): PreparedSearchOptions {
+  if (typeof value !== "object" || value === null) return {};
+  const range = value as Record<string, unknown>;
+  if (typeof range.start_seconds !== "number") return {};
+  return {
+    range: {
+      startMs: range.start_seconds * 1_000,
+      ...(typeof range.duration_seconds === "number"
+        ? { durationMs: range.duration_seconds * 1_000 }
+        : {}),
     },
   };
 }
