@@ -281,22 +281,138 @@ describe("notebook local media and analysis fan-out", () => {
       .sort())
       .toEqual(firstVideos.map((cell) => cell.id).sort());
 
-    const grown = await applyAnalysisResults(engine, second, analysis.id, {
+    const assembly = engine.notebooks.createCell({
+      type: "concat",
+      slug: "concat-scenes",
+      slot: { row: 11, column: -1 },
+      operation: "concat_video",
+      tool: "ffmpeg",
+      inputs: { workflowRole: "assembly" },
+    });
+    const manual = engine.notebooks.createCell({
+      type: "prompt",
+      slug: "prompt-manual-note",
+      slot: { row: 12, column: -1 },
+      prompt: "Keep this card in place",
+    });
+    const staged = {
+      ...second,
+      cells: [...second.cells, assembly, manual],
+    };
+    const stagedWritten = await engine.notebooks.write(staged);
+    expect(stagedWritten.ok).toBe(true);
+    const retainedSplit = staged.cells.find((cell) =>
+      cell.inputs?.workflowRole === "split-video-2");
+    expect(retainedSplit).toBeTruthy();
+    if (!retainedSplit) return;
+    const retainedBranch = staged.cells.filter((cell) =>
+      cell.id === retainedSplit.id
+      || cell.inputs?.splitVideoCellId === retainedSplit.id);
+    expect(retainedBranch).toHaveLength(8);
+
+    const changed = await applyAnalysisResults(engine, staged, analysis.id, {
       rawOutput: {
         scenes: [
-          { title: "one", timestamp: [0, 8] },
+          { title: "one-a", timestamp: [0, 4] },
+          { title: "one-b", timestamp: [4, 8] },
           { title: "two", timestamp: [8, 16] },
-          { title: "three", timestamp: [16, 24] },
         ],
       },
-      sourceDurationSeconds: 24,
+      sourceDurationSeconds: 16,
       request: { mode: "fixture" },
       sourceArtifactId: sourceArtifact.value.artifactId,
     });
-    expect(grown.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(3);
-    expect(grown.cells.filter((cell) =>
+    expect(changed.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(3);
+    expect(changed.cells.filter((cell) =>
       cell.inputs?.workflowRole?.toString().startsWith("scene-video-"))).toHaveLength(3);
-    // Artifacts from the prior analysis script remain in the catalog.
-    expect(engine.artifacts.list().length).toBeGreaterThanOrEqual(2);
+    for (const retained of retainedBranch) {
+      const reconciled = changed.cells.find((cell) => cell.id === retained.id);
+      expect(reconciled?.slot).toEqual(retained.slot);
+      expect(reconciled?.slug).toBe(retained.slug);
+      expect(reconciled?.inputs?.ordinal).toBe(3);
+    }
+    const newSplit = changed.cells.find((cell) =>
+      cell.inputs?.workflowRole === "split-video-2");
+    expect(newSplit).toBeTruthy();
+    if (!newSplit) return;
+    expect(newSplit.id).not.toBe(retainedSplit.id);
+    const newBranch = changed.cells.filter((cell) =>
+      cell.id === newSplit.id
+      || cell.inputs?.splitVideoCellId === newSplit.id);
+    expect(newBranch).toHaveLength(8);
+    const stagedIds = new Set(staged.cells.map((cell) => cell.id));
+    expect(newBranch.every((cell) => !stagedIds.has(cell.id))).toBe(true);
+    const preferredRows = new Map<string, number>([
+      ["split-video-2", 2],
+      ["scene-video-2", 6],
+      ["frame-first-2", 7],
+      ["frame-last-2", 7],
+      ["scene-extract-audio-2", 7],
+      ["scene-audio-2", 8],
+      ["prompt-2", 12],
+      ["animate-2", 13],
+    ]);
+    const rowOffsets = new Set(newBranch.map((cell) =>
+      cell.slot.row - (preferredRows.get(
+        cell.inputs?.workflowRole?.toString() ?? "",
+      ) ?? cell.slot.row)));
+    expect(rowOffsets.size).toBe(1);
+    expect([...rowOffsets][0]).toBeGreaterThan(0);
+    expect(new Set(changed.cells.map((cell) =>
+      `${cell.slot.row}:${cell.slot.column}`)).size).toBe(changed.cells.length);
+    expect(new Set(changed.cells.map((cell) => cell.slug)).size)
+      .toBe(changed.cells.length);
+    expect(newBranch.every((cell) =>
+      cell.slot.row !== assembly.slot.row
+      || cell.slot.column !== assembly.slot.column)).toBe(true);
+    expect(newBranch.every((cell) =>
+      cell.slot.row !== manual.slot.row
+      || cell.slot.column !== manual.slot.column)).toBe(true);
+
+    const removedArtifact = await engine.artifacts.create({
+      kind: "video",
+      name: "removed branch output",
+    });
+    expect(removedArtifact.ok).toBe(true);
+    if (!removedArtifact.ok) return;
+    const changedWithOutput = {
+      ...changed,
+      cells: changed.cells.map((cell) =>
+        cell.id === newSplit.id
+          ? { ...cell, outputArtifactId: removedArtifact.value.artifactId }
+          : cell),
+    };
+    const changedWritten = await engine.notebooks.write(changedWithOutput);
+    expect(
+      changedWritten.ok,
+      changedWritten.ok ? undefined : changedWritten.error.message,
+    ).toBe(true);
+
+    const shrunk = await applyAnalysisResults(
+      engine,
+      changedWithOutput,
+      analysis.id,
+      {
+        rawOutput: {
+          scenes: [
+            { title: "one", timestamp: [0, 8] },
+            { title: "two", timestamp: [8, 16] },
+          ],
+        },
+        sourceDurationSeconds: 16,
+        request: { mode: "fixture" },
+        sourceArtifactId: sourceArtifact.value.artifactId,
+      },
+    );
+    const removedIds = new Set(newBranch.map((cell) => cell.id));
+    expect(shrunk.cells.every((cell) => !removedIds.has(cell.id))).toBe(true);
+    expect(shrunk.cells.find((cell) => cell.id === assembly.id)?.slot)
+      .toEqual(assembly.slot);
+    expect(shrunk.cells.find((cell) => cell.id === manual.id)?.slot)
+      .toEqual(manual.slot);
+    expect(engine.artifacts.list().some((artifact) =>
+      artifact.artifactId === removedArtifact.value.artifactId)).toBe(true);
+    const shrunkWritten = await engine.notebooks.write(shrunk);
+    expect(shrunkWritten.ok).toBe(true);
   });
 });

@@ -5,6 +5,7 @@ import {
   notebookAudioSummary,
   notebookCellActionPresentation,
   notebookCellInspectorActionLabel,
+  notebookCellIsActiveStatus,
   notebookCellStatusLabel,
   notebookCellSupportsExecution,
   notebookSplitFrameIds,
@@ -45,6 +46,17 @@ describe('notebook cell presentation', () => {
       operation: 'split_range',
       tool: 'ffmpeg',
     }, 'pending')).toEqual({ disabled: false, label: 'Run' })
+  })
+
+  it('identifies every active execution phase', () => {
+    expect([
+      'awaiting-output',
+      'completing',
+      'queued',
+      'running',
+    ].every(notebookCellIsActiveStatus)).toBe(true)
+    expect(notebookCellIsActiveStatus('completed')).toBe(false)
+    expect(notebookCellIsActiveStatus('error')).toBe(false)
   })
 
   it('uses operation-aware action copy in the inspector', () => {

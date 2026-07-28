@@ -12,6 +12,7 @@ import { FFMPEG } from "../../server/src/ffmpeg.js";
 import {
   seedMultycultyWorkflow,
 } from "../../server/src/multyculty-workflow.js";
+import { applyAnalysisResults } from "../../server/src/notebook-workflow.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -304,10 +305,34 @@ describe("Multyculty workflow fixture", () => {
       target: assembly?.id,
       targetInput: "audio",
     }));
+    if (!analysis) throw new Error("analysis cell missing");
+    const rerun = await applyAnalysisResults(engine, first, analysis.id, {
+      rawOutput: {
+        scenes: [
+          { title: "intro", timestamp: [0, 15] },
+          { title: "culture", timestamp: [15, 30] },
+        ],
+      },
+      sourceDurationSeconds: 30,
+      request: { mode: "multyculty-fixture" },
+      sourceArtifactId: sourceId,
+    });
+    const firstLayout = first.cells
+      .map((cell) => ({ id: cell.id, slot: cell.slot }))
+      .sort((left, right) => left.id.localeCompare(right.id));
+    const rerunLayout = rerun.cells
+      .map((cell) => ({ id: cell.id, slot: cell.slot }))
+      .sort((left, right) => left.id.localeCompare(right.id));
+    expect(rerun.cells).toHaveLength(21);
+    expect(rerunLayout).toEqual(firstLayout);
+    expect(new Set(rerun.cells.map((cell) =>
+      `${cell.slot.row}:${cell.slot.column}`)).size).toBe(21);
+    const rerunWritten = await engine.notebooks.write(rerun);
+    expect(rerunWritten.ok).toBe(true);
     const downgraded = await engine.notebooks.write({
-      ...first,
+      ...rerun,
       properties: {
-        ...(first.properties ?? {}),
+        ...(rerun.properties ?? {}),
         multycultyFixture: { version: 0 },
       },
     });

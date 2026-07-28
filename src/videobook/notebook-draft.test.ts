@@ -4,7 +4,9 @@ import type { NotebookDocument } from 'videobook-engine'
 import {
   notebookDocument,
   notebookEdges,
+  notebookEdgesWithCellFocus,
   notebookNodes,
+  notebookFocusedEdgeColor,
 } from './notebook-draft'
 
 const source: NotebookDocument = {
@@ -164,7 +166,7 @@ describe('notebook draft conversion', () => {
       },
       markerEnd: {
         type: MarkerType.ArrowClosed,
-        color: '#72e7aa',
+        color: 'rgba(114, 231, 170, 0.38)',
       },
     })
     expect(
@@ -219,5 +221,54 @@ describe('notebook draft conversion', () => {
       notebookNodes(fanIn).find((node) => node.id === target.id)
         ?.data.targetConnectionCount,
     ).toBe(2)
+  })
+
+  it('uses the subtle silver focus color for route markers', () => {
+    expect(notebookFocusedEdgeColor).toBe('rgba(180, 188, 195, 0.68)')
+  })
+
+  it('focuses only routes incident to the selected cell', () => {
+    const secondSource = {
+      ...source.cells[0]!,
+      id: '018f7cf5-0d31-7d96-8c0f-800000000008',
+      slot: { row: 0, column: 1 },
+    }
+    const target = {
+      ...source.cells[0]!,
+      id: '018f7cf5-0d31-7d96-8c0f-800000000005',
+      type: 'generate_image' as const,
+      slot: { row: 2, column: 0 },
+    }
+    const fanIn: NotebookDocument = {
+      ...source,
+      cells: [source.cells[0]!, secondSource, target],
+      edges: [
+        {
+          id: '018f7cf5-0d31-7d96-8c0f-800000000009',
+          source: source.cells[0]!.id,
+          target: target.id,
+          targetInput: 'reference-video',
+        },
+        {
+          id: '018f7cf5-0d31-7d96-8c0f-800000000010',
+          source: secondSource.id,
+          target: target.id,
+          targetInput: 'reference-audio',
+        },
+      ],
+    }
+    const rendered = notebookEdges(fanIn)
+    const sourceFocused = notebookEdgesWithCellFocus(rendered, secondSource.id)
+    const targetFocused = notebookEdgesWithCellFocus(rendered, target.id)
+
+    expect(sourceFocused.find((edge) => edge.source === secondSource.id)?.className)
+      .toContain('workflow-edge-cell-focus')
+    expect(sourceFocused.find((edge) => edge.source === source.cells[0]!.id)?.className)
+      .toBe('workflow-edge')
+    expect(targetFocused.every((edge) =>
+      edge.className?.includes('workflow-edge-cell-focus'))).toBe(true)
+    expect(targetFocused.find((edge) => edge.markerEnd)?.markerEnd)
+      .toMatchObject({ color: notebookFocusedEdgeColor })
+    expect(notebookEdgesWithCellFocus(rendered, null)).toBe(rendered)
   })
 })

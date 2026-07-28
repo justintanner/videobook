@@ -12,6 +12,10 @@ import {
   type NotebookBusRiverRoute,
 } from './notebook-routing'
 
+export const notebookFocusedEdgeColor = 'rgba(180, 188, 195, 0.68)'
+
+export type NotebookFlowEdge = Edge<NotebookBusRiverRoute, 'busRiver'>
+
 export interface NotebookCellData extends Record<string, unknown> {
   kind: NotebookCellType
   slug: string
@@ -92,7 +96,7 @@ export function notebookNodes(document: NotebookDocument): Array<Node<NotebookCe
 
 export function notebookEdges(
   document: NotebookDocument,
-): Array<Edge<NotebookBusRiverRoute, 'busRiver'>> {
+): NotebookFlowEdge[] {
   const routes = notebookBusRiverRoutes(document)
   return document.edges.map((edge) => {
     const route = routes.get(edge.id) ?? defaultNotebookBusRiverRoute
@@ -114,10 +118,34 @@ export function notebookEdges(
               type: MarkerType.ArrowClosed,
               width: 18,
               height: 18,
-              color: '#72e7aa',
+              color: 'rgba(114, 231, 170, 0.38)',
             },
           }
         : {}),
+    }
+  })
+}
+
+export function notebookEdgesWithCellFocus(
+  edges: NotebookFlowEdge[],
+  selectedCellId: string | null,
+): NotebookFlowEdge[] {
+  if (!selectedCellId) return edges
+  return edges.map((edge) => {
+    if (edge.source !== selectedCellId && edge.target !== selectedCellId) {
+      return edge
+    }
+    const classNames = new Set(
+      (edge.className ?? '').split(/\s+/).filter(Boolean),
+    )
+    classNames.add('workflow-edge-cell-focus')
+    const markerEnd = edge.markerEnd && typeof edge.markerEnd === 'object'
+      ? { ...edge.markerEnd, color: notebookFocusedEdgeColor }
+      : edge.markerEnd
+    return {
+      ...edge,
+      className: [...classNames].join(' '),
+      markerEnd,
     }
   })
 }

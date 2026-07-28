@@ -102,12 +102,16 @@ export function notebookCellSupportsExecution(cell: ActionCell): boolean {
     && Boolean(cell.operation ?? cell.tool ?? cell.model)
 }
 
+export function notebookCellIsActiveStatus(status: string): boolean {
+  return activeStatuses.has(status)
+}
+
 export function notebookCellActionPresentation(
   cell: ActionCell,
   status: string,
 ): NotebookCellActionPresentation | null {
   if (!notebookCellSupportsExecution(cell)) return null
-  const disabled = activeStatuses.has(status)
+  const disabled = notebookCellIsActiveStatus(status)
   if (isNotebookGenerationCellType(cell.type)) {
     return { disabled, label: 'Gen' }
   }

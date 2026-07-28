@@ -81,6 +81,16 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('inspector-delete-button')
     expect(html).toContain('Delete cell')
     expect(html).not.toContain('completed')
+    expect(html).toContain(
+      'class="inspector-cell-actions inspector-media-actions" aria-label="Cell actions"',
+    )
+    expect(html).not.toContain('record-card-actions inspector-media-actions')
+    expect(html.indexOf('<h3>Inputs</h3>')).toBeLessThan(
+      html.indexOf('class="inspector-cell-actions inspector-media-actions"'),
+    )
+    expect(html).toMatch(
+      /inspector-clear-slot-button[\s\S]*<\/button><button[^>]*inspector-delete-button/,
+    )
   })
 
   it('marks audio output for a compact media preview', () => {
@@ -467,6 +477,9 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('inspector-delete-button')
     expect(html).toContain('Delete cell')
     expect(html).toContain('class="inspector-save-button" disabled=""')
+    expect(html).toContain(
+      'class="inspector-cell-actions" aria-label="Cell actions"',
+    )
     expect(html).not.toContain('Dolt source')
   })
 })

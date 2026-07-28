@@ -85,6 +85,25 @@ interface BranchCells {
   animate: NotebookCell;
 }
 
+type BranchChildKind =
+  | "video"
+  | "first"
+  | "last"
+  | "extract-audio"
+  | "audio"
+  | "prompt"
+  | "animate";
+
+interface ExistingBranchCells {
+  video?: NotebookCell;
+  first?: NotebookCell;
+  last?: NotebookCell;
+  extractAudio?: NotebookCell;
+  audio?: NotebookCell;
+  prompt?: NotebookCell;
+  animate?: NotebookCell;
+}
+
 function roleOf(cell: NotebookCell): string | null {
   return typeof cell.inputs?.workflowRole === "string"
     ? cell.inputs.workflowRole
@@ -136,11 +155,190 @@ function branchRole(
   return `${kind}-${ordinal}`;
 }
 
-function branchCell(
+function matchesBranchChild(
+  cell: NotebookCell,
+  kind: BranchChildKind,
+): boolean {
+  if (kind === "video") return cell.type === "video";
+  if (kind === "first") {
+    return cell.type === "image" && cell.inputs?.frameRole === "first";
+  }
+  if (kind === "last") {
+    return cell.type === "image" && cell.inputs?.frameRole === "last";
+  }
+  if (kind === "extract-audio") return cell.type === "extract_audio";
+  if (kind === "audio") return cell.type === "audio";
+  if (kind === "prompt") return cell.type === "prompt";
+  return cell.type === "generate_video";
+}
+
+function existingBranchCell(
   document: NotebookDocument,
-  role: string,
+  analysisCellId: string,
+  splitVideoCellId: string,
+  kind: BranchChildKind,
+  ordinal: number,
 ): NotebookCell | undefined {
-  return document.cells.find((cell) => roleOf(cell) === role);
+  const owned = document.cells.find((cell) =>
+    analysisOwnerId(cell) === analysisCellId
+    && splitVideoOwnerId(cell) === splitVideoCellId
+    && matchesBranchChild(cell, kind));
+  if (owned) return owned;
+  return document.cells.find((cell) =>
+    analysisOwnerId(cell) === analysisCellId
+    && splitVideoOwnerId(cell) === null
+    && roleOf(cell) === branchRole(kind, ordinal)
+    && matchesBranchChild(cell, kind));
+}
+
+function existingBranchCells(
+  document: NotebookDocument,
+  analysisCellId: string,
+  splitVideoCellId: string,
+  ordinal: number,
+): ExistingBranchCells {
+  return {
+    video: existingBranchCell(
+      document,
+      analysisCellId,
+      splitVideoCellId,
+      "video",
+      ordinal,
+    ),
+    first: existingBranchCell(
+      document,
+      analysisCellId,
+      splitVideoCellId,
+      "first",
+      ordinal,
+    ),
+    last: existingBranchCell(
+      document,
+      analysisCellId,
+      splitVideoCellId,
+      "last",
+      ordinal,
+    ),
+    extractAudio: existingBranchCell(
+      document,
+      analysisCellId,
+      splitVideoCellId,
+      "extract-audio",
+      ordinal,
+    ),
+    audio: existingBranchCell(
+      document,
+      analysisCellId,
+      splitVideoCellId,
+      "audio",
+      ordinal,
+    ),
+    prompt: existingBranchCell(
+      document,
+      analysisCellId,
+      splitVideoCellId,
+      "prompt",
+      ordinal,
+    ),
+    animate: existingBranchCell(
+      document,
+      analysisCellId,
+      splitVideoCellId,
+      "animate",
+      ordinal,
+    ),
+  };
+}
+
+function branchCellList(branch: BranchCells): NotebookCell[] {
+  return [
+    branch.splitVideo,
+    branch.video,
+    branch.first,
+    branch.last,
+    branch.extractAudio,
+    branch.audio,
+    branch.prompt,
+    branch.animate,
+  ];
+}
+
+function slotKey(slot: NotebookGridSlot): string {
+  return `${slot.row}:${slot.column}`;
+}
+
+function allocateBranchSlots(
+  branch: BranchCells,
+  retainedCellIds: Set<string>,
+  occupiedSlots: Set<string>,
+): BranchCells {
+  const created = branchCellList(branch).filter((cell) =>
+    !retainedCellIds.has(cell.id));
+  if (created.length === 0) return branch;
+  let rowOffset = 0;
+  while (true) {
+    const candidateSlots = new Set<string>();
+    const collision = created.some((cell) => {
+      const key = slotKey({
+        row: cell.slot.row + rowOffset,
+        column: cell.slot.column,
+      });
+      if (occupiedSlots.has(key) || candidateSlots.has(key)) return true;
+      candidateSlots.add(key);
+      return false;
+    });
+    if (!collision) break;
+    rowOffset += 1;
+  }
+  const allocate = (cell: NotebookCell): NotebookCell => {
+    if (retainedCellIds.has(cell.id)) return cell;
+    return {
+      ...cell,
+      slot: gridSlot(cell.slot.row + rowOffset, cell.slot.column),
+    };
+  };
+  const allocated = {
+    splitVideo: allocate(branch.splitVideo),
+    video: allocate(branch.video),
+    first: allocate(branch.first),
+    last: allocate(branch.last),
+    extractAudio: allocate(branch.extractAudio),
+    audio: allocate(branch.audio),
+    prompt: allocate(branch.prompt),
+    animate: allocate(branch.animate),
+  };
+  for (const cell of branchCellList(allocated)) {
+    occupiedSlots.add(slotKey(cell.slot));
+  }
+  return allocated;
+}
+
+function allocateBranchSlugs(
+  branch: BranchCells,
+  retainedCellIds: Set<string>,
+  occupiedSlugs: Set<string>,
+): BranchCells {
+  const allocate = (cell: NotebookCell): NotebookCell => {
+    if (retainedCellIds.has(cell.id)) return cell;
+    let slug = cell.slug;
+    let suffix = 2;
+    while (occupiedSlugs.has(slug)) {
+      slug = `${cell.slug}-${suffix}`;
+      suffix += 1;
+    }
+    occupiedSlugs.add(slug);
+    return slug === cell.slug ? cell : { ...cell, slug };
+  };
+  return {
+    splitVideo: allocate(branch.splitVideo),
+    video: allocate(branch.video),
+    first: allocate(branch.first),
+    last: allocate(branch.last),
+    extractAudio: allocate(branch.extractAudio),
+    audio: allocate(branch.audio),
+    prompt: allocate(branch.prompt),
+    animate: allocate(branch.animate),
+  };
 }
 
 function branchEdges(
@@ -257,8 +455,8 @@ function updateSplitVideoCell(
   return {
     ...base,
     type: "split_video",
-    slug: `split-video-${String(shot.ordinal).padStart(2, "0")}`,
-    slot: gridSlot(2, column),
+    slug: base.slug,
+    slot: base.slot,
     provider: "local",
     model: undefined,
     operation: "split_range",
@@ -280,7 +478,7 @@ function updateSplitVideoCell(
 
 function createBranchCells(
   engine: Engine,
-  document: NotebookDocument,
+  existing: ExistingBranchCells,
   analysisCellId: string,
   analysisPrompt: string,
   splitVideo: NotebookCell,
@@ -303,10 +501,7 @@ function createBranchCells(
     featureId: feature?.id ?? `scene-${shot.ordinal}`,
     featureLabel: feature?.label ?? shot.label,
   };
-  const videoExisting = branchCell(
-    document,
-    branchRole("video", shot.ordinal),
-  );
+  const videoExisting = existing.video;
   const videoBase = videoExisting ?? engine.notebooks.createCell({
     type: "video",
     slug: `vid-scene-${String(shot.ordinal).padStart(2, "0")}`,
@@ -315,8 +510,8 @@ function createBranchCells(
   const video: NotebookCell = {
     ...videoBase,
     type: "video",
-    slug: `vid-scene-${String(shot.ordinal).padStart(2, "0")}`,
-    slot: gridSlot(videoRow, column),
+    slug: videoBase.slug,
+    slot: videoBase.slot,
     provider: undefined,
     model: undefined,
     operation: undefined,
@@ -328,10 +523,7 @@ function createBranchCells(
       state: stateForDerivedCell(videoExisting),
     },
   };
-  const firstExisting = branchCell(
-    document,
-    branchRole("first", shot.ordinal),
-  );
+  const firstExisting = existing.first;
   const firstBase = firstExisting ?? engine.notebooks.createCell({
     type: "image",
     slug: `img-scene-${String(shot.ordinal).padStart(2, "0")}-first`,
@@ -340,8 +532,8 @@ function createBranchCells(
   const first: NotebookCell = {
     ...firstBase,
     type: "image",
-    slug: `img-scene-${String(shot.ordinal).padStart(2, "0")}-first`,
-    slot: gridSlot(extractionRow, column - 1),
+    slug: firstBase.slug,
+    slot: firstBase.slot,
     provider: undefined,
     model: undefined,
     operation: undefined,
@@ -354,10 +546,7 @@ function createBranchCells(
       state: stateForDerivedCell(firstExisting),
     },
   };
-  const lastExisting = branchCell(
-    document,
-    branchRole("last", shot.ordinal),
-  );
+  const lastExisting = existing.last;
   const lastBase = lastExisting ?? engine.notebooks.createCell({
     type: "image",
     slug: `img-scene-${String(shot.ordinal).padStart(2, "0")}-last`,
@@ -366,8 +555,8 @@ function createBranchCells(
   const last: NotebookCell = {
     ...lastBase,
     type: "image",
-    slug: `img-scene-${String(shot.ordinal).padStart(2, "0")}-last`,
-    slot: gridSlot(extractionRow, column),
+    slug: lastBase.slug,
+    slot: lastBase.slot,
     provider: undefined,
     model: undefined,
     operation: undefined,
@@ -380,10 +569,7 @@ function createBranchCells(
       state: stateForDerivedCell(lastExisting),
     },
   };
-  const extractAudioExisting = branchCell(
-    document,
-    branchRole("extract-audio", shot.ordinal),
-  );
+  const extractAudioExisting = existing.extractAudio;
   const extractAudioBase = extractAudioExisting
     ?? engine.notebooks.createCell({
       type: "extract_audio",
@@ -393,8 +579,8 @@ function createBranchCells(
   const extractAudio: NotebookCell = {
     ...extractAudioBase,
     type: "extract_audio",
-    slug: `extract-audio-scene-${String(shot.ordinal).padStart(2, "0")}`,
-    slot: gridSlot(extractionRow, column + 1),
+    slug: extractAudioBase.slug,
+    slot: extractAudioBase.slot,
     provider: "local",
     model: undefined,
     operation: "extract_audio",
@@ -407,10 +593,7 @@ function createBranchCells(
       state: stateForDerivedCell(extractAudioExisting),
     },
   };
-  const audioExisting = branchCell(
-    document,
-    branchRole("audio", shot.ordinal),
-  );
+  const audioExisting = existing.audio;
   const audioBase = audioExisting ?? engine.notebooks.createCell({
     type: "audio",
     slug: `aud-scene-${String(shot.ordinal).padStart(2, "0")}`,
@@ -419,8 +602,8 @@ function createBranchCells(
   const audio: NotebookCell = {
     ...audioBase,
     type: "audio",
-    slug: `aud-scene-${String(shot.ordinal).padStart(2, "0")}`,
-    slot: gridSlot(audioRow, column + 1),
+    slug: audioBase.slug,
+    slot: audioBase.slot,
     provider: undefined,
     model: undefined,
     operation: undefined,
@@ -433,10 +616,7 @@ function createBranchCells(
       state: stateForDerivedCell(audioExisting),
     },
   };
-  const promptExisting = branchCell(
-    document,
-    branchRole("prompt", shot.ordinal),
-  );
+  const promptExisting = existing.prompt;
   const promptBase = promptExisting ?? engine.notebooks.createCell({
     type: "prompt",
     slug: `prompt-scene-${String(shot.ordinal).padStart(2, "0")}`,
@@ -448,8 +628,8 @@ function createBranchCells(
   const prompt: NotebookCell = {
     ...promptBase,
     type: "prompt",
-    slug: `prompt-scene-${String(shot.ordinal).padStart(2, "0")}`,
-    slot: gridSlot(promptRow, column),
+    slug: promptBase.slug,
+    slot: promptBase.slot,
     prompt: shot.prompt ?? promptExisting?.prompt ?? promptBrief,
     provider: "openai",
     model: "gpt-5.2",
@@ -473,10 +653,7 @@ function createBranchCells(
       state: stateForDerivedCell(promptExisting),
     },
   };
-  const animateExisting = branchCell(
-    document,
-    branchRole("animate", shot.ordinal),
-  );
+  const animateExisting = existing.animate;
   const animateBase = animateExisting ?? engine.notebooks.createCell({
     type: "generate_video",
     slug: `generate-video-scene-${String(shot.ordinal).padStart(2, "0")}`,
@@ -485,8 +662,8 @@ function createBranchCells(
   const animate: NotebookCell = {
     ...animateBase,
     type: "generate_video",
-    slug: `generate-video-scene-${String(shot.ordinal).padStart(2, "0")}`,
-    slot: gridSlot(promptRow + 1, column),
+    slug: animateBase.slug,
+    slot: animateBase.slot,
     prompt: "",
     provider: "kie",
     model: "bytedance/seedance-2",
@@ -619,6 +796,11 @@ export async function applyAnalysisResults(
     ?? document.cells.find((cell) => cell.operation === "concat_video");
   const branchCells: NotebookCell[] = [];
   const canonicalEdges: NotebookEdge[] = [];
+  const retainedCellIds = new Set(baseCells.map((cell) => cell.id));
+  const occupiedSlots = new Set(
+    baseCells.map((cell) => slotKey(cell.slot)),
+  );
+  const occupiedSlugs = new Set(baseCells.map((cell) => cell.slug));
 
   for (const shot of shots) {
     const kept = reconciliation.keep.find((entry) =>
@@ -626,31 +808,43 @@ export async function applyAnalysisResults(
     const existingSplit = kept
       ? document.cells.find((cell) => cell.id === kept.existing.cellId)
       : undefined;
+    const previousOrdinal = Number(existingSplit?.inputs?.ordinal);
+    const legacyOrdinal = Number.isInteger(previousOrdinal) && previousOrdinal > 0
+      ? previousOrdinal
+      : shot.ordinal;
     const splitVideo = updateSplitVideoCell(
       engine,
       existingSplit,
       analysisCellId,
       shot,
     );
-    const branch = createBranchCells(
+    const provisionalBranch = createBranchCells(
       engine,
-      document,
+      existingSplit
+        ? existingBranchCells(
+          document,
+          analysisCellId,
+          existingSplit.id,
+          legacyOrdinal,
+        )
+        : {},
       analysisCellId,
       analysisCell.prompt ?? "",
       splitVideo,
       shot,
       shots.length,
     );
-    branchCells.push(
-      branch.splitVideo,
-      branch.video,
-      branch.first,
-      branch.last,
-      branch.extractAudio,
-      branch.audio,
-      branch.prompt,
-      branch.animate,
+    const slottedBranch = allocateBranchSlots(
+      provisionalBranch,
+      retainedCellIds,
+      occupiedSlots,
     );
+    const branch = allocateBranchSlugs(
+      slottedBranch,
+      retainedCellIds,
+      occupiedSlugs,
+    );
+    branchCells.push(...branchCellList(branch));
     canonicalEdges.push(...branchEdges(
       engine,
       sourceCell,

@@ -610,15 +610,18 @@ function MediaCellInspector({
           busy={busy}
           onSetInput={onSetInput}
         />
-      </div>
-      <div className="record-card-actions inspector-media-actions">
-        <ClearSlotButton
-          busy={busy}
-          canClear={canClear}
-          clearing={clearing}
-          onClearSlot={onClearSlot}
-        />
-        <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
+        <section
+          className="inspector-cell-actions inspector-media-actions"
+          aria-label="Cell actions"
+        >
+          <ClearSlotButton
+            busy={busy}
+            canClear={canClear}
+            clearing={clearing}
+            onClearSlot={onClearSlot}
+          />
+          <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
+        </section>
       </div>
     </div>
   )
@@ -833,7 +836,7 @@ function ExecutableCellInspector({
           </button>
         )}
       </form>
-      <div className="inspector-cell-actions">
+      <section className="inspector-cell-actions" aria-label="Cell actions">
         {action && runLabel && (
           <button
             type="button"
@@ -858,10 +861,8 @@ function ExecutableCellInspector({
             {saveOnRun && saving ? 'Applying…' : runLabel}
           </button>
         )}
-        <div className="inspector-delete-row">
-          <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
-        </div>
-      </div>
+        <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
+      </section>
     </div>
   )
 }

@@ -21,7 +21,6 @@ import {
   applyEdgeChanges,
   applyNodeChanges,
   type Connection,
-  type Edge,
   type Node,
   type NodeProps,
   type ReactFlowInstance,
@@ -80,6 +79,7 @@ import {
 import {
   BusRiverEdge,
 } from '@/components/videobook/BusRiverEdge'
+import { CellRunningOverlay } from '@/components/videobook/CellRunningOverlay'
 import {
   NotebookGridBoard,
 } from '@/components/videobook/NotebookGridBoard'
@@ -93,8 +93,10 @@ import {
 } from '@/components/videobook/CanonicalSequencePlayer'
 import {
   notebookEdges,
+  notebookEdgesWithCellFocus,
   notebookNodes,
   type NotebookCellData,
+  type NotebookFlowEdge,
 } from '@/videobook/notebook-draft'
 import {
   validateCommandPlan,
@@ -123,6 +125,7 @@ import {
   formatMediaTime,
   notebookAudioPresentation,
   notebookCellActionPresentation,
+  notebookCellIsActiveStatus,
   notebookCellSlugPrefix,
   notebookCellStatusLabel,
   notebookCellSupportsExecution,
@@ -1623,6 +1626,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     tool: data.tool,
   }, data.status)
   const statusLabel = notebookCellStatusLabel(data.kind, data.status)
+  const running = notebookCellIsActiveStatus(data.status)
 
   return (
     <article
@@ -1630,8 +1634,10 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         'cell-node',
         `cell-kind-${data.kind}`,
         selected ? 'cell-node-selected' : '',
+        running ? 'cell-node-running' : '',
         data.deleting ? 'cell-node-deleting' : '',
       ].filter(Boolean).join(' ')}
+      aria-busy={running}
     >
       {targetInputs.map((input, index) => (
         <Handle
@@ -1717,6 +1723,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <strong>@{data.slug}</strong>
           <CellStatusBadge status={statusLabel} />
         </footer>
+        <CellRunningOverlay slug={data.slug} status={data.status} />
       </section>
       <Handle
         type="source"
@@ -1820,7 +1827,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [processingArtifactId, setProcessingArtifactId] = useState<string | null>(null)
   const [online, setOnline] = useState(() => window.navigator.onLine)
   const [, setNotice] = useState('Connect to the server, then load your books.')
-  const flowRef = useRef<ReactFlowInstance<CanvasNode, Edge> | null>(null)
+  const flowRef = useRef<ReactFlowInstance<CanvasNode, NotebookFlowEdge> | null>(null)
   const notebookScrollRef = useRef<HTMLDivElement | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const recorderStreamRef = useRef<MediaStream | null>(null)
@@ -2024,8 +2031,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           (cellId) => void runCell(cellId),
         )
       : [])
-  const [edges, setEdges] = useState<Edge[]>(() =>
+  const [edges, setEdges] = useState<NotebookFlowEdge[]>(() =>
     initialWorkspace?.notebook ? notebookEdges(initialWorkspace.notebook) : [])
+  const focusedEdges = useMemo(
+    () => notebookEdgesWithCellFocus(edges, selectedCellId),
+    [edges, selectedCellId],
+  )
   const notebookBaseMetrics = useMemo(
     () => notebookGridMetrics(
       nodes.map((node) => node.data.slot),
@@ -4401,10 +4412,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       style={notebookFlowStyle}
                     >
                       <MediaSlotContext.Provider value={mediaSlotContextValue}>
-                        <ReactFlow<CanvasNode, Edge>
+                        <ReactFlow<CanvasNode, NotebookFlowEdge>
                           className="notebook-flow"
                       nodes={nodes}
-                      edges={edges}
+                      edges={focusedEdges}
                       nodeTypes={nodeTypes}
                       edgeTypes={edgeTypes}
                       viewport={notebookViewport}
