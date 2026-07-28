@@ -2194,8 +2194,20 @@ textarea:focus-visible {
   background: rgba(112, 39, 39, 0.14);
 }
 
-.inspector-run-error svg {
+.inspector-run-error > svg {
   margin-top: 1px;
+}
+
+.inspector-run-error-content {
+  min-width: 0;
+}
+
+.inspector-run-error-header {
+  display: flex;
+  min-height: 22px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .inspector-run-error strong {
@@ -2204,6 +2216,29 @@ textarea:focus-visible {
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+.inspector-run-error button {
+  flex: 0 0 auto;
+  min-width: 52px;
+  min-height: 22px;
+  padding: 0 7px;
+  border: 1px solid rgba(210, 111, 111, 0.34);
+  color: #d8a4a4;
+  background: rgba(112, 39, 39, 0.18);
+  font: inherit;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.inspector-run-error button:hover,
+.inspector-run-error button:focus-visible {
+  border-color: rgba(225, 146, 146, 0.68);
+  color: #f0c2c2;
+  background: rgba(139, 52, 52, 0.3);
+  outline: 0;
 }
 
 .inspector-run-error p {
@@ -2471,6 +2506,10 @@ textarea:focus-visible {
 .inspector-input-sources {
   display: grid;
   gap: 16px;
+}
+
+.inspector-executable-body > .inspector-input-sources {
+  margin-bottom: 22px;
 }
 
 .inspector-input-sources h3 {

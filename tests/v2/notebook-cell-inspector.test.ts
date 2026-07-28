@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { NotebookCell } from 'videobook-engine'
+import type { NotebookCell, NotebookEdge } from 'videobook-engine'
 import { NotebookCellInspector } from '../../src/components/videobook/NotebookCellInspector'
 import { NotebookMediaFullscreen } from '../../src/components/videobook/NotebookMediaFullscreen'
 import {
@@ -299,11 +299,37 @@ describe('NotebookCellInspector', () => {
         endSeconds: 30,
       },
     }
+    const videoSource: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000004',
+      slug: 'vid-continuous-source',
+    }
+    const analysisSource: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000005',
+      type: 'analyze',
+      slug: 'analyze-splitter',
+      outputArtifactId: '01900000-0000-7000-8000-000000000006',
+    }
+    const edges: NotebookEdge[] = [
+      {
+        id: '01900000-0000-7000-8000-000000000007',
+        source: videoSource.id,
+        target: splitCell.id,
+        targetInput: 'video',
+      },
+      {
+        id: '01900000-0000-7000-8000-000000000008',
+        source: analysisSource.id,
+        target: splitCell.id,
+        targetInput: 'analysis',
+      },
+    ]
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: splitCell,
-      cells: [splitCell],
-      edges: [],
+      cells: [splitCell, videoSource, analysisSource],
+      edges,
       asset: undefined,
       status: 'completed',
       error: null,
@@ -326,7 +352,14 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('Unsaved changes')
     expect(html).not.toContain('aria-label="Action type"')
     expect(html).not.toContain('Cell type is fixed')
-    expect(html).not.toContain('<select')
+    expect(html).toContain('<h3>Inputs</h3>')
+    expect(html).toContain('Select the upstream cell that supplies each input.')
+    expect(html).toContain('<span>video</span>')
+    expect(html).toContain('<span>analysis</span>')
+    expect(html).toContain('@vid-continuous-source · video')
+    expect(html).toContain('@analyze-splitter · analyze')
+    expect(html).toContain(`value="${videoSource.id}" selected=""`)
+    expect(html).toContain(`value="${analysisSource.id}" selected=""`)
     expect(html).not.toContain('placeholder="Provider"')
     expect(html).not.toContain('placeholder="Model"')
     expect(html).not.toContain('placeholder="Operation"')
@@ -379,6 +412,9 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('role="alert"')
     expect(html).toContain('aria-label="Cell run error"')
     expect(html).toContain('Run failed')
+    expect(html).toMatch(
+      /aria-label="Copy run error"[^>]*title="Copy run error"[^>]*><span[^>]*>Copy<\/span><\/button>/,
+    )
     expect(html).toContain('ffmpeg exited with code 1')
     expect(html).toContain('End time exceeds the source duration')
     expect(html.indexOf('Run failed')).toBeLessThan(html.indexOf('Start seconds'))

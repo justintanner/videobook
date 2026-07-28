@@ -187,12 +187,26 @@ function isPassiveMediaCell(cell: NotebookCell): boolean {
   return cell.type === 'audio' || cell.type === 'image' || cell.type === 'video'
 }
 
-function mediaInputNames(cell: NotebookCell, edges: NotebookEdge[]): string[] {
+function defaultInputNames(cell: NotebookCell): string[] {
+  if (cell.type === 'extract_audio') return ['video']
+  if (cell.type === 'split_video') return ['video', 'analysis']
+  if (cell.type === 'image') return ['segment']
+  if (cell.type === 'audio' || cell.type === 'video') return ['media']
+  return []
+}
+
+function cellInputNames(cell: NotebookCell, edges: NotebookEdge[]): string[] {
   const connected = edges
     .filter((edge) => edge.target === cell.id)
     .map((edge) => edge.targetInput)
-  const fallback = cell.type === 'image' ? 'segment' : 'media'
-  return [...new Set([...connected, fallback])]
+  return [...new Set([...defaultInputNames(cell), ...connected])]
+}
+
+function isVideoProducingSource(cell: NotebookCell): boolean {
+  return cell.type === 'video'
+    || cell.type === 'generate_video'
+    || cell.type === 'concat'
+    || cell.type === 'splice'
 }
 
 function compatibleSource(
@@ -201,6 +215,14 @@ function compatibleSource(
   source: NotebookCell,
 ): boolean {
   if (source.id === target.id) return false
+  if (target.type === 'extract_audio') {
+    return targetInput === 'video' && isVideoProducingSource(source)
+  }
+  if (target.type === 'split_video') {
+    if (targetInput === 'analysis') return source.type === 'analyze'
+    if (targetInput === 'video') return isVideoProducingSource(source)
+    return false
+  }
   if (target.type === 'audio' && targetInput === 'media') {
     return source.type === 'extract_audio'
   }
@@ -372,12 +394,14 @@ function InputSources({
   busy: boolean
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
 }) {
-  const inputs = mediaInputNames(cell, edges)
+  const inputs = cellInputNames(cell, edges)
+
+  if (inputs.length === 0) return null
 
   return (
     <section className="inspector-input-sources">
       <h3>Inputs</h3>
-      <p>Select the upstream cell that owns each media input.</p>
+      <p>Select the upstream cell that supplies each input.</p>
       {inputs.map((input) => {
         const edge = edges.find((candidate) =>
           candidate.target === cell.id && candidate.targetInput === input)
@@ -758,30 +782,40 @@ function MediaCellInspector({
 
 function ExecutableCellInspector({
   cell,
+  cells,
+  edges,
   asset,
   status,
   error,
   busy,
   deleting,
   onUpdate,
+  onSetInput,
   onRun,
   onDelete,
   onOpenFullscreen,
 }: Pick<
   NotebookCellInspectorProps,
   | 'cell'
+  | 'cells'
+  | 'edges'
   | 'asset'
   | 'status'
   | 'error'
   | 'busy'
   | 'deleting'
   | 'onUpdate'
+  | 'onSetInput'
   | 'onRun'
   | 'onDelete'
   | 'onOpenFullscreen'
 >) {
   const [draft, setDraft] = useState(() => cellFormDraft(cell))
   const [saving, setSaving] = useState(false)
+  const [copyResult, setCopyResult] = useState<{
+    error: string
+    state: 'copied' | 'failed'
+  } | null>(null)
   const action = notebookCellActionPresentation(cell, status)
   const textCell = cell.type === 'prompt'
     || cell.type === 'analyze'
@@ -799,9 +833,25 @@ function ExecutableCellInspector({
     ? notebookCellInspectorActionLabel(cell.type, action.label)
     : null
   const saveOnRun = actionCell && Boolean(runLabel)
+  const runError = error
+    ?? 'This action failed, but no error details were recorded.'
+  const copyState = copyResult?.error === runError ? copyResult.state : 'idle'
+  const copyLabel = copyState === 'copied'
+    ? 'Copied'
+    : copyState === 'failed'
+      ? 'Retry copy'
+      : 'Copy'
 
   const updateDraft = (field: keyof CellFormDraft, value: string) => {
     setDraft((current) => ({ ...current, [field]: value }))
+  }
+  const copyRunError = async () => {
+    try {
+      await navigator.clipboard.writeText(runError)
+      setCopyResult({ error: runError, state: 'copied' })
+    } catch {
+      setCopyResult({ error: runError, state: 'failed' })
+    }
   }
   const save = async () => {
     if (!dirty || !valid) return
@@ -839,9 +889,19 @@ function ExecutableCellInspector({
           aria-label="Cell run error"
         >
           <CircleAlert size={16} aria-hidden="true" />
-          <div>
-            <strong>Run failed</strong>
-            <p>{error ?? 'This action failed, but no error details were recorded.'}</p>
+          <div className="inspector-run-error-content">
+            <div className="inspector-run-error-header">
+              <strong>Run failed</strong>
+              <button
+                type="button"
+                aria-label="Copy run error"
+                title="Copy run error"
+                onClick={() => void copyRunError()}
+              >
+                <span aria-live="polite">{copyLabel}</span>
+              </button>
+            </div>
+            <p>{runError}</p>
           </div>
         </section>
       )}
@@ -853,6 +913,13 @@ function ExecutableCellInspector({
           onOpenFullscreen={onOpenFullscreen}
         />
       )}
+      <InputSources
+        cell={cell}
+        cells={cells}
+        edges={edges}
+        busy={busy}
+        onSetInput={onSetInput}
+      />
       <form
         className="inspector-cell-form"
         aria-busy={saving}
@@ -1062,12 +1129,15 @@ export function NotebookCellInspector({
   return (
     <ExecutableCellInspector
       cell={cell}
+      cells={cells}
+      edges={edges}
       asset={asset}
       status={status}
       error={error}
       busy={busy}
       deleting={deleting}
       onUpdate={onUpdate}
+      onSetInput={onSetInput}
       onRun={onRun}
       onDelete={onDelete}
       onOpenFullscreen={onOpenFullscreen}
