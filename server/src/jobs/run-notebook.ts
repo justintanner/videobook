@@ -27,6 +27,7 @@ import {
   type BurnInCaption,
 } from "../notebook-media-ops.js";
 import { analyzeNotebookSource } from "../notebook-live-analysis.js";
+import { analysisFixtureForCell } from "../notebook-fixtures.js";
 import { applyAnalysisResults } from "../notebook-workflow.js";
 import {
   DEFAULT_ANIMATION_TOOL,
@@ -1294,9 +1295,7 @@ async function executeLocalOrGeneration(
     const sourceId = firstUpstreamArtifact(document, cell, "source")
       ?? firstUpstreamArtifact(document, cell);
     if (!sourceId) throw new Error(`Analyze cell ${cell.id} has no source artifact`);
-    const fixture = cell.inputs?.fixtureAnalysis
-      ?? cell.inputs?.analysisFixture
-      ?? null;
+    const fixture = analysisFixtureForCell(cell);
     const configuredDuration = Number(
       cell.inputs?.sourceDurationSeconds
         ?? (
@@ -1305,7 +1304,7 @@ async function executeLocalOrGeneration(
             : undefined
         ),
     );
-    const analysisRun = fixture
+    const analysisRun = fixture !== null
       ? {
           rawOutput: fixture,
           sourceDurationSeconds: Number.isFinite(configuredDuration)

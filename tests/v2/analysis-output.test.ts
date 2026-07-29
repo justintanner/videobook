@@ -46,6 +46,38 @@ describe("Analysis output assets", () => {
       },
     );
     expect(written.ok).toBe(true);
+    const outputJson = {
+      version: 2,
+      request: {
+        provider: "openai",
+        model: "gpt-5.6-sol",
+        mode: "live",
+      },
+      raw: {
+        shots: [{
+          startSeconds: 0,
+          endSeconds: 16,
+          label: "Opening",
+          prompt: "A presenter opens the segment.",
+        }],
+      },
+      shots: [{
+        ordinal: 1,
+        label: "Opening",
+        startSeconds: 0,
+        endSeconds: 16,
+        durationSeconds: 16,
+        prompt: "A presenter opens the segment.",
+      }],
+      sourceDurationSeconds: 16,
+      normalizedAt: "2026-07-29T00:00:00.000Z",
+    };
+    const outputWritten = await engine.files.write(
+      created.value.artifactId,
+      "analysis.json",
+      JSON.stringify(outputJson),
+    );
+    expect(outputWritten.ok).toBe(true);
 
     const assets = await buildAssetList(
       engine,
@@ -53,6 +85,7 @@ describe("Analysis output assets", () => {
     );
     expect(assets[0]?.analysis_info).toEqual({
       source_duration_seconds: 16,
+      output_json: outputJson,
       shots: [{
         ordinal: 1,
         label: "Opening",

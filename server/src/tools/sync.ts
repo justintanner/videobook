@@ -52,6 +52,7 @@ export type AssetWorkProjection = {
 
 export type SyncAnalysisInfo = {
   source_duration_seconds: number;
+  output_json: unknown | null;
   shots: Array<{
     ordinal: number;
     label: string;
@@ -150,8 +151,22 @@ function analysisInfoFromMetadata(
   });
   return {
     source_duration_seconds: sourceDurationSeconds,
+    output_json: null,
     shots,
   };
+}
+
+async function analysisOutputJson(
+  engine: Engine,
+  artifactId: string,
+): Promise<unknown | null> {
+  const read = await engine.files.read(artifactId, "analysis.json");
+  if (!read.ok) return null;
+  try {
+    return JSON.parse(read.value.toString()) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 function findAssetMediaFile(
@@ -553,6 +568,10 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
 
       const meta = metadata.ok ? metadata.value : null;
       const archiveMeta = archiveMetadata.ok ? archiveMetadata.value : null;
+      const analysisInfo = analysisInfoFromMetadata(meta);
+      if (analysisInfo) {
+        analysisInfo.output_json = await analysisOutputJson(fs, a.slug);
+      }
 
       // Backfill duration if missing from metadata (video + audio; probeVideo
       // reads format.duration via ffprobe and works for both).
@@ -631,7 +650,7 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
         renders,
         duration,
         audio_info,
-        analysis_info: analysisInfoFromMetadata(meta),
+        analysis_info: analysisInfo,
         waveform,
         frame_dirs: frameDirs,
         archive_id: typeof archiveMeta?.archive_id === "string" ? archiveMeta.archive_id : null,

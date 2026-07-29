@@ -83,6 +83,7 @@ import {
   BusRiverEdge,
 } from '@/components/videobook/BusRiverEdge'
 import { CellRunningOverlay } from '@/components/videobook/CellRunningOverlay'
+import { AnalysisCellSummary } from '@/components/videobook/AnalysisCellSummary'
 import {
   NotebookGridBoard,
 } from '@/components/videobook/NotebookGridBoard'
@@ -723,7 +724,11 @@ function asAsset(value: unknown): AssetRecord | null {
       })
     : []
   const analysisInfo = sourceDurationSeconds !== null
-    ? { sourceDurationSeconds, shots: analysisShots }
+    ? {
+        sourceDurationSeconds,
+        outputJson: analysis?.output_json ?? analysis?.outputJson ?? null,
+        shots: analysisShots,
+      }
     : null
   return {
     id,
@@ -1819,43 +1824,6 @@ function CellStatusBadge({ status }: { status: string | null }) {
   )
 }
 
-function AnalysisCellSummary({ data }: { data: CanvasCellData }) {
-  const info = data.asset?.analysisInfo
-  const shotCount = info?.shots.length
-    ?? asNumber(data.inputs?.shotCount)
-    ?? 0
-  const duration = info?.sourceDurationSeconds
-    ?? asNumber(data.inputs?.sourceDurationSeconds)
-  const shots = info?.shots.slice(0, 3) ?? []
-  const overflow = Math.max(0, shotCount - shots.length)
-
-  return (
-    <div className="cell-copy cell-copy-analysis">
-      <div className="analysis-cell-summary">
-        <strong>{shotCount > 0 ? `${shotCount} shots` : 'Analysis pending'}</strong>
-        {duration !== null && (
-          <span>{formatMediaTime(duration)}</span>
-        )}
-      </div>
-      {shots.length > 0 && (
-        <ol className="analysis-cell-shots">
-          {shots.map((shot) => (
-            <li key={shot.ordinal}>
-              <span>{shot.label}</span>
-              <time>
-                {formatMediaTime(shot.startSeconds)}–{formatMediaTime(shot.endSeconds)}
-              </time>
-            </li>
-          ))}
-        </ol>
-      )}
-      {overflow > 0 && (
-        <span className="analysis-cell-overflow">+{overflow} more</span>
-      )}
-    </div>
-  )
-}
-
 function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const slotContext = useContext(MediaSlotContext)
   const runCell = useContext(CellRunContext)
@@ -1981,7 +1949,11 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         ) : data.kind === 'split_video' ? (
           <SplitVideoPreview data={data} />
         ) : data.kind === 'analysis' ? (
-          <AnalysisCellSummary data={data} />
+          <AnalysisCellSummary
+            analysisInfo={data.asset?.analysisInfo ?? null}
+            fallbackShotCount={asNumber(data.inputs?.shotCount)}
+            fallbackSourceDurationSeconds={asNumber(data.inputs?.sourceDurationSeconds)}
+          />
         ) : audioCell ? (
           <div className="cell-copy cell-copy-audio">
             {playableAudio && mediaUrl ? <audio src={mediaUrl} controls preload="metadata" /> : null}

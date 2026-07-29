@@ -11,6 +11,10 @@ import {
   analyzeNotebookSource,
   sampleNotebookAnalysisFrames,
 } from "../../server/src/notebook-live-analysis.js";
+import {
+  MULTYCULTY_FIXTURE_OWNER,
+  analysisFixtureForCell,
+} from "../../server/src/notebook-fixtures.js";
 import { runNotebookCell } from "../../server/src/jobs/run-notebook.js";
 import { buildSevenStageScaffold } from "../../server/src/notebook-workflow.js";
 
@@ -51,6 +55,20 @@ describe("notebook live analysis", () => {
         retryDelay: 100,
       });
     }
+  });
+
+  it("only replays explicit fixtures outside the default workflow", () => {
+    const fixture = { shots: [{ label: "Fixture" }] };
+
+    expect(analysisFixtureForCell({
+      inputs: { fixtureAnalysis: fixture },
+    })).toBe(fixture);
+    expect(analysisFixtureForCell({
+      inputs: {
+        fixtureOwner: MULTYCULTY_FIXTURE_OWNER,
+        fixtureAnalysis: fixture,
+      },
+    })).toBeNull();
   });
 
   it("samples at most 15 timestamped frames in chronological order", () => {
@@ -222,7 +240,7 @@ describe("notebook live analysis", () => {
     )).rejects.toThrow(/processed original_frames/);
   });
 
-  it("runs legacy Analyze live and persists normalized metadata and provenance", async () => {
+  it("runs legacy fixture-owned Analyze live and persists normalized metadata and provenance", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "videobook-live-runner-"));
     engine = createEngine({
       rootDir,
@@ -267,6 +285,18 @@ describe("notebook live analysis", () => {
               provider: "kie",
               model: "gemini-3.5-flash",
               tool: "kie_gemini_analysis",
+              inputs: {
+                ...(cell.inputs ?? {}),
+                fixtureOwner: MULTYCULTY_FIXTURE_OWNER,
+                fixtureAnalysis: {
+                  shots: [{
+                    startSeconds: 0,
+                    endSeconds: 30,
+                    label: "Fixture replay",
+                    prompt: "This should never be returned.",
+                  }],
+                },
+              },
             }
           : cell),
     };
@@ -340,5 +370,8 @@ describe("notebook live analysis", () => {
       mode: "live",
     });
     expect(saved.raw.shots).toHaveLength(2);
+    expect(saved.raw.shots[0]).toMatchObject({
+      label: "Opening",
+    });
   });
 });

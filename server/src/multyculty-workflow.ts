@@ -15,10 +15,7 @@ import {
   buildSevenStageScaffold,
   MULTYCULTY_FEATURES,
 } from "./notebook-workflow.js";
-import {
-  INTELLIGENCE_MODEL,
-  INTELLIGENCE_REASONING_EFFORT,
-} from "./openai-intelligence.js";
+import { MULTYCULTY_FIXTURE_OWNER } from "./notebook-fixtures.js";
 
 type ArtifactRecord = {
   artifactId: string;
@@ -27,7 +24,6 @@ type ArtifactRecord = {
 };
 
 export const MULTYCULTY_FIXTURE_VERSION = 22;
-export const MULTYCULTY_FIXTURE_OWNER = "multyculty-default";
 
 const SECTION_SLUGS = [
   "vid-section-intro",
@@ -109,6 +105,40 @@ function fixtureRecord(document: NotebookDocument): Record<string, unknown> | nu
 function canonicalFixtureCells(document: NotebookDocument): NotebookCell[] {
   return document.cells.filter((cell) =>
     cell.inputs?.fixtureOwner === MULTYCULTY_FIXTURE_OWNER);
+}
+
+function hasRunnableAnalysisFixture(document: NotebookDocument): boolean {
+  return document.cells.some((cell) =>
+    roleOf(cell) === "analysis"
+    && cell.inputs?.fixtureOwner === MULTYCULTY_FIXTURE_OWNER
+    && (
+      cell.inputs.fixtureAnalysis !== undefined
+      || cell.inputs.analysisFixture !== undefined
+    ));
+}
+
+function withoutRunnableAnalysisFixture(
+  document: NotebookDocument,
+): NotebookDocument {
+  let changed = false;
+  const cells = document.cells.map((cell) => {
+    if (
+      roleOf(cell) !== "analysis"
+      || cell.inputs?.fixtureOwner !== MULTYCULTY_FIXTURE_OWNER
+      || (
+        cell.inputs.fixtureAnalysis === undefined
+        && cell.inputs.analysisFixture === undefined
+      )
+    ) {
+      return cell;
+    }
+    const inputs = { ...cell.inputs };
+    delete inputs.fixtureAnalysis;
+    delete inputs.analysisFixture;
+    changed = true;
+    return { ...cell, inputs };
+  });
+  return changed ? { ...document, cells } : document;
 }
 
 function isCurrentFixture(document: NotebookDocument): boolean {
@@ -431,14 +461,18 @@ export async function seedMultycultyWorkflow(
     ?? engine.notebooks.list()[0];
   if (!notebook) throw new Error("The Multyculty book has no notebook");
   if (isCurrentFixture(notebook)) {
-    const fixture = fixtureRecord(notebook);
+    const runnable = withoutRunnableAnalysisFixture(notebook);
+    const persisted = runnable === notebook
+      ? notebook
+      : await writeNotebook(engine, runnable);
+    const fixture = fixtureRecord(persisted);
     if (
       options.materializeLocalOutputs
       && typeof fixture?.materializedAt !== "string"
     ) {
-      return materializeLocalOutputs(engine, notebook);
+      return materializeLocalOutputs(engine, persisted);
     }
-    return notebook;
+    return persisted;
   }
 
   const artifacts = engine.artifacts.list() as ArtifactRecord[];
@@ -448,6 +482,12 @@ export async function seedMultycultyWorkflow(
   const sourceAudio = streams.value.find((stream) => stream.kind === "audio");
   if (!sourceAudio) throw new Error("The Multyculty source has no audio stream");
   const previousRevision = engine.head;
+  const fixtureAnalysis = {
+    scenes: [
+      { title: "intro", timestamp: [0, 15] },
+      { title: "culture", timestamp: [15, 30] },
+    ],
+  };
   const scaffold = buildSevenStageScaffold(
     engine,
     {
@@ -492,12 +532,6 @@ export async function seedMultycultyWorkflow(
           inputs: {
             ...(cell.inputs ?? {}),
             sourceDurationSeconds: 30,
-            fixtureAnalysis: {
-              scenes: [
-                { title: "intro", timestamp: [0, 15] },
-                { title: "culture", timestamp: [15, 30] },
-              ],
-            },
             state: "pending",
           },
         };
@@ -523,14 +557,12 @@ export async function seedMultycultyWorkflow(
     configured,
     analysis.id,
     {
-      rawOutput: configured.cells.find((cell) => cell.id === analysis.id)?.inputs
-        ?.fixtureAnalysis,
+      rawOutput: fixtureAnalysis,
       sourceDurationSeconds: 30,
       request: {
         mode: "multyculty-fixture",
-        provider: "openai",
-        model: INTELLIGENCE_MODEL,
-        reasoning: { effort: INTELLIGENCE_REASONING_EFFORT },
+        provider: "fixture",
+        model: "precomputed",
       },
       sourceArtifactId: sourceArtifact.artifactId,
     },
@@ -599,6 +631,7 @@ export async function ensureMultycultyWorkflow(
   const fixture = fixtureRecord(notebook);
   if (
     isCurrentFixture(notebook)
+    && !hasRunnableAnalysisFixture(notebook)
     && (
       !options.materializeLocalOutputs
       || typeof fixture?.materializedAt === "string"

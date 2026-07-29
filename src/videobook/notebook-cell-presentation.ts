@@ -81,6 +81,7 @@ export type NotebookAnalysisShot = {
 
 export type NotebookAnalysisInfo = {
   sourceDurationSeconds: number
+  outputJson?: unknown
   shots: NotebookAnalysisShot[]
 }
 

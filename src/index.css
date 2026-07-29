@@ -1494,6 +1494,75 @@ textarea:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.analysis-cell-output-json {
+  border-top: 1px solid rgba(114, 231, 170, 0.12);
+}
+
+.analysis-cell-output-json summary {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  color: #79a98c;
+  cursor: pointer;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  list-style: none;
+  text-transform: uppercase;
+}
+
+.analysis-cell-output-json summary::-webkit-details-marker {
+  display: none;
+}
+
+.analysis-cell-output-json summary:hover,
+.analysis-cell-output-json summary:focus-visible {
+  color: #b9e8cc;
+  outline: 0;
+}
+
+.analysis-cell-output-json[open] {
+  position: absolute;
+  inset: 8px;
+  z-index: 3;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  padding: 7px 8px 8px;
+  border: 1px solid rgba(114, 231, 170, 0.26);
+  background: rgba(2, 12, 8, 0.98);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.42);
+}
+
+.analysis-cell-output-json-scroll {
+  display: none;
+}
+
+.analysis-cell-output-json[open] .analysis-cell-output-json-scroll {
+  display: block;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  border-top: 1px solid rgba(114, 231, 170, 0.1);
+  user-select: text;
+}
+
+.analysis-cell-output-json .inspector-source-json {
+  padding: 7px 0;
+  font-size: 8px;
+  line-height: 1.45;
+  overflow-wrap: normal;
+  white-space: pre;
+}
+
+.analysis-cell-output-json .inspector-source-json span {
+  max-height: none;
+  overflow: visible;
+  font-size: inherit;
+  line-height: inherit;
+  letter-spacing: 0;
+}
+
 .cell-copy-audio {
   min-width: 0;
   align-content: center;

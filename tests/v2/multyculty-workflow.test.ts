@@ -188,6 +188,9 @@ describe("Multyculty workflow fixture", () => {
     expect(sourceExtractAudio?.slot).toEqual({ row: 0, column: 1 });
     expect(analysis?.slot).toEqual({ row: 1, column: 0 });
     expect(analysis?.prompt).toContain("two continuous 15-second");
+    expect(analysis?.inputs?.fixtureOwner).toBe("multyculty-default");
+    expect(analysis?.inputs).not.toHaveProperty("fixtureAnalysis");
+    expect(analysis?.inputs).not.toHaveProperty("analysisFixture");
     expect(audio?.slot).toEqual({ row: 1, column: 1 });
     const featureColumns = [-2, 2];
     for (let ordinal = 1; ordinal <= 2; ordinal += 1) {
@@ -310,6 +313,37 @@ describe("Multyculty workflow fixture", () => {
       targetInput: "audio",
     }));
     if (!analysis) throw new Error("analysis cell missing");
+    const manual = engine.notebooks.createCell({
+      type: "prompt",
+      slug: "prompt-manual-note",
+      slot: { row: 8, column: 0 },
+    });
+    const legacyWritten = await engine.notebooks.write({
+      ...first,
+      cells: [
+        ...first.cells.map((cell) =>
+          cell.id === analysis.id
+            ? {
+                ...cell,
+                inputs: {
+                  ...(cell.inputs ?? {}),
+                  fixtureAnalysis: {
+                    scenes: [{ title: "legacy", timestamp: [0, 30] }],
+                  },
+                },
+              }
+            : cell),
+        manual,
+      ],
+    });
+    if (!legacyWritten.ok) throw new Error(legacyWritten.error.message);
+    const cleaned = await seedMultycultyWorkflow(engine);
+    expect(cleaned.cells.find((cell) => cell.id === analysis.id)?.inputs)
+      .not.toHaveProperty("fixtureAnalysis");
+    expect(cleaned.cells.some((cell) => cell.id === manual.id)).toBe(true);
+    expect(cleaned.cells.filter((cell) =>
+      cell.inputs?.fixtureOwner === "multyculty-default").map((cell) => cell.id))
+      .toEqual(first.cells.map((cell) => cell.id));
     const rerun = await applyAnalysisResults(engine, first, analysis.id, {
       rawOutput: {
         scenes: [
