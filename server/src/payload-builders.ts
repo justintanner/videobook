@@ -1868,7 +1868,7 @@ function translateToolPayload(
         input: {
           task_id: "<task_id_from_source_video_metadata>",
           prompt: args.prompt as string,
-          extend_at: String(args.extend_at as number),
+          extend_at: args.extend_at as number,
           extend_times: args.extend_times as GrokVideoExtendRequest["input"]["extend_times"],
         },
       };

@@ -597,9 +597,9 @@ describe("applyVideoToolConstraints", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildVideoRoutingPrompt", () => {
-  it("defaults video generation to Google Flow Gemini Omni Video", () => {
-    expect(DEFAULT_VIDEO_MODEL_KEY).toBe("gemini_omni");
-    expect(VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name).toBe("generate_kie_gemini_omni_video");
+  it("defaults video generation to Seedance 2", () => {
+    expect(DEFAULT_VIDEO_MODEL_KEY).toBe("seedance2");
+    expect(VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name).toBe("generate_kie_seedance_2_0_video");
   });
 
   it("returns a non-empty string", () => {
@@ -617,7 +617,9 @@ describe("buildVideoRoutingPrompt", () => {
   it("includes routing preferences", () => {
     const prompt = buildVideoRoutingPrompt();
     expect(prompt).toContain("ROUTING PREFERENCES");
-    expect(prompt).toContain("PREFER generate_kie_gemini_omni_video");
+    expect(prompt).toContain("PREFER generate_kie_seedance_2_0_video");
+    expect(prompt).toContain("generate_kie_gemini_omni_video only when the user explicitly asks");
+    expect(prompt).not.toContain("Gemini Omni — the DEFAULT model");
   });
 
   it("includes JSON response format instruction", () => {

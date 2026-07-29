@@ -1,20 +1,19 @@
-/**
- * rewrite_prompt MCP tool — rewrites generation prompts using model-specific
- * prompting guides via GPT-5.2.
- */
 import type { Engine, GenerationError } from "videobook-engine";
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createOpenAi, textPart, imageUrlPart, firstContent } from "@apicity/openai";
+import { textPart, imageUrlPart } from "@apicity/openai";
 import type { OpenAiContentPart, OpenAiMessage } from "@apicity/openai";
 import { getCanonicalName } from "../generation-registry.js";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 import type { ToolDef } from "./tool-def.js";
 import { timelineSlotSlugs } from "../timeline-helpers.js";
-
-const REWRITE_MODEL = "gpt-5.2";
+import {
+  buildIntelligenceResponses,
+  firstResponseText,
+  intelligenceRequest,
+} from "../openai-intelligence.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GUIDES_DIR = join(__dirname, "../guides");
@@ -543,7 +542,7 @@ async function handleStandardRewrite(
   }
 
   const maxChars = model === "kling30" ? 400 : undefined;
-  const provider = createOpenAi({ apiKey, timeout: 60_000 });
+  const responses = buildIntelligenceResponses(apiKey, { timeout: 60_000 });
   const extras: BuildRewriteExtras = effectiveProviderDocs
     ? { maxChars, customPrompt, providerDocs: true, modelContext: MODEL_CONTEXT[model] ?? model, previousError }
     : { maxChars, platform, customPrompt, previousError };
@@ -562,14 +561,13 @@ async function handleStandardRewrite(
     messages = buildRewriteMessages(guide, prompt, extras);
   }
 
-  const result = await provider.post.v1.chat.completions({
-    model: REWRITE_MODEL,
-    messages,
-    temperature: 0.7,
-    max_completion_tokens: 1024,
-  });
+  const result = await responses(intelligenceRequest({
+    input: responseInputFromMessages(messages),
+    text: { format: { type: "text" } },
+    max_output_tokens: 1024,
+  }));
 
-  const rewritten = firstContent(result).trim();
+  const rewritten = firstResponseText(result);
   const output = buildResult(model, prompt, rewritten, guideFile, previousError);
 
   return {
@@ -610,15 +608,14 @@ async function handleSceneRewrite(
   const guide = await loadGuide("kling30");
   const text = buildSceneRewriteText(guide, scenes, elements, sceneIndex, instruction);
 
-  const provider = createOpenAi({ apiKey, timeout: 60_000 });
-  const result = await provider.post.v1.chat.completions({
-    model: REWRITE_MODEL,
-    messages: [{ role: "user", content: text }],
-    temperature: 0.7,
-    max_completion_tokens: 1024,
-  });
+  const responses = buildIntelligenceResponses(apiKey, { timeout: 60_000 });
+  const result = await responses(intelligenceRequest({
+    input: [{ role: "user", content: text }],
+    text: { format: { type: "text" } },
+    max_output_tokens: 1024,
+  }));
 
-  const rewritten = firstContent(result).trim();
+  const rewritten = firstResponseText(result);
   const output = buildSceneResult(
     sceneIndex,
     scenes[sceneIndex].prompt,
@@ -630,4 +627,25 @@ async function handleSceneRewrite(
   return {
     content: [{ type: "text" as const, text: JSON.stringify(output) }],
   };
+}
+
+function responseInputFromMessages(messages: OpenAiMessage[]): Array<{
+  role: "user" | "assistant" | "system";
+  content: string | Array<
+    | { type: "input_text"; text: string }
+    | { type: "input_image"; image_url: string; detail: "auto" | "low" | "high" }
+  >;
+}> {
+  return messages.map((message) => ({
+    role: message.role,
+    content: typeof message.content === "string"
+      ? message.content
+      : message.content.map((part) => part.type === "text"
+        ? { type: "input_text" as const, text: part.text }
+        : {
+            type: "input_image" as const,
+            image_url: part.image_url.url,
+            detail: part.image_url.detail ?? "auto",
+          }),
+  }));
 }

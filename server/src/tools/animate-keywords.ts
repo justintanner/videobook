@@ -232,10 +232,10 @@ export function animateKeywordsDef(fs: Engine): ToolDef {
       );
       let jobId: string | null = null;
       if (!cached) {
-        if (!getApiKey("KIE_API_KEY")) {
+        if (!getApiKey("OPENAI_API_KEY")) {
           return errorResult(
             "missing_vision_provider",
-            "KIE_API_KEY is required to verify face-safe keyword placement.",
+            "OPENAI_API_KEY is required to verify face-safe keyword placement.",
           );
         }
         const clear = await fs.jobs.failures.clear(asset_id);

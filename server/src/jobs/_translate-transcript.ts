@@ -1,9 +1,14 @@
 import { createHash } from "node:crypto";
 import { parseSegments } from "../remotion/subtitles/segments.js";
 import type { Segment, Word } from "../remotion/subtitles/types.js";
-import { firstResponseText, VISION_MODEL, type ResponsesFn } from "./describe-image.js";
+import {
+  INTELLIGENCE_MODEL,
+  firstResponseText,
+  intelligenceRequest,
+  type ResponsesFn,
+} from "../openai-intelligence.js";
 
-export const TRANSLATION_MODEL = VISION_MODEL;
+export const TRANSLATION_MODEL = INTELLIGENCE_MODEL;
 
 export type SidecarWord = {
   text: string;
@@ -234,20 +239,36 @@ async function requestTranslations(
   sentences: SourceSentence[],
   targetLanguage: string,
   responses: ResponsesFn,
+  signal?: AbortSignal,
 ): Promise<string[]> {
-  const response = await responses({
-    model: TRANSLATION_MODEL,
+  const response = await responses(intelligenceRequest({
     instructions: buildInstructions(targetLanguage, sentences.length),
-    // The "(JSON)" mention is load-bearing: the OpenAI responses API rejects
-    // text.format json_object unless an input message contains the word.
     input: [{
       role: "user",
       content: `TRANSCRIPT LINES (JSON):\n${JSON.stringify(sentences.map((s, i) => ({ i, text: s.text })))}`,
     }],
-    text: { format: { type: "json_object" } },
-    temperature: 0.2,
+    text: {
+      format: {
+        type: "json_schema",
+        name: "translated_transcript",
+        schema: {
+          type: "object",
+          required: ["translations"],
+          additionalProperties: false,
+          properties: {
+            translations: {
+              type: "array",
+              minItems: sentences.length,
+              maxItems: sentences.length,
+              items: { type: "string" },
+            },
+          },
+        },
+        strict: true,
+      },
+    },
     max_output_tokens: 4096,
-  });
+  }), signal);
 
   const content = firstResponseText(response);
   if (!content) {
@@ -282,6 +303,7 @@ export async function translateTranscript(
   raw: unknown,
   targetLanguage: string,
   responses: ResponsesFn,
+  signal?: AbortSignal,
 ): Promise<TranslatedSidecar> {
   const sourceSegments = parseSegments(raw as Parameters<typeof parseSegments>[0]);
   const sentences = collectSentences(sourceSegments);
@@ -289,7 +311,7 @@ export async function translateTranscript(
     throw new Error("Transcript contains no subtitle text to translate");
   }
 
-  const translations = await requestTranslations(sentences, targetLanguage, responses);
+  const translations = await requestTranslations(sentences, targetLanguage, responses, signal);
 
   const segments: SidecarSegment[] = sentences.map((sentence, i) => ({
     start: sentence.start,

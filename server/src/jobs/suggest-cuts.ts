@@ -1,13 +1,16 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { join } from "node:path";
-import { readFile as fsReadFile } from "node:fs/promises";
-import type { KieGeminiPart } from "@apicity/kie";
+import type { OpenAiResponseInputContent } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
+import {
+  INTELLIGENCE_MODEL,
+  buildIntelligenceResponses,
+  firstResponseText,
+  intelligenceRequest,
+} from "../openai-intelligence.js";
 import { withLocalLease } from "./_lease.js";
 import {
-  MODEL,
   TRIM_BUDGET_FRACTION,
   DEAD_AIR_THRESHOLD_S,
   TrimSchema,
@@ -18,7 +21,6 @@ import {
   sampleFrames,
   type Trim,
 } from "../tools/_suggest-shared.js";
-import { callGeminiFlashJson, geminiImageBase64Part, geminiTextPart } from "../kie-gemini.js";
 
 type SuggestCutsPayload = {
   type: "suggest_cuts";
@@ -90,12 +92,12 @@ export function registerSuggestCutsJob(fs: Engine): void {
     const { assetId, bookId } = payload as SuggestCutsPayload;
 
     return withLocalLease(fs, bookId, assetId, ctx, "analyze", async () => {
-      const apiKey = getApiKey("KIE_API_KEY");
-      if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
+      const apiKey = getApiKey("OPENAI_API_KEY");
+      if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
 
       const loaded = await loadAssetForAnalysis(fs, assetId, bookId);
       if (!loaded.ok) throw new Error(loaded.error.message);
-      const { framesDir, frameNames, transcript, meta, prior } = loaded.value;
+      const { frameNames, transcript, meta, prior } = loaded.value;
 
       const candidates = transcript.source === "elevenlabs"
         ? extractSilenceCandidates(transcript.words, DEAD_AIR_THRESHOLD_S)
@@ -104,28 +106,41 @@ export function registerSuggestCutsJob(fs: Engine): void {
       const trimBudgetS = duration > 0 ? duration * TRIM_BUDGET_FRACTION : Infinity;
 
       const sampled = sampleFrames(frameNames);
-      const frameParts: KieGeminiPart[] = [];
+      const frameParts: OpenAiResponseInputContent[] = [];
       for (const file of sampled) {
-        const buf = await fsReadFile(join(framesDir, file));
-        frameParts.push(geminiImageBase64Part(buf.toString("base64"), "image/jpeg"));
+        const frameRead = await fs.files.read(assetId, `original_frames/${file}`);
+        if (!frameRead.ok) throw new Error(frameRead.error.message);
+        frameParts.push(
+          { type: "input_text", text: `Frame timestamp: ${parseFloat(file).toFixed(3)}s` },
+          {
+            type: "input_image",
+            image_url: `data:image/jpeg;base64,${Buffer.from(frameRead.value).toString("base64")}`,
+            detail: "high",
+          },
+        );
       }
 
       const contextString = buildCutsContext(meta, prior, transcript, sampled.length, candidates, trimBudgetS);
-      const userContent: KieGeminiPart[] = [
-        geminiTextPart(contextString),
+      const userContent: OpenAiResponseInputContent[] = [
+        { type: "input_text", text: contextString },
         ...frameParts,
       ];
 
-      const outputText = await callGeminiFlashJson({
-        apiKey,
-        parts: [
-          geminiTextPart(`Instructions:\n${SYSTEM_PROMPT_CUTS}`),
-          ...userContent,
-        ],
-        temperature: 0.3,
-        maxOutputTokens: 4096,
-        responseSchema: SUGGEST_CUTS_JSON_SCHEMA as unknown as Record<string, unknown>,
-      });
+      const responses = buildIntelligenceResponses(apiKey);
+      const response = await responses(intelligenceRequest({
+        instructions: SYSTEM_PROMPT_CUTS,
+        input: [{ role: "user", content: userContent }],
+        text: {
+          format: {
+            type: "json_schema",
+            name: "suggested_cuts",
+            schema: SUGGEST_CUTS_JSON_SCHEMA,
+            strict: true,
+          },
+        },
+        max_output_tokens: 4096,
+      }), ctx.signal);
+      const outputText = firstResponseText(response);
 
       let parsed: { trims: Trim[]; summary: string };
       try {
@@ -153,7 +168,7 @@ export function registerSuggestCutsJob(fs: Engine): void {
           trim_budget_s: Number.isFinite(trimBudgetS) ? trimBudgetS : null,
           dropped_trims: dropped.map((d) => ({ trim: d.trim, reason: d.reason })),
         },
-        model: MODEL,
+        model: INTELLIGENCE_MODEL,
         asset_id: assetId,
       };
 

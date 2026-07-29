@@ -47,6 +47,7 @@ import {
   listNotebookActions,
   markDescendantsStale,
   normalizeCellActionFields,
+  normalizeLegacyAnalyzeDocument,
   selectedCellDetails,
   validateCellConfiguration,
 } from "../notebook-action-catalog.js";
@@ -1173,36 +1174,37 @@ function cellPayload(cell: NotebookCell): Record<string, unknown> {
 }
 
 function notebookPayload(notebook: NotebookDocument): Record<string, unknown> {
+  const normalized = normalizeLegacyAnalyzeDocument(notebook);
   return {
-    id: notebook.id,
-    name: notebook.name,
-    created_at: notebook.createdAt,
-    ...(notebook.description === undefined
+    id: normalized.id,
+    name: normalized.name,
+    created_at: normalized.createdAt,
+    ...(normalized.description === undefined
       ? {}
-      : { description: notebook.description }),
-    ...(notebook.lifecycleState === undefined
+      : { description: normalized.description }),
+    ...(normalized.lifecycleState === undefined
       ? {}
-      : { lifecycleState: notebook.lifecycleState }),
-    ...(notebook.workflowVersion === undefined
+      : { lifecycleState: normalized.lifecycleState }),
+    ...(normalized.workflowVersion === undefined
       ? {}
-      : { workflowVersion: notebook.workflowVersion }),
-    ...(notebook.analysisRevision === undefined
+      : { workflowVersion: normalized.workflowVersion }),
+    ...(normalized.analysisRevision === undefined
       ? {}
-      : { analysisRevision: notebook.analysisRevision }),
-    ...(notebook.audioSpine === undefined
+      : { analysisRevision: normalized.analysisRevision }),
+    ...(normalized.audioSpine === undefined
       ? {}
-      : { audioSpine: notebook.audioSpine }),
-    ...(notebook.currentSelection === undefined
+      : { audioSpine: normalized.audioSpine }),
+    ...(normalized.currentSelection === undefined
       ? {}
-      : { currentSelection: notebook.currentSelection }),
-    ...(notebook.fixture === undefined ? {} : { fixture: notebook.fixture }),
-    execution: notebook.execution ?? {},
-    generationPlans: notebook.generationPlans ?? [],
-    notebookRunPlans: notebook.notebookRunPlans ?? [],
-    transcriptEdits: notebook.transcriptEdits ?? [],
-    transcriptAttachments: notebook.transcriptAttachments ?? [],
-    cells: notebook.cells.map(cellPayload),
-    edges: notebook.edges,
+      : { currentSelection: normalized.currentSelection }),
+    ...(normalized.fixture === undefined ? {} : { fixture: normalized.fixture }),
+    execution: normalized.execution ?? {},
+    generationPlans: normalized.generationPlans ?? [],
+    notebookRunPlans: normalized.notebookRunPlans ?? [],
+    transcriptEdits: normalized.transcriptEdits ?? [],
+    transcriptAttachments: normalized.transcriptAttachments ?? [],
+    cells: normalized.cells.map(cellPayload),
+    edges: normalized.edges,
   };
 }
 

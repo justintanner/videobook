@@ -571,7 +571,7 @@ const VIDEO_MODELS: Record<string, VideoModelInfo> = {
   },
 };
 
-const DEFAULT_VIDEO_MODEL_KEY = "gemini_omni";
+const DEFAULT_VIDEO_MODEL_KEY = "seedance2";
 
 // Google Flow provider aliases: a base video tool can expose a "google"
 // provider (see VideoModelInfo.googleToolName) whose effective tool name and
@@ -1884,7 +1884,7 @@ function applyVideoToolConstraints(
 }
 
 // ---------------------------------------------------------------------------
-// Routing prompt for GPT-4o-mini
+// Routing prompt
 // ---------------------------------------------------------------------------
 
 const VIDEO_TOOL_NAMES = Object.values(VIDEO_MODELS).map((m) => m.tool_name);
@@ -1914,7 +1914,7 @@ ROUTING PREFERENCES:
 - Use generate_kie_seedance_2_0_video when user mentions "seedance" or "bytedance" and wants 1080p, or just defaults to the higher-quality variant. Accepts any input combination: text-only, first/last frame, reference images/videos/audio
 - Use generate_kie_seedance_2_0_fast_video when user mentions "seedance fast" or 480p/720p is acceptable (faster/cheaper). Same input flexibility as the full variant
 - Use generate_kie_seedance_2_0_mini_video when user mentions "seedance mini". Text prompt plus optional reference images/videos/audio; no first/last frame; 480p/720p
-- generate_kie_gemini_omni_video is Google Gemini Omni — the DEFAULT model; use it when no other model is clearly indicated. Multimodal text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes
+- Use generate_kie_gemini_omni_video only when the user explicitly asks for Gemini or Google Omni. Multimodal text prompt plus optional reference images (0-7) and one reference video clip with in/out timecodes
 - Use generate_google_flow_veo_3_1_fast_video when user mentions "veo" or "veo 3.1"; pick generate_google_flow_veo_3_1_quality_video for "veo quality", generate_google_flow_veo_3_1_lite_video for "veo lite", and generate_google_flow_veo_3_1_lite_low_priority_video for "veo lite low priority" / "veo lp". Text-to-video, first/last frame image-to-video, or reference images (fast/lite/lite-lp only)
 - Use generate_kie_wan_2_7_image_to_video ONLY when user mentions "wan" with first/last frame or clip continuation
 - Use generate_kie_wan_2_7_edit_video ONLY when user mentions "wan" with video editing or modifying an existing video

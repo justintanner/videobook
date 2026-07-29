@@ -1,8 +1,8 @@
 import type { Engine } from "videobook-engine";
 import { registerJobHandler, type JobHandlerContext } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
+import { buildIntelligenceResponses } from "../openai-intelligence.js";
 import { withLocalLease } from "./_lease.js";
-import { buildResponses } from "./describe-image.js";
 import { enqueueLazyTimelineRender } from "../lazy-render.js";
 import { parseSegments } from "../remotion/subtitles/segments.js";
 import {
@@ -68,8 +68,8 @@ export async function runTranslateTranscript(
         }
       }
 
-      const responses = buildResponses(requireApiKey("KIE_API_KEY"));
-      const sidecar = await translateTranscript(raw, targetLanguage, responses);
+      const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"));
+      const sidecar = await translateTranscript(raw, targetLanguage, responses, ctx.signal);
 
       const writeResult = await fs.files.write(assetId, sidecarFilename, JSON.stringify(sidecar, null, 2)
       );

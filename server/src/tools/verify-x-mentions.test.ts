@@ -1,10 +1,10 @@
 import { createServer, type Server } from "node:http";
-import { createXai } from "@apicity/xai";
 import { afterEach, describe, expect, it } from "vitest";
+import { buildIntelligenceResponses } from "../openai-intelligence.js";
 import {
   extractXMentions,
-  verifyXMentionsWithXai,
-  XAI_MENTION_MODEL,
+  verifyXMentionsWithOpenAi,
+  MENTION_VERIFICATION_MODEL,
 } from "./verify-x-mentions.js";
 
 describe("extractXMentions", () => {
@@ -34,7 +34,7 @@ describe("extractXMentions", () => {
   });
 });
 
-describe("verifyXMentionsWithXai", () => {
+describe("verifyXMentionsWithOpenAi", () => {
   let server: Server | null = null;
 
   afterEach(async () => {
@@ -52,7 +52,7 @@ describe("verifyXMentionsWithXai", () => {
       instance.listen(0, "127.0.0.1", () => {
         const address = instance.address();
         if (typeof address === "object" && address !== null) resolve(address.port);
-        else reject(new Error("Local xAI server has no TCP address"));
+        else reject(new Error("Local OpenAI server has no TCP address"));
       });
     });
   }
@@ -76,7 +76,7 @@ describe("verifyXMentionsWithXai", () => {
           created_at: 1_752_900_000,
           completed_at: 1_752_900_010,
           status: "completed",
-          model: XAI_MENTION_MODEL,
+          model: MENTION_VERIFICATION_MODEL,
           output: [{
             type: "web_search_call",
             id: "ws-1",
@@ -120,13 +120,13 @@ describe("verifyXMentionsWithXai", () => {
       });
     });
     const port = await listen(server);
-    const provider = createXai({
-      apiKey: "test-xai-key",
+    const responses = buildIntelligenceResponses("test-openai-key", {
       baseURL: `http://127.0.0.1:${port}`,
       timeout: 30_000,
+      retries: 0,
     });
 
-    const verification = await verifyXMentionsWithXai(provider, ["JackMunro", "GhostHandle", "Unmentioned"]);
+    const verification = await verifyXMentionsWithOpenAi(responses, ["JackMunro", "GhostHandle", "Unmentioned"]);
 
     expect(verification.mentions).toEqual([
       { handle: "JackMunro", exists: true, display_name: "Jack Munro", summary: "Filmmaker posting mime history clips." },
@@ -134,7 +134,7 @@ describe("verifyXMentionsWithXai", () => {
       { handle: "Unmentioned", exists: null, display_name: null, summary: null },
     ]);
     expect(verification.citations).toEqual(["https://x.com/JackMunro"]);
-    expect(verification.model).toBe(XAI_MENTION_MODEL);
+    expect(verification.model).toBe(MENTION_VERIFICATION_MODEL);
 
     expect(captured).not.toBeNull();
     const request = captured as unknown as {
@@ -143,15 +143,19 @@ describe("verifyXMentionsWithXai", () => {
       tools: Array<{ type: string }>;
       search_parameters?: unknown;
       text: { format: { type: string; name: string } };
+      reasoning: { effort: string };
+      store: boolean;
     };
-    expect(request.model).toBe(XAI_MENTION_MODEL);
-    expect(request.tools).toEqual([{ type: "web_search" }]);
+    expect(request.model).toBe(MENTION_VERIFICATION_MODEL);
+    expect(request.tools).toEqual([{ type: "web_search_preview" }]);
     expect(request.search_parameters).toBeUndefined();
     expect(request.text.format.type).toBe("json_schema");
+    expect(request.reasoning).toEqual({ effort: "medium" });
+    expect(request.store).toBe(false);
     expect(request.input.some((message) => message.role === "user" && message.content.includes("@JackMunro, @GhostHandle, @Unmentioned"))).toBe(true);
   });
 
-  it("throws when xAI refuses the request", async () => {
+  it("throws when OpenAI refuses the request", async () => {
     server = createServer((request, response) => {
       request.on("data", () => {});
       request.on("end", () => {
@@ -162,7 +166,7 @@ describe("verifyXMentionsWithXai", () => {
           created_at: 1_752_900_000,
           completed_at: 1_752_900_010,
           status: "completed",
-          model: XAI_MENTION_MODEL,
+          model: MENTION_VERIFICATION_MODEL,
           output: [{
             type: "message",
             id: "msg-1",
@@ -187,13 +191,13 @@ describe("verifyXMentionsWithXai", () => {
       });
     });
     const port = await listen(server);
-    const provider = createXai({
-      apiKey: "test-xai-key",
+    const responses = buildIntelligenceResponses("test-openai-key", {
       baseURL: `http://127.0.0.1:${port}`,
       timeout: 30_000,
+      retries: 0,
     });
 
-    await expect(verifyXMentionsWithXai(provider, ["JackMunro"]))
+    await expect(verifyXMentionsWithOpenAi(responses, ["JackMunro"]))
       .rejects.toThrow(/refused.*cannot verify/);
   });
 });

@@ -5,6 +5,11 @@ import {
   getActionSpec,
   type GenerationActionSpec,
 } from "./generation-registry.js";
+import {
+  INTELLIGENCE_MODEL,
+  INTELLIGENCE_REASONING_EFFORT,
+  OPENAI_ANALYSIS_TOOL,
+} from "./openai-intelligence.js";
 
 export type NotebookActionKind =
   | "local"
@@ -49,18 +54,19 @@ const LOCAL_ACTIONS: NotebookAction[] = [
     cellTypes: ["analyze"],
     kind: "analysis",
     operation: "analyze_source",
-    provider: "kie",
-    model: "gemini-3.5-flash",
-    tool: "kie_gemini_analysis",
+    provider: "openai",
+    model: INTELLIGENCE_MODEL,
+    tool: OPENAI_ANALYSIS_TOOL,
     title: "Analyze source",
-    description: "Run KIE Gemini 3.5 Flash analysis and emit normalized shots",
+    description: "Run OpenAI Responses analysis and emit normalized shots",
     outputKind: "script",
     billable: true,
     defaults: {
-      provider: "kie",
-      model: "gemini-3.5-flash",
+      provider: "openai",
+      model: INTELLIGENCE_MODEL,
+      reasoning: { effort: INTELLIGENCE_REASONING_EFFORT },
       operation: "analyze_source",
-      tool: "kie_gemini_analysis",
+      tool: OPENAI_ANALYSIS_TOOL,
     },
     parameters: [
       {
@@ -138,7 +144,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
     kind: "generation",
     operation: "rewrite_prompt",
     provider: "openai",
-    model: "gpt-5.2",
+    model: INTELLIGENCE_MODEL,
     tool: "rewrite_prompt",
     title: "Write animation prompt",
     description: "Rewrite an animation prompt using scene analysis and endpoint frames",
@@ -146,7 +152,8 @@ const LOCAL_ACTIONS: NotebookAction[] = [
     billable: true,
     defaults: {
       provider: "openai",
-      model: "gpt-5.2",
+      model: INTELLIGENCE_MODEL,
+      reasoning: { effort: INTELLIGENCE_REASONING_EFFORT },
       operation: "rewrite_prompt",
       tool: "rewrite_prompt",
     },
@@ -341,42 +348,44 @@ export function defaultActionForCell(
   cell: NotebookCell,
   document: NotebookDocument,
 ): NotebookAction | null {
-  const actions = actionsForCell(cell, document);
-  const tool = cell.tool ?? cell.model;
+  const normalizedCell = normalizeLegacyAnalyzeCell(cell);
+  const actions = actionsForCell(normalizedCell, document);
+  const tool = normalizedCell.tool ?? normalizedCell.model;
   const configured = tool
     ? actions.find((action) =>
       action.tool === tool || action.id === tool || action.model === tool)
     : undefined;
   if (configured) return configured;
-  if (cell.operation) {
-    const operation = actions.find((action) => action.operation === cell.operation);
+  if (normalizedCell.operation) {
+    const operation = actions.find((action) =>
+      action.operation === normalizedCell.operation);
     if (operation) return operation;
   }
-  if (cell.type === "analyze") {
+  if (normalizedCell.type === "analyze") {
     return actions.find((action) => action.operation === "analyze_source")
       ?? null;
   }
-  if (cell.type === "split_video") {
+  if (normalizedCell.type === "split_video") {
     return actions.find((action) => action.operation === "split_range")
       ?? null;
   }
-  if (cell.type === "extract_audio") {
+  if (normalizedCell.type === "extract_audio") {
     return actions.find((action) => action.operation === "extract_audio")
       ?? null;
   }
-  if (cell.type === "concat") {
+  if (normalizedCell.type === "concat") {
     return actions.find((action) => action.operation === "concat_video")
       ?? null;
   }
-  if (cell.type === "splice") {
+  if (normalizedCell.type === "splice") {
     return actions.find((action) => action.operation === "splice_video")
       ?? null;
   }
-  const defaultGenerationTool = cell.type === "generate_video"
+  const defaultGenerationTool = normalizedCell.type === "generate_video"
     ? DEFAULT_ANIMATION_TOOL
-    : cell.type === "generate_image"
+    : normalizedCell.type === "generate_image"
       ? DEFAULT_IMAGE_TOOL
-      : cell.type === "generate_audio"
+      : normalizedCell.type === "generate_audio"
         ? DEFAULT_AUDIO_TOOL
         : null;
   if (defaultGenerationTool) {
@@ -390,17 +399,28 @@ export function validateCellConfiguration(
   cell: NotebookCell,
   document: NotebookDocument,
 ): { ok: true; action: NotebookAction | null } | { ok: false; message: string } {
-  const actions = actionsForCell(cell, document, { includeHiddenGeneration: true });
+  const normalizedCell = normalizeLegacyAnalyzeCell(cell);
+  const actions = actionsForCell(
+    normalizedCell,
+    document,
+    { includeHiddenGeneration: true },
+  );
   const hasActionConfiguration = Boolean(
-    cell.operation ?? cell.tool ?? cell.model,
+    normalizedCell.operation ?? normalizedCell.tool ?? normalizedCell.model,
   );
   if (!hasActionConfiguration) {
-    return { ok: true, action: defaultActionForCell(cell, document) };
+    return {
+      ok: true,
+      action: defaultActionForCell(normalizedCell, document),
+    };
   }
   if (actions.length === 0) {
-    return { ok: false, message: `No actions available for cell type ${cell.type}` };
+    return {
+      ok: false,
+      message: `No actions available for cell type ${normalizedCell.type}`,
+    };
   }
-  const tool = cell.tool ?? cell.model;
+  const tool = normalizedCell.tool ?? normalizedCell.model;
   if (tool) {
     const registeredSpec = getActionSpec(tool);
     const registeredAction = registeredSpec
@@ -410,49 +430,95 @@ export function validateCellConfiguration(
       action.tool === tool || action.id === tool || action.model === tool)
       ?? registeredAction
       ?? undefined;
-    if (!match || !match.cellTypes.includes(cell.type)) {
+    if (!match || !match.cellTypes.includes(normalizedCell.type)) {
       return {
         ok: false,
-        message: `Tool ${tool} is not valid for cell type ${cell.type}`,
+        message: `Tool ${tool} is not valid for cell type ${normalizedCell.type}`,
       };
     }
-    if (cell.provider && match.provider && cell.provider !== match.provider) {
+    if (
+      normalizedCell.provider
+      && match.provider
+      && normalizedCell.provider !== match.provider
+    ) {
       return {
         ok: false,
-        message: `Provider ${cell.provider} is incompatible with tool ${tool}`,
+        message:
+          `Provider ${normalizedCell.provider} is incompatible with tool ${tool}`,
       };
     }
     return { ok: true, action: match };
   }
-  const match = actions.find((action) => action.operation === cell.operation);
+  const match = actions.find((action) =>
+    action.operation === normalizedCell.operation);
   if (!match) {
     return {
       ok: false,
-      message: `Operation ${cell.operation} is not valid for cell type ${cell.type}`,
+      message:
+        `Operation ${normalizedCell.operation} is not valid for cell type ${normalizedCell.type}`,
     };
   }
-  if (cell.provider && match.provider && cell.provider !== match.provider) {
+  if (
+    normalizedCell.provider
+    && match.provider
+    && normalizedCell.provider !== match.provider
+  ) {
     return {
       ok: false,
-      message: `Provider ${cell.provider} is incompatible with operation ${cell.operation}`,
+      message:
+        `Provider ${normalizedCell.provider} is incompatible with operation ${normalizedCell.operation}`,
     };
   }
   return { ok: true, action: match };
+}
+
+export function normalizeLegacyAnalyzeCell(cell: NotebookCell): NotebookCell {
+  if (
+    cell.type !== "analyze"
+    || cell.provider !== "kie"
+    || (
+      cell.model !== "gemini-3.5-flash"
+      && cell.model !== "gemini-3-5-flash"
+    )
+    || cell.tool !== "kie_gemini_analysis"
+  ) {
+    return cell;
+  }
+  return {
+    ...cell,
+    provider: "openai",
+    model: INTELLIGENCE_MODEL,
+    operation: "analyze_source",
+    tool: OPENAI_ANALYSIS_TOOL,
+  };
+}
+
+export function normalizeLegacyAnalyzeDocument(
+  document: NotebookDocument,
+): NotebookDocument {
+  let changed = false;
+  const cells = document.cells.map((cell) => {
+    const normalized = normalizeLegacyAnalyzeCell(cell);
+    if (normalized !== cell) changed = true;
+    return normalized;
+  });
+  return changed ? { ...document, cells } : document;
 }
 
 export function normalizeCellActionFields(
   cell: NotebookCell,
   document: NotebookDocument,
 ): NotebookCell {
-  const validated = validateCellConfiguration(cell, document);
-  if (!validated.ok || !validated.action) return cell;
+  const normalizedCell = normalizeLegacyAnalyzeCell(cell);
+  const validated = validateCellConfiguration(normalizedCell, document);
+  if (!validated.ok || !validated.action) return normalizedCell;
   const action = validated.action;
   return {
-    ...cell,
-    provider: cell.provider ?? action.provider ?? undefined,
-    model: cell.model ?? action.model ?? undefined,
-    operation: cell.operation ?? action.operation,
-    tool: cell.tool ?? action.tool ?? undefined,
+    ...normalizedCell,
+    provider: normalizedCell.provider ?? action.provider ?? undefined,
+    model: normalizedCell.model ?? action.model ?? undefined,
+    operation: normalizedCell.operation ?? action.operation,
+    tool: normalizedCell.tool ?? action.tool ?? undefined,
   };
 }
 
@@ -498,32 +564,36 @@ export function selectedCellDetails(
   document: NotebookDocument,
   cellId: string,
 ): Record<string, unknown> {
-  const cell = document.cells.find((candidate) => candidate.id === cellId);
+  const normalizedDocument = normalizeLegacyAnalyzeDocument(document);
+  const cell = normalizedDocument.cells.find((candidate) =>
+    candidate.id === cellId);
   if (!cell) throw new Error(`Cell not found: ${cellId}`);
-  const upstream = document.edges
+  const upstream = normalizedDocument.edges
     .filter((edge) => edge.target === cellId)
     .map((edge) => ({
       edgeId: edge.id,
       sourceCellId: edge.source,
       targetInput: edge.targetInput,
-      source: document.cells.find((candidate) => candidate.id === edge.source) ?? null,
+      source: normalizedDocument.cells.find((candidate) =>
+        candidate.id === edge.source) ?? null,
     }));
-  const downstream = document.edges
+  const downstream = normalizedDocument.edges
     .filter((edge) => edge.source === cellId)
     .map((edge) => ({
       edgeId: edge.id,
       targetCellId: edge.target,
       targetInput: edge.targetInput,
-      target: document.cells.find((candidate) => candidate.id === edge.target) ?? null,
+      target: normalizedDocument.cells.find((candidate) =>
+        candidate.id === edge.target) ?? null,
     }));
-  const execution = document.execution?.[cellId] ?? null;
-  const action = defaultActionForCell(cell, document);
-  const validation = validateCellConfiguration(cell, document);
+  const execution = normalizedDocument.execution?.[cellId] ?? null;
+  const action = defaultActionForCell(cell, normalizedDocument);
+  const validation = validateCellConfiguration(cell, normalizedDocument);
   return {
     cell,
     rawRow: notebookCellTableRows(notebookId, cell),
     action,
-    availableActions: actionsForCell(cell, document),
+    availableActions: actionsForCell(cell, normalizedDocument),
     validation,
     upstream,
     downstream,

@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import type { OpenAiResponseRequest, OpenAiResponseResponse } from "@apicity/openai";
 import { parseSegments } from "../remotion/subtitles/segments.js";
 import type { Word } from "../remotion/subtitles/types.js";
-import type { ResponsesFn } from "./describe-image.js";
+import {
+  INTELLIGENCE_MODEL,
+  type ResponsesFn,
+} from "../openai-intelligence.js";
 import {
   computeSourceTextHash,
   groupIntoSentences,
@@ -19,10 +22,13 @@ function word(text: string, start: number, end: number): Word {
 }
 
 // Hand-written fake of the injectable OpenAI responses function — the same
-// injection seam production uses (buildResponses), no module mocking.
-function fakeResponses(payload: unknown): ResponsesFn {
+// injection seam production uses (buildIntelligenceResponses), no module mocking.
+function fakeResponses(
+  payload: unknown,
+  capture?: (request: OpenAiResponseRequest) => void,
+): ResponsesFn {
   return async (req: OpenAiResponseRequest): Promise<OpenAiResponseResponse> => {
-    void req;
+    capture?.(req);
     return {
       status: "completed",
       output: [{
@@ -165,6 +171,29 @@ describe("translateTranscript", () => {
     expect(parsed[0].words.length).toBeGreaterThan(0);
     expect(parsed[0].words[0].start).toBe(0.0);
     expect(parsed[0].words[parsed[0].words.length - 1].end).toBeCloseTo(1.2, 10);
+  });
+
+  it("uses the shared intelligence defaults and a strict response schema", async () => {
+    let request: OpenAiResponseRequest | null = null;
+    const responses = fakeResponses(
+      { translations: ["Here, baby, drink the milk.", "Thank you, mom."] },
+      (captured) => {
+        request = captured;
+      },
+    );
+
+    await translateTranscript(raw, "en", responses);
+
+    expect(request).not.toBeNull();
+    expect(request?.model).toBe(INTELLIGENCE_MODEL);
+    expect(request?.reasoning).toEqual({ effort: "medium" });
+    expect(request?.store).toBe(false);
+    expect(request?.temperature).toBeUndefined();
+    expect(request?.text?.format).toMatchObject({
+      type: "json_schema",
+      name: "translated_transcript",
+      strict: true,
+    });
   });
 
   it("matches its own source via sidecarMatchesSource until the transcript changes", async () => {

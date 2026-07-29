@@ -1,13 +1,15 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { createOpenAi, withRetry, textPart, firstContent } from "@apicity/openai";
-import type { OpenAiContentPart, OpenAiChatRequest, OpenAiChatResponse } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
+import {
+  INTELLIGENCE_MODEL,
+  buildIntelligenceResponses,
+  firstResponseText,
+  intelligenceRequest,
+} from "../openai-intelligence.js";
 import { withLocalLease } from "./_lease.js";
 import type { ElevenLabs, ElevenLabsWord } from "../tools/_suggest-shared.js";
-
-const JOKES_MODEL = "gpt-5.5";
 
 type AnalyzeJokesPayload = {
   type: "analyze_jokes";
@@ -124,28 +126,21 @@ export function registerAnalyzeJokesJob(fs: Engine): void {
         throw new Error(`No ElevenLabs transcript found for ${assetId} — run /transcribe @${assetId} first.`);
       }
 
-      const userContent: OpenAiContentPart[] = [textPart(buildJokesContext(eleven))];
-
-      const provider = createOpenAi({ apiKey, timeout: 240_000 });
-      const call = withRetry<OpenAiChatRequest, OpenAiChatResponse>(provider.post.v1.chat.completions, { retries: 2, baseMs: 500 });
-
-      const result = await call({
-        model: JOKES_MODEL,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userContent },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
+      const responses = buildIntelligenceResponses(apiKey, { timeout: 240_000 });
+      const result = await responses(intelligenceRequest({
+        instructions: SYSTEM_PROMPT,
+        input: [{ role: "user", content: buildJokesContext(eleven) }],
+        text: {
+          format: {
+            type: "json_schema",
             name: "analyze_jokes_result",
-            schema: JOKES_JSON_SCHEMA as unknown as Record<string, unknown>,
+            schema: JOKES_JSON_SCHEMA,
             strict: true,
           },
         },
-        max_completion_tokens: 4096,
-      });
-      const outputText = firstContent(result);
+        max_output_tokens: 4096,
+      }), ctx.signal);
+      const outputText = firstResponseText(result);
 
       let parsed: ModelOutput;
       try {
@@ -162,7 +157,7 @@ export function registerAnalyzeJokesJob(fs: Engine): void {
           transcript_source: "elevenlabs" as const,
           word_count: spokenWords(eleven.words).length,
         },
-        model: JOKES_MODEL,
+        model: INTELLIGENCE_MODEL,
         asset_id: assetId,
       };
 

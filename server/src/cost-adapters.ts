@@ -440,7 +440,7 @@ const ALIBABA_ADAPTERS: Record<string, CostAdapter> = {
 };
 
 const ADAPTERS: Record<string, CostAdapter> = {
-  rewrite_prompt: openaiText("gpt-5.2", 1000),
+  rewrite_prompt: openaiText("gpt-5.6-sol", 1000),
   generate_elevenlabs_text_to_audio: elevenLabsTts,
   ...KIE_ADAPTERS,
   ...FAL_ADAPTERS,

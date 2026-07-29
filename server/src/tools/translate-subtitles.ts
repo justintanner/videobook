@@ -30,10 +30,10 @@ export function translateSubtitlesDef(fs: Engine): ToolDef {
         };
       }
 
-      if (!process.env.KIE_API_KEY) {
+      if (!process.env.OPENAI_API_KEY) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
+          content: [{ type: "text" as const, text: "OPENAI_API_KEY environment variable is not set" }],
         };
       }
 

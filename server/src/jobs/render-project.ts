@@ -21,10 +21,10 @@ import type {
   RenderInputProps,
 } from "../remotion/subtitles/types.js";
 import { requireApiKey } from "../api-key.js";
+import { buildIntelligenceResponses } from "../openai-intelligence.js";
 import { claimLockedLease } from "./_lease.js";
 import { ensureElevenLabsTranscript } from "./_transcribe.js";
 import { ingestWorkspaceOutputs } from "./_persist-output.js";
-import { buildResponses } from "./describe-image.js";
 import {
   iso1FromIso3,
   readLanguageCode,
@@ -109,6 +109,7 @@ async function resolveSubtitleSegments(
   assetId: string,
   raw: unknown,
   subtitleLanguage: string,
+  signal?: AbortSignal,
 ): Promise<Segment[]> {
   const sourceSegments = parseSegments(raw as Parameters<typeof parseSegments>[0]);
   const sourceIso1 = iso1FromIso3(readLanguageCode(raw));
@@ -130,8 +131,8 @@ async function resolveSubtitleSegments(
   }
 
   try {
-    const responses = buildResponses(requireApiKey("KIE_API_KEY"));
-    const sidecar = await translateTranscript(raw, subtitleLanguage, responses);
+    const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"));
+    const sidecar = await translateTranscript(raw, subtitleLanguage, responses, signal);
     const writeResult = await fs.files.write(assetId, sidecarFilename, JSON.stringify(sidecar, null, 2)
     );
     if (!writeResult.ok) {
@@ -255,7 +256,7 @@ export function registerRenderProjectJob(fs: Engine): void {
             const elevenlabsResult = await fs.files.read(asset.assetId, "elevenlabs.json");
             if (elevenlabsResult.ok) {
               rawTranscript = JSON.parse(elevenlabsResult.value.toString()) as unknown;
-              allSegments = await resolveSubtitleSegments(fs, bookId, asset.assetId, rawTranscript, subtitleLanguage);
+              allSegments = await resolveSubtitleSegments(fs, bookId, asset.assetId, rawTranscript, subtitleLanguage, ctx.signal);
             }
 
             let chunks: Chunk[] = [];

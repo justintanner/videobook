@@ -502,6 +502,61 @@ describe('NotebookCellInspector', () => {
     expect(html.indexOf('Run failed')).toBeLessThan(html.indexOf('Start seconds'))
   })
 
+  it('keeps Analyze inputs concise and makes its prompt collapsible', () => {
+    const analyzeCell: NotebookCell = {
+      ...cell,
+      type: 'analyze',
+      slug: 'analyze-splitter',
+      prompt: 'Split the source into narrative shots.',
+      provider: 'openai',
+      model: 'gpt-5.6-sol',
+      operation: 'analyze_source',
+      tool: 'openai_responses_analysis',
+      outputArtifactId: undefined,
+    }
+    const sourceCell: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000010',
+      slug: 'vid-source',
+    }
+    const edges: NotebookEdge[] = [{
+      id: '01900000-0000-7000-8000-000000000011',
+      source: sourceCell.id,
+      target: analyzeCell.id,
+      targetInput: 'source',
+    }]
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: analyzeCell,
+      cells: [analyzeCell, sourceCell],
+      edges,
+      asset: undefined,
+      status: 'pending',
+      error: null,
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('<h3>Inputs</h3>')
+    expect(html).toContain('<span>source</span>')
+    expect(html).not.toContain('Select the upstream cell that supplies each input.')
+    expect(html).not.toContain('Changing a source clears this preview until its producer is rerun.')
+    expect(html).toContain('<details class="inspector-prompt-disclosure" open="">')
+    expect(html).toContain('<summary>Prompt</summary>')
+    expect(html).toContain('aria-label="Prompt"')
+    expect(html).toContain('class="inspector-prompt-textarea"')
+    expect(html).toContain('Split the source into narrative shots.')
+    expect(html).toContain('Analyze')
+  })
+
   it('persists dirty action fields before running', async () => {
     const calls: string[] = []
     const result = await persistAndRunNotebookCell({

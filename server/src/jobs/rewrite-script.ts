@@ -1,16 +1,19 @@
 import type { Engine } from "videobook-engine";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
+import {
+  INTELLIGENCE_MODEL,
+  buildIntelligenceResponses,
+  firstResponseText,
+  intelligenceRequest,
+  type ResponsesFn,
+} from "../openai-intelligence.js";
 import { withLocalLease } from "./_lease.js";
 import {
-  buildResponses,
-  firstResponseText,
   formatMarkdown,
   PROMPT_CHAR_LIMIT,
   SCRIPT_FILENAME,
-  VISION_MODEL,
   type DescribeImageResult,
-  type ResponsesFn,
 } from "./describe-image.js";
 import { platformGuidance, type Platform } from "../platform-guidance.js";
 
@@ -28,6 +31,26 @@ const FIELD_LABEL_TO_KEY: Record<string, Exclude<keyof DescribeImageResult, "pro
   Shot: "shot",
   Pose: "pose",
 };
+
+const FULL_REWRITE_JSON_SCHEMA = {
+  type: "object",
+  required: ["prompt", "shot", "pose"],
+  additionalProperties: false,
+  properties: {
+    prompt: { type: "string" },
+    shot: { anyOf: [{ type: "string" }, { type: "null" }] },
+    pose: { anyOf: [{ type: "string" }, { type: "null" }] },
+  },
+} as const;
+
+const TLDR_REWRITE_JSON_SCHEMA = {
+  type: "object",
+  required: ["prompt"],
+  additionalProperties: false,
+  properties: {
+    prompt: { type: "string" },
+  },
+} as const;
 
 function parseMarkdownToResult(md: string): DescribeImageResult {
   const lines = md.split("\n");
@@ -55,8 +78,8 @@ function buildFullSystemPrompt(platform: Platform | null): string {
     "You rewrite image-reproduction prompt documents. The input describes one scene, split into a prose " +
     "prompt paragraph and two labeled breakdown fields (Shot, Pose). You apply a user transformation and " +
     "emit a rewritten document in the same JSON shape.\n\n" +
-    "Return ONLY a JSON object with keys: prompt (string, REQUIRED), shot (string, optional), pose (string, " +
-    "optional — include the same fields that appear in the input). The shot field is shot size + camera " +
+    "Return ONLY a JSON object with keys: prompt (string, REQUIRED), shot (string or null), pose (string or " +
+    "null). Use null when an optional field is absent from the input. The shot field is shot size + camera " +
     "angle in standard cinematography terms (e.g. 'medium close-up, eye-level'). The pose field describes " +
     "body geometry only (weight, stance, rotation, limb positions); for close-ups, also describe implied " +
     "off-frame posture in one trailing sentence. The pose field must not mention clothing, hair, face, or " +
@@ -115,27 +138,38 @@ async function rewriteText(
   responses: ResponsesFn,
   current: DescribeImageResult,
   opts: { tldr: boolean; platform: Platform | null; customPrompt: string | null },
+  signal?: AbortSignal,
 ): Promise<DescribeImageResult> {
   const system = opts.tldr ? buildTldrSystemPrompt(opts.platform) : buildFullSystemPrompt(opts.platform);
   const user = buildUserMessage(current, opts.customPrompt);
 
-  const response = await responses({
-    model: VISION_MODEL,
+  const response = await responses(intelligenceRequest({
     instructions: system,
     input: [{ role: "user", content: user }],
-    text: { format: { type: "json_object" } },
-    temperature: 0.4,
+    text: {
+      format: {
+        type: "json_schema",
+        name: opts.tldr ? "rewrite_script_tldr" : "rewrite_script_full",
+        schema: opts.tldr ? TLDR_REWRITE_JSON_SCHEMA : FULL_REWRITE_JSON_SCHEMA,
+        strict: true,
+      },
+    },
     max_output_tokens: 2048,
-  });
+  }), signal);
 
   const content = firstResponseText(response);
   if (!content) {
     throw new Error(`Rewrite provider returned no content (status=${response.status})`);
   }
-  const parsed = JSON.parse(content) as DescribeImageResult;
-  if (!parsed.prompt || typeof parsed.prompt !== "string") {
-    throw new Error(`Rewrite model returned no prompt field. Got keys: ${Object.keys(parsed).join(",")}`);
+  const raw = JSON.parse(content) as Record<string, unknown>;
+  if (!raw.prompt || typeof raw.prompt !== "string") {
+    throw new Error(`Rewrite model returned no prompt field. Got keys: ${Object.keys(raw).join(",")}`);
   }
+  const parsed: DescribeImageResult = {
+    prompt: raw.prompt,
+    ...(typeof raw.shot === "string" ? { shot: raw.shot } : {}),
+    ...(typeof raw.pose === "string" ? { pose: raw.pose } : {}),
+  };
   if (parsed.prompt.length > PROMPT_CHAR_LIMIT) {
     parsed.prompt = parsed.prompt.slice(0, PROMPT_CHAR_LIMIT).trimEnd();
   }
@@ -158,7 +192,7 @@ export function registerRewriteScriptJob(fs: Engine): void {
     } = payload as RewriteScriptPayload;
 
     return withLocalLease(fs, bookId, scriptAssetId, ctx, "rewrite_script", async () => {
-      const responses = buildResponses(requireApiKey("KIE_API_KEY"));
+      const responses = buildIntelligenceResponses(requireApiKey("OPENAI_API_KEY"));
 
       const readResult = await fs.files.read(scriptAssetId, SCRIPT_FILENAME);
       if (!readResult.ok) {
@@ -174,7 +208,7 @@ export function registerRewriteScriptJob(fs: Engine): void {
         tldr: tldr === true,
         platform: platform ?? null,
         customPrompt: customPrompt ?? null,
-      });
+      }, ctx.signal);
 
       const markdown = tldr ? formatTldrMarkdown(rewritten) : formatMarkdown(rewritten);
       const writeResult = await fs.files.write(scriptAssetId, SCRIPT_FILENAME, markdown);
@@ -185,7 +219,7 @@ export function registerRewriteScriptJob(fs: Engine): void {
       await fs.metadata.artifacts.write(scriptAssetId, "original", {
           origin: "describe_image",
           sourceAssetId,
-          model: VISION_MODEL,
+          model: INTELLIGENCE_MODEL,
           processed_at: new Date().toISOString(),
           variant: tldr ? "tldr" : "full",
           ...(platform ? { platform } : {}),

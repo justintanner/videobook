@@ -1,17 +1,8 @@
-/**
- * rename_all MCP tool — bulk rename vid/img assets with an explicit dry
- * run. Dry run uses GPT-5.5 (@apicity/openai) once over each asset's stored
- * context (videos: analysis/prompt/transcript; images: analysis/prompt +
- * parent-video context for extracted frames) plus preview stills (vision),
- * then revalidates user edits and finally applies via fs.renameAsset +
- * first-class reference updates.
- */
 import type { Artifact, Engine, NotebookDocument } from "videobook-engine";
 import { z } from "zod";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createOpenAi, firstContent } from "@apicity/openai";
-import type { OpenAiContentPart, OpenAiMessage } from "@apicity/openai";
+import type { OpenAiContentPart } from "@apicity/openai";
 import {
   isRenamable,
   humanizeSlug,
@@ -28,8 +19,12 @@ import {
 } from "../rename-helpers.js";
 import { RENDER_ORIENTATIONS } from "./sync.js";
 import type { ToolDef } from "./tool-def.js";
-
-const MODEL = "gpt-5.5";
+import {
+  INTELLIGENCE_MODEL,
+  buildIntelligenceResponses,
+  firstResponseText,
+  intelligenceRequest,
+} from "../openai-intelligence.js";
 
 interface RenamePayload {
   asset_id: string;
@@ -51,7 +46,7 @@ const schema = {
     .optional()
     .describe(
       "Edited renames for revalidation (dry_run:true) or confirmed renames to apply (dry_run:false). " +
-        "Omit on the first dry run to let GPT-5.5 propose names.",
+        "Omit on the first dry run to let GPT-5.6 Sol propose names.",
     ),
 };
 
@@ -59,7 +54,7 @@ export function renameAllDef(fs: Engine): ToolDef {
   return {
     name: "rename_all",
     description:
-      "Bulk-rename vid-*/img-* assets with an explicit dry run. Dry run proposes descriptive names via GPT-5.5 " +
+      "Bulk-rename vid-*/img-* assets with an explicit dry run. Dry run proposes descriptive names via GPT-5.6 Sol " +
       "over stored analysis/transcript/prompt context; re-run dry_run with edited `renames` to revalidate; " +
       "set dry_run=false to apply via fs.renameAsset and update timeline/OSG/plan references.",
     schema,
@@ -141,22 +136,22 @@ async function handleDryRunSuggest(
   const hasImages = previews.some((p) => p.parts.length > 0);
   const contentParts = buildMultimodalContent(contexts, previews, hasImages);
 
-  const provider = createOpenAi({ apiKey, timeout: 120_000 });
-  const messages: OpenAiMessage[] = [
-    { role: "user", content: contentParts },
-  ];
-  const result = await provider.post.v1.chat.completions({
-    model: MODEL,
-    messages,
-    max_completion_tokens: 2048,
-  });
-  const suggestions = parseSuggestionResponse(firstContent(result));
+  const responses = buildIntelligenceResponses(apiKey, { timeout: 120_000 });
+  const result = await responses(intelligenceRequest({
+    input: [{
+      role: "user",
+      content: responseContentFromChat(contentParts),
+    }],
+    text: { format: { type: "json_object" } },
+    max_output_tokens: 2048,
+  }));
+  const suggestions = parseSuggestionResponse(firstResponseText(result));
 
   const rows = buildRenameRows(contexts, suggestions, allAssetIds);
   return {
     content: [{
       type: "text" as const,
-      text: JSON.stringify({ dry_run: true, rows, model: MODEL }),
+      text: JSON.stringify({ dry_run: true, rows, model: INTELLIGENCE_MODEL }),
     }],
   };
 }
@@ -542,6 +537,24 @@ function buildMultimodalContent(
     parts.push(...images);
   }
   return parts;
+}
+
+function responseContentFromChat(
+  content: OpenAiContentPart[] | string,
+): Array<
+  | { type: "input_text"; text: string }
+  | { type: "input_image"; image_url: string; detail: "auto" | "low" | "high" }
+> {
+  if (typeof content === "string") {
+    return [{ type: "input_text", text: content }];
+  }
+  return content.map((part) => part.type === "text"
+    ? { type: "input_text" as const, text: part.text }
+    : {
+        type: "input_image" as const,
+        image_url: part.image_url.url,
+        detail: part.image_url.detail ?? "auto",
+      });
 }
 
 /** Rewrite first-class references after a batch rename: timeline slots/audio,

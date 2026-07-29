@@ -190,7 +190,7 @@ describe("translateToolPayload", () => {
       input: {
         task_id: "<task_id_from_source_video_metadata>",
         prompt: "continue through the doorway",
-        extend_at: "3",
+        extend_at: 3,
         extend_times: "10",
       },
     });

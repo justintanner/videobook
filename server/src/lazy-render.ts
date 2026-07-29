@@ -96,7 +96,7 @@ export async function enqueueLazyAnalysisIfSlotted(
   // Same provider gate as assign_slot's lazy analysis: truthy env check (not
   // getApiKey) so placeholder keys used in tests pass; the real placeholder
   // defense lives at the API call inside analyze-video.
-  if (!process.env.KIE_API_KEY) return null;
+  if (!process.env.OPENAI_API_KEY) return null;
 
   const asset = fs.artifacts.get(assetId);
   if (!asset.ok) return null;

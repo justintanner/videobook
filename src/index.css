@@ -2247,6 +2247,34 @@ textarea:focus-visible {
   display: grid;
 }
 
+.inspector-prompt-disclosure {
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  background: rgba(1, 9, 5, 0.72);
+}
+
+.inspector-prompt-disclosure summary {
+  padding: 11px 12px;
+  color: #668c75;
+  cursor: pointer;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.inspector-prompt-disclosure summary:hover,
+.inspector-prompt-disclosure summary:focus-visible {
+  color: #a9d6bf;
+  background: rgba(42, 110, 70, 0.14);
+  outline: 0;
+}
+
+.inspector-body .inspector-prompt-textarea {
+  display: block;
+  border-width: 1px 0 0;
+  background: rgba(1, 9, 5, 0.94);
+}
+
 .inspector-run-error {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);

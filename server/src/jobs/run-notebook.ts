@@ -26,8 +26,18 @@ import {
   splitSourceRange,
   type BurnInCaption,
 } from "../notebook-media-ops.js";
+import { analyzeNotebookSource } from "../notebook-live-analysis.js";
 import { applyAnalysisResults } from "../notebook-workflow.js";
-import { DEFAULT_ANIMATION_TOOL } from "../notebook-action-catalog.js";
+import {
+  DEFAULT_ANIMATION_TOOL,
+  normalizeLegacyAnalyzeCell,
+  normalizeLegacyAnalyzeDocument,
+} from "../notebook-action-catalog.js";
+import {
+  INTELLIGENCE_MODEL,
+  INTELLIGENCE_REASONING_EFFORT,
+  OPENAI_ANALYSIS_TOOL,
+} from "../openai-intelligence.js";
 
 export interface RunNotebookPayload {
   type: "run_notebook";
@@ -1287,39 +1297,60 @@ async function executeLocalOrGeneration(
     const fixture = cell.inputs?.fixtureAnalysis
       ?? cell.inputs?.analysisFixture
       ?? null;
-    if (!fixture) {
-      if (!process.env.KIE_API_KEY) {
-        throw new Error(
-          "Analysis requires KIE_API_KEY or a fixtureAnalysis input for offline runs",
+    const configuredDuration = Number(
+      cell.inputs?.sourceDurationSeconds
+        ?? (
+          fixture && typeof fixture === "object"
+            ? (fixture as { sourceDurationSeconds?: number }).sourceDurationSeconds
+            : undefined
+        ),
+    );
+    const analysisRun = fixture
+      ? {
+          rawOutput: fixture,
+          sourceDurationSeconds: Number.isFinite(configuredDuration)
+            ? configuredDuration
+            : 60,
+          request: {
+            provider: "openai",
+            model: INTELLIGENCE_MODEL,
+            reasoning: { effort: INTELLIGENCE_REASONING_EFFORT },
+            mode: "fixture",
+            prompt: cell.prompt ?? "",
+          },
+        }
+      : await analyzeNotebookSource(
+          engine,
+          sourceId,
+          cell.prompt ?? "",
+          {
+            ...(Number.isFinite(configuredDuration)
+              ? { sourceDurationSeconds: configuredDuration }
+              : {}),
+          },
         );
-      }
+    if (
+      !Number.isFinite(analysisRun.sourceDurationSeconds)
+      || analysisRun.sourceDurationSeconds <= 0
+    ) {
       throw new Error(
-        "Live KIE analysis is key-gated; provide fixtureAnalysis for offline DAG runs",
+        `Analyze cell ${cell.id} requires a positive source duration`,
       );
     }
-    const duration = Number(
-      cell.inputs?.sourceDurationSeconds
-        ?? (fixture as { sourceDurationSeconds?: number }).sourceDurationSeconds
-        ?? 60,
-    );
     const next = await applyAnalysisResults(engine, document, cell.id, {
-      rawOutput: fixture,
-      sourceDurationSeconds: duration,
-      request: {
-        provider: cell.provider ?? "kie",
-        model: cell.model ?? "gemini-3.5-flash",
-        prompt: cell.prompt ?? "",
-        mode: "fixture",
-      },
+      rawOutput: analysisRun.rawOutput,
+      sourceDurationSeconds: analysisRun.sourceDurationSeconds,
+      request: analysisRun.request,
       sourceArtifactId: sourceId,
     });
-    const analysis = next.cells.find((candidate) => candidate.id === cell.id);
-    if (!analysis?.outputArtifactId) {
+    const completedAnalysis = next.cells.find((candidate) =>
+      candidate.id === cell.id);
+    if (!completedAnalysis?.outputArtifactId) {
       throw new Error("Analysis did not produce a script artifact");
     }
     return {
-      artifactId: analysis.outputArtifactId,
-      tool: cell.tool ?? "kie_gemini_analysis",
+      artifactId: completedAnalysis.outputArtifactId,
+      tool: cell.tool ?? OPENAI_ANALYSIS_TOOL,
       document: next,
     };
   }
@@ -1442,33 +1473,49 @@ export async function runNotebookCell(
   outputArtifactId: string;
   status: "completed" | "awaiting-output";
 }> {
-  const nextFingerprint = notebookCellFingerprint(document, cell);
+  const normalizedDocument = normalizeLegacyAnalyzeDocument(document);
+  const normalizedCell = normalizedDocument.cells.find((candidate) =>
+    candidate.id === cell.id) ?? normalizeLegacyAnalyzeCell(cell);
+  const nextFingerprint = notebookCellFingerprint(
+    normalizedDocument,
+    normalizedCell,
+  );
   const startedAt = new Date().toISOString();
   const runningState: CellExecution = {
     fingerprint: nextFingerprint,
     status: "running",
-    ...(cell.outputArtifactId
-      ? { outputArtifactId: cell.outputArtifactId }
+    ...(normalizedCell.outputArtifactId
+      ? { outputArtifactId: normalizedCell.outputArtifactId }
       : {}),
     ...(options.runId ? { runId: options.runId } : {}),
     startedAt,
     updatedAt: startedAt,
-    tool: cell.tool
-      || cell.model
-      || cell.operation,
+    tool: normalizedCell.tool
+      || normalizedCell.model
+      || normalizedCell.operation,
   };
   const started = await mutateNotebook(
     engine,
     notebookId,
     "start_notebook_cell",
-    (current) => withExecution(current, cell.id, runningState),
-    { cellId: cell.id, runId: options.runId },
+    (current) => withExecution(
+      normalizeLegacyAnalyzeDocument(current),
+      normalizedCell.id,
+      runningState,
+    ),
+    { cellId: normalizedCell.id, runId: options.runId },
   );
   if (!started.ok) throw new Error(started.error.message);
-  const activeDocument = withExecution(document, cell.id, runningState);
+  const activeDocument = withExecution(
+    normalizedDocument,
+    normalizedCell.id,
+    runningState,
+  );
   const activeCell = activeDocument.cells.find((candidate) =>
-    candidate.id === cell.id);
-  if (!activeCell) throw new Error(`Notebook cell not found: ${cell.id}`);
+    candidate.id === normalizedCell.id);
+  if (!activeCell) {
+    throw new Error(`Notebook cell not found: ${normalizedCell.id}`);
+  }
   try {
     const output = await executeLocalOrGeneration(
       engine,
@@ -1917,17 +1964,29 @@ export function registerRunNotebookJob(engine: Engine): void {
     const runId = input.runId ?? uuidv7();
     const initial = engine.notebooks.read(input.notebookId);
     if (!initial.ok) throw new Error(initial.error.message);
+    let document = normalizeLegacyAnalyzeDocument(initial.value);
+    if (document !== initial.value) {
+      const normalized = await mutateNotebook(
+        engine,
+        input.notebookId,
+        "normalize_legacy_analyze_cells",
+        normalizeLegacyAnalyzeDocument,
+      );
+      if (!normalized.ok) throw new Error(normalized.error.message);
+      const refreshed = engine.notebooks.read(input.notebookId);
+      if (!refreshed.ok) throw new Error(refreshed.error.message);
+      document = refreshed.value;
+    }
     const selected = input.cellIds ? new Set(input.cellIds) : null;
     const required = new Set<string>();
     if (selected) {
       for (const cellId of selected) {
         required.add(cellId);
-        for (const ancestor of ancestorsOf(initial.value, cellId)) {
+        for (const ancestor of ancestorsOf(document, cellId)) {
           required.add(ancestor);
         }
       }
     }
-    let document = initial.value;
     const ordered = topologicalOrder(document);
     const outputs: Record<string, string> = {};
     const errors: string[] = [];

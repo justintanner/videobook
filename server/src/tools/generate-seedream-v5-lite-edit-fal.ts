@@ -14,7 +14,7 @@ const schema = {
   prompt: apicityStringField(seedream.prompt, "Edit instruction", { required: true }),
   image_slugs: apicityStringArrayField(seedream.image_urls, "1-10 @img-* slugs for reference images", { required: true }),
   image_size: apicityField(seedream.image_size, "Output size preset"),
-  auto_4K: apicityField(seedream.auto_4K, "Upscale output to 4K"),
+  auto_4K: z.boolean().optional().describe("Upscale output to 4K"),
   num_images: apicityField(seedream.num_images, "Number of images to generate"),
   max_images: apicityField(seedream.max_images, "Max images returned"),
 } satisfies ZodRawShape;

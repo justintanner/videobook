@@ -40,7 +40,7 @@ async function enrichCommitsWithRewrite(
       return {
         ...commit,
         rewrite: {
-          model: metadata.model ?? "gpt-5.2",
+          model: metadata.model ?? "gpt-5.6-sol",
           variant: metadata.variant ?? "full",
           ...(metadata.platform ? { platform: metadata.platform } : {}),
           ...(metadata.customPrompt

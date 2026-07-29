@@ -1,9 +1,13 @@
 import type { Engine } from "videobook-engine";
 import { join } from "node:path";
-import { readFile } from "node:fs/promises";
-import type { KieGeminiPart } from "@apicity/kie";
+import type { OpenAiResponseInputContent } from "@apicity/openai";
 import { registerJobHandler, queue } from "../queue.js";
 import { getApiKey } from "../api-key.js";
+import {
+  buildIntelligenceResponses,
+  firstResponseText,
+  intelligenceRequest,
+} from "../openai-intelligence.js";
 import {
   DOWNSTREAM_LEASE_WAIT_MS,
   withLocalLease,
@@ -11,7 +15,6 @@ import {
 import { findAudioFile } from "videobook-engine";
 import { readAndAssessDialog } from "../dialog-quality.js";
 import { enqueueLazyTimelineRender } from "../lazy-render.js";
-import { callGeminiFlashJson, geminiImageBase64Part, geminiTextPart } from "../kie-gemini.js";
 
 type AnalyzeVideoPayload = {
   type: "analyze_video";
@@ -50,6 +53,91 @@ Return a JSON object with these fields:
 - "recommendedSubtitlePosition": Based on what is already on screen, recommend the best position ("top", "middle", or "bottom") for adding subtitle overlays that will not conflict with any detected burned-in subtitles or on-screen graphics. If burned-in subtitles are at the bottom, recommend "top". If nothing is detected, default to "bottom".
 - "recommendedOsgPosition": Based on what is already on screen, recommend the best corner ("top-left", "top-right", "bottom-left", or "bottom-right") for placing an overlay graphic that will not conflict with any detected on-screen graphics. If nothing is detected, default to "top-right".`;
 
+const ANALYZE_VIDEO_JSON_SCHEMA = {
+  type: "object",
+  required: [
+    "summary",
+    "scenes",
+    "tags",
+    "mood",
+    "subjects",
+    "subjectPlacement",
+    "actions",
+    "setting",
+    "textOnScreen",
+    "burnedInSubtitles",
+    "onScreenGraphic",
+    "recommendedSubtitlePosition",
+    "recommendedOsgPosition",
+  ],
+  additionalProperties: false,
+  properties: {
+    summary: { type: "string" },
+    scenes: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["timestamp", "description", "tags"],
+        additionalProperties: false,
+        properties: {
+          timestamp: { type: "number" },
+          description: { type: "string" },
+          tags: { type: "array", items: { type: "string" } },
+        },
+      },
+    },
+    tags: { type: "array", items: { type: "string" } },
+    mood: { type: "string" },
+    subjects: { type: "array", items: { type: "string" } },
+    subjectPlacement: { type: "string", enum: ["left", "center", "right"] },
+    actions: { type: "array", items: { type: "string" } },
+    setting: { type: "string" },
+    textOnScreen: { type: "array", items: { type: "string" } },
+    burnedInSubtitles: {
+      anyOf: [
+        {
+          type: "object",
+          required: ["detected", "position", "confidence"],
+          additionalProperties: false,
+          properties: {
+            detected: { type: "boolean" },
+            position: { type: "string", enum: ["top", "middle", "bottom"] },
+            confidence: { type: "string", enum: ["high", "medium", "low"] },
+          },
+        },
+        { type: "null" },
+      ],
+    },
+    onScreenGraphic: {
+      anyOf: [
+        {
+          type: "object",
+          required: ["detected", "position", "description", "confidence"],
+          additionalProperties: false,
+          properties: {
+            detected: { type: "boolean" },
+            position: {
+              type: "string",
+              enum: ["top-left", "top-right", "bottom-left", "bottom-right"],
+            },
+            description: { type: "string" },
+            confidence: { type: "string", enum: ["high", "medium", "low"] },
+          },
+        },
+        { type: "null" },
+      ],
+    },
+    recommendedSubtitlePosition: {
+      type: "string",
+      enum: ["top", "middle", "bottom"],
+    },
+    recommendedOsgPosition: {
+      type: "string",
+      enum: ["top-left", "top-right", "bottom-left", "bottom-right"],
+    },
+  },
+} as const;
+
 function sampleFrames(frames: string[]): string[] {
   if (frames.length <= MAX_FRAMES) return frames;
   const step = (frames.length - 1) / (MAX_FRAMES - 1);
@@ -77,15 +165,20 @@ export function registerAnalyzeVideoJob(fs: Engine): void {
           .filter((f) => f.endsWith(".jpg"))
           .sort((a, b) => parseFloat(a) - parseFloat(b))
       : [];
-    // videobook-engine doesn't yet expose a typed read for asset subdir files,
-    // so frame bytes are read via node:fs below.
-    const framesDir = join(assetDir, "original_frames");
 
     const sampled = sampleFrames(frameFiles);
-    const frameParts: KieGeminiPart[] = [];
+    const frameParts: OpenAiResponseInputContent[] = [];
     for (const file of sampled) {
-      const buf = await readFile(join(framesDir, file));
-      frameParts.push(geminiImageBase64Part(buf.toString("base64"), "image/jpeg"));
+      const frameRead = await fs.files.read(assetId, `original_frames/${file}`);
+      if (!frameRead.ok) throw new Error(frameRead.error.message);
+      frameParts.push(
+        { type: "input_text", text: `Frame timestamp: ${parseFloat(file).toFixed(3)}s` },
+        {
+          type: "input_image",
+          image_url: `data:image/jpeg;base64,${Buffer.from(frameRead.value).toString("base64")}`,
+          detail: "high",
+        },
+      );
     }
 
     let transcriptionText = "";
@@ -115,28 +208,32 @@ export function registerAnalyzeVideoJob(fs: Engine): void {
     }
     contextParts.push(`${sampled.length} frames from the video are attached below.`);
 
-    const userContent = [
-      geminiTextPart(contextParts.join("\n\n")),
+    const userContent: OpenAiResponseInputContent[] = [
+      { type: "input_text", text: contextParts.join("\n\n") },
       ...frameParts,
     ];
 
     let analysis: Record<string, unknown> = FALLBACK_ANALYSIS;
 
-    const kieKey = getApiKey("KIE_API_KEY");
+    const apiKey = getApiKey("OPENAI_API_KEY");
 
-    if (kieKey) {
+    if (apiKey) {
       try {
-        const outputText = await callGeminiFlashJson({
-          apiKey: kieKey,
-          parts: [
-            geminiTextPart(`Instructions:\n${SYSTEM_PROMPT}`),
-            ...userContent,
-          ],
-          temperature: 0.3,
-          maxOutputTokens: 4096,
-          timeout: 180_000,
-        });
-        analysis = JSON.parse(outputText) as Record<string, unknown>;
+        const responses = buildIntelligenceResponses(apiKey, { timeout: 180_000 });
+        const response = await responses(intelligenceRequest({
+          instructions: SYSTEM_PROMPT,
+          input: [{ role: "user", content: userContent }],
+          text: {
+            format: {
+              type: "json_schema",
+              name: "video_analysis",
+              schema: ANALYZE_VIDEO_JSON_SCHEMA,
+              strict: true,
+            },
+          },
+          max_output_tokens: 4096,
+        }), ctx.signal);
+        analysis = JSON.parse(firstResponseText(response)) as Record<string, unknown>;
       } catch (e) {
         console.error(`[analyze_video] API failed for ${assetId}:`, e instanceof Error ? e.message : e);
       }

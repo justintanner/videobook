@@ -7,10 +7,14 @@ import { buildChatRoutingPrompt, getRoutableTool, NESTED_TIMESTAMP_PARAMS, TIMES
 import { parseTime } from "../time-parse.js";
 import { withLogging } from "./log-wrapper.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
-import { callGeminiFlashJson, geminiTextPart } from "../kie-gemini.js";
 import { getApiKey } from "../api-key.js";
 import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
 import { timelineSlotSlugs } from "../timeline-helpers.js";
+import {
+  buildIntelligenceResponses,
+  firstResponseText,
+  intelligenceRequest,
+} from "../openai-intelligence.js";
 
 type ChatDecision = {
   tool: string;
@@ -18,11 +22,7 @@ type ChatDecision = {
   message: string;
 };
 
-// Thinking tokens count against maxOutputTokens on gemini-3.5-flash; 512 was
-// too low and truncated routing JSON mid-string ("Unterminated string in JSON").
 const CHAT_ROUTING_MAX_OUTPUT_TOKENS = 2048;
-// Live routing can exceed 15s under Kie load even with low thinking; 15s aborts
-// surfaced as "Routing failed: ... AbortError" before any decision JSON arrived.
 const CHAT_ROUTING_TIMEOUT_MS = 45_000;
 
 export type ChatResolvedAsset = ResolvedArtifact;
@@ -307,9 +307,9 @@ export function chatDef(fs: Engine): ToolDef {
       }) as unknown as ChatLogEntry[];
       const historyContext = formatHistoryForPrompt(historyLines);
 
-      const apiKey = getApiKey("KIE_API_KEY");
+      const apiKey = getApiKey("OPENAI_API_KEY");
       if (!apiKey) {
-        return error("KIE_API_KEY environment variable is not set");
+        return error("OPENAI_API_KEY environment variable is not set");
       }
 
       const systemPrompt = buildChatRoutingPrompt(book.slug, historyContext || undefined);
@@ -329,28 +329,20 @@ Determine which tool to use and what parameters to pass.`;
 
       let decision: ChatDecision;
       try {
-        // One retry: Gemini occasionally returns brace-balanced but invalid JSON
-        // (unquoted URLs, trailing commas). repairChatRoutingJson covers common
-        // cases; a second call recovers from rarer corruption.
+        const responses = buildIntelligenceResponses(apiKey, {
+          timeout: CHAT_ROUTING_TIMEOUT_MS,
+        });
         let lastError: unknown;
         decision = { tool: "", params: {}, message: "" };
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
-            const outputText = await callGeminiFlashJson({
-              apiKey,
-              parts: [
-                geminiTextPart(`Instructions:\n${systemPrompt}`),
-                geminiTextPart(userMessage),
-              ],
-              temperature: 0.1,
-              maxOutputTokens: CHAT_ROUTING_MAX_OUTPUT_TOKENS,
-              // Do not pass responseSchema: Kie gemini-3.5-flash + open-ended
-              // params objects frequently truncates to incomplete JSON
-              // (e.g. `{"tool":"...","params": {`). application/json + normalize is enough.
-              thinkingConfig: { includeThoughts: false, thinkingLevel: "low" },
-              timeout: CHAT_ROUTING_TIMEOUT_MS,
-              signal: AbortSignal.timeout(CHAT_ROUTING_TIMEOUT_MS),
-            });
+            const response = await responses(intelligenceRequest({
+              instructions: systemPrompt,
+              input: userMessage,
+              text: { format: { type: "json_object" } },
+              max_output_tokens: CHAT_ROUTING_MAX_OUTPUT_TOKENS,
+            }), AbortSignal.timeout(CHAT_ROUTING_TIMEOUT_MS));
+            const outputText = firstResponseText(response);
             decision = parseChatDecision(outputText);
             lastError = null;
             break;

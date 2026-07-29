@@ -15,6 +15,10 @@ import {
   buildSevenStageScaffold,
   MULTYCULTY_FEATURES,
 } from "./notebook-workflow.js";
+import {
+  INTELLIGENCE_MODEL,
+  INTELLIGENCE_REASONING_EFFORT,
+} from "./openai-intelligence.js";
 
 type ArtifactRecord = {
   artifactId: string;
@@ -524,8 +528,9 @@ export async function seedMultycultyWorkflow(
       sourceDurationSeconds: 30,
       request: {
         mode: "multyculty-fixture",
-        provider: "kie",
-        model: "gemini-3.5-flash",
+        provider: "openai",
+        model: INTELLIGENCE_MODEL,
+        reasoning: { effort: INTELLIGENCE_REASONING_EFFORT },
       },
       sourceArtifactId: sourceArtifact.artifactId,
     },

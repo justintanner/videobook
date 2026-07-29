@@ -399,12 +399,14 @@ function InputSources({
   cells,
   edges,
   busy,
+  showHints = true,
   onSetInput,
 }: {
   cell: NotebookCell
   cells: NotebookCell[]
   edges: NotebookEdge[]
   busy: boolean
+  showHints?: boolean
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
 }) {
   const inputs = cellInputNames(cell, edges)
@@ -414,7 +416,7 @@ function InputSources({
   return (
     <section className="inspector-input-sources">
       <h3>Inputs</h3>
-      <p>Select the upstream cell that supplies each input.</p>
+      {showHints && <p>Select the upstream cell that supplies each input.</p>}
       {inputs.map((input) => {
         const edge = edges.find((candidate) =>
           candidate.target === cell.id && candidate.targetInput === input)
@@ -442,9 +444,11 @@ function InputSources({
           </label>
         )
       })}
-      <span className="workspace-notice">
-        Changing a source clears this preview until its producer is rerun.
-      </span>
+      {showHints && (
+        <span className="workspace-notice">
+          Changing a source clears this preview until its producer is rerun.
+        </span>
+      )}
     </section>
   )
 }
@@ -1061,6 +1065,7 @@ function ExecutableCellInspector({
         cells={cells}
         edges={edges}
         busy={busy}
+        showHints={cell.type !== 'analyze'}
         onSetInput={onSetInput}
       />
       <form
@@ -1076,14 +1081,16 @@ function ExecutableCellInspector({
         }}
       >
         {textCell && (
-          <label>
-            Prompt
+          <details className="inspector-prompt-disclosure" open>
+            <summary>Prompt</summary>
             <textarea
+              aria-label="Prompt"
+              className="inspector-prompt-textarea"
               value={draft.prompt}
               rows={8}
               onChange={(event) => updateDraft('prompt', event.target.value)}
             />
-          </label>
+          </details>
         )}
         {cell.type === 'split_video' && (
           <div className="inspector-field-pair">

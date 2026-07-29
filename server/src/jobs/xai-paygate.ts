@@ -13,7 +13,7 @@ type XaiPaidDotPath =
   | typeof XAI_IMAGE_EDITS_DOT_PATH
   | typeof XAI_VIDEO_GENERATIONS_DOT_PATH;
 
-type XaiPaidMethod<TReq, TRes> = (request: TReq, approval: PayGateApproval) => Promise<TRes>;
+type XaiPaidMethod<TReq, TRes> = (request: TReq, approval?: PayGateApproval) => Promise<TRes>;
 
 export function createXaiPaygatedProvider(apiKey: string, timeout: number): XaiProvider {
   return createXai({
@@ -34,10 +34,9 @@ export function mintXaiOtp(dotPath: XaiPaidDotPath, request: object, ttlSeconds 
 }
 
 export async function callXaiPaid<TReq extends object, TRes>(
-  method: (request: TReq, signal?: AbortSignal) => Promise<TRes>,
+  method: XaiPaidMethod<TReq, TRes>,
   dotPath: XaiPaidDotPath,
   request: TReq,
 ): Promise<TRes> {
-  const paidMethod = method as unknown as XaiPaidMethod<TReq, TRes>;
-  return paidMethod(request, { otp: mintXaiOtp(dotPath, request) });
+  return method(request, { otp: mintXaiOtp(dotPath, request) });
 }

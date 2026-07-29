@@ -37,8 +37,8 @@ export function describeImageDef(fs: Engine): ToolDef {
         return error(`describe_image only accepts img-* assets, got: ${asset_id}`);
       }
 
-      if (!process.env.KIE_API_KEY) {
-        return error("KIE_API_KEY is not set");
+      if (!process.env.OPENAI_API_KEY) {
+        return error("OPENAI_API_KEY is not set");
       }
 
       const manifestResult = await fs.files.manifest(asset_id);

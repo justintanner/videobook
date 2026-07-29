@@ -7,6 +7,7 @@ import { scopedBookEngine, withBookContext } from "../../server/src/book-context
 import {
   DEFAULT_ANIMATION_TOOL,
   listNotebookActions,
+  selectedCellDetails,
   validateCellConfiguration,
 } from "../../server/src/notebook-action-catalog.js";
 import { videobookDomainDefs } from "../../server/src/tools/videobook-domain.js";
@@ -38,10 +39,21 @@ describe("notebook action catalog", () => {
     expect(ids).toEqual([...ids].sort((left, right) => left.localeCompare(right)));
     const analysis = actions.find((action) => action.operation === "analyze_source");
     expect(analysis).toMatchObject({
-      provider: "kie",
-      model: "gemini-3.5-flash",
-      tool: "kie_gemini_analysis",
+      provider: "openai",
+      model: "gpt-5.6-sol",
+      tool: "openai_responses_analysis",
+      defaults: {
+        reasoning: { effort: "medium" },
+      },
     });
+    expect(actions.find((action) => action.operation === "rewrite_prompt"))
+      .toMatchObject({
+        provider: "openai",
+        model: "gpt-5.6-sol",
+        defaults: {
+          reasoning: { effort: "medium" },
+        },
+      });
     expect(actions.some((action) => action.tool === DEFAULT_ANIMATION_TOOL)).toBe(true);
     expect(actions.some((action) => action.tool === "ffmpeg")).toBe(true);
     expect(actions.find((action) => action.operation === "split_range"))
@@ -100,6 +112,9 @@ describe("notebook action catalog", () => {
       },
     })) as {
       id: string;
+      provider: string;
+      model: string;
+      tool: string;
       output_cell: {
         id: string;
         type: string;
@@ -113,6 +128,11 @@ describe("notebook action catalog", () => {
         targetInput: string;
       };
     };
+    expect(analysis).toMatchObject({
+      provider: "openai",
+      model: "gpt-5.6-sol",
+      tool: "openai_responses_analysis",
+    });
     expect(analysis.output_cell).toMatchObject({
       type: "analysis",
       slug: "analysis-source",
@@ -159,7 +179,7 @@ describe("notebook action catalog", () => {
       "output_artifact_id",
     ]);
     expect(details.validation.ok).toBe(true);
-    expect(details.action.tool).toBe("kie_gemini_analysis");
+    expect(details.action.tool).toBe("openai_responses_analysis");
 
     const invalid = await invoke("update_notebook_cell", {
       notebook_id: notebookId,
@@ -174,8 +194,9 @@ describe("notebook action catalog", () => {
       slug: "analyze-source",
       slot: { row: 0, column: 0 },
       operation: "analyze_source",
-      tool: "kie_gemini_analysis",
-      provider: "kie",
+      tool: "openai_responses_analysis",
+      provider: "openai",
+      model: "gpt-5.6-sol",
     }, {
       id: notebookId,
       name: "Main",
@@ -184,5 +205,114 @@ describe("notebook action catalog", () => {
       createdAt: new Date().toISOString(),
     });
     expect(valid.ok).toBe(true);
+  });
+
+  it("normalizes exact legacy Analyze metadata only in read details", () => {
+    const legacy = {
+      id: "019f0000-0000-7000-8000-000000000001",
+      type: "analyze" as const,
+      slug: "analyze-source",
+      slot: { row: 0, column: 0 },
+      prompt: "Segment",
+      provider: "kie",
+      model: "gemini-3-5-flash",
+      operation: "analyze_source",
+      tool: "kie_gemini_analysis",
+    };
+    const document = {
+      id: "019f0000-0000-7000-8000-000000000002",
+      name: "Main",
+      cells: [legacy],
+      edges: [],
+      createdAt: new Date().toISOString(),
+    };
+    const details = selectedCellDetails(
+      document.id,
+      document,
+      legacy.id,
+    ) as {
+      cell: {
+        provider: string;
+        model: string;
+        tool: string;
+      };
+      resolvedRequest: {
+        provider: string;
+        model: string;
+        tool: string;
+      };
+    };
+    expect(details.cell).toMatchObject({
+      provider: "openai",
+      model: "gpt-5.6-sol",
+      tool: "openai_responses_analysis",
+    });
+    expect(details.resolvedRequest).toMatchObject({
+      provider: "openai",
+      model: "gpt-5.6-sol",
+      tool: "openai_responses_analysis",
+    });
+    expect(legacy).toMatchObject({
+      provider: "kie",
+      model: "gemini-3-5-flash",
+      tool: "kie_gemini_analysis",
+    });
+  });
+
+  it("normalizes legacy Analyze metadata in notebook reads without persisting", async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books);
+    const byName = new Map(defs.map((def) => [def.name, def]));
+    const created = resultJson(await byName.get("create_book")!.handler({
+      slug: "legacy-notebook-read",
+    })) as { bookId: string };
+    const managed = books.get(created.bookId);
+    expect(managed.ok).toBe(true);
+    if (!managed.ok) return;
+    const notebook = managed.value.engine.notebooks.list()[0]!;
+    const legacy = managed.value.engine.notebooks.createCell({
+      type: "analyze",
+      slug: "analyze-source",
+      slot: { row: 0, column: 0 },
+      prompt: "Segment",
+      provider: "kie",
+      model: "gemini-3.5-flash",
+      operation: "analyze_source",
+      tool: "kie_gemini_analysis",
+    });
+    const written = await managed.value.engine.notebooks.write({
+      ...notebook,
+      cells: [legacy],
+    });
+    expect(written.ok).toBe(true);
+    const getNotebook = byName.get("get_notebook");
+    expect(getNotebook).toBeTruthy();
+    if (!getNotebook) return;
+    const payload = resultJson(await withBookContext(
+      { bookId: created.bookId, engine: managed.value.engine },
+      () => getNotebook.handler({
+        book_id: created.bookId,
+        notebook_id: notebook.id,
+      }),
+    )) as {
+      cells: Array<{
+        id: string;
+        provider: string;
+        model: string;
+        tool: string;
+      }>;
+    };
+    expect(payload.cells.find((cell) => cell.id === legacy.id)).toMatchObject({
+      provider: "openai",
+      model: "gpt-5.6-sol",
+      tool: "openai_responses_analysis",
+    });
+    const raw = managed.value.engine.notebooks.read(notebook.id);
+    expect(raw.ok).toBe(true);
+    if (!raw.ok) return;
+    expect(raw.value.cells.find((cell) => cell.id === legacy.id)).toMatchObject({
+      provider: "kie",
+      model: "gemini-3.5-flash",
+      tool: "kie_gemini_analysis",
+    });
   });
 });

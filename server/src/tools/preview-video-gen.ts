@@ -5,7 +5,6 @@
  */
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { createOpenAi, firstContent } from "@apicity/openai";
 import {
   DEFAULT_VIDEO_MODEL_KEY,
   VIDEO_MODELS,
@@ -18,6 +17,11 @@ import type { ToolDef } from "./tool-def.js";
 
 import { getCanonicalName } from "../generation-registry.js";
 import { timelineSlotSlugs } from "../timeline-helpers.js";
+import {
+  buildIntelligenceResponses,
+  firstResponseText,
+  intelligenceRequest,
+} from "../openai-intelligence.js";
 
 function findSelectedModel(rawToolName: string): string | null {
   const canonical = getCanonicalName(rawToolName);
@@ -26,6 +30,20 @@ function findSelectedModel(rawToolName: string): string | null {
     if (info.googleToolName === rawToolName || info.googleToolName === canonical || (info.googleToolName && getCanonicalName(info.googleToolName) === canonical)) return key;
   }
   return null;
+}
+
+export function selectPreviewVideoModel(
+  modelOverride: string | undefined,
+  historicalModel: string | null,
+  routedToolName: string,
+): string {
+  const implicitHistoricalModel = historicalModel === "gemini_omni"
+    ? null
+    : historicalModel;
+  return modelOverride
+    ?? implicitHistoricalModel
+    ?? findSelectedModel(routedToolName)
+    ?? DEFAULT_VIDEO_MODEL_KEY;
 }
 
 export function previewVideoGenDef(fs: Engine): ToolDef {
@@ -61,7 +79,7 @@ export function previewVideoGenDef(fs: Engine): ToolDef {
       }
       const { resolved: resolvedAssets, unresolved } = resolvedResult.value;
 
-      // 3. Route prompt via GPT-4o-mini (skip when model explicitly selected)
+      // 3. Route prompt (skip when model explicitly selected)
       let routedToolName = VIDEO_MODELS[DEFAULT_VIDEO_MODEL_KEY].tool_name;
       let routedParams: Record<string, unknown> = {};
 
@@ -104,19 +122,18 @@ Available assets:
 
 Determine which video generation tool to use and what parameters to pass.`;
 
-          const provider = createOpenAi({ apiKey, timeout: 15_000 });
-          const result = await provider.post.v1.chat.completions({
-            model: "gpt-4o-mini",
-            messages: [
-              { role: "system", content: buildVideoRoutingPrompt() },
-              { role: "user", content: userMessage },
-            ],
-            response_format: { type: "json_object" },
-            temperature: 0.1,
-            max_completion_tokens: 512,
+          const responses = buildIntelligenceResponses(apiKey, {
+            timeout: 15_000,
+            retries: 0,
           });
+          const result = await responses(intelligenceRequest({
+            instructions: buildVideoRoutingPrompt(),
+            input: userMessage,
+            text: { format: { type: "json_object" } },
+            max_output_tokens: 2_048,
+          }));
 
-          const decision = JSON.parse(firstContent(result)) as {
+          const decision = JSON.parse(firstResponseText(result)) as {
             tool?: string | null;
             params?: Record<string, unknown>;
           };
@@ -159,7 +176,11 @@ Determine which video generation tool to use and what parameters to pass.`;
       // 6. Use explicit override, then last-used model from history, then routed
       //    If the chosen model doesn't support the requested provider, pick the first that does.
       const historicalModel = extractLastUsedModel(historyEntries);
-      let selectedModel = modelOverride ?? historicalModel ?? findSelectedModel(routedToolName) ?? DEFAULT_VIDEO_MODEL_KEY;
+      let selectedModel = selectPreviewVideoModel(
+        modelOverride,
+        historicalModel,
+        routedToolName,
+      );
       if (providerOverride) {
         const chosen = modelOptions.find((o) => o.key === selectedModel);
         const supportsProvider = chosen?.providers.some((p) => p.key === providerOverride);

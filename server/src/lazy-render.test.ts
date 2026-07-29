@@ -142,7 +142,7 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-lazy-analysis-test-"));
     fs = createEngineForTest(tempDir);
-    vi.stubEnv("KIE_API_KEY", "test-key");
+    vi.stubEnv("OPENAI_API_KEY", "test-key");
     const project = await fs.projects.create(bookId);
     if (!project.ok) throw new Error(project.error.message);
   });
@@ -220,7 +220,7 @@ describe("enqueueLazyAnalysisIfSlotted", () => {
   });
 
   it("does not enqueue without a vision provider key", async () => {
-    vi.stubEnv("KIE_API_KEY", "");
+    vi.stubEnv("OPENAI_API_KEY", "");
     const enqueue = vi.spyOn(queue, "enqueue").mockResolvedValue(undefined);
     const assetId = await createTrimmedVideoAsset();
     await assignToTimeline(assetId);

@@ -13,7 +13,7 @@ const schema = {
   book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(seedream.prompt, "Text prompt for image generation", { required: true }),
   image_size: apicityField(seedream.image_size, "Output size preset"),
-  auto_4K: apicityField(seedream.auto_4K, "Upscale output to 4K"),
+  auto_4K: z.boolean().optional().describe("Upscale output to 4K"),
   num_images: apicityField(seedream.num_images, "Number of images to generate"),
   max_images: apicityField(seedream.max_images, "Max images returned"),
 } satisfies ZodRawShape;

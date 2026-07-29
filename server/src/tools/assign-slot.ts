@@ -19,7 +19,7 @@ async function enqueueLazyAnalysis(
   asset: Artifact,
   bookId: string,
 ): Promise<{ jobId: string; kind: "analyze_video" | "describe_image" } | null> {
-  if (!process.env.KIE_API_KEY) return null;
+  if (!process.env.OPENAI_API_KEY) return null;
   if (asset.kind !== "video" && asset.kind !== "image") return null;
   const manifest = await engine.files.manifest(asset.artifactId);
   if (!manifest.ok) return null;

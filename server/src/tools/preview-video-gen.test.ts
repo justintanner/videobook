@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { selectPreviewVideoModel } from "./preview-video-gen.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -142,5 +143,27 @@ describe("preview_video tool", () => {
     expect(omniOption.modes.modes.map((m: { key: string }) => m.key)).toEqual(["t2v", "i2v", "r2v", "edit"]);
     const nonModed = parsed.model_options.find((o: { key: string }) => o.key === "kling30");
     expect(nonModed.modes).toBeNull();
+  });
+});
+
+describe("selectPreviewVideoModel", () => {
+  it("uses Seedance 2 when no explicit, historical, or routed model applies", () => {
+    expect(selectPreviewVideoModel(undefined, null, "unknown_tool")).toBe("seedance2");
+  });
+
+  it("does not silently restore Gemini Omni from history", () => {
+    expect(selectPreviewVideoModel(
+      undefined,
+      "gemini_omni",
+      "generate_kie_seedance_2_0_video",
+    )).toBe("seedance2");
+  });
+
+  it("keeps an explicit Gemini Omni selection", () => {
+    expect(selectPreviewVideoModel(
+      "gemini_omni",
+      "seedance2",
+      "generate_kie_seedance_2_0_video",
+    )).toBe("gemini_omni");
   });
 });

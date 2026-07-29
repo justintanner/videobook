@@ -60,8 +60,8 @@ export function rewriteScriptDef(fs: Engine): ToolDef {
         );
       }
 
-      if (!process.env.KIE_API_KEY) {
-        return error("KIE_API_KEY is not set");
+      if (!process.env.OPENAI_API_KEY) {
+        return error("OPENAI_API_KEY is not set");
       }
 
       const scriptManifest = await fs.files.manifest(asset_id);

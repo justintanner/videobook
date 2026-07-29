@@ -1,10 +1,3 @@
-/**
- * prepare_image_generation MCP tool — returns a rich preview JSON for the frontend to
- * render a dynamic parameter form for image generation.
- *
- * Always defaults to nano_banana (richest settings). The user can switch
- * models via the dropdown in the UI.
- */
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import {
@@ -12,9 +5,39 @@ import {
   buildImageModelOption,
   extractLastUsedImageModel,
 } from "../image-models.js";
-import type { ActionLogEntry } from "../image-models.js";
+import type { ActionLogEntry, ModelOption } from "../image-models.js";
 import type { ToolDef } from "./tool-def.js";
 import { timelineSlotSlugs } from "../timeline-helpers.js";
+
+type PreviewImageModelOption = Pick<ModelOption, "key" | "image_slots">;
+
+function supportsResolvedImages(
+  option: PreviewImageModelOption,
+  resolvedImageCount: number,
+): boolean {
+  const slots = option.image_slots;
+  if (resolvedImageCount === 0) return !slots || slots.min === 0;
+  if (!slots || resolvedImageCount < slots.min) return false;
+  return slots.max === null || resolvedImageCount <= slots.max;
+}
+
+export function selectPreviewImageModel(
+  modelOverride: string | undefined,
+  historicalModel: string | null,
+  resolvedImageCount: number,
+  modelOptions: PreviewImageModelOption[],
+): string {
+  if (modelOverride) return modelOverride;
+
+  const fallback = resolvedImageCount > 0 ? "gpt_image" : "gpt_image_text";
+  if (!historicalModel || historicalModel === "nano_banana") return fallback;
+
+  const historicalOption = modelOptions.find((option) => option.key === historicalModel);
+  if (!historicalOption) return fallback;
+  return supportsResolvedImages(historicalOption, resolvedImageCount)
+    ? historicalModel
+    : fallback;
+}
 
 export function previewImageGenDef(fs: Engine): ToolDef {
   return {
@@ -73,14 +96,25 @@ export function previewImageGenDef(fs: Engine): ToolDef {
         buildImageModelOption(key, info, baseParams, resolvedAssets, historyEntries, providerOverride, projectAssetTags),
       );
 
-      // 5. Use explicit override, then last successful generation model, then nano_banana
+      // 5. Use explicit override, then a compatible non-Gemini historical model, then GPT Image 2
       //    If the chosen model doesn't support the requested provider, pick the first that does.
-      let selectedModel = modelOverride ?? extractLastUsedImageModel(historyEntries) ?? "nano_banana";
+      const resolvedImageCount = resolvedAssets.filter(
+        (asset) => asset.artifactType === "image" && asset.filePath,
+      ).length;
+      let selectedModel = selectPreviewImageModel(
+        modelOverride,
+        extractLastUsedImageModel(historyEntries),
+        resolvedImageCount,
+        modelOptions,
+      );
       if (providerOverride) {
         const chosen = modelOptions.find((o) => o.key === selectedModel);
         const supportsProvider = chosen?.providers.some((p) => p.key === providerOverride);
         if (!supportsProvider) {
-          const compatible = modelOptions.find((o) => o.providers.some((p) => p.key === providerOverride));
+          const compatible = modelOptions.find(
+            (option) => option.providers.some((provider) => provider.key === providerOverride)
+              && supportsResolvedImages(option, resolvedImageCount),
+          );
           if (compatible) selectedModel = compatible.key;
         }
       }

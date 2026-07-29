@@ -24,6 +24,7 @@ export default defineConfig({
       'src/videobook/search-benchmark-corpus.test.ts',
       'server/src/archive-store.test.ts',
       'server/src/jobs/archive-clip.test.ts',
+      'server/src/openai-intelligence.test.ts',
       'server/src/tools/log-wrapper.test.ts',
       'server/src/scheduled-posts.test.ts',
     ],

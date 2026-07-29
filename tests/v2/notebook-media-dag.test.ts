@@ -294,6 +294,13 @@ describe("notebook local media and analysis fan-out", () => {
       sourceArtifactId: sourceArtifact.value.artifactId,
     });
     expect(first.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(2);
+    expect(first.cells.find((cell) => cell.id === analysis.id)).toMatchObject({
+      provider: "openai",
+      model: "gpt-5.6-sol",
+      tool: "openai_responses_analysis",
+    });
+    expect(first.cells.filter((cell) => cell.operation === "rewrite_prompt")
+      .every((cell) => cell.model === "gpt-5.6-sol")).toBe(true);
     const firstAnalysisOutput = first.cells.find((cell) =>
       cell.id === analysisOutput.id);
     expect(firstAnalysisOutput?.outputArtifactId).toBeTruthy();

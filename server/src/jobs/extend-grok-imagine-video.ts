@@ -49,7 +49,7 @@ export function registerExtendGrokImagineVideoJob(fs: Engine): void {
       input: {
         task_id: kieTaskId,
         prompt,
-        extend_at: String(extend_at ?? 0),
+        extend_at: extend_at ?? 0,
         extend_times: extend_times ?? "6",
       },
     };

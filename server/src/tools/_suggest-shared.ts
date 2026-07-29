@@ -1,9 +1,6 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import { findVideoFile } from "videobook-engine";
-import { KIE_GEMINI_FLASH_MODEL } from "../kie-gemini.js";
-
-export const MODEL = KIE_GEMINI_FLASH_MODEL;
 const MAX_FRAMES = 15;
 const SILENCE_MARKER_THRESHOLD_S = 0.5;
 export const DEAD_AIR_THRESHOLD_S = 1.5;
@@ -311,7 +308,6 @@ export function buildSfxContext(
 
 export type AssetForAnalysis = {
   manifest: { path: string; files: Array<{ name: string }>; directories?: Record<string, string[]> };
-  framesDir: string;
   frameNames: string[];
   transcript: TranscriptResult;
   meta: OriginalMeta | null;
@@ -366,7 +362,6 @@ export async function loadAssetForAnalysis(
     ok: true,
     value: {
       manifest,
-      framesDir: `${manifest.path}/original_frames`,
       frameNames,
       transcript,
       meta,

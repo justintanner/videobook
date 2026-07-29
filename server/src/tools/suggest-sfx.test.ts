@@ -12,7 +12,7 @@ type TextContent = Array<{ type: string; text: string }>;
 describe("suggest_sfx tool", () => {
   let client: Client;
   let tempDir: string;
-  const originalKey = process.env.KIE_API_KEY;
+  const originalKey = process.env.OPENAI_API_KEY;
 
   beforeAll(async () => {
     await queue.start();
@@ -23,7 +23,7 @@ describe("suggest_sfx tool", () => {
   });
 
   beforeEach(async () => {
-    delete process.env.KIE_API_KEY;
+    delete process.env.OPENAI_API_KEY;
     tempDir = await mkdtemp(join(tmpdir(), "videocity-suggest-sfx-test-"));
     client = await createTestClient(tempDir);
     await client.callTool({
@@ -34,15 +34,15 @@ describe("suggest_sfx tool", () => {
 
   afterEach(async () => {
     if (originalKey) {
-      process.env.KIE_API_KEY = originalKey;
+      process.env.OPENAI_API_KEY = originalKey;
     } else {
-      delete process.env.KIE_API_KEY;
+      delete process.env.OPENAI_API_KEY;
     }
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("returns error when KIE_API_KEY is not set", async () => {
+  it("returns error when OPENAI_API_KEY is not set", async () => {
     const result = await client.callTool({
       name: "suggest_sfx",
       arguments: { asset_id: "vid-anything", book_id: "sfx-proj" },
@@ -50,11 +50,11 @@ describe("suggest_sfx tool", () => {
 
     expect(result.isError).toBe(true);
     const content = result.content as TextContent;
-    expect(content[0].text).toContain("KIE_API_KEY");
+    expect(content[0].text).toContain("OPENAI_API_KEY");
   });
 
   it("returns error for nonexistent asset", async () => {
-    process.env.KIE_API_KEY = "test-key";
+    process.env.OPENAI_API_KEY = "test-key";
 
     const result = await client.callTool({
       name: "suggest_sfx",
@@ -65,7 +65,7 @@ describe("suggest_sfx tool", () => {
   });
 
   it("returns error when asset has no video file", async () => {
-    process.env.KIE_API_KEY = "test-key";
+    process.env.OPENAI_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("vid", "empty-vid");
@@ -83,7 +83,7 @@ describe("suggest_sfx tool", () => {
   });
 
   it("returns error when asset has no frames", async () => {
-    process.env.KIE_API_KEY = "test-key";
+    process.env.OPENAI_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("vid", "no-frames-vid");
@@ -101,7 +101,7 @@ describe("suggest_sfx tool", () => {
   });
 
   it("returns error when asset has frames but no transcript", async () => {
-    process.env.KIE_API_KEY = "test-key";
+    process.env.OPENAI_API_KEY = "test-key";
 
     const fs = createEngineForTest(tempDir);
     const asset = await fs.artifacts.create("vid", "no-transcript-vid");

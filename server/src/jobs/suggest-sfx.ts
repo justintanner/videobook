@@ -1,20 +1,22 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { join } from "node:path";
-import { readFile as fsReadFile } from "node:fs/promises";
-import type { KieGeminiPart } from "@apicity/kie";
+import type { OpenAiResponseInputContent } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey } from "../api-key.js";
+import {
+  INTELLIGENCE_MODEL,
+  buildIntelligenceResponses,
+  firstResponseText,
+  intelligenceRequest,
+} from "../openai-intelligence.js";
 import { withLocalLease } from "./_lease.js";
 import {
-  MODEL,
   SfxSchema,
   buildSfxContext,
   loadAssetForAnalysis,
   sampleFrames,
   type Sfx,
 } from "../tools/_suggest-shared.js";
-import { callGeminiFlashJson, geminiImageBase64Part, geminiTextPart } from "../kie-gemini.js";
 
 const MAX_SFX = 8;
 const TIMESTAMP_END_BUFFER_S = 0.05;
@@ -71,36 +73,49 @@ export function registerSuggestSfxJob(fs: Engine): void {
     const { assetId, bookId } = payload as SuggestSfxPayload;
 
     return withLocalLease(fs, bookId, assetId, ctx, "analyze", async () => {
-      const apiKey = getApiKey("KIE_API_KEY");
-      if (!apiKey) throw new Error("KIE_API_KEY environment variable is not set");
+      const apiKey = getApiKey("OPENAI_API_KEY");
+      if (!apiKey) throw new Error("OPENAI_API_KEY environment variable is not set");
 
       const loaded = await loadAssetForAnalysis(fs, assetId, bookId);
       if (!loaded.ok) throw new Error(loaded.error.message);
-      const { framesDir, frameNames, transcript, meta, prior } = loaded.value;
+      const { frameNames, transcript, meta, prior } = loaded.value;
 
       const sampled = sampleFrames(frameNames);
-      const frameParts: KieGeminiPart[] = [];
+      const frameParts: OpenAiResponseInputContent[] = [];
       for (const file of sampled) {
-        const buf = await fsReadFile(join(framesDir, file));
-        frameParts.push(geminiImageBase64Part(buf.toString("base64"), "image/jpeg"));
+        const frameRead = await fs.files.read(assetId, `original_frames/${file}`);
+        if (!frameRead.ok) throw new Error(frameRead.error.message);
+        frameParts.push(
+          { type: "input_text", text: `Frame timestamp: ${parseFloat(file).toFixed(3)}s` },
+          {
+            type: "input_image",
+            image_url: `data:image/jpeg;base64,${Buffer.from(frameRead.value).toString("base64")}`,
+            detail: "high",
+          },
+        );
       }
 
       const contextString = buildSfxContext(meta, prior, transcript, sampled.length);
-      const userContent: KieGeminiPart[] = [
-        geminiTextPart(contextString),
+      const userContent: OpenAiResponseInputContent[] = [
+        { type: "input_text", text: contextString },
         ...frameParts,
       ];
 
-      const outputText = await callGeminiFlashJson({
-        apiKey,
-        parts: [
-          geminiTextPart(`Instructions:\n${SYSTEM_PROMPT_SFX}`),
-          ...userContent,
-        ],
-        temperature: 0.3,
-        maxOutputTokens: 4096,
-        responseSchema: SUGGEST_SFX_JSON_SCHEMA as unknown as Record<string, unknown>,
-      });
+      const responses = buildIntelligenceResponses(apiKey);
+      const response = await responses(intelligenceRequest({
+        instructions: SYSTEM_PROMPT_SFX,
+        input: [{ role: "user", content: userContent }],
+        text: {
+          format: {
+            type: "json_schema",
+            name: "suggested_sound_effects",
+            schema: SUGGEST_SFX_JSON_SCHEMA,
+            strict: true,
+          },
+        },
+        max_output_tokens: 4096,
+      }), ctx.signal);
+      const outputText = firstResponseText(response);
 
       let parsed: { sfx: Sfx[]; summary: string };
       try {
@@ -142,7 +157,7 @@ export function registerSuggestSfxJob(fs: Engine): void {
           transcript_source: transcript.source,
           dropped_sfx: droppedSfx,
         },
-        model: MODEL,
+        model: INTELLIGENCE_MODEL,
         asset_id: assetId,
       };
 

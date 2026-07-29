@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { selectPreviewImageModel } from "./preview-image-gen.js";
 
 type TextContent = Array<{ type: string; text: string }>;
 
@@ -42,7 +43,8 @@ describe("preview_image tool", () => {
     const parsed = JSON.parse(content[0].text);
 
     expect(parsed.category).toBe("image");
-    expect(parsed.selected_model).toBe("nano_banana");
+    expect(parsed.selected_model).toBe("gpt_image");
+    expect(parsed.tool_name).toBe("generate_kie_gpt_image_2_image_to_image");
     expect(parsed.model_options).toBeDefined();
     expect(parsed.model_options.length).toBeGreaterThanOrEqual(3);
 
@@ -64,7 +66,8 @@ describe("preview_image tool", () => {
 
     expect(parsed.category).toBe("image");
     expect(parsed.resolved_assets).toEqual([]);
-    expect(parsed.selected_model).toBe("nano_banana");
+    expect(parsed.selected_model).toBe("gpt_image_text");
+    expect(parsed.tool_name).toBe("generate_kie_gpt_image_2_text_to_image");
     expect(parsed.model_options.length).toBeGreaterThanOrEqual(3);
   });
 
@@ -79,5 +82,36 @@ describe("preview_image tool", () => {
     const parsed = JSON.parse(content[0].text);
 
     expect(parsed.validation.warnings.some((w: string) => w.includes("Unresolved @tag"))).toBe(true);
+  });
+});
+
+describe("selectPreviewImageModel", () => {
+  const modelOptions = [
+    { key: "nano_banana", image_slots: { min: 0, max: 14 } },
+    { key: "gpt_image", image_slots: { min: 1, max: 16 } },
+    { key: "gpt_image_text", image_slots: null },
+    { key: "grok_imagine_image", image_slots: { min: 1, max: 1 } },
+    { key: "grok_imagine_text", image_slots: null },
+  ];
+
+  it("uses the matching GPT Image 2 variant for the reference mode", () => {
+    expect(selectPreviewImageModel(undefined, null, 0, modelOptions)).toBe("gpt_image_text");
+    expect(selectPreviewImageModel(undefined, null, 1, modelOptions)).toBe("gpt_image");
+  });
+
+  it("does not silently restore Nano Banana from history", () => {
+    expect(selectPreviewImageModel(undefined, "nano_banana", 0, modelOptions)).toBe("gpt_image_text");
+    expect(selectPreviewImageModel(undefined, "nano_banana", 1, modelOptions)).toBe("gpt_image");
+  });
+
+  it("keeps compatible non-Gemini history and rejects incompatible modes", () => {
+    expect(selectPreviewImageModel(undefined, "grok_imagine_text", 0, modelOptions)).toBe("grok_imagine_text");
+    expect(selectPreviewImageModel(undefined, "grok_imagine_text", 1, modelOptions)).toBe("gpt_image");
+    expect(selectPreviewImageModel(undefined, "grok_imagine_image", 1, modelOptions)).toBe("grok_imagine_image");
+    expect(selectPreviewImageModel(undefined, "grok_imagine_image", 0, modelOptions)).toBe("gpt_image_text");
+  });
+
+  it("keeps an explicit Nano Banana selection", () => {
+    expect(selectPreviewImageModel("nano_banana", null, 0, modelOptions)).toBe("nano_banana");
   });
 });

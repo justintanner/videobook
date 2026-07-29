@@ -56,7 +56,7 @@ describe("xai paygate", () => {
       resolution: "720p",
     };
 
-    const method = (async (_request: typeof request, approval?: { otp?: string }) => {
+    const method = async (_request: typeof request, approval?: { otp: string }) => {
       expect(approval?.otp).toEqual(expect.any(String));
       const result = verifyOtp({
         nowSeconds: Math.floor(Date.now() / 1000),
@@ -72,7 +72,7 @@ describe("xai paygate", () => {
       });
       expect(result.ok).toBe(true);
       return { request_id: "req-1" };
-    }) as unknown as (request: typeof request, signal?: AbortSignal) => Promise<{ request_id: string }>;
+    };
 
     await expect(callXaiPaid(method, XAI_VIDEO_GENERATIONS_DOT_PATH, request)).resolves.toEqual({
       request_id: "req-1",

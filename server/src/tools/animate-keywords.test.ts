@@ -189,7 +189,7 @@ describe("animate_keywords tool", () => {
   });
 
   it("fails safely without changing settings when vision is unavailable", async () => {
-    vi.stubEnv("KIE_API_KEY", "");
+    vi.stubEnv("OPENAI_API_KEY", "");
     const assetId = await createVideo(true);
 
     const result = await client.callTool({

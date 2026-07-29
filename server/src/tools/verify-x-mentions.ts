@@ -1,9 +1,16 @@
-import { createXai, type XaiProvider, type XaiResponseResponse } from "@apicity/xai";
+import type { OpenAiResponseResponse } from "@apicity/openai";
 import { z } from "zod";
 import { toolError } from "./_shared.js";
 import type { ToolDef } from "./tool-def.js";
+import {
+  INTELLIGENCE_MODEL,
+  buildIntelligenceResponses,
+  firstResponseText,
+  intelligenceRequest,
+  type ResponsesFn,
+} from "../openai-intelligence.js";
 
-export const XAI_MENTION_MODEL = "grok-4.20-reasoning";
+export const MENTION_VERIFICATION_MODEL = INTELLIGENCE_MODEL;
 const XAI_TIMEOUT_MS = 60_000;
 const MAX_MENTIONS = 10;
 const MAX_TEXT_CHARS = 1_000;
@@ -70,40 +77,33 @@ const VERIFY_INSTRUCTIONS = [
   "Never guess.",
 ].join(" ");
 
-function responseText(response: XaiResponseResponse): { text: string; citations: string[] } {
-  const parts: string[] = [];
+function responseText(response: OpenAiResponseResponse): { text: string; citations: string[] } {
   const citations: string[] = [];
   for (const item of response.output) {
     if (item.type !== "message") continue;
     for (const content of item.content) {
-      if (content.type === "refusal") {
-        throw new Error(`xAI refused the verification request: ${content.refusal}`);
-      }
-      parts.push(content.text);
-      for (const annotation of content.annotations) {
+      if (content.type !== "output_text") continue;
+      for (const annotation of content.annotations ?? []) {
         if (annotation.type === "url_citation" && annotation.url && !citations.includes(annotation.url)) {
           citations.push(annotation.url);
         }
       }
     }
   }
-  return { text: parts.join(""), citations };
+  return { text: firstResponseText(response), citations };
 }
 
-export async function verifyXMentionsWithXai(
-  provider: XaiProvider,
+export async function verifyXMentionsWithOpenAi(
+  responses: ResponsesFn,
   handles: string[],
   signal?: AbortSignal,
 ): Promise<XMentionVerification> {
-  // xAI retired the live-search search_parameters API (410) in favor of
-  // server-side agent tools; web_search reaches x.com profiles and cites them.
-  const response = await provider.post.v1.responses({
-    model: XAI_MENTION_MODEL,
+  const response = await responses(intelligenceRequest({
     input: [
-      { role: "system", content: VERIFY_INSTRUCTIONS },
       { role: "user", content: `Verify these X handles: ${handles.map((handle) => `@${handle}`).join(", ")}` },
     ],
-    tools: [{ type: "web_search" }],
+    instructions: VERIFY_INSTRUCTIONS,
+    tools: [{ type: "web_search_preview" }],
     text: {
       format: {
         type: "json_schema",
@@ -112,12 +112,12 @@ export async function verifyXMentionsWithXai(
         strict: true,
       },
     },
-  }, signal);
+  }), signal);
 
   const { text, citations } = responseText(response);
   const parsed = JSON.parse(text) as { mentions?: XMentionVerdict[] };
   if (!Array.isArray(parsed.mentions)) {
-    throw new Error("xAI verification response is missing the mentions array");
+    throw new Error("OpenAI verification response is missing the mentions array");
   }
 
   const byHandle = new Map(parsed.mentions.map((verdict) => [verdict.handle.replace(/^@/, "").toLowerCase(), verdict]));
@@ -136,7 +136,7 @@ export async function verifyXMentionsWithXai(
 export function verifyXMentionsDef(): ToolDef {
   return {
     name: "verify_x_mentions",
-    description: "Verify that @-mentions in post text are real X (Twitter) accounts using xAI live X search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.",
+    description: "Verify that @-mentions in post text are real X (Twitter) accounts using OpenAI web search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.",
     schema: {
       text: z.string().min(1).max(MAX_TEXT_CHARS).describe("Post text containing @handles to verify"),
       book_id: z.string().describe("Project slug"),
@@ -144,8 +144,8 @@ export function verifyXMentionsDef(): ToolDef {
     handler: async (args) => {
       const { text } = args as { text: string; book_id: string };
 
-      if (!process.env.XAI_API_KEY) {
-        return toolError("XAI_API_KEY environment variable is not set");
+      if (!process.env.OPENAI_API_KEY) {
+        return toolError("OPENAI_API_KEY environment variable is not set");
       }
 
       const handles = extractXMentions(text).slice(0, MAX_MENTIONS);
@@ -153,17 +153,16 @@ export function verifyXMentionsDef(): ToolDef {
         return {
           content: [{
             type: "text" as const,
-            text: JSON.stringify({ mentions: [], citations: [], model: XAI_MENTION_MODEL }),
+            text: JSON.stringify({ mentions: [], citations: [], model: MENTION_VERIFICATION_MODEL }),
           }],
         };
       }
 
-      const provider = createXai({
-        apiKey: process.env.XAI_API_KEY,
+      const responses = buildIntelligenceResponses(process.env.OPENAI_API_KEY, {
         timeout: XAI_TIMEOUT_MS,
       });
       try {
-        const verification = await verifyXMentionsWithXai(provider, handles);
+        const verification = await verifyXMentionsWithOpenAi(responses, handles);
         return {
           content: [{ type: "text" as const, text: JSON.stringify(verification) }],
         };

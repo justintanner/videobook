@@ -2,16 +2,16 @@ import type { Engine } from "videobook-engine";
 import { join, dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
-import type { OpenAiResponseRequest, OpenAiResponseResponse } from "@apicity/openai";
 import { registerJobHandler } from "../queue.js";
 import { requireApiKey } from "../api-key.js";
 import { withLocalLease } from "./_lease.js";
 import {
-  KIE_GEMINI_FLASH_MODEL,
-  callGeminiFlashJson,
-  geminiImageDataUrlPart,
-  geminiTextPart,
-} from "../kie-gemini.js";
+  INTELLIGENCE_MODEL,
+  buildIntelligenceResponses,
+  firstResponseText,
+  intelligenceRequest,
+  type ResponsesFn,
+} from "../openai-intelligence.js";
 type DescribeImagePayload = {
   type: "describe_image";
   sourceAssetId: string;
@@ -30,15 +30,26 @@ export type DescribeImageResult = {
   pose?: string;
 };
 
-export type ResponsesFn = (req: OpenAiResponseRequest, signal?: AbortSignal) => Promise<OpenAiResponseResponse>;
+export { firstResponseText, type ResponsesFn };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GUIDE_PATH = join(__dirname, "../guides/image_reproduction_guide.md");
 
 export const SCRIPT_FILENAME = "original.md";
 export const ANALYSIS_FILENAME = ".original.analysis.json";
-export const VISION_MODEL = KIE_GEMINI_FLASH_MODEL;
+export const VISION_MODEL = INTELLIGENCE_MODEL;
 export const PROMPT_CHAR_LIMIT = 1900;
+
+const DESCRIBE_IMAGE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    prompt: { type: "string", maxLength: PROMPT_CHAR_LIMIT },
+    shot: { type: "string" },
+    pose: { type: "string" },
+  },
+  required: ["prompt", "shot", "pose"],
+};
 
 function mimeForFilename(filename: string): "image/jpeg" | "image/png" | "image/webp" {
   const ext = extname(filename).replace(/^\./, "").toLowerCase();
@@ -82,87 +93,7 @@ export function mimeForImageFilename(filename: string): "image/jpeg" | "image/pn
 }
 
 export function buildResponses(apiKey: string | undefined): ResponsesFn {
-  if (!apiKey) {
-    throw new Error("KIE_API_KEY is not set");
-  }
-  return async (req, signal) => {
-    const parts = responseRequestToGeminiParts(req);
-    const outputText = await callGeminiFlashJson({
-      apiKey,
-      parts,
-      temperature: typeof req.temperature === "number" ? req.temperature : undefined,
-      maxOutputTokens: typeof req.max_output_tokens === "number" ? req.max_output_tokens : undefined,
-      timeout: 180_000,
-      signal,
-    });
-
-    return {
-      status: "completed",
-      model: VISION_MODEL,
-      output: [{
-        type: "message",
-        role: "assistant",
-        status: "completed",
-        content: [{ type: "output_text", text: outputText, annotations: [] }],
-      }],
-    } as unknown as OpenAiResponseResponse;
-  };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function appendResponseContent(parts: ReturnType<typeof geminiTextPart>[], content: unknown): void {
-  if (typeof content === "string") {
-    parts.push(geminiTextPart(content));
-    return;
-  }
-
-  if (!Array.isArray(content)) return;
-
-  for (const item of content) {
-    if (!isRecord(item)) continue;
-    if (item.type === "input_text" && typeof item.text === "string") {
-      parts.push(geminiTextPart(item.text));
-    } else if (item.type === "input_image" && typeof item.image_url === "string") {
-      parts.push(geminiImageDataUrlPart(item.image_url));
-    }
-  }
-}
-
-function responseRequestToGeminiParts(req: OpenAiResponseRequest): ReturnType<typeof geminiTextPart>[] {
-  const parts: ReturnType<typeof geminiTextPart>[] = [];
-  if (typeof req.instructions === "string" && req.instructions.trim()) {
-    parts.push(geminiTextPart(`Instructions:\n${req.instructions}`));
-  }
-
-  const input = req.input as unknown;
-  if (typeof input === "string") {
-    parts.push(geminiTextPart(input));
-  } else if (Array.isArray(input)) {
-    for (const item of input) {
-      if (!isRecord(item)) continue;
-      appendResponseContent(parts, item.content);
-    }
-  }
-
-  if (parts.length === 0) {
-    parts.push(geminiTextPart("Return the requested JSON object."));
-  }
-  return parts;
-}
-
-export function firstResponseText(response: OpenAiResponseResponse): string {
-  const texts: string[] = [];
-  for (const item of response.output) {
-    if (item.type !== "message") continue;
-    for (const c of item.content) {
-      if (c.type === "output_text") texts.push(c.text);
-      else if (c.type === "refusal") throw new Error(`Vision provider refused: ${c.refusal}`);
-    }
-  }
-  return texts.join("").trim();
+  return buildIntelligenceResponses(apiKey);
 }
 
 export async function describeImageBytes(
@@ -170,11 +101,10 @@ export async function describeImageBytes(
   mime: "image/jpeg" | "image/png" | "image/webp",
   responses?: ResponsesFn,
 ): Promise<DescribeImageResult> {
-  const fn = responses ?? buildResponses(requireApiKey("KIE_API_KEY"));
+  const fn = responses ?? buildResponses(requireApiKey("OPENAI_API_KEY"));
   const guide = await readFile(GUIDE_PATH, "utf-8");
   const dataUrl = `data:${mime};base64,${bytes.toString("base64")}`;
-  const response = await fn({
-    model: VISION_MODEL,
+  const response = await fn(intelligenceRequest({
     instructions: buildSystemPrompt(guide),
     input: [{
       role: "user",
@@ -183,10 +113,16 @@ export async function describeImageBytes(
         { type: "input_text", text: "Analyze this image and produce the reproduction prompt as a JSON object matching the schema in the guide." },
       ],
     }],
-    text: { format: { type: "json_object" } },
-    temperature: 0.4,
+    text: {
+      format: {
+        type: "json_schema",
+        name: "image_reproduction",
+        schema: DESCRIBE_IMAGE_SCHEMA,
+        strict: true,
+      },
+    },
     max_output_tokens: 2048,
-  });
+  }));
   const content = firstResponseText(response);
   if (!content) {
     throw new Error(`Vision provider returned no content (status=${response.status})`);
@@ -216,7 +152,7 @@ export function registerDescribeImageJob(fs: Engine): void {
     // mode runs on the source asset, which already exists at status='ready'.
     const targetAssetId = scriptAssetId ?? sourceAssetId;
     return withLocalLease(fs, bookId, targetAssetId, ctx, "describe", async () => {
-      const responses = buildResponses(requireApiKey("KIE_API_KEY"));
+      const responses = buildResponses(requireApiKey("OPENAI_API_KEY"));
 
       const readResult = await fs.files.read(sourceAssetId, sourceImageFilename);
       if (!readResult.ok) {

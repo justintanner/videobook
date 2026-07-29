@@ -16,10 +16,14 @@ import { YtDlp } from "ytdlp-nodejs";
 import { registerJobHandler } from "../queue.js";
 import { getApiKey, requireApiKey } from "../api-key.js";
 import { probeVideo } from "../ffmpeg.js";
+import {
+  buildIntelligenceResponses,
+  firstResponseText,
+  intelligenceRequest,
+} from "../openai-intelligence.js";
 import { validateDownloadOutput } from "./download-video.js";
 import { withLocalLease } from "./_lease.js";
 import { chunkStarts, chunkLength, extractAudioChunk } from "./_audio-chunks.js";
-import { callGeminiFlashJson, geminiTextPart } from "../kie-gemini.js";
 import {
   archiveTags,
   assetSnapshotKey,
@@ -87,6 +91,16 @@ type TranscriptResult = {
 const MEDIA_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".avi", ".mkv", ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"]);
 const CHUNK_SECONDS = 20 * 60;
 const ELEVENLABS_TIMEOUT_MS = 10 * 60_000;
+const ENRICHMENT_JSON_SCHEMA = {
+  type: "object",
+  required: ["topics", "people"],
+  additionalProperties: false,
+  properties: {
+    topics: { type: "array", items: { type: "string" } },
+    people: { type: "array", items: { type: "string" } },
+  },
+} as const;
+
 function readStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
@@ -335,20 +349,28 @@ function sampleTranscript(text: string): string {
 }
 
 async function enrichMetadata(title: string | null, transcript: string): Promise<{ topics: string[]; people: string[] }> {
-  const apiKey = getApiKey("KIE_API_KEY");
+  const apiKey = getApiKey("OPENAI_API_KEY");
   const sample = sampleTranscript(transcript);
   if (!apiKey || (!title && !sample)) return { topics: [], people: [] };
   try {
-    const outputText = await callGeminiFlashJson({
-      apiKey,
-      parts: [
-        geminiTextPart("Return JSON only with topics:string[] and people:string[]. Topics are searchable subjects. People are named people only, not generic roles."),
-        geminiTextPart(`Title: ${title ?? ""}\n\nTranscript sample:\n${sample}`),
-      ],
-      temperature: 0.1,
-      maxOutputTokens: 1000,
-      timeout: 120_000,
-    });
+    const responses = buildIntelligenceResponses(apiKey, { timeout: 120_000 });
+    const response = await responses(intelligenceRequest({
+      instructions: "Identify searchable subjects and named people. People must be named people only, not generic roles.",
+      input: [{
+        role: "user",
+        content: `Title: ${title ?? ""}\n\nTranscript sample:\n${sample}`,
+      }],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "archive_metadata",
+          schema: ENRICHMENT_JSON_SCHEMA,
+          strict: true,
+        },
+      },
+      max_output_tokens: 1000,
+    }));
+    const outputText = firstResponseText(response);
     const parsed = JSON.parse(outputText) as Record<string, unknown>;
     return {
       topics: readStringArray(parsed.topics),

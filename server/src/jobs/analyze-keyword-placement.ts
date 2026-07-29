@@ -1,17 +1,17 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { KieGeminiPart } from "@apicity/kie";
+import type { OpenAiResponseInputContent } from "@apicity/openai";
 import type { Engine } from "videobook-engine";
 import sharp from "sharp";
 import { z } from "zod";
 import { getApiKey } from "../api-key.js";
 import { runFfmpeg, probeVideo } from "../ffmpeg.js";
 import {
-  callGeminiFlashJson,
-  geminiImageBase64Part,
-  geminiTextPart,
-} from "../kie-gemini.js";
+  buildIntelligenceResponses,
+  firstResponseText,
+  intelligenceRequest,
+} from "../openai-intelligence.js";
 import { writeKeywordPlacementAnalysis } from "../keyword-placement-cache.js";
 import { registerJobHandler } from "../queue.js";
 import {
@@ -114,7 +114,7 @@ For every frame, identify all occupied regions that cinematic keyword typography
 - every visible human face, including partial faces and faces in posters or screens
 - every existing visible text block, subtitle, caption, title, logo, watermark, or graphic
 
-Return one entry for every cue_id. Coordinates use the Gemini image scale from 0 to 1000: x and y are the top-left corner, followed by width and height. Use tight boxes around the visible occupied content. Do not return boxes for bodies, clothing, scenery, microphones, or ordinary objects. Return an empty occupied_regions array only when none of the listed content is visible. Never omit, rename, or duplicate a cue_id.`;
+Return one entry for every cue_id. Coordinates use a normalized image scale from 0 to 1000: x and y are the top-left corner, followed by width and height. Use tight boxes around the visible occupied content. Do not return boxes for bodies, clothing, scenery, microphones, or ordinary objects. Return an empty occupied_regions array only when none of the listed content is visible. Never omit, rename, or duplicate a cue_id.`;
 
 function escapeXml(value: string): string {
   return value
@@ -238,21 +238,35 @@ async function analyzeFrames(
   apiKey: string,
   signal: AbortSignal,
 ): Promise<Map<string, KeywordOccupiedRegion[]>> {
-  const parts: KieGeminiPart[] = [geminiTextPart(`Instructions:\n${SYSTEM_PROMPT}`)];
+  const content: OpenAiResponseInputContent[] = [];
   for (const frame of frames) {
-    parts.push(geminiTextPart(`cue_id=${frame.cueId}; keyword=${frame.text}; timestamp=${frame.frameTime.toFixed(3)}s`));
-    parts.push(geminiImageBase64Part(frame.buffer.toString("base64"), "image/jpeg"));
+    content.push(
+      {
+        type: "input_text",
+        text: `cue_id=${frame.cueId}; keyword=${frame.text}; timestamp=${frame.frameTime.toFixed(3)}s`,
+      },
+      {
+        type: "input_image",
+        image_url: `data:image/jpeg;base64,${frame.buffer.toString("base64")}`,
+        detail: "high",
+      },
+    );
   }
-  const output = await callGeminiFlashJson({
-    apiKey,
-    parts,
-    temperature: 0.1,
-    maxOutputTokens: 8192,
-    responseSchema: VISION_JSON_SCHEMA as unknown as Record<string, unknown>,
-    timeout: 240_000,
-    signal,
-  });
-  return parseVisionRegions(output, frames);
+  const responses = buildIntelligenceResponses(apiKey, { timeout: 240_000 });
+  const response = await responses(intelligenceRequest({
+    instructions: SYSTEM_PROMPT,
+    input: [{ role: "user", content }],
+    text: {
+      format: {
+        type: "json_schema",
+        name: "keyword_placement_analysis",
+        schema: VISION_JSON_SCHEMA,
+        strict: true,
+      },
+    },
+    max_output_tokens: 8192,
+  }), signal);
+  return parseVisionRegions(firstResponseText(response), frames);
 }
 
 async function writeContactSheetIfChanged(
@@ -287,8 +301,8 @@ export function registerAnalyzeKeywordPlacementJob(fs: Engine): void {
       "analyze",
       { durationMs: LOCK_DURATION_MS, data: { state: "analyzing-keyword-placement" } },
       async () => {
-        const apiKey = getApiKey("KIE_API_KEY");
-        if (!apiKey) throw new Error("KIE_API_KEY is not set");
+        const apiKey = getApiKey("OPENAI_API_KEY");
+        if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
         const probe = await probeVideo(videoPath, { signal: ctx.signal });
         const extracted = await extractKeywordFrames(videoPath, graphics, probe.duration, ctx.signal);
         const regions = await analyzeFrames(extracted.frames, apiKey, ctx.signal);

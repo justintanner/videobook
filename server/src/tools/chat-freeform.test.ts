@@ -35,7 +35,7 @@ function resultText(result: { content?: unknown; toolResult?: unknown }): string
 describe("freeform chat commands", () => {
   let client: Client;
   let tempDir: string;
-  const origKey = process.env.KIE_API_KEY;
+  const origKey = process.env.OPENAI_API_KEY;
 
   beforeAll(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-freeform-chat-"));
@@ -45,12 +45,12 @@ describe("freeform chat commands", () => {
       arguments: { book_id: "test-proj" },
     });
     // Clear API key so we can test up to the routing boundary
-    delete process.env.KIE_API_KEY;
+    delete process.env.OPENAI_API_KEY;
   });
 
   afterAll(async () => {
-    if (origKey) process.env.KIE_API_KEY = origKey;
-    else delete process.env.KIE_API_KEY;
+    if (origKey) process.env.OPENAI_API_KEY = origKey;
+    else delete process.env.OPENAI_API_KEY;
     await client?.close();
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
@@ -88,7 +88,7 @@ describe("freeform chat commands", () => {
         });
         // No @tags to resolve, so should reach the API key check
         expect(result.isError).toBe(true);
-        expect(resultText(result)).toContain("KIE_API_KEY");
+        expect(resultText(result)).toContain("OPENAI_API_KEY");
       });
     }
   });
@@ -120,7 +120,7 @@ describe("freeform chat commands", () => {
       });
       // Asset resolved successfully, hits API key check
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
       expect(resultText(result)).not.toContain("Asset not found");
     });
 
@@ -133,7 +133,7 @@ describe("freeform chat commands", () => {
         },
       });
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
       expect(resultText(result)).not.toContain("Asset not found");
     });
 
@@ -146,7 +146,7 @@ describe("freeform chat commands", () => {
         },
       });
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
     });
 
     it("resolves @tag in 'speed up @img-sunset 2x'", async () => {
@@ -158,7 +158,7 @@ describe("freeform chat commands", () => {
         },
       });
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
     });
 
     it("resolves @tag in 'transcribe @img-sunset'", async () => {
@@ -170,7 +170,7 @@ describe("freeform chat commands", () => {
         },
       });
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
     });
 
     it("resolves @tag in 'show files for @img-sunset'", async () => {
@@ -182,7 +182,7 @@ describe("freeform chat commands", () => {
         },
       });
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
     });
   });
 
@@ -283,7 +283,7 @@ describe("freeform chat commands", () => {
       });
       // @s01 → @asset-id → resolves → hits API check
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
       expect(resultText(result)).not.toContain("Asset not found");
     });
 
@@ -296,7 +296,7 @@ describe("freeform chat commands", () => {
         },
       });
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
       expect(resultText(result)).not.toContain("Asset not found");
     });
 
@@ -313,7 +313,7 @@ describe("freeform chat commands", () => {
       // s02 doesn't match the TAG_PATTERN /@([a-zA-Z0-9]+-[a-zA-Z0-9_-]+)/g
       // because "s02" has no hyphen. So it passes through with no assets to resolve.
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
     });
 
     it("expands @s01 in 'extract first frame of @s01'", async () => {
@@ -325,7 +325,7 @@ describe("freeform chat commands", () => {
         },
       });
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
       expect(resultText(result)).not.toContain("Asset not found");
     });
   });
@@ -342,7 +342,7 @@ describe("freeform chat commands", () => {
       });
       // Empty prompt should still reach API key check (no assets to resolve)
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
     });
 
     it("handles prompt with only a URL", async () => {
@@ -354,7 +354,7 @@ describe("freeform chat commands", () => {
         },
       });
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
     });
 
     it("handles prompt with special characters (no @tags)", async () => {
@@ -366,7 +366,7 @@ describe("freeform chat commands", () => {
         },
       });
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
     });
 
     it("handles @-sign without valid tag pattern (e.g. email)", async () => {
@@ -381,7 +381,7 @@ describe("freeform chat commands", () => {
       // because "example.com" has a dot, not matching the pattern
       // Should pass through to API key check
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
     });
 
     it("handles single-word @tag that has no hyphen (ignored by resolver)", async () => {
@@ -395,7 +395,7 @@ describe("freeform chat commands", () => {
       // TAG_PATTERN requires a hyphen: /@([a-zA-Z0-9]+-[a-zA-Z0-9_-]+)/
       // "@singleword" has no hyphen, so it's not parsed as a tag
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
     });
 
     it("handles numeric timestamps in freeform without @tags", async () => {
@@ -407,7 +407,7 @@ describe("freeform chat commands", () => {
         },
       });
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
     });
 
     it("handles prompt that looks like a command but isn't (starts with /)", async () => {
@@ -421,7 +421,7 @@ describe("freeform chat commands", () => {
         },
       });
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
     });
 
     it("handles very long prompt without @tags", async () => {
@@ -434,7 +434,7 @@ describe("freeform chat commands", () => {
         },
       });
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
     });
   });
 
@@ -469,7 +469,7 @@ describe("freeform chat commands", () => {
         },
       });
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
       expect(resultText(result)).not.toContain("Asset not found");
     });
 
@@ -507,7 +507,7 @@ describe("freeform chat commands", () => {
       });
       // Script resolved, hits API key check
       expect(result.isError).toBe(true);
-      expect(resultText(result)).toContain("KIE_API_KEY");
+      expect(resultText(result)).toContain("OPENAI_API_KEY");
       expect(resultText(result)).not.toContain("Asset not found");
     });
   });

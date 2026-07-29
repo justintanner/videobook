@@ -8,7 +8,12 @@ import type {
 import {
   DEFAULT_ANIMATION_TOOL,
   normalizeCellActionFields,
+  normalizeLegacyAnalyzeCell,
 } from "./notebook-action-catalog.js";
+import {
+  INTELLIGENCE_MODEL,
+  OPENAI_ANALYSIS_TOOL,
+} from "./openai-intelligence.js";
 import {
   normalizeShots,
   parseAnalysisShots,
@@ -674,7 +679,7 @@ function createBranchCells(
     slot: promptBase.slot,
     prompt: shot.prompt ?? promptExisting?.prompt ?? promptBrief,
     provider: "openai",
-    model: "gpt-5.2",
+    model: INTELLIGENCE_MODEL,
     operation: "rewrite_prompt",
     tool: "rewrite_prompt",
     inputs: {
@@ -746,8 +751,12 @@ export async function applyAnalysisResults(
     sourceArtifactId: string;
   },
 ): Promise<NotebookDocument> {
-  const analysisCell = document.cells.find((cell) => cell.id === analysisCellId);
-  if (!analysisCell) throw new Error(`Analysis cell not found: ${analysisCellId}`);
+  const storedAnalysisCell = document.cells.find((cell) =>
+    cell.id === analysisCellId);
+  if (!storedAnalysisCell) {
+    throw new Error(`Analysis cell not found: ${analysisCellId}`);
+  }
+  const analysisCell = normalizeLegacyAnalyzeCell(storedAnalysisCell);
   const resultCell = analysisOutputCell(document, analysisCellId);
   const shots = normalizeShots(
     parseAnalysisShots(input.rawOutput),
@@ -831,10 +840,10 @@ export async function applyAnalysisResults(
   const updatedAnalysis: NotebookCell = {
     ...analysisCell,
     outputArtifactId: scriptArtifact.value.artifactId,
-    provider: analysisCell.provider ?? "kie",
-    model: analysisCell.model ?? "gemini-3.5-flash",
+    provider: analysisCell.provider ?? "openai",
+    model: analysisCell.model ?? INTELLIGENCE_MODEL,
     operation: analysisCell.operation ?? "analyze_source",
-    tool: analysisCell.tool ?? "kie_gemini_analysis",
+    tool: analysisCell.tool ?? OPENAI_ANALYSIS_TOOL,
     inputs: {
       ...(analysisCell.inputs ?? {}),
       shotCount: shots.length,
@@ -1029,10 +1038,10 @@ export function buildSevenStageScaffold(
     slug: "analyze-splitter",
     slot: gridSlot(1, 0),
     prompt: "Segment the source into four continuous 15-second narrative shots with precise timestamps and concise visual context.",
-    provider: "kie",
-    model: "gemini-3.5-flash",
+    provider: "openai",
+    model: INTELLIGENCE_MODEL,
     operation: "analyze_source",
-    tool: "kie_gemini_analysis",
+    tool: OPENAI_ANALYSIS_TOOL,
     inputs: { workflowRole: "analysis", state: "pending" },
   });
   const analysisOutput = baseCell(
