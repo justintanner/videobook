@@ -3,6 +3,7 @@ import type { Engine } from "videobook-engine";
 import { findAudioFile } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
+import { readTimeline } from "../timeline-helpers.js";
 import type { ToolDef } from "./tool-def.js";
 
 const TIMELINE_FPS = 30;
@@ -44,7 +45,7 @@ export async function runRenderTimeline(
   bookId: string,
   orientationOverride?: Orientation,
 ): Promise<RenderTimelineOutcome> {
-  const timeline = engine.timeline.get();
+  const timeline = readTimeline(engine);
   const orientation = orientationOverride ?? timeline.render;
   if (timeline.slots.length === 0) {
     return { status: "empty", message: "Timeline has no assigned artifacts." };

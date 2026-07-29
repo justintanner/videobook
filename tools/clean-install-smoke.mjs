@@ -230,6 +230,10 @@ try {
   await run('npm', ['ci', '--no-audit', '--no-fund'], join(appRoot, 'server'))
   await run('npm', ['run', 'build'], appRoot)
   await run('npm', ['run', 'build:server'], appRoot)
+  const requireFromEngine = createRequire(join(engineRoot, 'package.json'))
+  const expectedEngineVersion = requireFromEngine('./package.json').version
+  const builtEngine = await import(pathToFileURL(join(engineRoot, 'dist/index.js')).href)
+  const expectedSchemaVersion = builtEngine.SCHEMA_VERSION
 
   const serverPort = await freePort()
   const clientPort = await freePort()
@@ -250,8 +254,8 @@ try {
     const health = await healthResponse.json()
     if (
       health.ok !== true
-      || health.engineVersion !== '3.0.0'
-      || health.schemaVersion !== 5
+      || health.engineVersion !== expectedEngineVersion
+      || health.schemaVersion !== expectedSchemaVersion
     ) {
       throw new Error(`Unexpected health response: ${JSON.stringify(health)}`)
     }

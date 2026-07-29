@@ -55,6 +55,12 @@ export function createB2ContentStore(
       });
       await writeFile(destinationPath, new Uint8Array(result.body));
     },
+    delete: async (key) => {
+      await provider.objects.del({
+        bucket: config.bucket,
+        key,
+      });
+    },
   };
 }
 

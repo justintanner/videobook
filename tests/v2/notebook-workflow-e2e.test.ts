@@ -30,7 +30,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
   })
 
   it('runs video→analysis fixture→split/audio/image without paid generation', async () => {
-    expect(SCHEMA_VERSION).toBe(13)
+    expect(SCHEMA_VERSION).toBe(18)
     expect(NOTEBOOK_CELL_TYPES).toEqual([
       'audio',
       'image',
@@ -106,8 +106,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
       sourceArtifactId: sourceArtifact.value.artifactId,
     })
     expect(fanned.cells.every((cell) => NOTEBOOK_CELL_TYPES.includes(cell.type))).toBe(true)
-    expect(fanned.properties?.stageLabels).toBeUndefined()
-    expect(fanned.properties?.featureLanes).toBeUndefined()
+    expect(fanned).not.toHaveProperty('properties')
     expect(fanned.cells.filter((cell) => cell.operation === 'split_range')).toHaveLength(2)
     expect(fanned.cells.filter((cell) =>
       cell.inputs?.workflowRole?.toString().startsWith('scene-video-'))).toHaveLength(2)

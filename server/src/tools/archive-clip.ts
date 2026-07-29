@@ -12,7 +12,7 @@ function normalizeUrl(url: string): string {
 export function archiveClipDef(fs: Engine): ToolDef {
   return {
     name: "archive_clip",
-    description: "Archive a full URL or existing video/audio asset to the global clip archive (B2 if configured, otherwise a local archive folder next to the projects directory), dedupe by media SHA-256, and transcribe long clips in chunks.",
+    description: "Materialize a full URL or existing video/audio asset in the rebuildable global archive cache (B2 if configured, otherwise local), dedupe by media SHA-256, and transcribe long clips in chunks. Book-owned semantic links remain in artifact metadata.",
     schema: {
       url: z.string().optional().describe("Source URL to download in full"),
       asset_id: z.string().optional().describe("Existing video/audio asset ID to archive"),

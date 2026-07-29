@@ -118,7 +118,7 @@ export async function runTranscribeVideoAudio(
       // lease, so the asset stays claimable for a later retry.
       const reason = err instanceof Error ? err.message : String(err);
       console.warn(`[transcribe_video_audio] soft-failed for ${assetId}: ${reason}`);
-      await fs.history.logAction("transcribe-soft-fail", { assetId, error: reason }).catch(() => undefined);
+      await fs.logs.append("transcribe-soft-fail", { assetId, error: reason }).catch(() => undefined);
       return { success: false, reason };
     }
   }, { waitForActiveMs: DOWNSTREAM_LEASE_WAIT_MS });

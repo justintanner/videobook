@@ -53,7 +53,7 @@ export function keywordPlacementFingerprint(
     video: {
       name: videoFile.name,
       size: videoFile.sizeBytes,
-      modified: videoFile.mtimeMs,
+      objectHash: videoFile.objectHash,
     },
     transcriptHash,
     cues: graphics.map((graphic) => ({

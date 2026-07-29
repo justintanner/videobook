@@ -1,40 +1,10 @@
 import type { NotebookCell, NotebookCellType, NotebookDocument } from "videobook-engine";
+import { notebookCellTableRows } from "videobook-engine";
 import {
   GENERATION_ACTIONS,
   getActionSpec,
   type GenerationActionSpec,
 } from "./generation-registry.js";
-
-function rawCellRows(notebookId: string, cell: NotebookCell) {
-  return [
-    { column: "notebook_id", type: "TEXT", value: notebookId },
-    { column: "cell_id", type: "TEXT", value: cell.id },
-    { column: "type", type: "TEXT", value: cell.type },
-    { column: "slug", type: "TEXT", value: cell.slug },
-    { column: "grid_row", type: "INTEGER", value: cell.slot.row },
-    { column: "grid_column", type: "INTEGER", value: cell.slot.column },
-    {
-      column: "output_entity_id",
-      type: "TEXT",
-      value: cell.outputEntityId ?? null,
-    },
-    { column: "prompt", type: "TEXT", value: cell.prompt ?? null },
-    { column: "provider", type: "TEXT", value: cell.provider ?? null },
-    { column: "model", type: "TEXT", value: cell.model ?? null },
-    { column: "operation", type: "TEXT", value: cell.operation ?? null },
-    { column: "tool", type: "TEXT", value: cell.tool ?? null },
-    {
-      column: "inputs_json",
-      type: "TEXT",
-      value: JSON.stringify(cell.inputs ?? {}),
-    },
-    {
-      column: "output_artifact_id",
-      type: "TEXT",
-      value: cell.outputArtifactId ?? null,
-    },
-  ] as const;
-}
 
 export type NotebookActionKind =
   | "local"
@@ -505,13 +475,7 @@ export function markDescendantsStale(
     stack.push(...(children.get(id) ?? []));
   }
   if (stale.size === 0) return document;
-  const execution = {
-    ...((document.properties?.execution
-      && typeof document.properties.execution === "object"
-      && !Array.isArray(document.properties.execution))
-      ? document.properties.execution as Record<string, unknown>
-      : {}),
-  };
+  const execution = { ...(document.execution ?? {}) };
   for (const id of stale) {
     const current = execution[id];
     if (current && typeof current === "object" && !Array.isArray(current)) {
@@ -525,10 +489,7 @@ export function markDescendantsStale(
   }
   return {
     ...document,
-    properties: {
-      ...(document.properties ?? {}),
-      execution,
-    },
+    execution,
   };
 }
 
@@ -555,17 +516,12 @@ export function selectedCellDetails(
       targetInput: edge.targetInput,
       target: document.cells.find((candidate) => candidate.id === edge.target) ?? null,
     }));
-  const executionRaw = document.properties?.execution;
-  const execution = executionRaw
-    && typeof executionRaw === "object"
-    && !Array.isArray(executionRaw)
-    ? (executionRaw as Record<string, unknown>)[cellId] ?? null
-    : null;
+  const execution = document.execution?.[cellId] ?? null;
   const action = defaultActionForCell(cell, document);
   const validation = validateCellConfiguration(cell, document);
   return {
     cell,
-    rawRow: rawCellRows(notebookId, cell),
+    rawRow: notebookCellTableRows(notebookId, cell),
     action,
     availableActions: actionsForCell(cell, document),
     validation,

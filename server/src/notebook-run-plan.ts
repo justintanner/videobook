@@ -3,6 +3,7 @@ import type {
   Engine,
   NotebookCell,
   NotebookDocument,
+  NotebookRunPlan,
   SourceSurface,
 } from "videobook-engine";
 import { mutateNotebook } from "./notebook-mutations.js";
@@ -25,19 +26,8 @@ export type NotebookRunPlanStatus =
   | "completed"
   | "failed";
 
-export interface NotebookRunPlanRecord {
-  planId: string;
+export interface NotebookRunPlanRecord extends NotebookRunPlan {
   status: NotebookRunPlanStatus;
-  plan: Record<string, unknown>;
-  paidCellIds: string[];
-  cellDefinitionFingerprints: Record<string, string>;
-  knownCostUsd: number;
-  unknownCostCount: number;
-  createdAt: string;
-  updatedAt: string;
-  runId?: string;
-  outputs?: Record<string, string>;
-  error?: string;
 }
 
 interface CostEstimate {
@@ -49,30 +39,7 @@ interface CostEstimate {
 export function notebookRunPlanRecords(
   document: NotebookDocument,
 ): NotebookRunPlanRecord[] {
-  const raw = document.properties?.notebookRunPlans;
-  if (!Array.isArray(raw)) return [];
-  return raw.flatMap((entry) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
-    const record = entry as Record<string, unknown>;
-    if (
-      typeof record.planId !== "string"
-      || typeof record.status !== "string"
-      || !record.plan
-      || typeof record.plan !== "object"
-      || Array.isArray(record.plan)
-      || !Array.isArray(record.paidCellIds)
-      || !record.cellDefinitionFingerprints
-      || typeof record.cellDefinitionFingerprints !== "object"
-      || Array.isArray(record.cellDefinitionFingerprints)
-      || typeof record.knownCostUsd !== "number"
-      || typeof record.unknownCostCount !== "number"
-      || typeof record.createdAt !== "string"
-      || typeof record.updatedAt !== "string"
-    ) {
-      return [];
-    }
-    return [entry as NotebookRunPlanRecord];
-  });
+  return (document.notebookRunPlans ?? []) as NotebookRunPlanRecord[];
 }
 
 export async function persistNotebookRunPlan(
@@ -86,14 +53,11 @@ export async function persistNotebookRunPlan(
     "persist_notebook_run_plan",
     (document) => ({
       ...document,
-      properties: {
-        ...(document.properties ?? {}),
-        notebookRunPlans: [
-          ...notebookRunPlanRecords(document).filter((candidate) =>
-            candidate.planId !== record.planId),
-          record,
-        ],
-      },
+      notebookRunPlans: [
+        ...notebookRunPlanRecords(document).filter((candidate) =>
+          candidate.planId !== record.planId),
+        record,
+      ],
     }),
     {
       planId: record.planId,

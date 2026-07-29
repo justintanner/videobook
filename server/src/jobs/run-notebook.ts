@@ -8,6 +8,7 @@ import type {
   ClipPlacement,
   NotebookCell,
   NotebookDocument,
+  NotebookRunPlan,
   NotebookRun,
 } from "videobook-engine";
 import { MVP_CONTRACT_VERSION } from "videobook-engine";
@@ -109,18 +110,11 @@ export async function updateGenerationPlanState(
     notebookId,
     "update_generation_plan",
     (notebook) => {
-      const raw = notebook.properties?.generationPlans;
-      const plans = Array.isArray(raw) ? raw : [];
+      const plans = notebook.generationPlans ?? [];
       return {
         ...notebook,
-        properties: {
-          ...(notebook.properties ?? {}),
-          generationPlans: plans.map((entry) => {
-            if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-              return entry;
-            }
-            const record = entry as Record<string, unknown>;
-            return record.planId === planId
+        generationPlans: plans.map((record) =>
+          record.planId === planId
               ? {
                   ...record,
                   status,
@@ -130,9 +124,7 @@ export async function updateGenerationPlanState(
                     : {}),
                   ...(details.error ? { error: details.error } : {}),
                 }
-              : entry;
-          }),
-        },
+              : record),
       };
     },
     {
@@ -326,9 +318,7 @@ async function executeSpliceCell(
 }
 
 function executionState(document: NotebookDocument): Record<string, CellExecution> {
-  const raw = document.properties?.execution;
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
-  return raw as Record<string, CellExecution>;
+  return (document.execution ?? {}) as Record<string, CellExecution>;
 }
 
 function withExecution(
@@ -340,7 +330,7 @@ function withExecution(
   const execution = { ...executionState(document), [cellId]: state };
   return {
     ...document,
-    properties: { ...(document.properties ?? {}), execution },
+    execution,
     cells: document.cells.map((cell) => (
       cell.id === cellId
         ? {
@@ -1637,12 +1627,8 @@ interface AwaitNotebookOutputPayload {
 
 function notebookRunPlanRecords(
   document: NotebookDocument,
-): Array<Record<string, unknown>> {
-  const raw = document.properties?.notebookRunPlans;
-  return Array.isArray(raw)
-    ? raw.filter((entry): entry is Record<string, unknown> =>
-      Boolean(entry) && typeof entry === "object" && !Array.isArray(entry))
-    : [];
+): NotebookRunPlan[] {
+  return document.notebookRunPlans ?? [];
 }
 
 export async function updateNotebookRunPlanState(
@@ -1650,7 +1636,7 @@ export async function updateNotebookRunPlanState(
   notebookId: string,
   planId: string,
   status: string,
-  details: Record<string, unknown> = {},
+  details: Partial<NotebookRunPlan> = {},
 ): Promise<void> {
   const result = await mutateNotebook(
     engine,
@@ -1658,18 +1644,15 @@ export async function updateNotebookRunPlanState(
     "update_notebook_run_plan",
     (document) => ({
       ...document,
-      properties: {
-        ...(document.properties ?? {}),
-        notebookRunPlans: notebookRunPlanRecords(document).map((record) =>
-          record.planId === planId
-            ? {
-                ...record,
-                status,
-                ...details,
-                updatedAt: new Date().toISOString(),
-              }
-            : record),
-      },
+      notebookRunPlans: notebookRunPlanRecords(document).map((record) =>
+        record.planId === planId
+          ? {
+              ...record,
+              status,
+              ...details,
+              updatedAt: new Date().toISOString(),
+            }
+          : record),
     }),
     { planId, status, ...details },
   );
@@ -1690,26 +1673,14 @@ function paidCellAuthorized(
     return Boolean(
       record
       && (record.status === "queued" || record.status === "awaiting-output")
-      && fingerprints
-      && typeof fingerprints === "object"
-      && !Array.isArray(fingerprints)
-      && (fingerprints as Record<string, unknown>)[cell.id]
-        === expectedFingerprint,
+      && fingerprints?.[cell.id] === expectedFingerprint,
     );
   }
   const planId = input.generationPlan?.planId;
   if (typeof planId !== "string") return false;
-  const records = Array.isArray(document.properties?.generationPlans)
-    ? document.properties.generationPlans
-    : [];
+  const records = document.generationPlans ?? [];
   const record = records.find((candidate) =>
-    candidate
-    && typeof candidate === "object"
-    && !Array.isArray(candidate)
-    && (candidate as Record<string, unknown>).planId === planId
-    && (candidate as Record<string, unknown>).cellId === cell.id) as
-      | Record<string, unknown>
-      | undefined;
+    candidate.planId === planId && candidate.cellId === cell.id);
   const plan = record?.plan;
   return Boolean(
     record
@@ -2100,24 +2071,6 @@ export function registerRunNotebookJob(engine: Engine): void {
           { runId, outputs },
         );
       }
-      await engine.history.recordAction({
-        operation: "run_notebook",
-        scope: "book",
-        phase: "started",
-        actor: "human",
-        lane: "notebook",
-        writeSet: [`notebook:${input.notebookId}`],
-        details: {
-          notebookId: input.notebookId,
-          runId,
-          cellIds: input.cellIds ?? [],
-          outputs,
-          waitingCellIds: [...waiting],
-          errors,
-          planId: input.runPlanId ?? input.generationPlan?.planId,
-          jobId: input.jobId,
-        },
-      });
       return {
         id: runId,
         notebookId: input.notebookId,
@@ -2154,23 +2107,6 @@ export function registerRunNotebookJob(engine: Engine): void {
         },
       );
     }
-    await engine.history.recordAction({
-      operation: "run_notebook",
-      scope: "book",
-      phase: errors.length === 0 ? "completed" : "failed",
-      actor: "human",
-      lane: "notebook",
-      writeSet: [`notebook:${input.notebookId}`],
-      details: {
-        notebookId: input.notebookId,
-        cellIds: input.cellIds ?? [],
-        outputs,
-        errors,
-        planId: input.runPlanId ?? input.generationPlan?.planId,
-        parentActionId: input.generationPlan?.parentActionId,
-        jobId: input.jobId,
-      },
-    });
     if (errors.length > 0) throw new Error(errors.join("\n"));
     return run;
   });
@@ -2211,30 +2147,14 @@ export async function reconcileAwaitingNotebookOutputs(
           record.status === "queued"
           || record.status === "awaiting-output"
         ));
-      const generationRecords = Array.isArray(
-        notebook.properties?.generationPlans,
-      )
-        ? notebook.properties.generationPlans
-        : [];
+      const generationRecords = notebook.generationPlans ?? [];
       const generationRecord = generationRecords.find((candidate) =>
-        candidate
-        && typeof candidate === "object"
-        && !Array.isArray(candidate)
-        && (candidate as Record<string, unknown>).cellId === cellId
+        candidate.cellId === cellId
         && (
-          (candidate as Record<string, unknown>).status === "queued"
-          || (candidate as Record<string, unknown>).status
-            === "awaiting-output"
-        )) as Record<string, unknown> | undefined;
-      const generationPlan = runPlan?.plan
-        && typeof runPlan.plan === "object"
-        && !Array.isArray(runPlan.plan)
-        ? runPlan.plan as Record<string, unknown>
-        : generationRecord?.plan
-          && typeof generationRecord.plan === "object"
-          && !Array.isArray(generationRecord.plan)
-          ? generationRecord.plan as Record<string, unknown>
-          : undefined;
+          candidate.status === "queued"
+          || candidate.status === "awaiting-output"
+        ));
+      const generationPlan = runPlan?.plan ?? generationRecord?.plan;
       await queue.enqueue(
         `reconcile-await-notebook-${state.runId}-${cellId}-${Date.now()}`,
         {

@@ -143,10 +143,10 @@ export function notebookCellIsActiveStatus(status: string): boolean {
 }
 
 export function notebookCellExecutionObservation(
-  document: Pick<NotebookDocument, 'properties'>,
+  document: Pick<NotebookDocument, 'execution'>,
   cellId: string,
 ): NotebookCellExecutionObservation {
-  const execution = objectValue(document.properties?.execution)
+  const execution = objectValue(document.execution)
   const cell = execution && objectValue(execution[cellId])
   return {
     error: stringValue(cell?.error),
@@ -155,11 +155,11 @@ export function notebookCellExecutionObservation(
 }
 
 export function notebookCellRunObservation(
-  document: Pick<NotebookDocument, 'properties'>,
+  document: Pick<NotebookDocument, 'execution'>,
   cellId: string,
   runId: string,
 ): NotebookCellRunObservation {
-  const execution = objectValue(document.properties?.execution)
+  const execution = objectValue(document.execution)
   const cell = execution && objectValue(execution[cellId])
   if (!cell || stringValue(cell.runId) !== runId) {
     return { error: null, state: 'pending', status: null }

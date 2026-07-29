@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { getEngineRoot } from "./queue.js";
 import {
+  ARCHIVE_STORE_BOUNDARY,
   createLocalArchiveStore,
   getArchiveStore,
   localArchiveDir,
@@ -26,6 +27,13 @@ const envNames: EnvName[] = [
 ];
 
 describe("archive store", () => {
+  it("declares the external archive as a rebuildable application cache", () => {
+    expect(ARCHIVE_STORE_BOUNDARY).toMatchObject({
+      role: "rebuildable-app-cache",
+      bookAuthority: "artifact-metadata",
+    });
+  });
+
   let tempDir: string;
   let envSnapshot: Array<[EnvName, string | undefined]>;
 

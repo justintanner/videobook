@@ -6,7 +6,11 @@ import { findVideoFile } from "videobook-engine";
 import { isValidHex } from "../remotion/util.js";
 import type { Orientation, OsgPosition } from "../remotion/subtitles/types.js";
 import type { ToolDef } from "./tool-def.js";
-import { timelineInput } from "../timeline-helpers.js";
+import {
+  readTimeline,
+  timelineInput,
+  writeTimeline,
+} from "../timeline-helpers.js";
 import {
   DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
   DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
@@ -406,8 +410,8 @@ export function renderVideoDef(fs: Engine): ToolDef {
       let savedOrientation: Orientation | undefined;
       if (explicitOrientation) {
         try {
-          const timeline = fs.timeline.get();
-          const updated = await fs.timeline.set({
+          const timeline = readTimeline(fs);
+          const updated = await writeTimeline(fs, {
             ...timelineInput(timeline),
             render: explicitOrientation,
           });

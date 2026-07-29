@@ -3,6 +3,7 @@ import { z } from "zod";
 import { extname, join } from "node:path";
 import { probeVideo } from "../ffmpeg.js";
 import { queue } from "../queue.js";
+import { readTimeline } from "../timeline-helpers.js";
 import type { ToolDef } from "./tool-def.js";
 import { toolError } from "./_shared.js";
 
@@ -39,7 +40,7 @@ function findCanonicalVideo(files: ArtifactManifestFile[]): ArtifactManifestFile
 }
 
 function timelineOrientation(fs: Engine): Orientation {
-  return fs.timeline.get().render;
+  return readTimeline(fs).render;
 }
 
 async function findFinalVideo(

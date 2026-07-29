@@ -2,9 +2,11 @@ import type { Engine } from "videobook-engine";
 import { z } from "zod";
 import {
   slotIndex,
+  readTimeline,
   timelineFailure,
   timelineInput,
   timelineSuccess,
+  writeTimeline,
 } from "../timeline-helpers.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -19,12 +21,12 @@ export function clearSlotDef(engine: Engine): ToolDef {
     handler: async (args) => {
       const index = slotIndex(String(args.slot));
       if (index === null) return timelineFailure("Slot must use the form s01, s02, and so on");
-      const timeline = engine.timeline.get();
+      const timeline = readTimeline(engine);
       if (index >= timeline.slots.length) {
         return timelineFailure(`Slot ${String(args.slot)} is outside the current timeline`);
       }
       const removed = timeline.slots[index]!;
-      const result = await engine.timeline.set({
+      const result = await writeTimeline(engine, {
         ...timelineInput(timeline),
         slots: timeline.slots.filter((_, position) => position !== index).map((slot) => ({
           id: slot.id,

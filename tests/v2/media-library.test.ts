@@ -219,7 +219,7 @@ describe('media Library slots', () => {
     expect(afterClear.value.edges).toEqual([outgoing])
     expect(engine.artifacts.get(artifact.artifactId).ok).toBe(true)
     expect(
-      (afterClear.value.properties?.execution as Record<string, {
+      (afterClear.value.execution as Record<string, {
         stale?: boolean
       }>)[downstream.id]?.stale,
     ).toBe(true)

@@ -64,10 +64,8 @@ describe('notebook cell presentation', () => {
 
   it('observes only the matching notebook run lifecycle', () => {
     const pending = {
-      properties: {
-        execution: {
-          cell: { runId: 'previous-run', status: 'completed' },
-        },
+      execution: {
+        cell: { runId: 'previous-run', status: 'completed' },
       },
     }
     expect(notebookCellRunObservation(pending, 'cell', 'current-run')).toEqual({
@@ -77,10 +75,8 @@ describe('notebook cell presentation', () => {
     })
 
     const running = {
-      properties: {
-        execution: {
-          cell: { runId: 'current-run', status: 'running' },
-        },
+      execution: {
+        cell: { runId: 'current-run', status: 'running' },
       },
     }
     expect(notebookCellRunObservation(running, 'cell', 'current-run')).toEqual({
@@ -90,13 +86,11 @@ describe('notebook cell presentation', () => {
     })
 
     const failed = {
-      properties: {
-        execution: {
-          cell: {
-            runId: 'current-run',
-            status: 'error',
-            error: 'ffmpeg failed',
-          },
+      execution: {
+        cell: {
+          runId: 'current-run',
+          status: 'error',
+          error: 'ffmpeg failed',
         },
       },
     }
@@ -109,13 +103,11 @@ describe('notebook cell presentation', () => {
 
   it('reads persisted execution details independently of a run id', () => {
     const document = {
-      properties: {
-        execution: {
-          cell: {
-            runId: 'failed-run',
-            status: 'error',
-            error: 'ffmpeg failed',
-          },
+      execution: {
+        cell: {
+          runId: 'failed-run',
+          status: 'error',
+          error: 'ffmpeg failed',
         },
       },
     }

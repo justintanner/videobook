@@ -1,36 +1,12 @@
-/**
- * Pure helpers for the rename_all tool: deterministic slug computation that
- * mirrors videobook-engine's slugifyName, humanization for display, dry-run
- * row building, edited-name revalidation, and reference rewriting.
- *
- * These are kept side-effect-free and engine-agnostic so the dry-run target
- * prediction is testable without a filesystem or network. The engine's
- * `fs.renameAsset` re-runs collision resolution at apply time and may add a
- * `-N` suffix if a historical slug collision appears; callers should treat the
- * predicted `target_asset_id` as authoritative for in-flight assets and rely
- * on the apply result's `new_asset_id` for the final id.
- */
+import {
+  artifactNameSlug,
+  humanizeArtifactSlug,
+  isArtifactNameStopWord,
+} from "videobook-engine";
 
 /** Asset prefixes eligible for rename-all (matches the preview scope). */
 export const RENAME_PREFIXES = ["vid", "img"] as const;
 export type RenamePrefix = (typeof RENAME_PREFIXES)[number];
-
-/** Engine stop-word list — kept in sync with videobook-engine/asset/slug.js.
- *  Reproduced locally because the engine does not export slugifyName. */
-const STOP_WORDS = new Set([
-  "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of",
-  "with", "by", "from", "as", "is", "was", "are", "were", "been", "be",
-  "have", "has", "had", "do", "does", "did", "will", "would", "could",
-  "should", "may", "might", "must", "shall", "can", "need", "this", "that",
-  "these", "those", "it", "its", "my", "your", "his", "her", "our", "their",
-  "what", "which", "who", "whom", "whose", "where", "when", "why", "how",
-  "all", "each", "every", "both", "few", "more", "most", "other", "some",
-  "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too",
-  "very", "just", "also",
-]);
-
-/** Maximum content words in a slug (engine truncates to 4). */
-const MAX_SLUG_WORDS = 4;
 
 export type RenameStatus = "renamable" | "skipped" | "unchanged" | "conflict";
 
@@ -56,33 +32,15 @@ export interface EditedRename {
   suggested_name: string;
 }
 
-/** Replicate videobook-engine slugifyName(name, prefix). */
 export function slugifyName(name: string, prefix: string): string {
-  const prefixLower = prefix.toLowerCase().replace(/-$/, "");
-  const words = name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .split(/[\s-]+/)
-    .filter((w) => w.length > 0 && !STOP_WORDS.has(w))
-    .filter((w) => w !== prefixLower);
-
-  const deduped: string[] = [];
-  for (const w of words) {
-    if (deduped.length === 0 || deduped[deduped.length - 1] !== w) {
-      deduped.push(w);
-    }
-  }
-  const slug = deduped.slice(0, MAX_SLUG_WORDS).join("-");
-  return slug ? `${prefix}-${slug}` : `${prefix}-untitled`;
+  const normalized = prefix.toLowerCase().replace(/-$/, "");
+  if (normalized === "vid") return artifactNameSlug("video", name);
+  if (normalized === "img") return artifactNameSlug("image", name);
+  throw new Error(`Unsupported rename prefix: ${prefix}`);
 }
 
-/** Strip the type prefix and title-case the remainder for display. */
 export function humanizeSlug(slug: string): string {
-  const rawName = slug.replace(/^[a-z]+-/, "");
-  return rawName
-    .split("-")
-    .map((w) => (w.length === 0 ? w : w.charAt(0).toUpperCase() + w.slice(1)))
-    .join(" ");
+  return humanizeArtifactSlug(slug);
 }
 
 export function prefixOf(assetId: string): string {
@@ -112,7 +70,7 @@ export function leadingMnemonicTokens(assetId: string): string[] {
   const part = parts[0];
   if (
     /^[a-z]{2,4}$/.test(part) &&
-    !STOP_WORDS.has(part) &&
+    !isArtifactNameStopWord(part) &&
     !GENERIC_SLUG_TOKENS.has(part)
   ) {
     return [part];

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MVP_SCHEMA_VERSION, SCHEMA_VERSION } from 'videobook-engine'
 import { BookManager } from '../../server/src/book-manager.js'
+import { readTimeline, writeTimeline } from '../../server/src/timeline-helpers.js'
 
 describe('v2 book manager', () => {
   let rootDir: string
@@ -61,7 +62,7 @@ describe('v2 book manager', () => {
       Buffer.from('image bytes'),
     )).ok).toBe(true)
 
-    const timeline = await firstBook.value.engine.timeline.set({
+    const timeline = await writeTimeline(firstBook.value.engine, {
       render: 'portrait',
       slots: [{ artifactId: artifact.value.artifactId }],
     })
@@ -71,7 +72,7 @@ describe('v2 book manager', () => {
     expect(timeline.value.slots[0]?.artifactId).toBe(artifact.value.artifactId)
     expect(timeline.value.slots[0]?.id).toMatch(/^[0-9a-f-]{36}$/)
     expect(secondBook.value.engine.artifacts.list()).toEqual([])
-    expect(secondBook.value.engine.timeline.get().slots).toEqual([])
+    expect(readTimeline(secondBook.value.engine).slots).toEqual([])
   })
 
   it('requires a typed slug confirmation before permanently deleting the book root', async () => {

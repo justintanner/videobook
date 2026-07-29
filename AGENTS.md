@@ -25,7 +25,7 @@ Guidance for AI coding agents working in the Videobook repository.
 
 - **Frontend (`src/`)**: React 19 + TypeScript + Vite 7 SPA. Entry: `main.tsx` → `App.tsx`. Uses `use-mcp` to connect to MCP server at `/mcp`.
 - **Backend (`server/src/`)**: Express MCP server on port 3001. Entry: `server/src/index.ts`. Tools in `server/src/tools/*.ts` registered via `server/src/tools/index.ts`.
-- **Domain/storage (`videobook-engine` 2.0.1)**: one isolated UUIDv7 engine root per book, providing Dolt-native artifact, file/CAS, metadata, history, notebook, timeline, and runtime-job operations. All managed data goes through the scoped book `Engine`.
+- **Domain/storage (`videobook-engine` 4.0.0, schema 18)**: one isolated UUIDv7 engine root per book, providing Dolt-native artifact, file/CAS, metadata, history, notebook, canonical-sequence, and runtime-job operations. All managed data goes through the scoped book `Engine`.
 
 ## Code Style
 

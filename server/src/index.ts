@@ -3,6 +3,7 @@ import cors from "cors";
 import express from "express";
 import { createWriteStream } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { Transform } from "node:stream";
@@ -21,6 +22,10 @@ import { searchReferenceStore } from "./search-reference-store.js";
 import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
 import { createServer } from "./server.js";
 
+const require = createRequire(import.meta.url);
+const enginePackage = require("videobook-engine/package.json") as {
+  version: string;
+};
 const app = express();
 const SEARCH_REFERENCE_LIMIT_BYTES = 500 * 1024 * 1024;
 
@@ -46,7 +51,7 @@ app.get("/healthz", async (_req, res) => {
   res.json({
     ok: true,
     service: "videobook",
-    engineVersion: "3.1.0",
+    engineVersion: enginePackage.version,
     schemaVersion: SCHEMA_VERSION,
   });
 });

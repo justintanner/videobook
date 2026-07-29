@@ -96,7 +96,7 @@ function isCanonicalRole(role: string | null): boolean {
 }
 
 function fixtureRecord(document: NotebookDocument): Record<string, unknown> | null {
-  const raw = document.properties?.multycultyFixture;
+  const raw = document.fixture;
   return raw && typeof raw === "object" && !Array.isArray(raw)
     ? raw as Record<string, unknown>
     : null;
@@ -259,11 +259,10 @@ async function attachFixtureOutputs(
   };
 }
 
-function fixtureExecution(document: NotebookDocument): Record<string, unknown> {
-  const raw = document.properties?.execution;
-  const execution = raw && typeof raw === "object" && !Array.isArray(raw)
-    ? { ...raw as Record<string, unknown> }
-    : {};
+function fixtureExecution(
+  document: NotebookDocument,
+): NonNullable<NotebookDocument["execution"]> {
+  const execution = { ...(document.execution ?? {}) };
   const completedAt = new Date().toISOString();
   for (const cell of canonicalFixtureCells(document)) {
     if (!cell.outputArtifactId) continue;
@@ -404,15 +403,12 @@ async function materializeLocalOutputs(
   const fixture = fixtureRecord(completedDocument) ?? {};
   return writeNotebook(engine, {
     ...completedDocument,
-    properties: {
-      ...(completedDocument.properties ?? {}),
-      execution,
-      state: "finished",
-      multycultyFixture: {
-        ...fixture,
-        materializedAt: completedAt,
-        noPaidCalls: true,
-      },
+    execution,
+    lifecycleState: "finished",
+    fixture: {
+      ...fixture,
+      materializedAt: completedAt,
+      noPaidCalls: true,
     },
   });
 }
@@ -454,7 +450,9 @@ export async function seedMultycultyWorkflow(
       ...notebook,
       cells: [],
       edges: [],
-      properties: {},
+      execution: {},
+      generationPlans: [],
+      notebookRunPlans: [],
     },
     sourceArtifact.artifactId,
   );
@@ -555,24 +553,18 @@ export async function seedMultycultyWorkflow(
             },
           }
         : cell),
-    properties: {
-      ...(withOutputs.properties ?? {}),
-      description:
-        "Compact offline example from source analysis through two generated scenes and a playable concat.",
-      state: "finished",
-      multycultyFixture: {
-        version: MULTYCULTY_FIXTURE_VERSION,
-        owner: MULTYCULTY_FIXTURE_OWNER,
-        previousRevision,
-        ensuredAt: new Date().toISOString(),
-        noPaidCalls: true,
-      },
+    description:
+      "Compact offline example from source analysis through two generated scenes and a playable concat.",
+    lifecycleState: "finished",
+    fixture: {
+      version: MULTYCULTY_FIXTURE_VERSION,
+      owner: MULTYCULTY_FIXTURE_OWNER,
+      previousRevision,
+      ensuredAt: new Date().toISOString(),
+      noPaidCalls: true,
     },
   };
-  migrated.properties = {
-    ...(migrated.properties ?? {}),
-    execution: fixtureExecution(migrated),
-  };
+  migrated.execution = fixtureExecution(migrated);
   const seeded = await writeNotebook(engine, migrated);
   return options.materializeLocalOutputs
     ? materializeLocalOutputs(engine, seeded)

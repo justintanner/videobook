@@ -395,16 +395,13 @@ describe('semantic search MCP tools', () => {
     if (!selectedNotebook.ok) return
     expect((await engine.notebooks.write({
       ...selectedNotebook.value,
-      properties: {
-        ...selectedNotebook.value.properties,
-        currentSelection: {
-          transcriptId: '01900000-0000-7000-8000-000000000001',
-          sequence: {
-            range: {
-              sequenceId: engine.sequences.getPrimary().sequenceId,
-              startFrame: 30,
-              durationFrames: 45,
-            },
+      currentSelection: {
+        transcriptId: '01900000-0000-7000-8000-000000000001',
+        sequence: {
+          range: {
+            sequenceId: engine.sequences.getPrimary().sequenceId,
+            startFrame: 30,
+            durationFrames: 45,
           },
         },
       },
@@ -435,7 +432,7 @@ describe('semantic search MCP tools', () => {
     const attachedNotebook = engine.notebooks.read(notebook.value.id)
     expect(attachedNotebook.ok).toBe(true)
     if (!attachedNotebook.ok) return
-    expect(attachedNotebook.value.properties?.transcriptAttachments).toEqual([
+    expect(attachedNotebook.value.transcriptAttachments).toEqual([
       expect.objectContaining({
         artifactId: artifact.value.artifactId,
         objectHash,

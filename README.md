@@ -34,12 +34,20 @@ storage health, and provider settings.
 
 ## Storage
 
-Each book owns an isolated `videobook-engine` v3.0.0 schema-v5 root under
+Each book owns an isolated `videobook-engine` v4.0.0 schema-v18 root under
 `VIDEOBOOK_LIBRARY_DIR/<book UUIDv7>/`. That root holds its embedded DoltLite
-catalog, content-addressed objects, managed files, notebook graph, timeline,
+catalog, content-addressed objects, managed files, notebook graph, primary sequence,
 history, and runtime tables. Media bytes can be published to B2 under immutable
-keys. Application-wide settings such as provider credentials and X OAuth tokens
-live separately at `VIDEOBOOK_APP_STATE_PATH`.
+keys. Per-book scheduled posts live in ignored engine runtime settings. Only
+application-wide credentials, including X OAuth tokens, live separately at
+`VIDEOBOOK_APP_STATE_PATH`; that file is never part of a public book record.
+
+The global clip archive is an application-level rebuildable cache, not book
+semantic state. Its search indexes and topic/person markers are derived from
+immutable media, transcript, and ingest objects. When a book asset is archived,
+the catalog keeps the canonical archive link and user-visible archive metadata
+on that artifact; deleting or rebuilding the external archive cache does not
+change the book's revision history.
 
 Rewind is forward-only: Videobook materializes the selected historical state,
 then creates a new revision. It never checks out detached history, rewrites

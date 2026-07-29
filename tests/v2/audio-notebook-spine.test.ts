@@ -165,7 +165,7 @@ describe('audio notebook spine', () => {
     const loaded = engine.notebooks.read(notebook.id)
     expect(loaded.ok).toBe(true)
     if (!loaded.ok) return
-    expect(loaded.value.properties?.audioSpine).toMatchObject({
+    expect(loaded.value.audioSpine).toMatchObject({
       artifactId: artifact.value.artifactId,
       streamId: stream.value.streamId,
     })
@@ -319,7 +319,7 @@ describe('audio notebook spine', () => {
       'audio',
     ])
     expect(selectedNotebook.value.edges).toHaveLength(3)
-    expect(selectedNotebook.value.properties?.currentSelection).toMatchObject({
+    expect(selectedNotebook.value.currentSelection).toMatchObject({
       transcriptId: correctedTranscriptId.transcriptId,
       startWordId: correctedWordId,
       endWordId: correctedWordId,
@@ -578,7 +578,7 @@ describe('audio notebook spine', () => {
     const reloadedNotebook = engine.notebooks.read(notebook.id)
     expect(reloadedNotebook.ok).toBe(true)
     if (!reloadedNotebook.ok) return
-    expect(reloadedNotebook.value.properties?.transcriptEdits).toEqual([
+    expect(reloadedNotebook.value.transcriptEdits).toEqual([
       expect.objectContaining({
         kind: 'remove',
         actionId: committedRemoval.commit.actionId,

@@ -10,17 +10,20 @@ import {
   cancelScheduledPost,
   listScheduledPosts,
   loadAndArmAll,
+  SCHEDULED_POST_SETTINGS_KEY,
   stopScheduler,
 } from "./scheduled-posts.js";
 
 describe("scheduled-posts persistence", () => {
   let tempDir: string;
   let engine: Engine;
+  let bookId: string;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-sched-"));
     engine = createEngineForTest(tempDir);
     await setEngineRoot(tempDir, engine);
+    bookId = engine.book.get().bookId;
   });
 
   afterEach(async () => {
@@ -30,12 +33,12 @@ describe("scheduled-posts persistence", () => {
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("persists a scheduled post in the main Dolt database and lists it", async () => {
+  it("persists a scheduled post in per-book runtime settings and lists it", async () => {
     const future = new Date(Date.now() + 60 * 60_000).toISOString();
     const result = await schedulePost(
       {
         asset_id: "vid-test",
-        book_id: "p1",
+        book_id: bookId,
         platform: "x",
         text: "hello",
       },
@@ -52,12 +55,13 @@ describe("scheduled-posts persistence", () => {
     expect(listed[0].schedule_id).toBe(result.schedule_id);
     expect(listed[0].status).toBe("pending");
     expect(listed[0].payload.asset_id).toBe("vid-test");
+    expect(engine.settings.get(SCHEDULED_POST_SETTINGS_KEY)).toEqual(listed);
   });
 
   it("cancels a pending scheduled post", async () => {
     const future = new Date(Date.now() + 60 * 60_000).toISOString();
     const { schedule_id } = await schedulePost(
-      { asset_id: "img-test", book_id: "p1", platform: "x" },
+      { asset_id: "img-test", book_id: bookId, platform: "x" },
       future,
     );
 
@@ -71,7 +75,7 @@ describe("scheduled-posts persistence", () => {
   it("rejects invalid scheduled_for", async () => {
     await expect(
       schedulePost(
-        { asset_id: "vid-x", book_id: "p1", platform: "x" },
+        { asset_id: "vid-x", book_id: bookId, platform: "x" },
         "not-a-date",
       ),
     ).rejects.toThrow(/Invalid scheduled_for/);
@@ -84,7 +88,7 @@ describe("scheduled-posts persistence", () => {
   it("loadAndArmAll re-arms pending entries from Dolt", async () => {
     const future = new Date(Date.now() + 60 * 60_000).toISOString();
     await schedulePost(
-      { asset_id: "vid-survive", book_id: "p1", platform: "x" },
+      { asset_id: "vid-survive", book_id: bookId, platform: "x" },
       future,
     );
     stopScheduler(); // simulate restart by clearing in-memory timers

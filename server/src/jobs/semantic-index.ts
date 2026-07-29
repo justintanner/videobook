@@ -170,7 +170,7 @@ export async function indexArtifact(
       );
       semanticVisual = "ready";
     } catch (error) {
-      await fs.history.logAction("semantic-index-deferred", {
+      await fs.logs.append("semantic-index-deferred", {
         artifactId,
         manifestId: LOCAL_CLIP_MANIFEST.manifestId,
         error: error instanceof Error ? error.message : String(error),
@@ -189,7 +189,7 @@ export async function indexArtifact(
         );
         semanticAudio = "ready";
       } catch (error) {
-        await fs.history.logAction("semantic-index-deferred", {
+        await fs.logs.append("semantic-index-deferred", {
           artifactId,
           manifestId: LOCAL_CLAP_MANIFEST.manifestId,
           error: error instanceof Error ? error.message : String(error),
@@ -552,7 +552,7 @@ async function buildObservations(
       : [stillObservation(artifactId, sourcePath, objectHash, analysis)];
   const observations = [...visual];
   if (audio) observations.push(audioObservation(artifactId, objectHash, audio));
-  const typedTranscripts = fs.transcripts.list(artifactId);
+  const typedTranscripts = await fs.transcripts.list(artifactId);
   const typedTranscript = typedTranscripts.ok
     ? typedTranscripts.value.at(-1)
     : undefined;

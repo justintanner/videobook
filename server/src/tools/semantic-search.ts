@@ -995,7 +995,7 @@ export function semanticSearchDefs(
         }
         const notebook = engine.notebooks.read(String(args.notebook_id));
         if (!notebook.ok) return failure(notebook.error.message);
-        const currentSelection = notebook.value.properties?.currentSelection;
+        const currentSelection = notebook.value.currentSelection;
         if (
           !currentSelection
           || typeof currentSelection !== "object"
@@ -1106,35 +1106,30 @@ export function semanticSearchDefs(
           notebook.value.id,
           "attach_search_moment_to_notebook_selection",
           (document) => {
-            const attachments = Array.isArray(document.properties?.transcriptAttachments)
-              ? document.properties.transcriptAttachments
-              : [];
+            const attachments = document.transcriptAttachments ?? [];
             return {
               ...document,
-              properties: {
-                ...document.properties,
-                transcriptAttachments: [
-                  ...attachments,
-                  {
-                    id: uuidv7(),
-                    transcriptSelection: selection,
-                    artifactId: hit.artifactId,
-                    objectHash,
-                    sourceLocation: hit.location,
-                    representativeTick: hit.representativeTick,
-                    query: args.query ?? {},
-                    signals: hit.signals,
-                    score: hit.score,
-                    sequenceId: committed.value.sequence.sequenceId,
-                    sequenceRevision: committed.value.revision,
-                    trackId: track.trackId,
-                    clipId: inserted.clipId,
-                    timelineStartFrame: inserted.timelineStartFrame,
-                    durationFrames: inserted.durationFrames,
-                    actionId: committed.value.actionId,
-                  },
-                ],
-              },
+              transcriptAttachments: [
+                ...attachments,
+                {
+                  id: uuidv7(),
+                  transcriptSelection: selection,
+                  artifactId: hit.artifactId,
+                  objectHash,
+                  sourceLocation: hit.location,
+                  representativeTick: hit.representativeTick,
+                  query: args.query ?? {},
+                  signals: hit.signals,
+                  score: hit.score,
+                  sequenceId: committed.value.sequence.sequenceId,
+                  sequenceRevision: committed.value.revision,
+                  trackId: track.trackId,
+                  clipId: inserted.clipId,
+                  timelineStartFrame: inserted.timelineStartFrame,
+                  durationFrames: inserted.durationFrames,
+                  actionId: committed.value.actionId,
+                },
+              ],
               cells: document.cells.map((cell) =>
                 cell.inputs?.audioSpineRole === "sequence"
                   ? {
@@ -1318,7 +1313,7 @@ export function semanticSearchDefs(
 function librarySearchDef(books: BookManager): ToolDef {
   return {
     name: "search_library_moments",
-    description: "Federate a moment search across every schema-v5 book",
+    description: "Federate a moment search across every current-schema book",
     scope: "global",
     schema: {
       query: searchQuerySchema,

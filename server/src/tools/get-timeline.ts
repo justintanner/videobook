@@ -1,6 +1,6 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { timelineSuccess } from "../timeline-helpers.js";
+import { readTimeline, timelineSuccess } from "../timeline-helpers.js";
 import type { ToolDef } from "./tool-def.js";
 
 export function getTimelineDef(engine: Engine): ToolDef {
@@ -10,6 +10,6 @@ export function getTimelineDef(engine: Engine): ToolDef {
     schema: {
       book_id: z.string().uuid(),
     },
-    handler: async () => timelineSuccess(engine.timeline.get()),
+    handler: async () => timelineSuccess(readTimeline(engine)),
   };
 }

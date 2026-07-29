@@ -5,6 +5,7 @@ import type {
   SearchQuery,
   SourceSurface,
 } from 'videobook-engine'
+import { isDestructiveEditOperation } from 'videobook-engine/edit-policy'
 
 export const COMMAND_PLAN_VERSION = 1 as const
 
@@ -227,7 +228,7 @@ export function planConfirmation(
     (stage): stage is EditCommandStage => stage.kind === 'edit',
   )
   const destructive = editStages.some((stage) =>
-    stage.intent.operations.some(isDestructiveOperation))
+    stage.intent.operations.some(isDestructiveEditOperation))
   const paid = stages.some((stage) =>
     stage.kind === 'queued' && stage.jobType === 'generation')
   const multiStep = stages.length > 1
@@ -280,14 +281,6 @@ export function equivalentEditOperations(plans: CommandPlan[]): boolean {
       stage.kind === 'edit' ? stage.intent.operations : []))
   return operations.every((candidate) =>
     JSON.stringify(candidate) === JSON.stringify(operations[0] ?? []))
-}
-
-function isDestructiveOperation(operation: EditOperation): boolean {
-  return (
-    operation.kind === 'remove-range'
-    || operation.kind === 'batch-replace-range'
-    || (operation.kind === 'insert-clip' && operation.mode === 'overwrite')
-  )
 }
 
 function requiredText(value: string, label: string): string {

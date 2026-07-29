@@ -1,6 +1,11 @@
-import type { Engine, TimelineInput } from "videobook-engine";
+import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { timelineFailure, timelineSuccess } from "../timeline-helpers.js";
+import {
+  timelineFailure,
+  timelineSuccess,
+  type TimelineInput,
+  writeTimeline,
+} from "../timeline-helpers.js";
 import type { ToolDef } from "./tool-def.js";
 
 const slotSchema = z.object({
@@ -57,7 +62,7 @@ export function setTimelineDef(engine: Engine): ToolDef {
           })),
         }),
       };
-      const result = await engine.timeline.set(input);
+      const result = await writeTimeline(engine, input);
       return result.ok ? timelineSuccess(result.value) : timelineFailure(result.error.message);
     },
   };

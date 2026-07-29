@@ -2,28 +2,37 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (238)
+## MCP endpoints (299)
 
+- `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
 - `analyze_jokes` — Analyze a clip's ElevenLabs transcript and identify the jokes in the bit, classified by type (pun, self-deprecating, observational, etc.). Each joke includes the verbatim text, start/end timestamps, and a one-line note on why it works. Runs in the background and persists to .analyze-jokes.json. Requires an ElevenLabs transcript — run /transcribe first if missing.
 - `animate_keywords` — Configure transcript-timed keyword graphics for a video. Extracts exact word-time frames and waits for vision-guided placement that avoids faces, subtitles, and existing text or graphics. Pass keywords for exact transcript words, or omit them for automatic selection. Renders cinematic white serif over-the-shoulder titles. Use enabled=false to turn them off.
 - `apply_cuts` — Splice out one or more time ranges from a video asset in-place. Operates via ffmpeg concat-splice; re-runs process_video downstream so frames, transcripts, and analyses are regenerated. Pair with /suggest-cuts to source ranges, or hand-pick them.
 - `apply_sfx` — Generate sound effects via ElevenLabs text-to-sound-effects and mix them onto a video asset's audio track in-place. Each entry yields one discrete SFX cue at `duration_seconds`, mixed at the given timestamp. Re-runs process_video downstream. Pair with /suggest-sfx to source entries.
-- `archive_clip` — Archive a full URL or existing video/audio asset to the global clip archive (B2 if configured, otherwise a local archive folder next to the projects directory), dedupe by media SHA-256, and transcribe long clips in chunks.
+- `archive_clip` — Materialize a full URL or existing video/audio asset in the rebuildable global archive cache (B2 if configured, otherwise local), dedupe by media SHA-256, and transcribe long clips in chunks. Book-owned semantic links remain in artifact metadata.
 - `asset_history` — Get immutable Dolt revision history for an asset
 - `asset_manifest` — List all files in an asset directory
 - `assign_slot` — Assign an artifact to a typed timeline slot
+- `attach_library_asset` — Copy a foreign Library asset into a book and attach it to a media slot
+- `attach_search_moment_to_notebook_selection` — Attach a visual search moment over the notebook's selected transcript range
 - `audio_boost` — Boost audio volume of a video or audio asset using a linear multiplier (1.0–4.0). Operates in-place with git versioning.
 - `audio_mix` — Mix audio from a vid-* or aud-* layer asset into a vid-* or aud-* target asset in-place. The layer starts at 0 seconds at the requested 0-100 volume. The target duration is preserved, and video targets retain their original video stream with git versioning.
 - `build_generation_provider_payload` (historical names, not exposed: `translate_payload`) — Translate gen tool args to the @apicity provider payload. Returns the exact request body that would be sent, with asset slugs in place of upload URLs.
+- `cancel_job` — Cancel a queued or running persistent job
 - `change_video_speed` — Change video playback speed (speed up or slow down). Operates in-place with git versioning.
 - `chat` — Natural language interface — routes free-form prompts to the appropriate tool. Supports @asset tags (e.g., @vid-foo, @img-bar).
+- `check_duplicate_bytes` — Find existing book files with the same immutable content hash before import
 - `check_kimi_coding_api` — Check whether the Kimi Coding API is reachable and its configured API key is valid
 - `clean_failed_assets` (historical names, not exposed: `clear_failed_tasks`) — Clean up assets with a persisted generation error: delete unmaterialized generation husks (returned as 'cleared'), but keep assets that already hold media and only clear their error row (returned as 'error_cleared').
 - `clean_video_audio` — Clean a vid-* asset's audio in place with ElevenLabs Voice Isolator. Preserves dialogue as the main track, keeps a quiet denoised source bed for important sound effects, suppresses odd start/end sounds with fades, and can add subtle instrumental ElevenLabs music. The video stream is copied unchanged and process_video refreshes derived audio artifacts.
+- `commit_edit_intent` — Commit an unchanged previewed CommandPlan edit stage atomically
 - `concat_images` — Concatenate 1-9 image assets into a new img-* asset. One or two inputs use a fixed two-slot sheet, with landscape images side-by-side and portrait images stacked. A missing slot stays as background, and each source image is fit into its cell without stretching.
 - `connect_notebook_cells` — Create a UUIDv7 notebook edge
+- `continue_notebook_generation` — Create a reviewable insertion plan for a completed generation or report a stale destination
+- `continue_queued_insert` — Turn a completed generation into an insertion plan only when its pinned sequence destination is still current
 - `copy_file_to_clipboard` — Copy an asset's original media file to the macOS pasteboard as a file reference
+- `correct_notebook_transcript_word` — Correct transcript text without changing the word's source timing
 - `create_book` — Create a book with a Main notebook
 - `create_character` — Create a new character folder (char-*), optionally seeded from existing image assets
 - `create_character_entity` — Create a reusable character
@@ -54,6 +63,9 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `doctor` — Diagnose the health of every asset in a project (all asset types: video, image, audio, script, final, character, plan). Reports assets stuck in the error state and assets wedged in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore that one asset to its last usable state before the current error — clears a stale error or lease when the media is intact, otherwise restores the asset from Dolt history. A bare fix:true scan never bulk-fixes; it just reports.
 - `download_video` — Download a full video from a URL (YouTube, Twitter/X, etc.) into a videocity project as original.mp4. Supports requested range metadata and auto-exports 16:9 and 9:16 versions.
 - `duplicate_asset` — Duplicate an asset within the same project
+- `enqueue_notebook_run` — Revalidate and enqueue a persisted aggregate workbook plan
+- `enqueue_sequence_export` — Queue a confirmed canonical sequence export after revalidating its exact revision
+- `ensure_notebook_workflow_scaffold` — Ensure the seven-stage VIDEO→CONCAT workflow scaffold exists
 - `estimate_cost` — Estimate the USD cost of a generation tool call before invoking it. Accepts one or more {tool_name, input} pairs and returns a single CostEstimate summed across all calls. Token-based providers (openai/anthropic/xai) use a chars/4 heuristic and price via a bundled local rate table. Tools without a registered cost adapter return a $0 estimate with a warning.
 - `export_asset_to_project` — Export an asset from one project to a different project
 - `export_to_downloads` — Copy an asset's original media file to the user's Downloads folder
@@ -147,12 +159,18 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `generate_xai_grok_imagine_video` (historical names, not exposed: `generate_grok_imagine_ref_video`, `generate_xai_grok_imagine_reference_to_video`) — Generate a video using xAI Grok Imagine with optional reference images (0-7). Creates a new vid- asset and enqueues a background job.
 - `get_book` — Read the current book identity
 - `get_character_entity` — Read a reusable character
+- `get_edit_action` — Read the immutable audit record for a committed CommandPlan edit stage
 - `get_google_flow_character` — Retrieve normalized details for a single Google Flow character by ref.
-- `get_history_action` — Read one action history record
+- `get_history_action` — Read one authored semantic revision
 - `get_notebook` — Read a notebook graph
+- `get_notebook_audio_spine` — Read the notebook audio spine, waveform, and current typed transcript
+- `get_notebook_cell_details` — Return selected-cell details including raw Dolt row, edges, and action validation
+- `get_primary_sequence` — Read the canonical primary sequence
 - `get_prompt_entity` — Read a reusable prompt
 - `get_render_settings` — Fetch stored render settings for a single asset across all orientations, plus transcript language info (detected source language and cached subtitle translations)
 - `get_scene_entity` — Read a reusable scene
+- `get_search_coverage` — Read progressive semantic-index coverage for a book or artifact
+- `get_search_index_status` — Read temporal search manifests, providers, and index statistics
 - `get_timeline` — Get the selected book's typed v2 timeline
 - `get_watermark_config` — Read the saved watermark X-handle preferences: { savedHandle, recent, authenticatedHandle }. Used to pre-fill the /watermark dialog.
 - `inject_first_frame` — Replace exactly the first frame of a vid-* or final video with an img-* asset in place. Preserves runtime and stream-copies the original audio unchanged. For final, orientation defaults to the active timeline orientation.
@@ -160,26 +178,48 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `inspect_generation_request` (historical names, not exposed: `generation_payload`) — Read the persisted Kie request payload, task meta, and failure info for a single asset. Used by the /inbox hover inspector to show what was sent to the provider.
 - `invert_image` — In-place inverts an img-* asset and regenerates crops.
 - `isolate_vocals` — Isolate vocals from a video or audio asset using ElevenLabs audio-isolation via KIE. Writes audio_vocals.mp3 (for video assets) or mix.mp3 + .mix.json (for audio assets).
-- `list_assets` — List all assets for a project with their media and thumbnail URLs.
-- `list_book_actions` — List permanent action history for a book
+- `list_assets` — List a bounded asset page with media and thumbnail URLs, optionally including notebook-referenced assets outside the page.
+- `list_book_actions` — List authored semantic revisions for a book
 - `list_books` — List all Videobook books
 - `list_characters` — List reusable characters
 - `list_chat_history` — List recent chat input history entries.
 - `list_elevenlabs_voices` — List available ElevenLabs voice IDs with custom voices first and generic voices after them
 - `list_google_flow_characters` — List Google Flow characters for an account (display names + optional signed thumbnail previews).
 - `list_google_flow_voices` — List Google Flow voices (custom 'user' voices and/or the 'system' presets) for an account.
+- `list_ingest_status` — List independent ingest and search-index phase states
 - `list_jobs` — List persistent jobs for a book
-- `list_notebooks` — List v2 notebook documents
+- `list_legacy_books` — List schema-v4 books awaiting an explicit copy-forward migration
+- `list_media_streams` — List typed media streams for a source artifact
+- `list_notebook_actions` — List the deterministic notebook action catalog for runnable cells
+- `list_notebook_generation_plans` — List durable generation plans and their retryable lifecycle state
+- `list_notebook_run_plans` — List durable aggregate workbook run plans and their lifecycle state
+- `list_notebooks` — List canonical notebook documents
 - `list_prompt_history` — List recent prompts for a given surface in the current project, newest-first.
 - `list_prompts` — List reusable prompts
 - `list_scenes` — List reusable scenes
+- `list_sequence_replace_targets` — List clips that a search moment can explicitly replace
 - `mark_asset_seen` — Mark an asset as seen so the sidebar's NEW badge clears. Idempotent: re-marking an already-seen asset is a no-op.
-- `move_notebook_cells` — Persist notebook cell positions
+- `migrate_legacy_book` — Copy a confirmed schema-v4 book to v5 and archive the untouched source
+- `move_notebook_cells` — Persist notebook cell grid slots
+- `move_notebook_transcript_words` — Preview and commit reordering timed transcript words on the audio spine
 - `move_timeline_audio` — Move an audio overlay to a frame offset
 - `pad_video` — Append black video frames at the end to make a whole-second video tail. Retains original audio and makes the appended tail silent.
+- `pin_search_moment` — Pin a revision-stable search moment into a notebook media selection cell
+- `plan_chat_command` — Parse a natural-language sequence edit into a typed CommandPlan without executing tools
+- `plan_generation_insert` — Plan a paid queued generation with provider, model, cost, and a revision-pinned insertion
+- `plan_notebook_captions` — Create a reviewable caption replacement plan from the notebook audio transcript
+- `plan_notebook_cleanup` — Suggest non-destructive filler, long-silence, and weak-section removals as a selectable CommandPlan
+- `plan_notebook_generation` — Plan a notebook prompt, image, or video generation with provider, model, cost, and revision-pinned execution
+- `plan_notebook_rough_cut` — Map narration beats to non-repeating indexed visuals as a reviewable CommandPlan
+- `plan_notebook_run` — Plan every missing or stale notebook cell with aggregate provider cost and media disclosure
+- `plan_sequence_edit` — Compile a UI, slash, or chat insert, trim, or volume request into one CommandPlan
+- `plan_sequence_export` — Create a queued export CommandPlan for a validated canonical sequence revision
+- `plan_sequence_sound_effects` — Suggest existing indexed audio moments for timed story beats as a selectable CommandPlan
 - `post` — Publish a video or image asset to a social platform. Currently supports X (Twitter); Instagram is planned. Scheduled posts persist across server restarts.
 - `prepare_image_generation` (historical names, not exposed: `preview_image`) — Return a preview with schema, prefilled parameters, validation, and model options for all available image models.
+- `prepare_search_reference` — Prepare an existing image or video asset for temporary reverse search
 - `prepare_video_generation` (historical names, not exposed: `preview_video`) — Route a natural language prompt to the best video generation tool and return a preview with schema, prefilled parameters, validation, and model options for all available video models.
+- `preview_edit_intent` — Preview one CommandPlan edit stage through the canonical engine diff
 - `provider_key_status` — List all managed environment keys with their source (1password = injected via op run, read-only; env = from .env, editable), masked values, and live credit/token lookups for supported providers. Never exposes secret values.
 - `push_chat_history` — Append a message to the chat input history log.
 - `read_asset_metadata` — Read native artifact metadata at the current Dolt revision. Returns the parsed value or an error if the key is missing.
@@ -188,6 +228,10 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `reconcile_project_work` (historical names, not exposed: `sync`) — Check all pending KIE tasks for a project, enqueue completion jobs for finished ones, and detect externally-placed files (via Finder/CLI) that need processing. Call periodically after triggering generation tools or adding files externally.
 - `record_prompt` — Append a user-typed prompt to the per-surface, per-project Dolt history. Surfaces: chat, image_rewrite, video_rewrite, script_rewrite, post, image_generate, video_generate.
 - `recover_asset` — Recover a single asset stuck in the failed/error state by clearing its persisted generation error. Non-destructive: the asset and its media files are kept intact — only the error record is removed, returning the card to its normal ready state. Use this instead of clean_failed_assets when the asset must be preserved.
+- `register_search_manifest` — Register an immutable semantic-index model manifest
+- `release_search_reference` — Release a temporary reverse-search reference
+- `remove_notebook_transcript_words` — Preview and commit a source-immutable ripple removal of timed transcript words
+- `remove_sequence_track` — Remove an empty canonical track while preserving required track kinds
 - `remove_sound` — Remove a described sound (e.g. a horse neigh) from a vid-* or aud-* asset in place. ElevenLabs Scribe tags audio events with timestamps, events matching the description are silenced with short fades, and video streams are preserved untouched with git versioning.
 - `remove_timeline_audio` — Remove an audio overlay by its UUIDv7 id
 - `remove_timeline_slot` — Remove a typed timeline slot and shift later slots left
@@ -199,18 +243,33 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `render_video` — Render a vid- asset into landscape.mp4, portrait.mp4, or square.mp4. Renders all 3 orientations when orientation is omitted.
 - `reorder_character_images` — Reorder images in a character folder by renaming them sequentially (source-01, source-02, etc).
 - `replace_google_flow_character` — Replace a Google Flow character with updated fields. Returns { character_ref, old_ref, status, warning }. Recreate happens first, then best-effort delete.
+- `replace_sequence_clip_with_search_moment` — Preview, then confirm, replacing one explicit sequence clip with a search moment
 - `replace_video_audio` — Replace the audio track of a video asset in-place with audio from an aud-* asset, or a specific file inside another asset via the `<assetId>/<filename>` form (e.g. `plan/s1.mp3`). Operates on the vid- asset's original.mp4 with git versioning. Existing per-orientation renders are now stale — re-run /render before /final.
 - `restore_archive_clips` — Restore selected archived video/audio clips into the current videocity project as new assets.
 - `restore_asset_version` — Restore an asset from an immutable revision as a new revision
+- `restore_edit_action` — Create a forward revision restoring a prior edit action or revision
+- `restore_notebook_transcript_edit` — Restore the sequence revision preceding a confirmed transcript edit
 - `retry_generation` — Retry a failed generation by replaying its original request payload. Reads the persisted generation-request metadata for the asset, clears its error record, and re-enqueues the same job. Use this on a failed asset card to re-run the exact inputs without re-resolving references.
+- `retry_ingest` — Retry derivation jobs without uploading source bytes again
+- `retry_job` — Re-enqueue a failed or cancelled persistent job with the same durable payload
 - `reverse_video` — Reverse video playback (play backwards). Toggle operation — reversing twice restores original. Max 300s due to memory buffering.
+- `revise_notebook_generation_plan` — Retry, switch the allowed generation model, or omit a preserved notebook generation plan
 - `rewrite_prompt` — Rewrite a generation prompt using model-specific best practices. Supports standard mode (rewrite any prompt) and scene mode (rewrite a specific scene in a Kling 3.0 multi-shot asset).
 - `rewrite_script` — Rewrite a generated script asset in-place as a text-to-text transformation of its existing markdown (the source image is NOT re-read). Variants: "full" (full reproduction prompt + breakdown) or "tldr" (1–2 sentence summary). Optional platform preset ("ig" | "tiktok" | "youtube") tunes authentic-capture cues for that feed. Optional custom_prompt applies a transformation instruction (e.g. "replace the pig with a man in a blue suit"). Previous versions are preserved as immutable Dolt revisions. Returns immediately; reconcile_project_work reports status="generating" until the new markdown is written.
 - `run_notebook` — Run missing or stale configured notebook cells topologically
-- `run_notebook_cell` — Run a selected configured notebook cell
+- `run_notebook_cell` — Run one selected notebook cell and any stale prerequisites
 - `search_archive` — Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.
+- `search_library_assets` — Search ready audio, image, and video assets across all books
+- `search_library_moments` — Federate a moment search across every current-schema book
+- `search_moments` — Search indexed book moments with text, media references, and filters
+- `select_notebook_timeline_range` — Map a primary-sequence range back to timed transcript words and persist it
+- `select_notebook_transcript_words` — Persist an exact timed transcript word range as a notebook selection
+- `send_search_moment_to_sequence` — Append one search moment to the primary sequence as a reversible edit
 - `set_character_metadata` — Write free-form native metadata for a character. Accepts a JSON object, a JSON-stringified object, or plain-text notes (stored as { notes: "..." }).
 - `set_env_secret` — Write a secret into the server's .env file and live environment. Rejects keys managed by 1Password (edit those in the vault). Never returns the secret value.
+- `set_notebook_audio_spine` — Designate an audio or video artifact as the notebook's timed audio spine
+- `set_notebook_cell_input` — Atomically replace or clear one named notebook cell input
+- `set_notebook_media_slot` — Attach or clear a passive notebook media slot
 - `set_timeline` — Replace a book's typed v2 timeline using stable artifact UUIDs
 - `set_video_overlay` — Set or clear the on-screen graphic overlay on a video asset. Persists to the asset's render metadata for all orientations without rendering. Pass osg_asset_id=null to clear.
 - `show_folder` — Reveal an asset's folder in Finder
@@ -219,9 +278,10 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `splice_video` — Splice two videos with an explicit overlap window. An overlap of 0 concatenates both complete videos; a positive overlap searches that many seconds at the end of the first video for the frame that best matches the first frame of the second. Creates a new vid- asset.
 - `split_video` — Split a video asset into two new assets at chunk_a_end / chunk_b_start. Setting chunk_b_start < chunk_a_end produces an overlap window; equal values produce a clean split. The original asset is preserved.
 - `split_video_by_durations` — Split a video into N targeted chunks plus a leftover chunk with the rest. Pass target_secs as a list (e.g. [10] or [10, 15]); each target produces an exact-length chunk, and the trailing leftover holds whatever's left. If the leftover would be sub-half-second, the last target is backed off by 1s. Source is preserved. When `destination` is provided, chunks are written as files inside an existing asset (one filename per target, no leftover) instead of minting fresh vid-* assets.
-- `storage_status` — Read v2 catalog and object publication status
+- `storage_status` — Read catalog and object publication status
 - `storage_sync` — Publish a book's pending content-addressed objects and catalog
 - `suggest_cuts` — Analyze a video asset (frames + transcript + metadata) and return structured trim suggestions: dead air, filler words, awkward sections. Runs in the background and persists to .suggest-cuts.json. Requires a transcript — run /transcribe first if missing. Use /apply-cuts to splice the result.
+- `suggest_sequence_coverage` — Rank existing visual moments for a sequence range before offering generation
 - `suggest_sfx` — Analyze a video asset (frames + transcript + metadata) and return structured SFX suggestions: timestamps, slug types, and descriptions. Runs in the background and persists to .suggest-sfx.json. Requires a transcript — run /transcribe first if missing. Use /apply-sfx to mix the result.
 - `sync_video_to_audio` — Smoothly retime a video's picture through multiple anchors while preserving its original audio unchanged.
 - `timewarp_video` — Retime one video range and compensate the remaining picture to preserve the original duration and audio.
@@ -238,9 +298,10 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `update_timeline_audio` — Update an audio overlay's volume or fades
 - `upload_file` — Upload a media or markdown file into a videocity project as an asset
 - `upscale_kie_grok_imagine_video` (historical names, not exposed: `upscale_grok_imagine_video`) — Upscale an existing Grok-Imagine video asset using Kie's grok-imagine/upscale. Source must have been generated by grok-imagine. Creates a new vid- asset and enqueues a background job.
+- `validate_sequence_export` — Validate a revision-pinned canonical sequence export and resolve immutable inputs
 - `verify_x_mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using xAI live X search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
-- `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns an authorize_url the client should open. After the user approves in the browser, the server captures the callback, exchanges the code, and persists refreshable tokens in Dolt runtime settings.
+- `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at? } so the client can poll while the user authorizes in the browser.
 
 ## Slash commands (118 static commands)

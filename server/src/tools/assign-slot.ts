@@ -1,13 +1,16 @@
-import type { Artifact, Engine, TimelineSlotInput } from "videobook-engine";
+import type { Artifact, Engine } from "videobook-engine";
 import { z } from "zod";
 import { queue } from "../queue.js";
 import { enqueueLazyTimelineRender } from "../lazy-render.js";
 import {
+  readTimeline,
   resolveArtifact,
   slotIndex,
   timelineFailure,
   timelineInput,
   timelinePayload,
+  type TimelineSlotInput,
+  writeTimeline,
 } from "../timeline-helpers.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -58,7 +61,7 @@ export function assignSlotDef(engine: Engine): ToolDef {
       if (index === null) return timelineFailure("Slot must use the form s01, s02, and so on");
       const asset = resolveArtifact(engine, String(args.asset_id));
       if (!asset) return timelineFailure(`Artifact not found: ${String(args.asset_id)}`);
-      const timeline = engine.timeline.get();
+      const timeline = readTimeline(engine);
       if (index > timeline.slots.length) {
         return timelineFailure("Typed timelines cannot contain empty gaps; assign the next available slot first");
       }
@@ -74,7 +77,7 @@ export function assignSlotDef(engine: Engine): ToolDef {
         : { artifactId: asset.artifactId };
       if (index < slots.length) slots[index] = replacement;
       else slots.push(replacement);
-      const result = await engine.timeline.set({ ...timelineInput(timeline), slots });
+      const result = await writeTimeline(engine, { ...timelineInput(timeline), slots });
       if (!result.ok) return timelineFailure(result.error.message);
       const response: Record<string, unknown> = timelinePayload(result.value);
       const bookId = String(args.book_id);

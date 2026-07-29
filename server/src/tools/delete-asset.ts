@@ -1,19 +1,24 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { timelineFailure, timelineInput } from "../timeline-helpers.js";
+import {
+  readTimeline,
+  timelineFailure,
+  timelineInput,
+  writeTimeline,
+} from "../timeline-helpers.js";
 import type { ToolDef } from "./tool-def.js";
 
 async function removeFromTimeline(
   engine: Engine,
   artifactId: string,
 ): Promise<{ updated: boolean; error?: string }> {
-  const timeline = engine.timeline.get();
+  const timeline = readTimeline(engine);
   const slots = timeline.slots.filter((slot) => slot.artifactId !== artifactId);
   const audio = timeline.audio.filter((clip) => clip.artifactId !== artifactId);
   if (slots.length === timeline.slots.length && audio.length === timeline.audio.length) {
     return { updated: false };
   }
-  const result = await engine.timeline.set({
+  const result = await writeTimeline(engine, {
     ...timelineInput(timeline),
     slots: slots.map((slot) => ({
       id: slot.id,

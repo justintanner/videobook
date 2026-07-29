@@ -62,6 +62,7 @@ const jobIdIndex = new Map<string, QueueIndexEntry>();
 const rewindingBooks = new Set<string>();
 const testEngines = new Map<string, Engine>();
 let activeTestRoot: string | null = null;
+let activeTestBookId: string | null = null;
 
 const JOB_INDEX_MAX = 2_000;
 const ASSET_REAPER_INTERVAL_MS = 30_000;
@@ -199,13 +200,25 @@ function providerHandoffKindFor(jobType: string): ArtifactWorkKind | null {
     : null;
 }
 
-async function resolveEngine(bookId: string): Promise<Engine> {
+export async function resolveBookEngine(bookId: string): Promise<Engine> {
   const testEngine = testEngines.get(bookId);
   if (testEngine) return testEngine;
   await bookManager.ready();
   const book = bookManager.get(bookId);
   if (!book.ok) throw new Error(book.error.message);
   return book.value.engine;
+}
+
+export async function listBookEngines(): Promise<Engine[]> {
+  if (activeTestBookId) {
+    const engine = testEngines.get(activeTestBookId);
+    return engine ? [engine] : [];
+  }
+  await bookManager.ready();
+  return bookManager.list().flatMap((book) => {
+    const managed = bookManager.get(book.bookId);
+    return managed.ok ? [managed.value.engine] : [];
+  });
 }
 
 function makeWrappedResolver(
@@ -301,13 +314,13 @@ async function dispatchFailure(
   } else {
     await engine.jobs.pending.forceFail(assetId, { message });
   }
-  await engine.history.logAction("job-error", { assetId, error: message });
+  await engine.logs.append("job-error", { assetId, error: message });
 }
 
 async function ensureRunner(bookId: string): Promise<RunnerInfo> {
   const existing = runnerByBook.get(bookId);
   if (existing) return existing;
-  const engine = await resolveEngine(bookId);
+  const engine = await resolveBookEngine(bookId);
   await engine.ready;
   await engine.jobs.queue.reap();
   const runner = engine.jobs.queue.createRunner({
@@ -391,7 +404,7 @@ export const queue: Queue = {
   async getStatus(jobId: string) {
     const entry = jobIdIndex.get(jobId);
     if (!entry) return null;
-    const engine = await resolveEngine(entry.bookId);
+  const engine = await resolveBookEngine(entry.bookId);
     const job = engine.jobs.queue.get(entry.internalId);
     if (!job) return null;
     const state = mapState(job.state);
@@ -463,7 +476,7 @@ export async function prepareBookForRewind(
 ): Promise<RewindQueuePreparation> {
   if (rewindingBooks.has(bookId)) throw new Error(`Book is already rewinding: ${bookId}`);
   rewindingBooks.add(bookId);
-  const engine = await resolveEngine(bookId);
+  const engine = await resolveBookEngine(bookId);
   const info = runnerByBook.get(bookId);
   if (info) {
     runnerByBook.delete(bookId);
@@ -497,14 +510,18 @@ export async function setEngineRoot(
 ): Promise<void> {
   const previousRoot = activeTestRoot;
   if (previousRoot && previousRoot !== rootDir) {
-    const previous = [...testEngines.entries()].find(([, value]) => value === testEngines.get(previousRoot));
-    if (previous) await stopBookQueue(previous[0]);
+    if (activeTestBookId) {
+      await stopBookQueue(activeTestBookId);
+      testEngines.delete(activeTestBookId);
+      activeTestBookId = null;
+    }
   }
   const next = engine ?? createEngine({ rootDir, initialBookSlug: "test-book" });
   await next.ready;
   const bookId = next.book.get().bookId;
   testEngines.set(bookId, next);
   activeTestRoot = rootDir;
+  activeTestBookId = bookId;
   await ensureRunner(bookId);
 }
 

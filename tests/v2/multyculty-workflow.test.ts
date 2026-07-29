@@ -147,8 +147,7 @@ describe("Multyculty workflow fixture", () => {
       "generate_video",
       "concat",
     ]));
-    expect(first.properties?.stageLabels).toBeUndefined();
-    expect(first.properties?.featureLanes).toBeUndefined();
+    expect(first).not.toHaveProperty("properties");
     const source = first.cells.find((cell) => cell.inputs?.workflowRole === "source");
     const analysis = first.cells.find((cell) => cell.inputs?.workflowRole === "analysis");
     const analysisOutput = first.cells.find((cell) =>
@@ -180,7 +179,7 @@ describe("Multyculty workflow fixture", () => {
     expect(first.cells.filter((cell) => cell.operation === "image_to_video")).toHaveLength(2);
     expect(first.cells.filter((cell) => cell.operation === "concat_video")).toHaveLength(1);
     expect(first.cells.every((cell) => cell.outputArtifactId)).toBe(true);
-    expect(first.properties?.multycultyFixture).toEqual(expect.objectContaining({
+    expect(first.fixture).toEqual(expect.objectContaining({
       materializedAt: expect.any(String),
       noPaidCalls: true,
     }));
@@ -336,10 +335,7 @@ describe("Multyculty workflow fixture", () => {
     expect(rerunWritten.ok).toBe(true);
     const downgraded = await engine.notebooks.write({
       ...rerun,
-      properties: {
-        ...(rerun.properties ?? {}),
-        multycultyFixture: { version: 0 },
-      },
+      fixture: { version: 0 },
     });
     expect(downgraded.ok).toBe(true);
     const second = await seedMultycultyWorkflow(engine);

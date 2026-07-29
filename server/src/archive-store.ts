@@ -39,6 +39,17 @@ export interface ArchiveStore {
   presignGet(key: string, expiresInSeconds: number): PresignedMedia | null;
 }
 
+/**
+ * The global archive is outside every forkable book catalog. Its indexes and
+ * marker objects are derived from immutable media, transcript, and ingest
+ * objects; book-owned archive links remain canonical artifact metadata.
+ */
+export const ARCHIVE_STORE_BOUNDARY = {
+  role: "rebuildable-app-cache",
+  bookAuthority: "artifact-metadata",
+  derivedObjects: ["index", "topic-marker", "person-marker"],
+} as const;
+
 export function localArchiveDir(): string {
   const fromEnv = process.env.VIDEOBOOK_ARCHIVE_DIR;
   if (fromEnv) return resolve(fromEnv);

@@ -975,11 +975,8 @@ export async function applyAnalysisResults(
     ...document,
     cells,
     edges,
-    properties: {
-      ...(document.properties ?? {}),
-      workflowVersion: 7,
-      analysisRevision: scriptArtifact.value.artifactId,
-    },
+    workflowVersion: 7,
+    analysisRevision: scriptArtifact.value.artifactId,
   };
   return {
     ...next,
@@ -1181,10 +1178,7 @@ export function buildSevenStageScaffold(
     ...document,
     cells,
     edges,
-    properties: {
-      ...(document.properties ?? {}),
-      workflowVersion: 7,
-    },
+    workflowVersion: 7,
   };
   return {
     ...next,

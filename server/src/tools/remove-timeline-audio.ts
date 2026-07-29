@@ -1,6 +1,12 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { timelineFailure, timelineInput, timelinePayload } from "../timeline-helpers.js";
+import {
+  readTimeline,
+  timelineFailure,
+  timelineInput,
+  timelinePayload,
+  writeTimeline,
+} from "../timeline-helpers.js";
 import type { ToolDef } from "./tool-def.js";
 
 export function removeTimelineAudioDef(engine: Engine): ToolDef {
@@ -12,12 +18,12 @@ export function removeTimelineAudioDef(engine: Engine): ToolDef {
       audio_id: z.string().uuid(),
     },
     handler: async (args) => {
-      const timeline = engine.timeline.get();
+      const timeline = readTimeline(engine);
       const audioId = String(args.audio_id);
       if (!timeline.audio.some((clip) => clip.id === audioId)) {
         return timelineFailure(`Timeline audio clip not found: ${audioId}`);
       }
-      const result = await engine.timeline.set({
+      const result = await writeTimeline(engine, {
         ...timelineInput(timeline),
         audio: timeline.audio.filter((clip) => clip.id !== audioId).map((clip) => ({
           id: clip.id,

@@ -432,7 +432,7 @@ async function readAnalysisRecommendations(
 // whenever any file is added, removed, resized, or rewritten, so every URL
 // derived from an asset's filePath (including alternate-orientation renders
 // like portrait.mp4 / landscape.mp4) invalidates together. Cheap: no file
-// reads — just hashes (name, size, mtime) tuples.
+// reads — just hashes the immutable manifest tuples.
 function computeAssetFingerprint(files: ArtifactManifestFile[]): string {
   if (files.length === 0) return "";
   const sorted = [...files].sort((a, b) => a.name.localeCompare(b.name));
@@ -442,7 +442,7 @@ function computeAssetFingerprint(files: ArtifactManifestFile[]): string {
     hash.update("\0");
     hash.update(String(f.sizeBytes ?? 0));
     hash.update("\0");
-    hash.update(String(f.mtimeMs ?? 0));
+    hash.update(f.objectHash);
     hash.update("\0");
   }
   return hash.digest("hex").slice(0, 12);
@@ -502,8 +502,8 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
         const fp = computeAssetFingerprint(files);
         if (fp) cacheBust = `?v=${fp}`;
       } else {
-        const mediaMtime = mediaFile?.mtimeMs ?? 0;
-        if (mediaMtime) cacheBust = `?v=${Math.floor(mediaMtime)}`;
+        const mediaHash = mediaFile?.objectHash;
+        if (mediaHash) cacheBust = `?v=${mediaHash.slice(0, 12)}`;
       }
       // Character assets: free-form folders have no original.* media. Project
       // the first image in the folder so sidebar thumbs and drag-drop keep working.
@@ -658,8 +658,8 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
       height: null,
       origin: "notebook",
       prompt:
-        typeof notebook.properties?.description === "string"
-          ? notebook.properties.description
+        typeof notebook.description === "string"
+          ? notebook.description
           : notebook.name,
       renders: [],
       duration: null,

@@ -15,7 +15,7 @@ describe("MCP tool logging", () => {
     if (root) await rm(root, { recursive: true, force: true });
   });
 
-  it("does not duplicate activity recorded by the tool handler", async () => {
+  it("does not duplicate semantic activity recorded by the tool handler", async () => {
     root = await mkdtemp(join(tmpdir(), "videobook-self-recorded-tool-"));
     const engine = createEngine({
       rootDir: root,
@@ -28,21 +28,17 @@ describe("MCP tool logging", () => {
       recordsOwnActivity: true,
       schema: { book_id: z.string() },
       handler: async () => {
-        const recorded = await engine.history.recordAction({
-          operation: "self_recorded_tool",
-          actor: "human",
-        });
+        const recorded = await engine.book.rename("renamed-by-tool");
         if (!recorded.ok) throw new Error(recorded.error.message);
         return { content: [{ type: "text", text: "{}" }] };
       },
     }, engine);
 
+    const before = engine.history.revisions().length;
     await wrapped.handler({ book_id: engine.book.get().bookId });
-    const actions = engine.history.actions();
-    expect(actions.ok).toBe(true);
-    if (!actions.ok) throw new Error(actions.error.message);
-    expect(actions.value.actions.map((action) => action.operation))
-      .toEqual(["self_recorded_tool"]);
+    const revisions = engine.history.revisions();
+    expect(revisions).toHaveLength(before + 1);
+    expect(revisions[0]?.operation).toBe("rename_book");
     engine.close();
   });
 });

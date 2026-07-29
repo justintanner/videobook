@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { appState } from "./app-state.js";
-import { queue } from "./queue.js";
+import type { Engine } from "videobook-engine";
+import {
+  listBookEngines,
+  queue,
+  resolveBookEngine,
+} from "./queue.js";
 
 export interface ScheduledPostPayload {
   asset_id: string;
@@ -29,7 +33,7 @@ export interface ScheduledPostEntry {
 
 const REARM_INTERVAL_MS = 12 * 60 * 60_000;
 const SAFE_TIMEOUT_MS = 2_147_483_000;
-const SETTINGS_KEY = "application.scheduled_posts.v1";
+export const SCHEDULED_POST_SETTINGS_KEY = "application.scheduled_posts.v1";
 
 const armed = new Map<string, NodeJS.Timeout>();
 let writeChain: Promise<unknown> = Promise.resolve();
@@ -41,30 +45,38 @@ function serialize<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-async function readState(): Promise<ScheduledPostEntry[]> {
-  const entries = await appState.get<unknown>(SETTINGS_KEY);
+function readState(engine: Engine): ScheduledPostEntry[] {
+  const entries = engine.settings.get<unknown>(SCHEDULED_POST_SETTINGS_KEY);
   return Array.isArray(entries) ? entries as ScheduledPostEntry[] : [];
 }
 
-async function writeState(entries: ScheduledPostEntry[]): Promise<void> {
-  await appState.set(SETTINGS_KEY, entries);
+function writeState(engine: Engine, entries: ScheduledPostEntry[]): void {
+  const result = engine.settings.set(SCHEDULED_POST_SETTINGS_KEY, entries);
+  if (!result.ok) throw new Error(result.error.message);
 }
 
 async function updateEntry(
+  bookId: string,
   scheduleId: string,
   patch: Partial<ScheduledPostEntry>,
 ): Promise<void> {
   await serialize(async () => {
-    const entries = await readState();
+    const engine = await resolveBookEngine(bookId);
+    const entries = readState(engine);
     const updated = entries.map((entry) =>
       entry.schedule_id === scheduleId ? { ...entry, ...patch } : entry,
     );
-    await writeState(updated);
+    writeState(engine, updated);
   });
 }
 
-function armTimer(entry: ScheduledPostEntry): void {
-  if (armed.has(entry.schedule_id)) return;
+function timerKey(bookId: string, scheduleId: string): string {
+  return `${bookId}:${scheduleId}`;
+}
+
+function armTimer(bookId: string, entry: ScheduledPostEntry): void {
+  const key = timerKey(bookId, entry.schedule_id);
+  if (armed.has(key)) return;
   if (entry.status !== "pending") return;
   const delay = new Date(entry.scheduled_for).getTime() - Date.now();
   const safeDelay = Math.min(Math.max(delay, 0), SAFE_TIMEOUT_MS);
@@ -72,16 +84,17 @@ function armTimer(entry: ScheduledPostEntry): void {
     return;
   }
   const t = setTimeout(() => {
-    armed.delete(entry.schedule_id);
-    void firePost(entry.schedule_id).catch((e) =>
+    armed.delete(key);
+    void firePost(bookId, entry.schedule_id).catch((e) =>
       console.error(`[scheduled-posts] firePost ${entry.schedule_id} failed:`, e),
     );
   }, safeDelay);
-  armed.set(entry.schedule_id, t);
+  armed.set(key, t);
 }
 
-async function firePost(scheduleId: string): Promise<void> {
-  const entries = await readState();
+async function firePost(bookId: string, scheduleId: string): Promise<void> {
+  const engine = await resolveBookEngine(bookId);
+  const entries = readState(engine);
   const entry = entries.find((e) => e.schedule_id === scheduleId);
   if (!entry || entry.status !== "pending") return;
 
@@ -99,14 +112,14 @@ async function firePost(scheduleId: string): Promise<void> {
         scheduledFor: entry.scheduled_for,
       },
     );
-    await updateEntry(scheduleId, {
+    await updateEntry(bookId, scheduleId, {
       status: "posted",
       tweet_id: result.tweet_id,
       tweet_url: result.tweet_url,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await updateEntry(scheduleId, { status: "failed", error: message });
+    await updateEntry(bookId, scheduleId, { status: "failed", error: message });
   }
 }
 
@@ -123,6 +136,7 @@ export async function schedulePost(
   if (Number.isNaN(when.getTime())) {
     throw new Error(`Invalid scheduled_for: ${scheduledFor}`);
   }
+  const engine = await resolveBookEngine(payload.book_id);
   const entry: ScheduledPostEntry = {
     schedule_id: randomUUID(),
     payload,
@@ -131,50 +145,63 @@ export async function schedulePost(
     status: "pending",
   };
   await serialize(async () => {
-    const entries = await readState();
+    const entries = readState(engine);
     entries.push(entry);
-    await writeState(entries);
+    writeState(engine, entries);
   });
-  armTimer(entry);
+  armTimer(payload.book_id, entry);
   return { schedule_id: entry.schedule_id, scheduled_for: entry.scheduled_for };
 }
 
 export async function cancelScheduledPost(scheduleId: string): Promise<boolean> {
-  const timer = armed.get(scheduleId);
-  if (timer) {
-    clearTimeout(timer);
-    armed.delete(scheduleId);
-  }
   let found = false;
+  const engines = await listBookEngines();
   await serialize(async () => {
-    const entries = await readState();
-    const updated = entries.map((entry) => {
-      if (entry.schedule_id !== scheduleId) return entry;
-      if (entry.status !== "pending") return entry;
-      found = true;
-      return { ...entry, status: "cancelled" as const };
-    });
-    await writeState(updated);
+    for (const engine of engines) {
+      const bookId = engine.book.get().bookId;
+      const entries = readState(engine);
+      let changed = false;
+      const updated = entries.map((entry) => {
+        if (entry.schedule_id !== scheduleId || entry.status !== "pending") {
+          return entry;
+        }
+        found = true;
+        changed = true;
+        return { ...entry, status: "cancelled" as const };
+      });
+      if (!changed) continue;
+      const key = timerKey(bookId, scheduleId);
+      const timer = armed.get(key);
+      if (timer) clearTimeout(timer);
+      armed.delete(key);
+      writeState(engine, updated);
+    }
   });
   return found;
 }
 
 export async function listScheduledPosts(): Promise<ScheduledPostEntry[]> {
-  return await readState();
+  const engines = await listBookEngines();
+  return engines
+    .flatMap((engine) => readState(engine))
+    .sort((left, right) => left.created_at.localeCompare(right.created_at));
 }
 
 export async function loadAndArmAll(): Promise<void> {
-  const entries = await readState();
   const now = Date.now();
-  for (const entry of entries) {
-    if (entry.status !== "pending") continue;
-    const due = new Date(entry.scheduled_for).getTime();
-    if (due <= now) {
-      void firePost(entry.schedule_id).catch((e) =>
-        console.error(`[scheduled-posts] firePost ${entry.schedule_id} failed:`, e),
-      );
-    } else {
-      armTimer(entry);
+  const engines = await listBookEngines();
+  for (const engine of engines) {
+    const bookId = engine.book.get().bookId;
+    for (const entry of readState(engine)) {
+      if (entry.status !== "pending") continue;
+      const due = new Date(entry.scheduled_for).getTime();
+      if (due <= now) {
+        void firePost(bookId, entry.schedule_id).catch((e) =>
+          console.error(`[scheduled-posts] firePost ${entry.schedule_id} failed:`, e),
+        );
+      } else {
+        armTimer(bookId, entry);
+      }
     }
   }
   if (!rearmInterval) {
@@ -188,11 +215,14 @@ export async function loadAndArmAll(): Promise<void> {
 }
 
 async function rearmPending(): Promise<void> {
-  const entries = await readState();
-  for (const entry of entries) {
-    if (entry.status !== "pending") continue;
-    if (armed.has(entry.schedule_id)) continue;
-    armTimer(entry);
+  const engines = await listBookEngines();
+  for (const engine of engines) {
+    const bookId = engine.book.get().bookId;
+    for (const entry of readState(engine)) {
+      if (entry.status !== "pending") continue;
+      if (armed.has(timerKey(bookId, entry.schedule_id))) continue;
+      armTimer(bookId, entry);
+    }
   }
 }
 

@@ -99,24 +99,19 @@ function withCellExecution(
   cellId: string,
   status: "ready" | "completed",
 ): NotebookDocument {
-  const currentExecution = isRecord(document.properties?.execution)
-    ? document.properties.execution
-    : {};
+  const currentExecution = document.execution ?? {};
   const currentCell = isRecord(currentExecution[cellId])
     ? currentExecution[cellId]
     : {};
   return {
     ...document,
-    properties: {
-      ...(document.properties ?? {}),
-      execution: {
-        ...currentExecution,
-        [cellId]: {
-          ...currentCell,
-          status,
-          stale: false,
-          error: undefined,
-        },
+    execution: {
+      ...currentExecution,
+      [cellId]: {
+        ...currentCell,
+        status,
+        stale: false,
+        error: undefined,
       },
     },
   };

@@ -1,6 +1,12 @@
 import type { Engine } from "videobook-engine";
 import { z } from "zod";
-import { timelineFailure, timelineInput, timelinePayload } from "../timeline-helpers.js";
+import {
+  readTimeline,
+  timelineFailure,
+  timelineInput,
+  timelinePayload,
+  writeTimeline,
+} from "../timeline-helpers.js";
 import type { ToolDef } from "./tool-def.js";
 
 export function updateTimelineAudioDef(engine: Engine): ToolDef {
@@ -18,12 +24,12 @@ export function updateTimelineAudioDef(engine: Engine): ToolDef {
       if (args.volume === undefined && args.fade_in === undefined && args.fade_out === undefined) {
         return timelineFailure("Provide volume, fade_in, or fade_out");
       }
-      const timeline = engine.timeline.get();
+      const timeline = readTimeline(engine);
       const audioId = String(args.audio_id);
       if (!timeline.audio.some((clip) => clip.id === audioId)) {
         return timelineFailure(`Timeline audio clip not found: ${audioId}`);
       }
-      const result = await engine.timeline.set({
+      const result = await writeTimeline(engine, {
         ...timelineInput(timeline),
         audio: timeline.audio.map((clip) => ({
           id: clip.id,

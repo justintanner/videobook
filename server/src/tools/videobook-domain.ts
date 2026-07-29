@@ -140,12 +140,7 @@ function markCellAndDescendantsStale(
   cellId: string,
 ): NotebookDocument {
   const marked = markDescendantsStale(notebook, cellId);
-  const rawExecution = marked.properties?.execution;
-  const execution = rawExecution
-    && typeof rawExecution === "object"
-    && !Array.isArray(rawExecution)
-    ? { ...rawExecution as Record<string, unknown> }
-    : {};
+  const execution = { ...(marked.execution ?? {}) };
   const current = execution[cellId];
   execution[cellId] = current
     && typeof current === "object"
@@ -154,10 +149,7 @@ function markCellAndDescendantsStale(
     : { stale: true };
   return {
     ...marked,
-    properties: {
-      ...(marked.properties ?? {}),
-      execution,
-    },
+    execution,
     cells: marked.cells.map((cell) =>
       cell.id === cellId
         ? {
@@ -376,25 +368,7 @@ type NotebookGenerationPlanRecord = {
 function notebookGenerationPlans(
   notebook: NotebookDocument,
 ): NotebookGenerationPlanRecord[] {
-  const value = notebook.properties?.generationPlans;
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((entry) => {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
-    const record = entry as Record<string, unknown>;
-    if (
-      typeof record.planId !== "string"
-      || typeof record.cellId !== "string"
-      || typeof record.status !== "string"
-      || !record.plan
-      || typeof record.plan !== "object"
-      || Array.isArray(record.plan)
-      || typeof record.createdAt !== "string"
-      || typeof record.updatedAt !== "string"
-    ) {
-      return [];
-    }
-    return [entry as NotebookGenerationPlanRecord];
-  });
+  return (notebook.generationPlans ?? []) as NotebookGenerationPlanRecord[];
 }
 
 async function persistNotebookGenerationPlan(
@@ -408,14 +382,11 @@ async function persistNotebookGenerationPlan(
     "persist_generation_plan",
     (notebook) => ({
       ...notebook,
-      properties: {
-        ...(notebook.properties ?? {}),
-        generationPlans: [
-          ...notebookGenerationPlans(notebook)
-            .filter((candidate) => candidate.planId !== next.planId),
-          next,
-        ],
-      },
+      generationPlans: [
+        ...notebookGenerationPlans(notebook)
+          .filter((candidate) => candidate.planId !== next.planId),
+        next,
+      ],
     }),
     {
       planId: next.planId,
@@ -1206,7 +1177,30 @@ function notebookPayload(notebook: NotebookDocument): Record<string, unknown> {
     id: notebook.id,
     name: notebook.name,
     created_at: notebook.createdAt,
-    properties: notebook.properties ?? {},
+    ...(notebook.description === undefined
+      ? {}
+      : { description: notebook.description }),
+    ...(notebook.lifecycleState === undefined
+      ? {}
+      : { lifecycleState: notebook.lifecycleState }),
+    ...(notebook.workflowVersion === undefined
+      ? {}
+      : { workflowVersion: notebook.workflowVersion }),
+    ...(notebook.analysisRevision === undefined
+      ? {}
+      : { analysisRevision: notebook.analysisRevision }),
+    ...(notebook.audioSpine === undefined
+      ? {}
+      : { audioSpine: notebook.audioSpine }),
+    ...(notebook.currentSelection === undefined
+      ? {}
+      : { currentSelection: notebook.currentSelection }),
+    ...(notebook.fixture === undefined ? {} : { fixture: notebook.fixture }),
+    execution: notebook.execution ?? {},
+    generationPlans: notebook.generationPlans ?? [],
+    notebookRunPlans: notebook.notebookRunPlans ?? [],
+    transcriptEdits: notebook.transcriptEdits ?? [],
+    transcriptAttachments: notebook.transcriptAttachments ?? [],
     cells: notebook.cells.map(cellPayload),
     edges: notebook.edges,
   };
@@ -1388,14 +1382,14 @@ export function videobookDomainDefs(
     },
     {
       name: "list_notebooks",
-      description: "List schema-v5 notebook documents",
+      description: "List canonical notebook documents",
       scope: "book",
       schema: bookSchema,
       handler: async () => json(engine.notebooks.list().map(notebookPayload)),
     },
     {
       name: "get_primary_sequence",
-      description: "Read the canonical schema-v5 primary sequence",
+      description: "Read the canonical primary sequence",
       scope: "book",
       schema: bookSchema,
       handler: async () => json(engine.sequences.getPrimary()),
@@ -1728,14 +1722,12 @@ export function videobookDomainDefs(
       handler: async (args) => {
         const notebook = engine.notebooks.read(String(args.notebook_id));
         if (!notebook.ok) return failure(notebook.error.message);
-        const spine = notebook.value.properties?.audioSpine as
-          | Record<string, unknown>
-          | undefined;
+        const spine = notebook.value.audioSpine;
         const artifactId = spine?.artifactId;
         if (typeof artifactId !== "string") {
           return failure("Choose an audio spine before generating captions");
         }
-        const transcripts = engine.transcripts.list(artifactId);
+        const transcripts = await engine.transcripts.list(artifactId);
         if (!transcripts.ok) return failure(transcripts.error.message);
         const transcript = transcripts.value.at(-1);
         if (!transcript) return failure("The audio spine has no timed transcript");
@@ -1810,14 +1802,12 @@ export function videobookDomainDefs(
       handler: async (args) => {
         const notebook = engine.notebooks.read(String(args.notebook_id));
         if (!notebook.ok) return failure(notebook.error.message);
-        const spine = notebook.value.properties?.audioSpine as
-          | Record<string, unknown>
-          | undefined;
+        const spine = notebook.value.audioSpine;
         const artifactId = spine?.artifactId;
         if (typeof artifactId !== "string") {
           return failure("Choose an audio spine before suggesting cleanup");
         }
-        const transcripts = engine.transcripts.list(artifactId);
+        const transcripts = await engine.transcripts.list(artifactId);
         if (!transcripts.ok) return failure(transcripts.error.message);
         const transcript = transcripts.value.at(-1);
         if (!transcript) return failure("The audio spine has no timed transcript");
@@ -1999,7 +1989,7 @@ export function videobookDomainDefs(
         if (!streams.ok) return failure(streams.error.message);
         const stream = streams.value.find((candidate) => candidate.kind === "audio");
         if (!stream) return failure("The selected artifact has no registered audio stream");
-        const transcripts = engine.transcripts.list(artifact.value.artifactId);
+        const transcripts = await engine.transcripts.list(artifact.value.artifactId);
         const transcript = transcripts.ok ? transcripts.value.at(-1) : undefined;
         const sequence = engine.sequences.getPrimary();
         const audioTrack = sequence.tracks.find((candidate) =>
@@ -2158,18 +2148,15 @@ export function videobookDomainDefs(
             });
             return {
               ...notebook,
-              properties: {
-                ...notebook.properties,
-                audioSpine: {
-                  artifactId: artifact.value.artifactId,
-                  streamId: stream.streamId,
-                  objectHash: stream.objectHash,
-                  sourcePath: stream.sourcePath,
-                  sequenceId: committed.value.sequence.sequenceId,
-                  sequenceRevision: committed.value.revision,
-                  trackId: audioTrack.trackId,
-                  clipId: spineClip.clipId,
-                },
+              audioSpine: {
+                artifactId: artifact.value.artifactId,
+                streamId: stream.streamId,
+                objectHash: stream.objectHash,
+                sourcePath: stream.sourcePath,
+                sequenceId: committed.value.sequence.sequenceId,
+                sequenceRevision: committed.value.revision,
+                trackId: audioTrack.trackId,
+                clipId: spineClip.clipId,
               },
               cells: [...retained, audioCell, transcriptCell, sequenceCell],
               edges: [
@@ -2206,19 +2193,17 @@ export function videobookDomainDefs(
       handler: async (args) => {
         const notebook = engine.notebooks.read(String(args.notebook_id));
         if (!notebook.ok) return failure(notebook.error.message);
-        const spine = notebook.value.properties?.audioSpine;
+        const spine = notebook.value.audioSpine;
         if (!spine || typeof spine !== "object" || Array.isArray(spine)) {
           return json({ spine: null, waveform: null, transcript: null });
         }
-        const spineRecord = spine as Record<string, unknown>;
-        const artifactId = typeof spineRecord.artifactId === "string"
-          ? spineRecord.artifactId
-          : null;
+        const spineRecord = spine;
+        const artifactId = spine.artifactId;
         if (!artifactId) return failure("The notebook audio spine is invalid");
         const artifact = engine.artifacts.get(artifactId);
         if (!artifact.ok) return failure(artifact.error.message);
         const waveform = await engine.metadata.waveforms.read(artifactId);
-        const transcripts = engine.transcripts.list(artifactId);
+        const transcripts = await engine.transcripts.list(artifactId);
         if (!transcripts.ok) return failure(transcripts.error.message);
         return json({
           spine: {
@@ -2246,11 +2231,9 @@ export function videobookDomainDefs(
       handler: async (args) => {
         const notebook = engine.notebooks.read(String(args.notebook_id));
         if (!notebook.ok) return failure(notebook.error.message);
-        const transcript = engine.transcripts.get(String(args.transcript_id));
+        const transcript = await engine.transcripts.get(String(args.transcript_id));
         if (!transcript.ok) return failure(transcript.error.message);
-        const spine = notebook.value.properties?.audioSpine as
-          | Record<string, unknown>
-          | undefined;
+        const spine = notebook.value.audioSpine;
         if (spine?.artifactId !== transcript.value.artifactId) {
           return failure("The transcript does not belong to this notebook's audio spine");
         }
@@ -2348,7 +2331,7 @@ export function videobookDomainDefs(
       handler: async (args) => {
         const notebook = engine.notebooks.read(String(args.notebook_id));
         if (!notebook.ok) return failure(notebook.error.message);
-        const transcript = engine.transcripts.get(String(args.transcript_id));
+        const transcript = await engine.transcripts.get(String(args.transcript_id));
         if (!transcript.ok) return failure(transcript.error.message);
         const range = engine.transcripts.selectionRange(
           transcript.value.transcriptId,
@@ -2420,10 +2403,7 @@ export function videobookDomainDefs(
               : document.edges;
             return {
               ...document,
-              properties: {
-                ...document.properties,
-                currentSelection: selection,
-              },
+              currentSelection: selection,
               cells: [...document.cells, splitCell],
               edges,
             };
@@ -2452,11 +2432,9 @@ export function videobookDomainDefs(
       handler: async (args) => {
         const notebook = engine.notebooks.read(String(args.notebook_id));
         if (!notebook.ok) return failure(notebook.error.message);
-        const transcript = engine.transcripts.get(String(args.transcript_id));
+        const transcript = await engine.transcripts.get(String(args.transcript_id));
         if (!transcript.ok) return failure(transcript.error.message);
-        const spine = notebook.value.properties?.audioSpine as
-          | Record<string, unknown>
-          | undefined;
+        const spine = notebook.value.audioSpine;
         if (spine?.artifactId !== transcript.value.artifactId) {
           return failure("The transcript does not belong to this notebook's audio spine");
         }
@@ -2528,40 +2506,35 @@ export function videobookDomainDefs(
           notebook.value.id,
           "remove_notebook_transcript_words",
           (document) => {
-            const edits = Array.isArray(document.properties?.transcriptEdits)
-              ? document.properties.transcriptEdits
-              : [];
+            const edits = document.transcriptEdits ?? [];
             return {
               ...document,
-              properties: {
-                ...document.properties,
-                currentSelection: {
+              currentSelection: {
+                transcriptId: transcript.value.transcriptId,
+                transcriptRevision: transcript.value.revision,
+                startWordId: String(args.start_word_id),
+                endWordId: String(args.end_word_id),
+                range: selected.value,
+                sequence: mapped,
+                removed: true,
+                actionId: committed.value.actionId,
+              },
+              transcriptEdits: [
+                ...edits,
+                {
+                  kind: "remove",
+                  actionId: committed.value.actionId,
+                  commandId,
                   transcriptId: transcript.value.transcriptId,
-                  transcriptRevision: transcript.value.revision,
                   startWordId: String(args.start_word_id),
                   endWordId: String(args.end_word_id),
-                  range: selected.value,
-                  sequence: mapped,
-                  removed: true,
-                  actionId: committed.value.actionId,
+                  sourceRange: selected.value,
+                  sequenceRange: mapped.range,
+                  baseRevision: intent.baseRevision,
+                  revision: committed.value.revision,
+                  restored: false,
                 },
-                transcriptEdits: [
-                  ...edits,
-                  {
-                    kind: "remove",
-                    actionId: committed.value.actionId,
-                    commandId,
-                    transcriptId: transcript.value.transcriptId,
-                    startWordId: String(args.start_word_id),
-                    endWordId: String(args.end_word_id),
-                    sourceRange: selected.value,
-                    sequenceRange: mapped.range,
-                    baseRevision: intent.baseRevision,
-                    revision: committed.value.revision,
-                    restored: false,
-                  },
-                ],
-              },
+              ],
               cells: document.cells.map((cell) =>
                 cell.inputs?.audioSpineRole === "sequence"
                   ? {
@@ -2602,15 +2575,15 @@ export function videobookDomainDefs(
       handler: async (args) => {
         const notebook = engine.notebooks.read(String(args.notebook_id));
         if (!notebook.ok) return failure(notebook.error.message);
-        const spine = notebook.value.properties?.audioSpine;
+        const spine = notebook.value.audioSpine;
         if (!spine || typeof spine !== "object" || Array.isArray(spine)) {
           return failure("Set an audio spine before selecting the timeline");
         }
-        const artifactId = (spine as Record<string, unknown>).artifactId;
+        const artifactId = spine.artifactId;
         if (typeof artifactId !== "string") {
           return failure("The notebook audio spine is invalid");
         }
-        const transcripts = engine.transcripts.list(artifactId);
+        const transcripts = await engine.transcripts.list(artifactId);
         if (!transcripts.ok) return failure(transcripts.error.message);
         const transcript = transcripts.value.at(-1);
         if (!transcript) return failure("The audio spine has no timed transcript");
@@ -2697,10 +2670,7 @@ export function videobookDomainDefs(
             });
             return {
               ...document,
-              properties: {
-                ...document.properties,
-                currentSelection: selection,
-              },
+              currentSelection: selection,
               cells: [...document.cells, splitCell],
               edges: transcriptCell
                 ? [
@@ -2736,9 +2706,7 @@ export function videobookDomainDefs(
         if (!notebook.ok) return failure(notebook.error.message);
         const audit = engine.edits.get(String(args.action_id));
         if (!audit.ok) return failure(audit.error.message);
-        const edits = Array.isArray(notebook.value.properties?.transcriptEdits)
-          ? notebook.value.properties.transcriptEdits
-          : [];
+        const edits = notebook.value.transcriptEdits ?? [];
         const edit = edits.find((candidate) =>
           candidate
           && typeof candidate === "object"
@@ -2769,27 +2737,15 @@ export function videobookDomainDefs(
           "restore_notebook_transcript_edit",
           (document) => ({
             ...document,
-            properties: {
-              ...document.properties,
-              transcriptEdits: (Array.isArray(document.properties?.transcriptEdits)
-                ? document.properties.transcriptEdits
-                : []).map((candidate) => {
-                if (
-                  !candidate
-                  || typeof candidate !== "object"
-                  || Array.isArray(candidate)
-                  || (candidate as Record<string, unknown>).actionId !== args.action_id
-                ) {
-                  return candidate;
-                }
-                return {
-                  ...(candidate as Record<string, unknown>),
-                  restored: true,
-                  restoreActionId: restored.value.actionId,
-                  restoreRevision: restored.value.revision,
-                };
-              }),
-            },
+            transcriptEdits: (document.transcriptEdits ?? []).map((candidate) => {
+              if (candidate.actionId !== args.action_id) return candidate;
+              return {
+                ...candidate,
+                restored: true,
+                restoreActionId: restored.value.actionId,
+                restoreRevision: restored.value.revision,
+              };
+            }),
             cells: document.cells.map((cell) =>
               cell.inputs?.audioSpineRole === "sequence"
                 ? {
@@ -2831,11 +2787,9 @@ export function videobookDomainDefs(
       handler: async (args) => {
         const notebook = engine.notebooks.read(String(args.notebook_id));
         if (!notebook.ok) return failure(notebook.error.message);
-        const transcript = engine.transcripts.get(String(args.transcript_id));
+        const transcript = await engine.transcripts.get(String(args.transcript_id));
         if (!transcript.ok) return failure(transcript.error.message);
-        const spine = notebook.value.properties?.audioSpine as
-          | Record<string, unknown>
-          | undefined;
+        const spine = notebook.value.audioSpine;
         if (spine?.artifactId !== transcript.value.artifactId) {
           return failure("The transcript does not belong to this notebook's audio spine");
         }
@@ -2981,36 +2935,31 @@ export function videobookDomainDefs(
           notebook.value.id,
           "move_notebook_transcript_words",
           (document) => {
-            const edits = Array.isArray(document.properties?.transcriptEdits)
-              ? document.properties.transcriptEdits
-              : [];
+            const edits = document.transcriptEdits ?? [];
             return {
               ...document,
-              properties: {
-                ...document.properties,
-                transcriptEdits: [
-                  ...edits,
-                  {
-                    kind: "move",
-                    actionId: committed.value.actionId,
-                    commandId,
-                    transcriptId: transcript.value.transcriptId,
-                    startWordId: String(args.start_word_id),
-                    endWordId: String(args.end_word_id),
-                    beforeWordId: String(args.before_word_id),
-                    sourceRange: selected.value,
-                    destinationSourceRange: destination.value,
-                    sequenceRange: {
-                      sequenceId: sequence.sequenceId,
-                      startFrame: movedPlacement.timelineStartFrame,
-                      durationFrames: movedPlacement.durationFrames,
-                    },
-                    baseRevision: intent.baseRevision,
-                    revision: committed.value.revision,
-                    restored: false,
+              transcriptEdits: [
+                ...edits,
+                {
+                  kind: "move",
+                  actionId: committed.value.actionId,
+                  commandId,
+                  transcriptId: transcript.value.transcriptId,
+                  startWordId: String(args.start_word_id),
+                  endWordId: String(args.end_word_id),
+                  beforeWordId: String(args.before_word_id),
+                  sourceRange: selected.value,
+                  destinationSourceRange: destination.value,
+                  sequenceRange: {
+                    sequenceId: sequence.sequenceId,
+                    startFrame: movedPlacement.timelineStartFrame,
+                    durationFrames: movedPlacement.durationFrames,
                   },
-                ],
-              },
+                  baseRevision: intent.baseRevision,
+                  revision: committed.value.revision,
+                  restored: false,
+                },
+              ],
               cells: document.cells.map((cell) =>
                 cell.inputs?.audioSpineRole === "sequence"
                   ? {
@@ -3537,30 +3486,32 @@ export function videobookDomainDefs(
     },
     {
       name: "list_book_actions",
-      description: "List permanent action history for a book",
+      description: "List authored semantic revisions for a book",
       scope: "book",
       schema: { ...bookSchema, limit: z.number().int().positive().max(10_000).optional(), cursor: z.string().optional() },
       handler: async (args) => {
-        const result = engine.history.actions({
-          ...(typeof args.limit === "number" ? { limit: args.limit } : {}),
-          ...(typeof args.cursor === "string" ? { cursor: args.cursor } : {}),
+        const limit = typeof args.limit === "number" ? args.limit : 100;
+        return json({
+          actions: engine.history.revisions(limit),
+          nextCursor: null,
         });
-        return result.ok ? json(result.value) : failure(result.error.message);
       },
     },
     {
       name: "get_history_action",
-      description: "Read one action history record",
+      description: "Read one authored semantic revision",
       scope: "book",
-      schema: { ...bookSchema, action_id: z.string().uuid() },
+      schema: { ...bookSchema, action_id: z.string().min(1) },
       handler: async (args) => {
-        const result = engine.history.action(String(args.action_id));
-        return result.ok ? json(result.value) : failure(result.error.message);
+        const revision = engine.history.resolveRevision(String(args.action_id));
+        return revision
+          ? json(revision)
+          : failure(`Revision not found: ${String(args.action_id)}`);
       },
     },
     {
       name: "storage_status",
-      description: "Read schema-v5 catalog and object publication status",
+      description: "Read catalog and object publication status",
       scope: "book",
       schema: bookSchema,
       handler: async () => json(engine.storage.status()),

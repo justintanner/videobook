@@ -66,6 +66,8 @@ import type {
   Sequence,
   TimedSequenceClip,
 } from 'videobook-engine'
+import { SCHEMA_VERSION } from 'videobook-engine/catalog-metadata'
+import enginePackage from 'videobook-engine/package.json'
 import {
   adaptCommandArgs,
   parseCommandArgs,
@@ -592,7 +594,66 @@ function asNotebook(value: unknown): NotebookDocument | null {
     id,
     name,
     createdAt,
-    ...(record(item.properties) ? { properties: record(item.properties)! } : {}),
+    ...(asString(item.description) ? { description: asString(item.description)! } : {}),
+    ...(asString(item.lifecycleState ?? item.lifecycle_state)
+      ? { lifecycleState: asString(item.lifecycleState ?? item.lifecycle_state)! }
+      : {}),
+    ...(asNumber(item.workflowVersion ?? item.workflow_version) !== null
+      ? { workflowVersion: asNumber(item.workflowVersion ?? item.workflow_version)! }
+      : {}),
+    ...(asString(item.analysisRevision ?? item.analysis_revision)
+      ? { analysisRevision: asString(item.analysisRevision ?? item.analysis_revision)! }
+      : {}),
+    ...(record(item.audioSpine ?? item.audio_spine)
+      ? {
+          audioSpine: record(
+            item.audioSpine ?? item.audio_spine,
+          )! as unknown as NotebookDocument['audioSpine'],
+        }
+      : {}),
+    ...(record(item.currentSelection ?? item.current_selection)
+      ? {
+          currentSelection: record(
+            item.currentSelection ?? item.current_selection,
+          )! as NotebookDocument['currentSelection'],
+        }
+      : {}),
+    ...(record(item.fixture)
+      ? { fixture: record(item.fixture)! as NotebookDocument['fixture'] }
+      : {}),
+    ...(record(item.execution)
+      ? { execution: record(item.execution)! as NonNullable<NotebookDocument['execution']> }
+      : {}),
+    ...(Array.isArray(item.generationPlans ?? item.generation_plans)
+      ? {
+          generationPlans: (
+            item.generationPlans ?? item.generation_plans
+          ) as NonNullable<NotebookDocument['generationPlans']>,
+        }
+      : {}),
+    ...(Array.isArray(item.notebookRunPlans ?? item.notebook_run_plans)
+      ? {
+          notebookRunPlans: (
+            item.notebookRunPlans ?? item.notebook_run_plans
+          ) as NonNullable<NotebookDocument['notebookRunPlans']>,
+        }
+      : {}),
+    ...(Array.isArray(item.transcriptEdits ?? item.transcript_edits)
+      ? {
+          transcriptEdits: (
+            item.transcriptEdits ?? item.transcript_edits
+          ) as NonNullable<NotebookDocument['transcriptEdits']>,
+        }
+      : {}),
+    ...(Array.isArray(
+      item.transcriptAttachments ?? item.transcript_attachments,
+    )
+      ? {
+          transcriptAttachments: (
+            item.transcriptAttachments ?? item.transcript_attachments
+          ) as NonNullable<NotebookDocument['transcriptAttachments']>,
+        }
+      : {}),
     cells,
     edges,
   }
@@ -819,7 +880,7 @@ function asAudioNotebook(value: unknown): AudioNotebookState {
 }
 
 function latestTranscriptEdit(notebook: NotebookDocument | null): TranscriptEditRecord | null {
-  const edits = notebook?.properties?.transcriptEdits
+  const edits = notebook?.transcriptEdits
   if (!Array.isArray(edits)) return null
   for (let index = edits.length - 1; index >= 0; index -= 1) {
     const edit = record(edits[index])
@@ -1192,7 +1253,7 @@ function cellExecutionStatus(
   document: NotebookDocument,
   cellId: string,
 ): string {
-  const execution = record(document.properties?.execution)
+  const execution = record(document.execution)
   const item = execution && record(execution[cellId])
   const cell = document.cells.find((candidate) => candidate.id === cellId)
   if (!item) {
@@ -2093,15 +2154,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     [notebook],
   )
   const generationPlans = useMemo(
-    () => asGenerationPlans(notebook?.properties?.generationPlans),
+    () => asGenerationPlans(notebook?.generationPlans),
     [notebook],
   )
   const canAttachToTranscript = useMemo(() => {
-    const selection = record(notebook?.properties?.currentSelection)
+    const selection = record(notebook?.currentSelection)
     return record(selection?.sequence)?.range !== undefined
   }, [notebook])
   const activeSequenceRange = useMemo(() => {
-    const selection = record(notebook?.properties?.currentSelection)
+    const selection = record(notebook?.currentSelection)
     const sequenceSelection = record(selection?.sequence)
     const range = record(sequenceSelection?.range)
     const startFrame = asNumber(range?.startFrame)
@@ -6143,7 +6204,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 <label>Value<input type="password" value={secretValue} onChange={(event) => setSecretValue(event.target.value)} placeholder="Stored locally in .env" /></label>
                 <button type="submit" disabled={busy || !secretValue}>Save key</button>
               </form>
-              <div className="settings-sections"><div className="settings-grid">{providers.map((provider) => <article className="provider-card" key={provider.envKey}><span className={`provider-dot provider-${provider.keyStatus}`} /><div><strong>{provider.label}</strong><p>{provider.keyStatus}{provider.maskedKey ? ` · ${provider.maskedKey}` : ''}</p></div></article>)}</div><div className="settings-diagnostics"><div className="workspace-section-heading"><h2>Selected book storage</h2><p>Catalog and object publication status from videobook-engine 3.0.0 schema v5.</p></div><div className="settings-diagnostics-grid"><article className="record-card"><pre>{storage ? JSON.stringify(storage, null, 2) : 'Refresh settings to inspect storage.'}</pre></article></div></div></div>
+              <div className="settings-sections"><div className="settings-grid">{providers.map((provider) => <article className="provider-card" key={provider.envKey}><span className={`provider-dot provider-${provider.keyStatus}`} /><div><strong>{provider.label}</strong><p>{provider.keyStatus}{provider.maskedKey ? ` · ${provider.maskedKey}` : ''}</p></div></article>)}</div><div className="settings-diagnostics"><div className="workspace-section-heading"><h2>Selected book storage</h2><p>Catalog and object publication status from videobook-engine {enginePackage.version} schema v{SCHEMA_VERSION}.</p></div><div className="settings-diagnostics-grid"><article className="record-card"><pre>{storage ? JSON.stringify(storage, null, 2) : 'Refresh settings to inspect storage.'}</pre></article></div></div></div>
             </section>
           )}
       </>

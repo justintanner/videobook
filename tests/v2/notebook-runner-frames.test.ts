@@ -506,6 +506,7 @@ describe("notebook runner frames and concat", () => {
         }),
       ],
     };
+    expect((await engine.notebooks.write(invalidSpliceDocument)).ok).toBe(true);
     await expect(
       runNotebookCell(
         engine,

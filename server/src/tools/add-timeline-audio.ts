@@ -4,10 +4,12 @@ import { findAudioFile } from "videobook-engine";
 import { z } from "zod";
 import { probeVideo } from "../ffmpeg.js";
 import {
+  readTimeline,
   resolveArtifact,
   timelineFailure,
   timelineInput,
   timelinePayload,
+  writeTimeline,
 } from "../timeline-helpers.js";
 import type { ToolDef } from "./tool-def.js";
 
@@ -43,7 +45,7 @@ export function addTimelineAudioDef(engine: Engine): ToolDef {
           return timelineFailure(error instanceof Error ? error.message : String(error));
         }
       }
-      const timeline = engine.timeline.get();
+      const timeline = readTimeline(engine);
       const audio = [
         ...timeline.audio.map((clip) => ({
           id: clip.id,
@@ -63,7 +65,7 @@ export function addTimelineAudioDef(engine: Engine): ToolDef {
           ...(args.fade_out === undefined ? {} : { fadeOut: args.fade_out as number }),
         },
       ];
-      const result = await engine.timeline.set({ ...timelineInput(timeline), audio });
+      const result = await writeTimeline(engine, { ...timelineInput(timeline), audio });
       if (!result.ok) return timelineFailure(result.error.message);
       const clip = result.value.audio.at(-1);
       return {

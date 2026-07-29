@@ -271,7 +271,7 @@ describe('v2 notebook domain tools', () => {
         output_artifact_id?: string
       }>
       edges: Array<{ source: string; target: string; targetInput: string }>
-      properties?: { execution?: Record<string, { stale?: boolean }> }
+      execution?: Record<string, { stale?: boolean }>
     }
     expect(replaced.edges.filter((edge) =>
       edge.target === videoOutput.id && edge.targetInput === 'media'))
@@ -281,7 +281,7 @@ describe('v2 notebook domain tools', () => {
     })
     expect(replaced.cells.find((cell) => cell.id === videoOutput.id))
       .not.toHaveProperty('output_artifact_id')
-    expect(replaced.properties?.execution?.[videoOutput.id]?.stale).toBe(true)
+    expect(replaced.execution?.[videoOutput.id]?.stale).toBe(true)
 
     resultJson(await invoke('set_notebook_cell_input', {
       notebook_id: notebookId,

@@ -9,6 +9,7 @@ import type {
   SubtitleStyle,
 } from "./remotion/subtitles/types.js";
 import { queue } from "./queue.js";
+import { readTimeline } from "./timeline-helpers.js";
 import { isLanguageSetting } from "./jobs/_translate-transcript.js";
 import { findAutoRenderActions, readStoredRenderDefaults } from "./tools/sync.js";
 import {
@@ -99,7 +100,7 @@ export async function enqueueLazyAnalysisIfSlotted(
 
   const asset = fs.artifacts.get(assetId);
   if (!asset.ok) return null;
-  const timeline = fs.timeline.get();
+  const timeline = readTimeline(fs);
   if (!timeline.slots.some((slot) => slot.artifactId === asset.value.artifactId)) return null;
 
   const manifestResult = await fs.files.manifest(assetId);
@@ -142,7 +143,7 @@ export async function enqueueLazyTimelineRender(
 
   const resolved = fs.artifacts.get(assetId);
   if (!resolved.ok) return null;
-  const timeline = fs.timeline.get();
+  const timeline = readTimeline(fs);
   if (!timeline.slots.some((slot) => slot.artifactId === resolved.value.artifactId)) return null;
 
   const orientation = timeline.render;

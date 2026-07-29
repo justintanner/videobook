@@ -16,7 +16,7 @@ export async function failPendingTaskAndLog(
   const result = await fs.jobs.pending.fail(assetId, taskId, info);
   if (!result.ok) return;
   await fs
-    .history.logAction("job-error", {
+    .logs.append("job-error", {
         assetId,
         error: info.message,
         ...(info.failCode !== undefined ? { failCode: info.failCode } : {}),

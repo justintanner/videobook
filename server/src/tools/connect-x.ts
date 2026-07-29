@@ -5,7 +5,7 @@ export function xConnectStartDef(): ToolDef {
   return {
     name: "x_connect_start",
     description:
-      "Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns an authorize_url the client should open. After the user approves in the browser, the server captures the callback, exchanges the code, and persists refreshable tokens in Dolt runtime settings.",
+      "Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.",
     schema: {},
     handler: async () => {
       try {

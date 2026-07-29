@@ -37,14 +37,17 @@ import {
   transcriptTextKey,
 } from "../archive-b2.js";
 import type { ArchiveIndex, ArchiveIngest, ArchiveSourceRef } from "../archive-b2.js";
-import { getArchiveStore, readArchiveIngests } from "../archive-store.js";
+import {
+  ARCHIVE_STORE_BOUNDARY,
+  getArchiveStore,
+  readArchiveIngests,
+} from "../archive-store.js";
 import type { ArchiveStore } from "../archive-store.js";
 
 type ArchiveClipPayload = {
   type: "archive_clip";
   bookId: string;
   assetId?: string;
-  sourceProjectSlug?: string;
   url?: string;
   title?: string;
   topics: string[];
@@ -152,8 +155,8 @@ async function prepareAssetMedia(
   fs: Engine,
   payload: ArchiveClipPayload,
 ): Promise<PreparedMedia> {
-  if (!payload.assetId || !payload.sourceProjectSlug) {
-    throw new Error("asset archive requires assetId and sourceProjectSlug");
+  if (!payload.assetId) {
+    throw new Error("asset archive requires assetId");
   }
   const manifest = await fs.files.manifest(payload.assetId);
   if (!manifest.ok) throw new Error(manifest.error.message);
@@ -169,13 +172,13 @@ async function prepareAssetMedia(
     filename: `original${extension}`,
     source: {
       kind: "asset",
-      book_id: payload.sourceProjectSlug,
+      book_id: payload.bookId,
       asset_id: payload.assetId,
       ...(title ? { title } : {}),
       created_at: new Date().toISOString(),
     },
-    analysisTopics: await readAnalysisTopics(fs, payload.assetId, payload.sourceProjectSlug),
-    assetSnapshot: buildAssetSnapshot(manifest.value, payload.sourceProjectSlug, payload.assetId),
+    analysisTopics: await readAnalysisTopics(fs, payload.assetId, payload.bookId),
+    assetSnapshot: buildAssetSnapshot(manifest.value, payload.bookId, payload.assetId),
   };
 }
 
@@ -508,6 +511,7 @@ async function runArchive(fs: Engine, payload: ArchiveClipPayload): Promise<Reco
 
     return {
       archive_id: sha256,
+      cache_role: ARCHIVE_STORE_BOUNDARY.role,
       sha256,
       duplicate,
       ingest_id: payload.ingestId,
@@ -515,6 +519,10 @@ async function runArchive(fs: Engine, payload: ArchiveClipPayload): Promise<Reco
       asset_snapshot_file_count: assetSnapshot?.fileCount ?? 0,
       topics: index.topics.map((topic) => topic.label),
       people: index.people.map((person) => person.label),
+      title: index.title,
+      sources: index.sources,
+      transcript: index.transcript,
+      duration: index.duration,
     };
   } finally {
     await prepared.cleanup?.();
@@ -522,7 +530,7 @@ async function runArchive(fs: Engine, payload: ArchiveClipPayload): Promise<Reco
 }
 
 async function writeArchiveMetadata(fs: Engine, payload: ArchiveClipPayload, result: Record<string, unknown>): Promise<void> {
-  if (!payload.assetId || !payload.sourceProjectSlug) return;
+  if (!payload.assetId) return;
   const archiveId = result.archive_id;
   if (typeof archiveId !== "string") return;
   const write = await fs.metadata.artifacts.write(payload.assetId, "archive", {
@@ -533,6 +541,11 @@ async function writeArchiveMetadata(fs: Engine, payload: ArchiveClipPayload, res
     asset_snapshot_file_count: result.asset_snapshot_file_count,
     topics: result.topics,
     people: result.people,
+    title: result.title,
+    sources: result.sources,
+    transcript: result.transcript,
+    duration: result.duration,
+    cache_role: result.cache_role,
     archived_at: new Date().toISOString(),
   });
   if (!write.ok) throw new Error(write.error.message);
@@ -542,7 +555,7 @@ export function registerArchiveClipJob(fs: Engine): void {
   registerJobHandler("archive_clip", async (payload, ctx) => {
     const p = payload as ArchiveClipPayload;
     if (p.assetId) {
-      return withLocalLease(fs, p.sourceProjectSlug ?? p.bookId, p.assetId, ctx, "archive", async () => {
+      return withLocalLease(fs, p.bookId, p.assetId, ctx, "archive", async () => {
         const result = await runArchive(fs, p);
         await writeArchiveMetadata(fs, p, result);
         return result;
