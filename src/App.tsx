@@ -32,7 +32,6 @@ import {
   BookOpen,
   Braces,
   Check,
-  ChevronDown,
   CircleDot,
   Film,
   Image,
@@ -95,6 +94,7 @@ import { NotebookCellInspector } from '@/components/videobook/NotebookCellInspec
 import { MediaLibraryAssetPreview } from '@/components/videobook/MediaLibraryAssetPreview'
 import { ReverseSearchReference } from '@/components/videobook/ReverseSearchReference'
 import { NotebookMediaFullscreen } from '@/components/videobook/NotebookMediaFullscreen'
+import { BookProjectSelector } from '@/components/videobook/BookProjectSelector'
 import {
   CanonicalSequencePlayer,
   type TimelineKeyboardAction,
@@ -158,20 +158,16 @@ import {
   type NotebookAudioInfo,
 } from '@/videobook/notebook-cell-presentation'
 import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
+import type {
+  BookProjectMutationResult,
+  BookProjectSummary,
+} from '@/videobook/book-project-selector'
 
 type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
 
 type ToolResponse = {
   content?: Array<{ type: string; text?: string }>
   isError?: boolean
-}
-
-type BookSummary = {
-  bookId: string
-  slug: string
-  createdAt: number
-  artifactCount: number
-  notebookCount: number
 }
 
 type AssetRecord = {
@@ -337,7 +333,7 @@ type ProviderRecord = {
 }
 
 type InitialWorkspace = {
-  books: BookSummary[]
+  books: BookProjectSummary[]
   bookId: string
   notebook: NotebookDocument | null
   assets: AssetRecord[]
@@ -502,7 +498,7 @@ function messageFor(value: unknown, fallback: string): string {
   return fallback
 }
 
-function asBooks(value: unknown): BookSummary[] {
+function asBooks(value: unknown): BookProjectSummary[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((entry) => {
     const item = record(entry)
@@ -518,6 +514,17 @@ function asBooks(value: unknown): BookSummary[] {
       notebookCount: asNumber(item.notebookCount) ?? 0,
     }]
   })
+}
+
+function asBook(value: unknown): BookProjectSummary | null {
+  return asBooks([value])[0] ?? null
+}
+
+function bookProjectFailure(error: unknown): { ok: false; error: string } {
+  return {
+    ok: false,
+    error: error instanceof Error ? error.message : String(error),
+  }
 }
 
 function asNotebookCell(value: unknown): NotebookDocument['cells'][number] | null {
@@ -2043,7 +2050,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     autoReconnect: 3000,
   })
   const [screen, setScreen] = useState<Screen>('notebook')
-  const [books, setBooks] = useState<BookSummary[]>(() => initialWorkspace?.books ?? [])
+  const [books, setBooks] = useState<BookProjectSummary[]>(
+    () => initialWorkspace?.books ?? [],
+  )
   const [bookId, setBookId] = useState(() =>
     initialWorkspace?.bookId ?? savedValue('videobook.active-book'))
   const [notebook, setNotebook] = useState<NotebookDocument | null>(
@@ -2081,6 +2090,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [sourceViewCellId, setSourceViewCellId] = useState<string | null>(null)
   const [bookMenuOpen, setBookMenuOpen] = useState(false)
+  const [bookMenuLoading, setBookMenuLoading] = useState(false)
+  const [bookMenuError, setBookMenuError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [recording, setRecording] = useState(false)
   const [timelineSelectionStart, setTimelineSelectionStart] = useState('0')
@@ -2119,6 +2130,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [, setNotice] = useState('Connect to the server, then load your books.')
   const flowRef = useRef<ReactFlowInstance<CanvasNode, NotebookFlowEdge> | null>(null)
   const notebookScrollRef = useRef<HTMLDivElement | null>(null)
+  const bookMenuRequestRef = useRef(0)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const recorderStreamRef = useRef<MediaStream | null>(null)
   const recorderChunksRef = useRef<Blob[]>([])
@@ -2665,16 +2677,34 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     applyNotebook(nextNotebook, nextAssets)
   }, [applyNotebook, call])
 
+  const refreshBookList = useCallback(async () => {
+    const value = await call('list_books', { sort: 'newest' })
+    const nextBooks = asBooks(value)
+    setBooks(nextBooks)
+    return nextBooks
+  }, [call])
+
+  const refreshBookCommands = useCallback(async () => {
+    const value = await call('slash_commands', {})
+    setCommands(asCommands(value))
+  }, [call])
+
+  const refreshBookCommandsAfterMutation = useCallback(async () => {
+    try {
+      await refreshBookCommands()
+      return null
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+  }, [refreshBookCommands])
+
   const loadBooks = useCallback(async (preferredBookId?: string) => {
     setBusy(true)
     try {
-      const [bookValue, commandValue] = await Promise.all([
-        call('list_books', { sort: 'newest' }),
-        call('slash_commands', {}),
+      const [nextBooks] = await Promise.all([
+        refreshBookList(),
+        refreshBookCommands(),
       ])
-      const nextBooks = asBooks(bookValue)
-      setBooks(nextBooks)
-      setCommands(asCommands(commandValue))
       const target = nextBooks.find((book) => book.bookId === preferredBookId)
         ?? nextBooks.find((book) => book.slug === 'multyculty')
         ?? nextBooks.find((book) => book.bookId === bookId)
@@ -2696,22 +2726,169 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } finally {
       setBusy(false)
     }
-  }, [bookId, call, refreshBookData])
+  }, [bookId, refreshBookCommands, refreshBookData, refreshBookList])
 
-  const chooseBook = useCallback(async (nextBookId: string) => {
+  const openBookMenu = useCallback(async (): Promise<BookProjectMutationResult> => {
+    const requestId = bookMenuRequestRef.current + 1
+    bookMenuRequestRef.current = requestId
+    setBookMenuOpen(true)
+    setBookMenuLoading(true)
+    setBookMenuError(null)
+    try {
+      await refreshBookList()
+      return { ok: true }
+    } catch (error) {
+      const result = bookProjectFailure(error)
+      if (bookMenuRequestRef.current === requestId) {
+        setBookMenuError(result.error)
+      }
+      return result
+    } finally {
+      if (bookMenuRequestRef.current === requestId) {
+        setBookMenuLoading(false)
+      }
+    }
+  }, [refreshBookList])
+
+  const handleBookMenuOpenChange = useCallback((open: boolean) => {
+    if (open) {
+      void openBookMenu()
+      return
+    }
+    bookMenuRequestRef.current += 1
+    setBookMenuOpen(false)
+    setBookMenuLoading(false)
+    setBookMenuError(null)
+  }, [openBookMenu])
+
+  const refreshOpenBookMenu = useCallback(() => {
+    void openBookMenu()
+  }, [openBookMenu])
+
+  const chooseBook = useCallback(async (
+    nextBookId: string,
+  ): Promise<BookProjectMutationResult> => {
     setBusy(true)
     try {
       await refreshBookData(nextBookId)
       const next = books.find((book) => book.bookId === nextBookId)
       setNotice(next ? `Opened ${next.slug}` : 'Book opened')
       setScreen('notebook')
-      setBookMenuOpen(false)
+      handleBookMenuOpenChange(false)
+      return { ok: true }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      const result = bookProjectFailure(error)
+      setNotice(result.error)
+      return result
     } finally {
       setBusy(false)
     }
-  }, [books, refreshBookData])
+  }, [books, handleBookMenuOpenChange, refreshBookData])
+
+  const createBookProject = useCallback(async (
+    slug: string,
+  ): Promise<BookProjectMutationResult> => {
+    setBusy(true)
+    try {
+      const created = asBook(await call('create_book', { slug }))
+      if (!created) throw new Error('The server returned an invalid project')
+      setBooks((current) => [
+        created,
+        ...current.filter((book) => book.bookId !== created.bookId),
+      ])
+      await refreshBookData(created.bookId)
+      const commandError = await refreshBookCommandsAfterMutation()
+      setScreen('notebook')
+      handleBookMenuOpenChange(false)
+      setNotice(commandError
+        ? `Created ${created.slug}; commands could not refresh: ${commandError}`
+        : `Created ${created.slug}`)
+      return { ok: true }
+    } catch (error) {
+      const result = bookProjectFailure(error)
+      setNotice(result.error)
+      return result
+    } finally {
+      setBusy(false)
+    }
+  }, [
+    call,
+    handleBookMenuOpenChange,
+    refreshBookCommandsAfterMutation,
+    refreshBookData,
+  ])
+
+  const renameBookProject = useCallback(async (
+    targetBookId: string,
+    slug: string,
+  ): Promise<BookProjectMutationResult> => {
+    setBusy(true)
+    try {
+      const renamed = asBook(await call('rename_book', {
+        book_id: targetBookId,
+        slug,
+      }))
+      if (!renamed) throw new Error('The server returned an invalid project')
+      setBooks((current) => current.map((book) =>
+        book.bookId === targetBookId ? renamed : book))
+      const commandError = await refreshBookCommandsAfterMutation()
+      setNotice(commandError
+        ? `Renamed to ${renamed.slug}; commands could not refresh: ${commandError}`
+        : `Renamed to ${renamed.slug}`)
+      return { ok: true }
+    } catch (error) {
+      const result = bookProjectFailure(error)
+      setNotice(result.error)
+      return result
+    } finally {
+      setBusy(false)
+    }
+  }, [call, refreshBookCommandsAfterMutation])
+
+  const deleteBookProject = useCallback(async (
+    targetBookId: string,
+    confirmSlug: string,
+  ): Promise<BookProjectMutationResult> => {
+    if (books.length < 2) {
+      return { ok: false, error: 'Create another project before deleting this one' }
+    }
+    const target = books.find((book) => book.bookId === targetBookId)
+    const fallback = books.find((book) => book.bookId !== targetBookId)
+    if (!target || !fallback) {
+      return { ok: false, error: 'The selected project is no longer available' }
+    }
+    setBusy(true)
+    try {
+      await call('delete_book', {
+        book_id: targetBookId,
+        confirm_slug: confirmSlug,
+      })
+      setBooks((current) => current.filter((book) => book.bookId !== targetBookId))
+      if (targetBookId === bookId) {
+        await refreshBookData(fallback.bookId)
+        setScreen('notebook')
+        handleBookMenuOpenChange(false)
+      }
+      const commandError = await refreshBookCommandsAfterMutation()
+      setNotice(commandError
+        ? `Deleted ${target.slug}; commands could not refresh: ${commandError}`
+        : `Deleted ${target.slug}`)
+      return { ok: true }
+    } catch (error) {
+      const result = bookProjectFailure(error)
+      setNotice(result.error)
+      return result
+    } finally {
+      setBusy(false)
+    }
+  }, [
+    bookId,
+    books,
+    call,
+    handleBookMenuOpenChange,
+    refreshBookCommandsAfterMutation,
+    refreshBookData,
+  ])
 
   const createCell = async (type: NotebookCellType, position?: { x: number; y: number }) => {
     if (!bookId || !notebook) return
@@ -4638,12 +4815,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const slug = command.command.slice(1)
         const target = books.find((book) => book.slug === slug)
         if (!target) return { ok: false, message: `Book not found: ${slug}` }
-        await chooseBook(target.bookId)
-        return { ok: true, message: `Opened ${slug}` }
+        const result = await chooseBook(target.bookId)
+        return result.ok
+          ? { ok: true, message: `Opened ${slug}` }
+          : { ok: false, message: result.error }
       }
       if (command.uiAction === 'open_projects') {
-        setBookMenuOpen(true)
-        return { ok: true, message: 'Book switcher opened' }
+        const result = await openBookMenu()
+        return result.ok
+          ? { ok: true, message: 'Project selector opened' }
+          : { ok: false, message: result.error }
       }
       if (command.uiAction === 'open_notebook') {
         setScreen('notebook')
@@ -4869,36 +5050,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 <BookOpen size={18} />
                 <span>/videobook</span>
               </button>
-              <button
-                type="button"
-                className="brand-project-menu-toggle"
-                aria-expanded={bookMenuOpen}
-                aria-haspopup="menu"
-                onClick={() => setBookMenuOpen((open) => !open)}
-              >
-                <strong>{activeBook?.slug ?? 'select-book'}</strong>
-                <ChevronDown size={14} />
-              </button>
+              <BookProjectSelector
+                activeBook={activeBook}
+                books={books}
+                disabled={busy || mcp.state !== 'ready'}
+                error={bookMenuError}
+                loading={bookMenuLoading}
+                open={bookMenuOpen}
+                onCreate={createBookProject}
+                onDelete={deleteBookProject}
+                onOpenChange={handleBookMenuOpenChange}
+                onRefresh={refreshOpenBookMenu}
+                onRename={renameBookProject}
+                onSelect={chooseBook}
+              />
             </div>
-            {bookMenuOpen && (
-              <div className="project-menu book-menu" role="menu" aria-label="Videobook projects">
-                {books.map((book) => (
-                  <button
-                    key={book.bookId}
-                    type="button"
-                    role="menuitem"
-                    disabled={busy}
-                    className={book.bookId === bookId ? 'active' : ''}
-                    onClick={() => void chooseBook(book.bookId)}
-                  >
-                    <span>{book.slug}</span>
-                    <small>{book.notebookCount} notebooks</small>
-                    {book.bookId === bookId && <Check size={13} />}
-                  </button>
-                ))}
-                {books.length === 0 && <span>No projects available</span>}
-              </div>
-            )}
           </div>
         </div>
         <nav className="header-navigation" aria-label="Workspace navigation">

@@ -5,6 +5,7 @@ import type { ServerCommand } from '@/lib/command-registry'
 import { RichPromptField } from '@/components/ui/RichPromptField'
 import { assetMentionSuggestions } from '@/videobook/mention-suggestions'
 import { applyReadlineEdit } from '@/videobook/readline'
+import { hasExactCommandSuggestion } from '@/videobook/command-suggestions'
 
 export interface ComposerOutcome {
   ok: boolean
@@ -368,7 +369,7 @@ export function CommandComposer({
                 return
               }
               if (event.key === 'Enter') {
-                const exact = suggestions[selectedIndex]?.label === input.trim()
+                const exact = hasExactCommandSuggestion(input, suggestions)
                 if (!exact) {
                   event.preventDefault()
                   acceptSuggestion(suggestions[selectedIndex]!)
