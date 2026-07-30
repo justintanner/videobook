@@ -14,6 +14,10 @@ import {
   INTELLIGENCE_MODEL,
   OPENAI_ANALYSIS_TOOL,
 } from "./openai-intelligence.js";
+import type {
+  AnalysisBoundary,
+  NotebookAnalysisEvidence,
+} from "./notebook-live-analysis.js";
 import {
   normalizeShots,
   parseAnalysisShots,
@@ -31,6 +35,21 @@ export const WORKFLOW_STAGES = [
   "GENERATE VIDEO",
   "CONCAT",
 ] as const;
+
+export const DEFAULT_ANALYSIS_PROMPT =
+  "Detect shot boundaries from verified camera switches and audio continuity; cover the source exactly and label each shot from evidence.";
+
+const LEGACY_ANALYSIS_PROMPTS = new Set([
+  "Segment the source into four continuous 15-second narrative shots with precise timestamps and concise visual context.",
+  "Segment the source into two continuous 15-second narrative shots with precise timestamps and concise visual context.",
+]);
+
+function retainedAnalysisPrompt(existing: NotebookCell | undefined): string {
+  const prompt = existing?.prompt?.trim();
+  return !prompt || LEGACY_ANALYSIS_PROMPTS.has(prompt)
+    ? DEFAULT_ANALYSIS_PROMPT
+    : prompt;
+}
 
 export const MULTYCULTY_FEATURES = [
   {
@@ -464,16 +483,20 @@ export function buildAnalysisScriptArtifact(input: {
   rawOutput: unknown;
   shots: NormalizedShot[];
   sourceDurationSeconds: number;
+  evidence?: NotebookAnalysisEvidence;
+  boundaries?: AnalysisBoundary[];
 }): {
   content: string;
   legacyAnalysis: Record<string, unknown>;
 } {
   const content = JSON.stringify({
-    version: 2,
+    version: 3,
     request: input.request,
     raw: input.rawOutput,
     shots: input.shots,
     sourceDurationSeconds: input.sourceDurationSeconds,
+    evidence: input.evidence ?? null,
+    boundaries: input.boundaries ?? [],
     normalizedAt: new Date().toISOString(),
   }, null, 2);
   const legacyAnalysis = {
@@ -749,6 +772,8 @@ export async function applyAnalysisResults(
     sourceDurationSeconds: number;
     request: Record<string, unknown>;
     sourceArtifactId: string;
+    evidence?: NotebookAnalysisEvidence;
+    boundaries?: AnalysisBoundary[];
   },
 ): Promise<NotebookDocument> {
   const storedAnalysisCell = document.cells.find((cell) =>
@@ -767,6 +792,8 @@ export async function applyAnalysisResults(
     rawOutput: input.rawOutput,
     shots,
     sourceDurationSeconds: input.sourceDurationSeconds,
+    ...(input.evidence ? { evidence: input.evidence } : {}),
+    ...(input.boundaries ? { boundaries: input.boundaries } : {}),
   });
   const scriptArtifact = await engine.artifacts.create({
     kind: "script",
@@ -787,6 +814,7 @@ export async function applyAnalysisResults(
       analysisInfo: {
         sourceDurationSeconds: input.sourceDurationSeconds,
         shots,
+        boundaries: input.boundaries ?? [],
       },
     },
   );
@@ -1037,7 +1065,7 @@ export function buildSevenStageScaffold(
     type: "analyze",
     slug: "analyze-splitter",
     slot: gridSlot(1, 0),
-    prompt: "Segment the source into four continuous 15-second narrative shots with precise timestamps and concise visual context.",
+    prompt: retainedAnalysisPrompt(roleCells.get("analysis")),
     provider: "openai",
     model: INTELLIGENCE_MODEL,
     operation: "analyze_source",

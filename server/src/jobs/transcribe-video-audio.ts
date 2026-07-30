@@ -13,13 +13,6 @@ import {
 import { chunkStarts, chunkLength, extractAudioChunk } from "./_audio-chunks.js";
 import { enqueueLazyAnalysisIfSlotted, enqueueLazyTimelineRender } from "../lazy-render.js";
 
-// gpt-4o-mini-transcribe has two ceilings: it rejects requests once
-// instructions + audio exceed its input budget (~25 minutes of audio), and it
-// silently truncates transcripts at 2,000 output tokens (~1,500 words — only
-// 7-8 minutes of fast speech). The output cap binds first: 15-minute chunks
-// of a dense talk show came back cut off mid-sentence. 5-minute chunks cap a
-// chunk's transcript at ~1,100 words even for fast speakers, with the side
-// benefit that each mono 16kHz upload stays far under the 25MB file limit.
 const CHUNK_SECONDS = 5 * 60;
 
 type TranscribeVideoAudioPayload = {
@@ -44,7 +37,7 @@ async function transcribeBytes(provider: OpenAiProvider, bytes: Uint8Array<Array
   const file = new File([bytes], filename, { type: audioMimeType(filename) });
   const result = await provider.post.v1.audio.transcriptions({
     file,
-    model: "gpt-4o-mini-transcribe",
+    model: "gpt-transcribe",
   });
   return result.text;
 }

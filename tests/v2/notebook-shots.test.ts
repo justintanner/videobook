@@ -7,7 +7,7 @@ import {
 } from "../../server/src/notebook-shots.js";
 
 describe("notebook shot normalization and reconcile", () => {
-  it("covers the source exactly with generation-safe 4-15s ranges", () => {
+  it("covers the source exactly while preserving short camera shots", () => {
     const shots = normalizeShots(
       [
         { startSeconds: 0, endSeconds: 3, label: "cold open" },
@@ -22,9 +22,20 @@ describe("notebook shot normalization and reconcile", () => {
       expect(shots[index]?.startSeconds).toBe(shots[index - 1]?.endSeconds);
     }
     for (const shot of shots) {
-      expect(shot.durationSeconds).toBeGreaterThanOrEqual(4);
+      expect(shot.durationSeconds).toBeGreaterThan(0);
       expect(shot.durationSeconds).toBeLessThanOrEqual(15);
     }
+    expect(shots[0]).toMatchObject({
+      startSeconds: 0,
+      endSeconds: 3,
+      durationSeconds: 3,
+      label: "cold open",
+    });
+    expect(shots.find((shot) => shot.label === "tail")).toMatchObject({
+      startSeconds: 40,
+      endSeconds: 42,
+      durationSeconds: 2,
+    });
     const covered = shots.reduce((sum, shot) => sum + shot.durationSeconds, 0);
     expect(Math.round(covered * 1000) / 1000).toBe(45);
   });

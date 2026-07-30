@@ -6,6 +6,7 @@ import {
   type GenerationActionSpec,
 } from "./generation-registry.js";
 import {
+  ANALYSIS_REASONING_EFFORT,
   INTELLIGENCE_MODEL,
   INTELLIGENCE_REASONING_EFFORT,
   OPENAI_ANALYSIS_TOOL,
@@ -64,7 +65,7 @@ const LOCAL_ACTIONS: NotebookAction[] = [
     defaults: {
       provider: "openai",
       model: INTELLIGENCE_MODEL,
-      reasoning: { effort: INTELLIGENCE_REASONING_EFFORT },
+      reasoning: { effort: ANALYSIS_REASONING_EFFORT },
       operation: "analyze_source",
       tool: OPENAI_ANALYSIS_TOOL,
     },

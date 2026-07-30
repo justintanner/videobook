@@ -22,6 +22,15 @@ const SCDET_FPS = 4;
 const SETTLE_HOLD_S = 0.5;
 
 export type Candidate = { t: number; score: number; kind: "shot" | "settle" };
+export type SceneSample = { t: number; score: number };
+export type CameraCandidate = { t: number; score: number };
+
+type SceneDetectOptions = {
+  startSeconds?: number;
+  durationSeconds?: number;
+  fps?: number;
+  signal?: AbortSignal;
+};
 
 // Parse scdet's stderr stream. ffmpeg 6's scdet logs one line per processed
 // frame in the form:
@@ -29,7 +38,7 @@ export type Candidate = { t: number; score: number; kind: "shot" | "settle" };
 // Score is the absolute mean frame difference (Y-plane), time is seconds.
 // The very first line always has score=0 (no previous frame) — we keep it
 // in the timeline; deriveCandidates ignores it via the threshold.
-export function parseScdetOutput(stderr: string): Array<{ t: number; score: number }> {
+export function parseScdetOutput(stderr: string): SceneSample[] {
   const re = /lavfi\.scd\.score:\s*([0-9.]+),\s*lavfi\.scd\.time:\s*([0-9.]+)/g;
   const out: Array<{ t: number; score: number }> = [];
   let m: RegExpExecArray | null;
@@ -39,6 +48,31 @@ export function parseScdetOutput(stderr: string): Array<{ t: number; score: numb
     if (Number.isFinite(score) && Number.isFinite(t)) out.push({ t, score });
   }
   return out;
+}
+
+export function deriveCameraCandidates(
+  samples: SceneSample[],
+  scoreFloor = 6,
+  clusterSeconds = 0.5,
+): CameraCandidate[] {
+  const peaks = samples.filter((sample, index) => {
+    if (sample.score < scoreFloor) return false;
+    const previous = samples[index - 1]?.score ?? Number.NEGATIVE_INFINITY;
+    const next = samples[index + 1]?.score ?? Number.NEGATIVE_INFINITY;
+    return sample.score >= previous && sample.score >= next;
+  });
+  const clustered: CameraCandidate[] = [];
+  for (const peak of peaks) {
+    const previous = clustered.at(-1);
+    if (!previous || peak.t - previous.t > clusterSeconds) {
+      clustered.push({ ...peak });
+      continue;
+    }
+    if (peak.score > previous.score) {
+      clustered[clustered.length - 1] = { ...peak };
+    }
+  }
+  return clustered;
 }
 
 // Two-tier candidate derivation from a per-frame scdet timeline:
@@ -123,28 +157,81 @@ export function deriveCandidates(samples: Array<{ t: number; score: number }>): 
 // (not stdout), so we capture stderr from the invocation. A non-zero exit is
 // expected for `-f null -` runs only when ffmpeg actually fails — successful
 // runs return cleanly with the metadata in stderr.
-export async function detectSceneCandidates(videoPath: string): Promise<Candidate[]> {
+export async function detectSceneSamples(
+  videoPath: string,
+  options: SceneDetectOptions = {},
+): Promise<SceneSample[]> {
   let stderr = "";
+  const startSeconds = Math.max(0, options.startSeconds ?? 0);
+  const args = [
+    "-hide_banner",
+    "-nostats",
+    "-loglevel", "info",
+  ];
+  if (startSeconds > 0) args.push("-ss", String(startSeconds));
+  args.push("-i", videoPath);
+  if (
+    typeof options.durationSeconds === "number"
+    && options.durationSeconds > 0
+  ) {
+    args.push("-t", String(options.durationSeconds));
+  }
+  const filters = ["scale=320:180"];
+  if (typeof options.fps === "number" && options.fps > 0) {
+    filters.push(`fps=${options.fps}`);
+  }
+  filters.push("scdet=threshold=0");
+  args.push(
+    "-vf", filters.join(","),
+    "-an",
+    "-f", "null",
+    "-",
+  );
   try {
-    const result = await execFileAsync(FFMPEG, [
-      "-hide_banner",
-      "-nostats",
-      "-loglevel", "info",
-      "-i", videoPath,
-      "-vf", `scale=320:180,fps=${SCDET_FPS},scdet=threshold=0`,
-      "-an",
-      "-f", "null",
-      "-",
-    ], { maxBuffer: 64 * 1024 * 1024 });
+    const result = await execFileAsync(FFMPEG, args, {
+      maxBuffer: 64 * 1024 * 1024,
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
     stderr = result.stderr;
   } catch (error) {
-    const e = error as Error & { stderr?: string };
-    if (typeof e.stderr === "string") {
-      stderr = e.stderr;
-    } else {
-      throw new Error(`scdet pass failed: ${e.message}`);
+    if (options.signal?.aborted) {
+      throw options.signal.reason instanceof Error
+        ? options.signal.reason
+        : new Error("Scene detection was cancelled");
     }
+    const e = error as Error & { stderr?: string };
+    throw new Error(`scdet pass failed: ${e.message}`);
   }
-  const samples = parseScdetOutput(stderr);
+  return parseScdetOutput(stderr).map((sample) => ({
+    ...sample,
+    t: sample.t + startSeconds,
+  }));
+}
+
+export async function refineCameraCandidate(
+  videoPath: string,
+  candidate: CameraCandidate,
+  signal?: AbortSignal,
+): Promise<CameraCandidate> {
+  const startSeconds = Math.max(0, candidate.t - 0.75);
+  const samples = await detectSceneSamples(videoPath, {
+    startSeconds,
+    durationSeconds: 1.5,
+    signal,
+  });
+  const best = samples
+    .filter((sample) => Math.abs(sample.t - candidate.t) <= 0.75)
+    .sort((left, right) => right.score - left.score)[0];
+  return best ? { t: best.t, score: best.score } : candidate;
+}
+
+export async function detectSceneCandidates(
+  videoPath: string,
+  signal?: AbortSignal,
+): Promise<Candidate[]> {
+  const samples = await detectSceneSamples(videoPath, {
+    fps: SCDET_FPS,
+    signal,
+  });
   return deriveCandidates(samples);
 }

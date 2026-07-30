@@ -21,7 +21,7 @@ export interface BurnInCaption {
   durationSeconds: number;
 }
 
-async function materializeArtifactFile(
+export async function materializeArtifactFile(
   engine: Engine,
   artifactId: string,
   preferredNames: string[],

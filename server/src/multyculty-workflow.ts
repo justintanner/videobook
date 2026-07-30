@@ -13,8 +13,14 @@ import { normalizeSceneVideo } from "./notebook-media-ops.js";
 import {
   applyAnalysisResults,
   buildSevenStageScaffold,
+  DEFAULT_ANALYSIS_PROMPT,
   MULTYCULTY_FEATURES,
 } from "./notebook-workflow.js";
+import type {
+  AnalysisBoundary,
+  NotebookAnalysisEvidence,
+  NotebookLiveAnalysis,
+} from "./notebook-live-analysis.js";
 import { MULTYCULTY_FIXTURE_OWNER } from "./notebook-fixtures.js";
 
 type ArtifactRecord = {
@@ -23,7 +29,71 @@ type ArtifactRecord = {
   kind: string;
 };
 
-export const MULTYCULTY_FIXTURE_VERSION = 22;
+export const MULTYCULTY_FIXTURE_VERSION = 23;
+
+const MULTYCULTY_FIXTURE_ANALYSIS: NotebookLiveAnalysis["rawOutput"] = {
+  shots: [
+    {
+      startSeconds: 0,
+      endSeconds: 15,
+      label: "intro",
+      prompt: "Opening presenter shot establishing the discussion.",
+    },
+    {
+      startSeconds: 15,
+      endSeconds: 30,
+      label: "culture",
+      prompt: "The camera switches for the follow-up discussion beat.",
+    },
+  ],
+};
+
+const MULTYCULTY_FIXTURE_EVIDENCE: NotebookAnalysisEvidence = {
+  visualCandidates: [{
+    id: "visual-001",
+    timestampSeconds: 15,
+    score: 42,
+    frameTimestamps: [14.5, 14.9, 15.1, 15.5],
+  }],
+  visualDecisions: [{
+    candidateId: "visual-001",
+    accepted: true,
+    cameraSwitch: true,
+    transitionType: "hard_cut",
+    confidence: 0.98,
+    rechecked: false,
+  }],
+  audioCandidates: [],
+  selectedAudioCandidateIds: [],
+  transcript: {
+    included: false,
+    timed: false,
+  },
+};
+
+const MULTYCULTY_FIXTURE_BOUNDARIES: AnalysisBoundary[] = [
+  {
+    id: "boundary-source-start",
+    timestampSeconds: 0,
+    kind: "source_start",
+    confidence: 1,
+    evidenceIds: [],
+  },
+  {
+    id: "boundary-camera-001",
+    timestampSeconds: 15,
+    kind: "camera_cut",
+    confidence: 0.98,
+    evidenceIds: ["visual-001"],
+  },
+  {
+    id: "boundary-source-end",
+    timestampSeconds: 30,
+    kind: "source_end",
+    confidence: 1,
+    evidenceIds: [],
+  },
+];
 
 const SECTION_SLUGS = [
   "vid-section-intro",
@@ -482,12 +552,6 @@ export async function seedMultycultyWorkflow(
   const sourceAudio = streams.value.find((stream) => stream.kind === "audio");
   if (!sourceAudio) throw new Error("The Multyculty source has no audio stream");
   const previousRevision = engine.head;
-  const fixtureAnalysis = {
-    scenes: [
-      { title: "intro", timestamp: [0, 15] },
-      { title: "culture", timestamp: [15, 30] },
-    ],
-  };
   const scaffold = buildSevenStageScaffold(
     engine,
     {
@@ -527,8 +591,7 @@ export async function seedMultycultyWorkflow(
       if (cell.id === analysis.id) {
         return {
           ...cell,
-          prompt:
-            "Segment the source into two continuous 15-second narrative shots with precise timestamps and concise visual context.",
+          prompt: cell.prompt ?? DEFAULT_ANALYSIS_PROMPT,
           inputs: {
             ...(cell.inputs ?? {}),
             sourceDurationSeconds: 30,
@@ -557,14 +620,23 @@ export async function seedMultycultyWorkflow(
     configured,
     analysis.id,
     {
-      rawOutput: fixtureAnalysis,
+      rawOutput: MULTYCULTY_FIXTURE_ANALYSIS,
       sourceDurationSeconds: 30,
       request: {
         mode: "multyculty-fixture",
         provider: "fixture",
         model: "precomputed",
+        pipelineVersion: 3,
+        stages: [
+          "visual_candidate_detection",
+          "camera_validation",
+          "audio_boundary_selection",
+          "shot_labeling",
+        ],
       },
       sourceArtifactId: sourceArtifact.artifactId,
+      evidence: MULTYCULTY_FIXTURE_EVIDENCE,
+      boundaries: MULTYCULTY_FIXTURE_BOUNDARIES,
     },
   );
   const withOutputs = await attachFixtureOutputs(

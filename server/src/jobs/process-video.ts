@@ -321,7 +321,7 @@ export async function processVideoFiles(
 
     }
 
-    // Speech-to-text stays eager: cheap (gpt-4o-mini-transcribe) and useful as
+    // Speech-to-text stays eager: cheap and useful as
     // a standalone artifact even if the asset never lands in a slot. Vision
     // analysis (Gemini) is gated to slot drop in tools/assign-slot.ts — plus
     // the slot-gated revival below for re-processed (trimmed/re-downloaded)

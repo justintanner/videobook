@@ -19,17 +19,12 @@ export interface ShotRange {
   endSeconds: number;
 }
 
-export const MIN_SHOT_SECONDS = 4;
 export const MAX_SHOT_SECONDS = 15;
 
 function roundTime(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 
-/**
- * Normalize provider shot ranges into continuous non-overlapping 4–15s ranges
- * that cover [0, sourceDurationSeconds] exactly.
- */
 export function normalizeShots(
   shots: AnalysisShotInput[],
   sourceDurationSeconds: number,
@@ -48,15 +43,14 @@ export function normalizeShots(
     .filter((shot) => shot.endSeconds > shot.startSeconds)
     .sort((left, right) => left.startSeconds - right.startSeconds);
 
-  const raw: ShotRange[] = cleaned.length > 0
-    ? cleaned.map((shot) => ({
-      startSeconds: shot.startSeconds,
-      endSeconds: shot.endSeconds,
-    }))
+  type PreparedRange = ShotRange & {
+    label?: string;
+    prompt?: string;
+  };
+  const raw: PreparedRange[] = cleaned.length > 0
+    ? cleaned
     : [{ startSeconds: 0, endSeconds: duration }];
-
-  // Force continuous coverage without collapsing distinct abutting analysis shots.
-  const covered: ShotRange[] = [];
+  const covered: PreparedRange[] = [];
   let cursor = 0;
   for (const shot of raw) {
     let start = Math.max(cursor, shot.startSeconds);
@@ -64,123 +58,65 @@ export function normalizeShots(
     if (start > cursor) {
       covered.push({ startSeconds: cursor, endSeconds: start });
     }
-    // Clip overlap with previous covered range but keep this shot distinct.
     if (covered.length > 0) {
       const previous = covered[covered.length - 1]!;
       if (start < previous.endSeconds) start = previous.endSeconds;
       if (end < start) end = start;
     }
     if (end > start) {
-      covered.push({ startSeconds: start, endSeconds: end });
+      covered.push({
+        startSeconds: start,
+        endSeconds: end,
+        ...(shot.label ? { label: shot.label } : {}),
+        ...(shot.prompt ? { prompt: shot.prompt } : {}),
+      });
       cursor = end;
     }
   }
   if (cursor < duration) {
     covered.push({ startSeconds: cursor, endSeconds: duration });
   }
-
-  // Split long ranges into generation-safe lengths; keep abutting shots separate.
-  const sized: ShotRange[] = [];
+  if (covered.length === 0) {
+    covered.push({ startSeconds: 0, endSeconds: duration });
+  }
+  covered[0]!.startSeconds = 0;
+  covered[covered.length - 1]!.endSeconds = duration;
+  for (let index = 1; index < covered.length; index += 1) {
+    covered[index]!.startSeconds = covered[index - 1]!.endSeconds;
+  }
+  const finalRanges: PreparedRange[] = [];
   for (const shot of covered) {
+    const rangeDuration = roundTime(shot.endSeconds - shot.startSeconds);
+    const partCount = Math.max(
+      1,
+      Math.ceil(rangeDuration / MAX_SHOT_SECONDS),
+    );
     let start = shot.startSeconds;
-    while (roundTime(shot.endSeconds - start) > MAX_SHOT_SECONDS) {
-      const end = roundTime(start + MAX_SHOT_SECONDS);
-      sized.push({ startSeconds: start, endSeconds: end });
+    for (let part = 0; part < partCount; part += 1) {
+      const end = part === partCount - 1
+        ? shot.endSeconds
+        : roundTime(
+            shot.startSeconds + rangeDuration * (part + 1) / partCount,
+          );
+      finalRanges.push({
+        startSeconds: start,
+        endSeconds: end,
+        ...(shot.label ? { label: shot.label } : {}),
+        ...(shot.prompt ? { prompt: shot.prompt } : {}),
+      });
       start = end;
-    }
-    if (shot.endSeconds > start) {
-      sized.push({ startSeconds: start, endSeconds: shot.endSeconds });
-    }
-  }
-
-  // Merge short ranges into neighbors when the combined range stays within max.
-  let stable = sized.map((shot) => ({ ...shot }));
-  let changed = true;
-  while (changed && stable.length > 1) {
-    changed = false;
-    for (let index = 0; index < stable.length; index += 1) {
-      const shot = stable[index]!;
-      const durationSeconds = roundTime(shot.endSeconds - shot.startSeconds);
-      if (durationSeconds >= MIN_SHOT_SECONDS) continue;
-      const previous = stable[index - 1];
-      const next = stable[index + 1];
-      if (
-        previous
-        && roundTime(shot.endSeconds - previous.startSeconds) <= MAX_SHOT_SECONDS
-      ) {
-        previous.endSeconds = shot.endSeconds;
-        stable.splice(index, 1);
-        changed = true;
-        break;
-      }
-      if (
-        next
-        && roundTime(next.endSeconds - shot.startSeconds) <= MAX_SHOT_SECONDS
-      ) {
-        next.startSeconds = shot.startSeconds;
-        stable.splice(index, 1);
-        changed = true;
-        break;
-      }
-      if (previous) {
-        const needed = roundTime(MIN_SHOT_SECONDS - durationSeconds);
-        const previousDuration = roundTime(
-          previous.endSeconds - previous.startSeconds,
-        );
-        if (previousDuration - needed >= MIN_SHOT_SECONDS) {
-          previous.endSeconds = roundTime(previous.endSeconds - needed);
-          shot.startSeconds = previous.endSeconds;
-          changed = true;
-          break;
-        }
-      }
-      if (next) {
-        const needed = roundTime(MIN_SHOT_SECONDS - durationSeconds);
-        const nextDuration = roundTime(next.endSeconds - next.startSeconds);
-        if (nextDuration - needed >= MIN_SHOT_SECONDS) {
-          next.startSeconds = roundTime(next.startSeconds + needed);
-          shot.endSeconds = next.startSeconds;
-          changed = true;
-          break;
-        }
-      }
-    }
-  }
-
-  // Ensure exact coverage after rounding.
-  if (stable.length === 0) {
-    stable = [{ startSeconds: 0, endSeconds: duration }];
-  }
-  stable[0]!.startSeconds = 0;
-  stable[stable.length - 1]!.endSeconds = duration;
-  for (let index = 1; index < stable.length; index += 1) {
-    stable[index]!.startSeconds = stable[index - 1]!.endSeconds;
-  }
-
-  // Final pass: split any remaining over-long ranges after coverage fix.
-  const finalRanges: ShotRange[] = [];
-  for (const shot of stable) {
-    let start = shot.startSeconds;
-    while (roundTime(shot.endSeconds - start) > MAX_SHOT_SECONDS) {
-      const end = roundTime(start + MAX_SHOT_SECONDS);
-      finalRanges.push({ startSeconds: start, endSeconds: end });
-      start = end;
-    }
-    if (shot.endSeconds > start) {
-      finalRanges.push({ startSeconds: start, endSeconds: shot.endSeconds });
     }
   }
 
   return finalRanges.map((shot, index) => {
-    const source = cleaned[Math.min(index, Math.max(0, cleaned.length - 1))];
     const durationSeconds = roundTime(shot.endSeconds - shot.startSeconds);
     return {
       ordinal: index + 1,
       startSeconds: roundTime(shot.startSeconds),
       endSeconds: roundTime(shot.endSeconds),
       durationSeconds,
-      label: source?.label ?? `Shot ${index + 1}`,
-      ...(source?.prompt ? { prompt: source.prompt } : {}),
+      label: shot.label ?? `Shot ${index + 1}`,
+      ...(shot.prompt ? { prompt: shot.prompt } : {}),
     };
   });
 }

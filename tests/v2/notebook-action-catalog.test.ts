@@ -43,7 +43,7 @@ describe("notebook action catalog", () => {
       model: "gpt-5.6-sol",
       tool: "openai_responses_analysis",
       defaults: {
-        reasoning: { effort: "medium" },
+        reasoning: { effort: "high" },
       },
     });
     expect(actions.find((action) => action.operation === "rewrite_prompt"))

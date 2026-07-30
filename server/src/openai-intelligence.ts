@@ -8,6 +8,12 @@ export const INTELLIGENCE_MODEL = "gpt-5.6-sol";
 export const INTELLIGENCE_REASONING_EFFORT = "medium";
 export const OPENAI_ANALYSIS_TOOL = "openai_responses_analysis";
 
+export type IntelligenceReasoningEffort = NonNullable<
+  OpenAiResponseRequest["reasoning"]
+>["effort"];
+
+export const ANALYSIS_REASONING_EFFORT: IntelligenceReasoningEffort = "high";
+
 export type ResponsesFn = (
   request: OpenAiResponseRequest,
   signal?: AbortSignal,
@@ -25,17 +31,29 @@ type IntelligenceResponsesOptions = {
   baseURL?: string;
 };
 
-export function intelligenceRequest(request: IntelligenceRequest): OpenAiResponseRequest {
+type IntelligenceRequestOptions = {
+  reasoningEffort?: IntelligenceReasoningEffort;
+};
+
+export function intelligenceRequest(
+  request: IntelligenceRequest,
+  options: IntelligenceRequestOptions = {},
+): OpenAiResponseRequest {
   return {
     ...request,
     model: INTELLIGENCE_MODEL,
-    reasoning: { effort: INTELLIGENCE_REASONING_EFFORT },
+    reasoning: {
+      effort: options.reasoningEffort ?? INTELLIGENCE_REASONING_EFFORT,
+    },
     store: false,
   };
 }
 
 function normalizeRequest(request: OpenAiResponseRequest): OpenAiResponseRequest {
-  const normalized = intelligenceRequest(request);
+  const normalized = intelligenceRequest(request, {
+    reasoningEffort:
+      request.reasoning?.effort ?? INTELLIGENCE_REASONING_EFFORT,
+  });
   delete normalized.temperature;
   delete normalized.top_p;
   return normalized;

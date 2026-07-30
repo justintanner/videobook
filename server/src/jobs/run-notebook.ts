@@ -35,8 +35,8 @@ import {
   normalizeLegacyAnalyzeDocument,
 } from "../notebook-action-catalog.js";
 import {
+  ANALYSIS_REASONING_EFFORT,
   INTELLIGENCE_MODEL,
-  INTELLIGENCE_REASONING_EFFORT,
   OPENAI_ANALYSIS_TOOL,
 } from "../openai-intelligence.js";
 
@@ -1313,7 +1313,7 @@ async function executeLocalOrGeneration(
           request: {
             provider: "openai",
             model: INTELLIGENCE_MODEL,
-            reasoning: { effort: INTELLIGENCE_REASONING_EFFORT },
+            reasoning: { effort: ANALYSIS_REASONING_EFFORT },
             mode: "fixture",
             prompt: cell.prompt ?? "",
           },
@@ -1341,6 +1341,12 @@ async function executeLocalOrGeneration(
       sourceDurationSeconds: analysisRun.sourceDurationSeconds,
       request: analysisRun.request,
       sourceArtifactId: sourceId,
+      ...("evidence" in analysisRun
+        ? { evidence: analysisRun.evidence }
+        : {}),
+      ...("boundaries" in analysisRun
+        ? { boundaries: analysisRun.boundaries }
+        : {}),
     });
     const completedAnalysis = next.cells.find((candidate) =>
       candidate.id === cell.id);

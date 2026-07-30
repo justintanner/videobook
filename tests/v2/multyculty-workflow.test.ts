@@ -10,6 +10,7 @@ import {
 } from "videobook-engine";
 import { FFMPEG } from "../../server/src/ffmpeg.js";
 import {
+  MULTYCULTY_FIXTURE_VERSION,
   seedMultycultyWorkflow,
 } from "../../server/src/multyculty-workflow.js";
 import { applyAnalysisResults } from "../../server/src/notebook-workflow.js";
@@ -69,8 +70,12 @@ describe("Multyculty workflow fixture", () => {
     const sourcePath = join(mediaDir, "source.mp4");
     await execFileAsync(FFMPEG, [
       "-y",
-      "-f", "lavfi", "-i", "color=c=0x10261b:s=160x90:r=6:d=30",
+      "-f", "lavfi", "-i", "color=c=0x10261b:s=160x90:r=6:d=15",
+      "-f", "lavfi", "-i", "color=c=0x274b3a:s=160x90:r=6:d=15",
       "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=30",
+      "-filter_complex", "[0:v][1:v]concat=n=2:v=1:a=0[video]",
+      "-map", "[video]",
+      "-map", "2:a",
       "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
       "-c:a", "aac", "-shortest",
       sourcePath,
@@ -180,6 +185,7 @@ describe("Multyculty workflow fixture", () => {
     expect(first.cells.filter((cell) => cell.operation === "concat_video")).toHaveLength(1);
     expect(first.cells.every((cell) => cell.outputArtifactId)).toBe(true);
     expect(first.fixture).toEqual(expect.objectContaining({
+      version: MULTYCULTY_FIXTURE_VERSION,
       materializedAt: expect.any(String),
       noPaidCalls: true,
     }));
@@ -187,10 +193,50 @@ describe("Multyculty workflow fixture", () => {
     expect(source?.slot).toEqual({ row: 0, column: 0 });
     expect(sourceExtractAudio?.slot).toEqual({ row: 0, column: 1 });
     expect(analysis?.slot).toEqual({ row: 1, column: 0 });
-    expect(analysis?.prompt).toContain("two continuous 15-second");
+    expect(analysis?.prompt).toContain("verified camera switches");
     expect(analysis?.inputs?.fixtureOwner).toBe("multyculty-default");
     expect(analysis?.inputs).not.toHaveProperty("fixtureAnalysis");
     expect(analysis?.inputs).not.toHaveProperty("analysisFixture");
+    expect(analysis?.outputArtifactId).toBeTruthy();
+    if (!analysis?.outputArtifactId) return;
+    const analysisArtifact = await engine.files.read(
+      analysis.outputArtifactId,
+      "analysis.json",
+    );
+    expect(analysisArtifact.ok).toBe(true);
+    if (!analysisArtifact.ok) return;
+    const savedAnalysis = JSON.parse(analysisArtifact.value.toString()) as {
+      version: number;
+      request: Record<string, unknown>;
+      evidence: {
+        visualCandidates: unknown[];
+        visualDecisions: unknown[];
+      };
+      boundaries: Array<Record<string, unknown>>;
+    };
+    expect(savedAnalysis).toMatchObject({
+      version: 3,
+      request: {
+        mode: "multyculty-fixture",
+        pipelineVersion: 3,
+      },
+      evidence: {
+        visualCandidates: [expect.objectContaining({
+          id: "visual-001",
+          timestampSeconds: 15,
+        })],
+        visualDecisions: [expect.objectContaining({
+          candidateId: "visual-001",
+          cameraSwitch: true,
+          accepted: true,
+        })],
+      },
+    });
+    expect(savedAnalysis.boundaries).toEqual([
+      expect.objectContaining({ kind: "source_start", timestampSeconds: 0 }),
+      expect.objectContaining({ kind: "camera_cut", timestampSeconds: 15 }),
+      expect.objectContaining({ kind: "source_end", timestampSeconds: 30 }),
+    ]);
     expect(audio?.slot).toEqual({ row: 1, column: 1 });
     const featureColumns = [-2, 2];
     for (let ordinal = 1; ordinal <= 2; ordinal += 1) {

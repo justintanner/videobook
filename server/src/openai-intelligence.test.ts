@@ -72,6 +72,18 @@ describe("intelligenceRequest", () => {
       expect.objectContaining({ role: "user" }),
     ]));
   });
+
+  it("supports a high-reasoning override without changing the shared default", () => {
+    expect(intelligenceRequest(
+      { input: "Verify camera cuts." },
+      { reasoningEffort: "high" },
+    )).toMatchObject({
+      model: "gpt-5.6-sol",
+      reasoning: { effort: "high" },
+      store: false,
+    });
+    expect(INTELLIGENCE_REASONING_EFFORT).toBe("medium");
+  });
 });
 
 describe("buildIntelligenceResponses", () => {
@@ -102,6 +114,29 @@ describe("buildIntelligenceResponses", () => {
     expect(captured?.store).toBe(false);
     expect(captured).not.toHaveProperty("temperature");
     expect(captured).not.toHaveProperty("top_p");
+  });
+
+  it("preserves a supported reasoning override through the provider wrapper", async () => {
+    let captured: OpenAiResponseRequest | undefined;
+    const doFetch = (async (_input, init) => {
+      captured = JSON.parse(String(init?.body)) as OpenAiResponseRequest;
+      return new Response(JSON.stringify(response()), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+    const responses = buildIntelligenceResponses("test-key", {
+      fetch: doFetch,
+      retries: 0,
+      timeout: 1_000,
+    });
+
+    await responses(intelligenceRequest(
+      { input: "Verify camera cuts." },
+      { reasoningEffort: "high" },
+    ));
+
+    expect(captured?.reasoning).toEqual({ effort: "high" });
   });
 
   it("honors an external abort signal", async () => {
