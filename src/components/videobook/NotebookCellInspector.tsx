@@ -25,6 +25,7 @@ import {
   notebookOutputVersionArtifactIds,
   type NotebookAnalysisInfo,
   type NotebookAnalysisLlmExchange,
+  type NotebookAnalysisResponseFormat,
   type NotebookAudioInfo,
 } from '@/videobook/notebook-cell-presentation'
 import {
@@ -884,6 +885,17 @@ function analysisStageLabel(stage: string): string {
     .replaceAll('_', ' ')
 }
 
+function analysisResponseFormatLabel(
+  format: NotebookAnalysisResponseFormat,
+): string {
+  if (format.type === 'json_schema') {
+    return format.strict ? 'Strict JSON schema' : 'JSON schema'
+  }
+  if (format.type === 'json_object') return 'JSON object'
+  if (format.type === 'text') return 'Text'
+  return format.type.replaceAll('_', ' ')
+}
+
 function AnalysisLlmExchanges({
   analysisInfo,
 }: {
@@ -976,6 +988,20 @@ function AnalysisLlmExchanges({
                   <dt>Model</dt>
                   <dd>{exchange.model}</dd>
                 </div>
+                {exchange.responseFormat && (
+                  <div className="inspector-analysis-llm-format">
+                    <dt>Response format</dt>
+                    <dd>
+                      <span>
+                        <Braces size={11} aria-hidden="true" />
+                        {analysisResponseFormatLabel(exchange.responseFormat)}
+                      </span>
+                      {exchange.responseFormat.name && (
+                        <code>{exchange.responseFormat.name}</code>
+                      )}
+                    </dd>
+                  </div>
+                )}
               </dl>
               {!exchange.complete && (
                 <p className="inspector-analysis-llm-incomplete">

@@ -262,6 +262,11 @@ describe('NotebookCellInspector', () => {
         llmExchanges: [{
           provider: 'openai',
           model: 'gpt-5.6-sol',
+          responseFormat: {
+            name: 'notebook_shot_labels',
+            strict: true,
+            type: 'json_schema',
+          },
           stage: 'notebook_shot_labels',
         }],
         shots: [
@@ -320,6 +325,9 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('<strong>shot labels</strong>')
     expect(html).toContain('<dt>Provider</dt><dd>openai</dd>')
     expect(html).toContain('<dt>Model</dt><dd>gpt-5.6-sol</dd>')
+    expect(html).toContain('<dt>Response format</dt>')
+    expect(html).toContain('Strict JSON schema')
+    expect(html).toContain('<code>notebook_shot_labels</code>')
     expect(html).toContain('<span>LLM input</span>')
     expect(html).toContain('<span>LLM response</span>')
     expect(html).not.toContain('legacy')

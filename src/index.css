@@ -2699,6 +2699,36 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+.inspector-analysis-llm-meta .inspector-analysis-llm-format {
+  grid-column: 1 / -1;
+  border-top: 1px solid rgba(114, 231, 170, 0.1);
+  border-left: 0;
+}
+
+.inspector-analysis-llm-format dd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: normal;
+}
+
+.inspector-analysis-llm-format dd span {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  color: #9bf4b9;
+}
+
+.inspector-analysis-llm-format dd code {
+  overflow: hidden;
+  color: #719d82;
+  font-family: inherit;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .inspector-analysis-llm-incomplete {
   margin: 0;
   padding: 9px 10px;

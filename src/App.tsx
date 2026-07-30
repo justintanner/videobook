@@ -731,8 +731,23 @@ function asAsset(value: unknown): AssetRecord | null {
         const provider = exchange && asString(exchange.provider)
         const model = exchange && asString(exchange.model)
         const stage = exchange && asString(exchange.stage)
+        const responseFormatValue = exchange
+          && record(exchange.response_format ?? exchange.responseFormat)
+        const responseFormatType = responseFormatValue
+          && asString(responseFormatValue.type)
         return provider && model && stage
-          ? [{ provider, model, stage }]
+          ? [{
+              provider,
+              model,
+              responseFormat: responseFormatType
+                ? {
+                    name: asString(responseFormatValue?.name),
+                    strict: responseFormatValue?.strict === true,
+                    type: responseFormatType,
+                  }
+                : null,
+              stage,
+            }]
           : []
       })
     : []

@@ -90,7 +90,14 @@ export type NotebookAnalysisInfo = {
 export type NotebookAnalysisLlmExchangeSummary = {
   model: string
   provider: string
+  responseFormat?: NotebookAnalysisResponseFormat | null
   stage: string
+}
+
+export type NotebookAnalysisResponseFormat = {
+  name: string | null
+  strict: boolean
+  type: string
 }
 
 export type NotebookAnalysisLlmExchange = {
@@ -99,6 +106,7 @@ export type NotebookAnalysisLlmExchange = {
   model: string
   provider: string
   response: unknown
+  responseFormat: NotebookAnalysisResponseFormat | null
   stage: string
 }
 
@@ -306,6 +314,21 @@ export function notebookOutputVersionArtifactIds(
   ])]
 }
 
+export function notebookAnalysisResponseFormat(
+  input: unknown,
+): NotebookAnalysisResponseFormat | null {
+  const request = objectValue(input)
+  const text = request && objectValue(request.text)
+  const format = text && objectValue(text.format)
+  const type = stringValue(format?.type)
+  if (!type) return null
+  return {
+    name: stringValue(format?.name),
+    strict: format?.strict === true,
+    type,
+  }
+}
+
 export function notebookAnalysisLlmExchanges(
   outputJson: unknown,
 ): NotebookAnalysisLlmExchange[] {
@@ -332,6 +355,7 @@ export function notebookAnalysisLlmExchanges(
         ?? 'Unknown',
       provider: stringValue(exchange.provider) ?? 'Unknown',
       response: exchange.response,
+      responseFormat: notebookAnalysisResponseFormat(exchange.input),
       stage: stringValue(exchange.stage) ?? `call_${index + 1}`,
     }]
   })
@@ -350,6 +374,7 @@ export function notebookAnalysisLlmExchanges(
     model: stringValue(request.model) ?? 'Unknown',
     provider: stringValue(request.provider) ?? 'Unknown',
     response: output.raw,
+    responseFormat: null,
     stage: 'legacy_analysis',
   }]
 }

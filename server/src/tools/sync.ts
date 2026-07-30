@@ -58,6 +58,11 @@ export type SyncAnalysisInfo = {
     provider: string;
     model: string;
     stage: string;
+    response_format: {
+      type: string;
+      name: string | null;
+      strict: boolean;
+    } | null;
   }>;
   shots: Array<{
     ordinal: number;
@@ -209,8 +214,35 @@ async function analysisOutputProjection(
           const stage = typeof exchange.stage === "string"
             ? exchange.stage
             : null;
+          const text = input
+            && typeof input.text === "object"
+            && input.text !== null
+            && !Array.isArray(input.text)
+            ? input.text as Record<string, unknown>
+            : null;
+          const format = text
+            && typeof text.format === "object"
+            && text.format !== null
+            && !Array.isArray(text.format)
+            ? text.format as Record<string, unknown>
+            : null;
+          const formatType = typeof format?.type === "string"
+            ? format.type
+            : null;
+          const responseFormat = formatType
+            ? {
+                type: formatType,
+                name: typeof format?.name === "string" ? format.name : null,
+                strict: format?.strict === true,
+              }
+            : null;
           return provider && model && stage
-            ? [{ provider, model, stage }]
+            ? [{
+                provider,
+                model,
+                stage,
+                response_format: responseFormat,
+              }]
             : [];
         })
       : [];

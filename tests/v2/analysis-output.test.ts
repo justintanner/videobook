@@ -66,6 +66,13 @@ describe("Analysis output assets", () => {
               image_url: "data:image/jpeg;base64,full-frame-data",
             }],
           }],
+          text: {
+            format: {
+              type: "json_schema",
+              name: "notebook_shot_labels",
+              strict: true,
+            },
+          },
         },
         response: {
           id: "resp-analysis",
@@ -118,6 +125,11 @@ describe("Analysis output assets", () => {
         provider: "openai",
         model: "gpt-5.6-sol",
         stage: "notebook_shot_labels",
+        response_format: {
+          type: "json_schema",
+          name: "notebook_shot_labels",
+          strict: true,
+        },
       }],
       shots: [{
         ordinal: 1,

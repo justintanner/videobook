@@ -77,6 +77,13 @@ describe("AnalysisCellSummary", () => {
     const input = {
       model: "gpt-5.6-sol",
       input: [{ role: "user", content: "Analyze this source." }],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "notebook_shot_labels",
+          strict: true,
+        },
+      },
     };
     const response = {
       id: "resp-analysis",
@@ -99,6 +106,11 @@ describe("AnalysisCellSummary", () => {
       stage: "notebook_shot_labels",
       input,
       response,
+      responseFormat: {
+        name: "notebook_shot_labels",
+        strict: true,
+        type: "json_schema",
+      },
     }]);
 
     expect(notebookAnalysisLlmExchanges({
@@ -119,6 +131,7 @@ describe("AnalysisCellSummary", () => {
         mode: "live",
       },
       response: { shots: [] },
+      responseFormat: null,
     }]);
   });
 });
