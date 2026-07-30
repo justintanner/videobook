@@ -1,9 +1,20 @@
-import type {
-  Engine,
-  NotebookCell,
-  NotebookDocument,
+import { mkdtemp, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  findVideoFile,
+  type Engine,
+  type NotebookCell,
+  type NotebookDocument,
 } from "videobook-engine";
+import type {
+  AnalysisBoundary,
+  NotebookAnalysisEvidence,
+  NotebookLiveAnalysis,
+} from "./notebook-live-analysis.js";
 import type { BookManager } from "./book-manager.js";
+import { runFfmpeg } from "./ffmpeg.js";
+import { formatTimestamp, generateTimestamps } from "./frame-utils.js";
 import {
   notebookCellFingerprint,
   runNotebookCell,
@@ -16,11 +27,7 @@ import {
   DEFAULT_ANALYSIS_PROMPT,
   MULTYCULTY_FEATURES,
 } from "./notebook-workflow.js";
-import type {
-  AnalysisBoundary,
-  NotebookAnalysisEvidence,
-  NotebookLiveAnalysis,
-} from "./notebook-live-analysis.js";
+import { sampleNotebookAnalysisFrames } from "./notebook-live-analysis.js";
 import { MULTYCULTY_FIXTURE_OWNER } from "./notebook-fixtures.js";
 import {
   ANALYSIS_REASONING_EFFORT,
@@ -33,7 +40,7 @@ type ArtifactRecord = {
   kind: string;
 };
 
-export const MULTYCULTY_FIXTURE_VERSION = 24;
+export const MULTYCULTY_FIXTURE_VERSION = 25;
 
 const MULTYCULTY_FIXTURE_ANALYSIS: NotebookLiveAnalysis["rawOutput"] = {
   shots: [
@@ -155,27 +162,27 @@ const ANIMATION_SLUGS = [
 
 const COMPACT_FIXTURE_SLOTS = new Map<string, NotebookCell["slot"]>([
   ["source", { row: 0, column: 0 }],
-  ["source-extract-audio", { row: 0, column: 1 }],
-  ["analysis", { row: 1, column: 0 }],
-  ["source-audio", { row: 1, column: 1 }],
-  ["analysis-output", { row: 2, column: 0 }],
-  ["split-video-1", { row: 2, column: -2 }],
-  ["split-video-2", { row: 2, column: 2 }],
-  ["scene-video-1", { row: 3, column: -2 }],
-  ["scene-video-2", { row: 3, column: 2 }],
-  ["frame-first-1", { row: 4, column: -3 }],
-  ["frame-last-1", { row: 4, column: -2 }],
-  ["scene-extract-audio-1", { row: 4, column: -1 }],
-  ["frame-first-2", { row: 4, column: 1 }],
-  ["frame-last-2", { row: 4, column: 2 }],
-  ["scene-extract-audio-2", { row: 4, column: 3 }],
-  ["scene-audio-1", { row: 5, column: -1 }],
-  ["scene-audio-2", { row: 5, column: 3 }],
-  ["prompt-1", { row: 5, column: -2 }],
-  ["prompt-2", { row: 5, column: 2 }],
-  ["animate-1", { row: 6, column: -2 }],
-  ["animate-2", { row: 6, column: 2 }],
-  ["assembly", { row: 7, column: 0 }],
+  ["analysis", { row: 1, column: -1 }],
+  ["source-extract-audio", { row: 1, column: 1 }],
+  ["analysis-output", { row: 2, column: -1 }],
+  ["source-audio", { row: 2, column: 1 }],
+  ["split-video-1", { row: 3, column: -2 }],
+  ["split-video-2", { row: 3, column: 2 }],
+  ["scene-video-1", { row: 4, column: -2 }],
+  ["scene-video-2", { row: 4, column: 2 }],
+  ["frame-first-1", { row: 5, column: -3 }],
+  ["frame-last-1", { row: 5, column: -2 }],
+  ["scene-extract-audio-1", { row: 5, column: -1 }],
+  ["frame-first-2", { row: 5, column: 1 }],
+  ["frame-last-2", { row: 5, column: 2 }],
+  ["scene-extract-audio-2", { row: 5, column: 3 }],
+  ["scene-audio-1", { row: 6, column: -1 }],
+  ["scene-audio-2", { row: 6, column: 3 }],
+  ["prompt-1", { row: 6, column: -2 }],
+  ["prompt-2", { row: 6, column: 2 }],
+  ["animate-1", { row: 7, column: -2 }],
+  ["animate-2", { row: 7, column: 2 }],
+  ["assembly", { row: 8, column: 0 }],
 ]);
 
 const COMPACT_FIXTURE_ROLES = new Set(COMPACT_FIXTURE_SLOTS.keys());
@@ -187,6 +194,77 @@ function requiredArtifact(
   const artifact = artifacts.find((candidate) => candidate.slug === slug);
   if (!artifact) throw new Error(`Multyculty fixture artifact is missing: ${slug}`);
   return artifact;
+}
+
+async function fixtureAnalysisFramesReady(
+  engine: Engine,
+  sourceArtifactId: string,
+): Promise<boolean> {
+  const listed = engine.files.listSubdir(
+    sourceArtifactId,
+    "original_frames",
+  );
+  if (!listed.ok) return false;
+  const frame = sampleNotebookAnalysisFrames(listed.value, 2)[0];
+  if (!frame) return false;
+  const read = await engine.files.read(
+    sourceArtifactId,
+    `original_frames/${frame.name}`,
+  );
+  return read.ok && read.value.length > 0;
+}
+
+async function ensureFixtureAnalysisFrames(
+  engine: Engine,
+  sourceArtifactId: string,
+  durationSeconds: number,
+): Promise<boolean> {
+  if (await fixtureAnalysisFramesReady(engine, sourceArtifactId)) return false;
+  const manifest = await engine.files.manifest(sourceArtifactId);
+  if (!manifest.ok) throw new Error(manifest.error.message);
+  const video = findVideoFile(manifest.value.files);
+  if (!video) {
+    throw new Error(`Multyculty source has no video file: ${sourceArtifactId}`);
+  }
+  const workspace = await mkdtemp(join(tmpdir(), "videobook-multyculty-frames-"));
+  let lastError: unknown;
+  try {
+    for (const timestamp of generateTimestamps(durationSeconds)) {
+      const name = `${formatTimestamp(timestamp)}.jpg`;
+      const framePath = join(workspace, name);
+      try {
+        await runFfmpeg([
+          "-y",
+          "-ss", String(timestamp),
+          "-i", join(manifest.value.path, video.name),
+          "-frames:v", "1",
+          "-q:v", "2",
+          framePath,
+        ]);
+      } catch (error) {
+        lastError = error;
+        continue;
+      }
+      const output = await stat(framePath).catch(() => null);
+      if (!output || output.size === 0) {
+        lastError = new Error(`No frame at ${timestamp} seconds`);
+        continue;
+      }
+      const written = await engine.files.writeFromPath(
+        sourceArtifactId,
+        `original_frames/${name}`,
+        framePath,
+      );
+      if (!written.ok) throw new Error(written.error.message);
+    }
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+  if (!await fixtureAnalysisFramesReady(engine, sourceArtifactId)) {
+    const detail = lastError instanceof Error ? `: ${lastError.message}` : "";
+    throw new Error(`Multyculty source frame extraction failed${detail}`);
+  }
+  return true;
 }
 
 function roleOf(cell: NotebookCell): string | null {
@@ -576,6 +654,9 @@ export async function seedMultycultyWorkflow(
     candidate.name.toLowerCase() === "multyculty")
     ?? engine.notebooks.list()[0];
   if (!notebook) throw new Error("The Multyculty book has no notebook");
+  const artifacts = engine.artifacts.list() as ArtifactRecord[];
+  const sourceArtifact = requiredArtifact(artifacts, "vid-source-selection");
+  await ensureFixtureAnalysisFrames(engine, sourceArtifact.artifactId, 30);
   if (isCurrentFixture(notebook)) {
     const runnable = withoutRunnableAnalysisFixture(notebook);
     const persisted = runnable === notebook
@@ -591,8 +672,6 @@ export async function seedMultycultyWorkflow(
     return persisted;
   }
 
-  const artifacts = engine.artifacts.list() as ArtifactRecord[];
-  const sourceArtifact = requiredArtifact(artifacts, "vid-source-selection");
   const streams = engine.streams.list(sourceArtifact.artifactId);
   if (!streams.ok) throw new Error(streams.error.message);
   const sourceAudio = streams.value.find((stream) => stream.kind === "audio");
@@ -749,9 +828,14 @@ export async function ensureMultycultyWorkflow(
     artifact.slug === "vid-source-selection");
   if (!source) return { status: "skipped" };
   const fixture = fixtureRecord(notebook);
+  const analysisFramesReady = await fixtureAnalysisFramesReady(
+    selected.value.engine,
+    source.artifactId,
+  );
   if (
     isCurrentFixture(notebook)
     && !hasRunnableAnalysisFixture(notebook)
+    && analysisFramesReady
     && (
       !options.materializeLocalOutputs
       || typeof fixture?.materializedAt === "string"

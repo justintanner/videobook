@@ -121,7 +121,15 @@ describe("Multyculty workflow fixture", () => {
     });
     expect(stream.ok).toBe(true);
 
+    expect(engine.files.listSubdir(sourceId, "original_frames"))
+      .toEqual({ ok: true, value: [] });
     const seeded = await seedMultycultyWorkflow(engine);
+    const sourceFrames = engine.files.listSubdir(sourceId, "original_frames");
+    expect(sourceFrames.ok).toBe(true);
+    if (!sourceFrames.ok) return;
+    expect(sourceFrames.value.length).toBeGreaterThan(1);
+    expect(sourceFrames.value.every((name) =>
+      /^\d+\.\d{2}\.jpg$/.test(name))).toBe(true);
     const interrupted = await engine.notebooks.write({
       ...seeded,
       cells: seeded.cells.map((cell) =>
@@ -191,8 +199,9 @@ describe("Multyculty workflow fixture", () => {
     }));
     expect(source?.outputArtifactId).toBe(sourceId);
     expect(source?.slot).toEqual({ row: 0, column: 0 });
-    expect(sourceExtractAudio?.slot).toEqual({ row: 0, column: 1 });
-    expect(analysis?.slot).toEqual({ row: 1, column: 0 });
+    expect(analysis?.slot).toEqual({ row: 1, column: -1 });
+    expect(sourceExtractAudio?.slot).toEqual({ row: 1, column: 1 });
+    expect(analysisOutput?.slot).toEqual({ row: 2, column: -1 });
     expect(analysis?.prompt).toContain("verified camera switches");
     expect(analysis?.inputs?.fixtureOwner).toBe("multyculty-default");
     expect(analysis?.inputs).not.toHaveProperty("fixtureAnalysis");
@@ -261,36 +270,36 @@ describe("Multyculty workflow fixture", () => {
       expect.objectContaining({ kind: "camera_cut", timestampSeconds: 15 }),
       expect.objectContaining({ kind: "source_end", timestampSeconds: 30 }),
     ]);
-    expect(audio?.slot).toEqual({ row: 1, column: 1 });
+    expect(audio?.slot).toEqual({ row: 2, column: 1 });
     const featureColumns = [-2, 2];
     for (let ordinal = 1; ordinal <= 2; ordinal += 1) {
       const column = featureColumns[ordinal - 1];
       expect(first.cells.find((cell) =>
         cell.inputs?.workflowRole === `split-video-${ordinal}`)?.slot)
-        .toEqual({ row: 2, column });
-      expect(first.cells.find((cell) =>
-        cell.inputs?.workflowRole === `scene-video-${ordinal}`)?.slot)
         .toEqual({ row: 3, column });
       expect(first.cells.find((cell) =>
-        cell.inputs?.workflowRole === `frame-first-${ordinal}`)?.slot)
-        .toEqual({ row: 4, column: column - 1 });
-      expect(first.cells.find((cell) =>
-        cell.inputs?.workflowRole === `frame-last-${ordinal}`)?.slot)
+        cell.inputs?.workflowRole === `scene-video-${ordinal}`)?.slot)
         .toEqual({ row: 4, column });
       expect(first.cells.find((cell) =>
-        cell.inputs?.workflowRole === `scene-extract-audio-${ordinal}`)?.slot)
-        .toEqual({ row: 4, column: column + 1 });
+        cell.inputs?.workflowRole === `frame-first-${ordinal}`)?.slot)
+        .toEqual({ row: 5, column: column - 1 });
       expect(first.cells.find((cell) =>
-        cell.inputs?.workflowRole === `scene-audio-${ordinal}`)?.slot)
-        .toEqual({ row: 5, column: column + 1 });
-      expect(first.cells.find((cell) =>
-        cell.inputs?.workflowRole === `prompt-${ordinal}`)?.slot)
+        cell.inputs?.workflowRole === `frame-last-${ordinal}`)?.slot)
         .toEqual({ row: 5, column });
       expect(first.cells.find((cell) =>
-        cell.inputs?.workflowRole === `animate-${ordinal}`)?.slot)
+        cell.inputs?.workflowRole === `scene-extract-audio-${ordinal}`)?.slot)
+        .toEqual({ row: 5, column: column + 1 });
+      expect(first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `scene-audio-${ordinal}`)?.slot)
+        .toEqual({ row: 6, column: column + 1 });
+      expect(first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `prompt-${ordinal}`)?.slot)
         .toEqual({ row: 6, column });
+      expect(first.cells.find((cell) =>
+        cell.inputs?.workflowRole === `animate-${ordinal}`)?.slot)
+        .toEqual({ row: 7, column });
     }
-    expect(assembly?.slot).toEqual({ row: 7, column: 0 });
+    expect(assembly?.slot).toEqual({ row: 8, column: 0 });
     expect(assembly?.slug).toBe("concat-scenes");
     expect(first.cells.filter((cell) => cell.operation === "rewrite_prompt").every((cell) =>
       cell.inputs?.requiresConfirmation === true)).toBe(true);
@@ -386,7 +395,7 @@ describe("Multyculty workflow fixture", () => {
     const manual = engine.notebooks.createCell({
       type: "prompt",
       slug: "prompt-manual-note",
-      slot: { row: 8, column: 0 },
+      slot: { row: 9, column: 0 },
     });
     const legacyWritten = await engine.notebooks.write({
       ...first,
@@ -448,5 +457,7 @@ describe("Multyculty workflow fixture", () => {
     expect(second.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(2);
     expect(second.cells.find((cell) => cell.inputs?.workflowRole === "source")?.id)
       .not.toBe(source?.id);
+    expect(engine.files.listSubdir(sourceId, "original_frames"))
+      .toEqual(sourceFrames);
   }, 90_000);
 });
