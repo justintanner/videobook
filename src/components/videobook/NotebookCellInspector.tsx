@@ -7,7 +7,6 @@ import {
   Maximize2,
   Pencil,
   Save,
-  Trash2,
   X,
 } from 'lucide-react'
 import { Fragment, useEffect, useRef, useState } from 'react'
@@ -568,32 +567,38 @@ function SlugField({
   )
 }
 
-function ClearSlotButton({
+function InspectorClearButton({
+  className,
+  label,
+  pendingLabel,
   busy,
-  canClear,
-  clearing,
-  onClearSlot,
+  pending,
+  disabled = false,
+  onClear,
 }: {
+  className: string
+  label: string
+  pendingLabel: string
   busy: boolean
-  canClear: boolean
-  clearing: boolean
-  onClearSlot: () => Promise<void>
+  pending: boolean
+  disabled?: boolean
+  onClear: () => Promise<void>
 }) {
   return (
     <button
       type="button"
-      className="inspector-clear-slot-button"
-      aria-busy={clearing}
-      onClick={() => void onClearSlot()}
-      disabled={busy || clearing || !canClear}
+      className={className}
+      aria-busy={pending}
+      onClick={() => void onClear()}
+      disabled={busy || pending || disabled}
     >
       <CircleX size={13} />
-      <span>{clearing ? 'Clearing…' : 'Clear slot'}</span>
+      <span>{pending ? pendingLabel : label}</span>
     </button>
   )
 }
 
-function DeleteCellButton({
+function ClearCellButton({
   busy,
   deleting,
   onDelete,
@@ -603,16 +608,14 @@ function DeleteCellButton({
   onDelete: () => Promise<void>
 }) {
   return (
-    <button
-      type="button"
-      className="danger-button inspector-delete-button"
-      aria-busy={deleting}
-      onClick={() => void onDelete()}
-      disabled={busy}
-    >
-      <Trash2 size={13} />
-      <span>{deleting ? 'Deleting…' : 'Delete cell'}</span>
-    </button>
+    <InspectorClearButton
+      className="danger-button inspector-clear-cell-button"
+      label="Clear cell"
+      pendingLabel="Clearing…"
+      busy={busy}
+      pending={deleting}
+      onClear={onDelete}
+    />
   )
 }
 
@@ -790,16 +793,19 @@ function MediaCellInspector({
           onSetInput={onSetInput}
         />
         <section
-          className="inspector-cell-actions inspector-media-actions"
+          className="inspector-cell-actions inspector-compact-actions"
           aria-label="Cell actions"
         >
-          <ClearSlotButton
+          <InspectorClearButton
+            className="inspector-clear-slot-button"
+            label="Clear slot"
+            pendingLabel="Clearing…"
             busy={busy}
-            canClear={canClear}
-            clearing={clearing}
-            onClearSlot={onClearSlot}
+            pending={clearing}
+            disabled={!canClear}
+            onClear={onClearSlot}
           />
-          <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
+          <ClearCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
         </section>
       </div>
     </div>
@@ -874,6 +880,7 @@ function AnalysisJsonDisclosure({
 function analysisStageLabel(stage: string): string {
   return stage
     .replace(/^notebook_/, '')
+    .replace(/^legacy_/, '')
     .replaceAll('_', ' ')
 }
 
@@ -971,7 +978,7 @@ function AnalysisLlmExchanges({
                 </div>
               </dl>
               {!exchange.complete && (
-                <p className="inspector-analysis-llm-legacy">
+                <p className="inspector-analysis-llm-incomplete">
                   This older run retained summary payloads only. Re-run the
                   Analyze cell to record the complete provider exchange.
                 </p>
@@ -1066,7 +1073,6 @@ function AnalysisCellInspector({
     <div className="inspector-body inspector-analysis-body">
       <div className="inspector-analysis-content">
         <SlugField cell={cell} busy={busy} onUpdate={onUpdate} />
-        <span className="inspector-media-field-label">ANALYSIS</span>
         {artifactIds.length > 1 && (
           <OutputVersionSelector
             artifactIds={artifactIds}
@@ -1086,16 +1092,6 @@ function AnalysisCellInspector({
         )}
         {info ? (
           <>
-            <dl className="inspector-analysis-summary">
-              <div>
-                <dt>Shots</dt>
-                <dd>{shots.length}</dd>
-              </div>
-              <div>
-                <dt>Source duration</dt>
-                <dd>{formatMediaTime(info.sourceDurationSeconds)}</dd>
-              </div>
-            </dl>
             <AnalysisLlmExchanges
               key={effectiveArtifactId}
               analysisInfo={info}
@@ -1126,8 +1122,11 @@ function AnalysisCellInspector({
             <p>Run the connected Analyze cell to populate normalized shots.</p>
           </div>
         )}
-        <section className="inspector-cell-actions" aria-label="Cell actions">
-          <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
+        <section
+          className="inspector-cell-actions inspector-compact-actions"
+          aria-label="Cell actions"
+        >
+          <ClearCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
         </section>
       </div>
     </div>
@@ -1429,7 +1428,7 @@ function ExecutableCellInspector({
             {saveOnRun && saving ? 'Applying…' : runLabel}
           </button>
         )}
-        <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
+        <ClearCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
       </section>
     </div>
   )

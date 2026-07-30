@@ -22,6 +22,10 @@ import type {
   NotebookLiveAnalysis,
 } from "./notebook-live-analysis.js";
 import { MULTYCULTY_FIXTURE_OWNER } from "./notebook-fixtures.js";
+import {
+  ANALYSIS_REASONING_EFFORT,
+  INTELLIGENCE_MODEL,
+} from "./openai-intelligence.js";
 
 type ArtifactRecord = {
   artifactId: string;
@@ -29,7 +33,7 @@ type ArtifactRecord = {
   kind: string;
 };
 
-export const MULTYCULTY_FIXTURE_VERSION = 23;
+export const MULTYCULTY_FIXTURE_VERSION = 24;
 
 const MULTYCULTY_FIXTURE_ANALYSIS: NotebookLiveAnalysis["rawOutput"] = {
   shots: [
@@ -47,6 +51,48 @@ const MULTYCULTY_FIXTURE_ANALYSIS: NotebookLiveAnalysis["rawOutput"] = {
     },
   ],
 };
+
+const MULTYCULTY_FIXTURE_LLM_EXCHANGES: NotebookLiveAnalysis["llmExchanges"] = [{
+  provider: "openai",
+  model: INTELLIGENCE_MODEL,
+  stage: "notebook_shot_labels",
+  input: {
+    model: INTELLIGENCE_MODEL,
+    reasoning: { effort: ANALYSIS_REASONING_EFFORT },
+    store: false,
+    instructions: "Return one concise label and prompt for every supplied shot.",
+    input: [{
+      role: "user",
+      content: [{
+        type: "input_text",
+        text: [
+          DEFAULT_ANALYSIS_PROMPT,
+          "Source duration: 30 seconds.",
+          "Verified boundaries: 0 seconds, 15 seconds, 30 seconds.",
+          "Shot 1 opens on the presenter; shot 2 is the follow-up discussion beat.",
+        ].join("\n"),
+      }],
+    }],
+  },
+  response: {
+    id: "resp_multyculty_analysis_fixture",
+    object: "response",
+    created_at: 1,
+    status: "completed",
+    model: INTELLIGENCE_MODEL,
+    output: [{
+      type: "message",
+      id: "msg_multyculty_analysis_fixture",
+      role: "assistant",
+      status: "completed",
+      content: [{
+        type: "output_text",
+        text: JSON.stringify(MULTYCULTY_FIXTURE_ANALYSIS),
+        annotations: [],
+      }],
+    }],
+  },
+}];
 
 const MULTYCULTY_FIXTURE_EVIDENCE: NotebookAnalysisEvidence = {
   visualCandidates: [{
@@ -624,8 +670,9 @@ export async function seedMultycultyWorkflow(
       sourceDurationSeconds: 30,
       request: {
         mode: "multyculty-fixture",
-        provider: "fixture",
-        model: "precomputed",
+        provider: "openai",
+        model: INTELLIGENCE_MODEL,
+        reasoning: { effort: ANALYSIS_REASONING_EFFORT },
         pipelineVersion: 3,
         stages: [
           "visual_candidate_detection",
@@ -635,6 +682,7 @@ export async function seedMultycultyWorkflow(
         ],
       },
       sourceArtifactId: sourceArtifact.artifactId,
+      llmExchanges: MULTYCULTY_FIXTURE_LLM_EXCHANGES,
       evidence: MULTYCULTY_FIXTURE_EVIDENCE,
       boundaries: MULTYCULTY_FIXTURE_BOUNDARIES,
     },

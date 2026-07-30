@@ -82,18 +82,18 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('Dolt source')
     expect(html).toContain('inspector-clear-slot-button')
     expect(html).toContain('Clear slot')
-    expect(html).toContain('inspector-delete-button')
-    expect(html).toContain('Delete cell')
+    expect(html).toContain('inspector-clear-cell-button')
+    expect(html).toContain('Clear cell')
     expect(html).not.toContain('completed')
     expect(html).toContain(
-      'class="inspector-cell-actions inspector-media-actions" aria-label="Cell actions"',
+      'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell actions"',
     )
     expect(html).not.toContain('record-card-actions inspector-media-actions')
     expect(html.indexOf('<h3>Inputs</h3>')).toBeLessThan(
-      html.indexOf('class="inspector-cell-actions inspector-media-actions"'),
+      html.indexOf('class="inspector-cell-actions inspector-compact-actions"'),
     )
     expect(html).toMatch(
-      /inspector-clear-slot-button[\s\S]*<\/button><button[^>]*inspector-delete-button/,
+      /inspector-clear-slot-button[\s\S]*<\/button><button[^>]*inspector-clear-cell-button/,
     )
   })
 
@@ -313,8 +313,8 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('aria-label="Analysis versions"')
     expect(html).toContain('aria-label="Analysis version"')
     expect(html).toContain('Version 2 of 2 · current')
-    expect(html).toContain('<dt>Shots</dt><dd>2</dd>')
-    expect(html).toContain('<dt>Source duration</dt><dd>0:16</dd>')
+    expect(html).not.toContain('inspector-analysis-summary')
+    expect(html).not.toContain('inspector-media-field-label">ANALYSIS')
     expect(html).toContain('aria-label="LLM exchanges"')
     expect(html).toContain('<code>1 call</code>')
     expect(html).toContain('<strong>shot labels</strong>')
@@ -322,12 +322,17 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('<dt>Model</dt><dd>gpt-5.6-sol</dd>')
     expect(html).toContain('<span>LLM input</span>')
     expect(html).toContain('<span>LLM response</span>')
+    expect(html).not.toContain('legacy')
     expect(html).not.toContain('resp-analysis')
     expect(html.indexOf('Opening shot')).toBeLessThan(
       html.indexOf('Second shot'),
     )
     expect(html).not.toContain('RichJson')
     expect(html).not.toContain('Restore')
+    expect(html).toContain(
+      'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell actions"',
+    )
+    expect(html).toContain('Clear cell')
   })
 
   it('keeps inputs visible beneath a compact pending preview', () => {
@@ -363,11 +368,11 @@ describe('NotebookCellInspector', () => {
       html.indexOf('<h3>Inputs</h3>'),
     )
     expect(html).toContain('inspector-clear-slot-button')
-    expect(html).toContain('inspector-delete-button')
+    expect(html).toContain('inspector-clear-cell-button')
     expect(html).toContain('disabled=""')
   })
 
-  it('shows passive cell deletion progress', () => {
+  it('shows passive cell clearing progress', () => {
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell,
@@ -389,8 +394,8 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain('aria-busy="true"')
-    expect(html).toContain('Deleting…')
-    expect(html).toContain('inspector-delete-button')
+    expect(html).toContain('Clearing…')
+    expect(html).toContain('inspector-clear-cell-button')
   })
 
   it('renders action cells with one save-and-run control', () => {
@@ -476,8 +481,8 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('End seconds')
     expect(html).toContain('value="30"')
     expect(html).toContain('Split again')
-    expect(html).toContain('Delete cell')
-    expect(html.indexOf('Split again')).toBeLessThan(html.indexOf('Delete cell'))
+    expect(html).toContain('Clear cell')
+    expect(html.indexOf('Split again')).toBeLessThan(html.indexOf('Clear cell'))
     expect(html).not.toContain('completed')
     expect(html).not.toContain('inspector-run-error')
   })
@@ -799,7 +804,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('aria-label="inputs_json JSON"')
     expect(html).toContain('class="json-key"')
     expect(html).toContain('<code class="dolt-null">NULL</code>')
-    expect(html).not.toContain('inspector-delete-button')
+    expect(html).not.toContain('inspector-clear-cell-button')
     expect(html).not.toContain('class="inspector-slug-field"')
     expect(html).not.toContain('Clear slot')
   })
@@ -832,8 +837,8 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain('class="inspector-slug-field"')
-    expect(html).toContain('inspector-delete-button')
-    expect(html).toContain('Delete cell')
+    expect(html).toContain('inspector-clear-cell-button')
+    expect(html).toContain('Clear cell')
     expect(html).toContain('class="inspector-save-button" disabled=""')
     expect(html).toContain(
       'class="inspector-cell-actions" aria-label="Cell actions"',

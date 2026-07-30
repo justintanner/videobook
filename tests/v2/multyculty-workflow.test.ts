@@ -208,6 +208,13 @@ describe("Multyculty workflow fixture", () => {
     const savedAnalysis = JSON.parse(analysisArtifact.value.toString()) as {
       version: number;
       request: Record<string, unknown>;
+      llmExchanges: Array<{
+        provider: string;
+        model: string;
+        stage: string;
+        input: Record<string, unknown>;
+        response: Record<string, unknown>;
+      }>;
       evidence: {
         visualCandidates: unknown[];
         visualDecisions: unknown[];
@@ -218,6 +225,8 @@ describe("Multyculty workflow fixture", () => {
       version: 3,
       request: {
         mode: "multyculty-fixture",
+        provider: "openai",
+        model: "gpt-5.6-sol",
         pipelineVersion: 3,
       },
       evidence: {
@@ -232,6 +241,21 @@ describe("Multyculty workflow fixture", () => {
         })],
       },
     });
+    expect(savedAnalysis.llmExchanges).toEqual([
+      expect.objectContaining({
+        provider: "openai",
+        model: "gpt-5.6-sol",
+        stage: "notebook_shot_labels",
+        input: expect.objectContaining({
+          model: "gpt-5.6-sol",
+          store: false,
+        }),
+        response: expect.objectContaining({
+          status: "completed",
+          model: "gpt-5.6-sol",
+        }),
+      }),
+    ]);
     expect(savedAnalysis.boundaries).toEqual([
       expect.objectContaining({ kind: "source_start", timestampSeconds: 0 }),
       expect.objectContaining({ kind: "camera_cut", timestampSeconds: 15 }),

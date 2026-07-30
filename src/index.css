@@ -2597,38 +2597,17 @@ textarea:focus-visible {
 
 .inspector-analysis-body {
   overflow: auto;
+  padding: 0;
 }
 
 .inspector-analysis-content {
   display: grid;
   gap: 12px;
-  padding: 16px;
+  padding: 18px 22px 28px;
 }
 
-.inspector-analysis-summary {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin: 0;
-}
-
-.inspector-analysis-summary div {
-  padding: 10px;
-  border: 1px solid var(--line);
-  background: rgba(4, 18, 11, 0.72);
-}
-
-.inspector-analysis-summary dt {
-  color: #789e87;
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.inspector-analysis-summary dd {
-  margin: 5px 0 0;
-  color: #bfe9d0;
-  font-size: 13px;
+.inspector-analysis-content .inspector-slug-field {
+  margin-top: 0;
 }
 
 .inspector-analysis-llm {
@@ -2720,7 +2699,7 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.inspector-analysis-llm-legacy {
+.inspector-analysis-llm-incomplete {
   margin: 0;
   padding: 9px 10px;
   border-top: 1px solid rgba(114, 231, 170, 0.1);
@@ -2977,7 +2956,7 @@ textarea:focus-visible {
   line-height: 1.65;
 }
 
-.inspector-media-actions {
+.inspector-compact-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -2985,7 +2964,7 @@ textarea:focus-visible {
   padding: 14px 0 8px;
 }
 
-.inspector-cell-actions.inspector-media-actions > button {
+.inspector-cell-actions.inspector-compact-actions > button {
   flex: 0 0 auto;
   width: auto;
   min-height: 32px;
@@ -3027,7 +3006,7 @@ textarea:focus-visible {
   opacity: 0.44;
 }
 
-.inspector-delete-button {
+.inspector-clear-cell-button {
   gap: 7px;
   border-color: rgba(177, 116, 116, 0.28);
   color: #a77d7d;
@@ -3039,18 +3018,18 @@ textarea:focus-visible {
     transform 100ms ease;
 }
 
-.inspector-delete-button:hover:not(:disabled),
-.inspector-delete-button:focus-visible:not(:disabled) {
+.inspector-clear-cell-button:hover:not(:disabled),
+.inspector-clear-cell-button:focus-visible:not(:disabled) {
   border-color: rgba(198, 130, 130, 0.46);
   color: #c69595;
   background: rgba(112, 51, 51, 0.16);
 }
 
-.inspector-delete-button:active:not(:disabled) {
+.inspector-clear-cell-button:active:not(:disabled) {
   transform: translateY(1px);
 }
 
-.inspector-delete-button:disabled {
+.inspector-clear-cell-button:disabled {
   cursor: wait;
   opacity: 0.54;
 }
