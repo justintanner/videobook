@@ -1,4 +1,3 @@
-import { LoaderCircle } from 'lucide-react'
 import { notebookCellIsActiveStatus } from '@/videobook/notebook-cell-presentation'
 
 function runningStatusLabel(status: string): string {
@@ -25,9 +24,7 @@ export function CellRunningOverlay({
       aria-label={`@${slug} ${runningStatusLabel(status).toLowerCase()}`}
       aria-live="polite"
     >
-      <span className="cell-running-indicator" aria-hidden="true">
-        <LoaderCircle size={34} strokeWidth={1.6} />
-      </span>
+      <span className="cell-running-indicator" aria-hidden="true" />
       <strong>{runningStatusLabel(status)}</strong>
     </div>
   )

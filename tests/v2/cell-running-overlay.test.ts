@@ -19,6 +19,8 @@ describe('CellRunningOverlay', () => {
     expect(html).toContain(`data-running-status="${status}"`)
     expect(html).toContain(`>${label}</strong>`)
     expect(html).toContain('role="status"')
+    expect(html).toContain('class="cell-running-indicator"')
+    expect(html).not.toContain('<svg')
   })
 
   it('renders nothing for an inactive cell', () => {

@@ -1066,19 +1066,23 @@ textarea:focus-visible {
 .cell-running-indicator {
   position: relative;
   z-index: 1;
-  display: grid;
-  width: 48px;
-  height: 48px;
-  place-items: center;
-  border: 1px solid rgba(114, 231, 170, 0.42);
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  color: #a8edc4;
-  background: rgba(4, 24, 14, 0.82);
-  box-shadow: 0 0 14px rgba(114, 231, 170, 0.12);
+  background: #a8edc4;
+  box-shadow: 0 0 0 3px rgba(114, 231, 170, 0.14);
+  animation: cell-running-pulse 1400ms ease-in-out infinite;
 }
 
-.cell-running-indicator svg {
-  animation: spin 1100ms linear infinite;
+@keyframes cell-running-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 .cell-running-overlay strong {
@@ -4951,5 +4955,10 @@ textarea:focus-visible {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .cell-running-indicator {
+    animation: none !important;
+    opacity: 0.75;
   }
 }
