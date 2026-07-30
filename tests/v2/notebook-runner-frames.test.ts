@@ -360,6 +360,167 @@ describe("notebook runner frames and concat", () => {
     ]);
   }, 90_000);
 
+  it("extracts first, timed, and last frames into a versioned Image cell", async () => {
+    rootDir = await mkdtemp(join(tmpdir(), "vb-runner-extract-frame-"));
+    engine = createEngine({ rootDir, initialBookSlug: "runner-extract-frame" });
+    await engine.ready;
+
+    const clipPath = join(rootDir, "source.mp4");
+    await makeClip(clipPath, 3);
+    const sourceArtifact = await engine.artifacts.create({
+      kind: "video",
+      name: "source",
+    });
+    expect(sourceArtifact.ok).toBe(true);
+    if (!sourceArtifact.ok) return;
+    await engine.files.writeFromPath(
+      sourceArtifact.value.artifactId,
+      "original.mp4",
+      clipPath,
+    );
+
+    const notebook = await engine.notebooks.create("Main");
+    expect(notebook.ok).toBe(true);
+    if (!notebook.ok) return;
+    const source = engine.notebooks.createCell({
+      type: "video",
+      slug: "vid-source",
+      slot: { row: 0, column: 0 },
+      outputArtifactId: sourceArtifact.value.artifactId,
+    });
+    const extractFrame = engine.notebooks.createCell({
+      type: "extract_frame",
+      slug: "extract-frame-source",
+      slot: { row: 1, column: 0 },
+      provider: "local",
+      operation: "extract_frame",
+      tool: "ffmpeg",
+      inputs: { frameMode: "first" },
+    });
+    const image = engine.notebooks.createCell({
+      type: "image",
+      slug: "img-frame",
+      slot: { row: 2, column: 0 },
+    });
+    let current: NotebookDocument = {
+      ...notebook.value,
+      cells: [source, extractFrame, image],
+      edges: [
+        engine.notebooks.createEdge({
+          source: source.id,
+          target: extractFrame.id,
+          targetInput: "video",
+        }),
+        engine.notebooks.createEdge({
+          source: extractFrame.id,
+          target: image.id,
+          targetInput: "media",
+        }),
+      ],
+    };
+    await engine.notebooks.write(current);
+
+    const runConfigured = async (
+      frameMode: "first" | "time" | "last",
+      timestampSeconds?: number,
+    ) => {
+      current = {
+        ...current,
+        cells: current.cells.map((cell) =>
+          cell.id === extractFrame.id
+            ? {
+                ...cell,
+                inputs: {
+                  ...(cell.inputs ?? {}),
+                  frameMode,
+                  ...(timestampSeconds === undefined
+                    ? {}
+                    : { timestampSeconds }),
+                },
+              }
+            : cell),
+      };
+      const written = await engine!.notebooks.write(current);
+      expect(written.ok).toBe(true);
+      const action = current.cells.find((cell) =>
+        cell.id === extractFrame.id);
+      expect(action).toBeTruthy();
+      if (!action) throw new Error("Extract Frame action missing");
+      const completed = await runNotebookCell(
+        engine!,
+        engine!.book.get().bookId,
+        current.id,
+        current,
+        action,
+      );
+      current = completed.document;
+      return completed;
+    };
+
+    const first = await runConfigured("first");
+    const firstImage = first.document.cells.find((cell) =>
+      cell.id === image.id);
+    expect(firstImage).toMatchObject({
+      outputArtifactId: first.outputArtifactId,
+      inputs: {
+        frameMode: "first",
+        atSeconds: 0,
+        outputVersionArtifactIds: [first.outputArtifactId],
+        state: "completed",
+      },
+    });
+
+    const timed = await runConfigured("time", 1.25);
+    const timedImage = timed.document.cells.find((cell) =>
+      cell.id === image.id);
+    expect(timedImage).toMatchObject({
+      outputArtifactId: timed.outputArtifactId,
+      inputs: {
+        frameMode: "time",
+        timestampSeconds: 1.25,
+        atSeconds: 1.25,
+        outputVersionArtifactIds: [
+          first.outputArtifactId,
+          timed.outputArtifactId,
+        ],
+      },
+    });
+
+    const last = await runConfigured("last");
+    const lastImage = last.document.cells.find((cell) =>
+      cell.id === image.id);
+    expect(lastImage?.outputArtifactId).toBe(last.outputArtifactId);
+    expect(Number(lastImage?.inputs?.atSeconds)).toBeGreaterThan(2.9);
+    expect(lastImage?.inputs?.outputVersionArtifactIds).toEqual([
+      first.outputArtifactId,
+      timed.outputArtifactId,
+      last.outputArtifactId,
+    ]);
+    expect(last.document.cells.some((cell) => cell.type === "audio")).toBe(false);
+
+    const manifest = await engine.files.manifest(last.outputArtifactId);
+    expect(manifest.ok && manifest.value.files.some((file) =>
+      file.name === "original.jpg")).toBe(true);
+    const metadata = await engine.metadata.artifacts.read<{
+      origin?: string;
+      sourceArtifactId?: string;
+      frameMode?: string;
+      atSeconds?: number;
+    }>(last.outputArtifactId, "original");
+    expect(metadata.ok && metadata.value).toMatchObject({
+      origin: "extract_frame",
+      sourceArtifactId: sourceArtifact.value.artifactId,
+      frameMode: "last",
+      atSeconds: expect.any(Number),
+    });
+    const listed = (await buildAssetList(
+      engine,
+      engine.book.get().bookId,
+    )).find((asset) => asset.artifact_id === last.outputArtifactId);
+    expect(listed?.type).toBe("image");
+    expect(listed?.media_url).toContain("original.jpg");
+  }, 90_000);
+
   it("rejects extract audio actions connected to non-video media", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-audio-input-"));
     engine = createEngine({ rootDir, initialBookSlug: "runner-audio-input" });

@@ -764,6 +764,7 @@ export async function seedMultycultyWorkflow(
       llmExchanges: MULTYCULTY_FIXTURE_LLM_EXCHANGES,
       evidence: MULTYCULTY_FIXTURE_EVIDENCE,
       boundaries: MULTYCULTY_FIXTURE_BOUNDARIES,
+      materializeWorkflow: true,
     },
   );
   const withOutputs = await attachFixtureOutputs(

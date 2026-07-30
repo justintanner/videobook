@@ -30,12 +30,13 @@ describe('transparent runnable DAG e2e (offline)', () => {
   })
 
   it('runs video→analysis fixture→split/audio/image without paid generation', async () => {
-    expect(SCHEMA_VERSION).toBe(18)
+    expect(SCHEMA_VERSION).toBe(19)
     expect(NOTEBOOK_CELL_TYPES).toEqual([
       'audio',
       'image',
       'video',
       'extract_audio',
+      'extract_frame',
       'split_video',
       'prompt',
       'character',
@@ -104,6 +105,7 @@ describe('transparent runnable DAG e2e (offline)', () => {
       sourceDurationSeconds: 8,
       request: { mode: 'fixture' },
       sourceArtifactId: sourceArtifact.value.artifactId,
+      materializeWorkflow: true,
     })
     expect(fanned.cells.every((cell) => NOTEBOOK_CELL_TYPES.includes(cell.type))).toBe(true)
     expect(fanned).not.toHaveProperty('properties')

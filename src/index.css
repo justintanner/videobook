@@ -1228,6 +1228,7 @@ textarea:focus-visible {
 .cell-kind-image,
 .cell-kind-video,
 .cell-kind-character,
+.cell-kind-extract_frame,
 .cell-kind-generate_audio,
 .cell-kind-generate_image,
 .cell-kind-generate_video {

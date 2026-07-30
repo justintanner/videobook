@@ -223,6 +223,66 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('<dt>Duration</dt><dd>0:30</dd>')
   })
 
+  it('labels and selects the current saved image version', () => {
+    const imageCell: NotebookCell = {
+      ...cell,
+      type: 'image',
+      slug: 'img-frame',
+      inputs: {
+        frameMode: 'time',
+        atSeconds: 1.25,
+        outputVersionArtifactIds: ['image-one', 'image-two'],
+      },
+      outputArtifactId: 'image-two',
+    }
+    const currentAsset = {
+      artifactId: 'image-two',
+      id: 'img-frame-2',
+      type: 'image',
+      mediaUrl: '/files/img-frame-2/original.jpg',
+      thumbnailUrl: null,
+      width: 320,
+      height: 240,
+      duration: null,
+      audioInfo: null,
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: imageCell,
+      cells: [imageCell],
+      edges: [],
+      asset: currentAsset,
+      versionAssets: [
+        {
+          ...currentAsset,
+          artifactId: 'image-one',
+          id: 'img-frame-1',
+          mediaUrl: '/files/img-frame-1/original.jpg',
+        },
+        currentAsset,
+      ],
+      status: 'completed',
+      error: null,
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('aria-label="Image versions"')
+    expect(html).toContain('aria-label="Image version"')
+    expect(html).toContain('Version 1 of 2')
+    expect(html).toContain('Version 2 of 2 · current')
+    expect(html).toContain('value="image-two" selected=""')
+    expect(html).toContain('/files/img-frame-2/original.jpg')
+  })
+
   it('shows versioned normalized shots for Analysis outputs', () => {
     const analysisCell: NotebookCell = {
       ...cell,
@@ -593,6 +653,61 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('class="inspector-prompt-textarea"')
     expect(html).toContain('Split the source into narrative shots.')
     expect(html).toContain('Analyze')
+  })
+
+  it('configures Extract Frame with first, time, and last modes', () => {
+    const extractFrameCell: NotebookCell = {
+      ...cell,
+      type: 'extract_frame',
+      slug: 'extract-frame-source',
+      provider: 'local',
+      operation: 'extract_frame',
+      tool: 'ffmpeg',
+      outputArtifactId: undefined,
+      inputs: {
+        frameMode: 'time',
+        timestampSeconds: 1.25,
+      },
+    }
+    const sourceCell: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000010',
+      slug: 'vid-source',
+    }
+    const edges: NotebookEdge[] = [{
+      id: '01900000-0000-7000-8000-000000000011',
+      source: sourceCell.id,
+      target: extractFrameCell.id,
+      targetInput: 'video',
+    }]
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: extractFrameCell,
+      cells: [extractFrameCell, sourceCell],
+      edges,
+      asset: undefined,
+      status: 'pending',
+      error: null,
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('<span>video</span>')
+    expect(html).toContain('<option value="first">First</option>')
+    expect(html).toContain('<option value="time" selected="">Time</option>')
+    expect(html).toContain('<option value="last">Last</option>')
+    expect(html).toContain('Timestamp seconds')
+    expect(html).toContain('value="1.25"')
+    expect(html).toContain('Extract')
+    expect(html).not.toContain('Audio')
   })
 
   it('persists dirty action fields before running', async () => {

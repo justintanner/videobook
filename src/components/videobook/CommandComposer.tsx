@@ -142,7 +142,7 @@ export function CommandComposer({
   }
 
   const focusAndLoad = () => {
-    void onEnsureCatalog()
+    void onEnsureCatalog().catch(() => undefined)
     void ensureHistory()
   }
 

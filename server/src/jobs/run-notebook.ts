@@ -195,7 +195,11 @@ export const defaultNotebookGenerationModel: Record<
 export function notebookCellMediaType(
   cell: NotebookCell,
 ): "image" | "video" | "audio" | null {
-  if (cell.type === "image" || cell.type === "generate_image") return "image";
+  if (
+    cell.type === "image"
+    || cell.type === "extract_frame"
+    || cell.type === "generate_image"
+  ) return "image";
   if (
     cell.type === "audio"
     || cell.type === "extract_audio"
@@ -392,6 +396,7 @@ function stableCellInputs(
     "assemblyDurationFrames",
     "shotCount",
     "outputVersionArtifactIds",
+    "atSeconds",
   ]);
   return Object.fromEntries(
     Object.entries(inputs ?? {}).filter(([key]) => !volatile.has(key)),
@@ -501,7 +506,7 @@ function requiredVideoInputArtifact(
 function requiredMediaOutputCellIds(
   document: NotebookDocument,
   cell: NotebookCell,
-  type: "audio" | "video",
+  type: "audio" | "image" | "video",
 ): Set<string> {
   const connectedIds = new Set(
     document.edges
@@ -1288,6 +1293,49 @@ async function executeLocalOrGeneration(
         { durationSeconds: result.durationSeconds },
       ),
       cellInputs: { durationSeconds: result.durationSeconds },
+    };
+  }
+
+  if (cell.type === "extract_frame" && cell.operation === "extract_frame") {
+    const sourceId = requiredVideoInputArtifact(document, cell);
+    const outputCellIds = requiredMediaOutputCellIds(
+      document,
+      cell,
+      "image",
+    );
+    const configuredMode = cell.inputs?.frameMode;
+    const frameMode = configuredMode === "time" || configuredMode === "last"
+      ? configuredMode
+      : "first";
+    const timestampSeconds = Number(cell.inputs?.timestampSeconds);
+    if (
+      frameMode === "time"
+      && (!Number.isFinite(timestampSeconds) || timestampSeconds < 0)
+    ) {
+      throw new Error(
+        `extract_frame cell ${cell.id} requires a nonnegative timestamp`,
+      );
+    }
+    const result = await captureFrame(engine, sourceId, {
+      role: frameMode,
+      ...(frameMode === "time" ? { timestampSeconds } : {}),
+      title: `${cell.slug} · ${frameMode} frame`,
+    });
+    const outputInputs = {
+      frameMode,
+      ...(frameMode === "time" ? { timestampSeconds } : {}),
+      atSeconds: result.atSeconds,
+    };
+    return {
+      artifactId: result.artifactId,
+      tool: "ffmpeg",
+      document: withMediaOutput(
+        document,
+        outputCellIds,
+        result.artifactId,
+        outputInputs,
+      ),
+      cellInputs: outputInputs,
     };
   }
 

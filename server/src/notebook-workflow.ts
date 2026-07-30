@@ -464,6 +464,7 @@ export function workflowStageForCell(cell: NotebookCell): WorkflowStage {
   if (cell.type === "split_video") return "SPLIT VIDEO";
   if (
     cell.type === "extract_audio"
+    || cell.type === "extract_frame"
     || cell.type === "image"
     || cell.type === "audio"
   ) {
@@ -778,6 +779,7 @@ export async function applyAnalysisResults(
     llmExchanges?: NotebookAnalysisLlmExchange[];
     evidence?: NotebookAnalysisEvidence;
     boundaries?: AnalysisBoundary[];
+    materializeWorkflow?: boolean;
   },
 ): Promise<NotebookDocument> {
   const storedAnalysisCell = document.cells.find((cell) =>
@@ -831,6 +833,49 @@ export async function applyAnalysisResults(
       JSON.stringify(script.legacyAnalysis),
     );
   }
+  const updatedAnalysis: NotebookCell = {
+    ...analysisCell,
+    outputArtifactId: scriptArtifact.value.artifactId,
+    provider: analysisCell.provider ?? "openai",
+    model: analysisCell.model ?? INTELLIGENCE_MODEL,
+    operation: analysisCell.operation ?? "analyze_source",
+    tool: analysisCell.tool ?? OPENAI_ANALYSIS_TOOL,
+    inputs: {
+      ...(analysisCell.inputs ?? {}),
+      shotCount: shots.length,
+      sourceDurationSeconds: input.sourceDurationSeconds,
+      state: "completed",
+    },
+  };
+  const updatedResult: NotebookCell = {
+    ...resultCell,
+    outputArtifactId: scriptArtifact.value.artifactId,
+    inputs: {
+      ...(resultCell.inputs ?? {}),
+      analysisRole: "result",
+      producerCellId: analysisCellId,
+      shotCount: shots.length,
+      sourceDurationSeconds: input.sourceDurationSeconds,
+      outputVersionArtifactIds: outputVersionArtifactIds(
+        resultCell,
+        scriptArtifact.value.artifactId,
+      ),
+      state: "completed",
+    },
+  };
+  if (!input.materializeWorkflow) {
+    const persisted: NotebookDocument = {
+      ...document,
+      cells: document.cells.map((cell) =>
+        cell.id === analysisCellId
+          ? updatedAnalysis
+          : cell.id === resultCell.id
+            ? updatedResult
+            : cell),
+      analysisRevision: scriptArtifact.value.artifactId,
+    };
+    return persisted;
+  }
 
   const owned = document.cells.filter(
     (cell) => analysisOwnerId(cell) === analysisCellId,
@@ -870,36 +915,6 @@ export async function applyAnalysisResults(
     }
     return true;
   });
-  const updatedAnalysis: NotebookCell = {
-    ...analysisCell,
-    outputArtifactId: scriptArtifact.value.artifactId,
-    provider: analysisCell.provider ?? "openai",
-    model: analysisCell.model ?? INTELLIGENCE_MODEL,
-    operation: analysisCell.operation ?? "analyze_source",
-    tool: analysisCell.tool ?? OPENAI_ANALYSIS_TOOL,
-    inputs: {
-      ...(analysisCell.inputs ?? {}),
-      shotCount: shots.length,
-      sourceDurationSeconds: input.sourceDurationSeconds,
-      state: "completed",
-    },
-  };
-  const updatedResult: NotebookCell = {
-    ...resultCell,
-    outputArtifactId: scriptArtifact.value.artifactId,
-    inputs: {
-      ...(resultCell.inputs ?? {}),
-      analysisRole: "result",
-      producerCellId: analysisCellId,
-      shotCount: shots.length,
-      sourceDurationSeconds: input.sourceDurationSeconds,
-      outputVersionArtifactIds: outputVersionArtifactIds(
-        resultCell,
-        scriptArtifact.value.artifactId,
-      ),
-      state: "completed",
-    },
-  };
   const cellsWithoutOwnedBranches = baseCells.filter((cell) =>
     cell.id !== analysisCellId
     && cell.id !== resultCell.id

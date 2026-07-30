@@ -124,6 +124,7 @@ describe('notebook cell presentation', () => {
 
   it('uses operation-aware action copy in the inspector', () => {
     expect(notebookCellInspectorActionLabel('extract_audio', 'Re-run')).toBe('Extract again')
+    expect(notebookCellInspectorActionLabel('extract_frame', 'Run')).toBe('Extract')
     expect(notebookCellInspectorActionLabel('split_video', 'Run')).toBe('Split')
     expect(notebookCellInspectorActionLabel('generate_video', 'Gen')).toBe('Generate')
   })

@@ -159,8 +159,12 @@ describe('v2 notebook domain tools', () => {
     const audioOutput = await createCell('audio', 'aud-output', 2, 0)
     const splitVideo = await createCell('split_video', 'split-video-source', 1, 1)
     const videoOutput = await createCell('video', 'vid-output', 2, 1)
+    const extractFrame = await createCell('extract_frame', 'extract-frame-source', 1, 2)
+    const imageOutput = await createCell('image', 'img-output', 2, 2)
+    const invalidImage = await createCell('image', 'img-invalid', 3, 2)
 
     expect(extractAudio.operation).toBe('extract_audio')
+    expect(extractFrame.operation).toBe('extract_frame')
     expect(splitVideo.operation).toBe('split_range')
     const retypedAction = await invoke('update_notebook_cell', {
       notebook_id: notebookId,
@@ -188,6 +192,15 @@ describe('v2 notebook domain tools', () => {
     expect(invalidInput.isError).toBe(true)
     expect(invalidInput.content[0]?.text).toContain('video-producing source')
 
+    const invalidFrameInput = await invoke('connect_notebook_cells', {
+      notebook_id: notebookId,
+      source_cell_id: sourceAudio.id,
+      target_cell_id: extractFrame.id,
+      target_input: 'video',
+    })
+    expect(invalidFrameInput.isError).toBe(true)
+    expect(invalidFrameInput.content[0]?.text).toContain('video-producing source')
+
     for (const connection of [
       {
         source_cell_id: sourceVideo.id,
@@ -209,6 +222,16 @@ describe('v2 notebook domain tools', () => {
         target_cell_id: videoOutput.id,
         target_input: 'media',
       },
+      {
+        source_cell_id: sourceVideo.id,
+        target_cell_id: extractFrame.id,
+        target_input: 'video',
+      },
+      {
+        source_cell_id: extractFrame.id,
+        target_cell_id: imageOutput.id,
+        target_input: 'media',
+      },
     ]) {
       resultJson(await invoke('connect_notebook_cells', {
         notebook_id: notebookId,
@@ -225,6 +248,15 @@ describe('v2 notebook domain tools', () => {
     expect(invalidOutput.isError).toBe(true)
     expect(invalidOutput.content[0]?.text).toContain('split video source')
 
+    const invalidImageOutput = await invoke('connect_notebook_cells', {
+      notebook_id: notebookId,
+      source_cell_id: extractAudio.id,
+      target_cell_id: invalidImage.id,
+      target_input: 'media',
+    })
+    expect(invalidImageOutput.isError).toBe(true)
+    expect(invalidImageOutput.content[0]?.text).toContain('extract frame source')
+
     const bypassedMedia = await invoke('connect_notebook_cells', {
       notebook_id: notebookId,
       source_cell_id: splitVideo.id,
@@ -233,6 +265,15 @@ describe('v2 notebook domain tools', () => {
     })
     expect(bypassedMedia.isError).toBe(true)
     expect(bypassedMedia.content[0]?.text).toContain('video-producing source')
+
+    const bypassedFrameMedia = await invoke('connect_notebook_cells', {
+      notebook_id: notebookId,
+      source_cell_id: splitVideo.id,
+      target_cell_id: extractFrame.id,
+      target_input: 'video',
+    })
+    expect(bypassedFrameMedia.isError).toBe(true)
+    expect(bypassedFrameMedia.content[0]?.text).toContain('video-producing source')
 
     const cached = await managed.value.engine.artifacts.create('video', 'cached output')
     expect(cached.ok).toBe(true)

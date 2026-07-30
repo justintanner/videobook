@@ -86,26 +86,38 @@ describe('notebook draft conversion', () => {
         {
           ...source.cells[0]!,
           id: '018f7cf5-0d31-7d96-8c0f-800000000007',
-          type: 'split_video',
+          type: 'extract_frame',
         },
         {
           ...source.cells[0]!,
           id: '018f7cf5-0d31-7d96-8c0f-800000000008',
-          type: 'audio',
+          type: 'split_video',
         },
         {
           ...source.cells[0]!,
           id: '018f7cf5-0d31-7d96-8c0f-800000000009',
+          type: 'audio',
+        },
+        {
+          ...source.cells[0]!,
+          id: '018f7cf5-0d31-7d96-8c0f-800000000010',
           type: 'video',
+        },
+        {
+          ...source.cells[0]!,
+          id: '018f7cf5-0d31-7d96-8c0f-800000000011',
+          type: 'image',
         },
       ],
     }
 
     expect(notebookNodes(typed).map((node) => node.data.targetInputs)).toEqual([
       ['video'],
+      ['video'],
       ['video', 'analysis'],
       ['media'],
       ['media'],
+      ['media', 'segment'],
     ])
   })
 

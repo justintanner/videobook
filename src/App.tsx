@@ -412,6 +412,7 @@ const cellPalette: Array<{
   { type: 'generate_image', label: 'Generate image', group: 'Generation', icon: Image },
   { type: 'generate_audio', label: 'Generate audio', group: 'Generation', icon: AudioWaveform },
   { type: 'extract_audio', label: 'Extract audio', group: 'Edit', icon: AudioWaveform },
+  { type: 'extract_frame', label: 'Extract frame', group: 'Edit', icon: Image },
   { type: 'split_video', label: 'Split video', group: 'Edit', icon: Film },
   { type: 'concat', label: 'Concat', group: 'Edit', icon: Film },
   { type: 'splice', label: 'Splice', group: 'Edit', icon: Film },
@@ -429,6 +430,7 @@ const notebookCellTypes = new Set<string>([
   'image',
   'video',
   'extract_audio',
+  'extract_frame',
   'split_video',
   'prompt',
   'character',
@@ -1348,7 +1350,11 @@ function CellIcon({ kind }: { kind: NotebookCellType }) {
   if (kind === 'video' || kind === 'generate_video' || kind === 'split_video') {
     return <Video size={14} />
   }
-  if (kind === 'image' || kind === 'generate_image') return <Image size={14} />
+  if (
+    kind === 'image'
+    || kind === 'extract_frame'
+    || kind === 'generate_image'
+  ) return <Image size={14} />
   if (kind === 'audio' || kind === 'extract_audio' || kind === 'generate_audio') {
     return <AudioWaveform size={14} />
   }
@@ -1388,6 +1394,15 @@ function emptyCellLabel(data: CanvasCellData): string {
   }
   if (data.kind === 'character') return 'Select a character'
   if (data.kind === 'extract_audio') return 'Connect a video to extract audio'
+  if (data.kind === 'extract_frame') {
+    const mode = asString(data.inputs?.frameMode) ?? 'first'
+    if (mode === 'time') {
+      return `Extract frame at ${formatMediaTime(
+        asNumber(data.inputs?.timestampSeconds) ?? 0,
+      )}`
+    }
+    return mode === 'last' ? 'Extract last frame' : 'Extract first frame'
+  }
   if (data.kind === 'analysis') return 'Run the connected Analyze cell'
   if (data.kind === 'split_video') return 'Configure a video range'
   if (data.kind === 'concat') return 'Connect clip:0 and clip:1'
@@ -1897,7 +1912,9 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
     data.outputArtifactId,
   )
   const versionedOutput = (
-    data.kind === 'audio' || data.kind === 'analysis'
+    data.kind === 'audio'
+    || data.kind === 'image'
+    || data.kind === 'analysis'
   ) && outputVersions.length > 1
   const activeOutputVersion = Math.max(
     1,
@@ -2577,6 +2594,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       !selectedNotebookCell
       || (
         selectedNotebookCell.type !== 'audio'
+        && selectedNotebookCell.type !== 'image'
         && selectedNotebookCell.type !== 'analysis'
       )
     ) {
@@ -6516,7 +6534,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         disabled={busy || !bookId || mcp.state !== 'ready'}
         connectionLabel={mcp.state === 'ready' ? 'Load a book to begin' : 'Connecting to MCP…'}
         promptSession={null}
-        onEnsureCatalog={() => loadBooks(bookId)}
+        onEnsureCatalog={refreshBookCommands}
         onExecute={executeCommand}
       />
     </main>

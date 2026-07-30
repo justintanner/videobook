@@ -36,6 +36,7 @@ import { RichJson } from './RichJson'
 
 const actionCellTypes = new Set<NotebookCell['type']>([
   'extract_audio',
+  'extract_frame',
   'split_video',
   'prompt',
   'analyze',
@@ -58,6 +59,8 @@ type CellFormDraft = {
   startSeconds: string
   endSeconds: string
   overlap: string
+  frameMode: 'first' | 'time' | 'last'
+  timestampSeconds: string
 }
 
 const cellFormDraftFields = [
@@ -69,6 +72,8 @@ const cellFormDraftFields = [
   'startSeconds',
   'endSeconds',
   'overlap',
+  'frameMode',
+  'timestampSeconds',
 ] as const satisfies readonly (keyof CellFormDraft)[]
 
 function draftNumber(value: unknown): string {
@@ -78,6 +83,7 @@ function draftNumber(value: unknown): string {
 }
 
 function cellFormDraft(cell: NotebookCell): CellFormDraft {
+  const configuredFrameMode = cell.inputs?.frameMode
   return {
     prompt: cell.prompt ?? '',
     provider: cell.provider ?? '',
@@ -87,6 +93,10 @@ function cellFormDraft(cell: NotebookCell): CellFormDraft {
     startSeconds: draftNumber(cell.inputs?.startSeconds),
     endSeconds: draftNumber(cell.inputs?.endSeconds),
     overlap: draftNumber(cell.inputs?.overlap),
+    frameMode: configuredFrameMode === 'time' || configuredFrameMode === 'last'
+      ? configuredFrameMode
+      : 'first',
+    timestampSeconds: draftNumber(cell.inputs?.timestampSeconds),
   }
 }
 
@@ -108,6 +118,9 @@ function cellFormIsValid(cell: NotebookCell, draft: CellFormDraft): boolean {
   }
   if (cell.type === 'splice' && draft.operation === 'splice_video') {
     return validTimingValue(draft.overlap)
+  }
+  if (cell.type === 'extract_frame' && draft.frameMode === 'time') {
+    return validTimingValue(draft.timestampSeconds)
   }
   return true
 }
@@ -150,6 +163,24 @@ function cellFormPatch(
     patch.inputs = {
       ...(cell.inputs ?? {}),
       overlap: Number(draft.overlap),
+    }
+  }
+  if (
+    cell.type === 'extract_frame'
+    && (
+      draft.frameMode !== persisted.frameMode
+      || (
+        draft.frameMode === 'time'
+        && draft.timestampSeconds !== persisted.timestampSeconds
+      )
+    )
+  ) {
+    patch.inputs = {
+      ...(cell.inputs ?? {}),
+      frameMode: draft.frameMode,
+      ...(draft.frameMode === 'time'
+        ? { timestampSeconds: Number(draft.timestampSeconds) }
+        : {}),
     }
   }
   return patch
@@ -198,9 +229,10 @@ function isPassiveOutputCell(cell: NotebookCell): boolean {
 
 function defaultInputNames(cell: NotebookCell): string[] {
   if (cell.type === 'extract_audio') return ['video']
+  if (cell.type === 'extract_frame') return ['video']
   if (cell.type === 'split_video') return ['video', 'analysis']
   if (cell.type === 'analysis') return ['result']
-  if (cell.type === 'image') return ['segment']
+  if (cell.type === 'image') return ['media', 'segment']
   if (cell.type === 'audio' || cell.type === 'video') return ['media']
   return []
 }
@@ -231,6 +263,9 @@ function compatibleSource(
   if (target.type === 'extract_audio') {
     return targetInput === 'video' && isVideoProducingSource(source)
   }
+  if (target.type === 'extract_frame') {
+    return targetInput === 'video' && isVideoProducingSource(source)
+  }
   if (target.type === 'split_video') {
     if (targetInput === 'analysis') return source.type === 'analysis'
     if (targetInput === 'video') return isVideoProducingSource(source)
@@ -244,6 +279,9 @@ function compatibleSource(
   }
   if (target.type === 'video' && targetInput === 'media') {
     return source.type === 'split_video'
+  }
+  if (target.type === 'image' && targetInput === 'media') {
+    return source.type === 'extract_frame'
   }
   if (target.type === 'image' && targetInput === 'segment') {
     return source.type === 'video'
@@ -707,52 +745,52 @@ function MediaCellInspector({
 >) {
   const canClear = Boolean(cell.outputArtifactId)
     || edges.some((edge) => edge.target === cell.id)
-  const audioVersionArtifactIds = cell.type === 'audio'
+  const versionArtifactIds = cell.type === 'audio' || cell.type === 'image'
     ? notebookOutputVersionArtifactIds(cell.inputs, cell.outputArtifactId)
     : []
-  const audioVersionKey = audioVersionArtifactIds.join(':')
-  const currentAudioVersionArtifactId = cell.outputArtifactId
-    ?? audioVersionArtifactIds.at(-1)
+  const versionKey = versionArtifactIds.join(':')
+  const currentVersionArtifactId = cell.outputArtifactId
+    ?? versionArtifactIds.at(-1)
     ?? ''
-  const [audioVersionSelection, setAudioVersionSelection] = useState<{
+  const [versionSelection, setVersionSelection] = useState<{
     artifactId: string
     cellId: string
     currentArtifactId: string
     versionKey: string
   } | null>(null)
-  const selectedAudioVersionArtifactId = (
-    audioVersionSelection?.cellId === cell.id
-    && audioVersionSelection.currentArtifactId === currentAudioVersionArtifactId
-    && audioVersionSelection.versionKey === audioVersionKey
+  const selectedVersionArtifactId = (
+    versionSelection?.cellId === cell.id
+    && versionSelection.currentArtifactId === currentVersionArtifactId
+    && versionSelection.versionKey === versionKey
   )
-    ? audioVersionSelection.artifactId
-    : currentAudioVersionArtifactId
-  const audioVersionAssetById = new Map(
+    ? versionSelection.artifactId
+    : currentVersionArtifactId
+  const versionAssetById = new Map(
     (versionAssets ?? []).map((versionAsset) => [
       versionAsset.artifactId,
       versionAsset,
     ]),
   )
-  if (asset) audioVersionAssetById.set(asset.artifactId, asset)
-  const selectedVersionAvailable = audioVersionAssetById.has(
-    selectedAudioVersionArtifactId,
+  if (asset) versionAssetById.set(asset.artifactId, asset)
+  const selectedVersionAvailable = versionAssetById.has(
+    selectedVersionArtifactId,
   )
-  const effectiveAudioVersionArtifactId = (
-    audioVersionArtifactIds.includes(selectedAudioVersionArtifactId)
+  const effectiveVersionArtifactId = (
+    versionArtifactIds.includes(selectedVersionArtifactId)
     && selectedVersionAvailable
   )
-    ? selectedAudioVersionArtifactId
-    : currentAudioVersionArtifactId
-  const previewAsset = cell.type === 'audio'
-    ? audioVersionAssetById.get(effectiveAudioVersionArtifactId) ?? asset
+    ? selectedVersionArtifactId
+    : currentVersionArtifactId
+  const previewAsset = versionArtifactIds.length > 0
+    ? versionAssetById.get(effectiveVersionArtifactId) ?? asset
     : asset
-  const availableAudioVersionArtifactIds = new Set(audioVersionAssetById.keys())
-  const selectAudioVersion = (artifactId: string) => {
-    setAudioVersionSelection({
+  const availableVersionArtifactIds = new Set(versionAssetById.keys())
+  const selectVersion = (artifactId: string) => {
+    setVersionSelection({
       artifactId,
       cellId: cell.id,
-      currentArtifactId: currentAudioVersionArtifactId,
-      versionKey: audioVersionKey,
+      currentArtifactId: currentVersionArtifactId,
+      versionKey,
     })
   }
 
@@ -763,14 +801,14 @@ function MediaCellInspector({
         <span className="inspector-media-field-label">
           {cell.type.replaceAll('_', ' ').toUpperCase()}
         </span>
-        {audioVersionArtifactIds.length > 1 && previewAsset && (
+        {versionArtifactIds.length > 1 && previewAsset && (
           <OutputVersionSelector
-            artifactIds={audioVersionArtifactIds}
-            availableArtifactIds={availableAudioVersionArtifactIds}
+            artifactIds={versionArtifactIds}
+            availableArtifactIds={availableVersionArtifactIds}
             currentArtifactId={cell.outputArtifactId}
-            selectedArtifactId={effectiveAudioVersionArtifactId}
-            outputLabel="Audio"
-            onSelect={selectAudioVersion}
+            selectedArtifactId={effectiveVersionArtifactId}
+            outputLabel={cell.type === 'image' ? 'Image' : 'Audio'}
+            onSelect={selectVersion}
           />
         )}
         {previewAsset ? (
@@ -1221,7 +1259,10 @@ function ExecutableCellInspector({
       ? 'Retry copy'
       : 'Copy'
 
-  const updateDraft = (field: keyof CellFormDraft, value: string) => {
+  const updateDraft = <Field extends keyof CellFormDraft,>(
+    field: Field,
+    value: CellFormDraft[Field],
+  ) => {
     setDraft((current) => ({ ...current, [field]: value }))
   }
   const copyRunError = async () => {
@@ -1346,6 +1387,39 @@ function ExecutableCellInspector({
                 onChange={(event) => updateDraft('endSeconds', event.target.value)}
               />
             </label>
+          </div>
+        )}
+        {cell.type === 'extract_frame' && (
+          <div className="inspector-field-pair">
+            <label>
+              Frame
+              <select
+                value={draft.frameMode}
+                onChange={(event) => updateDraft(
+                  'frameMode',
+                  event.target.value as CellFormDraft['frameMode'],
+                )}
+              >
+                <option value="first">First</option>
+                <option value="time">Time</option>
+                <option value="last">Last</option>
+              </select>
+            </label>
+            {draft.frameMode === 'time' && (
+              <label>
+                Timestamp seconds
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={draft.timestampSeconds}
+                  onChange={(event) => updateDraft(
+                    'timestampSeconds',
+                    event.target.value,
+                  )}
+                />
+              </label>
+            )}
           </div>
         )}
         {cell.type === 'splice' && draft.operation === 'splice_video' && (

@@ -292,6 +292,7 @@ describe("notebook local media and analysis fan-out", () => {
       sourceDurationSeconds: 16,
       request: { mode: "fixture" },
       sourceArtifactId: sourceArtifact.value.artifactId,
+      materializeWorkflow: true,
     });
     expect(first.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(2);
     expect(first.cells.find((cell) => cell.id === analysis.id)).toMatchObject({
@@ -368,6 +369,31 @@ describe("notebook local media and analysis fan-out", () => {
     const order = topologicalOrder(first);
     expect(order.map((cell) => cell.id)).toContain(analysis.id);
 
+    const persistedOnly = await applyAnalysisResults(
+      engine,
+      first,
+      analysis.id,
+      {
+        rawOutput: {
+          scenes: [
+            { title: "one-a", timestamp: [0, 4] },
+            { title: "one-b", timestamp: [4, 8] },
+            { title: "two", timestamp: [8, 16] },
+          ],
+        },
+        sourceDurationSeconds: 16,
+        request: { mode: "fixture" },
+        sourceArtifactId: sourceArtifact.value.artifactId,
+      },
+    );
+    expect(persistedOnly.cells.map((cell) => cell.id).sort())
+      .toEqual(first.cells.map((cell) => cell.id).sort());
+    expect(persistedOnly.edges).toEqual(first.edges);
+    expect(persistedOnly.cells.filter((cell) =>
+      cell.operation === "split_range")).toHaveLength(2);
+    expect(persistedOnly.cells.find((cell) =>
+      cell.id === analysisOutput.id)?.inputs?.shotCount).toBe(3);
+
     const second = await applyAnalysisResults(engine, first, analysis.id, {
       rawOutput: {
         scenes: [
@@ -378,6 +404,7 @@ describe("notebook local media and analysis fan-out", () => {
       sourceDurationSeconds: 16,
       request: { mode: "fixture" },
       sourceArtifactId: sourceArtifact.value.artifactId,
+      materializeWorkflow: true,
     });
     expect(second.cells.filter((cell) => cell.operation === "split_range").map((cell) => cell.id).sort())
       .toEqual(first.cells.filter((cell) => cell.operation === "split_range").map((cell) => cell.id).sort());
@@ -435,6 +462,7 @@ describe("notebook local media and analysis fan-out", () => {
       sourceDurationSeconds: 16,
       request: { mode: "fixture" },
       sourceArtifactId: sourceArtifact.value.artifactId,
+      materializeWorkflow: true,
     });
     expect(changed.cells.filter((cell) => cell.operation === "split_range")).toHaveLength(3);
     expect(changed.cells.filter((cell) =>
@@ -516,6 +544,7 @@ describe("notebook local media and analysis fan-out", () => {
         sourceDurationSeconds: 16,
         request: { mode: "fixture" },
         sourceArtifactId: sourceArtifact.value.artifactId,
+        materializeWorkflow: true,
       },
     );
     const removedIds = new Set(newBranch.map((cell) => cell.id));

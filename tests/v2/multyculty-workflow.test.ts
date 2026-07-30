@@ -433,6 +433,7 @@ describe("Multyculty workflow fixture", () => {
       sourceDurationSeconds: 30,
       request: { mode: "multyculty-fixture" },
       sourceArtifactId: sourceId,
+      materializeWorkflow: true,
     });
     const firstLayout = first.cells
       .map((cell) => ({ id: cell.id, slot: cell.slot }))

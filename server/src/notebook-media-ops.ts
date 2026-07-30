@@ -239,8 +239,9 @@ export async function captureFrame(
   engine: Engine,
   sourceArtifactId: string,
   options: {
-    role: "first" | "last";
+    role: "first" | "time" | "last";
     range?: MediaRange;
+    timestampSeconds?: number;
     title: string;
   },
 ): Promise<{ artifactId: string; atSeconds: number }> {
@@ -273,9 +274,25 @@ export async function captureFrame(
     const end = sourceEnd > 0
       ? Math.min(requestedEnd, sourceEnd)
       : requestedEnd;
+    const requestedTimestamp = options.timestampSeconds;
+    if (
+      options.role === "time"
+      && (
+        typeof requestedTimestamp !== "number"
+        || !Number.isFinite(requestedTimestamp)
+        || requestedTimestamp < start
+        || requestedTimestamp >= end
+      )
+    ) {
+      throw new Error(
+        `Cannot capture frame from artifact ${sourceArtifactId}: requested timestamp ${String(requestedTimestamp)}s is outside the available range ${start}s–${end}s`,
+      );
+    }
     const atSeconds = options.role === "first"
       ? start
-      : Math.max(start, end - (1 / Math.max(probe.avgFps ?? probe.fps, 1)));
+      : options.role === "time"
+        ? requestedTimestamp!
+        : Math.max(start, end - (1 / Math.max(probe.avgFps ?? probe.fps, 1)));
     await runFfmpeg([
       "-y",
       "-ss",
@@ -301,6 +318,17 @@ export async function captureFrame(
       "original.jpg",
       outPath,
     );
+    const metadata = await engine.metadata.artifacts.write(
+      artifactId,
+      "original",
+      {
+        origin: "extract_frame",
+        sourceArtifactId,
+        frameMode: options.role,
+        atSeconds,
+      },
+    );
+    if (!metadata.ok) throw new Error(metadata.error.message);
     return { artifactId, atSeconds };
   } finally {
     await source.cleanup();

@@ -889,7 +889,10 @@ describe("notebook live analysis", () => {
     });
     expect(result.status).toBe("completed");
     expect(result.document.cells.filter((cell) =>
-      cell.operation === "split_range")).toHaveLength(2);
+      cell.operation === "split_range")).toHaveLength(0);
+    expect(result.document.cells.map((cell) => cell.id).sort())
+      .toEqual(configured.cells.map((cell) => cell.id).sort());
+    expect(result.document.edges).toEqual(configured.edges);
     expect(result.document.cells.find((cell) =>
       cell.id === legacyAnalysis.id)).toMatchObject({
       provider: "openai",

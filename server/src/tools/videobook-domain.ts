@@ -93,6 +93,15 @@ function notebookConnectionError(
       ? null
       : "Extract audio cells require a video-producing source";
   }
+  if (target.type === "extract_frame") {
+    if (targetInput !== "video") {
+      return "Extract frame cells accept only the video input";
+    }
+    return notebookCellMediaType(source) === "video"
+      && source.type !== "split_video"
+      ? null
+      : "Extract frame cells require a video-producing source";
+  }
   if (target.type === "split_video") {
     if (targetInput === "analysis") {
       return source.type === "analysis"
@@ -125,6 +134,13 @@ function notebookConnectionError(
     && source.type !== "split_video"
   ) {
     return "Video media outputs require a split video source";
+  }
+  if (
+    targetInput === "media"
+    && target.type === "image"
+    && source.type !== "extract_frame"
+  ) {
+    return "Image media outputs require an extract frame source";
   }
   if (
     targetInput === "segment"
