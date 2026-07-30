@@ -1,4 +1,5 @@
 import {
+  Braces,
   Check,
   CircleAlert,
   CircleX,
@@ -19,10 +20,12 @@ import {
   formatMediaTime,
   isNotebookMediaCellType,
   notebookAudioPresentation,
+  notebookAnalysisLlmExchanges,
   notebookCellActionPresentation,
   notebookCellInspectorActionLabel,
   notebookOutputVersionArtifactIds,
   type NotebookAnalysisInfo,
+  type NotebookAnalysisLlmExchange,
   type NotebookAudioInfo,
 } from '@/videobook/notebook-cell-presentation'
 import {
@@ -803,6 +806,206 @@ function MediaCellInspector({
   )
 }
 
+function AnalysisJsonDisclosure({
+  label,
+  value,
+  loadValue,
+  ariaLabel,
+}: {
+  label: string
+  value?: unknown
+  loadValue?: () => Promise<unknown>
+  ariaLabel: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [resolvedValue, setResolvedValue] = useState(value)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  return (
+    <details
+      className="inspector-analysis-json-disclosure"
+      aria-busy={loading}
+      onToggle={(event) => {
+        const nextOpen = event.currentTarget.open
+        setOpen(nextOpen)
+        if (
+          !nextOpen
+          || resolvedValue !== undefined
+          || !loadValue
+          || loading
+        ) {
+          return
+        }
+        setLoading(true)
+        setError(null)
+        void loadValue()
+          .then((nextValue) => setResolvedValue(nextValue))
+          .catch((loadError: unknown) => {
+            setError(
+              loadError instanceof Error
+                ? loadError.message
+                : String(loadError),
+            )
+          })
+          .finally(() => setLoading(false))
+      }}
+    >
+      <summary>
+        <Braces size={12} aria-hidden="true" />
+        <span>{label}</span>
+      </summary>
+      {open && resolvedValue !== undefined && (
+        <div className="inspector-analysis-json-scroll" tabIndex={0}>
+          <RichJson value={resolvedValue} ariaLabel={ariaLabel} />
+        </div>
+      )}
+      {open && resolvedValue === undefined && (
+        <div className="inspector-analysis-json-status" role="status">
+          {loading
+            ? 'Loading complete JSON…'
+            : error ?? 'Complete JSON is unavailable for this run.'}
+        </div>
+      )}
+    </details>
+  )
+}
+
+function analysisStageLabel(stage: string): string {
+  return stage
+    .replace(/^notebook_/, '')
+    .replaceAll('_', ' ')
+}
+
+function AnalysisLlmExchanges({
+  analysisInfo,
+}: {
+  analysisInfo: NotebookAnalysisInfo
+}) {
+  const inlineExchanges = notebookAnalysisLlmExchanges(
+    analysisInfo.outputJson,
+  )
+  const exchanges = analysisInfo.llmExchanges?.length
+    ? analysisInfo.llmExchanges.map((exchange) => ({
+        ...exchange,
+        complete: true,
+        input: undefined,
+        response: undefined,
+      }))
+    : inlineExchanges
+  const exchangeLoadRef = useRef<
+    Promise<NotebookAnalysisLlmExchange[]> | null
+  >(null)
+  const loadExchanges = (): Promise<NotebookAnalysisLlmExchange[]> => {
+    if (!analysisInfo.outputUrl) {
+      return Promise.reject(
+        new Error('Complete JSON is unavailable for this run.'),
+      )
+    }
+    if (!exchangeLoadRef.current) {
+      const load = fetch(analysisInfo.outputUrl)
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error(`Unable to load complete JSON (${response.status})`)
+          }
+          return response.json() as Promise<unknown>
+        })
+        .then((outputJson) => {
+          const loaded = notebookAnalysisLlmExchanges(outputJson)
+          if (loaded.length === 0) {
+            throw new Error('The saved analysis has no recorded LLM exchange.')
+          }
+          return loaded
+        })
+      exchangeLoadRef.current = load.catch((loadError: unknown) => {
+        exchangeLoadRef.current = null
+        throw loadError
+      })
+    }
+    return exchangeLoadRef.current
+  }
+  const loadExchangeValue = (
+    index: number,
+    key: 'input' | 'response',
+  ) => async (): Promise<unknown> => {
+    const loaded = await loadExchanges()
+    const exchange = loaded[index]
+    if (!exchange) {
+      throw new Error('The saved LLM exchange could not be found.')
+    }
+    return exchange[key]
+  }
+  if (exchanges.length === 0) return null
+
+  return (
+    <section
+      className="inspector-analysis-llm"
+      aria-label="LLM exchanges"
+    >
+      <header className="inspector-analysis-llm-heading">
+        <span>LLM exchange</span>
+        <code>{exchanges.length} {exchanges.length === 1 ? 'call' : 'calls'}</code>
+      </header>
+      <div className="inspector-analysis-llm-calls">
+        {exchanges.map((exchange, index) => {
+          const stage = analysisStageLabel(exchange.stage)
+          const ordinal = String(index + 1).padStart(2, '0')
+
+          return (
+            <article
+              className="inspector-analysis-llm-call"
+              key={`${exchange.stage}-${index}`}
+            >
+              <header>
+                <span>{ordinal}</span>
+                <strong>{stage}</strong>
+              </header>
+              <dl className="inspector-analysis-llm-meta">
+                <div>
+                  <dt>Provider</dt>
+                  <dd>{exchange.provider}</dd>
+                </div>
+                <div>
+                  <dt>Model</dt>
+                  <dd>{exchange.model}</dd>
+                </div>
+              </dl>
+              {!exchange.complete && (
+                <p className="inspector-analysis-llm-legacy">
+                  This older run retained summary payloads only. Re-run the
+                  Analyze cell to record the complete provider exchange.
+                </p>
+              )}
+              <div className="inspector-analysis-json-disclosures">
+                <AnalysisJsonDisclosure
+                  label="LLM input"
+                  value={exchange.input}
+                  loadValue={
+                    exchange.input === undefined
+                      ? loadExchangeValue(index, 'input')
+                      : undefined
+                  }
+                  ariaLabel={`LLM input JSON for ${stage}`}
+                />
+                <AnalysisJsonDisclosure
+                  label="LLM response"
+                  value={exchange.response}
+                  loadValue={
+                    exchange.response === undefined
+                      ? loadExchangeValue(index, 'response')
+                      : undefined
+                  }
+                  ariaLabel={`LLM response JSON for ${stage}`}
+                />
+              </div>
+            </article>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 function AnalysisCellInspector({
   cell,
   asset,
@@ -893,6 +1096,10 @@ function AnalysisCellInspector({
                 <dd>{formatMediaTime(info.sourceDurationSeconds)}</dd>
               </div>
             </dl>
+            <AnalysisLlmExchanges
+              key={effectiveArtifactId}
+              analysisInfo={info}
+            />
             <ol className="inspector-analysis-shots">
               {shots.map((shot) => (
                 <li key={shot.ordinal}>

@@ -81,8 +81,25 @@ export type NotebookAnalysisShot = {
 
 export type NotebookAnalysisInfo = {
   sourceDurationSeconds: number
+  llmExchanges?: NotebookAnalysisLlmExchangeSummary[]
   outputJson?: unknown
+  outputUrl?: string | null
   shots: NotebookAnalysisShot[]
+}
+
+export type NotebookAnalysisLlmExchangeSummary = {
+  model: string
+  provider: string
+  stage: string
+}
+
+export type NotebookAnalysisLlmExchange = {
+  complete: boolean
+  input: unknown
+  model: string
+  provider: string
+  response: unknown
+  stage: string
 }
 
 export type NotebookAudioPresentation = {
@@ -119,6 +136,13 @@ function objectValue(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null
+}
+
+function hasOwnValue(
+  value: Record<string, unknown>,
+  key: string,
+): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key)
 }
 
 export function isNotebookMediaCellType(type: NotebookCellType): boolean {
@@ -280,6 +304,54 @@ export function notebookOutputVersionArtifactIds(
     ...persisted,
     ...(outputArtifactId ? [outputArtifactId] : []),
   ])]
+}
+
+export function notebookAnalysisLlmExchanges(
+  outputJson: unknown,
+): NotebookAnalysisLlmExchange[] {
+  const output = objectValue(outputJson)
+  if (!output) return []
+  const recorded = Array.isArray(output.llmExchanges)
+    ? output.llmExchanges
+    : []
+  const exchanges = recorded.flatMap((value, index) => {
+    const exchange = objectValue(value)
+    if (
+      !exchange
+      || !hasOwnValue(exchange, 'input')
+      || !hasOwnValue(exchange, 'response')
+    ) {
+      return []
+    }
+    const input = objectValue(exchange.input)
+    return [{
+      complete: true,
+      input: exchange.input,
+      model: stringValue(exchange.model)
+        ?? stringValue(input?.model)
+        ?? 'Unknown',
+      provider: stringValue(exchange.provider) ?? 'Unknown',
+      response: exchange.response,
+      stage: stringValue(exchange.stage) ?? `call_${index + 1}`,
+    }]
+  })
+  if (exchanges.length > 0) return exchanges
+
+  const request = objectValue(output.request)
+  if (
+    !request
+    || !hasOwnValue(output, 'raw')
+  ) {
+    return []
+  }
+  return [{
+    complete: false,
+    input: request,
+    model: stringValue(request.model) ?? 'Unknown',
+    provider: stringValue(request.provider) ?? 'Unknown',
+    response: output.raw,
+    stage: 'legacy_analysis',
+  }]
 }
 
 export function notebookSplitFrameIds(

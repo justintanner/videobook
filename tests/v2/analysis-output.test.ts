@@ -53,6 +53,25 @@ describe("Analysis output assets", () => {
         model: "gpt-5.6-sol",
         mode: "live",
       },
+      llmExchanges: [{
+        provider: "openai",
+        model: "gpt-5.6-sol",
+        stage: "notebook_shot_labels",
+        input: {
+          model: "gpt-5.6-sol",
+          input: [{
+            role: "user",
+            content: [{
+              type: "input_image",
+              image_url: "data:image/jpeg;base64,full-frame-data",
+            }],
+          }],
+        },
+        response: {
+          id: "resp-analysis",
+          status: "completed",
+        },
+      }],
       raw: {
         shots: [{
           startSeconds: 0,
@@ -85,7 +104,21 @@ describe("Analysis output assets", () => {
     );
     expect(assets[0]?.analysis_info).toEqual({
       source_duration_seconds: 16,
-      output_json: outputJson,
+      output_json: {
+        version: outputJson.version,
+        request: outputJson.request,
+        raw: outputJson.raw,
+        shots: outputJson.shots,
+        sourceDurationSeconds: outputJson.sourceDurationSeconds,
+        normalizedAt: outputJson.normalizedAt,
+      },
+      output_url:
+        `/files/${engine.book.get().bookId}/${assets[0]?.id}/analysis.json`,
+      llm_exchanges: [{
+        provider: "openai",
+        model: "gpt-5.6-sol",
+        stage: "notebook_shot_labels",
+      }],
       shots: [{
         ordinal: 1,
         label: "Opening",

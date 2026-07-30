@@ -273,6 +273,21 @@ describe("notebook live analysis", () => {
       pipelineVersion: 3,
       transcriptIncluded: true,
     });
+    expect(result.llmExchanges).toHaveLength(1);
+    expect(result.llmExchanges[0]).toMatchObject({
+      provider: "openai",
+      model: "gpt-5.6-sol",
+      stage: "notebook_shot_labels",
+      input: {
+        model: "gpt-5.6-sol",
+        reasoning: { effort: "high" },
+        store: false,
+      },
+      response: {
+        id: "resp_notebook_analysis",
+        status: "completed",
+      },
+    });
     expect(result.boundaries.map((boundary) => boundary.kind)).toEqual([
       "source_start",
       "duration_fallback",
@@ -405,6 +420,11 @@ describe("notebook live analysis", () => {
     expect(validationRequests).toHaveLength(2);
     expect(validationRequests[0]?.reasoning).toEqual({ effort: "high" });
     expect(validationRequests[1]?.reasoning).toEqual({ effort: "high" });
+    expect(result.llmExchanges.map((exchange) => exchange.stage)).toEqual([
+      "notebook_camera_cut_validation",
+      "notebook_camera_cut_validation",
+      "notebook_shot_labels",
+    ]);
   });
 
   it("runs real scene detection and candidate-frame extraction before validation", async () => {
@@ -589,6 +609,10 @@ describe("notebook live analysis", () => {
     expect(result.boundaries[1]?.timestampSeconds).toBe(15);
     expect(result.evidence.selectedAudioCandidateIds).toEqual([
       result.boundaries[1]?.evidenceIds[0],
+    ]);
+    expect(result.llmExchanges.map((exchange) => exchange.stage)).toEqual([
+      "notebook_audio_boundary_selection",
+      "notebook_shot_labels",
     ]);
     expect(result.rawOutput.shots.every((shot) =>
       shot.endSeconds - shot.startSeconds <= 15)).toBe(true);
@@ -881,6 +905,13 @@ describe("notebook live analysis", () => {
     const saved = JSON.parse(artifact.value.toString()) as {
       version: number;
       request: Record<string, unknown>;
+      llmExchanges: Array<{
+        provider: string;
+        model: string;
+        stage: string;
+        input: Record<string, unknown>;
+        response: Record<string, unknown>;
+      }>;
       raw: { shots: unknown[] };
       evidence: Record<string, unknown>;
       boundaries: unknown[];
@@ -891,6 +922,21 @@ describe("notebook live analysis", () => {
       model: "gpt-5.6-sol",
       reasoning: { effort: "high" },
       mode: "live",
+    });
+    expect(saved.llmExchanges).toHaveLength(1);
+    expect(saved.llmExchanges[0]).toMatchObject({
+      provider: "openai",
+      model: "gpt-5.6-sol",
+      stage: "notebook_shot_labels",
+      input: {
+        model: "gpt-5.6-sol",
+        reasoning: { effort: "high" },
+        store: false,
+      },
+      response: {
+        status: "completed",
+        model: "gpt-5.6-sol",
+      },
     });
     expect(saved.evidence).toBeTruthy();
     expect(saved.boundaries).toHaveLength(3);

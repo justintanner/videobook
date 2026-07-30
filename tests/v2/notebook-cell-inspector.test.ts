@@ -247,6 +247,23 @@ describe('NotebookCellInspector', () => {
       audioInfo: null,
       analysisInfo: {
         sourceDurationSeconds: 16,
+        outputJson: {
+          version: 3,
+          request: {
+            provider: 'openai',
+            model: 'gpt-5.6-sol',
+            mode: 'live',
+          },
+          raw: {
+            shots: [],
+          },
+        },
+        outputUrl: '/files/book/analysis-source-2/analysis.json',
+        llmExchanges: [{
+          provider: 'openai',
+          model: 'gpt-5.6-sol',
+          stage: 'notebook_shot_labels',
+        }],
         shots: [
           {
             ordinal: 2,
@@ -298,6 +315,14 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('Version 2 of 2 · current')
     expect(html).toContain('<dt>Shots</dt><dd>2</dd>')
     expect(html).toContain('<dt>Source duration</dt><dd>0:16</dd>')
+    expect(html).toContain('aria-label="LLM exchanges"')
+    expect(html).toContain('<code>1 call</code>')
+    expect(html).toContain('<strong>shot labels</strong>')
+    expect(html).toContain('<dt>Provider</dt><dd>openai</dd>')
+    expect(html).toContain('<dt>Model</dt><dd>gpt-5.6-sol</dd>')
+    expect(html).toContain('<span>LLM input</span>')
+    expect(html).toContain('<span>LLM response</span>')
+    expect(html).not.toContain('resp-analysis')
     expect(html.indexOf('Opening shot')).toBeLessThan(
       html.indexOf('Second shot'),
     )

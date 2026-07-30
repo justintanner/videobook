@@ -53,6 +53,12 @@ export type AssetWorkProjection = {
 export type SyncAnalysisInfo = {
   source_duration_seconds: number;
   output_json: unknown | null;
+  output_url: string | null;
+  llm_exchanges: Array<{
+    provider: string;
+    model: string;
+    stage: string;
+  }>;
   shots: Array<{
     ordinal: number;
     label: string;
@@ -152,18 +158,68 @@ function analysisInfoFromMetadata(
   return {
     source_duration_seconds: sourceDurationSeconds,
     output_json: null,
+    output_url: null,
+    llm_exchanges: [],
     shots,
   };
 }
 
-async function analysisOutputJson(
+async function analysisOutputProjection(
   engine: Engine,
   artifactId: string,
-): Promise<unknown | null> {
+): Promise<{
+  outputJson: unknown;
+  llmExchanges: SyncAnalysisInfo["llm_exchanges"];
+} | null> {
   const read = await engine.files.read(artifactId, "analysis.json");
   if (!read.ok) return null;
   try {
-    return JSON.parse(read.value.toString()) as unknown;
+    const outputJson = JSON.parse(read.value.toString()) as unknown;
+    if (
+      typeof outputJson !== "object"
+      || outputJson === null
+      || Array.isArray(outputJson)
+    ) {
+      return { outputJson, llmExchanges: [] };
+    }
+    const output = outputJson as Record<string, unknown>;
+    const exchanges = Array.isArray(output.llmExchanges)
+      ? output.llmExchanges.flatMap((value) => {
+          if (
+            typeof value !== "object"
+            || value === null
+            || Array.isArray(value)
+          ) {
+            return [];
+          }
+          const exchange = value as Record<string, unknown>;
+          const input = typeof exchange.input === "object"
+            && exchange.input !== null
+            && !Array.isArray(exchange.input)
+            ? exchange.input as Record<string, unknown>
+            : null;
+          const provider = typeof exchange.provider === "string"
+            ? exchange.provider
+            : null;
+          const model = typeof exchange.model === "string"
+            ? exchange.model
+            : typeof input?.model === "string"
+              ? input.model
+              : null;
+          const stage = typeof exchange.stage === "string"
+            ? exchange.stage
+            : null;
+          return provider && model && stage
+            ? [{ provider, model, stage }]
+            : [];
+        })
+      : [];
+    const compactOutput = { ...output };
+    delete compactOutput.llmExchanges;
+    return {
+      outputJson: compactOutput,
+      llmExchanges: exchanges,
+    };
   } catch {
     return null;
   }
@@ -570,7 +626,13 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
       const archiveMeta = archiveMetadata.ok ? archiveMetadata.value : null;
       const analysisInfo = analysisInfoFromMetadata(meta);
       if (analysisInfo) {
-        analysisInfo.output_json = await analysisOutputJson(fs, a.slug);
+        const output = await analysisOutputProjection(fs, a.slug);
+        if (output) {
+          analysisInfo.output_json = output.outputJson;
+          analysisInfo.output_url =
+            `/files/${book_id}/${a.slug}/analysis.json`;
+          analysisInfo.llm_exchanges = output.llmExchanges;
+        }
       }
 
       // Backfill duration if missing from metadata (video + audio; probeVideo

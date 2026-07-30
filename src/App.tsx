@@ -723,10 +723,25 @@ function asAsset(value: unknown): AssetRecord | null {
           : []
       })
     : []
+  const analysisLlmExchangeValues =
+    analysis?.llm_exchanges ?? analysis?.llmExchanges
+  const analysisLlmExchanges = Array.isArray(analysisLlmExchangeValues)
+    ? analysisLlmExchangeValues.flatMap((value) => {
+        const exchange = record(value)
+        const provider = exchange && asString(exchange.provider)
+        const model = exchange && asString(exchange.model)
+        const stage = exchange && asString(exchange.stage)
+        return provider && model && stage
+          ? [{ provider, model, stage }]
+          : []
+      })
+    : []
   const analysisInfo = sourceDurationSeconds !== null
     ? {
         sourceDurationSeconds,
+        llmExchanges: analysisLlmExchanges,
         outputJson: analysis?.output_json ?? analysis?.outputJson ?? null,
+        outputUrl: asString(analysis?.output_url ?? analysis?.outputUrl),
         shots: analysisShots,
       }
     : null

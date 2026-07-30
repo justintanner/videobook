@@ -17,6 +17,7 @@ import {
 import type {
   AnalysisBoundary,
   NotebookAnalysisEvidence,
+  NotebookAnalysisLlmExchange,
 } from "./notebook-live-analysis.js";
 import {
   normalizeShots,
@@ -483,6 +484,7 @@ export function buildAnalysisScriptArtifact(input: {
   rawOutput: unknown;
   shots: NormalizedShot[];
   sourceDurationSeconds: number;
+  llmExchanges?: NotebookAnalysisLlmExchange[];
   evidence?: NotebookAnalysisEvidence;
   boundaries?: AnalysisBoundary[];
 }): {
@@ -492,6 +494,7 @@ export function buildAnalysisScriptArtifact(input: {
   const content = JSON.stringify({
     version: 3,
     request: input.request,
+    llmExchanges: input.llmExchanges ?? [],
     raw: input.rawOutput,
     shots: input.shots,
     sourceDurationSeconds: input.sourceDurationSeconds,
@@ -772,6 +775,7 @@ export async function applyAnalysisResults(
     sourceDurationSeconds: number;
     request: Record<string, unknown>;
     sourceArtifactId: string;
+    llmExchanges?: NotebookAnalysisLlmExchange[];
     evidence?: NotebookAnalysisEvidence;
     boundaries?: AnalysisBoundary[];
   },
@@ -789,6 +793,7 @@ export async function applyAnalysisResults(
   );
   const script = buildAnalysisScriptArtifact({
     request: input.request,
+    llmExchanges: input.llmExchanges,
     rawOutput: input.rawOutput,
     shots,
     sourceDurationSeconds: input.sourceDurationSeconds,

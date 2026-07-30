@@ -1341,6 +1341,9 @@ async function executeLocalOrGeneration(
       sourceDurationSeconds: analysisRun.sourceDurationSeconds,
       request: analysisRun.request,
       sourceArtifactId: sourceId,
+      ...("llmExchanges" in analysisRun
+        ? { llmExchanges: analysisRun.llmExchanges }
+        : {}),
       ...("evidence" in analysisRun
         ? { evidence: analysisRun.evidence }
         : {}),

@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createOpenAi,
+  type OpenAiResponseRequest,
+  type OpenAiResponseResponse,
   type OpenAiResponseInputContent,
 } from "@apicity/openai";
 import { z } from "zod";
@@ -101,6 +103,14 @@ export type NotebookAnalysisEvidence = {
   };
 };
 
+export type NotebookAnalysisLlmExchange = {
+  provider: string;
+  model: string;
+  stage: string;
+  input: OpenAiResponseRequest;
+  response: OpenAiResponseResponse;
+};
+
 export type NotebookLiveAnalysis = {
   rawOutput: {
     shots: Array<{
@@ -112,6 +122,7 @@ export type NotebookLiveAnalysis = {
   };
   sourceDurationSeconds: number;
   request: Record<string, unknown>;
+  llmExchanges: NotebookAnalysisLlmExchange[];
   evidence: NotebookAnalysisEvidence;
   boundaries: AnalysisBoundary[];
 };
@@ -1124,6 +1135,13 @@ function shotLabelContent(
   return content;
 }
 
+function llmExchangeStage(request: OpenAiResponseRequest): string {
+  const format = request.text?.format;
+  return format?.type === "json_schema"
+    ? format.name
+    : "openai_responses";
+}
+
 async function labelShots(
   responses: ResponsesFn,
   prompt: string,
@@ -1212,10 +1230,24 @@ export async function analyzeNotebookSource(
         duration,
         options.signal,
       );
-  const responses = options.responses
+  const providerResponses = options.responses
     ?? buildIntelligenceResponses(
       getApiKey("OPENAI_API_KEY") ?? undefined,
     );
+  const llmExchanges: Array<NotebookAnalysisLlmExchange | null> = [];
+  const responses: ResponsesFn = async (request, signal) => {
+    const exchangeIndex = llmExchanges.length;
+    llmExchanges.push(null);
+    const response = await providerResponses(request, signal);
+    llmExchanges[exchangeIndex] = {
+      provider: "openai",
+      model: request.model,
+      stage: llmExchangeStage(request),
+      input: request,
+      response,
+    };
+    return response;
+  };
   const visualDecisions = await validateCameraCandidates(
     responses,
     visualEvidence,
@@ -1312,6 +1344,9 @@ export async function analyzeNotebookSource(
   return {
     rawOutput,
     sourceDurationSeconds: duration,
+    llmExchanges: llmExchanges.filter(
+      (exchange): exchange is NotebookAnalysisLlmExchange => exchange !== null,
+    ),
     evidence,
     boundaries,
     request: {
