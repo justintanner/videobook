@@ -35,6 +35,7 @@ const textToImage: NotebookGenerationAction = {
   isDefault: true,
   defaultPriority: 0,
   inputContract: textContract,
+  controls: [],
 }
 
 const imageToImage: NotebookGenerationAction = {
@@ -49,6 +50,7 @@ const imageToImage: NotebookGenerationAction = {
   isDefault: false,
   defaultPriority: 1,
   inputContract: requiredImageContract,
+  controls: [],
 }
 
 const actions = [textToImage, imageToImage]

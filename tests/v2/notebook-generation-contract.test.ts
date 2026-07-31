@@ -52,17 +52,17 @@ describe("notebook generation input contracts", () => {
       },
     );
     expect(contract.modes.map((mode) => mode.id)).toEqual([
-      "text",
-      "frames",
-      "references",
+      "t2v",
+      "i2v",
+      "r2v",
     ]);
-    expect(contract.modes.find((mode) => mode.id === "frames")?.slots
+    expect(contract.modes.find((mode) => mode.id === "i2v")?.slots
       .map((slot) => slot.field)).toEqual([
       "first_frame_slug",
       "last_frame_slug",
       "replace_audio_with",
     ]);
-    expect(contract.modes.find((mode) => mode.id === "references")?.slots
+    expect(contract.modes.find((mode) => mode.id === "r2v")?.slots
       .map((slot) => slot.field)).toEqual([
       "image_slugs",
       "video_slugs",
@@ -84,10 +84,28 @@ describe("notebook generation input contracts", () => {
       id: mode.id,
       requiredGroups: mode.requiredGroups,
     }))).toEqual([
-      { id: "text", requiredGroups: [] },
-      { id: "first-frame", requiredGroups: [["first_frame_slug"]] },
-      { id: "references", requiredGroups: [["image_slugs"]] },
-      { id: "video-edit", requiredGroups: [["video_slug"]] },
+      { id: "t2v", requiredGroups: [] },
+      { id: "i2v", requiredGroups: [["first_frame_slug"]] },
+      { id: "r2v", requiredGroups: [["image_slugs"]] },
+      { id: "v2v", requiredGroups: [["video_slug"]] },
+    ]);
+  });
+
+  it("publishes Kie Gemini text, reference, and video modes", () => {
+    const contract = notebookGenerationInputContract(
+      "generate_kie_gemini_omni_video",
+      {
+        image_slugs: z.array(z.string()).max(7).optional(),
+        video_slug: z.string().optional(),
+      },
+    );
+    expect(contract.modes.map((mode) => ({
+      id: mode.id,
+      requiredGroups: mode.requiredGroups,
+    }))).toEqual([
+      { id: "t2v", requiredGroups: [] },
+      { id: "r2v", requiredGroups: [["image_slugs"]] },
+      { id: "v2v", requiredGroups: [["video_slug"]] },
     ]);
   });
 });

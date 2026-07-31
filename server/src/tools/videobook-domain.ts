@@ -53,6 +53,7 @@ import {
   validateCellConfiguration,
 } from "../notebook-action-catalog.js";
 import { notebookGenerationInputContract } from "../notebook-generation-contract.js";
+import { notebookGenerationControls } from "../notebook-generation-controls.js";
 import { buildSevenStageScaffold } from "../notebook-workflow.js";
 import {
   enqueueNotebookRunPlan,
@@ -1960,7 +1961,15 @@ export function videobookDomainDefs(
         cell_type: cellTypeSchema.optional(),
       },
       handler: async (args) => {
-        const { getAllToolDefs } = await import("./index.js");
+        const [
+          { getAllToolDefs },
+          { getVideoToolSchema },
+          { getImageToolSchema },
+        ] = await Promise.all([
+          import("./index.js"),
+          import("../video-models.js"),
+          import("../image-models.js"),
+        ]);
         const definitions = new Map(
           getAllToolDefs(engine).map((definition) => [definition.name, definition]),
         );
@@ -1973,11 +1982,22 @@ export function videobookDomainDefs(
             if (action.kind !== "generation" || !action.tool) return action;
             const definition = definitions.get(action.tool);
             if (!definition) return action;
+            const settingsSchema = action.cellTypes.includes("generate_video")
+              ? getVideoToolSchema(action.tool)
+              : action.cellTypes.includes("generate_image")
+                ? getImageToolSchema(action.tool)
+                : null;
             return {
               ...action,
               inputContract: notebookGenerationInputContract(
                 action.tool,
                 definition.schema,
+              ),
+              controls: notebookGenerationControls(
+                settingsSchema ?? z.object(definition.schema).toJSONSchema(),
+                action.tool === "generate_kie_gemini_omni_video"
+                  ? { duration: "8" }
+                  : {},
               ),
             };
           });
@@ -3475,6 +3495,7 @@ export function videobookDomainDefs(
           model: z.string().min(1),
           operation: z.string().min(1),
           tool: z.string().min(1),
+          inputs: z.record(z.string(), z.unknown()).optional(),
         }).optional(),
       },
       handler: async (args) => {
@@ -3490,6 +3511,7 @@ export function videobookDomainDefs(
             model: string;
             operation: string;
             tool: string;
+            inputs?: Record<string, unknown>;
           } | undefined;
           const previewCell: NotebookCell = draft
             ? { ...cell, ...draft }

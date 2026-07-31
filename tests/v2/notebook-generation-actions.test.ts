@@ -3,10 +3,12 @@ import type { NotebookCell, NotebookEdge } from 'videobook-engine'
 import {
   asNotebookGenerationActions,
   compatibleGenerationActions,
+  compatibleGenerationModes,
   generationActionForSelection,
   generationActionIsCompatible,
   generationActionLabel,
   generationConnectedInputs,
+  generationModeLabel,
   generationSelectionForAction,
   initialGenerationSelection,
   type GenerationInputContract,
@@ -44,6 +46,16 @@ const actions: NotebookGenerationAction[] = [
     isDefault: true,
     defaultPriority: 0,
     inputContract: optionalImageContract,
+    controls: [{
+      name: 'aspect_ratio',
+      label: 'Aspect ratio',
+      kind: 'select',
+      valueType: 'string',
+      required: false,
+      defaultValue: 'auto',
+      options: ['auto', '16:9', '9:16'],
+      description: 'Output aspect ratio',
+    }],
   },
   {
     id: 'generation.generate_google_flow_nano_banana_pro_image',
@@ -57,6 +69,7 @@ const actions: NotebookGenerationAction[] = [
     isDefault: false,
     defaultPriority: null,
     inputContract: optionalImageContract,
+    controls: [],
   },
   {
     id: 'generation.generate_kie_gpt_image_2_text_to_image',
@@ -70,6 +83,7 @@ const actions: NotebookGenerationAction[] = [
     isDefault: false,
     defaultPriority: null,
     inputContract: textContract,
+    controls: [],
   },
 ]
 
@@ -85,27 +99,42 @@ const geminiAction: NotebookGenerationAction = {
   isDefault: true,
   defaultPriority: 0,
   inputContract: {
-    modes: [{
-      id: 'default',
-      slots: [
-        {
+    modes: [
+      { id: 't2v', slots: [], requiredGroups: [] },
+      {
+        id: 'r2v',
+        slots: [{
           field: 'image_slugs',
           kind: 'image',
           targets: ['image'],
           min: 0,
           max: 7,
-        },
-        {
-          field: 'video_slug',
-          kind: 'video',
-          targets: ['video'],
-          min: 0,
-          max: 1,
-        },
-      ],
-      requiredGroups: [],
-    }],
+        }],
+        requiredGroups: [['image_slugs']],
+      },
+      {
+        id: 'v2v',
+        slots: [
+          {
+            field: 'image_slugs',
+            kind: 'image',
+            targets: ['image'],
+            min: 0,
+            max: 7,
+          },
+          {
+            field: 'video_slug',
+            kind: 'video',
+            targets: ['video'],
+            min: 0,
+            max: 1,
+          },
+        ],
+        requiredGroups: [['video_slug']],
+      },
+    ],
   },
+  controls: [],
 }
 
 const seedanceAction: NotebookGenerationAction = {
@@ -121,9 +150,9 @@ const seedanceAction: NotebookGenerationAction = {
   defaultPriority: 1,
   inputContract: {
     modes: [
-      { id: 'text', slots: [], requiredGroups: [] },
+      { id: 't2v', slots: [], requiredGroups: [] },
       {
-        id: 'frames',
+        id: 'i2v',
         slots: [
           {
             field: 'first_frame_slug',
@@ -140,10 +169,10 @@ const seedanceAction: NotebookGenerationAction = {
             max: 1,
           },
         ],
-        requiredGroups: [],
+        requiredGroups: [['first_frame_slug', 'last_frame_slug']],
       },
       {
-        id: 'references',
+        id: 'r2v',
         slots: [
           {
             field: 'image_slugs',
@@ -167,10 +196,11 @@ const seedanceAction: NotebookGenerationAction = {
             max: 3,
           },
         ],
-        requiredGroups: [],
+        requiredGroups: [['image_slugs', 'video_slugs', 'audio_slugs']],
       },
     ],
   },
+  controls: [],
 }
 
 const emptyImageCell: NotebookCell = {
@@ -263,6 +293,14 @@ describe('notebook generation actions', () => {
       'Nano Banana Pro · Kie',
     )
     expect(generationActionLabel(actions[2]!, actions)).toBe('GPT Image 2')
+  })
+
+  it('surfaces compatible generation types with concise labels', () => {
+    expect(compatibleGenerationModes(
+      geminiAction,
+      [{ kind: 'video', target: 'video' }],
+    ).map((mode) => mode.id)).toEqual(['v2v'])
+    expect(generationModeLabel('r2v')).toBe('R2V · Reference to video')
   })
 
   it('uses Gemini by default and Seedance for unsupported media combinations', () => {

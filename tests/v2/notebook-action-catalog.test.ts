@@ -200,15 +200,45 @@ describe("notebook action catalog", () => {
         providerLabel: string;
         defaultPriority?: number;
         inputContract?: { modes: Array<{ id: string }> };
+        controls?: Array<{
+          name: string;
+          defaultValue?: string | number | boolean;
+          options?: Array<string | number | boolean>;
+        }>;
       }>;
     };
-    expect(generationCatalog.actions.find((action) =>
-      action.tool === DEFAULT_VIDEO_TOOL)).toMatchObject({
+    const geminiCatalogAction = generationCatalog.actions.find((action) =>
+      action.tool === DEFAULT_VIDEO_TOOL);
+    expect(geminiCatalogAction).toMatchObject({
       title: "Gemini Omni Video",
       providerLabel: "Kie",
       defaultPriority: 0,
-      inputContract: { modes: [{ id: "default" }] },
     });
+    expect(geminiCatalogAction?.inputContract?.modes.map((mode) => mode.id))
+      .toEqual(["t2v", "r2v", "v2v"]);
+    expect(geminiCatalogAction?.controls?.find((control) =>
+      control.name === "aspect_ratio")).toMatchObject({
+      options: ["16:9", "9:16"],
+    });
+    expect(geminiCatalogAction?.controls?.find((control) =>
+      control.name === "duration")).toMatchObject({
+      defaultValue: "8",
+      options: ["4", "6", "8", "10"],
+    });
+    const fullCatalog = resultJson(await invoke("list_notebook_actions", {})) as {
+      actions: Array<{
+        kind: string;
+        tool?: string;
+        controls?: Array<{ name: string; required?: boolean }>;
+      }>;
+    };
+    expect(fullCatalog.actions
+      .filter((action) => action.kind === "generation")
+      .every((action) => Array.isArray(action.controls))).toBe(true);
+    expect(fullCatalog.actions.find((action) =>
+      action.tool === "generate_elevenlabs_text_to_audio")?.controls?.find(
+      (control) => control.name === "voice_id",
+    )).toMatchObject({ required: true });
 
     const details = resultJson(await invoke("get_notebook_cell_details", {
       notebook_id: notebookId,
@@ -301,16 +331,79 @@ describe("notebook action catalog", () => {
     const videoPreview = resultJson(await invoke("preview_notebook_generation", {
       notebook_id: notebookId,
       cell_id: videoGeneration.id,
+      draft: {
+        prompt: "A moonlit garden in motion",
+        provider: "kie",
+        model: "GeminiOmniVideoRequestSchema",
+        operation: "image_to_video",
+        tool: DEFAULT_VIDEO_TOOL,
+        inputs: {
+          generationMode: "t2v",
+          generationSettings: {
+            duration: "6",
+            aspect_ratio: "9:16",
+          },
+        },
+      },
     })) as {
       tool: string;
-      input: { prompt: string; duration: string };
+      input: { prompt: string; duration: string; aspect_ratio: string };
     };
     expect(videoPreview).toMatchObject({
       tool: DEFAULT_VIDEO_TOOL,
       input: {
         prompt: "A moonlit garden in motion",
-        duration: "8",
+        duration: "6",
+        aspect_ratio: "9:16",
       },
+    });
+    const incompatibleModePreview = await invoke("preview_notebook_generation", {
+      notebook_id: notebookId,
+      cell_id: videoGeneration.id,
+      draft: {
+        prompt: "A moonlit garden in motion",
+        provider: "kie",
+        model: "GeminiOmniVideoRequestSchema",
+        operation: "image_to_video",
+        tool: DEFAULT_VIDEO_TOOL,
+        inputs: {
+          generationMode: "r2v",
+          generationSettings: { duration: "8" },
+        },
+      },
+    });
+    expect(incompatibleModePreview.isError).toBe(true);
+    expect(incompatibleModePreview.content[0]?.text).toContain(
+      "does not accept the current media inputs",
+    );
+
+    const audioGeneration = resultJson(await invoke("create_notebook_cell", {
+      notebook_id: notebookId,
+      cell: {
+        type: "generate_audio",
+        slug: "generate-audio-01",
+        slot: { row: 4, column: 0 },
+        prompt: "Welcome to the moon garden",
+      },
+    })) as { id: string; provider: string; model: string; operation: string; tool: string };
+    const audioPreview = resultJson(await invoke("preview_notebook_generation", {
+      notebook_id: notebookId,
+      cell_id: audioGeneration.id,
+      draft: {
+        prompt: "Welcome to the moon garden",
+        provider: audioGeneration.provider,
+        model: audioGeneration.model,
+        operation: audioGeneration.operation,
+        tool: audioGeneration.tool,
+        inputs: {
+          generationMode: "default",
+          generationSettings: { voice_id: "voice-test" },
+        },
+      },
+    })) as { input: { text: string; voice_id: string } };
+    expect(audioPreview.input).toMatchObject({
+      text: "Welcome to the moon garden",
+      voice_id: "voice-test",
     });
 
     const valid = validateCellConfiguration({

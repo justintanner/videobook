@@ -37,13 +37,19 @@ import {
 } from '@/videobook/notebook-cell-actions'
 import {
   compatibleGenerationActions,
+  compatibleGenerationModes,
   generationActionForSelection,
   generationActionIsCompatible,
   generationActionLabel,
   generationConnectedInputs,
+  generationModeIsCompatible,
+  generationModeLabel,
   generationSelectionForAction,
   initialGenerationSelection,
+  initialGenerationMode,
   isGenerationCellType,
+  type GenerationControl,
+  type GenerationControlValue,
   type GenerationPreviewDraft,
   type GenerationSelection,
   type NotebookGenerationAction,
@@ -77,6 +83,8 @@ type CellFormDraft = {
   overlap: string
   frameMode: 'first' | 'time' | 'last'
   timestampSeconds: string
+  generationMode: string
+  generationSettings: Record<string, GenerationControlValue>
 }
 
 const cellFormDraftFields = [
@@ -90,6 +98,7 @@ const cellFormDraftFields = [
   'overlap',
   'frameMode',
   'timestampSeconds',
+  'generationMode',
 ] as const satisfies readonly (keyof CellFormDraft)[]
 
 function draftNumber(value: unknown): string {
@@ -98,7 +107,37 @@ function draftNumber(value: unknown): string {
     : '0'
 }
 
-function persistedCellFormDraft(cell: NotebookCell): CellFormDraft {
+function persistedGenerationSettings(
+  cell: NotebookCell,
+  controls: readonly GenerationControl[] = [],
+): Record<string, GenerationControlValue> {
+  const value = cell.inputs?.generationSettings
+  const nested = !value || typeof value !== 'object' || Array.isArray(value)
+    ? {}
+    : Object.fromEntries(Object.entries(value).filter((entry): entry is [
+        string,
+        GenerationControlValue,
+      ] => {
+        const setting = entry[1]
+        return typeof setting === 'string'
+          || typeof setting === 'number'
+          || typeof setting === 'boolean'
+      }))
+  const legacy = Object.fromEntries(controls.flatMap((control) => {
+    const setting = cell.inputs?.[control.name]
+    return typeof setting === 'string'
+      || typeof setting === 'number'
+      || typeof setting === 'boolean'
+      ? [[control.name, setting] as const]
+      : []
+  }))
+  return { ...legacy, ...nested }
+}
+
+function persistedCellFormDraft(
+  cell: NotebookCell,
+  controls: readonly GenerationControl[] = [],
+): CellFormDraft {
   const configuredFrameMode = cell.inputs?.frameMode
   return {
     prompt: cell.prompt ?? '',
@@ -113,6 +152,10 @@ function persistedCellFormDraft(cell: NotebookCell): CellFormDraft {
       ? configuredFrameMode
       : 'first',
     timestampSeconds: draftNumber(cell.inputs?.timestampSeconds),
+    generationMode: typeof cell.inputs?.generationMode === 'string'
+      ? cell.inputs.generationMode
+      : '',
+    generationSettings: persistedGenerationSettings(cell, controls),
   }
 }
 
@@ -121,14 +164,24 @@ function cellFormDraft(
   actions: readonly NotebookGenerationAction[],
   inputs: Parameters<typeof initialGenerationSelection>[2] = [],
 ): CellFormDraft {
-  const draft = persistedCellFormDraft(cell)
   const selection = initialGenerationSelection(cell, actions, inputs)
-  return selection ? { ...draft, ...selection } : draft
+  if (!selection || !isGenerationCellType(cell.type)) {
+    return persistedCellFormDraft(cell)
+  }
+  const action = generationActionForSelection(actions, cell.type, selection)
+  const draft = persistedCellFormDraft(cell, action?.controls)
+  return { ...draft, ...selection }
 }
 
-function cellFormIsDirty(cell: NotebookCell, draft: CellFormDraft): boolean {
-  const persisted = persistedCellFormDraft(cell)
+function cellFormIsDirty(
+  cell: NotebookCell,
+  draft: CellFormDraft,
+  controls: readonly GenerationControl[] = [],
+): boolean {
+  const persisted = persistedCellFormDraft(cell, controls)
   return cellFormDraftFields.some((field) => draft[field] !== persisted[field])
+    || JSON.stringify(draft.generationSettings)
+      !== JSON.stringify(persisted.generationSettings)
 }
 
 function validTimingValue(value: string): boolean {
@@ -159,11 +212,66 @@ function cellFormIsValid(cell: NotebookCell, draft: CellFormDraft): boolean {
   return true
 }
 
+function generationInputsForDraft(
+  cell: NotebookCell,
+  draft: CellFormDraft,
+  controls: readonly GenerationControl[] = [],
+): Record<string, unknown> {
+  const inputs = { ...(cell.inputs ?? {}) }
+  delete inputs.generationMode
+  delete inputs.generationSettings
+  for (const control of controls) delete inputs[control.name]
+  return {
+    ...inputs,
+    ...(draft.generationMode
+      ? { generationMode: draft.generationMode }
+      : {}),
+    ...(Object.keys(draft.generationSettings).length > 0
+      ? { generationSettings: draft.generationSettings }
+      : {}),
+  }
+}
+
+function effectiveGenerationControlValue(
+  control: GenerationControl,
+  settings: Record<string, GenerationControlValue>,
+): GenerationControlValue | undefined {
+  return settings[control.name] ?? control.defaultValue
+}
+
+function generationControlIsValid(
+  control: GenerationControl,
+  settings: Record<string, GenerationControlValue>,
+): boolean {
+  const value = effectiveGenerationControlValue(control, settings)
+  if (value === undefined || value === '') return !control.required
+  if (
+    control.options.length > 0
+    && !control.options.some((option) => option === value)
+  ) return false
+  if (control.valueType === 'number') {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return false
+    if (control.minimum !== undefined && value < control.minimum) return false
+    if (control.maximum !== undefined && value > control.maximum) return false
+  }
+  return typeof value === control.valueType
+}
+
+function generationControlsAreValid(
+  controls: readonly GenerationControl[],
+  settings: Record<string, GenerationControlValue>,
+): boolean {
+  return controls.every((control) =>
+    generationControlIsValid(control, settings))
+}
+
 function cellFormPatch(
   cell: NotebookCell,
   draft: CellFormDraft,
+  controls: readonly GenerationControl[] = [],
+  controlsToClear: readonly GenerationControl[] = controls,
 ): Record<string, unknown> {
-  const persisted = persistedCellFormDraft(cell)
+  const persisted = persistedCellFormDraft(cell, controls)
   const patch: Record<string, unknown> = {}
   if (draft.prompt !== persisted.prompt) patch.prompt = draft.prompt
   if (!isActionCellType(cell.type)) {
@@ -175,6 +283,16 @@ function cellFormPatch(
       patch.operation = draft.operation || undefined
     }
     if (draft.tool !== persisted.tool) patch.tool = draft.tool || undefined
+  }
+  if (
+    isGenerationCellType(cell.type)
+    && (
+      draft.generationMode !== persisted.generationMode
+      || JSON.stringify(draft.generationSettings)
+        !== JSON.stringify(persisted.generationSettings)
+    )
+  ) {
+    patch.inputs = generationInputsForDraft(cell, draft, controlsToClear)
   }
   if (
     cell.type === 'split_video'
@@ -1465,6 +1583,102 @@ function AnalysisCellInspector({
   )
 }
 
+function generationControlOptionValue(value: GenerationControlValue): string {
+  return `${typeof value}:${String(value)}`
+}
+
+function GenerationControlField({
+  control,
+  settings,
+  busy,
+  onChange,
+}: {
+  control: GenerationControl
+  settings: Record<string, GenerationControlValue>
+  busy: boolean
+  onChange: (value: GenerationControlValue | undefined) => void
+}) {
+  const rawValue = settings[control.name]
+  const value = effectiveGenerationControlValue(control, settings)
+  if (control.kind === 'boolean') {
+    return (
+      <label className="inspector-generation-toggle" title={control.description}>
+        <input
+          type="checkbox"
+          checked={value === true}
+          disabled={busy}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+        <span>{control.label}</span>
+      </label>
+    )
+  }
+  if (control.kind === 'select') {
+    const encodedValue = rawValue === undefined
+      ? ''
+      : generationControlOptionValue(rawValue)
+    const savedOption = rawValue !== undefined
+      && !control.options.some((option) => option === rawValue)
+    return (
+      <label title={control.description}>
+        {control.label}
+        <select
+          aria-label={control.label}
+          value={encodedValue}
+          disabled={busy}
+          onChange={(event) => {
+            const selected = control.options.find((option) =>
+              generationControlOptionValue(option) === event.target.value)
+            onChange(selected)
+          }}
+        >
+          <option value="">
+            {control.defaultValue === undefined
+              ? control.required ? 'Select…' : 'Auto'
+              : `Default · ${String(control.defaultValue)}`}
+          </option>
+          {savedOption && (
+            <option value={encodedValue}>{String(rawValue)} · incompatible</option>
+          )}
+          {control.options.map((option) => (
+            <option
+              key={generationControlOptionValue(option)}
+              value={generationControlOptionValue(option)}
+            >
+              {String(option)}
+            </option>
+          ))}
+        </select>
+      </label>
+    )
+  }
+  return (
+    <label title={control.description}>
+      {control.label}
+      <input
+        type={control.kind === 'number' ? 'number' : 'text'}
+        aria-label={control.label}
+        min={control.minimum}
+        max={control.maximum}
+        step={control.kind === 'number' ? 'any' : undefined}
+        value={value === undefined ? '' : String(value)}
+        disabled={busy}
+        onChange={(event) => {
+          const next = event.target.value
+          if (!next) {
+            onChange(undefined)
+            return
+          }
+          const numeric = Number(next)
+          onChange(control.kind === 'number'
+            ? Number.isFinite(numeric) ? numeric : undefined
+            : next)
+        }}
+      />
+    </label>
+  )
+}
+
 function ExecutableCellInspector({
   cell,
   cells,
@@ -1550,15 +1764,53 @@ function ExecutableCellInspector({
         generationSelection,
       )
     : null
-  const generationCompatible = Boolean(
+  const generationActionCompatible = Boolean(
     selectedGenerationAction
     && generationActionIsCompatible(
       selectedGenerationAction,
       connectedGenerationInputs,
     ),
   )
+  const compatibleModes = selectedGenerationAction
+    ? compatibleGenerationModes(
+        selectedGenerationAction,
+        connectedGenerationInputs,
+      )
+    : []
+  const effectiveGenerationMode = selectedGenerationAction
+    ? draft.generationMode || initialGenerationMode(
+        selectedGenerationAction,
+        connectedGenerationInputs,
+      )
+    : ''
+  const generationModeCompatible = Boolean(
+    selectedGenerationAction
+    && generationModeIsCompatible(
+      selectedGenerationAction,
+      effectiveGenerationMode,
+      connectedGenerationInputs,
+    ),
+  )
+  const generationModeOptions = selectedGenerationAction?.inputContract.modes
+    ?? []
+  const generationControls = selectedGenerationAction?.controls ?? []
+  const allGenerationControls = generationActions.flatMap((candidate) =>
+    candidate.controls)
+  const primaryGenerationControls = generationControls.filter((control) =>
+    control.name === 'duration'
+    || control.name === 'aspect_ratio'
+    || control.name === 'resolution')
+  const advancedGenerationControls = generationControls.filter((control) =>
+    !primaryGenerationControls.includes(control))
+  const generationSettingsValid = generationControlsAreValid(
+    generationControls,
+    draft.generationSettings,
+  )
+  const generationCompatible = generationActionCompatible
+    && generationModeCompatible
+    && generationSettingsValid
   const generationPickerActions = selectedGenerationAction
-    && !generationCompatible
+    && !generationActionCompatible
     && !compatibleActions.some((candidate) =>
       candidate.id === selectedGenerationAction.id)
     ? [selectedGenerationAction, ...compatibleActions]
@@ -1579,7 +1831,7 @@ function ExecutableCellInspector({
   )
   const previewCell = cell.type === 'character' || generationCell
   const actionCell = isActionCellType(cell.type)
-  const dirty = cellFormIsDirty(cell, draft)
+  const dirty = cellFormIsDirty(cell, draft, generationControls)
   const valid = cellFormIsValid(cell, draft)
     && (!generationCell || generationCompatible)
   const runLabel = generationCell
@@ -1610,7 +1862,23 @@ function ExecutableCellInspector({
     setDraft((current) => ({
       ...current,
       ...generationSelectionForAction(selected),
+      generationMode: initialGenerationMode(
+        selected,
+        connectedGenerationInputs,
+      ),
+      generationSettings: {},
     }))
+  }
+  const updateGenerationSetting = (
+    name: string,
+    value: GenerationControlValue | undefined,
+  ) => {
+    setDraft((current) => {
+      const generationSettings = { ...current.generationSettings }
+      if (value === undefined) delete generationSettings[name]
+      else generationSettings[name] = value
+      return { ...current, generationSettings }
+    })
   }
   const copyRunError = async () => {
     try {
@@ -1624,7 +1892,12 @@ function ExecutableCellInspector({
     if (!dirty || !valid) return
     setSaving(true)
     try {
-      await onUpdate(cellFormPatch(cell, draft))
+      await onUpdate(cellFormPatch(
+        cell,
+        { ...draft, generationMode: effectiveGenerationMode },
+        generationControls,
+        allGenerationControls,
+      ))
     } finally {
       setSaving(false)
     }
@@ -1637,7 +1910,12 @@ function ExecutableCellInspector({
         cellId: cell.id,
         dirty,
         valid,
-        patch: cellFormPatch(cell, draft),
+        patch: cellFormPatch(
+          cell,
+          { ...draft, generationMode: effectiveGenerationMode },
+          generationControls,
+          allGenerationControls,
+        ),
         onUpdate,
         onRun,
       })
@@ -1767,48 +2045,113 @@ function ExecutableCellInspector({
           </span>
         )}
         {generationCell && (
-          <div className="inspector-generation-model">
-            <label>
-              Model
-              <select
-                aria-label="Model"
-                value={selectedGenerationValue}
-                disabled={busy || compatibleActions.length === 0}
-                onChange={(event) => updateGenerationAction(event.target.value)}
-              >
-                {!selectedGenerationAction && draft.tool && (
-                  <option value={draft.tool}>
-                    {draft.tool} · incompatible
-                  </option>
-                )}
-                {!selectedGenerationValue && (
-                  <option value="">No compatible models</option>
-                )}
-                {generationPickerActions.map((candidate) => {
-                  const compatible = generationActionIsCompatible(
-                    candidate,
-                    connectedGenerationInputs,
-                  )
-                  const label = generationActionLabel(
-                    candidate,
-                    generationActions,
-                  )
-                  return (
-                    <option key={candidate.id} value={candidate.id}>
-                      {compatible ? label : `${label} · incompatible`}
+          <div className="inspector-generation-controls">
+            <div className="inspector-generation-model">
+              <label>
+                Model
+                <select
+                  aria-label="Model"
+                  value={selectedGenerationValue}
+                  disabled={busy || compatibleActions.length === 0}
+                  onChange={(event) => updateGenerationAction(event.target.value)}
+                >
+                  {!selectedGenerationAction && draft.tool && (
+                    <option value={draft.tool}>
+                      {draft.tool} · incompatible
                     </option>
-                  )
-                })}
-              </select>
-            </label>
+                  )}
+                  {!selectedGenerationValue && (
+                    <option value="">No compatible models</option>
+                  )}
+                  {generationPickerActions.map((candidate) => {
+                    const compatible = generationActionIsCompatible(
+                      candidate,
+                      connectedGenerationInputs,
+                    )
+                    const label = generationActionLabel(
+                      candidate,
+                      generationActions,
+                    )
+                    return (
+                      <option key={candidate.id} value={candidate.id}>
+                        {compatible ? label : `${label} · incompatible`}
+                      </option>
+                    )
+                  })}
+                </select>
+              </label>
+            </div>
+            {(selectedGenerationAction?.inputContract.modes.length ?? 0) > 1
+              || primaryGenerationControls.length > 0 ? (
+                <div className="inspector-generation-primary">
+                  {(selectedGenerationAction?.inputContract.modes.length ?? 0) > 1 && (
+                    <label>
+                      Type
+                      <select
+                        aria-label="Type"
+                        value={effectiveGenerationMode}
+                        disabled={busy || generationModeOptions.length === 0}
+                        onChange={(event) => updateDraft(
+                          'generationMode',
+                          event.target.value,
+                        )}
+                      >
+                        {generationModeOptions.map((mode) => (
+                          <option key={mode.id} value={mode.id}>
+                            {generationModeLabel(mode.id)}
+                            {!compatibleModes.some((candidate) =>
+                              candidate.id === mode.id)
+                              ? ' · needs inputs'
+                              : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {primaryGenerationControls.map((control) => (
+                    <GenerationControlField
+                      key={control.name}
+                      control={control}
+                      settings={draft.generationSettings}
+                      busy={busy || saving}
+                      onChange={(value) => updateGenerationSetting(
+                        control.name,
+                        value,
+                      )}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            {advancedGenerationControls.length > 0 && (
+              <details className="inspector-generation-options">
+                <summary>Options</summary>
+                <div className="inspector-generation-option-fields">
+                  {advancedGenerationControls.map((control) => (
+                    <GenerationControlField
+                      key={control.name}
+                      control={control}
+                      settings={draft.generationSettings}
+                      busy={busy || saving}
+                      onChange={(value) => updateGenerationSetting(
+                        control.name,
+                        value,
+                      )}
+                    />
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         )}
         {generationCell && selectedGenerationValue && !generationCompatible && (
           <div className="inspector-generation-warning" role="status">
             <CircleAlert size={14} />
             <span>
-              This model does not accept the current inputs. Choose a compatible
-              model or change the connections.
+              {!generationActionCompatible
+                ? 'This model does not accept the current inputs. Choose a compatible model or change the connections.'
+                : !generationModeCompatible
+                  ? 'This generation type does not match the current inputs. Choose a compatible type or change the connections.'
+                  : 'Complete the required generation settings before running.'}
             </span>
           </div>
         )}
@@ -1818,6 +2161,8 @@ function ExecutableCellInspector({
               cell.id,
               draft.tool,
               draft.prompt,
+              effectiveGenerationMode,
+              JSON.stringify(draft.generationSettings),
               ...edges
                 .filter((edge) => edge.target === cell.id)
                 .map((edge) => `${edge.source}:${edge.targetInput}`)
@@ -1831,6 +2176,11 @@ function ExecutableCellInspector({
               model: draft.model,
               operation: draft.operation,
               tool: draft.tool,
+              inputs: generationInputsForDraft(
+                cell,
+                { ...draft, generationMode: effectiveGenerationMode },
+                allGenerationControls,
+              ),
             })}
           />
         )}
@@ -1848,7 +2198,7 @@ function ExecutableCellInspector({
                   ? 'Changes apply when this action runs'
                   : 'Unsaved changes'
                 : generationCell
-                  ? 'Choose a model that accepts the current inputs'
+                  ? 'Check the generation type and required settings'
                   : saveOnRun
                   ? 'Check timing values before running'
                   : 'Check timing values before saving'}
@@ -1882,7 +2232,7 @@ function ExecutableCellInspector({
               action?.disabled
                 ? 'A run is already in progress for this cell'
                 : generationCell && !generationCompatible
-                  ? 'Choose a model that accepts the current inputs'
+                  ? 'Check the generation type and required settings'
                 : !saveOnRun && dirty
                   ? 'Save changes before running'
                   : undefined

@@ -12,6 +12,7 @@ import {
   OPENAI_ANALYSIS_TOOL,
 } from "./openai-intelligence.js";
 import type { NotebookGenerationInputContract } from "./notebook-generation-contract.js";
+import type { NotebookGenerationControl } from "./notebook-generation-controls.js";
 
 export type NotebookActionKind =
   | "local"
@@ -52,6 +53,7 @@ export interface NotebookAction {
   providerLabel?: string;
   defaultPriority?: number;
   inputContract?: NotebookGenerationInputContract;
+  controls?: NotebookGenerationControl[];
 }
 
 const LOCAL_ACTIONS: NotebookAction[] = [

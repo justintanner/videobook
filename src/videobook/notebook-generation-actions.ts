@@ -17,6 +17,7 @@ export type GenerationSelection = {
 
 export type GenerationPreviewDraft = GenerationSelection & {
   prompt: string
+  inputs: Record<string, unknown>
 }
 
 export type GenerationInputKind = 'image' | 'video' | 'audio'
@@ -44,6 +45,21 @@ export type GenerationConnectedInput = {
   target: string
 }
 
+export type GenerationControlValue = string | number | boolean
+
+export type GenerationControl = {
+  name: string
+  label: string
+  kind: 'select' | 'boolean' | 'number' | 'text'
+  valueType: 'string' | 'number' | 'boolean'
+  required: boolean
+  defaultValue?: GenerationControlValue
+  options: GenerationControlValue[]
+  minimum?: number
+  maximum?: number
+  description: string
+}
+
 export type NotebookGenerationAction = {
   id: string
   cellTypes: GenerationCellType[]
@@ -56,6 +72,7 @@ export type NotebookGenerationAction = {
   isDefault: boolean
   defaultPriority: number | null
   inputContract: GenerationInputContract
+  controls: GenerationControl[]
 }
 
 const generationCellTypes = new Set<string>([
@@ -88,6 +105,56 @@ function stringList(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((entry): entry is string => typeof entry === 'string')
     : []
+}
+
+function controlValue(value: unknown): GenerationControlValue | undefined {
+  return typeof value === 'string'
+    || typeof value === 'number'
+    || typeof value === 'boolean'
+    ? value
+    : undefined
+}
+
+function generationControl(value: unknown): GenerationControl | null {
+  const control = record(value)
+  const name = stringValue(control?.name)
+  const label = stringValue(control?.label)
+  const description = stringValue(control?.description)
+  const kind = control?.kind
+  const valueType = control?.valueType
+  if (
+    !name
+    || !label
+    || !description
+    || (kind !== 'select'
+      && kind !== 'boolean'
+      && kind !== 'number'
+      && kind !== 'text')
+    || (valueType !== 'string'
+      && valueType !== 'number'
+      && valueType !== 'boolean')
+  ) return null
+  const defaultValue = controlValue(control?.defaultValue)
+  const options = Array.isArray(control?.options)
+    ? control.options.flatMap((entry) => {
+        const parsed = controlValue(entry)
+        return parsed === undefined ? [] : [parsed]
+      })
+    : []
+  const minimum = finiteNumber(control?.minimum)
+  const maximum = finiteNumber(control?.maximum)
+  return {
+    name,
+    label,
+    kind,
+    valueType,
+    required: control?.required === true,
+    ...(defaultValue === undefined ? {} : { defaultValue }),
+    options,
+    ...(minimum === null ? {} : { minimum }),
+    ...(maximum === null ? {} : { maximum }),
+    description,
+  }
 }
 
 function inputSlot(value: unknown): GenerationInputSlot | null {
@@ -146,6 +213,11 @@ export function asNotebookGenerationActions(
     const tool = stringValue(action.tool)
     const title = stringValue(action.title)
     const contract = inputContract(action.inputContract)
+    const controls = Array.isArray(action.controls)
+      ? action.controls
+          .map(generationControl)
+          .filter((control): control is GenerationControl => control !== null)
+      : []
     const cellTypes = Array.isArray(action.cellTypes)
       ? action.cellTypes.filter((type): type is GenerationCellType =>
           typeof type === 'string' && isGenerationCellType(type))
@@ -173,6 +245,7 @@ export function asNotebookGenerationActions(
       isDefault: action.isDefault === true,
       defaultPriority: priority,
       inputContract: contract,
+      controls,
     }]
   })
 }
@@ -335,6 +408,53 @@ function inputModeMatches(
   }
   return mode.requiredGroups.every((group) =>
     group.some((field) => (counts.get(field) ?? 0) > 0))
+}
+
+export function compatibleGenerationModes(
+  action: NotebookGenerationAction,
+  inputs: readonly GenerationConnectedInput[],
+): GenerationInputMode[] {
+  return action.inputContract.modes.filter((mode) =>
+    inputModeMatches(mode, inputs))
+}
+
+export function generationModeIsCompatible(
+  action: NotebookGenerationAction,
+  modeId: string,
+  inputs: readonly GenerationConnectedInput[],
+): boolean {
+  const mode = action.inputContract.modes.find((candidate) =>
+    candidate.id === modeId)
+  return Boolean(mode && inputModeMatches(mode, inputs))
+}
+
+export function initialGenerationMode(
+  action: NotebookGenerationAction,
+  inputs: readonly GenerationConnectedInput[],
+  configured = '',
+): string {
+  if (
+    configured
+    && action.inputContract.modes.some((mode) => mode.id === configured)
+  ) return configured
+  return compatibleGenerationModes(action, inputs)[0]?.id
+    ?? action.inputContract.modes[0]?.id
+    ?? ''
+}
+
+export function generationModeLabel(modeId: string): string {
+  const labels: Record<string, string> = {
+    t2v: 'T2V · Text to video',
+    i2v: 'I2V · Image to video',
+    r2v: 'R2V · Reference to video',
+    v2v: 'V2V · Video to video',
+    t2i: 'T2I · Text to image',
+    i2i: 'I2I · Image to image',
+    t2a: 'T2A · Text to audio',
+  }
+  return labels[modeId]
+    ?? modeId.replaceAll('-', ' ').replace(/^./, (character) =>
+      character.toUpperCase())
 }
 
 export function generationActionIsCompatible(

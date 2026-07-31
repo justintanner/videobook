@@ -65,6 +65,7 @@ const generationActions: NotebookGenerationAction[] = [
     isDefault: false,
     defaultPriority: null,
     inputContract: textContract,
+    controls: [],
   },
   {
     id: 'generation.generate_kie_nano_banana_pro_text_to_image',
@@ -78,6 +79,85 @@ const generationActions: NotebookGenerationAction[] = [
     isDefault: true,
     defaultPriority: 0,
     inputContract: optionalImageContract,
+    controls: [{
+      name: 'aspect_ratio',
+      label: 'Aspect ratio',
+      kind: 'select',
+      valueType: 'string',
+      required: false,
+      defaultValue: 'auto',
+      options: ['auto', '16:9', '9:16'],
+      description: 'Output aspect ratio',
+    }],
+  },
+  {
+    id: 'generation.generate_kie_gemini_omni_video',
+    cellTypes: ['generate_video'],
+    provider: 'kie',
+    providerLabel: 'Kie',
+    model: 'GeminiOmniVideoRequestSchema',
+    operation: 'image_to_video',
+    tool: 'generate_kie_gemini_omni_video',
+    title: 'Gemini Omni Video',
+    isDefault: true,
+    defaultPriority: 0,
+    inputContract: {
+      modes: [
+        { id: 't2v', slots: [], requiredGroups: [] },
+        {
+          id: 'r2v',
+          slots: [{
+            field: 'image_slugs',
+            kind: 'image',
+            targets: ['image'],
+            min: 0,
+            max: 7,
+          }],
+          requiredGroups: [['image_slugs']],
+        },
+        {
+          id: 'v2v',
+          slots: [{
+            field: 'video_slug',
+            kind: 'video',
+            targets: ['video'],
+            min: 0,
+            max: 1,
+          }],
+          requiredGroups: [['video_slug']],
+        },
+      ],
+    },
+    controls: [
+      {
+        name: 'duration',
+        label: 'Duration',
+        kind: 'select',
+        valueType: 'string',
+        required: true,
+        defaultValue: '8',
+        options: ['4', '6', '8', '10'],
+        description: 'Output duration',
+      },
+      {
+        name: 'aspect_ratio',
+        label: 'Aspect ratio',
+        kind: 'select',
+        valueType: 'string',
+        required: false,
+        options: ['16:9', '9:16'],
+        description: 'Output aspect ratio',
+      },
+      {
+        name: 'resolution',
+        label: 'Resolution',
+        kind: 'select',
+        valueType: 'string',
+        required: false,
+        options: ['720p', '1080p', '4k'],
+        description: 'Output resolution',
+      },
+    ],
   },
 ]
 
@@ -141,6 +221,47 @@ describe('NotebookCellInspector', () => {
     )
     expect(html).not.toContain('Choose a generation tool')
     expect(html).not.toContain('placeholder="Provider"')
+  })
+
+  it('shows generation type and schema-backed video controls', () => {
+    const generationCell: NotebookCell = {
+      ...cell,
+      type: 'generate_video',
+      slug: 'generate-video-01',
+      prompt: 'A moonlit garden',
+      provider: undefined,
+      model: undefined,
+      operation: undefined,
+      tool: undefined,
+      outputArtifactId: undefined,
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: generationCell,
+      cells: [generationCell],
+      edges: [],
+      asset: undefined,
+      status: 'ready',
+      error: null,
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
+      generationActions,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('<select aria-label="Type">')
+    expect(html).toContain('T2V · Text to video')
+    expect(html).toContain('<select aria-label="Duration">')
+    expect(html).toContain('Default · 8')
+    expect(html).toContain('<select aria-label="Aspect ratio">')
+    expect(html).toContain('<select aria-label="Resolution">')
   })
 
   it('keeps an incompatible saved model visible and disables generation', () => {

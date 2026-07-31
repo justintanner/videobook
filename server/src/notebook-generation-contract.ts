@@ -98,7 +98,14 @@ function seedanceContract(
   );
   if (tool === "generate_kie_seedance_2_0_mini_video") {
     return {
-      modes: [mode("text", replacement), mode("references", references)],
+      modes: [
+        mode("t2v", replacement),
+        mode(
+          "r2v",
+          references,
+          [["image_slugs", "video_slugs", "audio_slugs"]],
+        ),
+      ],
     };
   }
   const frames = slotsByField(
@@ -107,9 +114,37 @@ function seedanceContract(
   );
   return {
     modes: [
-      mode("text", replacement),
-      mode("frames", frames),
-      mode("references", references),
+      mode("t2v", replacement),
+      mode(
+        "i2v",
+        frames,
+        [["first_frame_slug", "last_frame_slug"]],
+      ),
+      mode(
+        "r2v",
+        references,
+        [["image_slugs", "video_slugs", "audio_slugs"]],
+      ),
+    ],
+  };
+}
+
+function kieOmniContract(
+  slots: readonly NotebookGenerationInputSlot[],
+): NotebookGenerationInputContract {
+  return {
+    modes: [
+      mode("t2v", []),
+      mode(
+        "r2v",
+        slotsByField(slots, ["image_slugs"]),
+        [["image_slugs"]],
+      ),
+      mode(
+        "v2v",
+        slotsByField(slots, ["video_slug", "image_slugs"]),
+        [["video_slug"]],
+      ),
     ],
   };
 }
@@ -119,19 +154,19 @@ function googleOmniContract(
 ): NotebookGenerationInputContract {
   return {
     modes: [
-      mode("text", []),
+      mode("t2v", []),
       mode(
-        "first-frame",
+        "i2v",
         slotsByField(slots, ["first_frame_slug"]),
         [["first_frame_slug"]],
       ),
       mode(
-        "references",
+        "r2v",
         slotsByField(slots, ["image_slugs"]),
         [["image_slugs"]],
       ),
       mode(
-        "video-edit",
+        "v2v",
         slotsByField(slots, ["video_slug", "image_slugs"]),
         [["video_slug"]],
       ),
@@ -145,7 +180,7 @@ function wanImageToVideoContract(
   return {
     modes: [
       mode(
-        "frames",
+        "i2v",
         slotsByField(
           slots,
           ["first_frame_slug", "last_frame_slug", "driving_audio_slug"],
@@ -153,7 +188,7 @@ function wanImageToVideoContract(
         [["first_frame_slug", "last_frame_slug"]],
       ),
       mode(
-        "clip",
+        "v2v",
         slotsByField(slots, ["first_clip_slug", "driving_audio_slug"]),
         [["first_clip_slug"]],
       ),
@@ -172,6 +207,9 @@ export function notebookGenerationInputContract(
     || tool === "generate_kie_seedance_2_0_mini_video"
   ) {
     return seedanceContract(tool, slots);
+  }
+  if (tool === "generate_kie_gemini_omni_video") {
+    return kieOmniContract(slots);
   }
   if (tool === "generate_google_flow_omni_flash_video") {
     return googleOmniContract(slots);
@@ -274,7 +312,11 @@ export function notebookGenerationInputsAreCompatible(
   contract: NotebookGenerationInputContract,
   document: NotebookDocument,
   cell: NotebookCell,
+  modeId?: string,
 ): boolean {
   const inputs = connectedInputs(document, cell);
-  return contract.modes.some((candidate) => modeAcceptsInputs(candidate, inputs));
+  const modes = modeId
+    ? contract.modes.filter((candidate) => candidate.id === modeId)
+    : contract.modes;
+  return modes.some((candidate) => modeAcceptsInputs(candidate, inputs));
 }

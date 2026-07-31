@@ -686,11 +686,23 @@ export function modelArgs(
   bookId: string,
   engine?: Engine,
 ): Record<string, unknown> {
+  const settings = cell.inputs?.generationSettings;
+  const generationSettings = settings
+    && typeof settings === "object"
+    && !Array.isArray(settings)
+    ? settings as Record<string, unknown>
+    : {};
   const args: Record<string, unknown> = {
     ...(cell.inputs ?? {}),
+    ...generationSettings,
     book_id: bookId,
     prompt: promptFor(document, cell),
   };
+  delete args.generationMode;
+  delete args.generationSettings;
+  if ("text" in definition.schema) {
+    args.text = promptFor(document, cell);
+  }
   if (
     definition.name === "generate_kie_gemini_omni_video"
     && args.duration === undefined
@@ -841,9 +853,17 @@ export async function prepareNotebookGeneration(
     }
   }
   const inputContract = notebookGenerationInputContract(tool, definition.schema);
-  if (!notebookGenerationInputsAreCompatible(inputContract, document, cell)) {
+  const generationMode = typeof cell.inputs?.generationMode === "string"
+    ? cell.inputs.generationMode
+    : undefined;
+  if (!notebookGenerationInputsAreCompatible(
+    inputContract,
+    document,
+    cell,
+    generationMode,
+  )) {
     throw new Error(
-      `${tool} does not accept the current media inputs for @${cell.slug}`,
+      `${tool}${generationMode ? ` mode ${generationMode}` : ""} does not accept the current media inputs for @${cell.slug}`,
     );
   }
   const parsed = z.object(definition.schema).safeParse(
