@@ -794,36 +794,46 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
   );
 }
 
-export async function performSync(fs: Engine, book_id: string): Promise<SyncResult> {
-  const result: SyncResult = {
-    pending: [], completed: [], failed: [],
-    external_uploads: [], auto_render: [], auto_transcribe: [],
+export type ProviderPollResult = {
+  pending: SyncResult["pending"];
+  completed: SyncResult["completed"];
+  failed: SyncResult["failed"];
+};
+
+export type PollPendingProviderTasksOptions = {
+  /** Override age-out timeout (default PENDING_TASK_TIMEOUT_MS). Injectable for tests. */
+  timeoutMs?: number;
+  /** Override "now" for deterministic age-out in tests. */
+  nowMs?: number;
+};
+
+/**
+ * Poll provider-pending tasks: submit queued KIE rows, age out stale tasks,
+ * and poll kie/veo/google-flow/xai/alibaba/fal recordInfo lanes that mark
+ * completing + enqueue complete_kie_task. Does NOT process external uploads,
+ * auto-render, or auto-transcribe.
+ */
+export async function pollPendingProviderTasks(
+  fs: Engine,
+  book_id: string,
+  options: PollPendingProviderTasksOptions = {},
+): Promise<ProviderPollResult> {
+  const result: ProviderPollResult = {
+    pending: [],
+    completed: [],
+    failed: [],
   };
 
-  // Single listAssets call, shared by all consumers
-  const assets = await fs.artifacts.list();
-
-  // Run all discovery steps in parallel
-  const [uploads, tasksRes, transcribeActions, failuresRes] = await Promise.all([
-    findUnprocessedUploads(fs, book_id, assets),
-    fs.jobs.pending.findAll(),
-    findAutoTranscribeActions(fs, book_id, assets),
-    fs.jobs.failures.findAll(),
-  ]);
+  const tasksRes = await fs.jobs.pending.findAll();
   const tasks: PendingTask[] = tasksRes.ok ? tasksRes.value : [];
-  const persistedFailures = failuresRes.ok ? failuresRes.value : [];
+  if (tasks.length === 0) return result;
 
-  // Process external uploads
-  for (const upload of uploads) {
-    await processExternalUpload(fs, upload, book_id);
-    result.external_uploads.push({ assetId: upload.assetId, mediaFilename: upload.mediaFilename });
-  }
-
-  // Age out any non-completing task older than PENDING_TASK_TIMEOUT_MS so it
+  // Age out any non-completing task older than timeout so it
   // stops showing as pending forever. Completing tasks are skipped because the
   // completion job is already dispatched; recoverAssetsTable handles that lane
   // on server restart by clearing the completing flag and refreshing owner_id.
-  const nowMs = Date.now();
+  const timeoutMs = options.timeoutMs ?? PENDING_TASK_TIMEOUT_MS;
+  const nowMs = options.nowMs ?? Date.now();
   const activeTasks: PendingTask[] = [];
   for (const originalTask of tasks) {
     let t = originalTask;
@@ -839,7 +849,7 @@ export async function performSync(fs: Engine, book_id: string): Promise<SyncResu
       }
     }
     const ageMs = nowMs - t.createdAt;
-    if (t.completing !== true && Number.isFinite(ageMs) && ageMs > PENDING_TASK_TIMEOUT_MS) {
+    if (t.completing !== true && Number.isFinite(ageMs) && ageMs > timeoutMs) {
       const ageMinutes = Math.round(ageMs / 60000);
       const failMsg = `Task timed out after ${ageMinutes}m without reaching success or fail state`;
       const prompt = metaPrompt(t.meta);
@@ -1234,6 +1244,41 @@ export async function performSync(fs: Engine, book_id: string): Promise<SyncResu
       }
     }));
   }
+
+
+  return result;
+}
+
+export async function performSync(fs: Engine, book_id: string): Promise<SyncResult> {
+  const result: SyncResult = {
+    pending: [], completed: [], failed: [],
+    external_uploads: [], auto_render: [], auto_transcribe: [],
+  };
+
+  // Single listAssets call, shared by all consumers
+  const assets = await fs.artifacts.list();
+
+  // Run discovery steps in parallel with provider polling
+  const [uploads, providerResult, transcribeActions, failuresRes] = await Promise.all([
+    findUnprocessedUploads(fs, book_id, assets),
+    pollPendingProviderTasks(fs, book_id),
+    findAutoTranscribeActions(fs, book_id, assets),
+    fs.jobs.failures.findAll(),
+  ]);
+  const persistedFailures = failuresRes.ok ? failuresRes.value : [];
+
+  // Process external uploads
+  for (const upload of uploads) {
+    await processExternalUpload(fs, upload, book_id);
+    result.external_uploads.push({ assetId: upload.assetId, mediaFilename: upload.mediaFilename });
+  }
+
+  result.pending.push(...providerResult.pending);
+  result.completed.push(...providerResult.completed);
+  result.failed.push(...providerResult.failed);
+
+  const tasksRes = await fs.jobs.pending.findAll();
+  const tasks: PendingTask[] = tasksRes.ok ? tasksRes.value : [];
 
   // Merge persisted runtime failures that weren't already
   // reported by this poll and don't have an active pending task (retry in progress).

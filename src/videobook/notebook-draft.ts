@@ -22,6 +22,8 @@ export interface NotebookCellData extends Record<string, unknown> {
   subtitle: string
   slot: NotebookCell['slot']
   status: string
+  statusStartedAt?: string
+  statusError?: string
   preview?: string
   prompt?: string
   provider?: string

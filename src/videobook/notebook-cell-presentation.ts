@@ -134,6 +134,18 @@ export type NotebookCellExecutionObservation = Pick<
   'error' | 'status'
 >
 
+export type NotebookCellStateOverlay = 'clock' | 'failed' | null
+
+export type NotebookCellStateTone = 'active' | 'queued' | 'error' | null
+
+export type NotebookCellStatePresentation = {
+  error: string | null
+  label: string | null
+  overlay: NotebookCellStateOverlay
+  startedAt: number | null
+  tone: NotebookCellStateTone
+}
+
 function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
@@ -175,6 +187,101 @@ export function notebookCellSupportsExecution(cell: ActionCell): boolean {
 
 export function notebookCellIsActiveStatus(status: string): boolean {
   return activeStatuses.has(status)
+}
+
+export function notebookCellClockLabel(
+  status: string,
+  kind: NotebookCellType,
+): string {
+  if (status === 'queued') return 'QUEUED'
+  if (status === 'completing') return 'FINISHING'
+  if (status === 'awaiting-output') return 'GENERATING'
+  if (kind.startsWith('generate_')) return 'GENERATING'
+  if (kind === 'analyze') return 'ANALYZING'
+  if (kind.startsWith('extract_')) return 'EXTRACTING'
+  if (kind === 'split_video') return 'SPLITTING'
+  if (kind === 'splice') return 'SPLICING'
+  if (kind === 'concat') return 'CONCATENATING'
+  if (kind === 'prompt') return 'REWRITING'
+  return 'RUNNING'
+}
+
+function parseTimestamp(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value !== 'string' || value.length === 0) return null
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+export function notebookCellStateFromStatus(
+  kind: NotebookCellType,
+  status: string,
+  options?: {
+    error?: string | null
+    startedAt?: string | number | null
+  },
+): NotebookCellStatePresentation {
+  const error = options?.error ?? null
+
+  if (error || status === 'error') {
+    return {
+      overlay: 'failed',
+      label: null,
+      startedAt: null,
+      error: error ?? 'Generation failed',
+      tone: 'error',
+    }
+  }
+
+  if (status === 'ready' || status === 'completed' || status === 'stale') {
+    return {
+      overlay: null,
+      label: null,
+      startedAt: null,
+      error: null,
+      tone: null,
+    }
+  }
+
+  if (notebookCellIsActiveStatus(status)) {
+    return {
+      overlay: 'clock',
+      label: notebookCellClockLabel(status, kind),
+      startedAt: parseTimestamp(options?.startedAt),
+      error: null,
+      tone: status === 'queued' ? 'queued' : 'active',
+    }
+  }
+
+  return {
+    overlay: null,
+    label: null,
+    startedAt: null,
+    error: null,
+    tone: null,
+  }
+}
+
+export function notebookCellStatePresentation(
+  document: Pick<NotebookDocument, 'execution'>,
+  cellId: string,
+  kind: NotebookCellType,
+  options?: {
+    error?: string | null
+    status?: string | null
+  },
+): NotebookCellStatePresentation {
+  const execution = objectValue(document.execution)
+  const cell = execution && objectValue(execution[cellId])
+  const status = options?.status
+    ?? stringValue(cell?.status)
+    ?? 'ready'
+  const error = options?.error !== undefined
+    ? options.error
+    : stringValue(cell?.error)
+  const startedAt = parseTimestamp(cell?.startedAt)
+    ?? parseTimestamp(cell?.updatedAt)
+  return notebookCellStateFromStatus(kind, status, { error, startedAt })
 }
 
 export function notebookCellInputLabelVisible(input: string): boolean {

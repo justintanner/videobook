@@ -34,6 +34,8 @@ interface RunnerInfo {
   engine: Engine;
   runner: QueueRunner;
   reaper: { stop: () => void };
+  providerPollTimer: ReturnType<typeof setInterval> | null;
+  providerPollInFlight: boolean;
 }
 
 interface QueueIndexEntry {
@@ -66,6 +68,81 @@ let activeTestBookId: string | null = null;
 
 const JOB_INDEX_MAX = 2_000;
 const ASSET_REAPER_INTERVAL_MS = 30_000;
+const DEFAULT_PROVIDER_POLL_INTERVAL_MS = 10_000;
+
+let providerPollIntervalMs = DEFAULT_PROVIDER_POLL_INTERVAL_MS;
+let providerPollTimeoutOverrideMs: number | undefined;
+let providerPollTickHook: ((bookId: string) => void) | null = null;
+
+/** Test-only: shorten poll interval / inject age-out timeout for the driver. */
+export function configureProviderPollDriverForTests(options: {
+  intervalMs?: number;
+  timeoutMs?: number | undefined;
+}): void {
+  if (options.intervalMs !== undefined) {
+    providerPollIntervalMs = options.intervalMs;
+  }
+  if ("timeoutMs" in options) {
+    providerPollTimeoutOverrideMs = options.timeoutMs;
+  }
+}
+
+export function resetProviderPollDriverForTests(): void {
+  providerPollIntervalMs = DEFAULT_PROVIDER_POLL_INTERVAL_MS;
+  providerPollTimeoutOverrideMs = undefined;
+  providerPollTickHook = null;
+}
+
+export function setProviderPollTickHookForTests(
+  hook: ((bookId: string) => void) | null,
+): void {
+  providerPollTickHook = hook;
+}
+
+export function isProviderPollDriverActive(bookId: string): boolean {
+  const info = runnerByBook.get(bookId);
+  return info?.providerPollTimer != null;
+}
+
+async function tickProviderPoll(info: RunnerInfo): Promise<void> {
+  if (info.providerPollInFlight) return;
+  const pending = info.engine.jobs.pending.findAll();
+  if (!pending.ok || pending.value.length === 0) return;
+  info.providerPollInFlight = true;
+  try {
+    providerPollTickHook?.(info.bookId);
+    const { pollPendingProviderTasks } = await import("./tools/sync.js");
+    await pollPendingProviderTasks(
+      info.engine,
+      info.bookId,
+      providerPollTimeoutOverrideMs !== undefined
+        ? { timeoutMs: providerPollTimeoutOverrideMs }
+        : {},
+    );
+  } catch (error) {
+    console.warn(
+      `[provider-poll] book ${info.bookId} tick failed:`,
+      error instanceof Error ? error.message : error,
+    );
+  } finally {
+    info.providerPollInFlight = false;
+  }
+}
+
+function startProviderPollDriver(info: RunnerInfo): void {
+  if (info.providerPollTimer) return;
+  info.providerPollTimer = setInterval(() => {
+    void tickProviderPoll(info);
+  }, providerPollIntervalMs);
+}
+
+function stopProviderPollDriver(info: RunnerInfo): void {
+  if (info.providerPollTimer) {
+    clearInterval(info.providerPollTimer);
+    info.providerPollTimer = null;
+  }
+  info.providerPollInFlight = false;
+}
 
 export function registerJobHandler(
   type: string,
@@ -353,7 +430,15 @@ async function ensureRunner(bookId: string): Promise<RunnerInfo> {
   });
   runner.start();
   const reaper = engine.jobs.startReaper({ intervalMs: ASSET_REAPER_INTERVAL_MS });
-  const info = { bookId, engine, runner, reaper };
+  const info: RunnerInfo = {
+    bookId,
+    engine,
+    runner,
+    reaper,
+    providerPollTimer: null,
+    providerPollInFlight: false,
+  };
+  startProviderPollDriver(info);
   runnerByBook.set(bookId, info);
   return info;
 }
@@ -444,7 +529,10 @@ export const queue: Queue = {
     const infos = [...runnerByBook.values()];
     runnerByBook.clear();
     jobIdIndex.clear();
-    for (const info of infos) info.reaper.stop();
+    for (const info of infos) {
+      stopProviderPollDriver(info);
+      info.reaper.stop();
+    }
     await Promise.all(infos.map((info) => info.runner.stop()));
   },
 };
@@ -458,6 +546,7 @@ export async function stopBookQueue(bookId: string): Promise<void> {
   const info = runnerByBook.get(bookId);
   if (!info) return;
   runnerByBook.delete(bookId);
+  stopProviderPollDriver(info);
   info.reaper.stop();
   await info.runner.stop();
   const active = info.engine.jobs.queue.list({ states: ["queued", "running", "completing"] });
@@ -503,6 +592,7 @@ export async function prepareBookForRewind(
   const info = runnerByBook.get(bookId);
   if (info) {
     runnerByBook.delete(bookId);
+    stopProviderPollDriver(info);
     info.reaper.stop();
     await info.runner.stop();
   }

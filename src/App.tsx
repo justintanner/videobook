@@ -81,7 +81,7 @@ import {
 import {
   BusRiverEdge,
 } from '@/components/videobook/BusRiverEdge'
-import { CellRunningOverlay } from '@/components/videobook/CellRunningOverlay'
+import { CellStateOverlay } from '@/components/videobook/cell-overlays/CellStateOverlay'
 import { AnalysisCellSummary } from '@/components/videobook/AnalysisCellSummary'
 import {
   NotebookGridBoard,
@@ -1337,6 +1337,24 @@ function cellExecutionStatus(
     ?? 'ready'
 }
 
+function cellExecutionStartedAt(
+  document: NotebookDocument,
+  cellId: string,
+): string | undefined {
+  const execution = record(document.execution)
+  const item = execution && record(execution[cellId])
+  return asString(item?.startedAt) ?? asString(item?.updatedAt) ?? undefined
+}
+
+function cellExecutionError(
+  document: NotebookDocument,
+  cellId: string,
+): string | undefined {
+  const execution = record(document.execution)
+  const item = execution && record(execution[cellId])
+  return asString(item?.error) ?? undefined
+}
+
 function canvasNodes(
   document: NotebookDocument,
   assets: AssetRecord[],
@@ -1344,11 +1362,15 @@ function canvasNodes(
   const byArtifactId = new Map(assets.map((asset) => [asset.artifactId, asset]))
   return notebookNodes(document).map((node) => {
     const frameIds = notebookSplitFrameIds(node.data.inputs)
+    const statusError = cellExecutionError(document, node.id)
+    const statusStartedAt = cellExecutionStartedAt(document, node.id)
     return {
       ...node,
       data: {
         ...node.data,
         status: cellExecutionStatus(document, node.id),
+        ...(statusStartedAt ? { statusStartedAt } : {}),
+        ...(statusError ? { statusError } : {}),
         asset: artifactForCell(byArtifactId, node.data.outputArtifactId),
         ...(node.data.kind === 'split_video'
           ? {
@@ -1934,6 +1956,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   }, data.status)
   const statusLabel = notebookCellStatusLabel(data.kind, data.status)
   const running = notebookCellIsActiveStatus(data.status)
+  const failed = data.status === 'error' || Boolean(data.statusError)
   const outputVersions = notebookOutputVersionArtifactIds(
     data.inputs,
     data.outputArtifactId,
@@ -1955,11 +1978,14 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         `cell-kind-${data.kind}`,
         selected ? 'cell-node-selected' : '',
         running ? 'cell-node-running' : '',
+        data.status === 'queued' ? 'cell-node-queued' : '',
+        failed ? 'cell-node-error' : '',
         versionedOutput ? 'cell-node-version-stack' : '',
         data.deleting ? 'cell-node-deleting' : '',
       ].filter(Boolean).join(' ')}
       aria-busy={running}
       data-version-count={outputVersions.length}
+      data-cell-status={data.status}
     >
       {targetInputs.map((input, index) => (
         <Handle
@@ -2060,7 +2086,17 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           <strong>@{data.slug}</strong>
           <CellStatusBadge status={statusLabel} />
         </footer>
-        <CellRunningOverlay slug={data.slug} status={data.status} />
+        <CellStateOverlay
+          kind={data.kind}
+          slug={data.slug}
+          status={data.status}
+          statusStartedAt={data.statusStartedAt}
+          statusError={data.statusError}
+          icon={<CellIcon kind={data.kind} />}
+          onRetry={() => {
+            void runCell(id)
+          }}
+        />
       </section>
       <Handle
         type="source"
@@ -2726,8 +2762,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     for (const cellId of queuedCellIds) {
       next = notebookNodesWithCellStatus(next, cellId, 'queued')
     }
-    return next
-  }, [nodes, queuedCellIds])
+    if (Object.keys(cellRunErrors).length === 0) return next
+    return next.map((node) => {
+      const liveError = cellRunErrors[node.id]
+      if (!liveError) return node
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          status: 'error',
+          statusError: liveError,
+        },
+      }
+    })
+  }, [cellRunErrors, nodes, queuedCellIds])
   const focusedEdges = useMemo(
     () => notebookEdgesWithCellFocus(edges, selectedCellId),
     [edges, selectedCellId],

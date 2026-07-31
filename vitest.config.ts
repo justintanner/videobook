@@ -28,6 +28,7 @@ export default defineConfig({
       'server/src/jobs/archive-clip.test.ts',
       'server/src/openai-intelligence.test.ts',
       'server/src/tools/log-wrapper.test.ts',
+      'server/src/tools/poll-pending-provider-tasks.test.ts',
       'server/src/scheduled-posts.test.ts',
       'server/src/payload-builders.test.ts',
     ],
