@@ -132,6 +132,48 @@ describe('v2 notebook domain tools', () => {
       .toEqual({ row: 37, column: -8 })
     expect(expanded.cells.find((cell) => cell.id === prompt.id)?.slot)
       .toEqual({ row: 1, column: 0 })
+
+    const output = await managed.value.engine.artifacts.create(
+      'image',
+      'generated image output',
+    )
+    expect(output.ok).toBe(true)
+    if (!output.ok) return
+    resultJson(await invoke('update_notebook_cell', {
+      notebook_id: notebookId,
+      cell_id: image.id,
+      cell: { output_artifact_id: output.value.artifactId },
+    }))
+    resultJson(await invoke('clear_notebook_cell_slot', {
+      notebook_id: notebookId,
+      cell_id: image.id,
+    }))
+    const cleared = resultJson(await invoke('get_notebook', {
+      notebook_id: notebookId,
+    })) as {
+      cells: Array<{
+        id: string
+        inputs?: Record<string, unknown>
+        output_artifact_id?: string
+      }>
+      edges: Array<{ target: string }>
+      execution?: Record<string, {
+        stale?: boolean
+        status?: string
+      }>
+    }
+    expect(cleared.cells.find((candidate) => candidate.id === image.id))
+      .toMatchObject({
+        id: image.id,
+        inputs: { state: 'ready' },
+      })
+    expect(cleared.cells.find((candidate) => candidate.id === image.id))
+      .not.toHaveProperty('output_artifact_id')
+    expect(cleared.edges.some((edge) => edge.target === image.id)).toBe(false)
+    expect(cleared.execution?.[image.id]).toMatchObject({ status: 'ready' })
+    expect(cleared.execution?.[image.id]?.stale).not.toBe(true)
+    expect(managed.value.engine.artifacts.get(output.value.artifactId).ok)
+      .toBe(true)
   })
 
   it('enforces video action inputs and typed media outputs', async () => {

@@ -182,6 +182,54 @@ function markCellAndDescendantsStale(
   };
 }
 
+function clearNotebookCellSlot(
+  notebook: NotebookDocument,
+  cellId: string,
+): NotebookDocument {
+  if (!notebook.cells.some((cell) => cell.id === cellId)) {
+    throw new Error(`Cell not found: ${cellId}`);
+  }
+  const marked = markDescendantsStale({
+    ...notebook,
+    edges: notebook.edges.filter((edge) => edge.target !== cellId),
+  }, cellId);
+  const currentExecution = marked.execution?.[cellId];
+  const execution = {
+    ...(marked.execution ?? {}),
+    [cellId]: {
+      ...(currentExecution
+        && typeof currentExecution === "object"
+        && !Array.isArray(currentExecution)
+        ? currentExecution as Record<string, unknown>
+        : {}),
+      completedAt: undefined,
+      error: undefined,
+      outputArtifactId: undefined,
+      providerArtifactId: undefined,
+      runId: undefined,
+      stale: false,
+      startedAt: undefined,
+      status: "ready",
+    },
+  };
+  return {
+    ...marked,
+    execution,
+    cells: marked.cells.map((cell) =>
+      cell.id === cellId
+        ? {
+            ...cell,
+            outputArtifactId: undefined,
+            outputEntityId: undefined,
+            inputs: {
+              ...(cell.inputs ?? {}),
+              state: "ready",
+            },
+          }
+        : cell),
+  };
+}
+
 function firstEmptyGridSlots(
   cells: readonly NotebookCell[],
   count: number,
@@ -3202,6 +3250,40 @@ export function videobookDomainDefs(
           { cellIds: [...slots.keys()] },
         );
         return result.ok ? json({ notebook_id: args.notebook_id, revision: result.value.hash }) : failure(result.error.message);
+      },
+    },
+    {
+      name: "clear_notebook_cell_slot",
+      description: "Clear one notebook cell output and incoming connections without deleting the cell",
+      scope: "book",
+      schema: {
+        ...bookSchema,
+        notebook_id: z.string().uuid(),
+        cell_id: z.string().uuid(),
+        expected_revision: z.string().min(1).optional(),
+      },
+      handler: async (args) => {
+        if (
+          typeof args.expected_revision === "string"
+          && args.expected_revision !== engine.head
+        ) {
+          return failure(`Stale notebook revision: expected ${args.expected_revision}`);
+        }
+        const cellId = String(args.cell_id);
+        try {
+          const result = await mutateNotebook(
+            engine,
+            String(args.notebook_id),
+            "clear_notebook_cell_slot",
+            (notebook) => clearNotebookCellSlot(notebook, cellId),
+            { cellId },
+          );
+          return result.ok
+            ? json({ cell_id: cellId, revision: result.value.hash })
+            : failure(result.error.message);
+        } catch (cause) {
+          return failure(cause instanceof Error ? cause.message : String(cause));
+        }
       },
     },
     {

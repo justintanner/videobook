@@ -1,8 +1,12 @@
 import {
+  AudioWaveform,
   Braces,
   Check,
+  ChevronDown,
   CircleAlert,
   CircleX,
+  Film,
+  Image as ImageIcon,
   Layers2,
   Maximize2,
   Pencil,
@@ -230,6 +234,7 @@ type NotebookCellInspectorProps = {
   cells: NotebookCell[]
   edges: NotebookEdge[]
   asset: NotebookCellInspectorAsset | undefined
+  cellAssets?: ReadonlyMap<string, NotebookCellInspectorAsset>
   versionAssets?: readonly NotebookCellInspectorAsset[]
   status: string
   error: string | null
@@ -461,19 +466,195 @@ function DoltCellSource({
   )
 }
 
+function sourceCellTypeLabel(cell: NotebookCell): string {
+  return cell.type.replaceAll('_', ' ')
+}
+
+function SourceCellThumb({
+  cell,
+  asset,
+}: {
+  cell: NotebookCell
+  asset: NotebookCellInspectorAsset | undefined
+}) {
+  const thumbnailUrl = asset?.thumbnailUrl
+    ?? (asset?.type === 'image' ? asset.mediaUrl : null)
+  const kind = asset?.type ?? cell.type
+  const audio = kind === 'audio'
+    || cell.type === 'generate_audio'
+    || cell.type === 'extract_audio'
+  const video = kind === 'video'
+    || kind === 'final'
+    || cell.type === 'generate_video'
+    || cell.type === 'split_video'
+    || cell.type === 'concat'
+    || cell.type === 'splice'
+  const image = kind === 'image'
+    || cell.type === 'generate_image'
+    || cell.type === 'extract_frame'
+  const videoUrl = !thumbnailUrl && (kind === 'video' || kind === 'final')
+    ? asset?.mediaUrl
+    : null
+
+  return (
+    <span className="inspector-source-thumb" aria-hidden="true">
+      {thumbnailUrl ? (
+        <img src={thumbnailUrl} alt="" loading="lazy" decoding="async" />
+      ) : videoUrl ? (
+        <video src={videoUrl} muted playsInline preload="metadata" />
+      ) : audio ? (
+        <AudioWaveform size={16} />
+      ) : video ? (
+        <Film size={16} />
+      ) : image ? (
+        <ImageIcon size={16} />
+      ) : (
+        <Braces size={15} />
+      )}
+    </span>
+  )
+}
+
+function SourceCellPicker({
+  input,
+  candidates,
+  selectedCellId,
+  cellAssets,
+  busy,
+  onSelect,
+}: {
+  input: string
+  candidates: NotebookCell[]
+  selectedCellId: string | null
+  cellAssets?: ReadonlyMap<string, NotebookCellInspectorAsset>
+  busy: boolean
+  onSelect: (sourceCellId: string | null) => Promise<void>
+}) {
+  const detailsRef = useRef<HTMLDetailsElement>(null)
+  const selectedCell = candidates.find((candidate) =>
+    candidate.id === selectedCellId)
+  const choose = (sourceCellId: string | null) => {
+    detailsRef.current?.removeAttribute('open')
+    if (sourceCellId === selectedCellId) return
+    void onSelect(sourceCellId)
+  }
+
+  return (
+    <details
+      ref={detailsRef}
+      className="inspector-source-picker"
+      onBlur={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          return
+        }
+        event.currentTarget.removeAttribute('open')
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return
+        event.preventDefault()
+        detailsRef.current?.removeAttribute('open')
+        detailsRef.current?.querySelector<HTMLElement>('summary')?.focus()
+      }}
+    >
+      <summary
+        aria-label={`${input.replaceAll('_', ' ')} input`}
+        aria-disabled={busy}
+        tabIndex={busy ? -1 : 0}
+        onClick={(event) => {
+          if (busy) event.preventDefault()
+        }}
+      >
+        {selectedCell ? (
+          <>
+            <SourceCellThumb
+              cell={selectedCell}
+              asset={cellAssets?.get(selectedCell.id)}
+            />
+            <span className="inspector-source-picker-copy">
+              <strong>@{selectedCell.slug}</strong>
+              <small>{sourceCellTypeLabel(selectedCell)}</small>
+            </span>
+          </>
+        ) : (
+          <>
+            <span
+              className="inspector-source-thumb inspector-source-thumb-empty"
+              aria-hidden="true"
+            >
+              <CircleX size={15} />
+            </span>
+            <span className="inspector-source-picker-copy">
+              <strong>No source</strong>
+              <small>Optional input</small>
+            </span>
+          </>
+        )}
+        <ChevronDown
+          className="inspector-source-picker-chevron"
+          size={15}
+          aria-hidden="true"
+        />
+      </summary>
+      <div
+        className="inspector-source-picker-options"
+        role="listbox"
+        aria-label={`${input.replaceAll('_', ' ')} input options`}
+      >
+        <button
+          type="button"
+          role="option"
+          aria-selected={selectedCellId === null}
+          disabled={busy}
+          onClick={() => choose(null)}
+        >
+          <span
+            className="inspector-source-thumb inspector-source-thumb-empty"
+            aria-hidden="true"
+          >
+            <CircleX size={15} />
+          </span>
+          <span className="inspector-source-picker-copy">
+            <strong>No source</strong>
+            <small>Disconnect input</small>
+          </span>
+        </button>
+        {candidates.map((candidate) => (
+          <button
+            type="button"
+            role="option"
+            aria-selected={candidate.id === selectedCellId}
+            disabled={busy}
+            key={candidate.id}
+            onClick={() => choose(candidate.id)}
+          >
+            <SourceCellThumb
+              cell={candidate}
+              asset={cellAssets?.get(candidate.id)}
+            />
+            <span className="inspector-source-picker-copy">
+              <strong>@{candidate.slug}</strong>
+              <small>{sourceCellTypeLabel(candidate)}</small>
+            </span>
+          </button>
+        ))}
+      </div>
+    </details>
+  )
+}
+
 function InputSources({
   cell,
   cells,
   edges,
   busy,
-  showHints = true,
+  cellAssets,
   onSetInput,
 }: {
   cell: NotebookCell
   cells: NotebookCell[]
   edges: NotebookEdge[]
   busy: boolean
-  showHints?: boolean
+  cellAssets?: ReadonlyMap<string, NotebookCellInspectorAsset>
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
 }) {
   const inputs = cellInputNames(cell, edges)
@@ -483,39 +664,32 @@ function InputSources({
   return (
     <section className="inspector-input-sources">
       <h3>Inputs</h3>
-      {showHints && <p>Select the upstream cell that supplies each input.</p>}
-      {inputs.map((input) => {
-        const edge = edges.find((candidate) =>
-          candidate.target === cell.id && candidate.targetInput === input)
-        const candidates = cells
-          .filter((candidate) =>
-            compatibleSource(cell, input, candidate) || candidate.id === edge?.source)
-          .sort((left, right) => left.slug.localeCompare(right.slug))
-        return (
-          <label key={input}>
-            <span>{input.replaceAll('_', ' ')}</span>
-            <select
-              value={edge?.source ?? ''}
-              disabled={busy}
-              onChange={(event) => {
-                void onSetInput(input, event.target.value || null)
-              }}
-            >
-              <option value="">No upstream source</option>
-              {candidates.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>
-                  @{candidate.slug} · {candidate.type.replaceAll('_', ' ')}
-                </option>
-              ))}
-            </select>
-          </label>
-        )
-      })}
-      {showHints && (
-        <span className="workspace-notice">
-          Changing a source clears this preview until its producer is rerun.
-        </span>
-      )}
+      <div className="inspector-input-source-rows">
+        {inputs.map((input) => {
+          const edge = edges.find((candidate) =>
+            candidate.target === cell.id && candidate.targetInput === input)
+          const candidates = cells
+            .filter((candidate) =>
+              compatibleSource(cell, input, candidate)
+              || candidate.id === edge?.source)
+            .sort((left, right) => left.slug.localeCompare(right.slug))
+          return (
+            <div className="inspector-input-source-row" key={input}>
+              <span className="inspector-input-source-label">
+                {input.replaceAll('_', ' ')}
+              </span>
+              <SourceCellPicker
+                input={input}
+                candidates={candidates}
+                selectedCellId={edge?.source ?? null}
+                cellAssets={cellAssets}
+                busy={busy}
+                onSelect={(sourceCellId) => onSetInput(input, sourceCellId)}
+              />
+            </div>
+          )
+        })}
+      </div>
     </section>
   )
 }
@@ -684,6 +858,46 @@ function DeleteCellButton({
   )
 }
 
+function CellCleanupActions({
+  cell,
+  edges,
+  busy,
+  clearing,
+  deleting,
+  onClearSlot,
+  onDelete,
+}: Pick<
+  NotebookCellInspectorProps,
+  | 'cell'
+  | 'edges'
+  | 'busy'
+  | 'clearing'
+  | 'deleting'
+  | 'onClearSlot'
+  | 'onDelete'
+>) {
+  const canClear = Boolean(cell.outputArtifactId || cell.outputEntityId)
+    || edges.some((edge) => edge.target === cell.id)
+
+  return (
+    <section
+      className="inspector-cell-actions inspector-compact-actions"
+      aria-label="Cell cleanup actions"
+    >
+      <InspectorClearButton
+        className="inspector-clear-slot-button"
+        label="Clear slot"
+        pendingLabel="Clearing…"
+        busy={busy}
+        pending={clearing}
+        disabled={!canClear}
+        onClear={onClearSlot}
+      />
+      <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
+    </section>
+  )
+}
+
 function OutputVersionSelector({
   artifactIds,
   availableArtifactIds,
@@ -744,6 +958,7 @@ function MediaCellInspector({
   cells,
   edges,
   asset,
+  cellAssets,
   versionAssets,
   busy,
   clearing,
@@ -759,6 +974,7 @@ function MediaCellInspector({
   | 'cells'
   | 'edges'
   | 'asset'
+  | 'cellAssets'
   | 'versionAssets'
   | 'busy'
   | 'clearing'
@@ -769,8 +985,6 @@ function MediaCellInspector({
   | 'onDelete'
   | 'onOpenFullscreen'
 >) {
-  const canClear = Boolean(cell.outputArtifactId)
-    || edges.some((edge) => edge.target === cell.id)
   const versionArtifactIds = cell.type === 'audio' || cell.type === 'image'
     ? notebookOutputVersionArtifactIds(cell.inputs, cell.outputArtifactId)
     : []
@@ -855,23 +1069,18 @@ function MediaCellInspector({
           cells={cells}
           edges={edges}
           busy={busy}
+          cellAssets={cellAssets}
           onSetInput={onSetInput}
         />
-        <section
-          className="inspector-cell-actions inspector-compact-actions"
-          aria-label="Cell actions"
-        >
-          <InspectorClearButton
-            className="inspector-clear-slot-button"
-            label="Clear slot"
-            pendingLabel="Clearing…"
-            busy={busy}
-            pending={clearing}
-            disabled={!canClear}
-            onClear={onClearSlot}
-          />
-          <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
-        </section>
+        <CellCleanupActions
+          cell={cell}
+          edges={edges}
+          busy={busy}
+          clearing={clearing}
+          deleting={deleting}
+          onClearSlot={onClearSlot}
+          onDelete={onDelete}
+        />
       </div>
     </div>
   )
@@ -1105,20 +1314,32 @@ function AnalysisLlmExchanges({
 
 function AnalysisCellInspector({
   cell,
+  cells,
+  edges,
   asset,
+  cellAssets,
   versionAssets,
   busy,
+  clearing,
   deleting,
   onUpdate,
+  onSetInput,
+  onClearSlot,
   onDelete,
 }: Pick<
   NotebookCellInspectorProps,
   | 'cell'
+  | 'cells'
+  | 'edges'
   | 'asset'
+  | 'cellAssets'
   | 'versionAssets'
   | 'busy'
+  | 'clearing'
   | 'deleting'
   | 'onUpdate'
+  | 'onSetInput'
+  | 'onClearSlot'
   | 'onDelete'
 >) {
   const artifactIds = notebookOutputVersionArtifactIds(
@@ -1212,12 +1433,23 @@ function AnalysisCellInspector({
             <p>Run the connected Analyze cell to populate normalized shots.</p>
           </div>
         )}
-        <section
-          className="inspector-cell-actions inspector-compact-actions"
-          aria-label="Cell actions"
-        >
-          <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
-        </section>
+        <InputSources
+          cell={cell}
+          cells={cells}
+          edges={edges}
+          busy={busy}
+          cellAssets={cellAssets}
+          onSetInput={onSetInput}
+        />
+        <CellCleanupActions
+          cell={cell}
+          edges={edges}
+          busy={busy}
+          clearing={clearing}
+          deleting={deleting}
+          onClearSlot={onClearSlot}
+          onDelete={onDelete}
+        />
       </div>
     </div>
   )
@@ -1228,13 +1460,16 @@ function ExecutableCellInspector({
   cells,
   edges,
   asset,
+  cellAssets,
   status,
   error,
   busy,
+  clearing,
   deleting,
   onUpdate,
   onSetInput,
   onRun,
+  onClearSlot,
   onDelete,
   onOpenFullscreen,
   generationActions = [],
@@ -1244,13 +1479,16 @@ function ExecutableCellInspector({
   | 'cells'
   | 'edges'
   | 'asset'
+  | 'cellAssets'
   | 'status'
   | 'error'
   | 'busy'
+  | 'clearing'
   | 'deleting'
   | 'onUpdate'
   | 'onSetInput'
   | 'onRun'
+  | 'onClearSlot'
   | 'onDelete'
   | 'onOpenFullscreen'
   | 'generationActions'
@@ -1416,7 +1654,7 @@ function ExecutableCellInspector({
         cells={cells}
         edges={edges}
         busy={busy}
-        showHints={cell.type !== 'analyze'}
+        cellAssets={cellAssets}
         onSetInput={onSetInput}
       />
       <form
@@ -1606,14 +1844,14 @@ function ExecutableCellInspector({
           </button>
         )}
       </form>
-      <section
-        className={[
-          'inspector-cell-actions',
-          generationCell ? 'inspector-generation-actions' : '',
-        ].filter(Boolean).join(' ')}
-        aria-label="Cell actions"
-      >
-        {runLabel && (action || generationCell) && (
+      {runLabel && (action || generationCell) && (
+        <section
+          className={[
+            'inspector-cell-actions',
+            generationCell ? 'inspector-generation-actions' : '',
+          ].filter(Boolean).join(' ')}
+          aria-label="Primary cell action"
+        >
           <button
             type="button"
             className="inspector-run-action"
@@ -1638,9 +1876,17 @@ function ExecutableCellInspector({
               ? generationCell ? 'Generating…' : 'Applying…'
               : runLabel}
           </button>
-        )}
-        <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
-      </section>
+        </section>
+      )}
+      <CellCleanupActions
+        cell={cell}
+        edges={edges}
+        busy={busy}
+        clearing={clearing}
+        deleting={deleting}
+        onClearSlot={onClearSlot}
+        onDelete={onDelete}
+      />
     </div>
   )
 }
@@ -1651,6 +1897,7 @@ export function NotebookCellInspector({
   cells,
   edges,
   asset,
+  cellAssets,
   versionAssets,
   status,
   error,
@@ -1678,11 +1925,17 @@ export function NotebookCellInspector({
     return (
       <AnalysisCellInspector
         cell={cell}
+        cells={cells}
+        edges={edges}
         asset={asset}
+        cellAssets={cellAssets}
         versionAssets={versionAssets}
         busy={busy}
+        clearing={clearing}
         deleting={deleting}
         onUpdate={onUpdate}
+        onSetInput={onSetInput}
+        onClearSlot={onClearSlot}
         onDelete={onDelete}
       />
     )
@@ -1695,6 +1948,7 @@ export function NotebookCellInspector({
         cells={cells}
         edges={edges}
         asset={asset}
+        cellAssets={cellAssets}
         versionAssets={versionAssets}
         busy={busy}
         clearing={clearing}
@@ -1714,13 +1968,16 @@ export function NotebookCellInspector({
       cells={cells}
       edges={edges}
       asset={asset}
+      cellAssets={cellAssets}
       status={status}
       error={error}
       busy={busy}
+      clearing={clearing}
       deleting={deleting}
       onUpdate={onUpdate}
       onSetInput={onSetInput}
       onRun={onRun}
+      onClearSlot={onClearSlot}
       onDelete={onDelete}
       onOpenFullscreen={onOpenFullscreen}
       generationActions={generationActions}

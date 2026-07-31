@@ -2622,6 +2622,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => notebook?.cells.find((cell) => cell.id === selectedCellId) ?? null,
     [notebook, selectedCellId],
   )
+  const notebookCellAssets = useMemo(
+    () => new Map((notebook?.cells ?? []).flatMap((cell) => {
+      const cellAsset = artifactForCell(assetById, cell.outputArtifactId)
+      return cellAsset ? [[cell.id, cellAsset] as const] : []
+    })),
+    [assetById, notebook],
+  )
   const selectedCellError = notebook && selectedNotebookCell
     ? notebookCellExecutionObservation(notebook, selectedNotebookCell.id).error
     : null
@@ -3118,22 +3125,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const clearSelectedMediaSlot = async () => {
+  const clearSelectedCellSlot = async () => {
     if (!bookId || !notebook || !selectedNotebookCell) return
-    if (!passiveMediaKind(selectedNotebookCell.type)) return
     const cellId = selectedNotebookCell.id
     setMediaSlotOperation(cellId, 'clear')
     try {
-      await call('set_notebook_media_slot', {
+      await call('clear_notebook_cell_slot', {
         book_id: bookId,
         notebook_id: notebook.id,
         cell_id: cellId,
-        artifact_ref: null,
       })
       if (fullscreenCellId === cellId) setFullscreenCellId(null)
       await refreshNotebook(bookId, notebook.id)
       setMediaSlotOperation(cellId, null)
-      setNotice('Media slot cleared')
+      setNotice('Cell slot cleared')
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setMediaSlotError(cellId, message)
@@ -5595,6 +5600,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     cells={notebook?.cells ?? []}
                     edges={notebook?.edges ?? []}
                     asset={selectedCell.data.asset}
+                    cellAssets={notebookCellAssets}
                     versionAssets={selectedCellVersionAssets}
                     status={selectedCell.data.status}
                     error={selectedCellError}
@@ -5607,7 +5613,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     onSetInput={setSelectedCellInput}
                     onRun={runCell}
                     onDelete={deleteSelectedCell}
-                    onClearSlot={clearSelectedMediaSlot}
+                    onClearSlot={clearSelectedCellSlot}
                     onOpenFullscreen={() => setFullscreenCellId(selectedNotebookCell.id)}
                   />
                 ) : null}

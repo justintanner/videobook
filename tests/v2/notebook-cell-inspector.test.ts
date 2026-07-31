@@ -1,7 +1,11 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { NotebookCell, NotebookEdge } from 'videobook-engine'
+import {
+  NOTEBOOK_CELL_TYPES,
+  type NotebookCell,
+  type NotebookEdge,
+} from 'videobook-engine'
 import { NotebookCellInspector } from '../../src/components/videobook/NotebookCellInspector'
 import { NotebookMediaFullscreen } from '../../src/components/videobook/NotebookMediaFullscreen'
 import {
@@ -108,11 +112,53 @@ describe('NotebookCellInspector', () => {
     )
     expect(html).toContain('Generate')
     expect(html).not.toContain('Save changes')
+    expect(html).toContain('inspector-clear-slot-button')
+    expect(html).toContain('Clear slot')
     expect(html).toContain('inspector-delete-cell-button')
     expect(html).toContain('Delete cell')
+    expect(html).toMatch(
+      /inspector-clear-slot-button[\s\S]*<\/button><button[^>]*inspector-delete-cell-button/,
+    )
     expect(html).not.toContain('Choose a generation tool')
     expect(html).not.toContain('placeholder="Provider"')
   })
+
+  it.each(NOTEBOOK_CELL_TYPES)(
+    'renders Video-style cleanup actions for %s cells',
+    (type) => {
+      const typedCell: NotebookCell = {
+        ...cell,
+        type,
+      }
+      const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+        notebookId: '01900000-0000-7000-8000-000000000003',
+        cell: typedCell,
+        cells: [typedCell],
+        edges: [],
+        asset: undefined,
+        status: 'completed',
+        error: null,
+        busy: false,
+        clearing: false,
+        deleting: false,
+        sourceVisible: false,
+        generationActions,
+        onUpdate: async () => undefined,
+        onSetInput: async () => undefined,
+        onRun: async () => undefined,
+        onClearSlot: async () => undefined,
+        onDelete: async () => undefined,
+        onOpenFullscreen: () => undefined,
+      }))
+
+      expect(html).toContain(
+        'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell cleanup actions"',
+      )
+      expect(html).toMatch(
+        /inspector-clear-slot-button[\s\S]*<\/button><button[^>]*inspector-delete-cell-button/,
+      )
+    },
+  )
 
   it('renders output media without requiring an open action', () => {
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
@@ -174,7 +220,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('Delete cell')
     expect(html).not.toContain('completed')
     expect(html).toContain(
-      'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell actions"',
+      'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell cleanup actions"',
     )
     expect(html).not.toContain('record-card-actions inspector-media-actions')
     expect(html.indexOf('<h3>Inputs</h3>')).toBeLessThan(
@@ -486,8 +532,13 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('RichJson')
     expect(html).not.toContain('Restore')
     expect(html).toContain(
-      'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell actions"',
+      '<span class="inspector-input-source-label">result</span>',
     )
+    expect(html).toContain('aria-label="result input"')
+    expect(html).toContain(
+      'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell cleanup actions"',
+    )
+    expect(html).toContain('Clear slot')
     expect(html).toContain('Delete cell')
   })
 
@@ -593,12 +644,24 @@ describe('NotebookCellInspector', () => {
         targetInput: 'analysis',
       },
     ]
+    const videoSourceAsset = {
+      artifactId: videoSource.outputArtifactId!,
+      id: videoSource.slug,
+      type: 'video',
+      mediaUrl: '/files/vid-continuous-source/original.mp4',
+      thumbnailUrl: '/files/vid-continuous-source/thumb.jpg',
+      width: 1920,
+      height: 1080,
+      duration: 30,
+      audioInfo: null,
+    }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: splitCell,
       cells: [splitCell, videoSource, analysisSource],
       edges,
       asset: undefined,
+      cellAssets: new Map([[videoSource.id, videoSourceAsset]]),
       status: 'completed',
       error: null,
       busy: false,
@@ -621,13 +684,24 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('aria-label="Action type"')
     expect(html).not.toContain('Cell type is fixed')
     expect(html).toContain('<h3>Inputs</h3>')
-    expect(html).toContain('Select the upstream cell that supplies each input.')
-    expect(html).toContain('<span>video</span>')
-    expect(html).toContain('<span>analysis</span>')
-    expect(html).toContain('@vid-continuous-source · video')
-    expect(html).toContain('@analysis-splitter · analysis')
-    expect(html).toContain(`value="${videoSource.id}" selected=""`)
-    expect(html).toContain(`value="${analysisSource.id}" selected=""`)
+    expect(html).not.toContain('Select the upstream cell that supplies each input.')
+    expect(html).not.toContain(
+      'Changing a source clears this preview until its producer is rerun.',
+    )
+    expect(html).toContain(
+      '<span class="inspector-input-source-label">video</span>',
+    )
+    expect(html).toContain(
+      '<span class="inspector-input-source-label">analysis</span>',
+    )
+    expect(html).toContain('aria-label="video input"')
+    expect(html).toContain('aria-label="analysis input"')
+    expect(html).toContain('role="listbox" aria-label="video input options"')
+    expect(html).toContain('role="option" aria-selected="true"')
+    expect(html).toContain('<strong>@vid-continuous-source</strong>')
+    expect(html).toContain('<strong>@analysis-splitter</strong>')
+    expect(html).toContain('/files/vid-continuous-source/thumb.jpg')
+    expect(html).toContain('inspector-source-picker-chevron')
     expect(html).not.toContain('placeholder="Provider"')
     expect(html).not.toContain('placeholder="Model"')
     expect(html).not.toContain('placeholder="Operation"')
@@ -637,7 +711,9 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('End seconds')
     expect(html).toContain('value="30"')
     expect(html).toContain('Split again')
+    expect(html).toContain('Clear slot')
     expect(html).toContain('Delete cell')
+    expect(html.indexOf('Split again')).toBeLessThan(html.indexOf('Clear slot'))
     expect(html.indexOf('Split again')).toBeLessThan(html.indexOf('Delete cell'))
     expect(html).not.toContain('completed')
     expect(html).not.toContain('inspector-run-error')
@@ -732,7 +808,10 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain('<h3>Inputs</h3>')
-    expect(html).toContain('<span>source</span>')
+    expect(html).toContain(
+      '<span class="inspector-input-source-label">source</span>',
+    )
+    expect(html).toContain('aria-label="source input"')
     expect(html).not.toContain('Select the upstream cell that supplies each input.')
     expect(html).not.toContain('Changing a source clears this preview until its producer is rerun.')
     expect(html).toContain('<details class="inspector-prompt-disclosure" open="">')
@@ -788,7 +867,9 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('<span>video</span>')
+    expect(html).toContain(
+      '<span class="inspector-input-source-label">video</span>',
+    )
     expect(html).toContain('<option value="first">First</option>')
     expect(html).toContain('<option value="time" selected="">Time</option>')
     expect(html).toContain('<option value="last">Last</option>')
@@ -1072,11 +1153,13 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain('class="inspector-slug-field"')
+    expect(html).toContain('inspector-clear-slot-button')
+    expect(html).toContain('Clear slot')
     expect(html).toContain('inspector-delete-cell-button')
     expect(html).toContain('Delete cell')
     expect(html).toContain('class="inspector-save-button" disabled=""')
     expect(html).toContain(
-      'class="inspector-cell-actions" aria-label="Cell actions"',
+      'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell cleanup actions"',
     )
     expect(html).not.toContain('Dolt source')
   })
