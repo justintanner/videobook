@@ -83,6 +83,7 @@ import {
 } from '@/components/videobook/BusRiverEdge'
 import { CellStateOverlay } from '@/components/videobook/cell-overlays/CellStateOverlay'
 import { AnalysisCellSummary } from '@/components/videobook/AnalysisCellSummary'
+import { NotebookMediaMetadata } from '@/components/videobook/NotebookMediaMetadata'
 import {
   NotebookGridBoard,
 } from '@/components/videobook/NotebookGridBoard'
@@ -2077,6 +2078,12 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
             ) : (
               <img src={thumbnailUrl ?? mediaUrl ?? ''} alt={data.slug} />
             )}
+            <NotebookMediaMetadata
+              className="cell-media-metadata"
+              width={data.asset?.width ?? null}
+              height={data.asset?.height ?? null}
+              durationSeconds={playableVideo ? data.asset?.duration ?? null : null}
+            />
           </div>
         ) : (
           <div className={`cell-copy ${textCell ? 'cell-copy-text' : ''}`}>

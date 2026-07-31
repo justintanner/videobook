@@ -397,6 +397,10 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('preload="metadata"')
     expect(html).toContain('controls=""')
     expect(html).toContain('/files/vid-source/original.mp4')
+    expect(html).toContain('class="notebook-media-metadata inspector-cell-metadata"')
+    expect(html).toContain('<span>1920×1080</span>')
+    expect(html).toContain('dateTime="PT30S"')
+    expect(html).toContain('aria-label="Duration 0:30"')
     expect(html).not.toContain('role="tab"')
     expect(html).toContain('class="inspector-slug-field"')
     expect(html).toContain('value="vid-source"')
@@ -579,7 +583,7 @@ describe('NotebookCellInspector', () => {
       thumbnailUrl: null,
       width: 320,
       height: 240,
-      duration: null,
+      duration: 30,
       audioInfo: null,
     }
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
@@ -617,6 +621,8 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('Version 2 of 2 · current')
     expect(html).toContain('value="image-two" selected=""')
     expect(html).toContain('/files/img-frame-2/original.jpg')
+    expect(html).toContain('<span>320×240</span>')
+    expect(html).not.toContain('aria-label="Duration 0:30"')
   })
 
   it('shows versioned normalized shots for Analysis outputs', () => {

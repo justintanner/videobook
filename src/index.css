@@ -1719,16 +1719,30 @@ textarea:focus-visible {
   object-fit: contain;
 }
 
-.cell-ratio {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  padding: 4px 6px;
+.notebook-media-metadata {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid rgba(114, 231, 170, 0.42);
   color: #b9dfcb;
-  background: rgba(2, 10, 7, 0.82);
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  background: rgba(2, 10, 7, 0.86);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.notebook-media-metadata > span + time {
+  padding-left: 6px;
+  border-left: 1px solid rgba(114, 231, 170, 0.24);
+}
+
+.cell-media-metadata {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  padding: 4px 6px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
 }
 
 .book-trail-edge .react-flow__edge-text {
@@ -2539,7 +2553,7 @@ textarea:focus-visible {
   margin: 76px 14px;
 }
 
-.inspector-cell-ratio {
+.inspector-cell-metadata {
   position: absolute;
   top: 10px;
   right: 10px;

@@ -54,6 +54,7 @@ import {
   type GenerationSelection,
   type NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
+import { NotebookMediaMetadata } from './NotebookMediaMetadata'
 import { RichJson } from './RichJson'
 
 const actionCellTypes = new Set<NotebookCell['type']>([
@@ -462,9 +463,6 @@ function NotebookCellMedia({
   const previewUrl = asset.thumbnailUrl ?? mediaUrl
   const isVideo = asset.type === 'video' || asset.type === 'final'
   const isAudio = asset.type === 'audio'
-  const dimensions = asset.width && asset.height
-    ? `${asset.width}×${asset.height}`
-    : asset.type.toUpperCase()
   const audioPresentation = notebookAudioPresentation({
     audioInfo: asset.audioInfo,
     durationSeconds: asset.duration,
@@ -496,7 +494,15 @@ function NotebookCellMedia({
         ) : (
           <img key={previewUrl} src={previewUrl} alt={`@${slug}`} />
         )}
-        {!isAudio && <span className="inspector-cell-ratio">{dimensions}</span>}
+        {!isAudio && (
+          <NotebookMediaMetadata
+            className="inspector-cell-metadata"
+            width={asset.width}
+            height={asset.height}
+            durationSeconds={isVideo ? asset.duration : null}
+            fallbackLabel={asset.type.toUpperCase()}
+          />
+        )}
       </div>
       {isAudio && (
         <div className="inspector-audio-summary">
