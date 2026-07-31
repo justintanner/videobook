@@ -668,15 +668,22 @@ function buildVeo31VideoPayload(
   args: Veo31VideoArgs,
   opts: Veo31VideoOpts,
 ): GoogleFlowVideosRequest {
+  const referenceImageIds = opts.referenceImageIds ?? [];
+  // Google Flow reference-to-video only accepts duration 8.
+  const durationSeconds = referenceImageIds.length > 0
+    ? 8
+    : args.duration !== undefined
+      ? GOOGLE_FLOW_DURATION_SECONDS[args.duration]
+      : undefined;
   return {
     prompt: args.prompt,
     model,
     ...(args.aspect_ratio !== undefined ? { aspectRatio: googleFlowVideoAspect(args.aspect_ratio) } : {}),
-    ...(args.duration !== undefined ? { duration: GOOGLE_FLOW_DURATION_SECONDS[args.duration] } : {}),
+    ...(durationSeconds !== undefined ? { duration: durationSeconds } : {}),
     ...(args.seed !== undefined ? { seed: args.seed } : {}),
     ...(opts.startImageId !== undefined ? { startImage: opts.startImageId } : {}),
     ...(opts.endImageId !== undefined ? { endImage: opts.endImageId } : {}),
-    ...googleFlowReferenceSlots("referenceImage", opts.referenceImageIds ?? []),
+    ...googleFlowReferenceSlots("referenceImage", referenceImageIds),
   };
 }
 

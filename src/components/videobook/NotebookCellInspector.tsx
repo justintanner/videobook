@@ -24,6 +24,7 @@ import {
   notebookAudioPresentation,
   notebookAnalysisLlmExchanges,
   notebookCellActionPresentation,
+  notebookCellInputLabelVisible,
   notebookCellInspectorActionLabel,
   notebookOutputVersionArtifactIds,
   type NotebookAnalysisInfo,
@@ -673,11 +674,20 @@ function InputSources({
               compatibleSource(cell, input, candidate)
               || candidate.id === edge?.source)
             .sort((left, right) => left.slug.localeCompare(right.slug))
+          const labeled = notebookCellInputLabelVisible(input)
           return (
-            <div className="inspector-input-source-row" key={input}>
-              <span className="inspector-input-source-label">
-                {input.replaceAll('_', ' ')}
-              </span>
+            <div
+              className={[
+                'inspector-input-source-row',
+                labeled ? '' : 'unlabeled',
+              ].filter(Boolean).join(' ')}
+              key={input}
+            >
+              {labeled && (
+                <span className="inspector-input-source-label">
+                  {input.replaceAll('_', ' ')}
+                </span>
+              )}
               <SourceCellPicker
                 input={input}
                 candidates={candidates}
@@ -1618,29 +1628,6 @@ function ExecutableCellInspector({
   return (
     <div className="inspector-body inspector-executable-body">
       <SlugField cell={cell} busy={busy} onUpdate={onUpdate} />
-      {status === 'error' && (
-        <section
-          className="inspector-run-error"
-          role="alert"
-          aria-label="Cell run error"
-        >
-          <CircleAlert size={16} aria-hidden="true" />
-          <div className="inspector-run-error-content">
-            <div className="inspector-run-error-header">
-              <strong>Run failed</strong>
-              <button
-                type="button"
-                aria-label="Copy run error"
-                title="Copy run error"
-                onClick={() => void copyRunError()}
-              >
-                <span aria-live="polite">{copyLabel}</span>
-              </button>
-            </div>
-            <p>{runError}</p>
-          </div>
-        </section>
-      )}
       {asset && previewCell && (
         <NotebookCellMedia
           asset={asset}
@@ -1856,7 +1843,13 @@ function ExecutableCellInspector({
             type="button"
             className="inspector-run-action"
             aria-busy={saveOnRun && saving}
-            title={!saveOnRun && dirty ? 'Save changes before running' : undefined}
+            title={
+              action?.disabled
+                ? 'A run is already in progress for this cell'
+                : !saveOnRun && dirty
+                  ? 'Save changes before running'
+                  : undefined
+            }
             onClick={() => {
               if (saveOnRun) {
                 void saveAndRun()
@@ -1876,6 +1869,29 @@ function ExecutableCellInspector({
               ? generationCell ? 'Generating…' : 'Applying…'
               : runLabel}
           </button>
+        </section>
+      )}
+      {(status === 'error' || error) && (
+        <section
+          className="inspector-run-error"
+          role="alert"
+          aria-label="Cell run error"
+        >
+          <CircleAlert size={16} aria-hidden="true" />
+          <div className="inspector-run-error-content">
+            <div className="inspector-run-error-header">
+              <strong>Run failed</strong>
+              <button
+                type="button"
+                aria-label="Copy run error"
+                title="Copy run error"
+                onClick={() => void copyRunError()}
+              >
+                <span aria-live="polite">{copyLabel}</span>
+              </button>
+            </div>
+            <p>{runError}</p>
+          </div>
         </section>
       )}
       <CellCleanupActions

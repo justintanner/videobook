@@ -177,6 +177,10 @@ export function notebookCellIsActiveStatus(status: string): boolean {
   return activeStatuses.has(status)
 }
 
+export function notebookCellInputLabelVisible(input: string): boolean {
+  return input !== 'input'
+}
+
 export function notebookCellExecutionObservation(
   document: Pick<NotebookDocument, 'execution'>,
   cellId: string,

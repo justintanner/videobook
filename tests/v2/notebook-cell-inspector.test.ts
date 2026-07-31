@@ -761,7 +761,9 @@ describe('NotebookCellInspector', () => {
     )
     expect(html).toContain('ffmpeg exited with code 1')
     expect(html).toContain('End time exceeds the source duration')
-    expect(html.indexOf('Run failed')).toBeLessThan(html.indexOf('Start seconds'))
+    // Error block sits under the primary action, above Clear/Delete cleanup.
+    expect(html.indexOf('Start seconds')).toBeLessThan(html.indexOf('Run failed'))
+    expect(html.indexOf('Run failed')).toBeLessThan(html.indexOf('Clear slot'))
   })
 
   it('keeps Analyze inputs concise and makes its prompt collapsible', () => {

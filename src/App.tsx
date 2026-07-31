@@ -164,6 +164,12 @@ import {
   type NotebookAnalysisInfo,
   type NotebookAudioInfo,
 } from '@/videobook/notebook-cell-presentation'
+import {
+  notebookRunJobViewFromRecord,
+  notebookRunWatchStep,
+  selectEffectiveNotebookRunJob,
+  type NotebookRunWatchOutcomeKind,
+} from '@/videobook/notebook-run-watch'
 import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
 import type {
   BookProjectMutationResult,
@@ -315,10 +321,14 @@ type JobRecord = {
   attempts: number
   maxAttempts: number
   error: { message: string; code: string | null } | null
+  payload: Record<string, unknown> | null
   enqueuedAt: number
   startedAt: number | null
   finishedAt: number | null
 }
+
+type WorkspaceNoticeTone = 'info' | 'error'
+type WorkspaceNotice = { text: string; tone: WorkspaceNoticeTone }
 
 type GenerationPlanRecord = {
   planId: string
@@ -387,6 +397,8 @@ const ingestPollIntervalMs = 750
 const ingestPollTimeoutMs = 5 * 60_000
 const notebookRunPollIntervalMs = 500
 const notebookRunPollTimeoutMs = 5 * 60_000
+const notebookGenerationWatchIntervalMs = 2_000
+const notebookGenerationWatchTimeoutMs = 45 * 60_000
 const activeJobStates = new Set(['queued', 'running', 'completing'])
 
 function delay(ms: number): Promise<void> {
@@ -1114,6 +1126,11 @@ function asJobs(value: unknown): JobRecord[] {
     const operationId = item && asString(item.operationId ?? item.operation_id)
     if (!item || id === null || !type || !state || !operationId) return []
     const error = record(item.error)
+    const payloadValue = item.payload
+    const payload = payloadValue && typeof payloadValue === 'object'
+      && !Array.isArray(payloadValue)
+      ? payloadValue as Record<string, unknown>
+      : null
     return [{
       id,
       operationId,
@@ -1128,6 +1145,7 @@ function asJobs(value: unknown): JobRecord[] {
             code: asString(error.code),
           }
         : null,
+      payload,
       enqueuedAt: asNumber(item.enqueuedAt ?? item.enqueued_at) ?? 0,
       startedAt: asNumber(item.startedAt ?? item.started_at),
       finishedAt: asNumber(item.finishedAt ?? item.finished_at),
@@ -2110,6 +2128,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   )
   const [deletingCellId, setDeletingCellId] = useState<string | null>(null)
   const [mediaSlotStates, setMediaSlotStates] = useState<Record<string, MediaSlotState>>({})
+  const [cellRunErrors, setCellRunErrors] = useState<Record<string, string>>({})
   const [mediaLibraryPicker, setMediaLibraryPicker] = useState<MediaLibraryPickerState | null>(null)
   const momentSearchRef = useRef<MomentSearchHandle | null>(null)
   const [fullscreenCellId, setFullscreenCellId] = useState<string | null>(null)
@@ -2156,7 +2175,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [busy, setBusy] = useState(false)
   const [processingArtifactId, setProcessingArtifactId] = useState<string | null>(null)
   const [online, setOnline] = useState(() => window.navigator.onLine)
-  const [, setNotice] = useState('Connect to the server, then load your books.')
+  const [notice, setNoticeState] = useState<WorkspaceNotice | null>({
+    text: 'Connect to the server, then load your books.',
+    tone: 'info',
+  })
+  const setNotice = useCallback((
+    text: string,
+    tone: WorkspaceNoticeTone = 'info',
+  ) => {
+    setNoticeState({ text, tone })
+  }, [])
   const flowRef = useRef<ReactFlowInstance<CanvasNode, NotebookFlowEdge> | null>(null)
   const notebookScrollRef = useRef<HTMLDivElement | null>(null)
   const bookMenuRequestRef = useRef(0)
@@ -2166,6 +2194,40 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const audioSpinePlayerRef = useRef<HTMLAudioElement | null>(null)
   const mediaLibraryRequestRef = useRef(0)
   const mediaLibraryOpenerRef = useRef<HTMLElement | null>(null)
+  const activeWatchesRef = useRef(new Map<string, string>())
+  const watchScopeRef = useRef<{
+    bookId: string | null
+    notebookId: string | null
+    assets: AssetRecord[]
+  }>({ bookId, notebookId: notebook?.id ?? null, assets })
+  const callRef = useRef<(
+    tool: string,
+    args: Record<string, unknown>,
+  ) => Promise<unknown>>(async () => {
+    throw new Error('MCP call is not ready')
+  })
+
+  const setCellRunError = useCallback((cellId: string, message: string | null) => {
+    setCellRunErrors((current) => {
+      if (message === null) {
+        if (!(cellId in current)) return current
+        const next = { ...current }
+        delete next[cellId]
+        return next
+      }
+      if (current[cellId] === message) return current
+      return { ...current, [cellId]: message }
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!notice || notice.tone !== 'info') return
+    const expected = notice
+    const timer = window.setTimeout(() => {
+      setNoticeState((current) => current === expected ? null : current)
+    }, 6_000)
+    return () => window.clearTimeout(timer)
+  }, [notice])
   const activeBook = useMemo(
     () => books.find((book) => book.bookId === bookId) ?? null,
     [bookId, books],
@@ -2249,6 +2311,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (mcp.state !== 'ready') throw new Error('MCP server is not ready')
     return parseResult(await mcp.callTool(tool, args))
   }, [mcp])
+
+  useEffect(() => {
+    callRef.current = call
+  }, [call])
+
+  useEffect(() => {
+    watchScopeRef.current = {
+      bookId,
+      notebookId: notebook?.id ?? null,
+      assets,
+    }
+  }, [assets, bookId, notebook?.id])
 
   const setMediaSlotOperation = useCallback((
     cellId: string,
@@ -2346,6 +2420,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setMediaSlotStates((current) => Object.fromEntries(
       Object.entries(current).filter(([cellId]) => cellIds.has(cellId)),
     ))
+    setCellRunErrors((current) => Object.fromEntries(
+      Object.entries(current).filter(([cellId]) => cellIds.has(cellId)),
+    ))
     setMediaLibraryPicker((current) =>
       current && cellIds.has(current.cellId) ? current : null)
     setNodes((current) => {
@@ -2362,9 +2439,173 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       current && next.cells.some((cell) => cell.id === current) ? current : null)
   }, [])
 
+  const watchNotebookRun = useCallback(async (params: {
+    bookId: string
+    notebookId: string
+    cellId: string
+    slug: string
+    runId: string
+    jobOperationId: string
+    intervalMs: number
+    timeoutMs: number
+    maxPollFailures: number
+  }): Promise<{
+    kind: NotebookRunWatchOutcomeKind
+    message?: string
+  }> => {
+    activeWatchesRef.current.set(params.cellId, params.runId)
+    let sawRun = false
+    let consecutiveFailures = 0
+    const deadline = Date.now() + params.timeoutMs
+    try {
+      while (Date.now() < deadline) {
+        if (activeWatchesRef.current.get(params.cellId) !== params.runId) {
+          return { kind: 'superseded' }
+        }
+        const scope = watchScopeRef.current
+        if (
+          scope.bookId !== params.bookId
+          || scope.notebookId !== params.notebookId
+        ) {
+          return { kind: 'superseded' }
+        }
+        try {
+          const [notebookValue, jobValue] = await Promise.all([
+            callRef.current('get_notebook', {
+              book_id: params.bookId,
+              notebook_id: params.notebookId,
+            }),
+            callRef.current('list_jobs', {
+              book_id: params.bookId,
+              limit: 200,
+            }),
+          ])
+          consecutiveFailures = 0
+          const afterScope = watchScopeRef.current
+          if (
+            afterScope.bookId !== params.bookId
+            || afterScope.notebookId !== params.notebookId
+            || activeWatchesRef.current.get(params.cellId) !== params.runId
+          ) {
+            return { kind: 'superseded' }
+          }
+          const nextNotebook = asNotebook(notebookValue)
+          if (!nextNotebook) {
+            throw new Error('The server returned an invalid notebook')
+          }
+          const nextJobs = asJobs(jobValue)
+          setJobs(nextJobs)
+          setJobSnapshotAt(Date.now())
+          const jobViews = nextJobs.map(notebookRunJobViewFromRecord)
+          const effectiveJob = selectEffectiveNotebookRunJob({
+            jobs: jobViews,
+            cellId: params.cellId,
+            runId: params.runId,
+            jobOperationId: params.jobOperationId,
+          })
+          const observation = notebookCellRunObservation(
+            nextNotebook,
+            params.cellId,
+            params.runId,
+          )
+          if (observation.state !== 'pending') {
+            setCellQueued(params.cellId, false)
+          }
+          applyNotebook(nextNotebook, afterScope.assets)
+          const step = notebookRunWatchStep({
+            observation,
+            job: effectiveJob,
+            slug: params.slug,
+            sawRun,
+          })
+          if (step.kind === 'continue') {
+            sawRun = step.sawRun
+            await delay(params.intervalMs)
+            continue
+          }
+          if (step.kind === 'completed') {
+            const assetValue = await callRef.current('list_assets', {
+              book_id: params.bookId,
+              sort: 'newest',
+              limit: 200,
+              include_referenced: true,
+            })
+            const nextAssets = asAssets(assetValue)
+            setAssets(nextAssets)
+            applyNotebook(nextNotebook, nextAssets)
+            setCellRunError(params.cellId, null)
+            return { kind: 'completed' }
+          }
+          if (step.kind === 'failed') {
+            return { kind: 'failed', message: step.message }
+          }
+          return { kind: 'superseded' }
+        } catch (error) {
+          consecutiveFailures += 1
+          if (consecutiveFailures >= params.maxPollFailures) {
+            const detail = error instanceof Error ? error.message : String(error)
+            return {
+              kind: 'failed',
+              message:
+                `Lost contact with the server while watching @${params.slug}: ${detail}`,
+            }
+          }
+          await delay(params.intervalMs)
+        }
+      }
+      return { kind: 'timeout' }
+    } finally {
+      if (activeWatchesRef.current.get(params.cellId) === params.runId) {
+        activeWatchesRef.current.delete(params.cellId)
+      }
+    }
+  }, [applyNotebook, setCellQueued, setCellRunError])
+
+  const watchGenerationRun = useCallback(async (params: {
+    bookId: string
+    notebookId: string
+    cellId: string
+    slug: string
+    runId: string
+    jobOperationId: string
+  }) => {
+    try {
+      const outcome = await watchNotebookRun({
+        ...params,
+        intervalMs: notebookGenerationWatchIntervalMs,
+        timeoutMs: notebookGenerationWatchTimeoutMs,
+        maxPollFailures: 10,
+      })
+      if (outcome.kind === 'completed') {
+        setNotice(`@${params.slug} generated`)
+        setCellRunError(params.cellId, null)
+        return
+      }
+      if (outcome.kind === 'failed') {
+        const message = outcome.message ?? `@${params.slug} failed`
+        setCellRunError(params.cellId, message)
+        setNotice(message, 'error')
+        return
+      }
+      if (outcome.kind === 'timeout') {
+        setNotice(
+          `@${params.slug} is still running — check the Jobs screen`,
+        )
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setCellRunError(params.cellId, message)
+      setNotice(message, 'error')
+    } finally {
+      setCellQueued(params.cellId, false)
+    }
+  }, [setCellQueued, setCellRunError, setNotice, watchNotebookRun])
+
   const runCell = useCallback(async (cellId: string) => {
     if (!bookId || !notebook) return
     setBusy(true)
+    setCellRunError(cellId, null)
+    let watching = false
     try {
       const currentValue = await call('get_notebook', {
         book_id: bookId,
@@ -2410,6 +2651,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }))
         if (refreshed) applyNotebook(refreshed, assets)
         setNotice(`@${cell.slug} queued`)
+        watching = true
+        void watchGenerationRun({
+          bookId,
+          notebookId: currentNotebook.id,
+          cellId,
+          slug: cell.slug,
+          runId,
+          jobOperationId,
+        })
       } else {
         const accepted = await startNotebookCellRun({
           start: () => call('run_notebook_cell', {
@@ -2427,64 +2677,33 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           throw new Error('The server did not return a notebook run')
         }
         setNotice(`@${cell.slug} queued`)
-        const deadline = Date.now() + notebookRunPollTimeoutMs
-        let completed = false
-        while (Date.now() < deadline) {
-          const [notebookValue, jobValue] = await Promise.all([
-            call('get_notebook', {
-              book_id: bookId,
-              notebook_id: currentNotebook.id,
-            }),
-            call('list_jobs', { book_id: bookId, limit: 200 }),
-          ])
-          const nextNotebook = asNotebook(notebookValue)
-          if (!nextNotebook) {
-            throw new Error('The server returned an invalid notebook')
-          }
-          const nextJobs = asJobs(jobValue)
-          const observation = notebookCellRunObservation(
-            nextNotebook,
-            cellId,
-            runId,
-          )
-          setJobs(nextJobs)
-          setJobSnapshotAt(Date.now())
-          if (observation.state !== 'pending') setCellQueued(cellId, false)
-          applyNotebook(nextNotebook, assets)
-          if (observation.state === 'error') {
-            throw new Error(observation.error ?? `@${cell.slug} failed`)
-          }
-          if (observation.state === 'completed') {
-            const assetValue = await call('list_assets', {
-              book_id: bookId,
-              sort: 'newest',
-              limit: 200,
-              include_referenced: true,
-            })
-            const nextAssets = asAssets(assetValue)
-            setAssets(nextAssets)
-            applyNotebook(nextNotebook, nextAssets)
-            completed = true
-            break
-          }
-          const job = nextJobs.find((candidate) =>
-            candidate.operationId === jobOperationId)
-          if (job?.state === 'failed' || job?.state === 'aborted') {
-            throw new Error(
-              job.error?.message ?? `Notebook run ${job.state}`,
-            )
-          }
-          await delay(notebookRunPollIntervalMs)
+        const outcome = await watchNotebookRun({
+          bookId,
+          notebookId: currentNotebook.id,
+          cellId,
+          slug: cell.slug,
+          runId,
+          jobOperationId,
+          intervalMs: notebookRunPollIntervalMs,
+          timeoutMs: notebookRunPollTimeoutMs,
+          maxPollFailures: 1,
+        })
+        if (outcome.kind === 'failed') {
+          throw new Error(outcome.message ?? `@${cell.slug} failed`)
         }
-        if (!completed) {
+        if (outcome.kind === 'timeout') {
           throw new Error('Notebook run did not finish within five minutes')
         }
-        setNotice(`@${cell.slug} updated`)
+        if (outcome.kind === 'completed') {
+          setNotice(`@${cell.slug} updated`)
+        }
       }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      const message = error instanceof Error ? error.message : String(error)
+      setCellRunError(cellId, message)
+      setNotice(message, 'error')
     } finally {
-      setCellQueued(cellId, false)
+      if (!watching) setCellQueued(cellId, false)
       setBusy(false)
     }
   }, [
@@ -2496,6 +2715,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     notebook,
     online,
     setCellQueued,
+    setCellRunError,
+    setNotice,
+    watchGenerationRun,
+    watchNotebookRun,
   ])
 
   const presentedNodes = useMemo(() => {
@@ -2630,7 +2853,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     [assetById, notebook],
   )
   const selectedCellError = notebook && selectedNotebookCell
-    ? notebookCellExecutionObservation(notebook, selectedNotebookCell.id).error
+    ? (
+      notebookCellExecutionObservation(notebook, selectedNotebookCell.id).error
+      ?? cellRunErrors[selectedNotebookCell.id]
+      ?? null
+    )
     : null
   const selectedCellVersionAssets = useMemo(() => {
     if (
@@ -2791,7 +3018,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } finally {
       setBusy(false)
     }
-  }, [bookId, refreshBookCommands, refreshBookData, refreshBookList])
+  }, [bookId, refreshBookCommands, refreshBookData, refreshBookList, setNotice])
 
   const openBookMenu = useCallback(async (): Promise<BookProjectMutationResult> => {
     const requestId = bookMenuRequestRef.current + 1
@@ -2848,7 +3075,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } finally {
       setBusy(false)
     }
-  }, [books, handleBookMenuOpenChange, refreshBookData])
+  }, [books, handleBookMenuOpenChange, refreshBookData, setNotice])
 
   const createBookProject = useCallback(async (
     slug: string,
@@ -2881,6 +3108,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     handleBookMenuOpenChange,
     refreshBookCommandsAfterMutation,
     refreshBookData,
+    setNotice,
   ])
 
   const renameBookProject = useCallback(async (
@@ -2908,7 +3136,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } finally {
       setBusy(false)
     }
-  }, [call, refreshBookCommandsAfterMutation])
+  }, [call, refreshBookCommandsAfterMutation, setNotice])
 
   const deleteBookProject = useCallback(async (
     targetBookId: string,
@@ -2953,6 +3181,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     handleBookMenuOpenChange,
     refreshBookCommandsAfterMutation,
     refreshBookData,
+    setNotice,
   ])
 
   const createCell = async (type: NotebookCellType, position?: { x: number; y: number }) => {
@@ -3011,7 +3240,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setNotice('Cell saved')
       return true
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(
+        error instanceof Error ? error.message : String(error),
+        'error',
+      )
       return false
     } finally {
       setBusy(false)
@@ -3035,7 +3267,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await refreshNotebook(bookId, notebook.id)
       setNotice(sourceCellId ? 'Input source replaced' : 'Input source cleared')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(
+        error instanceof Error ? error.message : String(error),
+        'error',
+      )
     } finally {
       setBusy(false)
     }
@@ -3060,7 +3295,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await refreshBookData(bookId, notebook.id)
       setNotice('Cell deleted')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(
+        error instanceof Error ? error.message : String(error),
+        'error',
+      )
     } finally {
       setNodes((current) => current.map((node) => node.id === cellId
         ? { ...node, data: { ...node.data, deleting: false } }
@@ -3086,7 +3324,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       await refreshNotebook(bookId, notebook.id).catch(() => undefined)
-      setNotice(message)
+      setNotice(message, 'error')
     }
   }
 
@@ -3104,7 +3342,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await refreshNotebook(bookId, notebook.id)
       setNotice('Cells connected')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(
+        error instanceof Error ? error.message : String(error),
+        'error',
+      )
     } finally {
       setBusy(false)
     }
@@ -3142,7 +3383,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setMediaSlotError(cellId, message)
-      setNotice(message)
+      setNotice(message, 'error')
     }
   }
 
@@ -5147,6 +5388,25 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       {!online && (
         <div className="offline-banner" role="status">
           Offline · local import, search, editing, playback, history, and export remain available
+        </div>
+      )}
+      {notice && (
+        <div
+          className={[
+            'workspace-status-strip',
+            notice.tone === 'error' ? 'error' : '',
+          ].filter(Boolean).join(' ')}
+          role="status"
+          aria-live="polite"
+        >
+          <span>{notice.text}</span>
+          <button
+            type="button"
+            aria-label="Dismiss notice"
+            onClick={() => setNoticeState(null)}
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
 

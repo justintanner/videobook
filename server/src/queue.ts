@@ -290,7 +290,25 @@ function makeWrappedResolver(
         } catch (cause) {
           const message = cause instanceof Error ? cause.message : String(cause);
           if (assetId && !assetFailureHandled) {
-            await dispatchFailure(engine, assetId, lease.current, message);
+            await dispatchFailure(engine, assetId, lease.current, message, job);
+          } else if (!assetId) {
+            await engine.logs.append("job-error", {
+              jobType: type,
+              operationId: job.operationId,
+              error: message,
+              ...(typeof job.payload.bookId === "string"
+                ? { bookId: job.payload.bookId }
+                : {}),
+              ...(typeof job.payload.notebookId === "string"
+                ? { notebookId: job.payload.notebookId }
+                : {}),
+              ...(typeof job.payload.cellId === "string"
+                ? { cellId: job.payload.cellId }
+                : {}),
+              ...(typeof job.payload.runId === "string"
+                ? { runId: job.payload.runId }
+                : {}),
+            });
           }
           throw cause;
         } finally {
@@ -306,6 +324,7 @@ async function dispatchFailure(
   assetId: string,
   lease: LeaseToken | null,
   message: string,
+  job?: Job,
 ): Promise<void> {
   if (lease?.kind === "owner") {
     await engine.jobs.artifactWork.fail(assetId, lease.ownerId, { message });
@@ -314,7 +333,11 @@ async function dispatchFailure(
   } else {
     await engine.jobs.pending.forceFail(assetId, { message });
   }
-  await engine.logs.append("job-error", { assetId, error: message });
+  await engine.logs.append("job-error", {
+    assetId,
+    error: message,
+    ...(job ? { jobType: job.type, operationId: job.operationId } : {}),
+  });
 }
 
 async function ensureRunner(bookId: string): Promise<RunnerInfo> {

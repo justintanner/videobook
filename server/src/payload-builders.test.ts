@@ -255,10 +255,11 @@ describe("translateToolPayload", () => {
       image_slugs: ["ref-1"],
     });
     expect(result?.provider_path).toBe("googleflow.v1.videos({ async: true })");
+    // Reference-to-video requires duration 8 under the current Google Flow schema.
     expect(result?.payload).toEqual({
       prompt: "slow clouds",
       model: "veo-3.1-lite-low-priority",
-      duration: 4,
+      duration: 8,
       aspectRatio: "landscape",
       referenceImage_1: "ref-1",
     });
@@ -428,7 +429,8 @@ describe("translateToolPayload", () => {
     expect(result?.payload).toEqual({
       prompt: "pan across @referenceImage_1 starting from",
       model: "veo-3.1-quality",
-      duration: 4,
+      // Reference-image R2V only accepts duration 8 under current schema.
+      duration: 8,
       aspectRatio: "landscape",
       startImage: "img-open",
       referenceImage_1: "img-set",

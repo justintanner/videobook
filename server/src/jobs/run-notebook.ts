@@ -2035,11 +2035,20 @@ async function awaitNotebookOutput(
 
 export function registerRunNotebookJob(engine: Engine): void {
   registerJobHandler("await_notebook_output", async (payload) => {
-    await awaitNotebookOutput(
-      engine,
-      payload as unknown as AwaitNotebookOutputPayload,
-    );
-    return { status: "completed" };
+    const input = payload as unknown as AwaitNotebookOutputPayload;
+    try {
+      await awaitNotebookOutput(engine, input);
+      return { status: "completed" };
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      try {
+        await failAwaitingNotebookCell(engine, input, message);
+      } catch {
+        // Best-effort: surface the original await failure if we cannot write
+        // execution state (for example, notebook already deleted).
+      }
+      throw cause;
+    }
   });
   registerJobHandler("run_notebook", async (payload) => {
     const input = payload as unknown as RunNotebookPayload;
@@ -2209,7 +2218,16 @@ export function registerRunNotebookJob(engine: Engine): void {
           input.notebookId,
           input.runPlanId,
           "awaiting-output",
-          { runId, outputs },
+          {
+            runId,
+            outputs,
+            ...(errors.length > 0 ? { error: errors.join("\n") } : {}),
+          },
+        );
+      }
+      if (errors.length > 0) {
+        throw new Error(
+          `Notebook run is awaiting output with cell errors:\n${errors.join("\n")}`,
         );
       }
       return {
@@ -2261,6 +2279,10 @@ export async function reconcileAwaitingNotebookOutputs(
     states: ["queued", "running", "completing"],
     type: "await_notebook_output",
   });
+  const failedJobs = engine.jobs.queue.list({
+    states: ["failed", "aborted"],
+    type: "await_notebook_output",
+  });
   const activeCells = new Set(activeJobs.flatMap((job) => {
     const notebookId = typeof job.payload.notebookId === "string"
       ? job.payload.notebookId
@@ -2280,6 +2302,31 @@ export async function reconcileAwaitingNotebookOutputs(
         || !state.runId
         || activeCells.has(`${notebook.id}:${cellId}`)
       ) {
+        continue;
+      }
+      const matchingFailed = failedJobs
+        .filter((job) =>
+          job.payload.notebookId === notebook.id
+          && job.payload.cellId === cellId
+          && job.payload.runId === state.runId)
+        .sort((left, right) =>
+          (right.operationId ?? "").localeCompare(left.operationId ?? ""));
+      const latestFailed = matchingFailed[0];
+      if (latestFailed) {
+        const message = latestFailed.error?.message
+          ?? `Notebook await ${latestFailed.state}`;
+        await failAwaitingNotebookCell(
+          engine,
+          {
+            type: "await_notebook_output",
+            bookId,
+            notebookId: notebook.id,
+            cellId,
+            providerArtifactId: state.providerArtifactId,
+            runId: state.runId,
+          },
+          message,
+        );
         continue;
       }
       const runPlan = notebookRunPlanRecords(notebook).find((record) =>

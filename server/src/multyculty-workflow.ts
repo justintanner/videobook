@@ -13,8 +13,12 @@ import type {
   NotebookLiveAnalysis,
 } from "./notebook-live-analysis.js";
 import type { BookManager } from "./book-manager.js";
-import { runFfmpeg } from "./ffmpeg.js";
+import { FFMPEG, runFfmpeg } from "./ffmpeg.js";
 import { formatTimestamp, generateTimestamps } from "./frame-utils.js";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 import {
   notebookCellFingerprint,
   runNotebookCell,
@@ -641,6 +645,111 @@ async function materializeLocalOutputs(
   });
 }
 
+/** Create the source media + artifacts a clean multyculty book needs before seed. */
+export async function bootstrapMultycultySource(
+  engine: Engine,
+): Promise<void> {
+  if (engine.book.get().slug !== "multyculty") {
+    throw new Error("The Multyculty workflow can only seed the multyculty book");
+  }
+  if (engine.notebooks.list().length === 0) {
+    const notebook = await engine.notebooks.create("Main");
+    if (!notebook.ok) throw new Error(notebook.error.message);
+  }
+  const artifactSpecs = [
+    ["video", "vid-source-selection"],
+    ["video", "vid-section-intro"],
+    ["video", "vid-section-culture"],
+    ["video", "vid-animated-intro"],
+    ["video", "vid-animated-culture"],
+    ["final", "final"],
+  ] as const;
+  const existing = new Map(
+    (engine.artifacts.list() as ArtifactRecord[]).map((artifact) =>
+      [artifact.slug, artifact.artifactId] as const),
+  );
+  const artifacts = new Map<string, string>(existing);
+  for (const [kind, slug] of artifactSpecs) {
+    if (artifacts.has(slug)) continue;
+    const created = await engine.artifacts.create(kind, slug);
+    if (!created.ok) throw new Error(created.error.message);
+    artifacts.set(slug, created.value.artifactId);
+  }
+  const sourceId = artifacts.get("vid-source-selection");
+  if (!sourceId) throw new Error("Missing vid-source-selection artifact");
+  const sourceManifest = await engine.files.manifest(sourceId);
+  const hasOriginal = sourceManifest.ok
+    && sourceManifest.value.files.some((file) => file.name === "original.mp4");
+  if (!hasOriginal) {
+    const mediaDir = await mkdtemp(join(tmpdir(), "videobook-multyculty-media-"));
+    try {
+      const sourcePath = join(mediaDir, "source.mp4");
+      await execFileAsync(FFMPEG, [
+        "-y",
+        "-f", "lavfi", "-i", "color=c=0x10261b:s=160x90:r=6:d=15",
+        "-f", "lavfi", "-i", "color=c=0x274b3a:s=160x90:r=6:d=15",
+        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=30",
+        "-filter_complex", "[0:v][1:v]concat=n=2:v=1:a=0[video]",
+        "-map", "[video]",
+        "-map", "2:a",
+        "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-shortest",
+        sourcePath,
+      ]);
+      const file = await engine.files.writeFromPath(
+        sourceId,
+        "original.mp4",
+        sourcePath,
+      );
+      if (!file.ok) throw new Error(file.error.message);
+      for (const slug of ["vid-animated-intro", "vid-animated-culture"]) {
+        const artifactId = artifacts.get(slug);
+        if (!artifactId) continue;
+        const animationManifest = await engine.files.manifest(artifactId);
+        const animationHasOriginal = animationManifest.ok
+          && animationManifest.value.files.some((entry) =>
+            entry.name === "original.mp4");
+        if (animationHasOriginal) continue;
+        const animationFile = await engine.files.writeFromPath(
+          artifactId,
+          "original.mp4",
+          sourcePath,
+        );
+        if (!animationFile.ok) throw new Error(animationFile.error.message);
+      }
+    } finally {
+      await rm(mediaDir, { recursive: true, force: true });
+    }
+  }
+  const manifest = await engine.files.manifest(sourceId);
+  if (!manifest.ok) throw new Error(manifest.error.message);
+  const objectHash = manifest.value.files.find((entry) =>
+    entry.name === "original.mp4")?.objectHash
+    ?? manifest.value.files[0]?.objectHash;
+  if (!objectHash) throw new Error("Source media missing object hash");
+  const streams = engine.streams.list(sourceId);
+  const hasAudio = streams.ok
+    && streams.value.some((stream) => stream.kind === "audio");
+  if (!hasAudio) {
+    const stream = await engine.streams.register({
+      artifactId: sourceId,
+      sourcePath: "original.mp4",
+      objectHash,
+      streamIndex: 1,
+      kind: "audio",
+      timeBase: { numerator: 1, denominator: 48_000 },
+      durationTicks: 1_440_000,
+      codec: "aac",
+      audio: {
+        sampleRateHz: 48_000,
+        channels: 2,
+        channelLayout: "stereo",
+      },
+    });
+    if (!stream.ok) throw new Error(stream.error.message);
+  }
+}
+
 export async function seedMultycultyWorkflow(
   engine: Engine,
   options: {
@@ -650,6 +759,7 @@ export async function seedMultycultyWorkflow(
   if (engine.book.get().slug !== "multyculty") {
     throw new Error("The Multyculty workflow can only seed the multyculty book");
   }
+  await bootstrapMultycultySource(engine);
   const notebook = engine.notebooks.list().find((candidate) =>
     candidate.name.toLowerCase() === "multyculty")
     ?? engine.notebooks.list()[0];
@@ -814,27 +924,44 @@ export async function ensureMultycultyWorkflow(
     materializeLocalOutputs?: boolean;
   } = {},
 ): Promise<{
-  status: "skipped" | "unchanged" | "migrated";
+  status: "skipped" | "unchanged" | "migrated" | "created";
   notebookId?: string;
   revision?: string;
 }> {
   await books.ready();
-  const selected = books.getBySlug("multyculty");
-  if (!selected.ok) return { status: "skipped" };
+  let selected = books.getBySlug("multyculty");
+  let created = false;
+  if (!selected.ok) {
+    const createdBook = await books.create("multyculty");
+    if (!createdBook.ok) {
+      throw new Error(createdBook.error.message);
+    }
+    selected = books.getBySlug("multyculty");
+    if (!selected.ok) {
+      throw new Error(selected.error.message);
+    }
+    created = true;
+  }
+  await bootstrapMultycultySource(selected.value.engine);
   const notebook = selected.value.engine.notebooks.list().find((candidate) =>
     candidate.name.toLowerCase() === "multyculty")
     ?? selected.value.engine.notebooks.list()[0];
-  if (!notebook) return { status: "skipped" };
+  if (!notebook) {
+    throw new Error("The Multyculty book has no notebook after bootstrap");
+  }
   const source = selected.value.engine.artifacts.list().find((artifact) =>
     artifact.slug === "vid-source-selection");
-  if (!source) return { status: "skipped" };
+  if (!source) {
+    throw new Error("The Multyculty book is missing vid-source-selection");
+  }
   const fixture = fixtureRecord(notebook);
   const analysisFramesReady = await fixtureAnalysisFramesReady(
     selected.value.engine,
     source.artifactId,
   );
   if (
-    isCurrentFixture(notebook)
+    !created
+    && isCurrentFixture(notebook)
     && !hasRunnableAnalysisFixture(notebook)
     && analysisFramesReady
     && (
@@ -853,7 +980,7 @@ export async function ensureMultycultyWorkflow(
     options,
   );
   return {
-    status: "migrated",
+    status: created ? "created" : "migrated",
     notebookId: migrated.id,
     revision: selected.value.engine.head,
   };
