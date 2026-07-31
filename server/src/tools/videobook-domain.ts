@@ -28,6 +28,7 @@ import {
 import { z } from "zod";
 import { v5 as uuidv5, v7 as uuidv7 } from "uuid";
 import type { BookManager } from "../book-manager.js";
+import { ensureExtractFrameImageOutput } from "../notebook-cell-outputs.js";
 import { mutateNotebook } from "../notebook-mutations.js";
 import { queue, stopBookQueue } from "../queue.js";
 import {
@@ -3052,6 +3053,19 @@ export function videobookDomainDefs(
                 target: outputCell.id,
                 targetInput: "result",
               });
+            }
+            if (cell.type === "extract_frame") {
+              const ensured = ensureExtractFrameImageOutput(
+                engine,
+                {
+                  ...notebook,
+                  cells: [...notebook.cells, cell],
+                },
+                cell.id,
+              );
+              outputCell = ensured.outputCell;
+              outputEdge = ensured.outputEdge;
+              return ensured.document;
             }
             return {
               ...notebook,

@@ -151,7 +151,22 @@ describe('v2 notebook domain tools', () => {
     ) => resultJson(await invoke('create_notebook_cell', {
       notebook_id: notebookId,
       cell: { type, slug, slot: { row, column } },
-    })) as { id: string; operation?: string }
+    })) as {
+      id: string
+      operation?: string
+      output_cell?: {
+        id: string
+        type: string
+        slug: string
+        slot: { row: number; column: number }
+        inputs?: Record<string, unknown>
+      }
+      output_edge?: {
+        source: string
+        target: string
+        targetInput: string
+      }
+    }
 
     const sourceVideo = await createCell('video', 'vid-source', 0, 0)
     const sourceAudio = await createCell('audio', 'aud-source', 0, 1)
@@ -160,11 +175,26 @@ describe('v2 notebook domain tools', () => {
     const splitVideo = await createCell('split_video', 'split-video-source', 1, 1)
     const videoOutput = await createCell('video', 'vid-output', 2, 1)
     const extractFrame = await createCell('extract_frame', 'extract-frame-source', 1, 2)
-    const imageOutput = await createCell('image', 'img-output', 2, 2)
+    const imageOutput = extractFrame.output_cell!
     const invalidImage = await createCell('image', 'img-invalid', 3, 2)
 
     expect(extractAudio.operation).toBe('extract_audio')
     expect(extractFrame.operation).toBe('extract_frame')
+    expect(imageOutput).toMatchObject({
+      type: 'image',
+      slug: 'img-source',
+      slot: { row: 2, column: 2 },
+      inputs: {
+        mediaRole: 'extract-frame-output',
+        producerCellId: extractFrame.id,
+        state: 'pending',
+      },
+    })
+    expect(extractFrame.output_edge).toMatchObject({
+      source: extractFrame.id,
+      target: imageOutput.id,
+      targetInput: 'media',
+    })
     expect(splitVideo.operation).toBe('split_range')
     const retypedAction = await invoke('update_notebook_cell', {
       notebook_id: notebookId,
@@ -226,11 +256,6 @@ describe('v2 notebook domain tools', () => {
         source_cell_id: sourceVideo.id,
         target_cell_id: extractFrame.id,
         target_input: 'video',
-      },
-      {
-        source_cell_id: extractFrame.id,
-        target_cell_id: imageOutput.id,
-        target_input: 'media',
       },
     ]) {
       resultJson(await invoke('connect_notebook_cells', {

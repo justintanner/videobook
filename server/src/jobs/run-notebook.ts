@@ -13,6 +13,10 @@ import type {
 } from "videobook-engine";
 import { MVP_CONTRACT_VERSION } from "videobook-engine";
 import { mutateNotebook } from "../notebook-mutations.js";
+import {
+  ensureExtractFrameImageOutput,
+  findExtractFrameImageOutput,
+} from "../notebook-cell-outputs.js";
 import { queue, registerJobHandler, waitForJob } from "../queue.js";
 import type { ToolDef, ToolResult } from "../tools/tool-def.js";
 import { smoothSceneConcatDef } from "../tools/smooth-scene-concat.js";
@@ -1529,9 +1533,31 @@ export async function runNotebookCell(
   outputArtifactId: string;
   status: "completed" | "awaiting-output";
 }> {
-  const normalizedDocument = normalizeLegacyAnalyzeDocument(document);
-  const normalizedCell = normalizedDocument.cells.find((candidate) =>
+  let normalizedDocument = normalizeLegacyAnalyzeDocument(document);
+  let normalizedCell = normalizedDocument.cells.find((candidate) =>
     candidate.id === cell.id) ?? normalizeLegacyAnalyzeCell(cell);
+  if (
+    normalizedCell.type === "extract_frame"
+    && !findExtractFrameImageOutput(normalizedDocument, normalizedCell.id)
+  ) {
+    const repaired = await mutateNotebook(
+      engine,
+      notebookId,
+      "ensure_extract_frame_image_output",
+      (current) => ensureExtractFrameImageOutput(
+        engine,
+        current,
+        normalizedCell.id,
+      ).document,
+      { cellId: normalizedCell.id },
+    );
+    if (!repaired.ok) throw new Error(repaired.error.message);
+    const refreshed = engine.notebooks.read(notebookId);
+    if (!refreshed.ok) throw new Error(refreshed.error.message);
+    normalizedDocument = normalizeLegacyAnalyzeDocument(refreshed.value);
+    normalizedCell = normalizedDocument.cells.find((candidate) =>
+      candidate.id === cell.id) ?? normalizedCell;
+  }
   const nextFingerprint = notebookCellFingerprint(
     normalizedDocument,
     normalizedCell,
