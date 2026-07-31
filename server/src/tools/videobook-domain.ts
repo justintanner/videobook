@@ -3443,6 +3443,40 @@ export function videobookDomainDefs(
       },
     },
     {
+      name: "preview_notebook_generation",
+      description:
+        "Preview the exact provider payload a generation cell would submit, without running it",
+      scope: "book",
+      schema: {
+        ...bookSchema,
+        notebook_id: z.string().uuid(),
+        cell_id: z.string().uuid(),
+      },
+      handler: async (args) => {
+        const notebook = engine.notebooks.read(String(args.notebook_id));
+        if (!notebook.ok) return failure(notebook.error.message);
+        const cell = notebook.value.cells.find((candidate) =>
+          candidate.id === String(args.cell_id));
+        if (!cell) return failure("Notebook cell not found");
+        try {
+          const prepared = await prepareNotebookGeneration(
+            engine,
+            notebook.value,
+            cell,
+            String(args.book_id),
+          );
+          return json({
+            tool: prepared.tool,
+            provider: prepared.provider,
+            model: prepared.model,
+            input: prepared.input,
+          });
+        } catch (cause) {
+          return failure(cause instanceof Error ? cause.message : String(cause));
+        }
+      },
+    },
+    {
       name: "run_notebook_cell",
       description: "Run one selected notebook cell and any stale prerequisites",
       scope: "book",

@@ -2941,6 +2941,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setFullscreenCellId(null)
   }, [])
 
+  const previewGenerationPayload = useCallback(async (cellId: string) => {
+    if (!bookId || !notebook) throw new Error('Notebook is not ready')
+    return await call('preview_notebook_generation', {
+      book_id: bookId,
+      notebook_id: notebook.id,
+      cell_id: cellId,
+    })
+  }, [bookId, call, notebook])
+
   const refreshNotebook = useCallback(async (targetBookId: string, notebookId: string) => {
     const [value, audioValue] = await Promise.all([
       call('get_notebook', {
@@ -5923,6 +5932,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     onDelete={deleteSelectedCell}
                     onClearSlot={clearSelectedCellSlot}
                     onOpenFullscreen={() => setFullscreenCellId(selectedNotebookCell.id)}
+                    onPreviewPayload={previewGenerationPayload}
                   />
                 ) : null}
               </aside>

@@ -113,12 +113,26 @@ function persistedCellFormDraft(cell: NotebookCell): CellFormDraft {
   }
 }
 
+const imageInputCellTypes = new Set(['image', 'extract_frame', 'generate_image'])
+
+function cellHasImageInput(
+  cell: NotebookCell,
+  cells: readonly NotebookCell[],
+  edges: readonly NotebookEdge[],
+): boolean {
+  const byId = new Map(cells.map((candidate) => [candidate.id, candidate]))
+  return edges.some((edge) =>
+    edge.target === cell.id
+    && imageInputCellTypes.has(byId.get(edge.source)?.type ?? ''))
+}
+
 function cellFormDraft(
   cell: NotebookCell,
   actions: readonly NotebookGenerationAction[],
+  hasImageInput = false,
 ): CellFormDraft {
   const draft = persistedCellFormDraft(cell)
-  const selection = initialGenerationSelection(cell, actions)
+  const selection = initialGenerationSelection(cell, actions, { hasImageInput })
   return selection ? { ...draft, ...selection } : draft
 }
 
@@ -250,6 +264,7 @@ type NotebookCellInspectorProps = {
   onClearSlot: () => Promise<void>
   onDelete: () => Promise<void>
   onOpenFullscreen: () => void
+  onPreviewPayload?: (cellId: string) => Promise<unknown>
 }
 
 function isPassiveOutputCell(cell: NotebookCell): boolean {
@@ -1482,6 +1497,7 @@ function ExecutableCellInspector({
   onClearSlot,
   onDelete,
   onOpenFullscreen,
+  onPreviewPayload,
   generationActions = [],
 }: Pick<
   NotebookCellInspectorProps,
@@ -1501,10 +1517,11 @@ function ExecutableCellInspector({
   | 'onClearSlot'
   | 'onDelete'
   | 'onOpenFullscreen'
+  | 'onPreviewPayload'
   | 'generationActions'
 >) {
   const [draft, setDraft] = useState(() =>
-    cellFormDraft(cell, generationActions))
+    cellFormDraft(cell, generationActions, cellHasImageInput(cell, cells, edges)))
   const [saving, setSaving] = useState(false)
   const [copyResult, setCopyResult] = useState<{
     error: string
@@ -1801,6 +1818,18 @@ function ExecutableCellInspector({
             </label>
           </div>
         )}
+        {generationCell && onPreviewPayload && (
+          <AnalysisJsonDisclosure
+            key={[
+              cell.id,
+              draft.tool,
+              edges.filter((edge) => edge.target === cell.id).length,
+            ].join(':')}
+            label="Payload"
+            ariaLabel={`Provider payload preview for @${cell.slug}`}
+            loadValue={() => onPreviewPayload(cell.id)}
+          />
+        )}
         {dirty && (
           <div
             className={`inspector-dirty-notice${valid ? '' : ' invalid'}`}
@@ -1928,6 +1957,7 @@ export function NotebookCellInspector({
   onClearSlot,
   onDelete,
   onOpenFullscreen,
+  onPreviewPayload,
 }: NotebookCellInspectorProps) {
   if (sourceVisible) {
     return (
@@ -1996,6 +2026,7 @@ export function NotebookCellInspector({
       onClearSlot={onClearSlot}
       onDelete={onDelete}
       onOpenFullscreen={onOpenFullscreen}
+      onPreviewPayload={onPreviewPayload}
       generationActions={generationActions}
     />
   )

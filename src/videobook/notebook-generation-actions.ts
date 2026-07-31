@@ -161,12 +161,15 @@ function bestMatchingAction(
   )
 }
 
+const imageInputOperations = new Set(['image_to_image', 'edit_image'])
+
 export function initialGenerationSelection(
   cell: Pick<
     NotebookCell,
     'type' | 'provider' | 'model' | 'operation' | 'tool'
   >,
   actions: readonly NotebookGenerationAction[],
+  options?: { hasImageInput?: boolean },
 ): GenerationSelection | null {
   if (!isGenerationCellType(cell.type)) return null
   const available = generationActionsForCell(actions, cell.type)
@@ -174,7 +177,14 @@ export function initialGenerationSelection(
   const configured = bestMatchingAction(available, current)
   if (configured) return actionSelection(configured)
   if (generationActionFields.every((field) => current[field])) return current
-  const fallback = available.find((action) => action.isDefault) ?? available[0]
+  // An unconfigured generate_image cell with an image wired in should default
+  // to an action that can actually consume that image — a text_to_image
+  // fallback would silently drop the input at generation time.
+  const pool = options?.hasImageInput
+    ? available.filter((action) => imageInputOperations.has(action.operation))
+    : []
+  const candidates = pool.length > 0 ? pool : available
+  const fallback = candidates.find((action) => action.isDefault) ?? candidates[0]
   return fallback ? actionSelection(fallback) : null
 }
 

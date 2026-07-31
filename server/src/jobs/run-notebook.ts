@@ -817,6 +817,21 @@ export async function prepareNotebookGeneration(
   const { getAllToolDefs } = await import("../tools/index.js");
   const definition = getAllToolDefs(engine).find((candidate) => candidate.name === tool);
   if (!definition) throw new Error(`Unknown notebook generation model: ${tool}`);
+  if (
+    cell.type === "generate_image"
+    && !("image_slugs" in definition.schema)
+    && !("image_slug" in definition.schema)
+  ) {
+    const connectedImages = upstreamValues(document, cell).filter((entry) =>
+      typeof entry.output === "string" && isImageLikeCell(entry.cell)).length;
+    if (connectedImages > 0) {
+      throw new Error(
+        `@${cell.slug} has ${connectedImages} image input(s) connected, but ${tool} `
+        + "accepts no image and would ignore them — switch OPERATION to "
+        + "image_to_image or edit_image, or disconnect the image input",
+      );
+    }
+  }
   const parsed = z.object(definition.schema).safeParse(
     modelArgs(definition, document, cell, bookId, engine),
   );
