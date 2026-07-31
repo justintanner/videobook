@@ -176,6 +176,92 @@ describe('v2 notebook domain tools', () => {
       .toBe(true)
   })
 
+  it('deletes a ready generation cell with execution and plan state', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      slug: 'delete-generated-cell',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+
+    const invoke = async (name: string, args: Record<string, unknown>) => {
+      const def = byName.get(name)
+      if (!def) throw new Error(`Missing ${name}`)
+      return await withBookContext(
+        { bookId: created.bookId, engine: managed.value.engine },
+        () => def.handler({ book_id: created.bookId, ...args }),
+      )
+    }
+    const notebooks = resultJson(await invoke('list_notebooks', {})) as Array<{ id: string }>
+    const notebookId = notebooks[0]!.id
+    const source = resultJson(await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'prompt',
+        slug: 'prompt-source',
+        slot: { row: 0, column: 0 },
+        prompt: 'Source prompt',
+      },
+    })) as { id: string }
+    const generated = resultJson(await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'generate_image',
+        slug: 'generate-image-ready',
+        slot: { row: 0, column: 1 },
+        prompt: 'Generated image',
+      },
+    })) as { id: string }
+    resultJson(await invoke('connect_notebook_cells', {
+      notebook_id: notebookId,
+      source_cell_id: source.id,
+      target_cell_id: generated.id,
+      target_input: 'prompt',
+    }))
+
+    const notebook = managed.value.engine.notebooks.read(notebookId)
+    expect(notebook.ok).toBe(true)
+    if (!notebook.ok) return
+    const written = await managed.value.engine.notebooks.write({
+      ...notebook.value,
+      execution: {
+        [generated.id]: {
+          status: 'ready',
+          tool: 'generate_kie_gpt_image_2_text_to_image',
+        },
+      },
+      generationPlans: [{
+        planId: 'ready-generation-plan',
+        cellId: generated.id,
+        status: 'awaiting-output',
+        plan: { cellId: generated.id },
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(1).toISOString(),
+      }],
+    })
+    expect(written.ok).toBe(true)
+    if (!written.ok) return
+
+    resultJson(await invoke('delete_notebook_cell', {
+      notebook_id: notebookId,
+      cell_id: generated.id,
+    }))
+    const deleted = resultJson(await invoke('get_notebook', {
+      notebook_id: notebookId,
+    })) as {
+      cells: Array<{ id: string }>
+      edges: Array<{ source: string; target: string }>
+      execution?: Record<string, unknown>
+      generationPlans?: Array<{ cellId: string }>
+    }
+    expect(deleted.cells.map((cell) => cell.id)).toEqual([source.id])
+    expect(deleted.edges).toEqual([])
+    expect(deleted.execution?.[generated.id]).toBeUndefined()
+    expect(deleted.generationPlans).toEqual([])
+  })
+
   it('enforces video action inputs and typed media outputs', async () => {
     const defs = videobookDomainDefs(scopedBookEngine, books)
     const byName = new Map(defs.map((def) => [def.name, def]))

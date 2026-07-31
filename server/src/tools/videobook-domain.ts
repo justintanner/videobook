@@ -3292,18 +3292,9 @@ export function videobookDomainDefs(
       scope: "book",
       schema: { ...bookSchema, notebook_id: z.string().uuid(), cell_id: z.string().uuid() },
       handler: async (args) => {
+        const notebookId = String(args.notebook_id);
         const cellId = String(args.cell_id);
-        const result = await mutateNotebook(
-          engine,
-          String(args.notebook_id),
-          "delete_notebook_cell",
-          (notebook) => ({
-            ...notebook,
-            cells: notebook.cells.filter((cell) => cell.id !== cellId),
-            edges: notebook.edges.filter((edge) => edge.source !== cellId && edge.target !== cellId),
-          }),
-          { cellId },
-        );
+        const result = await engine.notebooks.removeCell(notebookId, cellId);
         return result.ok ? json({ cell_id: cellId, revision: result.value.hash }) : failure(result.error.message);
       },
     },
