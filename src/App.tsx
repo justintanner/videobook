@@ -111,7 +111,10 @@ import {
   asNotebookGenerationActions,
   type NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
-import { startNotebookCellRun } from '@/videobook/notebook-cell-actions'
+import {
+  startNotebookCellRun,
+  startPlannedNotebookGeneration,
+} from '@/videobook/notebook-cell-actions'
 import {
   asSearchReferenceDescriptor,
   referenceKind,
@@ -2281,16 +2284,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }, [])
 
-  const prepareGenerationPlan = useCallback(async (
+  const createGenerationPlan = useCallback(async (
     cellId: string,
     sourceSurface: 'ui' | 'slash' | 'chat',
-  ): Promise<ComposerOutcome> => {
+  ): Promise<CommandPlan> => {
     if (!bookId || !notebook) {
-      return { ok: false, message: 'Load a notebook first.' }
+      throw new Error('Load a notebook first.')
     }
     const startFrame = Number(timelineSelectionStart)
     const durationFrames = Number(timelineSelectionDuration)
-    const plan = asCommandPlan(await call('plan_notebook_generation', {
+    return asCommandPlan(await call('plan_notebook_generation', {
       book_id: bookId,
       notebook_id: notebook.id,
       cell_id: cellId,
@@ -2303,8 +2306,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ? { duration_frames: durationFrames }
         : {}),
     }))
-    setPendingCommandPlan({ plan, previews: {} })
-    return { ok: true, message: 'Generation plan ready for review' }
   }, [
     bookId,
     call,
@@ -2312,6 +2313,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     timelineSelectionDuration,
     timelineSelectionStart,
   ])
+
+  const prepareGenerationPlan = useCallback(async (
+    cellId: string,
+    sourceSurface: 'ui' | 'slash' | 'chat',
+  ): Promise<ComposerOutcome> => {
+    const plan = await createGenerationPlan(cellId, sourceSurface)
+    setPendingCommandPlan({ plan, previews: {} })
+    return { ok: true, message: 'Generation plan ready for review' }
+  }, [createGenerationPlan])
 
   const [nodes, setNodes] = useState<CanvasNode[]>(() =>
     initialWorkspace?.notebook
@@ -2354,40 +2364,57 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const runCell = useCallback(async (cellId: string) => {
     if (!bookId || !notebook) return
-    const cell = notebook.cells.find((candidate) => candidate.id === cellId)
-    if (!cell || !isRunnableCell(cell)) return
-    const cloud = isGenerationCell(cell)
-    if (cloud && !online) {
-      setNotice('Offline: cloud generation is unavailable. Local search, editing, playback, and export remain available.')
-      return
-    }
-    const consentKey = 'videobook.cloud-generation-consent'
-    if (cloud && window.localStorage.getItem(consentKey) !== 'accepted') {
-      const model = typeof cell.model === 'string'
-        ? cell.model
-        : 'configured cloud provider'
-      const accepted = window.confirm(
-        `Cloud generation disclosure\n\nProvider/model: ${model}\n`
-        + 'Payload class: prompt text and connected media references.\n'
-        + 'Your local source files are sent only when required by the selected model.\n\n'
-        + 'Continue and remember this choice on this device?',
-      )
-      if (!accepted) {
-        setNotice('Cloud generation cancelled before sending data')
-        return
-      }
-      window.localStorage.setItem(consentKey, 'accepted')
-    }
     setBusy(true)
     try {
+      const currentValue = await call('get_notebook', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+      })
+      const currentNotebook = asNotebook(currentValue)
+      if (!currentNotebook) {
+        throw new Error('The server returned an invalid notebook')
+      }
+      const cell = currentNotebook.cells.find((candidate) =>
+        candidate.id === cellId)
+      if (!cell || !isRunnableCell(cell)) {
+        throw new Error('Configure this cell before running it')
+      }
+      const cloud = isGenerationCell(cell)
+      if (cloud && !online) {
+        throw new Error(
+          'Offline: cloud generation is unavailable. '
+          + 'Local search, editing, playback, and export remain available.',
+        )
+      }
       if (cloud) {
-        const result = await prepareGenerationPlan(cellId, 'ui')
-        setNotice(result.message)
+        const accepted = await startPlannedNotebookGeneration({
+          createPlan: () => createGenerationPlan(cellId, 'ui'),
+          start: (plan) => call('run_notebook_cell', {
+            book_id: bookId,
+            notebook_id: currentNotebook.id,
+            cell_id: cellId,
+            plan,
+            actor: 'videobook-user',
+          }),
+          onStarting: () => setCellQueued(cellId, true),
+          onRejected: () => setCellQueued(cellId, false),
+        })
+        const runId = asString(record(accepted)?.run_id)
+        const jobOperationId = asString(record(accepted)?.job_id)
+        if (!runId || !jobOperationId) {
+          throw new Error('The server did not return a notebook run')
+        }
+        const refreshed = asNotebook(await call('get_notebook', {
+          book_id: bookId,
+          notebook_id: currentNotebook.id,
+        }))
+        if (refreshed) applyNotebook(refreshed, assets)
+        setNotice(`@${cell.slug} queued`)
       } else {
         const accepted = await startNotebookCellRun({
           start: () => call('run_notebook_cell', {
             book_id: bookId,
-            notebook_id: notebook.id,
+            notebook_id: currentNotebook.id,
             cell_id: cellId,
             actor: 'videobook-user',
           }),
@@ -2406,7 +2433,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           const [notebookValue, jobValue] = await Promise.all([
             call('get_notebook', {
               book_id: bookId,
-              notebook_id: notebook.id,
+              notebook_id: currentNotebook.id,
             }),
             call('list_jobs', { book_id: bookId, limit: 200 }),
           ])
@@ -2465,9 +2492,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     assets,
     bookId,
     call,
+    createGenerationPlan,
     notebook,
     online,
-    prepareGenerationPlan,
     setCellQueued,
   ])
 

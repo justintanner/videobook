@@ -2618,6 +2618,34 @@ textarea:focus-visible {
   display: grid;
 }
 
+.inspector-generation-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 8px;
+}
+
+.inspector-generation-fields label {
+  min-width: 0;
+  gap: 5px;
+  margin-bottom: 0;
+}
+
+.inspector-body .inspector-generation-fields select {
+  min-width: 0;
+  padding: 8px 9px;
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-generation-form .inspector-dirty-notice {
+  min-height: 28px;
+  margin: 10px 0 0;
+  padding: 0 9px;
+  font-size: 9px;
+}
+
 .inspector-prompt-disclosure {
   margin-bottom: 18px;
   border: 1px solid var(--line);
@@ -2799,6 +2827,24 @@ textarea:focus-visible {
   border-color: rgba(91, 200, 137, 0.34);
   color: #9edab8;
   background: rgba(38, 111, 68, 0.14);
+}
+
+.inspector-generation-actions {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 14px;
+}
+
+.inspector-cell-actions.inspector-generation-actions > button {
+  min-height: 38px;
+}
+
+.inspector-generation-actions .inspector-delete-cell-button {
+  width: auto;
+  padding: 0 11px;
+  font-size: 10px;
 }
 
 .inspector-media-field-label {
@@ -3334,7 +3380,7 @@ textarea:focus-visible {
   opacity: 0.44;
 }
 
-.inspector-clear-cell-button {
+.inspector-delete-cell-button {
   gap: 7px;
   border-color: rgba(177, 116, 116, 0.28);
   color: #a77d7d;
@@ -3346,18 +3392,18 @@ textarea:focus-visible {
     transform 100ms ease;
 }
 
-.inspector-clear-cell-button:hover:not(:disabled),
-.inspector-clear-cell-button:focus-visible:not(:disabled) {
+.inspector-delete-cell-button:hover:not(:disabled),
+.inspector-delete-cell-button:focus-visible:not(:disabled) {
   border-color: rgba(198, 130, 130, 0.46);
   color: #c69595;
   background: rgba(112, 51, 51, 0.16);
 }
 
-.inspector-clear-cell-button:active:not(:disabled) {
+.inspector-delete-cell-button:active:not(:disabled) {
   transform: translateY(1px);
 }
 
-.inspector-clear-cell-button:disabled {
+.inspector-delete-cell-button:disabled {
   cursor: wait;
   opacity: 0.54;
 }

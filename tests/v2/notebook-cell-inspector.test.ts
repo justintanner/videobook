@@ -7,6 +7,7 @@ import { NotebookMediaFullscreen } from '../../src/components/videobook/Notebook
 import {
   persistAndRunNotebookCell,
   startNotebookCellRun,
+  startPlannedNotebookGeneration,
 } from '../../src/videobook/notebook-cell-actions'
 import {
   doltCellDisplayValue,
@@ -97,7 +98,18 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain(
       '<option value="generate_kie_gpt_image_2_text_to_image" selected="">',
     )
-    expect(html).toContain('Unsaved changes')
+    expect(html).toContain(
+      'class="inspector-cell-form inspector-generation-form"',
+    )
+    expect(html).toContain('class="inspector-generation-fields"')
+    expect(html).toContain('Changes apply when you generate')
+    expect(html).toContain(
+      'class="inspector-cell-actions inspector-generation-actions"',
+    )
+    expect(html).toContain('Generate')
+    expect(html).not.toContain('Save changes')
+    expect(html).toContain('inspector-delete-cell-button')
+    expect(html).toContain('Delete cell')
     expect(html).not.toContain('Choose a generation tool')
     expect(html).not.toContain('placeholder="Provider"')
   })
@@ -158,8 +170,8 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain('Dolt source')
     expect(html).toContain('inspector-clear-slot-button')
     expect(html).toContain('Clear slot')
-    expect(html).toContain('inspector-clear-cell-button')
-    expect(html).toContain('Clear cell')
+    expect(html).toContain('inspector-delete-cell-button')
+    expect(html).toContain('Delete cell')
     expect(html).not.toContain('completed')
     expect(html).toContain(
       'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell actions"',
@@ -169,7 +181,7 @@ describe('NotebookCellInspector', () => {
       html.indexOf('class="inspector-cell-actions inspector-compact-actions"'),
     )
     expect(html).toMatch(
-      /inspector-clear-slot-button[\s\S]*<\/button><button[^>]*inspector-clear-cell-button/,
+      /inspector-clear-slot-button[\s\S]*<\/button><button[^>]*inspector-delete-cell-button/,
     )
   })
 
@@ -476,7 +488,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain(
       'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell actions"',
     )
-    expect(html).toContain('Clear cell')
+    expect(html).toContain('Delete cell')
   })
 
   it('keeps inputs visible beneath a compact pending preview', () => {
@@ -512,7 +524,7 @@ describe('NotebookCellInspector', () => {
       html.indexOf('<h3>Inputs</h3>'),
     )
     expect(html).toContain('inspector-clear-slot-button')
-    expect(html).toContain('inspector-clear-cell-button')
+    expect(html).toContain('inspector-delete-cell-button')
     expect(html).toContain('disabled=""')
   })
 
@@ -538,8 +550,8 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain('aria-busy="true"')
-    expect(html).toContain('Clearing…')
-    expect(html).toContain('inspector-clear-cell-button')
+    expect(html).toContain('Deleting…')
+    expect(html).toContain('inspector-delete-cell-button')
   })
 
   it('renders action cells with one save-and-run control', () => {
@@ -625,8 +637,8 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('End seconds')
     expect(html).toContain('value="30"')
     expect(html).toContain('Split again')
-    expect(html).toContain('Clear cell')
-    expect(html.indexOf('Split again')).toBeLessThan(html.indexOf('Clear cell'))
+    expect(html).toContain('Delete cell')
+    expect(html.indexOf('Split again')).toBeLessThan(html.indexOf('Delete cell'))
     expect(html).not.toContain('completed')
     expect(html).not.toContain('inspector-run-error')
   })
@@ -827,6 +839,30 @@ describe('NotebookCellInspector', () => {
     expect(calls).toEqual(['start', 'queued'])
   })
 
+  it('plans and starts generation directly without a review step', async () => {
+    const calls: string[] = []
+    const result = await startPlannedNotebookGeneration({
+      createPlan: async () => {
+        calls.push('plan')
+        return { planId: 'generation-plan' }
+      },
+      start: async (plan) => {
+        calls.push(`run:${plan.planId}`)
+        return { jobId: 'generation-job' }
+      },
+      onStarting: () => calls.push('starting'),
+      onAccepted: () => calls.push('accepted'),
+    })
+
+    expect(result).toEqual({ jobId: 'generation-job' })
+    expect(calls).toEqual([
+      'plan',
+      'starting',
+      'run:generation-plan',
+      'accepted',
+    ])
+  })
+
   it('does not mark a cell queued when its run is rejected', async () => {
     const calls: string[] = []
 
@@ -1003,7 +1039,7 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('aria-label="inputs_json JSON"')
     expect(html).toContain('class="json-key"')
     expect(html).toContain('<code class="dolt-null">NULL</code>')
-    expect(html).not.toContain('inspector-clear-cell-button')
+    expect(html).not.toContain('inspector-delete-cell-button')
     expect(html).not.toContain('class="inspector-slug-field"')
     expect(html).not.toContain('Clear slot')
   })
@@ -1036,8 +1072,8 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain('class="inspector-slug-field"')
-    expect(html).toContain('inspector-clear-cell-button')
-    expect(html).toContain('Clear cell')
+    expect(html).toContain('inspector-delete-cell-button')
+    expect(html).toContain('Delete cell')
     expect(html).toContain('class="inspector-save-button" disabled=""')
     expect(html).toContain(
       'class="inspector-cell-actions" aria-label="Cell actions"',

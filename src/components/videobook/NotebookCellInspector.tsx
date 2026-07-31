@@ -129,6 +129,14 @@ function validTimingValue(value: string): boolean {
 }
 
 function cellFormIsValid(cell: NotebookCell, draft: CellFormDraft): boolean {
+  if (isGenerationCellType(cell.type)) {
+    return Boolean(
+      draft.provider.trim()
+      && draft.model.trim()
+      && draft.operation.trim()
+      && draft.tool.trim(),
+    )
+  }
   if (cell.type === 'split_video') {
     return validTimingValue(draft.startSeconds)
       && validTimingValue(draft.endSeconds)
@@ -655,7 +663,7 @@ function InspectorClearButton({
   )
 }
 
-function ClearCellButton({
+function DeleteCellButton({
   busy,
   deleting,
   onDelete,
@@ -666,9 +674,9 @@ function ClearCellButton({
 }) {
   return (
     <InspectorClearButton
-      className="danger-button inspector-clear-cell-button"
-      label="Clear cell"
-      pendingLabel="Clearing…"
+      className="danger-button inspector-delete-cell-button"
+      label="Delete cell"
+      pendingLabel="Deleting…"
       busy={busy}
       pending={deleting}
       onClear={onDelete}
@@ -862,7 +870,7 @@ function MediaCellInspector({
             disabled={!canClear}
             onClear={onClearSlot}
           />
-          <ClearCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
+          <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
         </section>
       </div>
     </div>
@@ -1208,7 +1216,7 @@ function AnalysisCellInspector({
           className="inspector-cell-actions inspector-compact-actions"
           aria-label="Cell actions"
         >
-          <ClearCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
+          <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
         </section>
       </div>
     </div>
@@ -1254,7 +1262,6 @@ function ExecutableCellInspector({
     error: string
     state: 'copied' | 'failed'
   } | null>(null)
-  const action = notebookCellActionPresentation(cell, status)
   const textCell = cell.type === 'prompt'
     || cell.type === 'analyze'
     || cell.type === 'generate_video'
@@ -1266,14 +1273,28 @@ function ExecutableCellInspector({
   const generationCellType = isGenerationCellType(cell.type)
     ? cell.type
     : null
+  const action = notebookCellActionPresentation(
+    generationCell
+      ? {
+          ...cell,
+          provider: draft.provider,
+          model: draft.model,
+          operation: draft.operation,
+          tool: draft.tool,
+        }
+      : cell,
+    status,
+  )
   const previewCell = cell.type === 'character' || generationCell
   const actionCell = isActionCellType(cell.type)
   const dirty = cellFormIsDirty(cell, draft)
   const valid = cellFormIsValid(cell, draft)
-  const runLabel = action
+  const runLabel = generationCell
+    ? 'Generate'
+    : action
     ? notebookCellInspectorActionLabel(cell.type, action.label)
     : null
-  const saveOnRun = actionCell && Boolean(runLabel)
+  const saveOnRun = (actionCell || generationCell) && Boolean(runLabel)
   const runError = error
     ?? 'This action failed, but no error details were recorded.'
   const copyState = copyResult?.error === runError ? copyResult.state : 'idle'
@@ -1399,7 +1420,10 @@ function ExecutableCellInspector({
         onSetInput={onSetInput}
       />
       <form
-        className="inspector-cell-form"
+        className={[
+          'inspector-cell-form',
+          generationCell ? 'inspector-generation-form' : '',
+        ].filter(Boolean).join(' ')}
         aria-busy={saving}
         onSubmit={(event) => {
           event.preventDefault()
@@ -1497,7 +1521,7 @@ function ExecutableCellInspector({
           </span>
         )}
         {generationCell && (
-          <>
+          <div className="inspector-generation-fields">
             <label>
               Provider
               <select
@@ -1550,7 +1574,7 @@ function ExecutableCellInspector({
                 ))}
               </select>
             </label>
-          </>
+          </div>
         )}
         {dirty && (
           <div
@@ -1560,7 +1584,9 @@ function ExecutableCellInspector({
             <CircleAlert size={14} />
             <span>
               {valid
-                ? saveOnRun
+                ? generationCell
+                  ? 'Changes apply when you generate'
+                  : saveOnRun
                   ? 'Changes apply when this action runs'
                   : 'Unsaved changes'
                 : saveOnRun
@@ -1569,7 +1595,7 @@ function ExecutableCellInspector({
             </span>
           </div>
         )}
-        {!saveOnRun && (
+        {!saveOnRun && !generationCell && (
           <button
             type="submit"
             className="inspector-save-button"
@@ -1580,8 +1606,14 @@ function ExecutableCellInspector({
           </button>
         )}
       </form>
-      <section className="inspector-cell-actions" aria-label="Cell actions">
-        {action && runLabel && (
+      <section
+        className={[
+          'inspector-cell-actions',
+          generationCell ? 'inspector-generation-actions' : '',
+        ].filter(Boolean).join(' ')}
+        aria-label="Cell actions"
+      >
+        {runLabel && (action || generationCell) && (
           <button
             type="button"
             className="inspector-run-action"
@@ -1597,15 +1629,17 @@ function ExecutableCellInspector({
             disabled={
               busy
               || saving
-              || action.disabled
+              || action?.disabled
               || !valid
               || (!saveOnRun && dirty)
             }
           >
-            {saveOnRun && saving ? 'Applying…' : runLabel}
+            {saveOnRun && saving
+              ? generationCell ? 'Generating…' : 'Applying…'
+              : runLabel}
           </button>
         )}
-        <ClearCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
+        <DeleteCellButton busy={busy} deleting={deleting} onDelete={onDelete} />
       </section>
     </div>
   )
