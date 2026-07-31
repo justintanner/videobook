@@ -1,4 +1,9 @@
-import { MarkerType, type Edge, type Node } from '@xyflow/react'
+import {
+  MarkerType,
+  type Connection,
+  type Edge,
+  type Node,
+} from '@xyflow/react'
 import type {
   NotebookCell,
   NotebookCellType,
@@ -36,6 +41,70 @@ export interface NotebookCellData extends Record<string, unknown> {
   targetInputs?: string[]
   targetConnectionCount?: number
   sourcePorts?: string[]
+}
+
+type NotebookReferenceKind = 'image' | 'video' | 'audio'
+
+function notebookReferenceKind(
+  type: NotebookCellType,
+): NotebookReferenceKind | null {
+  if (
+    type === 'image'
+    || type === 'extract_frame'
+    || type === 'generate_image'
+  ) return 'image'
+  if (
+    type === 'video'
+    || type === 'split_video'
+    || type === 'generate_video'
+    || type === 'concat'
+    || type === 'splice'
+  ) return 'video'
+  if (
+    type === 'audio'
+    || type === 'extract_audio'
+    || type === 'generate_audio'
+  ) return 'audio'
+  return null
+}
+
+function nextNotebookReferenceInput(
+  document: NotebookDocument,
+  targetId: string,
+  kind: NotebookReferenceKind,
+): string {
+  const occupied = new Set(document.edges
+    .filter((edge) => edge.target === targetId)
+    .map((edge) => edge.targetInput))
+  if (!occupied.has(kind)) return kind
+  for (let ordinal = 2; ; ordinal += 1) {
+    const input = `${kind}_${ordinal}`
+    if (!occupied.has(input)) return input
+  }
+}
+
+export function notebookConnectionTargetInput(
+  document: NotebookDocument,
+  connection: Pick<
+    Connection,
+    'source' | 'target' | 'targetHandle'
+  >,
+): string {
+  const requestedInput = connection.targetHandle ?? 'input'
+  const source = document.cells.find((cell) => cell.id === connection.source)
+  const target = document.cells.find((cell) => cell.id === connection.target)
+  if (!source || target?.type !== 'generate_video') return requestedInput
+  const kind = notebookReferenceKind(source.type)
+  if (!kind) return requestedInput
+  if (
+    kind === 'image'
+    && (requestedInput === 'first_frame' || requestedInput === 'last_frame')
+  ) return requestedInput
+  if (
+    kind === 'audio'
+    && (requestedInput === 'replace_audio' || requestedInput === 'scene_audio')
+  ) return requestedInput
+  return nextNotebookReferenceInput(document, target.id, kind)
 }
 
 function defaultTargetInputs(type: NotebookCellType): string[] {

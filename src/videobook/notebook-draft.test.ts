@@ -2,6 +2,7 @@ import { MarkerType } from '@xyflow/react'
 import { describe, expect, it } from 'vitest'
 import type { NotebookDocument } from 'videobook-engine'
 import {
+  notebookConnectionTargetInput,
   notebookDocument,
   notebookEdges,
   notebookEdgesWithCellFocus,
@@ -119,6 +120,56 @@ describe('notebook draft conversion', () => {
       ['media'],
       ['media', 'segment'],
     ])
+  })
+
+  it('allocates distinct media inputs when Generate Video already has a connection', () => {
+    const video = {
+      ...source.cells[0]!,
+      id: '018f7cf5-0d31-7d96-8c0f-800000000007',
+      type: 'video' as const,
+      slug: 'vid-reference',
+      slot: { row: 0, column: 1 },
+    }
+    const target = {
+      ...source.cells[0]!,
+      id: '018f7cf5-0d31-7d96-8c0f-800000000008',
+      type: 'generate_video' as const,
+      slug: 'generate-video-result',
+      slot: { row: 1, column: 1 },
+    }
+    const connected: NotebookDocument = {
+      ...source,
+      cells: [source.cells[0]!, video, target],
+      edges: [{
+        id: '018f7cf5-0d31-7d96-8c0f-800000000009',
+        source: source.cells[0]!.id,
+        target: target.id,
+        targetInput: 'input',
+      }],
+    }
+
+    expect(notebookConnectionTargetInput(connected, {
+      source: video.id,
+      target: target.id,
+      targetHandle: 'input',
+    })).toBe('video')
+
+    expect(notebookConnectionTargetInput({
+      ...connected,
+      edges: [
+        ...connected.edges,
+        {
+          id: '018f7cf5-0d31-7d96-8c0f-800000000010',
+          source: video.id,
+          target: target.id,
+          targetInput: 'video',
+        },
+      ],
+    }, {
+      source: video.id,
+      target: target.id,
+      targetHandle: 'input',
+    })).toBe('video_2')
   })
 
   it('keeps manually created notes in ordinary draggable grid cells', () => {

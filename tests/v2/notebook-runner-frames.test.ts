@@ -53,6 +53,46 @@ describe("notebook runner frames and concat", () => {
     expect(tool).toBe(DEFAULT_ANIMATION_TOOL);
   });
 
+  it("maps numbered video inputs into generation reference fields", () => {
+    const video = {
+      id: "019f0000-0000-7000-8000-000000000010",
+      type: "video" as const,
+      slug: "vid-reference",
+      slot: { row: 0, column: 0 },
+      outputArtifactId: "019f0000-0000-7000-8000-000000000011",
+    };
+    const animate = {
+      id: "019f0000-0000-7000-8000-000000000012",
+      type: "generate_video" as const,
+      slug: "generate-video-reference",
+      slot: { row: 1, column: 0 },
+      prompt: "Follow the reference motion",
+    };
+    const document: NotebookDocument = {
+      id: "019f0000-0000-7000-8000-000000000013",
+      name: "References",
+      cells: [video, animate],
+      edges: [{
+        id: "019f0000-0000-7000-8000-000000000014",
+        source: video.id,
+        target: animate.id,
+        targetInput: "video_2",
+      }],
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    const definition = {
+      name: DEFAULT_ANIMATION_TOOL,
+      schema: {
+        book_id: {},
+        prompt: {},
+        video_slugs: {},
+      },
+    } as unknown as ToolDef;
+
+    expect(modelArgs(definition, document, animate, "book-id").video_slugs)
+      .toEqual([`@${video.outputArtifactId}`]);
+  });
+
   it("maps first_frame and last_frame image cells into Seedance payload fields", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-frames-"));
     engine = createEngine({ rootDir, initialBookSlug: "runner-frames" });

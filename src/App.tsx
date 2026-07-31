@@ -102,6 +102,7 @@ import {
 import {
   notebookEdges,
   notebookEdgesWithCellFocus,
+  notebookConnectionTargetInput,
   notebookNodes,
   notebookNodesWithCellStatus,
   type NotebookCellData,
@@ -3394,7 +3395,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         notebook_id: notebook.id,
         source_cell_id: connection.source,
         target_cell_id: connection.target,
-        target_input: connection.targetHandle ?? 'input',
+        target_input: notebookConnectionTargetInput(notebook, connection),
       })
       await refreshNotebook(bookId, notebook.id)
       setNotice('Cells connected')

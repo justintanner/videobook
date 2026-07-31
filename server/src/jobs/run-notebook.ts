@@ -673,6 +673,22 @@ function isImageLikeCell(source: NotebookCell): boolean {
   return notebookCellMediaType(source) === "image";
 }
 
+function isNumberedNotebookInput(input: string, base: string): boolean {
+  if (input === base) return true;
+  const suffix = input.slice(base.length + 1);
+  return input.startsWith(`${base}_`)
+    && suffix.length > 0
+    && /^\d+$/.test(suffix);
+}
+
+function isNotebookReferenceInput(
+  input: string,
+  kind: "video" | "audio",
+): boolean {
+  return isNumberedNotebookInput(input, kind)
+    || isNumberedNotebookInput(input, `reference_${kind}`);
+}
+
 export function modelArgs(
   definition: ToolDef,
   document: NotebookDocument,
@@ -726,13 +742,10 @@ export function modelArgs(
   const videoReferences = upstream
     .filter(({ cell: source, output, targetInput }) =>
       typeof output === "string"
+      && notebookCellMediaType(source) === "video"
       && (
-        targetInput === "reference_video"
-        || targetInput === "video"
-        || (
-          targetInput === "segment"
-          && notebookCellMediaType(source) === "video"
-        )
+        isNotebookReferenceInput(targetInput, "video")
+        || targetInput === "segment"
       ))
     .map(({ output }) => refFor(output!));
   if ("video_slugs" in definition.schema && videoReferences.length > 0) {
@@ -754,8 +767,7 @@ export function modelArgs(
       typeof output === "string"
       && notebookCellMediaType(source) === "audio"
       && (
-        targetInput === "reference_audio"
-        || targetInput === "audio"
+        isNotebookReferenceInput(targetInput, "audio")
         || targetInput === "scene_audio"
       ))
     .map(({ output }) => refFor(output!));
