@@ -55,6 +55,11 @@ describe("notebook action catalog", () => {
         },
       });
     expect(actions.some((action) => action.tool === DEFAULT_ANIMATION_TOOL)).toBe(true);
+    expect(actions
+      .filter((action) => action.kind === "generation" && action.isDefault)
+      .map((action) => action.cellTypes[0])
+      .sort())
+      .toEqual(["generate_audio", "generate_image", "generate_video"]);
     expect(actions.some((action) => action.tool === "ffmpeg")).toBe(true);
     expect(actions.find((action) => action.operation === "split_range"))
       .toMatchObject({

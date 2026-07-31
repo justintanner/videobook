@@ -12,6 +12,9 @@ import {
   doltCellDisplayValue,
   doltCellRows,
 } from '../../src/videobook/dolt-cell-source'
+import type {
+  NotebookGenerationAction,
+} from '../../src/videobook/notebook-generation-actions'
 
 const cell: NotebookCell = {
   id: '01900000-0000-7000-8000-000000000001',
@@ -25,7 +28,80 @@ const cell: NotebookCell = {
   outputArtifactId: '01900000-0000-7000-8000-000000000002',
 }
 
+const generationActions: NotebookGenerationAction[] = [
+  {
+    cellTypes: ['generate_image'],
+    provider: 'kie',
+    model: 'GptImage2TextToImageRequestSchema',
+    operation: 'text_to_image',
+    tool: 'generate_kie_gpt_image_2_text_to_image',
+    title: 'GPT Image 2',
+    isDefault: true,
+  },
+  {
+    cellTypes: ['generate_image'],
+    provider: 'kie',
+    model: 'NanoBananaProRequestSchema',
+    operation: 'text_to_image',
+    tool: 'generate_kie_nano_banana_pro_text_to_image',
+    title: 'Nano Banana Pro',
+    isDefault: false,
+  },
+]
+
 describe('NotebookCellInspector', () => {
+  it('defaults generation configuration to catalog-backed dropdowns', () => {
+    const generationCell: NotebookCell = {
+      ...cell,
+      type: 'generate_image',
+      slug: 'generate-image-01',
+      prompt: '',
+      provider: undefined,
+      model: undefined,
+      operation: undefined,
+      tool: undefined,
+      outputArtifactId: undefined,
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: generationCell,
+      cells: [generationCell],
+      edges: [],
+      asset: undefined,
+      status: 'ready',
+      error: null,
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
+      generationActions,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('<select aria-label="Provider">')
+    expect(html).toContain('<option value="kie" selected="">kie</option>')
+    expect(html).toContain('<select aria-label="Model">')
+    expect(html).toContain(
+      '<option value="GptImage2TextToImageRequestSchema" selected="">',
+    )
+    expect(html).toContain('<select aria-label="Operation">')
+    expect(html).toContain(
+      '<option value="text_to_image" selected="">text_to_image</option>',
+    )
+    expect(html).toContain('<select aria-label="Tool">')
+    expect(html).toContain(
+      '<option value="generate_kie_gpt_image_2_text_to_image" selected="">',
+    )
+    expect(html).toContain('Unsaved changes')
+    expect(html).not.toContain('Choose a generation tool')
+    expect(html).not.toContain('placeholder="Provider"')
+  })
+
   it('renders output media without requiring an open action', () => {
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
       notebookId: '01900000-0000-7000-8000-000000000003',

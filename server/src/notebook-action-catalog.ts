@@ -47,6 +47,7 @@ export interface NotebookAction {
     localMedia: boolean;
     requiresConfirmation: boolean;
   };
+  isDefault?: boolean;
 }
 
 const LOCAL_ACTIONS: NotebookAction[] = [
@@ -346,6 +347,10 @@ function generationAction(spec: GenerationActionSpec): NotebookAction | null {
       localMedia: false,
       requiresConfirmation: true,
     },
+    isDefault:
+      spec.canonical_name === DEFAULT_ANIMATION_TOOL
+      || spec.canonical_name === DEFAULT_IMAGE_TOOL
+      || spec.canonical_name === DEFAULT_AUDIO_TOOL,
   };
 }
 
@@ -357,6 +362,7 @@ export function listNotebookActions(options: {
       options.includeHiddenGeneration
       || spec.picker_visibility === "visible"
       || spec.canonical_name === DEFAULT_ANIMATION_TOOL
+      || spec.canonical_name === DEFAULT_IMAGE_TOOL
       || spec.canonical_name === DEFAULT_AUDIO_TOOL)
     .flatMap((spec) => {
       const action = generationAction(spec);

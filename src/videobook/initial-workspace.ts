@@ -8,6 +8,7 @@ export type InitialWorkspacePayload = {
   sequenceValue: unknown
   jobValue: unknown
   ingestStatusValue: unknown
+  actionValue: unknown
   audioValue: unknown
 }
 
@@ -94,6 +95,7 @@ export async function loadInitialWorkspace(): Promise<InitialWorkspacePayload | 
     sequenceValue,
     jobValue,
     ingestStatusValue,
+    actionValue,
   ] = await Promise.all([
     callTool('list_notebooks', { book_id: bookId }),
     callTool('list_assets', {
@@ -105,6 +107,7 @@ export async function loadInitialWorkspace(): Promise<InitialWorkspacePayload | 
     callTool('get_primary_sequence', { book_id: bookId }),
     callTool('list_jobs', { book_id: bookId, limit: 200 }),
     callTool('list_ingest_status', { book_id: bookId, limit: 200 }),
+    callTool('list_notebook_actions', { book_id: bookId }),
   ])
   const notebooks = Array.isArray(notebookValue)
     ? notebookValue.map(record).filter((entry) => entry !== null)
@@ -129,6 +132,7 @@ export async function loadInitialWorkspace(): Promise<InitialWorkspacePayload | 
     sequenceValue,
     jobValue,
     ingestStatusValue,
+    actionValue,
     audioValue,
   }
 }

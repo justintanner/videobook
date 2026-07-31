@@ -17,7 +17,6 @@ import {
 } from '@/videobook/dolt-cell-source'
 import {
   formatMediaTime,
-  isNotebookMediaCellType,
   notebookAudioPresentation,
   notebookAnalysisLlmExchanges,
   notebookCellActionPresentation,
@@ -32,6 +31,15 @@ import {
   persistAndRunNotebookCell,
   type NotebookCellUpdate,
 } from '@/videobook/notebook-cell-actions'
+import {
+  changeGenerationSelection,
+  generationActionFieldOptions,
+  initialGenerationSelection,
+  isGenerationCellType,
+  type GenerationActionField,
+  type GenerationSelection,
+  type NotebookGenerationAction,
+} from '@/videobook/notebook-generation-actions'
 import { RichJson } from './RichJson'
 
 const actionCellTypes = new Set<NotebookCell['type']>([
@@ -82,7 +90,7 @@ function draftNumber(value: unknown): string {
     : '0'
 }
 
-function cellFormDraft(cell: NotebookCell): CellFormDraft {
+function persistedCellFormDraft(cell: NotebookCell): CellFormDraft {
   const configuredFrameMode = cell.inputs?.frameMode
   return {
     prompt: cell.prompt ?? '',
@@ -100,8 +108,17 @@ function cellFormDraft(cell: NotebookCell): CellFormDraft {
   }
 }
 
+function cellFormDraft(
+  cell: NotebookCell,
+  actions: readonly NotebookGenerationAction[],
+): CellFormDraft {
+  const draft = persistedCellFormDraft(cell)
+  const selection = initialGenerationSelection(cell, actions)
+  return selection ? { ...draft, ...selection } : draft
+}
+
 function cellFormIsDirty(cell: NotebookCell, draft: CellFormDraft): boolean {
-  const persisted = cellFormDraft(cell)
+  const persisted = persistedCellFormDraft(cell)
   return cellFormDraftFields.some((field) => draft[field] !== persisted[field])
 }
 
@@ -129,7 +146,7 @@ function cellFormPatch(
   cell: NotebookCell,
   draft: CellFormDraft,
 ): Record<string, unknown> {
-  const persisted = cellFormDraft(cell)
+  const persisted = persistedCellFormDraft(cell)
   const patch: Record<string, unknown> = {}
   if (draft.prompt !== persisted.prompt) patch.prompt = draft.prompt
   if (!isActionCellType(cell.type)) {
@@ -212,6 +229,7 @@ type NotebookCellInspectorProps = {
   clearing: boolean
   deleting: boolean
   sourceVisible: boolean
+  generationActions?: readonly NotebookGenerationAction[]
   onUpdate: NotebookCellUpdate
   onSetInput: (targetInput: string, sourceCellId: string | null) => Promise<void>
   onRun: (cellId: string) => Promise<void>
@@ -1211,6 +1229,7 @@ function ExecutableCellInspector({
   onRun,
   onDelete,
   onOpenFullscreen,
+  generationActions = [],
 }: Pick<
   NotebookCellInspectorProps,
   | 'cell'
@@ -1226,8 +1245,10 @@ function ExecutableCellInspector({
   | 'onRun'
   | 'onDelete'
   | 'onOpenFullscreen'
+  | 'generationActions'
 >) {
-  const [draft, setDraft] = useState(() => cellFormDraft(cell))
+  const [draft, setDraft] = useState(() =>
+    cellFormDraft(cell, generationActions))
   const [saving, setSaving] = useState(false)
   const [copyResult, setCopyResult] = useState<{
     error: string
@@ -1242,6 +1263,9 @@ function ExecutableCellInspector({
   const generationCell = cell.type === 'generate_video'
     || cell.type === 'generate_image'
     || cell.type === 'generate_audio'
+  const generationCellType = isGenerationCellType(cell.type)
+    ? cell.type
+    : null
   const previewCell = cell.type === 'character' || generationCell
   const actionCell = isActionCellType(cell.type)
   const dirty = cellFormIsDirty(cell, draft)
@@ -1265,6 +1289,39 @@ function ExecutableCellInspector({
   ) => {
     setDraft((current) => ({ ...current, [field]: value }))
   }
+  const updateGenerationDraft = (
+    field: GenerationActionField,
+    value: string,
+  ) => {
+    if (!generationCellType) return
+    setDraft((current) => {
+      const selection: GenerationSelection = {
+        provider: current.provider,
+        model: current.model,
+        operation: current.operation,
+        tool: current.tool,
+      }
+      return {
+        ...current,
+        ...changeGenerationSelection(
+          generationActions,
+          generationCellType,
+          selection,
+          field,
+          value,
+        ),
+      }
+    })
+  }
+  const generationFieldOptions = (field: GenerationActionField) =>
+    generationCellType
+      ? generationActionFieldOptions(
+          generationActions,
+          generationCellType,
+          draft,
+          field,
+        )
+      : []
   const copyRunError = async () => {
     try {
       await navigator.clipboard.writeText(runError)
@@ -1439,39 +1496,59 @@ function ExecutableCellInspector({
             Choose a generation tool before running this cell.
           </span>
         )}
-        {!isNotebookMediaCellType(cell.type) && !actionCell && (
+        {generationCell && (
           <>
             <label>
               Provider
-              <input
+              <select
+                aria-label="Provider"
                 value={draft.provider}
-                placeholder="Provider"
-                onChange={(event) => updateDraft('provider', event.target.value)}
-              />
+                onChange={(event) =>
+                  updateGenerationDraft('provider', event.target.value)}
+              >
+                {generationFieldOptions('provider').map((provider) => (
+                  <option key={provider} value={provider}>{provider}</option>
+                ))}
+              </select>
             </label>
             <label>
               Model
-              <input
+              <select
+                aria-label="Model"
                 value={draft.model}
-                placeholder="Model"
-                onChange={(event) => updateDraft('model', event.target.value)}
-              />
+                onChange={(event) =>
+                  updateGenerationDraft('model', event.target.value)}
+              >
+                {generationFieldOptions('model').map((model) => (
+                  <option key={model} value={model}>{model}</option>
+                ))}
+              </select>
             </label>
             <label>
               Operation
-              <input
+              <select
+                aria-label="Operation"
                 value={draft.operation}
-                placeholder="Operation"
-                onChange={(event) => updateDraft('operation', event.target.value)}
-              />
+                onChange={(event) =>
+                  updateGenerationDraft('operation', event.target.value)}
+              >
+                {generationFieldOptions('operation').map((operation) => (
+                  <option key={operation} value={operation}>{operation}</option>
+                ))}
+              </select>
             </label>
             <label>
               Tool
-              <input
+              <select
+                aria-label="Tool"
                 value={draft.tool}
-                placeholder="Tool"
-                onChange={(event) => updateDraft('tool', event.target.value)}
-              />
+                onChange={(event) =>
+                  updateGenerationDraft('tool', event.target.value)}
+              >
+                {generationFieldOptions('tool').map((tool) => (
+                  <option key={tool} value={tool}>{tool}</option>
+                ))}
+              </select>
             </label>
           </>
         )}
@@ -1547,6 +1624,7 @@ export function NotebookCellInspector({
   clearing,
   deleting,
   sourceVisible,
+  generationActions,
   onUpdate,
   onSetInput,
   onRun,
@@ -1611,6 +1689,7 @@ export function NotebookCellInspector({
       onRun={onRun}
       onDelete={onDelete}
       onOpenFullscreen={onOpenFullscreen}
+      generationActions={generationActions}
     />
   )
 }

@@ -107,6 +107,10 @@ import {
   type NotebookCellData,
   type NotebookFlowEdge,
 } from '@/videobook/notebook-draft'
+import {
+  asNotebookGenerationActions,
+  type NotebookGenerationAction,
+} from '@/videobook/notebook-generation-actions'
 import { startNotebookCellRun } from '@/videobook/notebook-cell-actions'
 import {
   asSearchReferenceDescriptor,
@@ -342,6 +346,7 @@ type InitialWorkspace = {
   sequence: Sequence | null
   jobs: JobRecord[]
   commands: ServerCommand[]
+  generationActions: NotebookGenerationAction[]
 }
 
 const supportedUiActions = new Set([
@@ -1276,6 +1281,7 @@ function asInitialWorkspace(
     sequence: asSequence(payload.sequenceValue),
     jobs: asJobs(payload.jobValue),
     commands: asCommands(payload.commandValue),
+    generationActions: asNotebookGenerationActions(payload.actionValue),
   }
 }
 
@@ -2090,6 +2096,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [commands, setCommands] = useState<ServerCommand[]>(
     () => initialWorkspace?.commands ?? [],
   )
+  const [generationActions, setGenerationActions] = useState<
+    NotebookGenerationAction[]
+  >(() => initialWorkspace?.generationActions ?? [])
   const [providers, setProviders] = useState<ProviderRecord[]>([])
   const [storage, setStorage] = useState<unknown>(null)
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null)
@@ -2650,6 +2659,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       sequenceValue,
       jobValue,
       ingestStatusValue,
+      actionValue,
     ] = await Promise.all([
       call('list_notebooks', { book_id: targetBookId }),
       call('list_assets', {
@@ -2661,6 +2671,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       call('get_primary_sequence', { book_id: targetBookId }),
       call('list_jobs', { book_id: targetBookId, limit: 200 }),
       call('list_ingest_status', { book_id: targetBookId, limit: 200 }),
+      call('list_notebook_actions', { book_id: targetBookId }),
     ])
     const nextNotebooks = asNotebooks(notebookValue)
     const nextAssets = asAssets(assetValue)
@@ -2675,6 +2686,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setIngestStatuses(asIngestStatuses(ingestStatusValue))
     setSequence(asSequence(sequenceValue))
     setJobs(asJobs(jobValue))
+    setGenerationActions(asNotebookGenerationActions(actionValue))
     setJobSnapshotAt(Date.now())
     if (!nextNotebook) {
       setNotebook(null)
@@ -2734,6 +2746,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         setBookId('')
         setNotebook(null)
         setAssets([])
+        setGenerationActions([])
         setSequence(null)
         setNodes([])
         setEdges([])
@@ -5558,6 +5571,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     versionAssets={selectedCellVersionAssets}
                     status={selectedCell.data.status}
                     error={selectedCellError}
+                    generationActions={generationActions}
                     busy={busy || Boolean(selectedMediaSlotState?.operation)}
                     deleting={deletingCellId === selectedNotebookCell.id}
                     clearing={selectedMediaSlotState?.operation === 'clear'}

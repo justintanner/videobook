@@ -70,9 +70,20 @@ describe('v2 notebook domain tools', () => {
         slug: 'generate-image-opening',
         slot: { row: 0, column: 1 },
         prompt: 'A glowing moon garden',
-        model: 'generate_kie_gpt_image_2_text_to_image',
       },
-    })) as { id: string }
+    })) as {
+      id: string
+      provider: string
+      model: string
+      operation: string
+      tool: string
+    }
+    expect(image).toMatchObject({
+      provider: 'kie',
+      model: 'GptImage2TextToImageRequestSchema',
+      operation: 'text_to_image',
+      tool: 'generate_kie_gpt_image_2_text_to_image',
+    })
 
     resultJson(await invoke('connect_notebook_cells', {
       notebook_id: notebookId,
