@@ -1,26 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   notebookCellClockLabel,
-  notebookCellInputLabelVisible,
   notebookCellRunObservation,
   notebookCellStateFromStatus,
   notebookCellStatePresentation,
 } from './notebook-cell-presentation'
-
-describe('notebookCellInputLabelVisible', () => {
-  it('hides the default generation input label', () => {
-    expect(notebookCellInputLabelVisible('input')).toBe(false)
-  })
-
-  it('keeps meaningful multi-input labels', () => {
-    expect(notebookCellInputLabelVisible('video')).toBe(true)
-    expect(notebookCellInputLabelVisible('input_2')).toBe(true)
-    expect(notebookCellInputLabelVisible('result')).toBe(true)
-    expect(notebookCellInputLabelVisible('analysis')).toBe(true)
-    expect(notebookCellInputLabelVisible('media')).toBe(true)
-    expect(notebookCellInputLabelVisible('segment')).toBe(true)
-  })
-})
 
 describe('notebookCellRunObservation', () => {
   const cellId = '018f7cf5-0d31-7d96-8c0f-800000000002'

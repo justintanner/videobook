@@ -1,0 +1,280 @@
+import type { ZodRawShape } from "zod";
+import type { NotebookCell, NotebookDocument } from "videobook-engine";
+import { readSlotConstraints } from "./zod-slots.js";
+
+export type NotebookGenerationInputKind = "image" | "video" | "audio";
+
+export interface NotebookGenerationInputSlot {
+  field: string;
+  kind: NotebookGenerationInputKind;
+  targets: string[];
+  min: number;
+  max: number | null;
+}
+
+export interface NotebookGenerationInputMode {
+  id: string;
+  slots: NotebookGenerationInputSlot[];
+  requiredGroups: string[][];
+}
+
+export interface NotebookGenerationInputContract {
+  modes: NotebookGenerationInputMode[];
+}
+
+type ConnectedInput = {
+  kind: NotebookGenerationInputKind;
+  target: string;
+};
+
+type InputFieldSpec = {
+  kind: NotebookGenerationInputKind;
+  targets: string[];
+};
+
+const inputFieldSpecs: Record<string, InputFieldSpec> = {
+  image_slugs: {
+    kind: "image",
+    targets: ["image"],
+  },
+  image_slug: {
+    kind: "image",
+    targets: ["image"],
+  },
+  first_frame_slug: { kind: "image", targets: ["first_frame"] },
+  last_frame_slug: { kind: "image", targets: ["last_frame"] },
+  end_frame_slug: { kind: "image", targets: ["last_frame"] },
+  video_slugs: { kind: "video", targets: ["video"] },
+  video_slug: { kind: "video", targets: ["video"] },
+  first_clip_slug: { kind: "video", targets: ["video"] },
+  audio_slugs: { kind: "audio", targets: ["audio"] },
+  audio_slug: { kind: "audio", targets: ["audio"] },
+  driving_audio_slug: { kind: "audio", targets: ["audio"] },
+  replace_audio_with: { kind: "audio", targets: ["replace_audio"] },
+};
+
+function inputSlots(schema: ZodRawShape): NotebookGenerationInputSlot[] {
+  return Object.entries(inputFieldSpecs).flatMap(([field, spec]) => {
+    const fieldSchema = schema[field];
+    if (!fieldSchema) return [];
+    const constraints = readSlotConstraints(
+      fieldSchema as unknown as { _def?: unknown },
+    );
+    if (!constraints) return [];
+    return [{
+      field,
+      kind: spec.kind,
+      targets: spec.targets,
+      min: constraints.min,
+      max: constraints.max,
+    }];
+  });
+}
+
+function slotsByField(
+  slots: readonly NotebookGenerationInputSlot[],
+  fields: readonly string[],
+): NotebookGenerationInputSlot[] {
+  const fieldSet = new Set(fields);
+  return slots.filter((slot) => fieldSet.has(slot.field));
+}
+
+function mode(
+  id: string,
+  slots: NotebookGenerationInputSlot[],
+  requiredGroups: string[][] = [],
+): NotebookGenerationInputMode {
+  return { id, slots, requiredGroups };
+}
+
+function seedanceContract(
+  tool: string,
+  slots: readonly NotebookGenerationInputSlot[],
+): NotebookGenerationInputContract {
+  const replacement = slotsByField(slots, ["replace_audio_with"]);
+  const references = slotsByField(
+    slots,
+    ["image_slugs", "video_slugs", "audio_slugs", "replace_audio_with"],
+  );
+  if (tool === "generate_kie_seedance_2_0_mini_video") {
+    return {
+      modes: [mode("text", replacement), mode("references", references)],
+    };
+  }
+  const frames = slotsByField(
+    slots,
+    ["first_frame_slug", "last_frame_slug", "replace_audio_with"],
+  );
+  return {
+    modes: [
+      mode("text", replacement),
+      mode("frames", frames),
+      mode("references", references),
+    ],
+  };
+}
+
+function googleOmniContract(
+  slots: readonly NotebookGenerationInputSlot[],
+): NotebookGenerationInputContract {
+  return {
+    modes: [
+      mode("text", []),
+      mode(
+        "first-frame",
+        slotsByField(slots, ["first_frame_slug"]),
+        [["first_frame_slug"]],
+      ),
+      mode(
+        "references",
+        slotsByField(slots, ["image_slugs"]),
+        [["image_slugs"]],
+      ),
+      mode(
+        "video-edit",
+        slotsByField(slots, ["video_slug", "image_slugs"]),
+        [["video_slug"]],
+      ),
+    ],
+  };
+}
+
+function wanImageToVideoContract(
+  slots: readonly NotebookGenerationInputSlot[],
+): NotebookGenerationInputContract {
+  return {
+    modes: [
+      mode(
+        "frames",
+        slotsByField(
+          slots,
+          ["first_frame_slug", "last_frame_slug", "driving_audio_slug"],
+        ),
+        [["first_frame_slug", "last_frame_slug"]],
+      ),
+      mode(
+        "clip",
+        slotsByField(slots, ["first_clip_slug", "driving_audio_slug"]),
+        [["first_clip_slug"]],
+      ),
+    ],
+  };
+}
+
+export function notebookGenerationInputContract(
+  tool: string,
+  schema: ZodRawShape,
+): NotebookGenerationInputContract {
+  const slots = inputSlots(schema);
+  if (
+    tool === "generate_kie_seedance_2_0_video"
+    || tool === "generate_kie_seedance_2_0_fast_video"
+    || tool === "generate_kie_seedance_2_0_mini_video"
+  ) {
+    return seedanceContract(tool, slots);
+  }
+  if (tool === "generate_google_flow_omni_flash_video") {
+    return googleOmniContract(slots);
+  }
+  if (tool === "generate_kie_wan_2_7_image_to_video") {
+    return wanImageToVideoContract(slots);
+  }
+  return { modes: [mode("default", slots)] };
+}
+
+function cellInputKind(cell: NotebookCell): NotebookGenerationInputKind | null {
+  if (
+    cell.type === "image"
+    || cell.type === "extract_frame"
+    || cell.type === "generate_image"
+  ) return "image";
+  if (
+    cell.type === "video"
+    || cell.type === "split_video"
+    || cell.type === "generate_video"
+    || cell.type === "concat"
+    || cell.type === "splice"
+  ) return "video";
+  if (
+    cell.type === "audio"
+    || cell.type === "extract_audio"
+    || cell.type === "generate_audio"
+  ) return "audio";
+  return null;
+}
+
+function connectedInputTarget(
+  kind: NotebookGenerationInputKind,
+  targetInput: string,
+): string {
+  if (targetInput === "first_frame" || targetInput === "last_frame") {
+    return targetInput;
+  }
+  if (kind === "audio" && targetInput === "replace_audio") {
+    return targetInput;
+  }
+  return kind;
+}
+
+function connectedInputs(
+  document: NotebookDocument,
+  cell: NotebookCell,
+): ConnectedInput[] {
+  const cells = new Map(document.cells.map((candidate) => [candidate.id, candidate]));
+  return document.edges.flatMap((edge) => {
+    if (edge.target !== cell.id) return [];
+    const source = cells.get(edge.source);
+    const kind = source ? cellInputKind(source) : null;
+    return kind
+      ? [{ kind, target: connectedInputTarget(kind, edge.targetInput) }]
+      : [];
+  });
+}
+
+function modeAcceptsInputs(
+  candidate: NotebookGenerationInputMode,
+  inputs: readonly ConnectedInput[],
+): boolean {
+  const counts = new Map(candidate.slots.map((slot) => [slot.field, 0]));
+  const sorted = [...inputs].sort((left, right) => {
+    const leftSpecific = left.target === left.kind ? 0 : 1;
+    const rightSpecific = right.target === right.kind ? 0 : 1;
+    return rightSpecific - leftSpecific;
+  });
+  for (const input of sorted) {
+    const slots = candidate.slots
+      .filter((slot) => {
+        if (slot.kind !== input.kind || !slot.targets.includes(input.target)) {
+          return false;
+        }
+        const count = counts.get(slot.field) ?? 0;
+        return slot.max === null || count < slot.max;
+      })
+      .sort((left, right) => {
+        const leftCount = counts.get(left.field) ?? 0;
+        const rightCount = counts.get(right.field) ?? 0;
+        const leftRequired = leftCount < left.min ? 1 : 0;
+        const rightRequired = rightCount < right.min ? 1 : 0;
+        if (leftRequired !== rightRequired) return rightRequired - leftRequired;
+        return left.targets.length - right.targets.length;
+      });
+    const slot = slots[0];
+    if (!slot) return false;
+    counts.set(slot.field, (counts.get(slot.field) ?? 0) + 1);
+  }
+  if (candidate.slots.some((slot) =>
+    (counts.get(slot.field) ?? 0) < slot.min)) {
+    return false;
+  }
+  return candidate.requiredGroups.every((group) =>
+    group.some((field) => (counts.get(field) ?? 0) > 0));
+}
+
+export function notebookGenerationInputsAreCompatible(
+  contract: NotebookGenerationInputContract,
+  document: NotebookDocument,
+  cell: NotebookCell,
+): boolean {
+  const inputs = connectedInputs(document, cell);
+  return contract.modes.some((candidate) => modeAcceptsInputs(candidate, inputs));
+}

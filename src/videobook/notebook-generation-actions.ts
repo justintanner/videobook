@@ -1,26 +1,61 @@
-import type { NotebookCell } from 'videobook-engine'
+import type {
+  NotebookCell,
+  NotebookEdge,
+} from 'videobook-engine'
 
 export type GenerationCellType =
   | 'generate_audio'
   | 'generate_image'
   | 'generate_video'
 
-export type GenerationActionField =
-  | 'provider'
-  | 'model'
-  | 'operation'
-  | 'tool'
+export type GenerationSelection = {
+  provider: string
+  model: string
+  operation: string
+  tool: string
+}
 
-export type GenerationSelection = Record<GenerationActionField, string>
+export type GenerationPreviewDraft = GenerationSelection & {
+  prompt: string
+}
+
+export type GenerationInputKind = 'image' | 'video' | 'audio'
+
+export type GenerationInputSlot = {
+  field: string
+  kind: GenerationInputKind
+  targets: string[]
+  min: number
+  max: number | null
+}
+
+export type GenerationInputMode = {
+  id: string
+  slots: GenerationInputSlot[]
+  requiredGroups: string[][]
+}
+
+export type GenerationInputContract = {
+  modes: GenerationInputMode[]
+}
+
+export type GenerationConnectedInput = {
+  kind: GenerationInputKind
+  target: string
+}
 
 export type NotebookGenerationAction = {
+  id: string
   cellTypes: GenerationCellType[]
   provider: string
+  providerLabel: string
   model: string
   operation: string
   tool: string
   title: string
   isDefault: boolean
+  defaultPriority: number | null
+  inputContract: GenerationInputContract
 }
 
 const generationCellTypes = new Set<string>([
@@ -28,13 +63,6 @@ const generationCellTypes = new Set<string>([
   'generate_image',
   'generate_video',
 ])
-
-const generationActionFields: GenerationActionField[] = [
-  'provider',
-  'model',
-  'operation',
-  'tool',
-]
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -44,6 +72,57 @@ function record(value: unknown): Record<string, unknown> | null {
 
 function stringValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null
+}
+
+function finiteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function inputKind(value: unknown): GenerationInputKind | null {
+  return value === 'image' || value === 'video' || value === 'audio'
+    ? value
+    : null
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : []
+}
+
+function inputSlot(value: unknown): GenerationInputSlot | null {
+  const slot = record(value)
+  const field = stringValue(slot?.field)
+  const kind = inputKind(slot?.kind)
+  const targets = stringList(slot?.targets)
+  const min = finiteNumber(slot?.min)
+  const rawMax = slot?.max
+  const max = rawMax === null ? null : finiteNumber(rawMax)
+  if (!field || !kind || targets.length === 0 || min === null) return null
+  if (rawMax !== null && max === null) return null
+  return { field, kind, targets, min, max }
+}
+
+function inputMode(value: unknown): GenerationInputMode | null {
+  const candidate = record(value)
+  const id = stringValue(candidate?.id)
+  if (!id || !Array.isArray(candidate?.slots)) return null
+  const slots = candidate.slots
+    .map(inputSlot)
+    .filter((slot): slot is GenerationInputSlot => slot !== null)
+  const requiredGroups = Array.isArray(candidate.requiredGroups)
+    ? candidate.requiredGroups.map(stringList).filter((group) => group.length > 0)
+    : []
+  return { id, slots, requiredGroups }
+}
+
+function inputContract(value: unknown): GenerationInputContract | null {
+  const contract = record(value)
+  if (!Array.isArray(contract?.modes)) return null
+  const modes = contract.modes
+    .map(inputMode)
+    .filter((mode): mode is GenerationInputMode => mode !== null)
+  return modes.length > 0 ? { modes } : null
 }
 
 export function isGenerationCellType(
@@ -66,6 +145,7 @@ export function asNotebookGenerationActions(
     const operation = stringValue(action.operation)
     const tool = stringValue(action.tool)
     const title = stringValue(action.title)
+    const contract = inputContract(action.inputContract)
     const cellTypes = Array.isArray(action.cellTypes)
       ? action.cellTypes.filter((type): type is GenerationCellType =>
           typeof type === 'string' && isGenerationCellType(type))
@@ -75,18 +155,24 @@ export function asNotebookGenerationActions(
       || !model
       || !operation
       || !tool
+      || !contract
       || cellTypes.length === 0
     ) {
       return []
     }
+    const priority = finiteNumber(action.defaultPriority)
     return [{
+      id: stringValue(action.id) ?? `generation.${tool}`,
       cellTypes,
       provider,
+      providerLabel: stringValue(action.providerLabel) ?? provider,
       model,
       operation,
       tool,
       title: title ?? tool,
       isDefault: action.isDefault === true,
+      defaultPriority: priority,
+      inputContract: contract,
     }]
   })
 }
@@ -124,7 +210,7 @@ function selectionScore(
   action: NotebookGenerationAction,
   selection: GenerationSelection,
 ): number {
-  return generationActionFields.reduce(
+  return (['provider', 'model', 'operation', 'tool'] as const).reduce(
     (score, field) =>
       selection[field] && action[field] === selection[field]
         ? score + 1
@@ -133,35 +219,154 @@ function selectionScore(
   )
 }
 
-function bestMatchingAction(
+export function generationActionForSelection(
   actions: readonly NotebookGenerationAction[],
+  type: GenerationCellType,
   selection: GenerationSelection,
-): NotebookGenerationAction | undefined {
+): NotebookGenerationAction | null {
+  const available = generationActionsForCell(actions, type)
   const toolMatch = selection.tool
-    ? actions.find((action) => action.tool === selection.tool)
+    ? available.find((action) => action.tool === selection.tool)
     : undefined
   if (toolMatch) return toolMatch
   const legacyToolMatch = selection.model
-    ? actions.find((action) => action.tool === selection.model)
+    ? available.find((action) => action.tool === selection.model)
     : undefined
   if (legacyToolMatch) return legacyToolMatch
   const candidates = selection.model
-    ? actions.filter((action) => action.model === selection.model)
+    ? available.filter((action) => action.model === selection.model)
     : selection.operation
-      ? actions.filter((action) => action.operation === selection.operation)
+      ? available.filter((action) => action.operation === selection.operation)
       : selection.provider
-        ? actions.filter((action) => action.provider === selection.provider)
+        ? available.filter((action) => action.provider === selection.provider)
         : []
-  return candidates.reduce<NotebookGenerationAction | undefined>(
+  return candidates.reduce<NotebookGenerationAction | null>(
     (best, action) =>
       !best || selectionScore(action, selection) > selectionScore(best, selection)
         ? action
         : best,
-    undefined,
+    null,
   )
 }
 
-const imageInputOperations = new Set(['image_to_image', 'edit_image'])
+function cellInputKind(cell: NotebookCell): GenerationInputKind | null {
+  if (
+    cell.type === 'image'
+    || cell.type === 'extract_frame'
+    || cell.type === 'generate_image'
+  ) return 'image'
+  if (
+    cell.type === 'video'
+    || cell.type === 'split_video'
+    || cell.type === 'generate_video'
+    || cell.type === 'concat'
+    || cell.type === 'splice'
+  ) return 'video'
+  if (
+    cell.type === 'audio'
+    || cell.type === 'extract_audio'
+    || cell.type === 'generate_audio'
+  ) return 'audio'
+  return null
+}
+
+function normalizedInputTarget(
+  kind: GenerationInputKind,
+  targetInput: string,
+): string {
+  if (targetInput === 'first_frame' || targetInput === 'last_frame') {
+    return targetInput
+  }
+  if (kind === 'audio' && targetInput === 'replace_audio') {
+    return targetInput
+  }
+  return kind
+}
+
+export function generationConnectedInputs(
+  cellId: string,
+  cells: readonly NotebookCell[],
+  edges: readonly NotebookEdge[],
+): GenerationConnectedInput[] {
+  const cellsById = new Map(cells.map((cell) => [cell.id, cell]))
+  return edges.flatMap((edge) => {
+    if (edge.target !== cellId) return []
+    const source = cellsById.get(edge.source)
+    const kind = source ? cellInputKind(source) : null
+    return kind
+      ? [{ kind, target: normalizedInputTarget(kind, edge.targetInput) }]
+      : []
+  })
+}
+
+function inputModeMatches(
+  mode: GenerationInputMode,
+  inputs: readonly GenerationConnectedInput[],
+): boolean {
+  const counts = new Map(mode.slots.map((slot) => [slot.field, 0]))
+  const sortedInputs = [...inputs].sort((left, right) => {
+    const leftSpecific = left.target === left.kind ? 0 : 1
+    const rightSpecific = right.target === right.kind ? 0 : 1
+    return rightSpecific - leftSpecific
+  })
+  for (const input of sortedInputs) {
+    const candidates = mode.slots
+      .filter((slot) => {
+        if (slot.kind !== input.kind || !slot.targets.includes(input.target)) {
+          return false
+        }
+        const count = counts.get(slot.field) ?? 0
+        return slot.max === null || count < slot.max
+      })
+      .sort((left, right) => {
+        const leftCount = counts.get(left.field) ?? 0
+        const rightCount = counts.get(right.field) ?? 0
+        const leftRequired = leftCount < left.min ? 1 : 0
+        const rightRequired = rightCount < right.min ? 1 : 0
+        if (leftRequired !== rightRequired) return rightRequired - leftRequired
+        return left.targets.length - right.targets.length
+      })
+    const slot = candidates[0]
+    if (!slot) return false
+    counts.set(slot.field, (counts.get(slot.field) ?? 0) + 1)
+  }
+  if (mode.slots.some((slot) => (counts.get(slot.field) ?? 0) < slot.min)) {
+    return false
+  }
+  return mode.requiredGroups.every((group) =>
+    group.some((field) => (counts.get(field) ?? 0) > 0))
+}
+
+export function generationActionIsCompatible(
+  action: NotebookGenerationAction,
+  inputs: readonly GenerationConnectedInput[],
+): boolean {
+  return action.inputContract.modes.some((mode) =>
+    inputModeMatches(mode, inputs))
+}
+
+function compareGenerationActions(
+  left: NotebookGenerationAction,
+  right: NotebookGenerationAction,
+): number {
+  const leftPriority = left.defaultPriority ?? Number.POSITIVE_INFINITY
+  const rightPriority = right.defaultPriority ?? Number.POSITIVE_INFINITY
+  if (leftPriority !== rightPriority) return leftPriority - rightPriority
+  const title = left.title.localeCompare(right.title)
+  if (title !== 0) return title
+  const provider = left.providerLabel.localeCompare(right.providerLabel)
+  return provider !== 0 ? provider : left.tool.localeCompare(right.tool)
+}
+
+export function compatibleGenerationActions(
+  actions: readonly NotebookGenerationAction[],
+  type: GenerationCellType,
+  inputs: readonly GenerationConnectedInput[],
+): NotebookGenerationAction[] {
+  return generationActionsForCell(actions, type)
+    .filter((action) => generationActionIsCompatible(action, inputs))
+    .sort(compareGenerationActions)
+}
 
 export function initialGenerationSelection(
   cell: Pick<
@@ -169,64 +374,30 @@ export function initialGenerationSelection(
     'type' | 'provider' | 'model' | 'operation' | 'tool'
   >,
   actions: readonly NotebookGenerationAction[],
-  options?: { hasImageInput?: boolean },
+  inputs: readonly GenerationConnectedInput[] = [],
 ): GenerationSelection | null {
   if (!isGenerationCellType(cell.type)) return null
-  const available = generationActionsForCell(actions, cell.type)
   const current = currentSelection(cell)
-  const configured = bestMatchingAction(available, current)
+  const configured = generationActionForSelection(actions, cell.type, current)
   if (configured) return actionSelection(configured)
-  if (generationActionFields.every((field) => current[field])) return current
-  // An unconfigured generate_image cell with an image wired in should default
-  // to an action that can actually consume that image — a text_to_image
-  // fallback would silently drop the input at generation time.
-  const pool = options?.hasImageInput
-    ? available.filter((action) => imageInputOperations.has(action.operation))
-    : []
-  const candidates = pool.length > 0 ? pool : available
-  const fallback = candidates.find((action) => action.isDefault) ?? candidates[0]
+  if (Object.values(current).every(Boolean)) return current
+  const fallback = compatibleGenerationActions(actions, cell.type, inputs)[0]
   return fallback ? actionSelection(fallback) : null
 }
 
-export function generationActionFieldOptions(
-  actions: readonly NotebookGenerationAction[],
-  type: GenerationCellType,
-  selection: GenerationSelection,
-  field: GenerationActionField,
-): string[] {
-  const fieldIndex = generationActionFields.indexOf(field)
-  const candidates = generationActionFields
-    .slice(0, fieldIndex)
-    .reduce(
-      (current, upstream) =>
-        current.filter((action) => action[upstream] === selection[upstream]),
-      generationActionsForCell(actions, type),
-    )
-  const options = new Set(candidates.map((action) => action[field]))
-  if (selection[field]) options.add(selection[field])
-  return [...options].sort((left, right) => left.localeCompare(right))
+export function generationSelectionForAction(
+  action: NotebookGenerationAction,
+): GenerationSelection {
+  return actionSelection(action)
 }
 
-export function changeGenerationSelection(
+export function generationActionLabel(
+  action: NotebookGenerationAction,
   actions: readonly NotebookGenerationAction[],
-  type: GenerationCellType,
-  selection: GenerationSelection,
-  field: GenerationActionField,
-  value: string,
-): GenerationSelection {
-  const fieldIndex = generationActionFields.indexOf(field)
-  const candidates = generationActionFields
-    .slice(0, fieldIndex)
-    .reduce(
-      (current, upstream) =>
-        current.filter((action) => action[upstream] === selection[upstream]),
-      generationActionsForCell(actions, type),
-    )
-    .filter((action) => action[field] === value)
-  const selected = candidates.find((action) => action.tool === selection.tool)
-    ?? candidates.find((action) => action.isDefault)
-    ?? candidates[0]
-  return selected
-    ? actionSelection(selected)
-    : { ...selection, [field]: value }
+): string {
+  const duplicate = actions.some((candidate) =>
+    candidate.id !== action.id && candidate.title === action.title)
+  return duplicate
+    ? `${action.title} · ${action.providerLabel}`
+    : action.title
 }

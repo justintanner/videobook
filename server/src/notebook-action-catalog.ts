@@ -11,6 +11,7 @@ import {
   INTELLIGENCE_REASONING_EFFORT,
   OPENAI_ANALYSIS_TOOL,
 } from "./openai-intelligence.js";
+import type { NotebookGenerationInputContract } from "./notebook-generation-contract.js";
 
 export type NotebookActionKind =
   | "local"
@@ -48,6 +49,9 @@ export interface NotebookAction {
     requiresConfirmation: boolean;
   };
   isDefault?: boolean;
+  providerLabel?: string;
+  defaultPriority?: number;
+  inputContract?: NotebookGenerationInputContract;
 }
 
 const LOCAL_ACTIONS: NotebookAction[] = [
@@ -307,8 +311,63 @@ const LOCAL_ACTIONS: NotebookAction[] = [
 ];
 
 const DEFAULT_ANIMATION_TOOL = "generate_kie_seedance_2_0_video";
-const DEFAULT_IMAGE_TOOL = "generate_kie_gpt_image_2_text_to_image";
+const DEFAULT_VIDEO_TOOL = "generate_kie_gemini_omni_video";
+const DEFAULT_IMAGE_TOOL = "generate_kie_nano_banana_pro_text_to_image";
 const DEFAULT_AUDIO_TOOL = "generate_elevenlabs_text_to_audio";
+
+const generationTitleOverrides: Record<string, string> = {
+  generate_kie_gemini_omni_video: "Gemini Omni Video",
+  generate_google_flow_omni_flash_video: "Gemini Omni Video",
+  generate_kie_nano_banana_pro_text_to_image: "Nano Banana Pro",
+  generate_google_flow_nano_banana_pro_image: "Nano Banana Pro",
+  generate_kie_seedance_2_0_video: "Seedance 2",
+  generate_kie_seedance_2_0_fast_video: "Seedance 2 Fast",
+  generate_kie_seedance_2_0_mini_video: "Seedance 2 Mini",
+  generate_elevenlabs_text_to_audio: "ElevenLabs",
+};
+
+const providerLabels: Record<GenerationActionSpec["provider"], string> = {
+  kie: "Kie",
+  fal: "Fal",
+  xai: "xAI",
+  google_flow: "Google Flow",
+  alibaba: "Alibaba",
+  elevenlabs: "ElevenLabs",
+  workflow: "Workflow",
+};
+
+function generationActionTitle(spec: GenerationActionSpec): string {
+  const override = generationTitleOverrides[spec.canonical_name];
+  if (override) return override;
+  const withoutAction = spec.canonical_name.replace(
+    /^(generate|extend|upscale)_/,
+    "",
+  );
+  const withoutProvider = withoutAction.replace(
+    /^(kie|fal|xai|google_flow|alibaba|elevenlabs|workflow)_/,
+    "",
+  );
+  return withoutProvider
+    .replace(/_(\d)_(\d)(?=_|$)/g, "_$1.$2")
+    .split("_")
+    .map((word) => {
+      if (word === "gpt") return "GPT";
+      if (word === "xai") return "xAI";
+      if (word === "to") return "to";
+      return `${word.charAt(0).toUpperCase()}${word.slice(1)}`;
+    })
+    .join(" ");
+}
+
+function generationDefaultPriority(tool: string): number | undefined {
+  if (
+    tool === DEFAULT_VIDEO_TOOL
+    || tool === DEFAULT_IMAGE_TOOL
+    || tool === DEFAULT_AUDIO_TOOL
+  ) return 0;
+  if (tool === DEFAULT_ANIMATION_TOOL) return 1;
+  return undefined;
+}
 
 function generationCellType(
   spec: GenerationActionSpec,
@@ -330,7 +389,7 @@ function generationAction(spec: GenerationActionSpec): NotebookAction | null {
     provider: spec.provider,
     model: spec.apicity_identifier,
     tool: spec.canonical_name,
-    title: spec.canonical_name,
+    title: generationActionTitle(spec),
     description: `${spec.provider} ${spec.operation} (${spec.media_type})`,
     outputKind: "artifact",
     billable: true,
@@ -347,8 +406,10 @@ function generationAction(spec: GenerationActionSpec): NotebookAction | null {
       localMedia: false,
       requiresConfirmation: true,
     },
+    providerLabel: providerLabels[spec.provider],
+    defaultPriority: generationDefaultPriority(spec.canonical_name),
     isDefault:
-      spec.canonical_name === DEFAULT_ANIMATION_TOOL
+      spec.canonical_name === DEFAULT_VIDEO_TOOL
       || spec.canonical_name === DEFAULT_IMAGE_TOOL
       || spec.canonical_name === DEFAULT_AUDIO_TOOL,
   };
@@ -361,6 +422,7 @@ export function listNotebookActions(options: {
     .filter((spec) =>
       options.includeHiddenGeneration
       || spec.picker_visibility === "visible"
+      || spec.canonical_name === DEFAULT_VIDEO_TOOL
       || spec.canonical_name === DEFAULT_ANIMATION_TOOL
       || spec.canonical_name === DEFAULT_IMAGE_TOOL
       || spec.canonical_name === DEFAULT_AUDIO_TOOL)
@@ -434,16 +496,16 @@ export function defaultActionForCell(
     return actions.find((action) => action.operation === "splice_video")
       ?? null;
   }
-  const defaultGenerationTool = normalizedCell.type === "generate_video"
-    ? DEFAULT_ANIMATION_TOOL
+  const defaultGenerationTools = normalizedCell.type === "generate_video"
+    ? [DEFAULT_VIDEO_TOOL, DEFAULT_ANIMATION_TOOL]
     : normalizedCell.type === "generate_image"
-      ? DEFAULT_IMAGE_TOOL
+      ? [DEFAULT_IMAGE_TOOL]
       : normalizedCell.type === "generate_audio"
-        ? DEFAULT_AUDIO_TOOL
-        : null;
-  if (defaultGenerationTool) {
-    return actions.find((action) => action.tool === defaultGenerationTool)
-      ?? null;
+        ? [DEFAULT_AUDIO_TOOL]
+        : [];
+  for (const tool of defaultGenerationTools) {
+    const action = actions.find((candidate) => candidate.tool === tool);
+    if (action) return action;
   }
   return null;
 }
@@ -686,4 +748,4 @@ export function generationSpecOrNull(tool: string): GenerationActionSpec | null 
   return getActionSpec(tool) ?? null;
 }
 
-export { DEFAULT_ANIMATION_TOOL };
+export { DEFAULT_ANIMATION_TOOL, DEFAULT_IMAGE_TOOL, DEFAULT_VIDEO_TOOL };

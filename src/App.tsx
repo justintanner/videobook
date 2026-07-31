@@ -110,6 +110,7 @@ import {
 } from '@/videobook/notebook-draft'
 import {
   asNotebookGenerationActions,
+  type GenerationPreviewDraft,
   type NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
 import {
@@ -2942,12 +2943,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setFullscreenCellId(null)
   }, [])
 
-  const previewGenerationPayload = useCallback(async (cellId: string) => {
+  const previewGenerationPayload = useCallback(async (
+    cellId: string,
+    draft: GenerationPreviewDraft,
+  ) => {
     if (!bookId || !notebook) throw new Error('Notebook is not ready')
     return await call('preview_notebook_generation', {
       book_id: bookId,
       notebook_id: notebook.id,
       cell_id: cellId,
+      draft,
     })
   }, [bookId, call, notebook])
 

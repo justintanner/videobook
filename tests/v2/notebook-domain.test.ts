@@ -80,9 +80,9 @@ describe('v2 notebook domain tools', () => {
     }
     expect(image).toMatchObject({
       provider: 'kie',
-      model: 'GptImage2TextToImageRequestSchema',
+      model: 'NanoBananaProRequestSchema',
       operation: 'text_to_image',
-      tool: 'generate_kie_gpt_image_2_text_to_image',
+      tool: 'generate_kie_nano_banana_pro_text_to_image',
     })
 
     resultJson(await invoke('connect_notebook_cells', {

@@ -2,10 +2,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { NotebookDocument } from "videobook-engine";
 import { BookManager } from "../../server/src/book-manager.js";
 import { scopedBookEngine, withBookContext } from "../../server/src/book-context.js";
 import {
   DEFAULT_ANIMATION_TOOL,
+  DEFAULT_IMAGE_TOOL,
+  DEFAULT_VIDEO_TOOL,
   listNotebookActions,
   selectedCellDetails,
   validateCellConfiguration,
@@ -33,7 +36,7 @@ describe("notebook action catalog", () => {
     await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   });
 
-  it("exposes deterministic analysis and seedance defaults", () => {
+  it("exposes deterministic analysis and Videocity generation defaults", () => {
     const actions = listNotebookActions();
     const ids = actions.map((action) => action.id);
     expect(ids).toEqual([...ids].sort((left, right) => left.localeCompare(right)));
@@ -55,6 +58,14 @@ describe("notebook action catalog", () => {
         },
       });
     expect(actions.some((action) => action.tool === DEFAULT_ANIMATION_TOOL)).toBe(true);
+    expect(actions.find((action) =>
+      action.kind === "generation"
+      && action.cellTypes.includes("generate_video")
+      && action.isDefault)?.tool).toBe(DEFAULT_VIDEO_TOOL);
+    expect(actions.find((action) =>
+      action.kind === "generation"
+      && action.cellTypes.includes("generate_image")
+      && action.isDefault)?.tool).toBe(DEFAULT_IMAGE_TOOL);
     expect(actions
       .filter((action) => action.kind === "generation" && action.isDefault)
       .map((action) => action.cellTypes[0])
@@ -180,6 +191,25 @@ describe("notebook action catalog", () => {
     })) as { actions: Array<{ operation: string; model: string | null }> };
     expect(catalog.actions.some((action) => action.operation === "analyze_source")).toBe(true);
 
+    const generationCatalog = resultJson(await invoke("list_notebook_actions", {
+      cell_type: "generate_video",
+    })) as {
+      actions: Array<{
+        tool: string;
+        title: string;
+        providerLabel: string;
+        defaultPriority?: number;
+        inputContract?: { modes: Array<{ id: string }> };
+      }>;
+    };
+    expect(generationCatalog.actions.find((action) =>
+      action.tool === DEFAULT_VIDEO_TOOL)).toMatchObject({
+      title: "Gemini Omni Video",
+      providerLabel: "Kie",
+      defaultPriority: 0,
+      inputContract: { modes: [{ id: "default" }] },
+    });
+
     const details = resultJson(await invoke("get_notebook_cell_details", {
       notebook_id: notebookId,
       cell_id: analysis.id,
@@ -213,6 +243,75 @@ describe("notebook action catalog", () => {
       cell: { tool: "not-a-real-tool" },
     });
     expect(invalid.isError).toBe(true);
+
+    const generation = resultJson(await invoke("create_notebook_cell", {
+      notebook_id: notebookId,
+      cell: {
+        type: "generate_image",
+        slug: "generate-image-01",
+        slot: { row: 2, column: 0 },
+        prompt: "persisted prompt",
+      },
+    })) as {
+      id: string;
+      provider: string;
+      model: string;
+      operation: string;
+      tool: string;
+    };
+    expect(generation.tool).toBe(DEFAULT_IMAGE_TOOL);
+
+    const preview = resultJson(await invoke("preview_notebook_generation", {
+      notebook_id: notebookId,
+      cell_id: generation.id,
+      draft: {
+        prompt: "draft prompt",
+        provider: "kie",
+        model: "GptImage2TextToImageRequestSchema",
+        operation: "text_to_image",
+        tool: "generate_kie_gpt_image_2_text_to_image",
+      },
+    })) as {
+      tool: string;
+      input: { prompt: string };
+    };
+    expect(preview).toMatchObject({
+      tool: "generate_kie_gpt_image_2_text_to_image",
+      input: { prompt: "draft prompt" },
+    });
+    const afterPreview = resultJson(await invoke("get_notebook", {
+      notebook_id: notebookId,
+    })) as NotebookDocument;
+    expect(afterPreview.cells.find((cell) => cell.id === generation.id))
+      .toMatchObject({
+        prompt: "persisted prompt",
+        tool: DEFAULT_IMAGE_TOOL,
+      });
+
+    const videoGeneration = resultJson(await invoke("create_notebook_cell", {
+      notebook_id: notebookId,
+      cell: {
+        type: "generate_video",
+        slug: "generate-video-01",
+        slot: { row: 3, column: 0 },
+        prompt: "A moonlit garden in motion",
+      },
+    })) as { id: string; tool: string };
+    expect(videoGeneration.tool).toBe(DEFAULT_VIDEO_TOOL);
+    const videoPreview = resultJson(await invoke("preview_notebook_generation", {
+      notebook_id: notebookId,
+      cell_id: videoGeneration.id,
+    })) as {
+      tool: string;
+      input: { prompt: string; duration: string };
+    };
+    expect(videoPreview).toMatchObject({
+      tool: DEFAULT_VIDEO_TOOL,
+      input: {
+        prompt: "A moonlit garden in motion",
+        duration: "8",
+      },
+    });
 
     const valid = validateCellConfiguration({
       id: analysis.id,

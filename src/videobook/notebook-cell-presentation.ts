@@ -276,10 +276,6 @@ export function notebookCellStatePresentation(
   return notebookCellStateFromStatus(kind, status, { error, startedAt })
 }
 
-export function notebookCellInputLabelVisible(input: string): boolean {
-  return input !== 'input'
-}
-
 export function notebookCellExecutionObservation(
   document: Pick<NotebookDocument, 'execution'>,
   cellId: string,

@@ -52,6 +52,7 @@ import {
   selectedCellDetails,
   validateCellConfiguration,
 } from "../notebook-action-catalog.js";
+import { notebookGenerationInputContract } from "../notebook-generation-contract.js";
 import { buildSevenStageScaffold } from "../notebook-workflow.js";
 import {
   enqueueNotebookRunPlan,
@@ -1959,10 +1960,27 @@ export function videobookDomainDefs(
         cell_type: cellTypeSchema.optional(),
       },
       handler: async (args) => {
-        const actions = listNotebookActions().filter((action) =>
-          args.cell_type
-            ? action.cellTypes.includes(args.cell_type as NotebookCellType)
-            : true);
+        const { getAllToolDefs } = await import("./index.js");
+        const definitions = new Map(
+          getAllToolDefs(engine).map((definition) => [definition.name, definition]),
+        );
+        const actions = listNotebookActions()
+          .filter((action) =>
+            args.cell_type
+              ? action.cellTypes.includes(args.cell_type as NotebookCellType)
+              : true)
+          .map((action) => {
+            if (action.kind !== "generation" || !action.tool) return action;
+            const definition = definitions.get(action.tool);
+            if (!definition) return action;
+            return {
+              ...action,
+              inputContract: notebookGenerationInputContract(
+                action.tool,
+                definition.schema,
+              ),
+            };
+          });
         return json({ actions });
       },
     },
@@ -3451,6 +3469,13 @@ export function videobookDomainDefs(
         ...bookSchema,
         notebook_id: z.string().uuid(),
         cell_id: z.string().uuid(),
+        draft: z.object({
+          prompt: z.string(),
+          provider: z.string().min(1),
+          model: z.string().min(1),
+          operation: z.string().min(1),
+          tool: z.string().min(1),
+        }).optional(),
       },
       handler: async (args) => {
         const notebook = engine.notebooks.read(String(args.notebook_id));
@@ -3459,10 +3484,25 @@ export function videobookDomainDefs(
           candidate.id === String(args.cell_id));
         if (!cell) return failure("Notebook cell not found");
         try {
+          const draft = args.draft as {
+            prompt: string;
+            provider: string;
+            model: string;
+            operation: string;
+            tool: string;
+          } | undefined;
+          const previewCell: NotebookCell = draft
+            ? { ...cell, ...draft }
+            : cell;
+          const validation = validateCellConfiguration(
+            previewCell,
+            notebook.value,
+          );
+          if (!validation.ok) return failure(validation.message);
           const prepared = await prepareNotebookGeneration(
             engine,
             notebook.value,
-            cell,
+            previewCell,
             String(args.book_id),
           );
           return json({

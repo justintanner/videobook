@@ -18,6 +18,7 @@ import {
   doltCellRows,
 } from '../../src/videobook/dolt-cell-source'
 import type {
+  GenerationInputContract,
   NotebookGenerationAction,
 } from '../../src/videobook/notebook-generation-actions'
 
@@ -33,29 +34,55 @@ const cell: NotebookCell = {
   outputArtifactId: '01900000-0000-7000-8000-000000000002',
 }
 
+const textContract: GenerationInputContract = {
+  modes: [{ id: 'text', slots: [], requiredGroups: [] }],
+}
+
+const optionalImageContract: GenerationInputContract = {
+  modes: [{
+    id: 'default',
+    slots: [{
+      field: 'image_slugs',
+      kind: 'image',
+      targets: ['image'],
+      min: 0,
+      max: 8,
+    }],
+    requiredGroups: [],
+  }],
+}
+
 const generationActions: NotebookGenerationAction[] = [
   {
+    id: 'generation.generate_kie_gpt_image_2_text_to_image',
     cellTypes: ['generate_image'],
     provider: 'kie',
+    providerLabel: 'Kie',
     model: 'GptImage2TextToImageRequestSchema',
     operation: 'text_to_image',
     tool: 'generate_kie_gpt_image_2_text_to_image',
     title: 'GPT Image 2',
-    isDefault: true,
+    isDefault: false,
+    defaultPriority: null,
+    inputContract: textContract,
   },
   {
+    id: 'generation.generate_kie_nano_banana_pro_text_to_image',
     cellTypes: ['generate_image'],
     provider: 'kie',
+    providerLabel: 'Kie',
     model: 'NanoBananaProRequestSchema',
     operation: 'text_to_image',
     tool: 'generate_kie_nano_banana_pro_text_to_image',
     title: 'Nano Banana Pro',
-    isDefault: false,
+    isDefault: true,
+    defaultPriority: 0,
+    inputContract: optionalImageContract,
   },
 ]
 
 describe('NotebookCellInspector', () => {
-  it('defaults generation configuration to catalog-backed dropdowns', () => {
+  it('defaults generation configuration to one catalog-backed model picker', () => {
     const generationCell: NotebookCell = {
       ...cell,
       type: 'generate_image',
@@ -88,24 +115,17 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('<select aria-label="Provider">')
-    expect(html).toContain('<option value="kie" selected="">kie</option>')
     expect(html).toContain('<select aria-label="Model">')
     expect(html).toContain(
-      '<option value="GptImage2TextToImageRequestSchema" selected="">',
+      '<option value="generation.generate_kie_nano_banana_pro_text_to_image" selected="">Nano Banana Pro</option>',
     )
-    expect(html).toContain('<select aria-label="Operation">')
-    expect(html).toContain(
-      '<option value="text_to_image" selected="">text_to_image</option>',
-    )
-    expect(html).toContain('<select aria-label="Tool">')
-    expect(html).toContain(
-      '<option value="generate_kie_gpt_image_2_text_to_image" selected="">',
-    )
+    expect(html).not.toContain('<select aria-label="Provider">')
+    expect(html).not.toContain('<select aria-label="Operation">')
+    expect(html).not.toContain('<select aria-label="Tool">')
     expect(html).toContain(
       'class="inspector-cell-form inspector-generation-form"',
     )
-    expect(html).toContain('class="inspector-generation-fields"')
+    expect(html).toContain('class="inspector-generation-model"')
     expect(html).toContain('Changes apply when you generate')
     expect(html).toContain(
       'class="inspector-cell-actions inspector-generation-actions"',
@@ -121,6 +141,67 @@ describe('NotebookCellInspector', () => {
     )
     expect(html).not.toContain('Choose a generation tool')
     expect(html).not.toContain('placeholder="Provider"')
+  })
+
+  it('keeps an incompatible saved model visible and disables generation', () => {
+    const generationCell: NotebookCell = {
+      ...cell,
+      type: 'generate_image',
+      slug: 'generate-image-01',
+      prompt: 'Edit this image',
+      provider: 'kie',
+      model: 'GptImage2TextToImageRequestSchema',
+      operation: 'text_to_image',
+      tool: 'generate_kie_gpt_image_2_text_to_image',
+      outputArtifactId: undefined,
+    }
+    const sourceCell: NotebookCell = {
+      ...cell,
+      id: '01900000-0000-7000-8000-000000000020',
+      type: 'image',
+      slug: 'img-source',
+      outputArtifactId: '01900000-0000-7000-8000-000000000021',
+    }
+    const edge: NotebookEdge = {
+      id: '01900000-0000-7000-8000-000000000022',
+      source: sourceCell.id,
+      target: generationCell.id,
+      targetInput: 'input',
+    }
+    let previewCalls = 0
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: generationCell,
+      cells: [generationCell, sourceCell],
+      edges: [edge],
+      asset: undefined,
+      status: 'ready',
+      error: null,
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
+      generationActions,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+      onPreviewPayload: async () => {
+        previewCalls += 1
+        return {}
+      },
+    }))
+
+    expect(html).toContain(
+      '<option value="generation.generate_kie_gpt_image_2_text_to_image" selected="">GPT Image 2 · incompatible</option>',
+    )
+    expect(html).toContain('This model does not accept the current inputs.')
+    expect(html).toMatch(/class="inspector-run-action"[^>]*disabled=""/)
+    expect(html).toContain('class="inspector-analysis-json-disclosure"')
+    expect(html).not.toContain('class="inspector-analysis-json-scroll"')
+    expect(previewCalls).toBe(0)
   })
 
   it.each(NOTEBOOK_CELL_TYPES)(
@@ -531,9 +612,7 @@ describe('NotebookCellInspector', () => {
     )
     expect(html).not.toContain('RichJson')
     expect(html).not.toContain('Restore')
-    expect(html).toContain(
-      '<span class="inspector-input-source-label">result</span>',
-    )
+    expect(html).not.toContain('inspector-input-source-label')
     expect(html).toContain('aria-label="result input"')
     expect(html).toContain(
       'class="inspector-cell-actions inspector-compact-actions" aria-label="Cell cleanup actions"',
@@ -688,12 +767,7 @@ describe('NotebookCellInspector', () => {
     expect(html).not.toContain(
       'Changing a source clears this preview until its producer is rerun.',
     )
-    expect(html).toContain(
-      '<span class="inspector-input-source-label">video</span>',
-    )
-    expect(html).toContain(
-      '<span class="inspector-input-source-label">analysis</span>',
-    )
+    expect(html).not.toContain('inspector-input-source-label')
     expect(html).toContain('aria-label="video input"')
     expect(html).toContain('aria-label="analysis input"')
     expect(html).toContain('role="listbox" aria-label="video input options"')
@@ -810,9 +884,7 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain('<h3>Inputs</h3>')
-    expect(html).toContain(
-      '<span class="inspector-input-source-label">source</span>',
-    )
+    expect(html).not.toContain('inspector-input-source-label')
     expect(html).toContain('aria-label="source input"')
     expect(html).not.toContain('Select the upstream cell that supplies each input.')
     expect(html).not.toContain('Changing a source clears this preview until its producer is rerun.')
@@ -869,9 +941,8 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain(
-      '<span class="inspector-input-source-label">video</span>',
-    )
+    expect(html).not.toContain('inspector-input-source-label')
+    expect(html).toContain('aria-label="video input"')
     expect(html).toContain('<option value="first">First</option>')
     expect(html).toContain('<option value="time" selected="">Time</option>')
     expect(html).toContain('<option value="last">Last</option>')

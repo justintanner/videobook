@@ -24,7 +24,6 @@ import {
   notebookAudioPresentation,
   notebookAnalysisLlmExchanges,
   notebookCellActionPresentation,
-  notebookCellInputLabelVisible,
   notebookCellInspectorActionLabel,
   notebookOutputVersionArtifactIds,
   type NotebookAnalysisInfo,
@@ -37,11 +36,15 @@ import {
   type NotebookCellUpdate,
 } from '@/videobook/notebook-cell-actions'
 import {
-  changeGenerationSelection,
-  generationActionFieldOptions,
+  compatibleGenerationActions,
+  generationActionForSelection,
+  generationActionIsCompatible,
+  generationActionLabel,
+  generationConnectedInputs,
+  generationSelectionForAction,
   initialGenerationSelection,
   isGenerationCellType,
-  type GenerationActionField,
+  type GenerationPreviewDraft,
   type GenerationSelection,
   type NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
@@ -113,26 +116,13 @@ function persistedCellFormDraft(cell: NotebookCell): CellFormDraft {
   }
 }
 
-const imageInputCellTypes = new Set(['image', 'extract_frame', 'generate_image'])
-
-function cellHasImageInput(
-  cell: NotebookCell,
-  cells: readonly NotebookCell[],
-  edges: readonly NotebookEdge[],
-): boolean {
-  const byId = new Map(cells.map((candidate) => [candidate.id, candidate]))
-  return edges.some((edge) =>
-    edge.target === cell.id
-    && imageInputCellTypes.has(byId.get(edge.source)?.type ?? ''))
-}
-
 function cellFormDraft(
   cell: NotebookCell,
   actions: readonly NotebookGenerationAction[],
-  hasImageInput = false,
+  inputs: Parameters<typeof initialGenerationSelection>[2] = [],
 ): CellFormDraft {
   const draft = persistedCellFormDraft(cell)
-  const selection = initialGenerationSelection(cell, actions, { hasImageInput })
+  const selection = initialGenerationSelection(cell, actions, inputs)
   return selection ? { ...draft, ...selection } : draft
 }
 
@@ -264,7 +254,10 @@ type NotebookCellInspectorProps = {
   onClearSlot: () => Promise<void>
   onDelete: () => Promise<void>
   onOpenFullscreen: () => void
-  onPreviewPayload?: (cellId: string) => Promise<unknown>
+  onPreviewPayload?: (
+    cellId: string,
+    draft: GenerationPreviewDraft,
+  ) => Promise<unknown>
 }
 
 function isPassiveOutputCell(cell: NotebookCell): boolean {
@@ -574,6 +567,7 @@ function SourceCellPicker({
     >
       <summary
         aria-label={`${input.replaceAll('_', ' ')} input`}
+        title={`${input.replaceAll('_', ' ')} input`}
         aria-disabled={busy}
         tabIndex={busy ? -1 : 0}
         onClick={(event) => {
@@ -689,20 +683,11 @@ function InputSources({
               compatibleSource(cell, input, candidate)
               || candidate.id === edge?.source)
             .sort((left, right) => left.slug.localeCompare(right.slug))
-          const labeled = notebookCellInputLabelVisible(input)
           return (
             <div
-              className={[
-                'inspector-input-source-row',
-                labeled ? '' : 'unlabeled',
-              ].filter(Boolean).join(' ')}
+              className="inspector-input-source-row"
               key={input}
             >
-              {labeled && (
-                <span className="inspector-input-source-label">
-                  {input.replaceAll('_', ' ')}
-                </span>
-              )}
               <SourceCellPicker
                 input={input}
                 candidates={candidates}
@@ -801,7 +786,7 @@ function SlugField({
               title="Save slug"
               disabled={busy || saving || !draft.trim()}
             >
-              <Check size={16} />
+              <Check size={14} />
             </button>
             <button
               type="button"
@@ -811,7 +796,7 @@ function SlugField({
               disabled={busy || saving}
               onClick={cancel}
             >
-              <X size={16} />
+              <X size={14} />
             </button>
           </>
         ) : (
@@ -823,7 +808,7 @@ function SlugField({
             disabled={busy}
             onClick={beginEditing}
           >
-            <Pencil size={15} />
+            <Pencil size={13} />
           </button>
         )}
       </form>
@@ -1521,7 +1506,11 @@ function ExecutableCellInspector({
   | 'generationActions'
 >) {
   const [draft, setDraft] = useState(() =>
-    cellFormDraft(cell, generationActions, cellHasImageInput(cell, cells, edges)))
+    cellFormDraft(
+      cell,
+      generationActions,
+      generationConnectedInputs(cell.id, cells, edges),
+    ))
   const [saving, setSaving] = useState(false)
   const [copyResult, setCopyResult] = useState<{
     error: string
@@ -1538,6 +1527,44 @@ function ExecutableCellInspector({
   const generationCellType = isGenerationCellType(cell.type)
     ? cell.type
     : null
+  const generationSelection: GenerationSelection = {
+    provider: draft.provider,
+    model: draft.model,
+    operation: draft.operation,
+    tool: draft.tool,
+  }
+  const connectedGenerationInputs = generationCellType
+    ? generationConnectedInputs(cell.id, cells, edges)
+    : []
+  const compatibleActions = generationCellType
+    ? compatibleGenerationActions(
+        generationActions,
+        generationCellType,
+        connectedGenerationInputs,
+      )
+    : []
+  const selectedGenerationAction = generationCellType
+    ? generationActionForSelection(
+        generationActions,
+        generationCellType,
+        generationSelection,
+      )
+    : null
+  const generationCompatible = Boolean(
+    selectedGenerationAction
+    && generationActionIsCompatible(
+      selectedGenerationAction,
+      connectedGenerationInputs,
+    ),
+  )
+  const generationPickerActions = selectedGenerationAction
+    && !generationCompatible
+    && !compatibleActions.some((candidate) =>
+      candidate.id === selectedGenerationAction.id)
+    ? [selectedGenerationAction, ...compatibleActions]
+    : compatibleActions
+  const selectedGenerationValue = selectedGenerationAction?.id
+    ?? draft.tool
   const action = notebookCellActionPresentation(
     generationCell
       ? {
@@ -1554,6 +1581,7 @@ function ExecutableCellInspector({
   const actionCell = isActionCellType(cell.type)
   const dirty = cellFormIsDirty(cell, draft)
   const valid = cellFormIsValid(cell, draft)
+    && (!generationCell || generationCompatible)
   const runLabel = generationCell
     ? 'Generate'
     : action
@@ -1575,39 +1603,15 @@ function ExecutableCellInspector({
   ) => {
     setDraft((current) => ({ ...current, [field]: value }))
   }
-  const updateGenerationDraft = (
-    field: GenerationActionField,
-    value: string,
-  ) => {
-    if (!generationCellType) return
-    setDraft((current) => {
-      const selection: GenerationSelection = {
-        provider: current.provider,
-        model: current.model,
-        operation: current.operation,
-        tool: current.tool,
-      }
-      return {
-        ...current,
-        ...changeGenerationSelection(
-          generationActions,
-          generationCellType,
-          selection,
-          field,
-          value,
-        ),
-      }
-    })
+  const updateGenerationAction = (actionId: string) => {
+    const selected = generationPickerActions.find((candidate) =>
+      candidate.id === actionId)
+    if (!selected) return
+    setDraft((current) => ({
+      ...current,
+      ...generationSelectionForAction(selected),
+    }))
   }
-  const generationFieldOptions = (field: GenerationActionField) =>
-    generationCellType
-      ? generationActionFieldOptions(
-          generationActions,
-          generationCellType,
-          draft,
-          field,
-        )
-      : []
   const copyRunError = async () => {
     try {
       await navigator.clipboard.writeText(runError)
@@ -1759,63 +1763,53 @@ function ExecutableCellInspector({
         )}
         {generationCell && !draft.tool && !draft.model && (
           <span className="workspace-notice">
-            Choose a generation tool before running this cell.
+            No generation model matches the current inputs.
           </span>
         )}
         {generationCell && (
-          <div className="inspector-generation-fields">
-            <label>
-              Provider
-              <select
-                aria-label="Provider"
-                value={draft.provider}
-                onChange={(event) =>
-                  updateGenerationDraft('provider', event.target.value)}
-              >
-                {generationFieldOptions('provider').map((provider) => (
-                  <option key={provider} value={provider}>{provider}</option>
-                ))}
-              </select>
-            </label>
+          <div className="inspector-generation-model">
             <label>
               Model
               <select
                 aria-label="Model"
-                value={draft.model}
-                onChange={(event) =>
-                  updateGenerationDraft('model', event.target.value)}
+                value={selectedGenerationValue}
+                disabled={busy || compatibleActions.length === 0}
+                onChange={(event) => updateGenerationAction(event.target.value)}
               >
-                {generationFieldOptions('model').map((model) => (
-                  <option key={model} value={model}>{model}</option>
-                ))}
+                {!selectedGenerationAction && draft.tool && (
+                  <option value={draft.tool}>
+                    {draft.tool} · incompatible
+                  </option>
+                )}
+                {!selectedGenerationValue && (
+                  <option value="">No compatible models</option>
+                )}
+                {generationPickerActions.map((candidate) => {
+                  const compatible = generationActionIsCompatible(
+                    candidate,
+                    connectedGenerationInputs,
+                  )
+                  const label = generationActionLabel(
+                    candidate,
+                    generationActions,
+                  )
+                  return (
+                    <option key={candidate.id} value={candidate.id}>
+                      {compatible ? label : `${label} · incompatible`}
+                    </option>
+                  )
+                })}
               </select>
             </label>
-            <label>
-              Operation
-              <select
-                aria-label="Operation"
-                value={draft.operation}
-                onChange={(event) =>
-                  updateGenerationDraft('operation', event.target.value)}
-              >
-                {generationFieldOptions('operation').map((operation) => (
-                  <option key={operation} value={operation}>{operation}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Tool
-              <select
-                aria-label="Tool"
-                value={draft.tool}
-                onChange={(event) =>
-                  updateGenerationDraft('tool', event.target.value)}
-              >
-                {generationFieldOptions('tool').map((tool) => (
-                  <option key={tool} value={tool}>{tool}</option>
-                ))}
-              </select>
-            </label>
+          </div>
+        )}
+        {generationCell && selectedGenerationValue && !generationCompatible && (
+          <div className="inspector-generation-warning" role="status">
+            <CircleAlert size={14} />
+            <span>
+              This model does not accept the current inputs. Choose a compatible
+              model or change the connections.
+            </span>
           </div>
         )}
         {generationCell && onPreviewPayload && (
@@ -1823,11 +1817,21 @@ function ExecutableCellInspector({
             key={[
               cell.id,
               draft.tool,
-              edges.filter((edge) => edge.target === cell.id).length,
+              draft.prompt,
+              ...edges
+                .filter((edge) => edge.target === cell.id)
+                .map((edge) => `${edge.source}:${edge.targetInput}`)
+                .sort(),
             ].join(':')}
             label="Payload"
             ariaLabel={`Provider payload preview for @${cell.slug}`}
-            loadValue={() => onPreviewPayload(cell.id)}
+            loadValue={() => onPreviewPayload(cell.id, {
+              prompt: draft.prompt,
+              provider: draft.provider,
+              model: draft.model,
+              operation: draft.operation,
+              tool: draft.tool,
+            })}
           />
         )}
         {dirty && (
@@ -1843,7 +1847,9 @@ function ExecutableCellInspector({
                   : saveOnRun
                   ? 'Changes apply when this action runs'
                   : 'Unsaved changes'
-                : saveOnRun
+                : generationCell
+                  ? 'Choose a model that accepts the current inputs'
+                  : saveOnRun
                   ? 'Check timing values before running'
                   : 'Check timing values before saving'}
             </span>
@@ -1875,6 +1881,8 @@ function ExecutableCellInspector({
             title={
               action?.disabled
                 ? 'A run is already in progress for this cell'
+                : generationCell && !generationCompatible
+                  ? 'Choose a model that accepts the current inputs'
                 : !saveOnRun && dirty
                   ? 'Save changes before running'
                   : undefined

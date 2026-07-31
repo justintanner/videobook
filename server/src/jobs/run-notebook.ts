@@ -35,6 +35,8 @@ import { analysisFixtureForCell } from "../notebook-fixtures.js";
 import { applyAnalysisResults } from "../notebook-workflow.js";
 import {
   DEFAULT_ANIMATION_TOOL,
+  DEFAULT_IMAGE_TOOL,
+  DEFAULT_VIDEO_TOOL,
   normalizeLegacyAnalyzeCell,
   normalizeLegacyAnalyzeDocument,
 } from "../notebook-action-catalog.js";
@@ -43,6 +45,10 @@ import {
   INTELLIGENCE_MODEL,
   OPENAI_ANALYSIS_TOOL,
 } from "../openai-intelligence.js";
+import {
+  notebookGenerationInputContract,
+  notebookGenerationInputsAreCompatible,
+} from "../notebook-generation-contract.js";
 
 export interface RunNotebookPayload {
   type: "run_notebook";
@@ -191,8 +197,8 @@ export const defaultNotebookGenerationModel: Record<
   "image" | "video" | "audio",
   string
 > = {
-  image: "generate_kie_gpt_image_2_text_to_image",
-  video: DEFAULT_ANIMATION_TOOL,
+  image: DEFAULT_IMAGE_TOOL,
+  video: DEFAULT_VIDEO_TOOL,
   audio: "generate_elevenlabs_text_to_audio",
 };
 
@@ -673,22 +679,6 @@ function isImageLikeCell(source: NotebookCell): boolean {
   return notebookCellMediaType(source) === "image";
 }
 
-function isNumberedNotebookInput(input: string, base: string): boolean {
-  if (input === base) return true;
-  const suffix = input.slice(base.length + 1);
-  return input.startsWith(`${base}_`)
-    && suffix.length > 0
-    && /^\d+$/.test(suffix);
-}
-
-function isNotebookReferenceInput(
-  input: string,
-  kind: "video" | "audio",
-): boolean {
-  return isNumberedNotebookInput(input, kind)
-    || isNumberedNotebookInput(input, `reference_${kind}`);
-}
-
 export function modelArgs(
   definition: ToolDef,
   document: NotebookDocument,
@@ -701,6 +691,12 @@ export function modelArgs(
     book_id: bookId,
     prompt: promptFor(document, cell),
   };
+  if (
+    definition.name === "generate_kie_gemini_omni_video"
+    && args.duration === undefined
+  ) {
+    args.duration = "8";
+  }
   if (cell.operation === "rewrite_prompt" && "model" in definition.schema) {
     args.model = typeof cell.inputs?.targetModel === "string"
       ? cell.inputs.targetModel
@@ -720,18 +716,16 @@ export function modelArgs(
   if (lastFrame?.output && "last_frame_slug" in definition.schema) {
     args.last_frame_slug = refFor(lastFrame.output);
   }
+  if (lastFrame?.output && "end_frame_slug" in definition.schema) {
+    args.end_frame_slug = refFor(lastFrame.output);
+  }
 
   const imageReferences = upstream
     .filter(({ cell: source, output, targetInput }) =>
       typeof output === "string"
       && isImageLikeCell(source)
-      && (
-        (
-          targetInput !== "first_frame"
-          && targetInput !== "last_frame"
-        )
-        || !("first_frame_slug" in definition.schema)
-      ))
+      && targetInput !== "first_frame"
+      && targetInput !== "last_frame")
     .map(({ output }) => refFor(output!));
   if ("image_slugs" in definition.schema && imageReferences.length > 0) {
     args.image_slugs = imageReferences;
@@ -740,19 +734,18 @@ export function modelArgs(
     args.image_slug = imageReferences[0];
   }
   const videoReferences = upstream
-    .filter(({ cell: source, output, targetInput }) =>
+    .filter(({ cell: source, output }) =>
       typeof output === "string"
-      && notebookCellMediaType(source) === "video"
-      && (
-        isNotebookReferenceInput(targetInput, "video")
-        || targetInput === "segment"
-      ))
+      && notebookCellMediaType(source) === "video")
     .map(({ output }) => refFor(output!));
   if ("video_slugs" in definition.schema && videoReferences.length > 0) {
     args.video_slugs = videoReferences;
   }
   if ("video_slug" in definition.schema && videoReferences[0]) {
     args.video_slug = videoReferences[0];
+  }
+  if ("first_clip_slug" in definition.schema && videoReferences[0]) {
+    args.first_clip_slug = videoReferences[0];
   }
   const replacementAudio = upstream.find((entry) =>
     entry.targetInput === "replace_audio" && typeof entry.output === "string");
@@ -766,10 +759,7 @@ export function modelArgs(
     .filter(({ cell: source, output, targetInput }) =>
       typeof output === "string"
       && notebookCellMediaType(source) === "audio"
-      && (
-        isNotebookReferenceInput(targetInput, "audio")
-        || targetInput === "scene_audio"
-      ))
+      && targetInput !== "replace_audio")
     .map(({ output }) => refFor(output!));
   if (
     "audio_slugs" in definition.schema
@@ -778,6 +768,12 @@ export function modelArgs(
     && !lastFrame?.output
   ) {
     args.audio_slugs = audioReferences;
+  }
+  if ("audio_slug" in definition.schema && audioReferences[0]) {
+    args.audio_slug = audioReferences[0];
+  }
+  if ("driving_audio_slug" in definition.schema && audioReferences[0]) {
+    args.driving_audio_slug = audioReferences[0];
   }
   return args;
 }
@@ -843,6 +839,12 @@ export async function prepareNotebookGeneration(
         + "image_to_image or edit_image, or disconnect the image input",
       );
     }
+  }
+  const inputContract = notebookGenerationInputContract(tool, definition.schema);
+  if (!notebookGenerationInputsAreCompatible(inputContract, document, cell)) {
+    throw new Error(
+      `${tool} does not accept the current media inputs for @${cell.slug}`,
+    );
   }
   const parsed = z.object(definition.schema).safeParse(
     modelArgs(definition, document, cell, bookId, engine),
