@@ -93,28 +93,72 @@ export async function runSemanticIndex(
   payload: SemanticIndexPayload,
   ctx: JobHandlerContext,
 ): Promise<SemanticIndexResult> {
-  return withLocalLease(
-    fs,
-    payload.bookId,
-    payload.assetId,
-    ctx,
-    "analyze",
-    async () => withTransientStorageRetry(
-      () => indexArtifact(fs, payload.assetId, {
-        semanticVisual: true,
-        signal: ctx.signal,
-      }),
-      ctx.signal,
-    ),
-    { waitForActiveMs: DOWNSTREAM_LEASE_WAIT_MS },
-  );
+  // Indexing is auxiliary: a failure here must never fail the asset itself.
+  // The generated media is fine — marking the artifact errored would flip a
+  // freshly completed generation into "failed" (awaitNotebookOutput reads
+  // that status). Defer instead, matching the intra-job clip/clap lanes.
+  try {
+    return await withLocalLease(
+      fs,
+      payload.bookId,
+      payload.assetId,
+      ctx,
+      "analyze",
+      async () => {
+        try {
+          return await withTransientStorageRetry(
+            () => indexArtifact(fs, payload.assetId, {
+              semanticVisual: true,
+              signal: ctx.signal,
+            }),
+            ctx.signal,
+          );
+        } catch (error) {
+          if (ctx.signal.aborted) throw error;
+          return deferredSemanticIndex(fs, payload.assetId, error);
+        }
+      },
+      { waitForActiveMs: DOWNSTREAM_LEASE_WAIT_MS },
+    );
+  } catch (error) {
+    if (ctx.signal.aborted) throw error;
+    // Lease-claim failures land here; nothing holds the asset on our behalf.
+    ctx.markAssetFailureHandled();
+    return deferredSemanticIndex(fs, payload.assetId, error);
+  }
+}
+
+async function deferredSemanticIndex(
+  fs: Engine,
+  assetId: string,
+  error: unknown,
+): Promise<SemanticIndexResult> {
+  await fs.logs.append("semantic-index-deferred", {
+    artifactId: assetId,
+    manifestId: MANIFEST.manifestId,
+    error: error instanceof Error ? error.message : String(error),
+  }).catch(() => undefined);
+  return {
+    success: true,
+    artifactId: assetId,
+    observationCount: 0,
+    manifestId: MANIFEST.manifestId,
+    generation: GENERATION,
+    semanticVisual: "deferred",
+    semanticAudio: "deferred",
+  };
 }
 
 export async function indexArtifact(
   fs: Engine,
-  artifactId: string,
+  artifactReference: string,
   options: { semanticVisual?: boolean; signal?: AbortSignal } = {},
 ): Promise<SemanticIndexResult> {
+  // Enqueue sites pass whatever reference they hold (often the slug), but
+  // temporalSearch.commitBatch rejects anything except the canonical UUID.
+  const artifactResult = fs.artifacts.get(artifactReference);
+  if (!artifactResult.ok) throw new Error(artifactResult.error.message);
+  const artifactId = artifactResult.value.artifactId;
   const manifestResult = fs.temporalSearch.manifests.register(MANIFEST);
   if (!manifestResult.ok) throw new Error(manifestResult.error.message);
   const filesResult = await fs.files.manifest(artifactId);

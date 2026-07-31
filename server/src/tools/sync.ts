@@ -1364,7 +1364,7 @@ async function processSyncedTask(
   fs: Engine,
   task: PendingTask,
   taskInfo: KieTaskInfo,
-  result: SyncResult,
+  result: ProviderPollResult,
   bookId: string,
 ): Promise<void> {
   const data = taskInfo.data;

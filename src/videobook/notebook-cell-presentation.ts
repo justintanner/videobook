@@ -221,25 +221,17 @@ export function notebookCellStateFromStatus(
     startedAt?: string | number | null
   },
 ): NotebookCellStatePresentation {
-  const error = options?.error ?? null
-
-  if (error || status === 'error') {
+  // Only an error *status* selects the failed overlay. A leftover error
+  // string alongside an active status is stale client state from the previous
+  // attempt (re-queue overrides status but not the recorded error) and must
+  // not outrank the new run's clock.
+  if (status === 'error') {
     return {
       overlay: 'failed',
       label: null,
       startedAt: null,
-      error: error ?? 'Generation failed',
+      error: options?.error ?? 'Generation failed',
       tone: 'error',
-    }
-  }
-
-  if (status === 'ready' || status === 'completed' || status === 'stale') {
-    return {
-      overlay: null,
-      label: null,
-      startedAt: null,
-      error: null,
-      tone: null,
     }
   }
 

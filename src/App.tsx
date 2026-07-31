@@ -1956,7 +1956,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   }, data.status)
   const statusLabel = notebookCellStatusLabel(data.kind, data.status)
   const running = notebookCellIsActiveStatus(data.status)
-  const failed = data.status === 'error' || Boolean(data.statusError)
+  const failed = data.status === 'error'
   const outputVersions = notebookOutputVersionArtifactIds(
     data.inputs,
     data.outputArtifactId,

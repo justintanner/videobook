@@ -124,13 +124,22 @@ describe('notebookCellStateFromStatus', () => {
       error: 'Job lease expired',
       tone: 'error',
     })
-    expect(notebookCellStateFromStatus('generate_image', 'running', {
-      error: 'live failure',
-    })).toMatchObject({
+    expect(notebookCellStateFromStatus('generate_image', 'error')).toMatchObject({
       overlay: 'failed',
-      error: 'live failure',
+      error: 'Generation failed',
       tone: 'error',
     })
+  })
+
+  it('lets a re-queued run outrank the previous attempt error', () => {
+    for (const status of ['queued', 'running', 'awaiting-output'] as const) {
+      expect(notebookCellStateFromStatus('generate_image', status, {
+        error: 'Job lease expired',
+      })).toMatchObject({
+        overlay: 'clock',
+        error: null,
+      })
+    }
   })
 })
 
@@ -170,11 +179,14 @@ describe('notebookCellStatePresentation', () => {
   })
 
   it('prefers live error overrides over document execution', () => {
+    // Live failures override status and error together (App.tsx memo) — an
+    // error string alone never outranks an active status.
     expect(notebookCellStatePresentation({
       execution: {
         [cellId]: { status: 'running' },
       },
     }, cellId, 'generate_image', {
+      status: 'error',
       error: 'client-side failure',
     })).toMatchObject({
       overlay: 'failed',
