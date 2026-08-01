@@ -24,6 +24,7 @@ export type GenerationReviewSource = {
 
 type GenerationChatReviewProps = {
   actions: readonly NotebookGenerationAction[]
+  applyFormId: string
   busy: boolean
   draft: NotebookChatGenerationDraft
   modes: readonly GenerationInputMode[]
@@ -34,7 +35,6 @@ type GenerationChatReviewProps = {
   sources: readonly GenerationReviewSource[]
   summary: string
   onActionChange: (actionId: string) => void
-  onApply: () => void
   onCancel: () => void
   onModeChange: (modeId: string) => void
   onPromptChange: (prompt: string) => void
@@ -147,6 +147,7 @@ function valueRecord(value: unknown): Record<string, unknown> | null {
 
 export function GenerationChatReview({
   actions,
+  applyFormId,
   busy,
   draft,
   modes,
@@ -157,7 +158,6 @@ export function GenerationChatReview({
   sources,
   summary,
   onActionChange,
-  onApply,
   onCancel,
   onModeChange,
   onPromptChange,
@@ -200,10 +200,10 @@ export function GenerationChatReview({
         </div>
         <div className="command-plan-primary-actions">
           <button
-            type="button"
+            type="submit"
+            form={applyFormId}
             className="command-plan-apply"
             disabled={busy || !draft.cell.prompt?.trim()}
-            onClick={onApply}
           >
             <Check size={14} />Apply
           </button>

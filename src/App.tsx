@@ -76,6 +76,7 @@ import {
   type ServerCommand,
 } from '@/lib/command-registry'
 import {
+  COMMAND_COMPOSER_FORM_ID,
   CommandComposer,
   type ComposerOutcome,
 } from '@/components/videobook/CommandComposer'
@@ -7895,7 +7896,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               </div>
               <div className="command-plan-primary-actions">
                 <button
-                  type="button"
+                  type="submit"
+                  form={COMMAND_COMPOSER_FORM_ID}
                   className="command-plan-apply"
                   disabled={
                     busy
@@ -7908,7 +7910,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       (preview) => !preview.valid,
                     )
                   }
-                  onClick={() => void applyPendingCommandPlan()}
                 >
                   <Check size={14} />Apply
                 </button>
@@ -8011,6 +8012,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         {pendingChatAction?.kind === 'generation' && (
           <GenerationChatReview
             actions={pendingGenerationActionOptions}
+            applyFormId={COMMAND_COMPOSER_FORM_ID}
             busy={busy}
             draft={pendingChatAction.draft}
             modes={pendingGenerationModeOptions}
@@ -8021,7 +8023,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             sources={pendingGenerationSources}
             summary={pendingChatAction.summary}
             onActionChange={updatePendingGenerationAction}
-            onApply={() => void applyPendingChatAction()}
             onCancel={dismissPendingCommandPlan}
             onModeChange={updatePendingGenerationMode}
             onPromptChange={updatePendingGenerationPrompt}
@@ -8045,10 +8046,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               </div>
               <div className="command-plan-primary-actions">
                 <button
-                  type="button"
+                  type="submit"
+                  form={COMMAND_COMPOSER_FORM_ID}
                   className="command-plan-apply"
                   disabled={busy}
-                  onClick={() => void applyPendingChatAction()}
                 >
                   <Check size={14} />Apply
                 </button>

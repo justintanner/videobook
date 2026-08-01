@@ -18,8 +18,8 @@ describe('command composer outcome input', () => {
       .toEqual({ value: '/apply', select: true })
   })
 
-  it('leaves successful reads empty so they can replace a prior decision', () => {
-    expect(composerInputAfterOutcome({ ok: true }, '/apply')).toBeNull()
+  it('clears a prefilled apply command after a successful application', () => {
+    expect(composerInputAfterOutcome({ ok: true }, '/apply ')).toBeNull()
   })
 
   it('keeps the cursor after an explicitly unselected retry input', () => {

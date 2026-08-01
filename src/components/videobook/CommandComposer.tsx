@@ -39,6 +39,8 @@ export interface ComposerNotice {
   tone: 'error' | 'info'
 }
 
+export const COMMAND_COMPOSER_FORM_ID = 'videobook-command-composer-form'
+
 export interface PromptSession {
   id: string
   kind: string
@@ -398,7 +400,14 @@ export function CommandComposer({
 
       {children}
 
-      <div className="command-line-shell">
+      <form
+        id={COMMAND_COMPOSER_FORM_ID}
+        className="command-line-shell"
+        onSubmit={(event) => {
+          event.preventDefault()
+          void execute()
+        }}
+      >
         {suggestions.length > 0 && (
           <div className="command-suggestions">
             {suggestions.map((suggestion, index) => (
@@ -511,15 +520,14 @@ export function CommandComposer({
           }}
         />
         <button
-          type="button"
+          type="submit"
           className="command-send"
           disabled={disabled || sending || !input.trim()}
-          onClick={() => void execute()}
           aria-label="Send command"
         >
           {sending ? <Loader2 size={16} className="spin" /> : <Send size={16} />}
         </button>
-      </div>
+      </form>
     </section>
   )
 }
