@@ -177,6 +177,11 @@ import {
   downloadVideoCellInput,
   nextNotebookCellSlug,
 } from '@/videobook/notebook-download'
+import {
+  enqueueNotebookFrameCommand,
+  parseNotebookFrameCommand,
+  type NotebookFrameCommand,
+} from '@/videobook/notebook-frame-command'
 import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
 import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
 import type {
@@ -4962,10 +4967,78 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const executeNotebookFrameCommand = async (
+    command: NotebookFrameCommand,
+  ): Promise<ComposerOutcome> => {
+    if (!bookId || !notebook) {
+      return { ok: false, message: 'Open a notebook before extracting a frame.' }
+    }
+    let actionCellId: string | null = null
+    setBusy(true)
+    try {
+      const currentNotebook = asNotebook(await call('get_notebook', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+      }))
+      if (!currentNotebook) {
+        throw new Error('The server returned an invalid notebook')
+      }
+      const run = await enqueueNotebookFrameCommand({
+        actor: 'videobook-user',
+        bookId,
+        callTool: call,
+        command,
+        document: currentNotebook,
+      })
+      actionCellId = run.actionCellId
+      setCellRunError(actionCellId, null)
+      setCellQueued(actionCellId, true)
+      setSelectedCellId(run.outputCellId ?? actionCellId)
+      setNotice(`@${run.actionSlug} queued`)
+      const outcome = await watchNotebookRun({
+        bookId,
+        notebookId: currentNotebook.id,
+        cellId: actionCellId,
+        slug: run.actionSlug,
+        runId: run.runId,
+        jobOperationId: run.jobId,
+        intervalMs: notebookRunPollIntervalMs,
+        timeoutMs: notebookRunPollTimeoutMs,
+        maxPollFailures: 1,
+      })
+      if (outcome.kind === 'failed') {
+        throw new Error(outcome.message ?? `@${run.actionSlug} failed`)
+      }
+      if (outcome.kind === 'timeout') {
+        throw new Error('Frame extraction did not finish within five minutes')
+      }
+      if (outcome.kind === 'superseded') {
+        throw new Error(`@${run.actionSlug} was superseded by a newer run`)
+      }
+      setSelectedCellId(run.outputCellId ?? actionCellId)
+      return {
+        ok: true,
+        message: `Extracted the ${command.frameMode} frame of @${run.sourceSlug}`,
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (actionCellId) setCellRunError(actionCellId, message)
+      setNotice(message, 'error')
+      return { ok: false, message }
+    } finally {
+      if (actionCellId) setCellQueued(actionCellId, false)
+      setBusy(false)
+    }
+  }
+
   const executeCommand = async (input: string): Promise<ComposerOutcome> => {
     try {
       if (!bookId) return { ok: false, message: 'Load or create a book first.' }
       if (!input.startsWith('/')) {
+        const frameCommand = parseNotebookFrameCommand(input)
+        if (frameCommand) {
+          return await executeNotebookFrameCommand(frameCommand)
+        }
         const generationMatch = input.match(
           /\b(?:generate|run)\s+(?:the\s+)?(?:cell\s+)?@?([a-z0-9-]+)/iu,
         )
