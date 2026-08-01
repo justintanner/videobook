@@ -20,6 +20,7 @@ export interface AssetMentionCandidate
 
 interface NotebookMentionCell {
   slug: string
+  type: string
   outputArtifactId?: string
 }
 
@@ -41,19 +42,28 @@ export function notebookMentionAssets(
   const assetsByArtifactId = new Map(
     assets.map((asset) => [asset.artifactId, asset]),
   )
-  const seen = new Set<string>()
-  return cells.flatMap((cell) => {
+  const cellsByArtifactId = new Map<string, NotebookMentionCell>()
+  for (const cell of cells) {
     const artifactId = cell.outputArtifactId
-    if (!artifactId || seen.has(artifactId)) return []
+    if (!artifactId) continue
     const asset = assetsByArtifactId.get(artifactId)
-    if (!asset) return []
-    seen.add(artifactId)
+    if (!asset) continue
+    const current = cellsByArtifactId.get(artifactId)
+    if (!current || (
+      current.type !== asset.type
+      && cell.type === asset.type
+    )) {
+      cellsByArtifactId.set(artifactId, cell)
+    }
+  }
+  return [...cellsByArtifactId.entries()].map(([artifactId, cell]) => {
+    const asset = assetsByArtifactId.get(artifactId)!
     const { id: assetSlug, ...assetFields } = asset
-    return [{
+    return {
       ...assetFields,
       cellSlug: cell.slug,
       assetSlug,
-    }]
+    }
   })
 }
 
@@ -94,8 +104,15 @@ export function assetMentionSuggestions(
   const match = input.match(/@([\w-]*)$/)
   if (!match) return []
   const filter = match[1].toLowerCase()
+  const context = input.slice(0, match.index ?? input.length).trim()
+  const requiredType = /\b(?:generate|create|make)\s+(?:an?\s+)?(?:image|photo|picture)s?(?:\s+(?:of|from|using|with))?$/iu.test(context)
+    ? 'image'
+    : null
   return assets
-    .filter((asset) => asset.cellSlug.toLowerCase().includes(filter))
+    .filter((asset) => (
+      (!requiredType || asset.type.toLowerCase() === requiredType)
+      && asset.cellSlug.toLowerCase().includes(filter)
+    ))
     .slice(0, 12)
     .map((asset) => ({
       value: `@${asset.cellSlug}`,
