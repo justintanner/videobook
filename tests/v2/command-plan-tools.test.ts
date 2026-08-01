@@ -354,6 +354,7 @@ describe('CommandPlan edit tools', () => {
     ) as { kind: string; message: string }
     expect(clarification).toMatchObject({
       kind: 'clarification',
+      reason: 'unsupported',
       message: expect.stringContaining('ducking, captions'),
     })
     const generationPlan = resultJson(

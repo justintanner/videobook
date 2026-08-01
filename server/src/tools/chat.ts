@@ -3,7 +3,14 @@
  */
 import type { ChatLogEntry, Engine, ResolvedArtifact } from "videobook-engine";
 import { z } from "zod";
-import { buildChatRoutingPrompt, getRoutableTool, NESTED_TIMESTAMP_PARAMS, TIMESTAMP_PARAMS } from "../chat-router.js";
+import {
+  buildChatRoutingPrompt,
+  buildChatRoutingUserMessage,
+  buildRoutableTools,
+  getRoutableTool,
+  NESTED_TIMESTAMP_PARAMS,
+  TIMESTAMP_PARAMS,
+} from "../chat-router.js";
 import { parseTime } from "../time-parse.js";
 import { withLogging } from "./log-wrapper.js";
 import type { ToolDef, ToolResult } from "./tool-def.js";
@@ -312,20 +319,21 @@ export function chatDef(fs: Engine): ToolDef {
         return error("OPENAI_API_KEY environment variable is not set");
       }
 
-      const systemPrompt = buildChatRoutingPrompt(book.slug, historyContext || undefined);
-      const userMessage = `User query: ${expandedPrompt}
-
-Referenced assets:
-${JSON.stringify(assetContext, null, 2)}
-
-Available file paths:
-- Image files: ${JSON.stringify(imageFiles)}
-- Video files: ${JSON.stringify(videoFiles)}
-
-Script contents:
-${scriptContents.length > 0 ? JSON.stringify(scriptContents, null, 2) : "None"}
-
-Determine which tool to use and what parameters to pass.`;
+      const { getAllToolDefs } = await import("./index.js");
+      const allDefs = getAllToolDefs(fs);
+      const routableTools = buildRoutableTools(allDefs);
+      const systemPrompt = buildChatRoutingPrompt(
+        book.slug,
+        routableTools,
+        historyContext || undefined,
+      );
+      const userMessage = buildChatRoutingUserMessage({
+        query: expandedPrompt,
+        assetContext,
+        imageFiles,
+        videoFiles,
+        scriptContents,
+      });
 
       let decision: ChatDecision;
       try {
@@ -364,7 +372,7 @@ Determine which tool to use and what parameters to pass.`;
       }
 
       // 6. Validate tool exists in routable registry
-      const routableTool = getRoutableTool(decision.tool);
+      const routableTool = getRoutableTool(routableTools, decision.tool);
       if (!routableTool) {
         return error(`Unknown tool: ${decision.tool}. Please rephrase.`);
       }
@@ -396,18 +404,28 @@ Determine which tool to use and what parameters to pass.`;
       }
 
       // 8. Look up handler from tool defs
-      // Lazy import to avoid circular dependency at module load time
-      const { getAllToolDefs } = await import("./index.js");
-      const allDefs = getAllToolDefs(fs);
       const targetDef = allDefs.find((d) => d.name === routableTool.actualTool);
 
       if (!targetDef) {
         return error(`Tool handler not found: ${routableTool.actualTool}`);
       }
 
+      const validated = z.object(targetDef.schema).safeParse(params);
+      if (!validated.success) {
+        return error(
+          `Invalid parameters for ${decision.tool}: ${z.prettifyError(validated.error)}`,
+        );
+      }
+
       // 9. Execute (wrapped so the routed tool writes its own action log entry)
       const wrappedDef = withLogging(targetDef, fs);
-      const handlerResult = await wrappedDef.handler(params as Record<string, unknown>);
+      let handlerResult: ToolResult;
+      try {
+        handlerResult = await wrappedDef.handler(validated.data);
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        return error(`${decision.tool} failed: ${message}`);
+      }
 
       // 10. Log chat history (fire-and-forget)
       void fs.logs
@@ -427,18 +445,7 @@ Determine which tool to use and what parameters to pass.`;
         )
         .catch(() => {});
 
-      // 11. Return based on category
-      if (routableTool.category === "generation") {
-        // Return the preview JSON from the generation handler
-        return handlerResult;
-      }
-
-      // Action tools: return the LLM's brief message. create_watermark_card is an
-      // exception — surface the created asset_id JSON so the client can use it.
-      if (handlerResult.isError || decision.tool === "create_watermark_card") {
-        return handlerResult;
-      }
-      return { content: [{ type: "text" as const, text: decision.message ?? "Done." }] };
+      return handlerResult;
     },
   };
 }

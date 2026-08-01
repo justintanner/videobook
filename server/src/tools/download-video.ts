@@ -37,15 +37,15 @@ export function downloadVideoDef(fs: Engine): ToolDef {
     description: "Download a full video from a URL (YouTube, Twitter/X, etc.) into a videocity project as original.mp4. Supports requested range metadata and auto-exports 16:9 and 9:16 versions.",
     schema: {
       url: z.string().describe("Video URL (YouTube, Twitter/X, Instagram, TikTok, etc.)"),
-      start_time: z.string().optional().describe("Requested start time metadata (e.g. '30', '1:30', '2m20s')"),
-      end_time: z.string().optional().describe("Requested end time metadata (e.g. '60', '2:00', '3m')"),
+      start_time: z.union([z.string(), z.number()]).optional().describe("Requested start time metadata in seconds or timestamp notation (e.g. '30', '1:30', '2m20s')"),
+      end_time: z.union([z.string(), z.number()]).optional().describe("Requested end time metadata in seconds or timestamp notation (e.g. '60', '2:00', '3m')"),
       book_id: z.string().describe("Project slug"),
       export_videos: z.boolean().optional().default(false).describe("Auto-export 16:9 and 9:16 versions (default: off)"),
       full: z.boolean().optional().default(false).describe("Deprecated; downloads are always full"),
     },
     handler: async (args) => {
       const { url, start_time, end_time, book_id, export_videos } = args as {
-        url: string; start_time?: string; end_time?: string;
+        url: string; start_time?: string | number; end_time?: string | number;
         book_id: string; export_videos?: boolean; full?: boolean;
       };
       let startSecs: number | undefined;

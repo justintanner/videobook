@@ -25,6 +25,7 @@ export default defineConfig({
       'src/videobook/mvp-gates.test.ts',
       'src/videobook/search-benchmark-corpus.test.ts',
       'server/src/archive-store.test.ts',
+      'server/src/chat-router.test.ts',
       'server/src/jobs/archive-clip.test.ts',
       'server/src/openai-intelligence.test.ts',
       'server/src/tools/log-wrapper.test.ts',

@@ -530,6 +530,17 @@ function messageFor(value: unknown, fallback: string): string {
   return fallback
 }
 
+function isDownloadVideoResult(value: unknown): boolean {
+  const item = record(value)
+  return asString(item?.artifact_id) !== null
+    && asString(item?.assetId) !== null
+    && asString(item?.job_id)?.startsWith('download-') === true
+}
+
+function urlFromText(value: string): string {
+  return value.match(/https?:\/\/[^\s]+/u)?.[0] ?? value
+}
+
 function asBooks(value: unknown): BookProjectSummary[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((entry) => {
@@ -4902,6 +4913,55 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const completeVideoDownload = async (
+    result: unknown,
+    sourceUrl: string,
+  ): Promise<ComposerOutcome> => {
+    if (!notebook) {
+      await refreshBookData(bookId)
+      return { ok: true, message: messageFor(result, 'Download queued') }
+    }
+    const cell = downloadVideoCellInput(
+      result,
+      sourceUrl,
+      nextNotebookGridSlot(nodes),
+      notebook.cells,
+    )
+    let createdCellId: string
+    try {
+      const created = record(await call('create_notebook_cell', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        cell,
+      }))
+      const nextCellId = asString(created?.id)
+      if (!nextCellId) {
+        throw new Error('The server did not return the new notebook cell')
+      }
+      createdCellId = nextCellId
+      setSelectedCellId(nextCellId)
+    } catch (error) {
+      await refreshBookData(bookId, notebook.id)
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        ok: false,
+        message: `Download queued in Library, but board placement failed: ${message}`,
+      }
+    }
+    await refreshBookData(bookId, notebook.id)
+    void watchDownloadedAsset({
+      bookId,
+      notebookId: notebook.id,
+      cellId: createdCellId,
+      slug: cell.slug,
+      artifactId: cell.output_artifact_id,
+    })
+    return {
+      ok: true,
+      message: messageFor(result, `Download queued as @${cell.slug}`),
+    }
+  }
+
   const executeCommand = async (input: string): Promise<ComposerOutcome> => {
     try {
       if (!bookId) return { ok: false, message: 'Load or create a book first.' }
@@ -4953,6 +5013,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         })
         const result = record(value)
         if (result?.kind === 'clarification') {
+          if (result.reason === 'unsupported') {
+            const routed = await call('chat', {
+              book_id: bookId,
+              prompt: input,
+            })
+            if (isDownloadVideoResult(routed)) {
+              return await completeVideoDownload(routed, urlFromText(input))
+            }
+            await refreshBookData(bookId, notebook?.id)
+            return {
+              ok: true,
+              message: messageFor(routed, 'Command complete'),
+            }
+          }
           return {
             ok: false,
             message: asString(result.message) ?? 'Clarify the edit you want to make.',
@@ -5332,45 +5406,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (command.mcpTool.autoInject?.includes('book_id')) args.book_id = bookId
       const result = await call(command.mcpTool.tool, args)
       if (command.mcpTool.tool === 'download_video' && notebook) {
-        const cell = downloadVideoCellInput(
-          result,
-          asString(args.url) ?? '',
-          nextNotebookGridSlot(nodes),
-          notebook.cells,
-        )
-        let createdCellId: string
-        try {
-          const created = record(await call('create_notebook_cell', {
-            book_id: bookId,
-            notebook_id: notebook.id,
-            cell,
-          }))
-          const nextCellId = asString(created?.id)
-          if (!nextCellId) {
-            throw new Error('The server did not return the new notebook cell')
-          }
-          createdCellId = nextCellId
-          setSelectedCellId(nextCellId)
-        } catch (error) {
-          await refreshBookData(bookId, notebook.id)
-          const message = error instanceof Error ? error.message : String(error)
-          return {
-            ok: false,
-            message: `Download queued in Library, but board placement failed: ${message}`,
-          }
-        }
-        await refreshBookData(bookId, notebook.id)
-        void watchDownloadedAsset({
-          bookId,
-          notebookId: notebook.id,
-          cellId: createdCellId,
-          slug: cell.slug,
-          artifactId: cell.output_artifact_id,
-        })
-        return {
-          ok: true,
-          message: messageFor(result, `Download queued as @${cell.slug}`),
-        }
+        return await completeVideoDownload(result, asString(args.url) ?? '')
       }
       await refreshBookData(bookId, notebook?.id)
       return { ok: true, message: messageFor(result, `${command.command} complete`) }

@@ -139,9 +139,14 @@ const generationPlanSchema = z.object({
 });
 
 type EditRequest = z.infer<typeof editRequestSchema>;
+const UNSUPPORTED_CHAT_EDIT_MESSAGE = "I can safely plan insert, trim, volume, ducking, captions, move, split, delete, gaps, transforms, speed, and transitions. Name the action and its target.";
 type ChatEditParse =
   | { kind: "plan"; requests: EditRequest[] }
-  | { kind: "clarification"; message: string };
+  | {
+    kind: "clarification";
+    message: string;
+    reason: "incomplete" | "unsupported";
+  };
 
 function json(value: unknown): ToolResult {
   return { content: [{ type: "text", text: JSON.stringify(value) }] };
@@ -889,7 +894,7 @@ async function parseChatEditClause(
       reduction_db: reductionDb,
     };
   }
-  return "I can safely plan insert, trim, volume, ducking, captions, move, split, delete, gaps, transforms, speed, and transitions. Name the action and its target.";
+  return UNSUPPORTED_CHAT_EDIT_MESSAGE;
 }
 
 export async function parseChatEditRequest(
@@ -900,7 +905,11 @@ export async function parseChatEditRequest(
   const clauses = prompt.split(/\s*(?:;|\band\s+then\b|\bthen\b)\s*/iu)
     .filter((clause) => clause.trim().length > 0);
   if (clauses.length === 0) {
-    return { kind: "clarification", message: "Describe the edit you want to make." };
+    return {
+      kind: "clarification",
+      message: "Describe the edit you want to make.",
+      reason: "incomplete",
+    };
   }
   const sequence = engine.sequences.getPrimary();
   const requests: EditRequest[] = [];
@@ -912,7 +921,13 @@ export async function parseChatEditRequest(
       mediaContext,
     );
     if (typeof parsed === "string") {
-      return { kind: "clarification", message: parsed };
+      return {
+        kind: "clarification",
+        message: parsed,
+        reason: parsed === UNSUPPORTED_CHAT_EDIT_MESSAGE
+          ? "unsupported"
+          : "incomplete",
+      };
     }
     requests.push(parsed);
   }

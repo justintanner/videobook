@@ -1,6 +1,4 @@
-/**
- * Chat routing: routable tool registry, routing prompt builder, and timestamp param registry.
- */
+import type { ToolDef } from "./tools/tool-def.js";
 
 type RoutableToolInfo = {
   name: string;
@@ -10,363 +8,30 @@ type RoutableToolInfo = {
   category: "action" | "generation";
 };
 
-const ROUTABLE_TOOLS: RoutableToolInfo[] = [
-  // --- Action tools ---
-  {
-    name: "trim_video",
-    actualTool: "trim_video",
-    description: "Trim a video: keep a time range (trim_start/trim_end) or cut out a middle section (cut_start/cut_end)",
-    params: ["asset_id", "trim_start", "trim_end", "cut_start", "cut_end"],
-    category: "action",
-  },
-  {
-    name: "download_video",
-    actualTool: "download_video",
-    description: "Download a video from a URL (YouTube, Twitter/X, Instagram, TikTok, etc.)",
-    params: ["url", "start_time", "end_time"],
-    category: "action",
-  },
-  {
-    name: "change_video_speed",
-    actualTool: "change_video_speed",
-    description: "Change video playback speed (speed up or slow down, 0.25-4.0x)",
-    params: ["asset_id", "speed"],
-    category: "action",
-  },
-  {
-    name: "timewarp_video",
-    actualTool: "timewarp_video",
-    description: "Retime one selected video range by a duration multiplier while compensating the remaining picture to preserve runtime and audio",
-    params: ["asset_id", "start_seconds", "end_seconds", "stretch_factor"],
-    category: "action",
-  },
-  {
-    name: "sync_video_to_audio",
-    actualTool: "sync_video_to_audio",
-    description: "Smoothly retime video action against fixed original audio using exact video-to-audio timestamp or transcript-cue anchors",
-    params: ["asset_id", "anchors"],
-    category: "action",
-  },
-  {
-    name: "reverse_video",
-    actualTool: "reverse_video",
-    description: "Reverse video playback (play backwards)",
-    params: ["asset_id"],
-    category: "action",
-  },
-  {
-    name: "extract_first_frame",
-    actualTool: "extract_first_frame",
-    description: "Extract the first frame of a video as a new image asset",
-    params: ["asset_id"],
-    category: "action",
-  },
-  {
-    name: "inject_first_frame",
-    actualTool: "inject_first_frame",
-    description: "Replace frame zero of a video or final output with an image without changing timing or audio",
-    params: ["target_asset_id", "image_asset_id", "orientation"],
-    category: "action",
-  },
-  {
-    name: "extract_last_frame",
-    actualTool: "extract_last_frame",
-    description: "Extract the last frame of a video as a new image asset",
-    params: ["asset_id"],
-    category: "action",
-  },
-  {
-    name: "extract_audio",
-    actualTool: "extract_audio",
-    description: "Extract the audio track from a video as a new audio asset",
-    params: ["asset_id"],
-    category: "action",
-  },
-  {
-    name: "transcribe",
-    actualTool: "transcribe",
-    description: "Transcribe audio from a video or audio asset using speech-to-text",
-    params: ["asset_id"],
-    category: "action",
-  },
-  {
-    name: "asset_manifest",
-    actualTool: "asset_manifest",
-    description: "Show all files and details of a specific asset",
-    params: ["asset_id"],
-    category: "action",
-  },
-  {
-    name: "list_assets",
-    actualTool: "list_assets",
-    description: "List all assets in the current book",
-    params: ["sort"],
-    category: "action",
-  },
-  {
-    name: "list_books",
-    actualTool: "list_books",
-    description: "List all books",
-    params: ["sort"],
-    category: "action",
-  },
-  {
-    name: "render_timeline",
-    actualTool: "render_timeline",
-    description: "Concatenate rendered timeline slots into the final book video (use for /final and 'render the timeline' requests)",
-    params: [],
-    category: "action",
-  },
-  {
-    name: "split_video",
-    actualTool: "split_video",
-    description: "Split a video into two new assets at a timestamp (chunk_a_end seconds; optional chunk_b_start for overlap)",
-    params: ["asset_id", "chunk_a_end", "chunk_b_start"],
-    category: "action",
-  },
-  {
-    name: "export_asset_to_project",
-    actualTool: "export_asset_to_project",
-    description: "Export/copy an asset into a different project",
-    params: ["asset_id", "target_project", "new_name"],
-    category: "action",
-  },
-  {
-    name: "add_timeline_audio",
-    actualTool: "add_timeline_audio",
-    description: "Add an audio asset to the timeline audio lane (positions in frames at 30 fps)",
-    params: ["asset_id", "start_frame", "duration_frames"],
-    category: "action",
-  },
-  {
-    name: "move_timeline_audio",
-    actualTool: "move_timeline_audio",
-    description: "Move a timeline audio clip to a new start position (frames at 30 fps)",
-    params: ["audio_id", "start_frame"],
-    category: "action",
-  },
-  {
-    name: "remove_timeline_audio",
-    actualTool: "remove_timeline_audio",
-    description: "Remove an audio clip from the timeline audio lane",
-    params: ["audio_id"],
-    category: "action",
-  },
-  {
-    name: "update_timeline_audio",
-    actualTool: "update_timeline_audio",
-    description: "Update a timeline audio clip's volume (0-100) or fade_in/fade_out (ms)",
-    params: ["audio_id", "volume", "fade_in", "fade_out"],
-    category: "action",
-  },
-  {
-    name: "archive_clip",
-    actualTool: "archive_clip",
-    description: "Archive a video or audio asset to the global clip archive with optional topic tags",
-    params: ["asset_id", "topics"],
-    category: "action",
-  },
-  {
-    name: "search_archive",
-    actualTool: "search_archive",
-    description: "Search the global clip archive by text query and/or topics",
-    params: ["query", "topics"],
-    category: "action",
-  },
-  {
-    name: "restore_archive_clips",
-    actualTool: "restore_archive_clips",
-    description: "Restore archived clips into the current book by archive ID",
-    params: ["archive_ids"],
-    category: "action",
-  },
+type ChatToolAlias = {
+  name: string;
+  actualTool: string;
+  description: string;
+};
 
-  {
-    name: "list_elevenlabs_voices",
-    actualTool: "list_elevenlabs_voices",
-    description: "List available ElevenLabs voices",
-    params: [],
-    category: "action",
-  },
-  {
-    name: "create_book",
-    actualTool: "create_book",
-    description: "Create a new book with a Main notebook",
-    params: ["slug"],
-    category: "action",
-  },
-  {
-    name: "list_notebooks",
-    actualTool: "list_notebooks",
-    description: "List first-class notebooks in the current book",
-    params: [],
-    category: "action",
-  },
-  {
-    name: "create_notebook",
-    actualTool: "create_notebook",
-    description: "Create a first-class notebook",
-    params: ["name"],
-    category: "action",
-  },
-  {
-    name: "run_notebook",
-    actualTool: "run_notebook",
-    description: "Run a persisted notebook in topological order",
-    params: ["notebook_id"],
-    category: "action",
-  },
-  {
-    name: "list_prompts",
-    actualTool: "list_prompts",
-    description: "List reusable prompt entities",
-    params: [],
-    category: "action",
-  },
-  {
-    name: "get_prompt",
-    actualTool: "get_prompt",
-    description: "Read a reusable prompt entity",
-    params: ["entity_id"],
-    category: "action",
-  },
-  {
-    name: "create_prompt",
-    actualTool: "create_prompt",
-    description: "Create a reusable prompt entity",
-    params: ["name", "description", "prompt"],
-    category: "action",
-  },
-  {
-    name: "list_characters",
-    actualTool: "list_characters",
-    description: "List reusable Videobook character entities",
-    params: [],
-    category: "action",
-  },
-  {
-    name: "get_character",
-    actualTool: "get_character",
-    description: "Read a reusable Videobook character entity",
-    params: ["entity_id"],
-    category: "action",
-  },
-  {
-    name: "create_character_entity",
-    actualTool: "create_character_entity",
-    description: "Create a reusable Videobook character entity",
-    params: ["name", "description", "prompt"],
-    category: "action",
-  },
-  {
-    name: "list_scenes",
-    actualTool: "list_scenes",
-    description: "List reusable scene entities",
-    params: [],
-    category: "action",
-  },
-  {
-    name: "get_scene",
-    actualTool: "get_scene",
-    description: "Read a reusable scene entity",
-    params: ["entity_id"],
-    category: "action",
-  },
-  {
-    name: "create_scene",
-    actualTool: "create_scene",
-    description: "Create a reusable scene entity",
-    params: ["name", "description", "prompt"],
-    category: "action",
-  },
-  {
-    name: "list_jobs",
-    actualTool: "list_jobs",
-    description: "List persistent jobs for the current book",
-    params: [],
-    category: "action",
-  },
-  {
-    name: "revision_history",
-    actualTool: "revision_history",
-    description: "List forward-only book revisions",
-    params: ["limit"],
-    category: "action",
-  },
-  {
-    name: "storage_status",
-    actualTool: "storage_status",
-    description: "Inspect DoltLite and content-store publication status",
-    params: [],
-    category: "action",
-  },
-  {
-    name: "clean_failed_assets",
-    actualTool: "clean_failed_assets",
-    description: "Delete failed generation husks and clear stale errors from assets that already contain media",
-    params: [],
-    category: "action",
-  },
-  {
-    name: "create_watermark_card",
-    actualTool: "create_watermark_card",
-    description:
-      "Generate a real scannable QR-code watermark card (img-* asset) for a URL; use for 'QR code', 'watermark', or 'end card' requests — not generate_image",
-    params: ["url", "handle", "save_default"],
-    category: "action",
-  },
-  {
-    name: "create_qart",
-    actualTool: "create_qart",
-    description:
-      "Create scan-safe color and monochrome QR mosaics from an img-* source — use for 'artistic QR', 'qart', or 'picture QR', not generate_image",
-    params: ["image_slug", "value", "size", "name"],
-    category: "action",
-  },
-  {
-    name: "create_qrbtf",
-    actualTool: "create_qrbtf",
-    description:
-      "Generate parametric QR codes in artistic styles (normal, line, dsj, bubble, func) — use for 'parametric QR', 'qrbtf', or 'styled QR', not generate_image",
-    params: ["value", "style", "size", "name"],
-    category: "action",
-  },
-  {
-    name: "create_qr_outro",
-    actualTool: "create_qr_outro",
-    description:
-      "Generate an animated QR outro video (vid-* asset) from 1-4 borderless QR images with a bundled impact sound or an optional sound override in a responsive layout (16:9, 9:16, 1:1)",
-    params: ["qr_image_slugs", "sound_effect_slug", "aspect_ratio"],
-    category: "action",
-  },
-  // --- Generation tools ---
+type ChatRoutingUserMessageContext = {
+  query: string;
+  assetContext: Array<Record<string, unknown>>;
+  imageFiles: unknown[];
+  videoFiles: unknown[];
+  scriptContents: Array<{ tag: string; content: string }>;
+};
+
+const CHAT_TOOL_ALIASES: ChatToolAlias[] = [
   {
     name: "generate_video",
     actualTool: "prepare_video_generation",
     description: "Generate a video from a text prompt or image references",
-    params: ["prompt"],
-    category: "generation",
   },
   {
     name: "generate_image",
     actualTool: "generate_kie_nano_banana_pro_text_to_image",
     description: "Generate an image from a text prompt, optionally with reference images",
-    params: ["prompt", "image_slugs", "aspect_ratio"],
-    category: "generation",
-  },
-  {
-    name: "concat_images",
-    actualTool: "concat_images",
-    description: "Concatenate one or two square image assets into a 16:9 or 9:16 reference sheet; landscape is side-by-side, portrait is stacked, and one slot may be empty",
-    params: ["image_slugs", "layout", "aspect_ratio"],
-    category: "generation",
-  },
-  {
-    name: "generate_elevenlabs_text_to_audio",
-    actualTool: "generate_elevenlabs_text_to_audio",
-    description: "Generate speech audio from text using an ElevenLabs voice ID",
-    params: ["voice_id", "text"],
-    category: "generation",
   },
 ];
 
@@ -383,16 +48,59 @@ const NESTED_TIMESTAMP_PARAMS: Record<string, Record<string, string[]>> = {
   },
 };
 
-function buildChatRoutingPrompt(slug: string, historyContext?: string): string {
-  const toolLines = ROUTABLE_TOOLS.map(
-    (t) => `- ${t.name}: ${t.description} (params: ${t.params.join(", ")})`,
+function categoryForTool(name: string): RoutableToolInfo["category"] {
+  return /^(?:generate|extend|upscale)_/u.test(name)
+    || name === "prepare_video_generation"
+    || name === "prepare_image_generation"
+    || name === "concat_images"
+    || name === "gen_images_all"
+    ? "generation"
+    : "action";
+}
+
+function paramsForTool(definition: ToolDef): string[] {
+  return Object.keys(definition.schema).filter((name) => name !== "book_id");
+}
+
+function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
+  const definitionByName = new Map(
+    definitions.map((definition) => [definition.name, definition]),
+  );
+  const aliases = CHAT_TOOL_ALIASES.flatMap((alias) => {
+    const target = definitionByName.get(alias.actualTool);
+    if (!target) return [];
+    return [{
+      ...alias,
+      params: paramsForTool(target),
+      category: categoryForTool(alias.actualTool),
+    }];
+  });
+  const tools = definitions
+    .filter((definition) => definition.name !== "chat")
+    .map((definition) => ({
+      name: definition.name,
+      actualTool: definition.name,
+      description: definition.description,
+      params: paramsForTool(definition),
+      category: categoryForTool(definition.name),
+    }));
+  return [...aliases, ...tools];
+}
+
+function buildChatRoutingPrompt(
+  slug: string,
+  tools: RoutableToolInfo[],
+  historyContext?: string,
+): string {
+  const toolLines = tools.map(
+    (tool) => `- ${tool.name}: ${tool.description} (params: ${tool.params.join(", ")})`,
   ).join("\n");
 
   const historyBlock = historyContext
     ? `\n${historyContext}\n\nUse conversation history to resolve pronouns and follow-up references (e.g. "reverse it" refers to the asset from the previous turn).\n`
     : "";
 
-  return `You are a routing assistant for the videocity media system.
+  return `You are a routing assistant for the Videobook media system.
 
 Available tools:
 ${toolLines}
@@ -424,9 +132,40 @@ Respond with JSON only (strict JSON: double-quoted keys/strings, no trailing com
 {"tool": "tool_name", "params": {"param1": "value1"}, "message": "Status message."}`;
 }
 
-function getRoutableTool(name: string): RoutableToolInfo | undefined {
-  return ROUTABLE_TOOLS.find((t) => t.name === name);
+function buildChatRoutingUserMessage(
+  context: ChatRoutingUserMessageContext,
+): string {
+  return `User query: ${context.query}
+
+Referenced assets:
+${JSON.stringify(context.assetContext, null, 2)}
+
+Available file paths:
+- Image files: ${JSON.stringify(context.imageFiles)}
+- Video files: ${JSON.stringify(context.videoFiles)}
+
+Script contents:
+${context.scriptContents.length > 0
+    ? JSON.stringify(context.scriptContents, null, 2)
+    : "None"}
+
+Determine which tool to use and what parameters to pass. Return the routing decision as a JSON object.`;
 }
 
-export { ROUTABLE_TOOLS, TIMESTAMP_PARAMS, NESTED_TIMESTAMP_PARAMS, buildChatRoutingPrompt, getRoutableTool };
+function getRoutableTool(
+  tools: RoutableToolInfo[],
+  name: string,
+): RoutableToolInfo | undefined {
+  return tools.find((tool) => tool.name === name);
+}
+
+export {
+  CHAT_TOOL_ALIASES,
+  TIMESTAMP_PARAMS,
+  NESTED_TIMESTAMP_PARAMS,
+  buildRoutableTools,
+  buildChatRoutingPrompt,
+  buildChatRoutingUserMessage,
+  getRoutableTool,
+};
 export type { RoutableToolInfo };

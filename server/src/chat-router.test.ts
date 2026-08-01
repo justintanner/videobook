@@ -1,233 +1,128 @@
-import { describe, it, expect } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { Engine } from "videobook-engine";
 import {
-  getRoutableTool,
-  buildChatRoutingPrompt,
-  ROUTABLE_TOOLS,
+  CHAT_TOOL_ALIASES,
   NESTED_TIMESTAMP_PARAMS,
   TIMESTAMP_PARAMS,
+  buildChatRoutingPrompt,
+  buildChatRoutingUserMessage,
+  buildRoutableTools,
+  getRoutableTool,
 } from "./chat-router.js";
+import { closeEngineForTest, createEngineForTest } from "./fs.js";
+import { getAllToolDefs } from "./tools/index.js";
+import type { ToolDef } from "./tools/tool-def.js";
 
-describe("getRoutableTool", () => {
-  it("returns correct tool info for trim_video", () => {
-    const tool = getRoutableTool("trim_video");
-    expect(tool).toBeDefined();
-    expect(tool!.name).toBe("trim_video");
-    expect(tool!.actualTool).toBe("trim_video");
-    expect(tool!.category).toBe("action");
-    expect(tool!.params).toContain("asset_id");
-    expect(tool!.params).toContain("trim_start");
-    expect(tool!.params).toContain("trim_end");
+describe("chat routing catalog", () => {
+  let root: string;
+  let engine: Engine;
+  let definitions: ToolDef[];
+
+  beforeAll(async () => {
+    root = await mkdtemp(join(tmpdir(), "videobook-chat-router-"));
+    engine = createEngineForTest(root);
+    definitions = getAllToolDefs(engine);
   });
 
-  it("returns correct tool info for generate_video", () => {
-    const tool = getRoutableTool("generate_video");
-    expect(tool).toBeDefined();
-    expect(tool!.actualTool).toBe("prepare_video_generation");
-    expect(tool!.category).toBe("generation");
+  afterAll(async () => {
+    closeEngineForTest(root, engine);
+    await rm(root, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("returns timewarp routing parameters", () => {
-    const tool = getRoutableTool("timewarp_video");
-    expect(tool).toBeDefined();
-    expect(tool!.actualTool).toBe("timewarp_video");
-    expect(tool!.category).toBe("action");
-    expect(tool!.params).toEqual([
-      "asset_id",
-      "start_seconds",
-      "end_seconds",
-      "stretch_factor",
-    ]);
+  it("exposes every registered tool except chat itself", () => {
+    const tools = buildRoutableTools(definitions);
+    const directNames = tools
+      .filter((tool) => tool.name === tool.actualTool)
+      .map((tool) => tool.name);
+    const expectedNames = definitions
+      .map((definition) => definition.name)
+      .filter((name) => name !== "chat");
+    expect(new Set(directNames)).toEqual(new Set(expectedNames));
+    expect(tools).toHaveLength(expectedNames.length + CHAT_TOOL_ALIASES.length);
+    expect(getRoutableTool(tools, "chat")).toBeUndefined();
   });
 
-  it("returns audio sync routing parameters", () => {
-    const tool = getRoutableTool("sync_video_to_audio");
-    expect(tool).toBeDefined();
-    expect(tool!.actualTool).toBe("sync_video_to_audio");
-    expect(tool!.category).toBe("action");
-    expect(tool!.params).toEqual(["asset_id", "anchors"]);
+  it("includes registered destructive and administrative tools", () => {
+    const tools = buildRoutableTools(definitions);
+    expect(getRoutableTool(tools, "delete_notebook")?.actualTool)
+      .toBe("delete_notebook");
+    expect(getRoutableTool(tools, "storage_sync")?.actualTool)
+      .toBe("storage_sync");
+    expect(getRoutableTool(tools, "set_env_secret")?.actualTool)
+      .toBe("set_env_secret");
   });
 
-  it("returns correct tool info for generate_image", () => {
-    const tool = getRoutableTool("generate_image");
-    expect(tool).toBeDefined();
-    expect(tool!.actualTool).toBe("generate_kie_nano_banana_pro_text_to_image");
-    expect(tool!.category).toBe("generation");
-    expect(tool!.params).toContain("prompt");
-    expect(tool!.params).toContain("image_slugs");
+  it("derives parameters from registered schemas without book_id", () => {
+    const tools = buildRoutableTools(definitions);
+    const download = getRoutableTool(tools, "download_video");
+    const downloadDefinition = definitions.find((definition) =>
+      definition.name === "download_video");
+    expect(download?.params).toContain("url");
+    expect(download?.params).toContain("start_time");
+    expect(download?.params).toContain("end_time");
+    expect(download?.params).not.toContain("book_id");
+    expect(downloadDefinition?.schema.start_time?.safeParse(30).success).toBe(true);
   });
 
-  it("returns correct tool info for concat_images", () => {
-    const tool = getRoutableTool("concat_images");
-    expect(tool).toBeDefined();
-    expect(tool!.actualTool).toBe("concat_images");
-    expect(tool!.category).toBe("generation");
-    expect(tool!.params).toContain("image_slugs");
-    expect(tool!.params).toContain("layout");
-  });
-
-  it("returns QR outro routing parameters", () => {
-    const tool = getRoutableTool("create_qr_outro");
-    expect(tool).toBeDefined();
-    expect(tool!.actualTool).toBe("create_qr_outro");
-    expect(tool!.category).toBe("action");
-    expect(tool!.params).toEqual([
-      "qr_image_slugs",
-      "sound_effect_slug",
-      "aspect_ratio",
-    ]);
-  });
-
-  it("returns undefined for nonexistent tool", () => {
-    expect(getRoutableTool("nonexistent")).toBeUndefined();
-  });
-
-  it("returns undefined for empty string", () => {
-    expect(getRoutableTool("")).toBeUndefined();
-  });
-
-  it("routes safe Videobook notebook and entity operations", () => {
-    expect(getRoutableTool("create_notebook")?.actualTool).toBe("create_notebook");
-    expect(getRoutableTool("run_notebook")?.params).toEqual(["notebook_id"]);
-    expect(getRoutableTool("create_prompt")?.actualTool).toBe("create_prompt");
-    expect(getRoutableTool("create_character_entity")?.actualTool)
-      .toBe("create_character_entity");
-    expect(getRoutableTool("create_scene")?.actualTool).toBe("create_scene");
-    expect(getRoutableTool("revision_history")?.actualTool)
-      .toBe("revision_history");
-  });
-
-  it("does not route destructive Videobook operations from free text", () => {
-    expect(getRoutableTool("delete_notebook")).toBeUndefined();
-    expect(getRoutableTool("delete_prompt")).toBeUndefined();
-    expect(getRoutableTool("storage_sync")).toBeUndefined();
-    expect(getRoutableTool("rewind_project")).toBeUndefined();
-  });
-});
-
-describe("buildChatRoutingPrompt", () => {
-  it("includes the project slug", () => {
-    const prompt = buildChatRoutingPrompt("my-project");
-    expect(prompt).toContain("Current project: my-project");
-  });
-
-  it("includes the tool list", () => {
-    const prompt = buildChatRoutingPrompt("test");
-    expect(prompt).toContain("trim_video");
-    expect(prompt).toContain("download_video");
-    expect(prompt).toContain("generate_video");
-    expect(prompt).toContain("generate_image");
-    expect(prompt).toContain("create_watermark_card");
-    expect(prompt).toContain("concat_images");
-    expect(prompt).toContain("create_qr_outro");
-    expect(prompt).toContain("timewarp_video");
-    expect(prompt).toContain("sync_video_to_audio");
-    expect(prompt).toContain("Available tools:");
-  });
-
-  it("guides QR requests to create_watermark_card not generate_image", () => {
-    const prompt = buildChatRoutingPrompt("test");
-    expect(prompt).toContain("create_watermark_card");
-    expect(prompt).toMatch(/real scannable QR/i);
-    expect(prompt).toContain("source_url");
-  });
-
-  it("includes history context when provided", () => {
-    const historyContext = "Recent conversation:\nUser: trim the video";
-    const prompt = buildChatRoutingPrompt("test", historyContext);
-    expect(prompt).toContain(historyContext);
-    expect(prompt).toContain("resolve pronouns");
-  });
-
-  it("omits history block when no history context", () => {
-    const prompt = buildChatRoutingPrompt("test");
-    expect(prompt).not.toContain("resolve pronouns");
-    expect(prompt).not.toContain("Recent conversation");
-  });
-
-  it("includes JSON response format instruction", () => {
-    const prompt = buildChatRoutingPrompt("test");
-    expect(prompt).toContain("Respond with JSON only");
-  });
-});
-
-describe("TIMESTAMP_PARAMS", () => {
-  it("has entries for trim_video", () => {
-    expect(TIMESTAMP_PARAMS.trim_video).toBeDefined();
-    expect(TIMESTAMP_PARAMS.trim_video).toContain("trim_start");
-    expect(TIMESTAMP_PARAMS.trim_video).toContain("trim_end");
-    expect(TIMESTAMP_PARAMS.trim_video).toContain("cut_start");
-    expect(TIMESTAMP_PARAMS.trim_video).toContain("cut_end");
-  });
-
-  it("has entries for download_video", () => {
-    expect(TIMESTAMP_PARAMS.download_video).toBeDefined();
-    expect(TIMESTAMP_PARAMS.download_video).toContain("start_time");
-    expect(TIMESTAMP_PARAMS.download_video).toContain("end_time");
-  });
-
-  it("has entries for timewarp_video", () => {
-    expect(TIMESTAMP_PARAMS.timewarp_video).toEqual(["start_seconds", "end_seconds"]);
-  });
-
-  it("has nested timestamp entries for sync_video_to_audio", () => {
-    expect(NESTED_TIMESTAMP_PARAMS.sync_video_to_audio).toEqual({
-      anchors: ["video_seconds", "audio_seconds"],
+  it("keeps generic generation aliases", () => {
+    const tools = buildRoutableTools(definitions);
+    expect(getRoutableTool(tools, "generate_video")).toMatchObject({
+      actualTool: "prepare_video_generation",
+      category: "generation",
+    });
+    expect(getRoutableTool(tools, "generate_image")).toMatchObject({
+      actualTool: "generate_kie_nano_banana_pro_text_to_image",
+      category: "generation",
     });
   });
 
-  it("does not have entries for tools without timestamps", () => {
-    expect(TIMESTAMP_PARAMS.reverse_video).toBeUndefined();
-    expect(TIMESTAMP_PARAMS.generate_image).toBeUndefined();
+  it("builds a prompt from the live catalog and conversation history", () => {
+    const tools = buildRoutableTools(definitions);
+    const prompt = buildChatRoutingPrompt(
+      "my-book",
+      tools,
+      "Recent conversation:\nUser: download the clip",
+    );
+    expect(prompt).toContain("Current book: my-book");
+    expect(prompt).toContain("Available tools:");
+    expect(prompt).toContain("- download_video:");
+    expect(prompt).toContain("- delete_notebook:");
+    expect(prompt).toContain("Recent conversation:");
+    expect(prompt).not.toContain("\n- chat:");
+  });
+
+  it("requests JSON in the Responses API input message", () => {
+    const input = buildChatRoutingUserMessage({
+      query: "download the first 30 seconds",
+      assetContext: [],
+      imageFiles: [],
+      videoFiles: [],
+      scriptContents: [],
+    });
+    expect(input).toMatch(/\bJSON\b/u);
+    expect(input).toContain("download the first 30 seconds");
   });
 });
 
-describe("ROUTABLE_TOOLS", () => {
-  it("has the expected number of entries", () => {
-    expect(ROUTABLE_TOOLS.length).toBe(50);
-  });
-
-  it("includes inject_first_frame for image-to-video routing", () => {
-    const tool = getRoutableTool("inject_first_frame");
-    expect(tool).toBeDefined();
-    expect(tool!.actualTool).toBe("inject_first_frame");
-    expect(tool!.params).toEqual(["target_asset_id", "image_asset_id", "orientation"]);
-  });
-
-  it("includes create_watermark_card for QR/watermark routing", () => {
-    const tool = getRoutableTool("create_watermark_card");
-    expect(tool).toBeDefined();
-    expect(tool!.actualTool).toBe("create_watermark_card");
-    expect(tool!.category).toBe("action");
-    expect(tool!.params).toContain("url");
-    expect(tool!.params).toContain("handle");
-  });
-
-  it("contains both action and generation categories", () => {
-    const categories = new Set(ROUTABLE_TOOLS.map((t) => t.category));
-    expect(categories.has("action")).toBe(true);
-    expect(categories.has("generation")).toBe(true);
-  });
-
-  it("has unique tool names", () => {
-    const names = ROUTABLE_TOOLS.map((t) => t.name);
-    expect(new Set(names).size).toBe(names.length);
-  });
-
-  it("every tool has non-empty params array (except tools that take no routing params)", () => {
-    const noParamTools = new Set([
-      "render_timeline",
-      "list_elevenlabs_voices",
-      "clean_failed_assets",
-      "list_notebooks",
-      "list_prompts",
-      "list_characters",
-      "list_scenes",
-      "list_jobs",
-      "storage_status",
+describe("chat timestamp parameters", () => {
+  it("defines top-level timestamp fields", () => {
+    expect(TIMESTAMP_PARAMS.trim_video).toEqual([
+      "trim_start",
+      "trim_end",
+      "cut_start",
+      "cut_end",
     ]);
-    for (const tool of ROUTABLE_TOOLS) {
-      if (noParamTools.has(tool.name)) continue;
-      expect(tool.params.length).toBeGreaterThan(0);
-    }
+    expect(TIMESTAMP_PARAMS.download_video).toEqual(["start_time", "end_time"]);
+    expect(TIMESTAMP_PARAMS.split_video).toEqual(["chunk_a_end", "chunk_b_start"]);
+    expect(TIMESTAMP_PARAMS.timewarp_video).toEqual(["start_seconds", "end_seconds"]);
+  });
+
+  it("defines nested timestamp fields", () => {
+    expect(NESTED_TIMESTAMP_PARAMS.sync_video_to_audio).toEqual({
+      anchors: ["video_seconds", "audio_seconds"],
+    });
   });
 });
