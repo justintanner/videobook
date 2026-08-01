@@ -188,7 +188,10 @@ import type {
   BookProjectMutationResult,
   BookProjectSummary,
 } from '@/videobook/book-project-selector'
-import { notebookMentionAssets } from '@/videobook/mention-suggestions'
+import {
+  notebookMentionAssets,
+  resolveNotebookMentionAliases,
+} from '@/videobook/mention-suggestions'
 
 type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
 
@@ -5039,6 +5042,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const executeCommand = async (input: string): Promise<ComposerOutcome> => {
     try {
       if (!bookId) return { ok: false, message: 'Load or create a book first.' }
+      const resolvedAssetInput = resolveNotebookMentionAliases(
+        input,
+        commandMentionAssets,
+      )
       if (!input.startsWith('/')) {
         const frameCommand = parseNotebookFrameCommand(input)
         if (frameCommand) {
@@ -5075,7 +5082,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const value = await call('plan_chat_command', {
           book_id: bookId,
           actor: 'videobook-user',
-          prompt: input,
+          prompt: resolvedAssetInput,
           ...(fullscreenCell
             && notebook
             && fullscreenCell.outputArtifactId
@@ -5094,7 +5101,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           if (result.reason === 'unsupported') {
             const routed = await call('chat', {
               book_id: bookId,
-              prompt: input,
+              prompt: resolvedAssetInput,
             })
             if (isDownloadVideoResult(routed)) {
               return await completeVideoDownload(routed, urlFromText(input))
@@ -5114,6 +5121,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       const [commandToken, ...restParts] = input.trim().split(/\s+/)
       const rest = restParts.join(' ')
+      const resolvedRest = resolveNotebookMentionAliases(
+        rest,
+        commandMentionAssets,
+      )
       if (commandToken === '/rough-cut') {
         return await prepareRoughCut('slash')
       }
@@ -5378,7 +5389,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           value.startsWith('@') ? value.slice(1) : value)
         if (commandToken === '/insert' || commandToken === '/overwrite') {
           const [source, startValue, durationValue] = values
-          const asset = assets.find((candidate) =>
+          const mentionAsset = commandMentionAssets.find((candidate) =>
+            candidate.cellSlug.toLowerCase() === source?.toLowerCase())
+          const asset = mentionAsset ?? assets.find((candidate) =>
             candidate.id === source || candidate.artifactId === source)
           const startFrame = Number(startValue)
           const durationFrames = durationValue === undefined
@@ -5445,7 +5458,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           gain_db: gainDb,
         }, 'slash')
       }
-      const command = selectCommandForInput(commands, commandToken, rest)
+      const command = selectCommandForInput(commands, commandToken, resolvedRest)
       if (!command) return { ok: false, message: `Unknown command: ${commandToken}` }
       if (command.uiAction === 'switch_book') {
         const slug = command.command.slice(1)
@@ -5475,7 +5488,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (command.mcpTool.tool === 'download_video' && !notebook) {
         return { ok: false, message: 'Open a notebook before downloading media.' }
       }
-      const parsed = parseCommandArgs(rest, command.params)
+      const parsed = parseCommandArgs(resolvedRest, command.params)
       const adapted = adaptCommandArgs(command.mcpTool.adapter, command.mcpTool.tool, parsed)
       const args: CommandToolArgs = {
         ...adapted,

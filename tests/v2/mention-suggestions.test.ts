@@ -3,14 +3,16 @@ import {
   assetMentionMetadata,
   assetMentionSuggestions,
   notebookMentionAssets,
+  resolveNotebookMentionAliases,
   type AssetMentionCandidate,
+  type AssetMentionRecord,
 } from '../../src/videobook/mention-suggestions'
 
 function mentionAsset(
   id: string,
   artifactId: string,
-  overrides: Partial<AssetMentionCandidate> = {},
-): AssetMentionCandidate {
+  overrides: Partial<AssetMentionRecord> = {},
+): AssetMentionRecord {
   return {
     id,
     artifactId,
@@ -25,6 +27,18 @@ function mentionAsset(
   }
 }
 
+function mentionCandidate(
+  cellSlug: string,
+  assetSlug: string,
+  artifactId: string,
+  overrides: Partial<AssetMentionCandidate> = {},
+): AssetMentionCandidate {
+  return notebookMentionAssets(
+    [{ slug: cellSlug, outputArtifactId: artifactId }],
+    [mentionAsset(assetSlug, artifactId, overrides)],
+  )[0]!
+}
+
 describe('asset mention suggestions', () => {
   it('uses only deduplicated current outputs from the open notebook', () => {
     const currentVideo = mentionAsset('vid-current', 'artifact-current')
@@ -35,20 +49,34 @@ describe('asset mention suggestions', () => {
     const unrelated = mentionAsset('vid-unrelated', 'artifact-unrelated')
 
     expect(notebookMentionAssets([
-      { outputArtifactId: currentVideo.artifactId },
-      {},
-      { outputArtifactId: currentVideo.artifactId },
-      { outputArtifactId: 'artifact-missing' },
-      { outputArtifactId: currentImage.artifactId },
+      { slug: 'vid-01', outputArtifactId: currentVideo.artifactId },
+      { slug: 'empty' },
+      { slug: 'vid-copy', outputArtifactId: currentVideo.artifactId },
+      { slug: 'missing', outputArtifactId: 'artifact-missing' },
+      { slug: 'img-01', outputArtifactId: currentImage.artifactId },
     ], [unrelated, olderVersion, currentImage, currentVideo])).toEqual([
-      currentVideo,
-      currentImage,
+      expect.objectContaining({
+        cellSlug: 'vid-01',
+        assetSlug: currentVideo.id,
+        artifactId: currentVideo.artifactId,
+      }),
+      expect.objectContaining({
+        cellSlug: 'img-01',
+        assetSlug: currentImage.id,
+        artifactId: currentImage.artifactId,
+      }),
     ])
   })
 
-  it('filters case-insensitively and retains the selected asset metadata', () => {
-    const video = mentionAsset('vid-Dance-Move', 'artifact-video')
-    const image = mentionAsset('img-cover', 'artifact-image', { type: 'image' })
+  it('uses the notebook cell slug while retaining backing asset metadata', () => {
+    const video = mentionCandidate(
+      'vid-Dance-Move',
+      'vid-yt-source-2',
+      'artifact-video',
+    )
+    const image = mentionCandidate('img-cover', 'img-source', 'artifact-image', {
+      type: 'image',
+    })
 
     expect(assetMentionSuggestions([video, image], 'extract @dance')).toEqual([{
       value: '@vid-Dance-Move',
@@ -61,25 +89,60 @@ describe('asset mention suggestions', () => {
 
   it('caps the visible candidate list at twelve assets', () => {
     const assets = Array.from({ length: 14 }, (_, index) =>
-      mentionAsset(`vid-${index + 1}`, `artifact-${index + 1}`))
+      mentionCandidate(
+        `vid-${index + 1}`,
+        `vid-source-${index + 1}`,
+        `artifact-${index + 1}`,
+      ))
 
     expect(assetMentionSuggestions(assets, '@')).toHaveLength(12)
     expect(assetMentionSuggestions(assets, '@').at(-1)?.label).toBe('@vid-12')
   })
 
   it('formats available media metadata and surfaces non-ready status', () => {
-    expect(assetMentionMetadata(mentionAsset('vid-portrait', 'artifact-video', {
+    expect(assetMentionMetadata(mentionCandidate(
+      'vid-portrait',
+      'vid-source',
+      'artifact-video',
+      {
       width: 1080,
       height: 1920,
       duration: 29,
       status: 'processing_media',
-    }))).toEqual(['VIDEO', '1080×1920', '0:29', 'PROCESSING MEDIA'])
+      },
+    ))).toEqual(['VIDEO', '1080×1920', '0:29', 'PROCESSING MEDIA'])
 
-    expect(assetMentionMetadata(mentionAsset('aud-voice', 'artifact-audio', {
-      type: 'audio',
-      width: null,
-      height: null,
-      duration: null,
-    }))).toEqual(['AUDIO'])
+    expect(assetMentionMetadata(mentionCandidate(
+      'aud-voice',
+      'aud-source',
+      'artifact-audio',
+      {
+        type: 'audio',
+        width: null,
+        height: null,
+        duration: null,
+      },
+    ))).toEqual(['AUDIO'])
+  })
+
+  it('translates exact cell mentions at generic backend boundaries', () => {
+    const video = mentionCandidate(
+      'vid-01',
+      'vid-yt-8gwzvebyrji-2',
+      'artifact-video',
+    )
+    const image = mentionCandidate(
+      'img-01',
+      'img-generated-source',
+      'artifact-image',
+      { type: 'image' },
+    )
+
+    expect(resolveNotebookMentionAliases(
+      'combine @VID-01 with @img-01 and leave @vid-010 alone',
+      [video, image],
+    )).toBe(
+      'combine @vid-yt-8gwzvebyrji-2 with @img-generated-source and leave @vid-010 alone',
+    )
   })
 })

@@ -1,6 +1,6 @@
 import { formatMediaTime } from './notebook-cell-presentation'
 
-export interface AssetMentionCandidate {
+export interface AssetMentionRecord {
   id: string
   artifactId: string
   type: string
@@ -12,7 +12,14 @@ export interface AssetMentionCandidate {
   status: string
 }
 
+export interface AssetMentionCandidate
+  extends Omit<AssetMentionRecord, 'id'> {
+  cellSlug: string
+  assetSlug: string
+}
+
 interface NotebookMentionCell {
+  slug: string
   outputArtifactId?: string
 }
 
@@ -29,7 +36,7 @@ function positiveFinite(value: number | null): value is number {
 
 export function notebookMentionAssets(
   cells: readonly NotebookMentionCell[],
-  assets: readonly AssetMentionCandidate[],
+  assets: readonly AssetMentionRecord[],
 ): AssetMentionCandidate[] {
   const assetsByArtifactId = new Map(
     assets.map((asset) => [asset.artifactId, asset]),
@@ -41,7 +48,25 @@ export function notebookMentionAssets(
     const asset = assetsByArtifactId.get(artifactId)
     if (!asset) return []
     seen.add(artifactId)
-    return [asset]
+    const { id: assetSlug, ...assetFields } = asset
+    return [{
+      ...assetFields,
+      cellSlug: cell.slug,
+      assetSlug,
+    }]
+  })
+}
+
+export function resolveNotebookMentionAliases(
+  input: string,
+  assets: readonly AssetMentionCandidate[],
+): string {
+  const assetSlugsByCellSlug = new Map(
+    assets.map((asset) => [asset.cellSlug.toLowerCase(), asset.assetSlug]),
+  )
+  return input.replace(/@([\w-]+)/gu, (mention, value: string) => {
+    const assetSlug = assetSlugsByCellSlug.get(value.toLowerCase())
+    return assetSlug ? `@${assetSlug}` : mention
   })
 }
 
@@ -70,11 +95,11 @@ export function assetMentionSuggestions(
   if (!match) return []
   const filter = match[1].toLowerCase()
   return assets
-    .filter((asset) => asset.id.toLowerCase().includes(filter))
+    .filter((asset) => asset.cellSlug.toLowerCase().includes(filter))
     .slice(0, 12)
     .map((asset) => ({
-      value: `@${asset.id}`,
-      label: `@${asset.id}`,
+      value: `@${asset.cellSlug}`,
+      label: `@${asset.cellSlug}`,
       asset,
       type: 'asset',
     }))
