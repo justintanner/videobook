@@ -67,6 +67,7 @@ export interface RunNotebookPayload {
 }
 
 export type NotebookCellExecutionStatus =
+  | "queued"
   | "running"
   | "awaiting-output"
   | "completed"
@@ -370,6 +371,40 @@ function withExecution(
         : cell
     )),
   };
+}
+
+export async function markNotebookCellQueued(
+  engine: Engine,
+  notebookId: string,
+  cellId: string,
+  runId: string,
+): Promise<void> {
+  const notebook = engine.notebooks.read(notebookId);
+  if (!notebook.ok) throw new Error(notebook.error.message);
+  const cell = notebook.value.cells.find((candidate) => candidate.id === cellId);
+  if (!cell) throw new Error(`Notebook cell not found: ${cellId}`);
+  const updatedAt = new Date().toISOString();
+  const state: CellExecution = {
+    fingerprint: notebookCellFingerprint(notebook.value, cell),
+    status: "queued",
+    ...(cell.outputArtifactId ? { outputArtifactId: cell.outputArtifactId } : {}),
+    runId,
+    startedAt: updatedAt,
+    updatedAt,
+    tool: cell.tool || cell.model || cell.operation,
+  };
+  const result = await mutateNotebook(
+    engine,
+    notebookId,
+    "queue_notebook_cell",
+    (current) => {
+      const existing = executionState(current)[cellId];
+      if (existing?.runId === runId && existing.status !== "queued") return current;
+      return withExecution(current, cellId, state);
+    },
+    { cellId, runId },
+  );
+  if (!result.ok) throw new Error(result.error.message);
 }
 
 function upstreamValues(

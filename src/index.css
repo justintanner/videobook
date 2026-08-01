@@ -1399,10 +1399,53 @@ textarea:focus-visible {
   --cell-state-glow: rgba(79, 159, 114, 0.28);
 }
 
+.cell-node-running,
+.cell-node-queued {
+  border-color: var(--cell-state-color);
+  box-shadow:
+    0 0 0 1px var(--cell-state-soft),
+    0 0 24px var(--cell-state-glow),
+    0 18px 40px rgba(0, 0, 0, 0.42);
+  animation: cell-work-pulse 1.8s ease-in-out infinite;
+}
+
+.cell-node-running.cell-kind-image,
+.cell-node-running.cell-kind-generate_image,
+.cell-node-queued.cell-kind-image,
+.cell-node-queued.cell-kind-generate_image {
+  --cell-state-color: #22d3ee;
+  --cell-state-soft: rgba(34, 211, 238, 0.2);
+  --cell-state-glow: rgba(34, 211, 238, 0.38);
+}
+
+.cell-node-running.cell-kind-audio,
+.cell-node-running.cell-kind-video,
+.cell-node-running.cell-kind-generate_audio,
+.cell-node-running.cell-kind-generate_video,
+.cell-node-queued.cell-kind-audio,
+.cell-node-queued.cell-kind-video,
+.cell-node-queued.cell-kind-generate_audio,
+.cell-node-queued.cell-kind-generate_video {
+  --cell-state-color: #a78bfa;
+  --cell-state-soft: rgba(167, 139, 250, 0.2);
+  --cell-state-glow: rgba(167, 139, 250, 0.4);
+}
+
 .cell-node-error {
   --cell-state-color: #ef4444;
   --cell-state-soft: rgba(239, 68, 68, 0.22);
   --cell-state-glow: rgba(239, 68, 68, 0.4);
+}
+
+@keyframes cell-work-pulse {
+  0%,
+  100% {
+    filter: brightness(0.94);
+  }
+
+  50% {
+    filter: brightness(1.12);
+  }
 }
 
 .cell-state-overlay {
@@ -4796,7 +4839,6 @@ textarea:focus-visible {
 }
 
 .command-plan-drawer {
-  order: 2;
   width: 100%;
   max-height: min(48vh, 440px);
   overflow: auto;
@@ -4807,6 +4849,372 @@ textarea:focus-visible {
   box-shadow:
     inset 0 1px rgba(114, 231, 170, 0.08),
     0 -18px 54px rgba(0, 0, 0, 0.5);
+}
+
+.command-plan-details {
+  margin-top: 9px;
+  border-top: 1px solid var(--line);
+}
+
+.command-plan-details > summary {
+  padding: 9px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.command-plan-content-single {
+  grid-template-columns: minmax(220px, 0.72fr) minmax(260px, 1.28fr);
+}
+
+.command-plan-details-open {
+  padding-top: 9px;
+}
+
+.generation-chat-review {
+  max-height: min(68vh, 620px);
+  padding: 16px 18px 14px;
+}
+
+.generation-review-editor {
+  display: grid;
+  grid-template-columns:
+    minmax(190px, 0.82fr)
+    minmax(250px, 1.18fr)
+    minmax(280px, 1.14fr)
+    minmax(180px, 0.7fr);
+  grid-template-areas:
+    'inputs prompt model estimate'
+    'inputs prompt settings estimate';
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+  margin-top: 14px;
+}
+
+.generation-review-input-section {
+  grid-area: inputs;
+}
+
+.generation-review-prompt-section {
+  grid-area: prompt;
+}
+
+.generation-review-model-section {
+  grid-area: model;
+}
+
+.generation-review-settings-section {
+  grid-area: settings;
+}
+
+.generation-review-estimate-section {
+  grid-area: estimate;
+}
+
+.generation-review-section {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  background: rgba(1, 9, 5, 0.68);
+}
+
+.generation-review-label {
+  color: #6fa184;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.generation-review-sources {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.generation-review-source {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid rgba(114, 231, 170, 0.34);
+  color: var(--ink);
+  background: rgba(3, 16, 9, 0.92);
+  text-align: left;
+  cursor: pointer;
+}
+
+.generation-review-source:hover:not(:disabled),
+.generation-review-source:focus-visible:not(:disabled) {
+  border-color: var(--green);
+  box-shadow: 0 0 0 1px rgba(114, 231, 170, 0.16);
+  outline: 0;
+}
+
+.generation-review-source-badge {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  z-index: 1;
+  padding: 3px 6px;
+  color: #041008;
+  background: rgba(114, 231, 170, 0.92);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.generation-review-source-preview {
+  display: grid;
+  width: 100%;
+  min-height: 112px;
+  place-items: center;
+  overflow: hidden;
+  color: #6f9b82;
+  background:
+    linear-gradient(135deg, rgba(50, 147, 91, 0.14), transparent 56%),
+    #020a06;
+}
+
+.generation-review-source-preview > img,
+.generation-review-source-preview > .media-library-asset-preview,
+.generation-review-source-preview > .media-library-asset-preview > video,
+.generation-review-source-preview > .media-library-asset-placeholder {
+  width: 100%;
+  height: 112px;
+  object-fit: contain;
+}
+
+.generation-review-source-preview > .media-library-asset-preview,
+.generation-review-source-preview > .media-library-asset-placeholder {
+  display: grid;
+  place-items: center;
+}
+
+.generation-review-source-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 8px 8px;
+}
+
+.generation-review-source-copy strong,
+.generation-review-source-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generation-review-source-copy strong {
+  color: #bce5cf;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.generation-review-source-copy small,
+.generation-review-text-input small,
+.generation-review-model-section > small,
+.generation-review-prompt-section > small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.generation-review-text-input {
+  display: grid;
+  min-height: 145px;
+  place-content: center;
+  gap: 5px;
+  border: 1px dashed rgba(114, 231, 170, 0.3);
+  color: #9fcab2;
+  text-align: center;
+}
+
+.generation-review-text-input > span {
+  color: var(--green);
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.generation-review-prompt-section > label,
+.generation-review-model-section > label,
+.generation-review-settings label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.generation-review-prompt-section textarea,
+.generation-review-model-section select,
+.generation-review-settings input,
+.generation-review-settings select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  color: #bee5d0;
+  background: rgba(1, 9, 5, 0.9);
+}
+
+.generation-review-prompt-section textarea {
+  min-height: 112px;
+  padding: 9px 10px;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.55;
+}
+
+.generation-review-model-section select,
+.generation-review-settings input,
+.generation-review-settings select {
+  min-height: 34px;
+  padding: 6px 8px;
+  font-size: 10px;
+}
+
+.generation-review-prompt-section textarea:focus,
+.generation-review-model-section select:focus,
+.generation-review-settings input:focus,
+.generation-review-settings select:focus {
+  border-color: var(--green);
+  outline: 0;
+  box-shadow: 0 0 0 1px rgba(114, 231, 170, 0.13);
+}
+
+.generation-review-prompt-section kbd {
+  color: #a6d8bd;
+  font: inherit;
+}
+
+.generation-review-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.generation-review-settings label > span {
+  overflow: hidden;
+  color: #789e87;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generation-review-toggle {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+}
+
+.generation-review-toggle input {
+  width: auto;
+  min-height: 0;
+}
+
+.generation-review-defaults {
+  display: grid;
+  min-height: 72px;
+  place-items: center;
+  border: 1px dashed var(--line);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.generation-review-json {
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: rgba(0, 7, 4, 0.72);
+}
+
+.generation-review-json > summary {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 9px;
+  color: #82ad94;
+  cursor: pointer;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.generation-review-json > summary > span {
+  color: #d7ad7d;
+  font-size: 8px;
+  letter-spacing: 0.04em;
+}
+
+.generation-review-json > div {
+  max-height: 180px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+}
+
+.generation-review-json pre {
+  margin: 0;
+  padding: 10px;
+  color: #a8d5bd;
+  font: 9px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.generation-review-json-status {
+  display: block;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.generation-review-json-error {
+  color: #ef9b9b;
+}
+
+.generation-review-estimate-section {
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.generation-review-estimate-section > strong {
+  color: #bdf2d4;
+  font-size: clamp(34px, 3.5vw, 58px);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.generation-review-estimate-section > span:not(.generation-review-label) {
+  color: #6c987e;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+}
+
+.generation-review-estimate-section > small {
+  max-width: 180px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.generation-review-estimate-section > button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  color: #91bea4;
+  background: rgba(33, 88, 56, 0.14);
+  font-size: 9px;
 }
 
 .command-plan-drawer > header {
@@ -5468,6 +5876,16 @@ textarea:focus-visible {
   }
 }
 
+@media (max-width: 1500px) {
+  .generation-review-editor {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      'inputs prompt'
+      'model estimate'
+      'settings estimate';
+  }
+}
+
 @media (max-width: 1100px) {
   .app-shell {
     grid-template-columns: minmax(0, 1fr);
@@ -5611,6 +6029,16 @@ textarea:focus-visible {
   .command-plan-drawer > header,
   .command-plan-content {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .generation-review-editor {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'inputs'
+      'prompt'
+      'model'
+      'settings'
+      'estimate';
   }
 
   .command-plan-drawer > header {

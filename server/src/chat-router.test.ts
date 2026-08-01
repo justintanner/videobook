@@ -10,6 +10,7 @@ import {
   buildChatRoutingPrompt,
   buildChatRoutingUserMessage,
   buildRoutableTools,
+  effectForTool,
   getRoutableTool,
 } from "./chat-router.js";
 import { closeEngineForTest, createEngineForTest } from "./fs.js";
@@ -76,7 +77,16 @@ describe("chat routing catalog", () => {
     expect(getRoutableTool(tools, "generate_image")).toMatchObject({
       actualTool: "generate_kie_nano_banana_pro_text_to_image",
       category: "generation",
+      effect: "generation",
     });
+  });
+
+  it("executes reads immediately and gates every other routed effect", () => {
+    expect(effectForTool("list_assets", "action")).toBe("read");
+    expect(effectForTool("plan_sequence_edit", "action")).toBe("read");
+    expect(effectForTool("download_video", "action")).toBe("mutation");
+    expect(effectForTool("delete_notebook", "action")).toBe("mutation");
+    expect(effectForTool("generate_image", "generation")).toBe("generation");
   });
 
   it("builds a prompt from the live catalog and conversation history", () => {

@@ -25,10 +25,18 @@ import {
   commandSuggestionCandidates,
   hasExactCommandSuggestion,
 } from '@/videobook/command-suggestions'
+import { composerInputAfterOutcome } from '@/videobook/command-composer-outcome'
 
 export interface ComposerOutcome {
   ok: boolean
   message: string
+  nextInput?: string
+  selectInput?: boolean
+}
+
+export interface ComposerNotice {
+  message: string
+  tone: 'error' | 'info'
 }
 
 export interface PromptSession {
@@ -51,7 +59,10 @@ interface CommandComposerProps {
   disabled: boolean
   connectionLabel: string
   promptSession: PromptSession | null
+  pendingInput?: string
+  notice?: ComposerNotice | null
   onEnsureCatalog: () => Promise<void>
+  onDismissNotice?: () => void
   onDismissPanel?: () => void
   onExecute: (input: string) => Promise<ComposerOutcome>
   onSuccessfulExecute: () => void
@@ -107,7 +118,10 @@ export function CommandComposer({
   disabled,
   connectionLabel,
   promptSession,
+  pendingInput,
+  notice,
   onEnsureCatalog,
+  onDismissNotice,
   onDismissPanel,
   onExecute,
   onSuccessfulExecute,
@@ -125,12 +139,16 @@ export function CommandComposer({
   const loadedHistoryProjectRef = useRef('')
   const successTimerRef = useRef(0)
 
-  const focusInput = () => {
-    requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }))
+  const focusInput = (select = false) => {
+    requestAnimationFrame(() => {
+      inputRef.current?.focus({ preventScroll: true })
+      if (select) inputRef.current?.select()
+    })
   }
 
   const suggestions = useMemo<Suggestion[]>(() => {
     if (dismissed) return []
+    if (pendingInput && /^\/(?:apply|cancel)(?:\s|$)/iu.test(input)) return []
     const commandMatch = input.match(/^\/([\w-]*)$/)
     if (commandMatch) {
       const filter = commandMatch[1].toLowerCase()
@@ -143,7 +161,7 @@ export function CommandComposer({
         }))
     }
     return assetMentionSuggestions(assets, input)
-  }, [assets, commands, dismissed, input])
+  }, [assets, commands, dismissed, input, pendingInput])
 
   const showOutcome = (next: ComposerOutcome) => {
     window.clearTimeout(successTimerRef.current)
@@ -193,13 +211,30 @@ export function CommandComposer({
     setInput('')
     setDismissed(false)
     setSending(true)
+    let selectInput = false
     try {
       const nextOutcome = await onExecute(message)
       showOutcome(nextOutcome)
+      const inputDecision = composerInputAfterOutcome(nextOutcome, pendingInput)
+      if (inputDecision) {
+        setInput(inputDecision.value)
+        setDismissed(true)
+        selectInput = inputDecision.select
+      }
       if (nextOutcome.ok) onSuccessfulExecute()
+    } catch (error) {
+      showOutcome({
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+      })
+      if (pendingInput !== undefined) {
+        setInput(pendingInput)
+        setDismissed(true)
+        selectInput = true
+      }
     } finally {
       setSending(false)
-      focusInput()
+      focusInput(selectInput)
     }
   }
 
@@ -329,7 +364,23 @@ export function CommandComposer({
         </div>
       )}
 
-      {outcome && (
+      {notice && (
+        <div
+          className={`command-result ${notice.tone === 'error' ? 'command-result-error' : 'command-result-ok'}`}
+          role={notice.tone === 'error' ? 'alert' : 'status'}
+          aria-live="polite"
+        >
+          {notice.tone === 'error' ? <X size={13} /> : <Check size={13} />}
+          <span>{notice.message}</span>
+          {onDismissNotice && (
+            <button type="button" onClick={onDismissNotice} aria-label="Dismiss notice">
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {outcome && outcome.message !== notice?.message && (
         <div
           className={`command-result ${outcome.ok ? 'command-result-ok' : 'command-result-error'}`}
           role="status"
@@ -344,6 +395,8 @@ export function CommandComposer({
           )}
         </div>
       )}
+
+      {children}
 
       <div className="command-line-shell">
         {suggestions.length > 0 && (
@@ -467,7 +520,6 @@ export function CommandComposer({
           {sending ? <Loader2 size={16} className="spin" /> : <Send size={16} />}
         </button>
       </div>
-      {children}
     </section>
   )
 }

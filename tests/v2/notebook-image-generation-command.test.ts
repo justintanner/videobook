@@ -9,10 +9,20 @@ import { videobookDomainDefs } from '../../server/src/tools/videobook-domain.js'
 import type { ToolDef } from '../../server/src/tools/tool-def.js'
 import { asNotebookGenerationActions } from '../../src/videobook/notebook-generation-actions'
 import {
-  materializeNotebookImageGenerationCommand,
   parseNotebookImageGenerationCommand,
   resolveNotebookImageGenerationSources,
 } from '../../src/videobook/notebook-image-generation-command'
+import {
+  materializeNotebookChatGeneration,
+  notebookChatGenerationConnectedInputs,
+  notebookChatGenerationSettings,
+  parseNotebookChatGenerationCommand,
+  planNotebookChatGeneration,
+  reviseNotebookChatGenerationAction,
+  reviseNotebookChatGenerationMode,
+  reviseNotebookChatGenerationPrompt,
+  reviseNotebookChatGenerationSetting,
+} from '../../src/videobook/notebook-chat-generation'
 
 function resultJson(result: Awaited<ReturnType<ToolDef['handler']>>): unknown {
   expect(result.isError, result.content[0]?.text).toBeUndefined()
@@ -59,6 +69,20 @@ describe('notebook image generation commands', () => {
     expect(parseNotebookImageGenerationCommand(
       'generate cell @generate-image-01',
     )).toBeNull()
+    expect(parseNotebookChatGenerationCommand(
+      'create a video of falling stars',
+    )).toMatchObject({
+      cellType: 'generate_video',
+      mediaKind: 'video',
+      prompt: 'falling stars',
+    })
+    expect(parseNotebookChatGenerationCommand(
+      'make a soundtrack of distant thunder',
+    )).toMatchObject({
+      cellType: 'generate_audio',
+      mediaKind: 'audio',
+      prompt: 'distant thunder',
+    })
   })
 
   it('rejects non-image and unfinished sources before materialization', () => {
@@ -155,20 +179,79 @@ describe('notebook image generation commands', () => {
     const actions = asNotebookGenerationActions(
       await invoke('list_notebook_actions', { cell_type: 'generate_image' }),
     )
-    const command = parseNotebookImageGenerationCommand(
+    const command = parseNotebookChatGenerationCommand(
       'generate an image of neon rain with @img-01',
     )
     expect(command).not.toBeNull()
     if (!command) return
-
-    const materialized = await materializeNotebookImageGenerationCommand({
+    const plannedCellId = '01900000-0000-7000-8000-000000000010'
+    const draft = planNotebookChatGeneration({
       actions,
-      bookId: created.bookId,
-      callTool: invoke,
+      cellId: plannedCellId,
       command,
       document: current.value,
       fallbackSlot: { row: 0, column: 0 },
     })
+    expect(managed.value.engine.notebooks.read(notebookId)).toMatchObject({
+      ok: true,
+      value: {
+        cells: expect.not.arrayContaining([
+          expect.objectContaining({ id: plannedCellId }),
+        ]),
+      },
+    })
+    const connectedInputs = notebookChatGenerationConnectedInputs(draft, current.value)
+    const configurableAction = {
+      ...draft.action,
+      id: 'generation.configurable-test',
+      model: 'ConfigurableImageModel',
+      tool: 'generate_configurable_image',
+      controls: [{
+        name: 'quality',
+        label: 'Quality',
+        kind: 'select' as const,
+        valueType: 'string' as const,
+        required: false,
+        defaultValue: 'standard',
+        options: ['standard', 'high'],
+        description: 'Output quality',
+      }],
+    }
+    const revisedAction = reviseNotebookChatGenerationAction(
+      draft,
+      configurableAction,
+      connectedInputs,
+    )
+    const revisedMode = reviseNotebookChatGenerationMode(
+      revisedAction,
+      String(revisedAction.cell.inputs?.generationMode),
+      connectedInputs,
+    )
+    const revisedSetting = reviseNotebookChatGenerationSetting(
+      revisedMode,
+      'quality',
+      'high',
+    )
+    const revisedPrompt = reviseNotebookChatGenerationPrompt(
+      revisedSetting,
+      'cinematic neon rain',
+    )
+    expect(revisedPrompt).toMatchObject({
+      action: { id: 'generation.configurable-test' },
+      cell: {
+        model: 'ConfigurableImageModel',
+        prompt: 'cinematic neon rain',
+        tool: 'generate_configurable_image',
+      },
+    })
+    expect(notebookChatGenerationSettings(revisedPrompt)).toEqual({ quality: 'high' })
+    const materialized = await materializeNotebookChatGeneration({
+      bookId: created.bookId,
+      callTool: invoke,
+      document: current.value,
+      draft,
+    })
+    expect(materialized.cellId).toBe(plannedCellId)
     const connected = managed.value.engine.notebooks.read(notebookId)
     expect(connected.ok).toBe(true)
     if (!connected.ok) return

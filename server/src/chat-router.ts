@@ -6,6 +6,7 @@ type RoutableToolInfo = {
   description: string;
   params: string[];
   category: "action" | "generation";
+  effect: "read" | "mutation" | "generation";
 };
 
 type ChatToolAlias = {
@@ -48,6 +49,32 @@ const NESTED_TIMESTAMP_PARAMS: Record<string, Record<string, string[]>> = {
   },
 };
 
+const READ_ONLY_TOOL_NAMES = new Set([
+  "asset_history",
+  "asset_manifest",
+  "commands",
+  "project_activity",
+  "project_history",
+  "revision_history",
+  "slash_commands",
+  "storage_status",
+  "x_connect_status",
+]);
+
+const READ_ONLY_TOOL_PREFIXES = [
+  "check_",
+  "estimate_",
+  "get_",
+  "inspect_",
+  "list_",
+  "plan_",
+  "prepare_",
+  "preview_",
+  "read_",
+  "search_",
+  "wait_",
+];
+
 function categoryForTool(name: string): RoutableToolInfo["category"] {
   return /^(?:generate|extend|upscale)_/u.test(name)
     || name === "prepare_video_generation"
@@ -56,6 +83,18 @@ function categoryForTool(name: string): RoutableToolInfo["category"] {
     || name === "gen_images_all"
     ? "generation"
     : "action";
+}
+
+function effectForTool(
+  name: string,
+  category: RoutableToolInfo["category"],
+): RoutableToolInfo["effect"] {
+  if (category === "generation") return "generation";
+  if (
+    READ_ONLY_TOOL_NAMES.has(name)
+    || READ_ONLY_TOOL_PREFIXES.some((prefix) => name.startsWith(prefix))
+  ) return "read";
+  return "mutation";
 }
 
 function paramsForTool(definition: ToolDef): string[] {
@@ -69,21 +108,27 @@ function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
   const aliases = CHAT_TOOL_ALIASES.flatMap((alias) => {
     const target = definitionByName.get(alias.actualTool);
     if (!target) return [];
+    const category = categoryForTool(alias.actualTool);
     return [{
       ...alias,
       params: paramsForTool(target),
-      category: categoryForTool(alias.actualTool),
+      category,
+      effect: effectForTool(alias.actualTool, category),
     }];
   });
   const tools = definitions
     .filter((definition) => definition.name !== "chat")
-    .map((definition) => ({
-      name: definition.name,
-      actualTool: definition.name,
-      description: definition.description,
-      params: paramsForTool(definition),
-      category: categoryForTool(definition.name),
-    }));
+    .map((definition) => {
+      const category = categoryForTool(definition.name);
+      return {
+        name: definition.name,
+        actualTool: definition.name,
+        description: definition.description,
+        params: paramsForTool(definition),
+        category,
+        effect: effectForTool(definition.name, category),
+      };
+    });
   return [...aliases, ...tools];
 }
 
@@ -166,6 +211,7 @@ export {
   buildRoutableTools,
   buildChatRoutingPrompt,
   buildChatRoutingUserMessage,
+  effectForTool,
   getRoutableTool,
 };
 export type { RoutableToolInfo };

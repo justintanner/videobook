@@ -344,6 +344,7 @@ describe("notebook action catalog", () => {
     })) as {
       tool: string;
       payload: { input: { prompt: string } };
+      estimate: { currency: string; usd: number };
     };
     expect(preview).toMatchObject({
       tool: "generate_kie_gpt_image_2_text_to_image",
@@ -351,6 +352,7 @@ describe("notebook action catalog", () => {
         model: "gpt-image-2-text-to-image",
         input: { prompt: "draft prompt" },
       },
+      estimate: { currency: "USD", usd: expect.any(Number) },
     });
     const afterPreview = resultJson(await invoke("get_notebook", {
       notebook_id: notebookId,
@@ -360,6 +362,37 @@ describe("notebook action catalog", () => {
         prompt: "persisted prompt",
         tool: DEFAULT_IMAGE_TOOL,
       });
+
+    const pendingCellId = "01900000-0000-7000-8000-000000000021";
+    const pendingPreview = resultJson(await invoke("preview_notebook_generation", {
+      notebook_id: notebookId,
+      cell_id: pendingCellId,
+      draft: {
+        type: "generate_image",
+        slug: "generate-image-pending",
+        slot: { row: 2, column: 1 },
+        prompt: "pending draft prompt",
+        provider: "kie",
+        model: "GptImage2TextToImageRequestSchema",
+        operation: "text_to_image",
+        tool: "generate_kie_gpt_image_2_text_to_image",
+      },
+      connections: [],
+    })) as {
+      tool: string;
+      payload: { input: { prompt: string } };
+      estimate: { usd: number };
+    };
+    expect(pendingPreview).toMatchObject({
+      tool: "generate_kie_gpt_image_2_text_to_image",
+      payload: { input: { prompt: "pending draft prompt" } },
+      estimate: { usd: expect.any(Number) },
+    });
+    const afterPendingPreview = resultJson(await invoke("get_notebook", {
+      notebook_id: notebookId,
+    })) as NotebookDocument;
+    expect(afterPendingPreview.cells.some((cell) => cell.id === pendingCellId))
+      .toBe(false);
 
     const videoGeneration = resultJson(await invoke("create_notebook_cell", {
       notebook_id: notebookId,

@@ -1,12 +1,16 @@
-import { spawn } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { promisify } from 'node:util'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { FFMPEG } from '../../server/src/ffmpeg.js'
+
+const execFileAsync = promisify(execFile)
 
 interface StartedServer {
   child: ChildProcessWithoutNullStreams
@@ -40,7 +44,10 @@ interface AssetPayload {
 }
 
 interface HistoryPayload {
-  actions: Array<{ operation: string; phase: string; events: Array<{ phase: string }> }>
+  actions: Array<{
+    operation: string
+    details: { writeSet?: string[] }
+  }>
 }
 
 function wait(milliseconds: number): Promise<void> {
@@ -165,14 +172,13 @@ describe('v2 MCP server', () => {
     const notebooks = await callTool<NotebookPayload[]>(client, 'list_notebooks', {
       book_id: book.bookId,
     })
-    expect(notebooks).toEqual([{
+    expect(notebooks).toEqual([expect.objectContaining({
       id: expect.any(String),
       name: 'Main',
       created_at: expect.any(String),
-      properties: {},
       cells: [],
       edges: [],
-    }])
+    })])
     const notebook = notebooks[0]!
 
     const prompt = await callTool<CellPayload>(client, 'create_notebook_cell', {
@@ -216,34 +222,50 @@ describe('v2 MCP server', () => {
       expect.objectContaining({ source: prompt.id, target: image.id, targetInput: 'prompt' }),
     ])
 
-    const uploaded = await fetch(`${server.url.replace('/mcp', '')}/api/books/${book.bookId}/upload?filename=notes.md`, {
+    const videoPath = join(rootDir, 'timeline-source.mp4')
+    await execFileAsync(FFMPEG, [
+      '-y',
+      '-f', 'lavfi', '-i', 'color=c=0x163d2b:s=320x240:r=24:d=1',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+      videoPath,
+    ])
+    const videoBytes = await readFile(videoPath)
+    const videoBody = videoBytes.buffer.slice(
+      videoBytes.byteOffset,
+      videoBytes.byteOffset + videoBytes.byteLength,
+    ) as ArrayBuffer
+    const uploaded = await fetch(`${server.url.replace('/mcp', '')}/api/books/${book.bookId}/upload?filename=timeline-source.mp4`, {
       method: 'POST',
-      body: '# Green city notes',
+      body: videoBody,
     })
     expect(uploaded.ok).toBe(true)
     const upload = await uploaded.json() as { assetId: string }
-    expect(upload.assetId).toMatch(/^script-/)
+    expect(upload.assetId).toMatch(/^vid-/)
 
     const assets = await callTool<{ assets: AssetPayload[] }>(client, 'list_assets', {
       book_id: book.bookId,
     })
-    const script = assets.assets.find((asset) => asset.id === upload.assetId)
-    expect(script).toMatchObject({ artifact_id: expect.any(String), type: 'script' })
-    if (!script) throw new Error('Uploaded script was not listed')
+    const video = assets.assets.find((asset) => asset.id === upload.assetId)
+    expect(video).toMatchObject({ artifact_id: expect.any(String), type: 'video' })
+    if (!video) throw new Error('Uploaded video was not listed')
 
     const timeline = await callTool<{ slots: Array<{ artifact_id: string; id: string }> }>(client, 'set_timeline', {
       book_id: book.bookId,
       render: 'square',
-      slots: [{ artifact_id: script.artifact_id }],
+      slots: [{ artifact_id: video.artifact_id }],
     })
-    expect(timeline.slots).toEqual([{ artifact_id: script.artifact_id, id: expect.any(String) }])
+    expect(timeline.slots).toEqual([{ artifact_id: video.artifact_id, id: expect.any(String) }])
 
     const history = await callTool<HistoryPayload>(client, 'list_book_actions', {
       book_id: book.bookId,
     })
-    const creation = history.actions.find((action) => action.operation === 'tool-create-notebook-cell')
-    expect(creation).toMatchObject({ phase: 'completed' })
-    expect(creation?.events.map((event) => event.phase)).toEqual(['requested', 'completed'])
+    const notebookWrites = history.actions
+      .filter((action) => action.operation === 'write_notebook')
+      .flatMap((action) => action.details.writeSet ?? [])
+    expect(notebookWrites).toEqual(expect.arrayContaining([
+      `cell:${notebook.id}:${prompt.id}`,
+      `cell:${notebook.id}:${image.id}`,
+    ]))
     expect(server.output.join('')).not.toContain('[mcp] history record failed')
 
     const deleted = await callTool<{ bookId: string; slug: string }>(client, 'delete_book', {

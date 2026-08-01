@@ -2,6 +2,7 @@
  * chat MCP tool — natural language interface that routes to appropriate tools.
  */
 import type { ChatLogEntry, Engine, ResolvedArtifact } from "videobook-engine";
+import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import {
   buildChatRoutingPrompt,
@@ -28,6 +29,40 @@ type ChatDecision = {
   params: Record<string, unknown>;
   message: string;
 };
+
+type ChatActionPlan = {
+  kind: "chat-action-plan";
+  planId: string;
+  bookId: string;
+  prompt: string;
+  routedTool: string;
+  tool: string;
+  params: Record<string, unknown>;
+  message: string;
+  summary: string;
+  effect: "mutation" | "generation";
+  confirmation: {
+    required: true;
+    reason: string;
+  };
+};
+
+const chatActionPlanSchema = z.object({
+  kind: z.literal("chat-action-plan"),
+  planId: z.string().uuid(),
+  bookId: z.string().uuid(),
+  prompt: z.string().min(1),
+  routedTool: z.string().min(1),
+  tool: z.string().min(1),
+  params: z.record(z.string(), z.unknown()),
+  message: z.string(),
+  summary: z.string().min(1),
+  effect: z.enum(["mutation", "generation"]),
+  confirmation: z.object({
+    required: z.literal(true),
+    reason: z.string().min(1),
+  }),
+});
 
 const CHAT_ROUTING_MAX_OUTPUT_TOKENS = 2048;
 const CHAT_ROUTING_TIMEOUT_MS = 45_000;
@@ -266,19 +301,89 @@ export async function loadScriptContentsForChat(
   return scriptContents;
 }
 
+function appendChatHistory(
+  fs: Engine,
+  input: {
+    prompt: string;
+    tool: string;
+    params: Record<string, unknown>;
+    message: string;
+    failed: boolean;
+  },
+): void {
+  void fs.logs
+    .append("chat", { role: "user", text: input.prompt, ts: Date.now() })
+    .catch(() => {});
+  void fs.logs
+    .append(
+      "chat",
+      {
+        role: "assistant",
+        tool: input.tool,
+        params: input.params,
+        message: input.message,
+        error: input.failed,
+        ts: Date.now(),
+      },
+    )
+    .catch(() => {});
+}
+
+async function applyChatActionPlan(
+  fs: Engine,
+  bookId: string,
+  plan: ChatActionPlan,
+): Promise<ToolResult> {
+  if (plan.bookId !== bookId) {
+    return error("The chat action belongs to a different book");
+  }
+  if (plan.tool === "chat") return error("Chat cannot route to itself");
+  const { getAllToolDefs } = await import("./index.js");
+  const targetDef = getAllToolDefs(fs).find((definition) =>
+    definition.name === plan.tool);
+  if (!targetDef) return error(`Tool handler not found: ${plan.tool}`);
+  const params = { ...plan.params, book_id: bookId };
+  const validated = z.object(targetDef.schema).safeParse(params);
+  if (!validated.success) {
+    return error(
+      `Invalid parameters for ${plan.routedTool}: ${z.prettifyError(validated.error)}`,
+    );
+  }
+  const wrappedDef = withLogging(targetDef, fs);
+  let result: ToolResult;
+  try {
+    result = await wrappedDef.handler(validated.data);
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    result = error(`${plan.routedTool} failed: ${message}`);
+  }
+  appendChatHistory(fs, {
+    prompt: plan.prompt,
+    tool: plan.routedTool,
+    params: plan.params,
+    message: plan.message,
+    failed: Boolean(result.isError),
+  });
+  return result;
+}
+
 export function chatDef(fs: Engine): ToolDef {
   return {
     name: "chat",
-    description: "Natural language interface — routes free-form prompts to the appropriate tool. Supports @asset tags (e.g., @vid-foo, @img-bar).",
+    description: "Natural language interface — executes reads and previews mutations or generation for explicit application. Supports @asset tags (e.g., @vid-foo, @img-bar).",
     schema: {
-      prompt: z.string().describe("Natural language query with optional @asset tags"),
+      prompt: z.string().min(1).optional().describe("Natural language query with optional @asset tags"),
       book_id: z.string().uuid().describe("Book UUID"),
+      action_plan: chatActionPlanSchema.optional().describe("Previously previewed action to apply"),
     },
     handler: async (args) => {
-      const { prompt, book_id: bookId } = args as {
-        prompt: string;
+      const { prompt, book_id: bookId, action_plan: actionPlan } = args as {
+        prompt?: string;
         book_id: string;
+        action_plan?: ChatActionPlan;
       };
+      if (actionPlan) return await applyChatActionPlan(fs, bookId, actionPlan);
+      if (!prompt) return error("A chat prompt is required");
       const book = fs.book.get();
 
       // 1. Expand @s01 slot refs → actual asset slugs
@@ -417,6 +522,30 @@ export function chatDef(fs: Engine): ToolDef {
         );
       }
 
+      if (routableTool.effect !== "read") {
+        const effect = routableTool.effect;
+        const summary = decision.message.trim()
+          || `${effect === "generation" ? "Generate" : "Apply"} with ${decision.tool}`;
+        return json({
+          kind: "chat-action-plan",
+          planId: uuidv7(),
+          bookId,
+          prompt,
+          routedTool: decision.tool,
+          tool: targetDef.name,
+          params: validated.data,
+          message: decision.message,
+          summary,
+          effect,
+          confirmation: {
+            required: true,
+            reason: effect === "generation"
+              ? "This request creates generated media and may incur provider spend"
+              : "This request changes the current book",
+          },
+        } satisfies ChatActionPlan);
+      }
+
       // 9. Execute (wrapped so the routed tool writes its own action log entry)
       const wrappedDef = withLogging(targetDef, fs);
       let handlerResult: ToolResult;
@@ -427,23 +556,13 @@ export function chatDef(fs: Engine): ToolDef {
         return error(`${decision.tool} failed: ${message}`);
       }
 
-      // 10. Log chat history (fire-and-forget)
-      void fs.logs
-        .append("chat", { role: "user", text: prompt, ts: Date.now() })
-        .catch(() => {});
-      void fs.logs
-        .append(
-          "chat",
-          {
-            role: "assistant",
-            tool: decision.tool,
-            params: decision.params,
-            message: decision.message,
-            error: Boolean(handlerResult.isError),
-            ts: Date.now(),
-          },
-        )
-        .catch(() => {});
+      appendChatHistory(fs, {
+        prompt,
+        tool: decision.tool,
+        params: decision.params,
+        message: decision.message,
+        failed: Boolean(handlerResult.isError),
+      });
 
       return handlerResult;
     },
@@ -452,4 +571,8 @@ export function chatDef(fs: Engine): ToolDef {
 
 function error(text: string): ToolResult {
   return { isError: true as const, content: [{ type: "text" as const, text }] };
+}
+
+function json(value: unknown): ToolResult {
+  return { content: [{ type: "text" as const, text: JSON.stringify(value) }] };
 }

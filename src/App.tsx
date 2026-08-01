@@ -56,6 +56,7 @@ import {
   ZoomOut,
 } from 'lucide-react'
 import { useMcp } from 'use-mcp/react'
+import { v7 as uuidv7 } from 'uuid'
 import type {
   EditPreview,
   NotebookCellReference,
@@ -93,6 +94,10 @@ import {
 } from '@/components/videobook/MomentSearch'
 import { NotebookCellInspector } from '@/components/videobook/NotebookCellInspector'
 import { MediaLibraryAssetPreview } from '@/components/videobook/MediaLibraryAssetPreview'
+import {
+  GenerationChatReview,
+  type GenerationReviewSource,
+} from '@/components/videobook/GenerationChatReview'
 import { ReverseSearchReference } from '@/components/videobook/ReverseSearchReference'
 import { NotebookMediaFullscreen } from '@/components/videobook/NotebookMediaFullscreen'
 import { BookProjectSelector } from '@/components/videobook/BookProjectSelector'
@@ -111,6 +116,9 @@ import {
 } from '@/videobook/notebook-draft'
 import {
   asNotebookGenerationActions,
+  compatibleGenerationActions,
+  compatibleGenerationModes,
+  type GenerationControlValue,
   type GenerationPreviewDraft,
   type NotebookGenerationAction,
 } from '@/videobook/notebook-generation-actions'
@@ -180,13 +188,23 @@ import {
 import {
   enqueueNotebookFrameCommand,
   parseNotebookFrameCommand,
+  resolveNotebookFrameSource,
   type NotebookFrameCommand,
 } from '@/videobook/notebook-frame-command'
 import {
-  materializeNotebookImageGenerationCommand,
-  parseNotebookImageGenerationCommand,
-  type NotebookImageGenerationCommand,
-} from '@/videobook/notebook-image-generation-command'
+  generationCellTypeForRoutedTool,
+  materializeNotebookChatGeneration,
+  notebookChatGenerationConnectedInputs,
+  notebookChatGenerationReferences,
+  parseNotebookChatGenerationCommand,
+  planNotebookChatGeneration,
+  reviseNotebookChatGenerationAction,
+  reviseNotebookChatGenerationMode,
+  reviseNotebookChatGenerationPrompt,
+  reviseNotebookChatGenerationSetting,
+  type NotebookChatGenerationCommand,
+  type NotebookChatGenerationDraft,
+} from '@/videobook/notebook-chat-generation'
 import { parseNotebookGenerationCellCommand } from '@/videobook/notebook-generation-command'
 import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
 import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
@@ -199,6 +217,7 @@ import {
   resolveNotebookMentionAliases,
 } from '@/videobook/mention-suggestions'
 import { restoreCommandComposerFocus } from '@/videobook/command-composer-focus'
+import { parsePendingApplyCommand } from '@/videobook/command-composer-outcome'
 import { revealNotebookResult } from '@/videobook/notebook-result-reveal'
 
 type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
@@ -336,6 +355,46 @@ type PendingCommandPlan = {
   plan: CommandPlan
   previews: Record<string, EditPreview>
 }
+
+type ChatActionPlan = {
+  kind: 'chat-action-plan'
+  planId: string
+  bookId: string
+  prompt: string
+  routedTool: string
+  tool: string
+  params: Record<string, unknown>
+  message: string
+  summary: string
+  effect: 'mutation' | 'generation'
+  confirmation: {
+    required: true
+    reason: string
+  }
+}
+
+type PendingChatAction =
+  | {
+      kind: 'generation'
+      draft: NotebookChatGenerationDraft
+      notebookId: string
+      preview: unknown | null
+      previewError: string | null
+      previewLoading: boolean
+      previewStale: boolean
+      reason: string
+      summary: string
+    }
+  | {
+      kind: 'frame'
+      command: NotebookFrameCommand
+      reason: string
+      summary: string
+    }
+  | {
+      kind: 'routed'
+      plan: ChatActionPlan
+    }
 
 type JobRecord = {
   id: number
@@ -552,6 +611,74 @@ function isDownloadVideoResult(value: unknown): boolean {
   return asString(item?.artifact_id) !== null
     && asString(item?.assetId) !== null
     && asString(item?.job_id)?.startsWith('download-') === true
+}
+
+function asChatActionPlan(value: unknown): ChatActionPlan {
+  const item = record(value)
+  const params = record(item?.params)
+  const confirmation = record(item?.confirmation)
+  const kind = asString(item?.kind)
+  const planId = asString(item?.planId)
+  const planBookId = asString(item?.bookId)
+  const prompt = asString(item?.prompt)
+  const routedTool = asString(item?.routedTool)
+  const tool = asString(item?.tool)
+  const message = asString(item?.message) ?? ''
+  const summary = asString(item?.summary)
+  const effect = asString(item?.effect)
+  const reason = asString(confirmation?.reason)
+  if (
+    kind !== 'chat-action-plan'
+    || !planId
+    || !planBookId
+    || !prompt
+    || !routedTool
+    || !tool
+    || !params
+    || !summary
+    || (effect !== 'mutation' && effect !== 'generation')
+    || confirmation?.required !== true
+    || !reason
+  ) throw new Error('The server returned an invalid chat action plan')
+  return {
+    kind,
+    planId,
+    bookId: planBookId,
+    prompt,
+    routedTool,
+    tool,
+    params,
+    message,
+    summary,
+    effect,
+    confirmation: { required: true, reason },
+  }
+}
+
+function generationMediaKind(
+  cellType: NotebookChatGenerationCommand['cellType'],
+): NotebookChatGenerationCommand['mediaKind'] {
+  if (cellType === 'generate_audio') return 'audio'
+  if (cellType === 'generate_image') return 'image'
+  return 'video'
+}
+
+function applyReadyOutcome(message: string): ComposerOutcome {
+  return {
+    ok: true,
+    message,
+    nextInput: '/apply',
+    selectInput: true,
+  }
+}
+
+function generationApplyReadyOutcome(message: string): ComposerOutcome {
+  return {
+    ok: true,
+    message,
+    nextInput: '/apply ',
+    selectInput: false,
+  }
 }
 
 function urlFromText(value: string): string {
@@ -2249,6 +2376,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [selectionStartWordId, setSelectionStartWordId] = useState('')
   const [moveDestinationWordId, setMoveDestinationWordId] = useState('')
   const [pendingCommandPlan, setPendingCommandPlan] = useState<PendingCommandPlan | null>(null)
+  const [pendingChatAction, setPendingChatAction] = useState<PendingChatAction | null>(null)
   const [lastEditActionId, setLastEditActionId] = useState('')
   const [secretKey, setSecretKey] = useState('KIE_API_KEY')
   const [secretValue, setSecretValue] = useState('')
@@ -2328,6 +2456,55 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const commandMentionAssets = useMemo(
     () => notebookMentionAssets(notebook?.cells ?? [], assets),
     [assets, notebook],
+  )
+  const pendingGenerationDraft = pendingChatAction?.kind === 'generation'
+    ? pendingChatAction.draft
+    : null
+  const pendingGenerationConnectedInputs = useMemo(
+    () => pendingGenerationDraft && notebook
+      ? notebookChatGenerationConnectedInputs(pendingGenerationDraft, notebook)
+      : [],
+    [notebook, pendingGenerationDraft],
+  )
+  const pendingGenerationActionOptions = useMemo(
+    () => pendingGenerationDraft
+      ? compatibleGenerationActions(
+          generationActions,
+          pendingGenerationDraft.cell.type as NotebookChatGenerationCommand['cellType'],
+          pendingGenerationConnectedInputs,
+        )
+      : [],
+    [
+      generationActions,
+      pendingGenerationConnectedInputs,
+      pendingGenerationDraft,
+    ],
+  )
+  const pendingGenerationModeOptions = useMemo(
+    () => pendingGenerationDraft
+      ? compatibleGenerationModes(
+          pendingGenerationDraft.action,
+          pendingGenerationConnectedInputs,
+        )
+      : [],
+    [pendingGenerationConnectedInputs, pendingGenerationDraft],
+  )
+  const pendingGenerationSources = useMemo<GenerationReviewSource[]>(
+    () => pendingGenerationDraft && notebook
+      ? pendingGenerationDraft.sourceCellIds.flatMap((cellId) => {
+          const cell = notebook.cells.find((candidate) => candidate.id === cellId)
+          if (!cell) return []
+          return [{
+            cellId,
+            slug: cell.slug,
+            type: cell.type,
+            asset: cell.outputArtifactId
+              ? assetById.get(cell.outputArtifactId) ?? null
+              : null,
+          }]
+        })
+      : [],
+    [assetById, notebook, pendingGenerationDraft],
   )
   const playbackAssets = useMemo(
     () => assets.flatMap((asset) =>
@@ -2478,8 +2655,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     sourceSurface: 'ui' | 'slash' | 'chat',
   ): Promise<ComposerOutcome> => {
     const plan = await createGenerationPlan(cellId, sourceSurface)
+    setPendingChatAction(null)
     setPendingCommandPlan({ plan, previews: {} })
-    return { ok: true, message: 'Generation plan ready for review' }
+    return applyReadyOutcome('Generation plan ready for review')
   }, [createGenerationPlan])
 
   const [nodes, setNodes] = useState<CanvasNode[]>(() =>
@@ -3019,8 +3197,169 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [])
   const dismissPendingCommandPlan = useCallback(() => {
     setPendingCommandPlan(null)
+    setPendingChatAction(null)
     focusCommandComposer()
   }, [focusCommandComposer])
+  const loadPendingGenerationPreview = useCallback(async (
+    draft: NotebookChatGenerationDraft,
+    document: NotebookDocument,
+  ): Promise<unknown> => {
+    if (!bookId) throw new Error('Open a book before previewing generation.')
+    return await call('preview_notebook_generation', {
+      book_id: bookId,
+      notebook_id: document.id,
+      cell_id: draft.cell.id,
+      draft: {
+        type: draft.cell.type,
+        slug: draft.cell.slug,
+        slot: draft.cell.slot,
+        prompt: draft.cell.prompt ?? '',
+        provider: draft.cell.provider ?? draft.action.provider,
+        model: draft.cell.model ?? draft.action.model,
+        operation: draft.cell.operation ?? draft.action.operation,
+        tool: draft.cell.tool ?? draft.action.tool,
+        inputs: draft.cell.inputs ?? {},
+      },
+      connections: draft.connections.map((connection) => ({
+        source_cell_id: connection.sourceCellId,
+        target_input: connection.targetInput,
+      })),
+    })
+  }, [bookId, call])
+  const requestPendingGenerationPreview = useCallback((
+    draft: NotebookChatGenerationDraft,
+    document: NotebookDocument,
+  ) => {
+    const requestKey = JSON.stringify({
+      id: draft.cell.id,
+      prompt: draft.cell.prompt,
+      action: draft.action.id,
+      inputs: draft.cell.inputs,
+      connections: draft.connections,
+    })
+    setPendingChatAction((current) => current?.kind === 'generation'
+      && current.draft.cell.id === draft.cell.id
+      ? {
+          ...current,
+          previewError: null,
+          previewLoading: true,
+          previewStale: false,
+        }
+      : current)
+    void loadPendingGenerationPreview(draft, document)
+      .then((preview) => {
+        setPendingChatAction((current) => {
+          if (current?.kind !== 'generation') return current
+          const currentKey = JSON.stringify({
+            id: current.draft.cell.id,
+            prompt: current.draft.cell.prompt,
+            action: current.draft.action.id,
+            inputs: current.draft.cell.inputs,
+            connections: current.draft.connections,
+          })
+          return currentKey === requestKey
+            ? {
+                ...current,
+                preview,
+                previewError: null,
+                previewLoading: false,
+                previewStale: false,
+              }
+            : current
+        })
+      })
+      .catch((error: unknown) => {
+        setPendingChatAction((current) => {
+          if (current?.kind !== 'generation') return current
+          const currentKey = JSON.stringify({
+            id: current.draft.cell.id,
+            prompt: current.draft.cell.prompt,
+            action: current.draft.action.id,
+            inputs: current.draft.cell.inputs,
+            connections: current.draft.connections,
+          })
+          return currentKey === requestKey
+            ? {
+                ...current,
+                previewError: error instanceof Error ? error.message : String(error),
+                previewLoading: false,
+              }
+            : current
+        })
+      })
+  }, [loadPendingGenerationPreview])
+  const setPendingGenerationDraft = useCallback((
+    draft: NotebookChatGenerationDraft,
+    refreshPreview: boolean,
+  ) => {
+    setPendingChatAction((current) => current?.kind === 'generation'
+      && current.draft.cell.id === draft.cell.id
+      ? {
+          ...current,
+          draft,
+          previewError: null,
+          previewLoading: false,
+          previewStale: true,
+        }
+      : current)
+    if (refreshPreview && notebook) {
+      requestPendingGenerationPreview(draft, notebook)
+    }
+  }, [notebook, requestPendingGenerationPreview])
+  const updatePendingGenerationPrompt = useCallback((prompt: string) => {
+    if (!pendingGenerationDraft) return
+    setPendingGenerationDraft(
+      reviseNotebookChatGenerationPrompt(pendingGenerationDraft, prompt),
+      false,
+    )
+  }, [pendingGenerationDraft, setPendingGenerationDraft])
+  const updatePendingGenerationAction = useCallback((actionId: string) => {
+    if (!pendingGenerationDraft) return
+    const action = pendingGenerationActionOptions.find((candidate) =>
+      candidate.id === actionId)
+    if (!action) return
+    setPendingGenerationDraft(reviseNotebookChatGenerationAction(
+      pendingGenerationDraft,
+      action,
+      pendingGenerationConnectedInputs,
+    ), true)
+  }, [
+    pendingGenerationActionOptions,
+    pendingGenerationConnectedInputs,
+    pendingGenerationDraft,
+    setPendingGenerationDraft,
+  ])
+  const updatePendingGenerationMode = useCallback((modeId: string) => {
+    if (!pendingGenerationDraft) return
+    setPendingGenerationDraft(reviseNotebookChatGenerationMode(
+      pendingGenerationDraft,
+      modeId,
+      pendingGenerationConnectedInputs,
+    ), true)
+  }, [
+    pendingGenerationConnectedInputs,
+    pendingGenerationDraft,
+    setPendingGenerationDraft,
+  ])
+  const updatePendingGenerationSetting = useCallback((
+    name: string,
+    value: GenerationControlValue | undefined,
+  ) => {
+    if (!pendingGenerationDraft) return
+    setPendingGenerationDraft(reviseNotebookChatGenerationSetting(
+      pendingGenerationDraft,
+      name,
+      value,
+    ), true)
+  }, [pendingGenerationDraft, setPendingGenerationDraft])
+  const refreshPendingGenerationPreview = useCallback(() => {
+    if (!pendingGenerationDraft || !notebook) return
+    requestPendingGenerationPreview(pendingGenerationDraft, notebook)
+  }, [notebook, pendingGenerationDraft, requestPendingGenerationPreview])
+  const selectPendingGenerationSource = useCallback((cellId: string) => {
+    setSelectedCellId(cellId)
+    setInspectorOpen(true)
+  }, [])
 
   useLayoutEffect(() => {
     const container = notebookScrollRef.current
@@ -3239,7 +3578,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         setNotice('No videobook projects are available.')
       }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -3259,13 +3598,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (bookMenuRequestRef.current === requestId) {
         setBookMenuError(result.error)
       }
+      setNotice(result.error, 'error')
       return result
     } finally {
       if (bookMenuRequestRef.current === requestId) {
         setBookMenuLoading(false)
       }
     }
-  }, [refreshBookList])
+  }, [refreshBookList, setNotice])
 
   const handleBookMenuOpenChange = useCallback((open: boolean) => {
     if (open) {
@@ -3295,7 +3635,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return { ok: true }
     } catch (error) {
       const result = bookProjectFailure(error)
-      setNotice(result.error)
+      setNotice(result.error, 'error')
       return result
     } finally {
       setBusy(false)
@@ -3323,7 +3663,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return { ok: true }
     } catch (error) {
       const result = bookProjectFailure(error)
-      setNotice(result.error)
+      setNotice(result.error, 'error')
       return result
     } finally {
       setBusy(false)
@@ -3356,7 +3696,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return { ok: true }
     } catch (error) {
       const result = bookProjectFailure(error)
-      setNotice(result.error)
+      setNotice(result.error, 'error')
       return result
     } finally {
       setBusy(false)
@@ -3394,7 +3734,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return { ok: true }
     } catch (error) {
       const result = bookProjectFailure(error)
-      setNotice(result.error)
+      setNotice(result.error, 'error')
       return result
     } finally {
       setBusy(false)
@@ -3420,7 +3760,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         node.data.slot.row === slot.row
         && node.data.slot.column === slot.column)
     ) {
-      setNotice('Choose an empty grid square for the new cell')
+      setNotice('Choose an empty grid square for the new cell', 'error')
       return
     }
     const slug = nextNotebookCellSlug(type, notebook.cells)
@@ -3445,7 +3785,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await refreshBookData(bookId, notebook.id)
       setNotice(`Added @${slug} cell`)
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -3587,7 +3927,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await refreshNotebook(bookId, notebook.id)
       setNotice('Connection removed')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     }
   }
 
@@ -3676,7 +4016,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setMediaSlotError(cellId, message)
-      setNotice(message)
+      setNotice(message, 'error')
     }
   }
 
@@ -3780,6 +4120,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               error: message,
             }
           : current)
+      setNotice(message, 'error')
     }
   }
 
@@ -3864,7 +4205,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         current && current.cellId === cellId
           ? { ...current, activeArtifactId: null, error: message }
           : current)
-      setNotice(message)
+      setNotice(message, 'error')
     }
   }
 
@@ -3913,7 +4254,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         reused > 0 ? `reused ${reused} existing` : '',
       ].filter(Boolean).join(' · ') || 'No files imported')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setUploading(false)
     }
@@ -3933,7 +4274,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await refreshBookData(bookId, notebook?.id)
       setNotice(messageFor(result, 'URL import queued'))
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setUploading(false)
     }
@@ -3985,7 +4326,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setRecording(true)
       setNotice('Microphone recording started')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     }
   }
 
@@ -4070,7 +4411,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         ? `Processing finished; ${missing.join(', ')} not indexed`
         : 'Processing complete')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       try {
         await refreshBookData(bookId, notebook?.id)
@@ -4093,7 +4434,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await refreshBookData(bookId, notebook?.id)
       setNotice(`Job ${jobId} cancelled`)
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -4110,7 +4451,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await refreshBookData(bookId, notebook?.id)
       setNotice(`Job ${jobId} retry queued`)
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -4145,13 +4486,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         await refreshBookData(bookId, notebook.id)
         setNotice('Generation output omitted; the preserved failure remains available')
       } else {
+        setPendingChatAction(null)
         setPendingCommandPlan({ plan: asCommandPlan(value), previews: {} })
         setNotice(action === 'retry'
           ? 'Retry plan ready for review'
           : 'Provider/model switch ready for review')
       }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -4169,14 +4511,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
       const result = record(value)
       if (result?.kind === 'stale-continuation') {
-        setNotice(asString(result.message) ?? 'The sequence changed; review a new destination')
+        setNotice(
+          asString(result.message) ?? 'The sequence changed; review a new destination',
+          'error',
+        )
         await refreshBookData(bookId, notebook.id)
         return
       }
       const outcome = await previewCommandPlan(asCommandPlan(value))
-      setNotice(outcome.message)
+      setNotice(outcome.message, outcome.ok ? 'info' : 'error')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -4198,7 +4543,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setMoveDestinationWordId('')
       setNotice('Audio notebook spine set')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -4240,7 +4585,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setMoveDestinationWordId('')
       setNotice('Transcript correction saved without changing source timing')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -4267,7 +4612,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setSelectionStartWordId('')
       setNotice('Exact transcript range pinned to selects')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -4322,7 +4667,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setTranscriptCorrection('')
       setNotice('Transcript range removed from the sequence; source media is unchanged')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -4355,7 +4700,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await refreshNotebook(bookId, notebook.id)
       setNotice('Transcript sequence edit restored as a new revision')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -4409,7 +4754,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setTranscriptCorrection('')
       setNotice('Transcript range moved on the sequence and caption track')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -4428,7 +4773,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       || !Number.isSafeInteger(durationFrames)
       || durationFrames < 1
     ) {
-      setNotice('Timeline selection requires whole, non-negative frame values')
+      setNotice(
+        'Timeline selection requires whole, non-negative frame values',
+        'error',
+      )
       return
     }
     setBusy(true)
@@ -4445,7 +4793,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })))
       setNotice('Timeline range synchronized to the notebook transcript')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -4459,7 +4807,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (bookId) setStorage(await call('storage_status', { book_id: bookId }))
       setNotice('Settings refreshed')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -4474,7 +4822,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setSecretValue('')
       await refreshSettings()
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -4495,12 +4843,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         }) as EditPreview,
       ] as const))
       const previews = Object.fromEntries(previewEntries)
+      setPendingChatAction(null)
       setPendingCommandPlan({ plan, previews })
       const conflictCount = Object.values(previews)
         .reduce((count, preview) => count + preview.conflicts.length, 0)
       return conflictCount > 0
         ? { ok: false, message: `Plan requires review: ${conflictCount} conflicts` }
-        : { ok: true, message: 'Plan preview ready' }
+        : applyReadyOutcome('Plan preview ready')
     } catch (error) {
       return {
         ok: false,
@@ -4531,7 +4880,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return
     }
     const outcome = await previewCommandPlan(plan)
-    setNotice(outcome.message)
+    setNotice(outcome.message, outcome.ok ? 'info' : 'error')
   }
 
   const prepareSequenceEdit = async (
@@ -4555,14 +4904,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const applyPendingCommandPlan = async () => {
-    if (!bookId || !pendingCommandPlan) return
+  const applyPendingCommandPlan = async (): Promise<ComposerOutcome> => {
+    if (!bookId || !pendingCommandPlan) {
+      return { ok: false, message: 'There is no pending command plan.' }
+    }
+    const pending = pendingCommandPlan
     setBusy(true)
     try {
-      const workbookStage = pendingCommandPlan.plan.stages.find((stage) =>
+      const workbookStage = pending.plan.stages.find((stage) =>
         stage.kind === 'queued' && stage.input.workbook_run === true)
       if (workbookStage?.kind === 'queued') {
-        const hasCloudStages = pendingCommandPlan.plan.stages.some((stage) =>
+        const hasCloudStages = pending.plan.stages.some((stage) =>
           stage.kind === 'queued' && stage.jobType === 'generation')
         if (hasCloudStages && !online) {
           throw new Error('Offline: cloud generation is unavailable. The workbook plan remains preserved.')
@@ -4591,22 +4943,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const queued = record(await call('enqueue_notebook_run', {
           book_id: bookId,
           notebook_id: notebookId,
-          plan_id: pendingCommandPlan.plan.planId,
+          plan_id: pending.plan.planId,
           actor: 'videobook-user',
           confirm_unpriced: true,
         }))
         setPendingCommandPlan(null)
-        await refreshBookData(bookId, notebookId)
-        setNotice(
-          asString(queued?.status) === 'completed'
-            ? 'Workbook is already current'
-            : 'Workbook run accepted and queued',
-        )
-        return
+        await refreshBookData(bookId, notebookId).catch(() => undefined)
+        const message = asString(queued?.status) === 'completed'
+          ? 'Workbook is already current'
+          : 'Workbook run accepted and queued'
+        setNotice(message)
+        return { ok: true, message }
       }
       let latestActionId = ''
       let queuedCount = 0
-      for (const stage of pendingCommandPlan.plan.stages) {
+      for (const stage of pending.plan.stages) {
         if (stage.kind === 'edit') {
           const preview = pendingCommandPlan.previews[stage.stageId]
           if (!preview?.valid) {
@@ -4659,12 +5010,33 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           if (!notebookId || !cellId) {
             throw new Error('The generation plan is missing its notebook cell')
           }
-          await call('run_notebook_cell', {
-            book_id: bookId,
-            notebook_id: notebookId,
-            cell_id: cellId,
-            plan: pendingCommandPlan.plan,
-            actor: 'videobook-user',
+          setCellRunError(cellId, null)
+          const accepted = await startNotebookCellRun({
+            start: () => call('run_notebook_cell', {
+              book_id: bookId,
+              notebook_id: notebookId,
+              cell_id: cellId,
+              plan: pending.plan,
+              actor: 'videobook-user',
+            }),
+            onStarting: () => setCellQueued(cellId, true),
+            onRejected: () => setCellQueued(cellId, false),
+          })
+          const runId = asString(record(accepted)?.run_id)
+          const jobOperationId = asString(record(accepted)?.job_id)
+          if (!runId || !jobOperationId) {
+            setCellQueued(cellId, false)
+            throw new Error('The server did not return a notebook run')
+          }
+          const slug = notebook?.cells.find((cell) => cell.id === cellId)?.slug
+            ?? cellId.slice(0, 8)
+          void watchGenerationRun({
+            bookId,
+            notebookId,
+            cellId,
+            slug,
+            runId,
+            jobOperationId,
           })
           queuedCount += 1
           continue
@@ -4675,27 +5047,41 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       setPendingCommandPlan(null)
       setLastEditActionId(latestActionId)
-      await refreshBookData(bookId, notebook?.id)
-      setNotice(queuedCount > 0
+      await refreshBookData(bookId, notebook?.id).catch(() => undefined)
+      const message = queuedCount > 0
         ? `CommandPlan accepted · ${queuedCount} queued job`
-        : 'CommandPlan committed to a new sequence revision')
+        : 'CommandPlan committed to a new sequence revision'
+      setNotice(message)
+      return { ok: true, message }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
-      const hasGeneration = pendingCommandPlan.plan.stages.some((stage) =>
+      let message = error instanceof Error ? error.message : String(error)
+      setNotice(message, 'error')
+      const hasGeneration = pending.plan.stages.some((stage) =>
         stage.kind === 'queued' && stage.jobType === 'generation')
-      if (pendingCommandPlan && !hasGeneration) {
+      if (!hasGeneration) {
         try {
           const refreshed = await prepareSequenceEdit(
-            requestFromEditStage(pendingCommandPlan.plan.stages),
-            pendingCommandPlan.plan.sourceSurface === 'system'
+            requestFromEditStage(pending.plan.stages),
+            pending.plan.sourceSurface === 'system'
               ? 'ui'
-              : pendingCommandPlan.plan.sourceSurface,
+              : pending.plan.sourceSurface,
           )
-          if (!refreshed.ok) setNotice(refreshed.message)
+          if (!refreshed.ok) {
+            message = refreshed.message
+            setNotice(message, 'error')
+          }
         } catch {
           setPendingCommandPlan(null)
-          setNotice('The sequence changed. Recreate this plan against the current cut.')
+          message = 'The sequence changed. Recreate this plan against the current cut.'
+          setNotice(message, 'error')
         }
+      }
+      return {
+        ok: false,
+        message,
+        ...(hasGeneration
+          ? { nextInput: '/apply', selectInput: true }
+          : {}),
       }
     } finally {
       setBusy(false)
@@ -4729,7 +5115,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       await refreshBookData(bookId, notebook?.id)
       setNotice('Restored the previous sequence state as a forward revision')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : String(error))
+      setNotice(error instanceof Error ? error.message : String(error), 'error')
     } finally {
       setBusy(false)
     }
@@ -4928,7 +5314,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         frame >= candidate.timelineStartFrame
         && frame < candidate.timelineStartFrame + candidate.durationFrames)
     if (!clip) {
-      setNotice('No clip is selected at the playhead')
+      setNotice('No clip is selected at the playhead', 'error')
       return
     }
     if (action === 'split') {
@@ -4936,7 +5322,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         kind: 'split',
         clip_id: clip.clipId,
         split_frame: frame,
-      }, 'ui').then((outcome) => setNotice(outcome.message))
+      }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
       return
     }
     if (action === 'delete') {
@@ -4944,7 +5330,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         kind: 'delete',
         clip_id: clip.clipId,
         ripple: true,
-      }, 'ui').then((outcome) => setNotice(outcome.message))
+      }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
     }
   }
 
@@ -5061,15 +5447,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const executeNotebookImageGenerationCommand = async (
-    command: NotebookImageGenerationCommand,
+  const previewNotebookFrameCommand = async (
+    command: NotebookFrameCommand,
   ): Promise<ComposerOutcome> => {
     if (!bookId || !notebook) {
-      return { ok: false, message: 'Open a notebook before generating an image.' }
+      return { ok: false, message: 'Open a notebook before extracting a frame.' }
     }
-    let createdCellId: string | null = null
-    let createdCellSlug: string | null = null
-    setBusy(true)
     try {
       const currentNotebook = asNotebook(await call('get_notebook', {
         book_id: bookId,
@@ -5078,34 +5461,314 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!currentNotebook) {
         throw new Error('The server returned an invalid notebook')
       }
-      const materialized = await materializeNotebookImageGenerationCommand({
+      const source = resolveNotebookFrameSource(
+        currentNotebook,
+        command.sourceReference,
+      )
+      setPendingCommandPlan(null)
+      setPendingChatAction({
+        kind: 'frame',
+        command,
+        reason: 'This request creates and runs an Extract Frame cell',
+        summary: `Extract the ${command.frameMode} frame from @${source.slug}`,
+      })
+      return applyReadyOutcome('Frame extraction ready to apply')
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  const previewNotebookGenerationCommand = async (
+    command: NotebookChatGenerationCommand,
+    options?: {
+      preferredTool?: string
+      reason?: string
+      routedParams?: Record<string, unknown>
+      summary?: string
+    },
+  ): Promise<ComposerOutcome> => {
+    if (!bookId || !notebook) {
+      return { ok: false, message: 'Open a notebook before generating media.' }
+    }
+    try {
+      const currentNotebook = asNotebook(await call('get_notebook', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+      }))
+      if (!currentNotebook) {
+        throw new Error('The server returned an invalid notebook')
+      }
+      const draft = planNotebookChatGeneration({
         actions: generationActions,
-        bookId,
-        callTool: call,
+        cellId: uuidv7(),
         command,
         document: currentNotebook,
         fallbackSlot: nextNotebookGridSlot(nodes),
+        ...(options?.preferredTool
+          ? { preferredTool: options.preferredTool }
+          : {}),
+        ...(options?.routedParams
+          ? { routedParams: options.routedParams }
+          : {}),
       })
-      createdCellId = materialized.cellId
-      createdCellSlug = materialized.cellSlug
-      setSelectedCellId(materialized.cellId)
-      await refreshBookData(bookId, currentNotebook.id)
-      await prepareGenerationPlan(materialized.cellId, 'chat')
-      const referenceMessage = materialized.sourceSlugs.length > 0
-        ? ` connected to ${materialized.sourceSlugs.map((slug) => `@${slug}`).join(', ')}`
+      const references = draft.sourceSlugs.length > 0
+        ? ` from ${draft.sourceSlugs.map((slug) => `@${slug}`).join(', ')}`
         : ''
-      return {
-        ok: true,
-        message: `Created @${materialized.cellSlug}${referenceMessage}; review the generation plan`,
-      }
+      setPendingCommandPlan(null)
+      setPendingChatAction({
+        kind: 'generation',
+        draft,
+        notebookId: currentNotebook.id,
+        preview: null,
+        previewError: null,
+        previewLoading: true,
+        previewStale: false,
+        reason: options?.reason
+          ?? 'Generation can incur provider spend and sends the prompt and required references',
+        summary: options?.summary
+          ?? `Generate ${command.mediaKind} as @${draft.cell.slug}${references}`,
+      })
+      requestPendingGenerationPreview(draft, currentNotebook)
+      return generationApplyReadyOutcome(`Generation ready to apply as @${draft.cell.slug}`)
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error)
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  const previewRoutedChatAction = async (
+    plan: ChatActionPlan,
+    originalInput: string,
+  ): Promise<ComposerOutcome> => {
+    if (plan.effect === 'generation') {
+      const cellType = generationCellTypeForRoutedTool(
+        plan.tool,
+        plan.routedTool,
+        generationActions,
+      )
+      const command: NotebookChatGenerationCommand = {
+        cellType,
+        mediaKind: generationMediaKind(cellType),
+        prompt: asString(plan.params.prompt) ?? originalInput,
+        sourceReferences: notebookChatGenerationReferences(originalInput),
+      }
+      return await previewNotebookGenerationCommand(command, {
+        preferredTool: plan.tool,
+        reason: plan.confirmation.reason,
+        routedParams: plan.params,
+        summary: plan.summary,
+      })
+    }
+    setPendingCommandPlan(null)
+    setPendingChatAction({ kind: 'routed', plan })
+    return applyReadyOutcome('Action preview ready')
+  }
+
+  const showOptimisticGeneration = (
+    draft: NotebookChatGenerationDraft,
+    document: NotebookDocument,
+  ) => {
+    const optimistic = canvasNodes({
+      ...document,
+      cells: [draft.cell],
+      edges: [],
+    }, assets, jobs)[0]
+    if (!optimistic) return
+    const startedAt = new Date().toISOString()
+    setNodes((current) => current.some((node) => node.id === optimistic.id)
+      ? current.map((node) => node.id === optimistic.id
+          ? {
+              ...optimistic,
+              data: { ...optimistic.data, status: 'queued', statusStartedAt: startedAt },
+            }
+          : node)
+      : [...current, {
+          ...optimistic,
+          data: { ...optimistic.data, status: 'queued', statusStartedAt: startedAt },
+        }])
+  }
+
+  const applyPendingGenerationAction = async (
+    action: Extract<PendingChatAction, { kind: 'generation' }>,
+    promptOverride: string | null = null,
+  ): Promise<ComposerOutcome> => {
+    const preparedAction = promptOverride
+      ? {
+          ...action,
+          draft: reviseNotebookChatGenerationPrompt(action.draft, promptOverride),
+        }
+      : action
+    const retryInput = promptOverride ? `/apply ${promptOverride}` : '/apply '
+    if (!preparedAction.draft.cell.prompt?.trim()) {
+      return {
+        ok: false,
+        message: 'Enter a generation prompt before applying.',
+        nextInput: retryInput,
+        selectInput: false,
+      }
+    }
+    if (!bookId || !notebook || notebook.id !== preparedAction.notebookId) {
+      return { ok: false, message: 'The generation draft belongs to another notebook.' }
+    }
+    if (!online) {
+      return {
+        ok: false,
+        message: 'Offline: cloud generation is unavailable.',
+        nextInput: retryInput,
+        selectInput: false,
+      }
+    }
+    if (promptOverride) {
+      setPendingChatAction((current) => current === action
+        ? {
+            ...preparedAction,
+            previewLoading: false,
+            previewStale: true,
+          }
+        : current)
+    }
+    const consentKey = 'videobook.cloud-generation-consent'
+    if (window.localStorage.getItem(consentKey) !== 'accepted') {
+      const accepted = window.confirm(
+        `Cloud generation disclosure\n\nProvider/model: ${preparedAction.draft.action.provider} · ${preparedAction.draft.action.model}\n`
+        + 'Payload class: prompt text and connected media references.\n'
+        + 'Your local source files are sent only when required by the selected model.\n\n'
+        + 'Continue and remember this choice on this device?',
+      )
+      if (!accepted) {
+        return {
+          ok: false,
+          message: 'Cloud generation cancelled before sending data',
+          nextInput: retryInput,
+          selectInput: false,
+        }
+      }
+      window.localStorage.setItem(consentKey, 'accepted')
+    }
+    const cellId = preparedAction.draft.cell.id
+    const slug = preparedAction.draft.cell.slug
+    let materialized = false
+    let runAccepted = false
+    setBusy(true)
+    setCellRunError(cellId, null)
+    setCellQueued(cellId, true)
+    setSelectedCellId(cellId)
+    showOptimisticGeneration(preparedAction.draft, notebook)
+    try {
+      await materializeNotebookChatGeneration({
+        bookId,
+        callTool: call,
+        document: notebook,
+        draft: preparedAction.draft,
+      })
+      materialized = true
+      const plan = await createGenerationPlan(cellId, 'chat')
+      const accepted = await call('run_notebook_cell', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+        cell_id: cellId,
+        plan,
+        actor: 'videobook-user',
+      })
+      runAccepted = true
+      const runId = asString(record(accepted)?.run_id)
+      const jobOperationId = asString(record(accepted)?.job_id)
+      setPendingChatAction(null)
+      if (!runId || !jobOperationId) {
+        setCellQueued(cellId, false)
+        await refreshBookData(bookId, notebook.id).catch(() => undefined)
+        return {
+          ok: true,
+          message: `@${slug} was accepted; follow its status in Jobs`,
+        }
+      }
+      setNotice(`@${slug} queued`)
+      void watchGenerationRun({
+        bookId,
+        notebookId: notebook.id,
+        cellId,
+        slug,
+        runId,
+        jobOperationId,
+      })
       await refreshBookData(bookId, notebook.id).catch(() => undefined)
-      const message = createdCellId && createdCellSlug
-        ? `Created @${createdCellSlug}, but could not prepare generation: ${detail}`
-        : detail
+      return { ok: true, message: `@${slug} queued` }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (materialized && !runAccepted) {
+        await call('delete_notebook_cell', {
+          book_id: bookId,
+          notebook_id: notebook.id,
+          cell_id: cellId,
+        }).catch(() => undefined)
+      }
+      if (!runAccepted) {
+        setNodes((current) => current.filter((node) => node.id !== cellId))
+        setCellQueued(cellId, false)
+      }
+      setCellRunError(cellId, message)
+      await refreshBookData(bookId, notebook.id).catch(() => undefined)
       setNotice(message, 'error')
-      return { ok: false, message }
+      return {
+        ok: false,
+        message,
+        nextInput: retryInput,
+        selectInput: false,
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const applyPendingChatAction = async (
+    promptOverride: string | null = null,
+  ): Promise<ComposerOutcome> => {
+    if (!pendingChatAction || !bookId) {
+      return { ok: false, message: 'There is no pending chat action.' }
+    }
+    if (pendingChatAction.kind === 'generation') {
+      return await applyPendingGenerationAction(pendingChatAction, promptOverride)
+    }
+    if (pendingChatAction.kind === 'frame') {
+      const outcome = await executeNotebookFrameCommand(pendingChatAction.command)
+      if (outcome.ok) setPendingChatAction(null)
+      return outcome
+    }
+    setBusy(true)
+    try {
+      const result = await call('chat', {
+        book_id: bookId,
+        action_plan: pendingChatAction.plan,
+      })
+      const outcome = isDownloadVideoResult(result)
+        ? await completeVideoDownload(
+            result,
+            urlFromText(pendingChatAction.plan.prompt),
+          )
+        : {
+            ok: true,
+            message: messageFor(result, pendingChatAction.plan.message || 'Action applied'),
+          }
+      if (outcome.ok) {
+        setPendingChatAction(null)
+        await refreshBookData(bookId, notebook?.id)
+        setNotice(outcome.message, outcome.ok ? 'info' : 'error')
+      }
+      return outcome
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setNotice(message, 'error')
+      return {
+        ok: false,
+        message,
+        nextInput: '/apply',
+        selectInput: true,
+      }
     } finally {
       setBusy(false)
     }
@@ -5113,6 +5776,31 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const executeCommand = async (input: string): Promise<ComposerOutcome> => {
     try {
+      const normalizedInput = input.trim().toLowerCase()
+      const applyCommand = parsePendingApplyCommand(input)
+      if (applyCommand) {
+        if (applyCommand.promptOverride && pendingChatAction?.kind !== 'generation') {
+          return {
+            ok: false,
+            message: 'A quick prompt can only revise a pending generation.',
+            nextInput: input,
+            selectInput: false,
+          }
+        }
+        if (pendingChatAction) {
+          return await applyPendingChatAction(applyCommand.promptOverride)
+        }
+        if (pendingCommandPlan) return await applyPendingCommandPlan()
+        return { ok: false, message: 'There is no pending action to apply.' }
+      }
+      if (normalizedInput === '/cancel') {
+        if (!pendingChatAction && !pendingCommandPlan) {
+          return { ok: false, message: 'There is no pending action to cancel.' }
+        }
+        setPendingChatAction(null)
+        setPendingCommandPlan(null)
+        return { ok: true, message: 'Pending action cancelled' }
+      }
       if (!bookId) return { ok: false, message: 'Load or create a book first.' }
       const resolvedAssetInput = resolveNotebookMentionAliases(
         input,
@@ -5121,11 +5809,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (!input.startsWith('/')) {
         const frameCommand = parseNotebookFrameCommand(input)
         if (frameCommand) {
-          return await executeNotebookFrameCommand(frameCommand)
+          return await previewNotebookFrameCommand(frameCommand)
         }
-        const imageGenerationCommand = parseNotebookImageGenerationCommand(input)
-        if (imageGenerationCommand) {
-          return await executeNotebookImageGenerationCommand(imageGenerationCommand)
+        const generationCommand = parseNotebookChatGenerationCommand(input)
+        if (generationCommand) {
+          return await previewNotebookGenerationCommand(generationCommand)
         }
         const generationCellReference = parseNotebookGenerationCellCommand(input)
         if (generationCellReference && notebook) {
@@ -5176,6 +5864,15 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               book_id: bookId,
               prompt: resolvedAssetInput,
             })
+            const routedRecord = record(routed)
+            if (routedRecord?.kind === 'chat-action-plan') {
+              return await previewRoutedChatAction(
+                asChatActionPlan(routed),
+                input,
+              )
+            }
+            setPendingChatAction(null)
+            setPendingCommandPlan(null)
             if (isDownloadVideoResult(routed)) {
               return await completeVideoDownload(routed, urlFromText(input))
             }
@@ -5584,7 +6281,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (next === 'settings') void refreshSettings()
     if ((next === 'library' || next === 'timeline' || next === 'jobs') && bookId) {
       void refreshBookData(bookId, notebook?.id).catch((error: unknown) => {
-        setNotice(error instanceof Error ? error.message : String(error))
+        setNotice(error instanceof Error ? error.message : String(error), 'error')
       })
     }
   }
@@ -5677,6 +6374,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             error: message,
           }
         : current)
+      setNotice(message, 'error')
     }
   }
   const prepareMediaLibrarySimilar = async (asset: LibraryAssetRecord) => {
@@ -5729,6 +6427,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             error: message,
           }
         : current)
+      setNotice(message, 'error')
     }
   }
   const clearMediaLibraryReference = () => {
@@ -5814,12 +6513,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           Offline · local import, search, editing, playback, history, and export remain available
         </div>
       )}
-      {notice && (
+      {notice?.tone === 'info' && (
         <div
-          className={[
-            'workspace-status-strip',
-            notice.tone === 'error' ? 'error' : '',
-          ].filter(Boolean).join(' ')}
+          className="workspace-status-strip"
           role="status"
           aria-live="polite"
         >
@@ -6481,7 +7177,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
               <form className="timeline-track-controls" onSubmit={(event) => {
                 event.preventDefault()
                 void addSequenceTrack(timelineTrackKind, timelineTrackName)
-                  .then((outcome) => setNotice(outcome.message))
+                  .then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
               }}>
                 <select
                   aria-label="New track kind"
@@ -6510,7 +7206,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   const startFrame = Number(timelineSelectionStart)
                   const durationFrames = Number(timelineSelectionDuration)
                   if (!timelineInsertAssetId || !Number.isSafeInteger(startFrame) || startFrame < 0) {
-                    setNotice('Choose a source and a valid insertion frame')
+                    setNotice('Choose a source and a valid insertion frame', 'error')
                     return
                   }
                   void prepareSequenceEdit({
@@ -6520,7 +7216,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     ...(Number.isSafeInteger(durationFrames) && durationFrames > 0
                       ? { duration_frames: durationFrames }
                       : {}),
-                  }, 'ui').then((outcome) => setNotice(outcome.message))
+                  }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
                 }}>
                   <label>
                     Source
@@ -6543,7 +7239,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 <form onSubmit={(event) => {
                   event.preventDefault()
                   if (!selectedSequenceClip) {
-                    setNotice('Select a sequence clip first')
+                    setNotice('Select a sequence clip first', 'error')
                     return
                   }
                   void prepareSequenceEdit({
@@ -6551,7 +7247,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     clip_id: selectedSequenceClip.clipId,
                     timeline_start_frame: Number(timelineSelectionStart),
                     duration_frames: Number(timelineSelectionDuration),
-                  }, 'ui').then((outcome) => setNotice(outcome.message))
+                  }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
                 }}>
                   <span>Selected clip</span>
                   <strong>{selectedSequenceClip?.clipId.slice(0, 10) ?? 'None'}</strong>
@@ -6563,7 +7259,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   event.preventDefault()
                   const gainDb = Number(timelineGainDb)
                   if (!selectedSequenceClip || !Number.isFinite(gainDb)) {
-                    setNotice('Select an audio clip and enter a valid gain')
+                    setNotice('Select an audio clip and enter a valid gain', 'error')
                     return
                   }
                   void prepareSequenceEdit({
@@ -6573,7 +7269,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     muted: timelineMuted,
                     fade_in_frames: Number(timelineFadeIn),
                     fade_out_frames: Number(timelineFadeOut),
-                  }, 'ui').then((outcome) => setNotice(outcome.message))
+                  }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
                 }}>
                   <label>
                     Gain dB
@@ -6628,7 +7324,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         kind: 'duck',
                         narration_clip_id: selectedSequenceClip.clipId,
                         reduction_db: -12,
-                      }, 'ui').then((outcome) => setNotice(outcome.message))
+                      }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
                     }}
                   >
                     Duck overlaps −12 dB
@@ -6642,7 +7338,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     clip_id: selectedSequenceClip.clipId,
                     track_id: timelineTargetTrackId,
                     timeline_start_frame: Number(timelineSelectionStart),
-                  }, 'ui').then((outcome) => setNotice(outcome.message))
+                  }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
                 }}>
                   <label>
                     Move to track
@@ -6679,7 +7375,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           clip_id: selectedSequenceClip.clipId,
                           split_frame: selectedSequenceClip.timelineStartFrame
                             + Math.floor(selectedSequenceClip.durationFrames / 2),
-                        }, 'ui').then((outcome) => setNotice(outcome.message))
+                        }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
                       }}
                     >
                       Split midpoint
@@ -6693,7 +7389,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           kind: 'delete',
                           clip_id: selectedSequenceClip.clipId,
                           ripple: true,
-                        }, 'ui').then((outcome) => setNotice(outcome.message))
+                        }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
                       }}
                     >
                       Ripple delete
@@ -6708,7 +7404,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           timeline_start_frame: selectedSequenceClip.timelineStartFrame,
                           duration_frames: Number(timelineSelectionDuration),
                           track_ids: [selectedSequenceClip.trackId],
-                        }, 'ui').then((outcome) => setNotice(outcome.message))
+                        }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
                       }}
                     >
                       Insert gap
@@ -6722,7 +7418,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           kind: 'transform',
                           clip_id: selectedSequenceClip.clipId,
                           fit: 'fit',
-                        }, 'ui').then((outcome) => setNotice(outcome.message))
+                        }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
                       }}
                     >
                       Fit
@@ -6735,7 +7431,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         void prepareSequenceEdit({
                           kind: 'reframe',
                           clip_id: selectedSequenceClip.clipId,
-                        }, 'ui').then((outcome) => setNotice(outcome.message))
+                        }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
                       }}
                     >
                       Auto reframe
@@ -6753,7 +7449,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                           denominator: timedClip.speed.denominator,
                           reverse: !timedClip.reverse,
                           audio_policy: timedClip.audioPolicy,
-                        }, 'ui').then((outcome) => setNotice(outcome.message))
+                        }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
                       }}
                     >
                       Reverse
@@ -6770,7 +7466,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     duration_frames: Number(timelineSelectionDuration),
                     text: captionText.trim(),
                     style_id: captionStyle,
-                  }, 'ui').then((outcome) => setNotice(outcome.message))
+                  }, 'ui').then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
                 }}>
                   <label>
                     Caption text
@@ -6807,9 +7503,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         style_id: captionStyle,
                       }).then((value) =>
                         previewCommandPlan(asCommandPlan(value)))
-                        .then((outcome) => setNotice(outcome.message))
+                        .then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
                         .catch((error: unknown) => setNotice(
                           error instanceof Error ? error.message : String(error),
+                          'error',
                         ))
                     }}
                   >
@@ -6819,7 +7516,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     type="button"
                     disabled={busy || !sequence || sequence.captions.length === 0}
                     onClick={() => void prepareRoughCut('ui')
-                      .then((outcome) => setNotice(outcome.message))}
+                      .then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))}
                   >
                     Suggest rough cut
                   </button>
@@ -6827,7 +7524,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     type="button"
                     disabled={busy || !audioNotebook.transcript}
                     onClick={() => void prepareNotebookCleanup('ui')
-                      .then((outcome) => setNotice(outcome.message))}
+                      .then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))}
                   >
                     Suggest cleanup
                   </button>
@@ -6835,7 +7532,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     type="button"
                     disabled={busy || !sequence || sequence.captions.length === 0}
                     onClick={() => void prepareSoundEffects('ui')
-                      .then((outcome) => setNotice(outcome.message))}
+                      .then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))}
                   >
                     Suggest sound effects
                   </button>
@@ -6858,13 +7555,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         ? validation.errors.map((entry) =>
                             asString(record(entry)?.message)).filter(Boolean)
                         : []
-                      setNotice(errors.join(' · ') || 'Export validation failed')
+                      setNotice(
+                        errors.join(' · ') || 'Export validation failed',
+                        'error',
+                      )
                       return
                     }
                     return previewCommandPlan(asCommandPlan(value))
-                      .then((outcome) => setNotice(outcome.message))
+                      .then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))
                   }).catch((error: unknown) => {
-                    setNotice(error instanceof Error ? error.message : String(error))
+                    setNotice(error instanceof Error ? error.message : String(error), 'error')
                   })
                 }}>
                   <label>
@@ -6933,7 +7633,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                             type="button"
                             disabled={busy}
                             onClick={() => void removeSequenceTrack(track.trackId)
-                              .then((outcome) => setNotice(outcome.message))}
+                              .then((outcome) => setNotice(outcome.message, outcome.ok ? 'info' : 'error'))}
                           >
                             <Trash2 size={13} />Remove
                           </button>
@@ -7158,8 +7858,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         disabled={busy || !bookId || mcp.state !== 'ready'}
         connectionLabel={mcp.state === 'ready' ? 'Load a book to begin' : 'Connecting to MCP…'}
         promptSession={null}
+        pendingInput={pendingChatAction?.kind === 'generation'
+          ? '/apply '
+          : pendingCommandPlan || pendingChatAction
+            ? '/apply'
+            : undefined}
+        notice={notice?.tone === 'error'
+          ? { message: notice.text, tone: 'error' }
+          : null}
         onEnsureCatalog={refreshBookCommands}
-        onDismissPanel={pendingCommandPlan ? dismissPendingCommandPlan : undefined}
+        onDismissNotice={() => setNoticeState(null)}
+        onDismissPanel={pendingCommandPlan || pendingChatAction
+          ? dismissPendingCommandPlan
+          : undefined}
         onExecute={executeCommand}
         onSuccessfulExecute={revealLatestNotebookResult}
       >
@@ -7199,7 +7910,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   }
                   onClick={() => void applyPendingCommandPlan()}
                 >
-                  <Check size={14} />Apply plan
+                  <Check size={14} />Apply
                 </button>
                 <button
                   type="button"
@@ -7210,7 +7921,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 </button>
               </div>
             </header>
-            <div className="command-plan-content">
+            <details className="command-plan-details">
+              <summary>
+                Review {pendingCommandPlan.plan.stages.length} planned stage
+                {pendingCommandPlan.plan.stages.length === 1 ? '' : 's'}
+              </summary>
+              <div className="command-plan-content">
               <div className="command-plan-context">
                 <p>{pendingCommandPlan.plan.confirmation.reason}</p>
                 {pendingCommandPlan.plan.suggestions && (
@@ -7277,18 +7993,94 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   )
                 })}
               </ol>
-            </div>
-            {lastEditActionId && (
-              <div className="command-plan-secondary-actions">
+              </div>
+              {lastEditActionId && (
+                <div className="command-plan-secondary-actions">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void restoreLastCommandPlan()}
+                  >
+                    <Undo2 size={14} />Restore last edit
+                  </button>
+                </div>
+              )}
+            </details>
+          </aside>
+        )}
+        {pendingChatAction?.kind === 'generation' && (
+          <GenerationChatReview
+            actions={pendingGenerationActionOptions}
+            busy={busy}
+            draft={pendingChatAction.draft}
+            modes={pendingGenerationModeOptions}
+            preview={pendingChatAction.preview}
+            previewError={pendingChatAction.previewError}
+            previewLoading={pendingChatAction.previewLoading}
+            previewStale={pendingChatAction.previewStale}
+            sources={pendingGenerationSources}
+            summary={pendingChatAction.summary}
+            onActionChange={updatePendingGenerationAction}
+            onApply={() => void applyPendingChatAction()}
+            onCancel={dismissPendingCommandPlan}
+            onModeChange={updatePendingGenerationMode}
+            onPromptChange={updatePendingGenerationPrompt}
+            onRefreshPreview={refreshPendingGenerationPreview}
+            onSelectSource={selectPendingGenerationSource}
+            onSettingChange={updatePendingGenerationSetting}
+          />
+        )}
+        {pendingChatAction && pendingChatAction.kind !== 'generation' && (
+          <aside
+            className="command-plan-drawer"
+            aria-label="Chat action review"
+            aria-keyshortcuts="Escape"
+          >
+            <header>
+              <div className="command-plan-heading">
+                <span className="section-label">ACTION · CHAT</span>
+                <h2>{pendingChatAction.kind === 'routed'
+                  ? pendingChatAction.plan.summary
+                  : pendingChatAction.summary}</h2>
+              </div>
+              <div className="command-plan-primary-actions">
+                <button
+                  type="button"
+                  className="command-plan-apply"
+                  disabled={busy}
+                  onClick={() => void applyPendingChatAction()}
+                >
+                  <Check size={14} />Apply
+                </button>
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => void restoreLastCommandPlan()}
+                  onClick={dismissPendingCommandPlan}
                 >
-                  <Undo2 size={14} />Restore last edit
+                  <X size={14} />Cancel
                 </button>
               </div>
-            )}
+            </header>
+            <div className="command-plan-details command-plan-details-open">
+              <div className="command-plan-content command-plan-content-single">
+                <div className="command-plan-context">
+                  <p>{pendingChatAction.kind === 'routed'
+                    ? pendingChatAction.plan.confirmation.reason
+                    : pendingChatAction.reason}</p>
+                </div>
+                <ol className="command-plan-stages">
+                  <li>
+                    <span>{pendingChatAction.kind.toUpperCase()}</span>
+                    <strong>{pendingChatAction.kind === 'routed'
+                      ? pendingChatAction.plan.routedTool
+                      : `Extract ${pendingChatAction.command.frameMode} frame`}</strong>
+                    {pendingChatAction.kind === 'routed' && (
+                      <small>{pendingChatAction.plan.tool}</small>
+                    )}
+                  </li>
+                </ol>
+              </div>
+            </div>
           </aside>
         )}
       </CommandComposer>

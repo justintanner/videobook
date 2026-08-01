@@ -36,6 +36,7 @@ import {
   notebookCellIsPaid,
   notebookCellIsRunnable,
   notebookCellMediaType,
+  markNotebookCellQueued,
   prepareNotebookGeneration,
 } from "../jobs/run-notebook.js";
 import {
@@ -334,6 +335,7 @@ const pinnedSearchResultSchema = z.object({
   created_at: z.number().int().nonnegative(),
 });
 const cellInputSchema = z.object({
+  id: z.string().uuid().optional(),
   type: cellTypeSchema,
   slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)+$/),
   slot: z.object({
@@ -1182,8 +1184,11 @@ function reorderedAudioPlacements(
   );
 }
 
-function cellFromInput(input: CellInput): Omit<NotebookCell, "id"> {
+function cellFromInput(
+  input: CellInput,
+): Omit<NotebookCell, "id"> & { id?: string } {
   return {
+    ...(input.id ? { id: input.id } : {}),
     type: input.type,
     slug: input.slug,
     slot: input.slot,
@@ -3513,6 +3518,12 @@ export function videobookDomainDefs(
         notebook_id: z.string().uuid(),
         cell_id: z.string().uuid(),
         draft: z.object({
+          type: cellTypeSchema.optional(),
+          slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)+$/).optional(),
+          slot: z.object({
+            row: z.number().int().nonnegative(),
+            column: z.number().int(),
+          }).optional(),
           prompt: z.string(),
           provider: z.string().min(1),
           model: z.string().min(1),
@@ -3520,15 +3531,19 @@ export function videobookDomainDefs(
           tool: z.string().min(1),
           inputs: z.record(z.string(), z.unknown()).optional(),
         }).optional(),
+        connections: z.array(z.object({
+          source_cell_id: z.string().uuid(),
+          target_input: z.string().min(1),
+        })).optional(),
       },
       handler: async (args) => {
         const notebook = engine.notebooks.read(String(args.notebook_id));
         if (!notebook.ok) return failure(notebook.error.message);
-        const cell = notebook.value.cells.find((candidate) =>
-          candidate.id === String(args.cell_id));
-        if (!cell) return failure("Notebook cell not found");
         try {
           const draft = args.draft as {
+            type?: NotebookCellType;
+            slug?: string;
+            slot?: NotebookGridSlot;
             prompt: string;
             provider: string;
             model: string;
@@ -3536,17 +3551,56 @@ export function videobookDomainDefs(
             tool: string;
             inputs?: Record<string, unknown>;
           } | undefined;
+          const cellId = String(args.cell_id);
+          const cell = notebook.value.cells.find((candidate) =>
+            candidate.id === cellId);
+          if (!cell && (!draft?.type || !draft.slug || !draft.slot)) {
+            return failure("Notebook cell not found");
+          }
+          const baseCell: NotebookCell = cell ?? {
+            id: cellId,
+            type: draft!.type!,
+            slug: draft!.slug!,
+            slot: draft!.slot!,
+          };
           const previewCell: NotebookCell = draft
-            ? { ...cell, ...draft }
-            : cell;
+            ? { ...baseCell, ...draft, id: cellId }
+            : baseCell;
+          const connections = args.connections as Array<{
+            source_cell_id: string;
+            target_input: string;
+          }> | undefined;
+          const previewWithCell: NotebookDocument = {
+            ...notebook.value,
+            cells: [
+              ...notebook.value.cells.filter((candidate) =>
+                candidate.id !== cellId),
+              previewCell,
+            ],
+          };
+          const previewNotebook: NotebookDocument = connections
+            ? {
+                ...previewWithCell,
+                edges: [
+                  ...notebook.value.edges.filter((edge) =>
+                    edge.target !== cellId),
+                  ...connections.map((connection) =>
+                    engine.notebooks.createEdge({
+                      source: connection.source_cell_id,
+                      target: cellId,
+                      targetInput: connection.target_input,
+                    })),
+                ],
+              }
+            : previewWithCell;
           const validation = validateCellConfiguration(
             previewCell,
-            notebook.value,
+            previewNotebook,
           );
           if (!validation.ok) return failure(validation.message);
           const prepared = await prepareNotebookGeneration(
             engine,
-            notebook.value,
+            previewNotebook,
             previewCell,
             String(args.book_id),
           );
@@ -3555,6 +3609,17 @@ export function videobookDomainDefs(
             prepared.input,
             prepared.provider,
           );
+          const costResult = await estimateCostDef(engine).handler({
+            calls: [{
+              tool_name: prepared.tool,
+              input: prepared.input,
+            }],
+          });
+          const costText = costResult.content.find((item) =>
+            item.type === "text")?.text;
+          const costValue = !costResult.isError && costText
+            ? JSON.parse(costText) as { estimate?: unknown }
+            : {};
           return json({
             tool: prepared.tool,
             provider: prepared.provider,
@@ -3563,6 +3628,7 @@ export function videobookDomainDefs(
               ? { provider_path: translated.provider_path }
               : {}),
             payload: translated?.payload ?? prepared.input,
+            estimate: costValue.estimate ?? null,
           });
         } catch (cause) {
           return failure(cause instanceof Error ? cause.message : String(cause));
@@ -3632,6 +3698,12 @@ export function videobookDomainDefs(
               }
             : {}),
         });
+        await markNotebookCellQueued(
+          engine,
+          String(args.notebook_id),
+          String(args.cell_id),
+          runId,
+        ).catch(() => undefined);
         return json({
           job_id: jobId,
           run_id: runId,
