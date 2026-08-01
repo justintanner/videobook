@@ -288,11 +288,9 @@ describe('notebook generation actions', () => {
     )).toEqual([{ kind: 'image', target: 'first_frame' }])
   })
 
-  it('adds providers only when model titles collide', () => {
-    expect(generationActionLabel(actions[0]!, actions)).toBe(
-      'Nano Banana Pro · Kie',
-    )
-    expect(generationActionLabel(actions[2]!, actions)).toBe('GPT Image 2')
+  it('adds providers to every model label', () => {
+    expect(generationActionLabel(actions[0]!)).toBe('Nano Banana Pro · Kie')
+    expect(generationActionLabel(actions[2]!)).toBe('GPT Image 2 · Kie')
   })
 
   it('surfaces compatible generation types with concise labels', () => {

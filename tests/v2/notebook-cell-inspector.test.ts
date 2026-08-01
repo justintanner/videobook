@@ -197,7 +197,7 @@ describe('NotebookCellInspector', () => {
 
     expect(html).toContain('<select aria-label="Model">')
     expect(html).toContain(
-      '<option value="generation.generate_kie_nano_banana_pro_text_to_image" selected="">Nano Banana Pro</option>',
+      '<option value="generation.generate_kie_nano_banana_pro_text_to_image" selected="">Nano Banana Pro · Kie</option>',
     )
     expect(html).not.toContain('<select aria-label="Provider">')
     expect(html).not.toContain('<select aria-label="Operation">')
@@ -235,6 +235,7 @@ describe('NotebookCellInspector', () => {
       tool: undefined,
       outputArtifactId: undefined,
     }
+    let previewCalls = 0
     const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
       notebookId: '01900000-0000-7000-8000-000000000003',
       cell: generationCell,
@@ -254,14 +255,27 @@ describe('NotebookCellInspector', () => {
       onClearSlot: async () => undefined,
       onDelete: async () => undefined,
       onOpenFullscreen: () => undefined,
+      onPreviewPayload: async () => {
+        previewCalls += 1
+        return {}
+      },
     }))
 
+    expect(html).toContain('Gemini Omni Video · Kie')
     expect(html).toContain('<select aria-label="Type">')
     expect(html).toContain('T2V · Text to video')
     expect(html).toContain('<select aria-label="Duration">')
     expect(html).toContain('Default · 8')
     expect(html).toContain('<select aria-label="Aspect ratio">')
     expect(html).toContain('<select aria-label="Resolution">')
+    expect(html).toContain(
+      'class="inspector-analysis-json-disclosure inspector-payload-disclosure"',
+    )
+    expect(html).toContain('class="inspector-json-summary"')
+    expect(html).toContain(
+      '{&quot;provider&quot;:&quot;Kie&quot;,&quot;model&quot;:&quot;Gemini Omni Video&quot;,&quot;type&quot;:&quot;t2v&quot;,&quot;inputs&quot;:0,&quot;settings&quot;:{&quot;duration&quot;:&quot;8&quot;}}',
+    )
+    expect(previewCalls).toBe(0)
   })
 
   it('keeps an incompatible saved model visible and disables generation', () => {
@@ -316,11 +330,13 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain(
-      '<option value="generation.generate_kie_gpt_image_2_text_to_image" selected="">GPT Image 2 · incompatible</option>',
+      '<option value="generation.generate_kie_gpt_image_2_text_to_image" selected="">GPT Image 2 · Kie · incompatible</option>',
     )
     expect(html).toContain('This model does not accept the current inputs.')
     expect(html).toMatch(/class="inspector-run-action"[^>]*disabled=""/)
-    expect(html).toContain('class="inspector-analysis-json-disclosure"')
+    expect(html).toContain(
+      'class="inspector-analysis-json-disclosure inspector-payload-disclosure"',
+    )
     expect(html).not.toContain('class="inspector-analysis-json-scroll"')
     expect(previewCalls).toBe(0)
   })

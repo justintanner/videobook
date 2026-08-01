@@ -513,11 +513,6 @@ export function generationSelectionForAction(
 
 export function generationActionLabel(
   action: NotebookGenerationAction,
-  actions: readonly NotebookGenerationAction[],
 ): string {
-  const duplicate = actions.some((candidate) =>
-    candidate.id !== action.id && candidate.title === action.title)
-  return duplicate
-    ? `${action.title} · ${action.providerLabel}`
-    : action.title
+  return `${action.title} · ${action.providerLabel}`
 }

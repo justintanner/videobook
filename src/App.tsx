@@ -5704,12 +5704,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     >
                       <CellIcon kind={selectedCell.data.kind} />
                       <strong>{cellTypeLabel(selectedCell.data.kind)}</strong>
-                      <CellStatusBadge
-                        status={notebookCellStatusLabel(
-                          selectedCell.data.kind,
-                          selectedCell.data.status,
-                        )}
-                      />
                     </span>
                   ) : (
                     <span>INSPECTOR</span>

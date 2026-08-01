@@ -1222,11 +1222,15 @@ function MediaCellInspector({
 
 function AnalysisJsonDisclosure({
   label,
+  summary,
+  className,
   value,
   loadValue,
   ariaLabel,
 }: {
   label: string
+  summary?: string
+  className?: string
   value?: unknown
   loadValue?: () => Promise<unknown>
   ariaLabel: string
@@ -1238,7 +1242,10 @@ function AnalysisJsonDisclosure({
 
   return (
     <details
-      className="inspector-analysis-json-disclosure"
+      className={[
+        'inspector-analysis-json-disclosure',
+        className,
+      ].filter(Boolean).join(' ')}
       aria-busy={loading}
       onToggle={(event) => {
         const nextOpen = event.currentTarget.open
@@ -1268,6 +1275,7 @@ function AnalysisJsonDisclosure({
       <summary>
         <Braces size={12} aria-hidden="true" />
         <span>{label}</span>
+        {summary && <code className="inspector-json-summary">{summary}</code>}
       </summary>
       {open && resolvedValue !== undefined && (
         <div className="inspector-analysis-json-scroll" tabIndex={0}>
@@ -1823,6 +1831,29 @@ function ExecutableCellInspector({
     : compatibleActions
   const selectedGenerationValue = selectedGenerationAction?.id
     ?? draft.tool
+  const payloadSummarySettings = Object.fromEntries(
+    generationControls.flatMap((control) => {
+      const value = effectiveGenerationControlValue(
+        control,
+        draft.generationSettings,
+      )
+      return value === undefined ? [] : [[control.name, value]]
+    }),
+  )
+  const payloadSummary = JSON.stringify({
+    ...(selectedGenerationAction
+      ? {
+          provider: selectedGenerationAction.providerLabel,
+          model: selectedGenerationAction.title,
+        }
+      : {
+          ...(draft.provider ? { provider: draft.provider } : {}),
+          ...(draft.model ? { model: draft.model } : {}),
+        }),
+    ...(effectiveGenerationMode ? { type: effectiveGenerationMode } : {}),
+    inputs: connectedGenerationInputs.length,
+    settings: payloadSummarySettings,
+  })
   const action = notebookCellActionPresentation(
     generationCell
       ? {
@@ -2076,7 +2107,6 @@ function ExecutableCellInspector({
                     )
                     const label = generationActionLabel(
                       candidate,
-                      generationActions,
                     )
                     return (
                       <option key={candidate.id} value={candidate.id}>
@@ -2174,7 +2204,9 @@ function ExecutableCellInspector({
                 .map((edge) => `${edge.source}:${edge.targetInput}`)
                 .sort(),
             ].join(':')}
+            className="inspector-payload-disclosure"
             label="Payload"
+            summary={payloadSummary}
             ariaLabel={`Provider payload preview for @${cell.slug}`}
             loadValue={() => onPreviewPayload(cell.id, {
               prompt: draft.prompt,
