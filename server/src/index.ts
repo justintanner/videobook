@@ -13,10 +13,10 @@ import { SCHEMA_VERSION } from "videobook-engine";
 import { v7 as uuidv7 } from "uuid";
 import { localArchiveDir } from "./archive-store.js";
 import { bookManager, fs as scopedBookEngine } from "./fs.js";
+import { ensureDancingWorkflow } from "./dancing-workflow.js";
 import { registerAllJobHandlers } from "./jobs/index.js";
 import { reconcileAwaitingNotebookOutputs } from "./jobs/run-notebook.js";
 import { uploadLocalStream } from "./local-upload.js";
-import { ensureMultycultyWorkflow } from "./multyculty-workflow.js";
 import { queue } from "./queue.js";
 import { searchReferenceStore } from "./search-reference-store.js";
 import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
@@ -203,9 +203,7 @@ async function start(): Promise<void> {
   await bookManager.ready();
   registerAllJobHandlers(scopedBookEngine);
   if (process.env.VIDEOBOOK_DEV_FIXTURES === "1") {
-    await ensureMultycultyWorkflow(bookManager, {
-      materializeLocalOutputs: true,
-    });
+    await ensureDancingWorkflow(bookManager);
   }
   await queue.start();
   for (const book of bookManager.list()) {

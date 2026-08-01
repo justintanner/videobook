@@ -21,6 +21,7 @@
     "use": "op run --env-file=.env.tpl -- tsx server/src/cli.ts",
     "check:op": "op run --env-file=.env.tpl -- node -e 'const keys=[\"OPENAI_API_KEY\",\"KIE_API_KEY\",\"XAI_API_KEY\",\"X_CLIENT_ID\",\"X_CLIENT_SECRET\",\"KIMI_CODING_API_KEY\",\"FAL_API_KEY\",\"DASHSCOPE_API_KEY\",\"GOOGLE_FLOW_API_KEY\",\"ELEVENLABS_API_KEY\",\"B2_ACCESS_KEY_ID\",\"B2_SECRET_ACCESS_KEY\",\"B2_REGION\",\"B2_BUCKET\",\"B2_ENDPOINT\"]; console.log(`1Password OK - ${keys.filter((k)=>process.env[k] && !process.env[k].startsWith(\"op://\")).length} secrets resolved`)';",
     "docs:commands": "tsx scripts/generate-command-docs.ts",
+    "seed:dancing": "tsx scripts/seed-dancing.ts",
     "seed:multyculty": "tsx scripts/seed-multyculty.ts",
     "benchmark:search": "tsx scripts/run-search-benchmark.ts",
     "extract:videocity-benchmark": "node tools/extract-videocity-benchmark.mjs",

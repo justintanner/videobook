@@ -3177,7 +3177,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         refreshBookCommands(),
       ])
       const target = nextBooks.find((book) => book.bookId === preferredBookId)
-        ?? nextBooks.find((book) => book.slug === 'multyculty')
+        ?? nextBooks.find((book) => book.slug === 'dancing')
         ?? nextBooks.find((book) => book.bookId === bookId)
         ?? nextBooks[0]
       if (target) {

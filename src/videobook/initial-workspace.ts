@@ -85,7 +85,7 @@ export async function loadInitialWorkspace(): Promise<InitialWorkspacePayload | 
   const books = Array.isArray(bookValue) ? bookValue : []
   const selected = books
     .map(record)
-    .find((book) => book?.slug === 'multyculty')
+    .find((book) => book?.slug === 'dancing')
     ?? books.map(record).find(Boolean)
   const bookId = typeof selected?.bookId === 'string' ? selected.bookId : ''
   if (!bookId) return null

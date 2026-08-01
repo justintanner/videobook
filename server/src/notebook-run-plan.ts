@@ -233,7 +233,7 @@ export async function planNotebookRun(
     actor,
     bookId: engine.book.get().bookId,
     summary: runnable.length === 0
-      ? "Multyculty workbook is fully current"
+      ? "Workbook is fully current"
       : `Run ${runnable.length} stale workbook cells`,
     normalizedReferences: [{
       kind: "notebook",
