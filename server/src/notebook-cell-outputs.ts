@@ -5,6 +5,15 @@ import type {
   NotebookGridSlot,
 } from "videobook-engine";
 
+type ExtractFrameMode = "first" | "time" | "last";
+
+type ExtractFrameSelection = {
+  frameMode: ExtractFrameMode;
+  sourceCellId: string | null;
+  timestampSeconds: number | null;
+  key: string;
+};
+
 function uniqueImageSlug(
   cells: readonly NotebookCell[],
   stem: string,
@@ -36,10 +45,114 @@ function firstEmptyRowBelow(
   }
 }
 
+function normalizedFrameMode(value: unknown): ExtractFrameMode {
+  return value === "time" || value === "last" ? value : "first";
+}
+
+function normalizedTimestamp(value: unknown): number | null {
+  const timestamp = Number(value);
+  return Number.isFinite(timestamp) && timestamp >= 0
+    ? Math.round(timestamp * 1_000) / 1_000
+    : null;
+}
+
+export function extractFrameSelectionKey(
+  sourceCellId: string | null,
+  frameMode: ExtractFrameMode,
+  timestampSeconds: number | null = null,
+): string {
+  const source = sourceCellId ?? "unconnected";
+  const timestamp = frameMode === "time"
+    ? String(timestampSeconds ?? "invalid")
+    : "frame";
+  return `${source}:${frameMode}:${timestamp}`;
+}
+
+export function extractFrameSelection(
+  document: NotebookDocument,
+  extractFrameCellId: string,
+): ExtractFrameSelection {
+  const extractFrame = document.cells.find((cell) =>
+    cell.id === extractFrameCellId);
+  if (extractFrame?.type !== "extract_frame") {
+    throw new Error(`Extract Frame cell not found: ${extractFrameCellId}`);
+  }
+  const frameMode = normalizedFrameMode(extractFrame.inputs?.frameMode);
+  const timestampSeconds = frameMode === "time"
+    ? normalizedTimestamp(extractFrame.inputs?.timestampSeconds)
+    : null;
+  const sourceCellId = document.edges.find((edge) =>
+    edge.target === extractFrameCellId && edge.targetInput === "video")
+    ?.source ?? null;
+  return {
+    frameMode,
+    sourceCellId,
+    timestampSeconds,
+    key: extractFrameSelectionKey(
+      sourceCellId,
+      frameMode,
+      timestampSeconds,
+    ),
+  };
+}
+
+function extractFrameOutputInputs(
+  cell: NotebookCell,
+  extractFrameCellId: string,
+  selection: ExtractFrameSelection,
+): Record<string, unknown> {
+  const inputs: Record<string, unknown> = {
+    ...(cell.inputs ?? {}),
+    mediaRole: "extract-frame-output",
+    producerCellId: extractFrameCellId,
+    frameMode: selection.frameMode,
+    frameSelectionKey: selection.key,
+  };
+  delete inputs.sourceCellId;
+  delete inputs.timestampSeconds;
+  if (selection.sourceCellId) inputs.sourceCellId = selection.sourceCellId;
+  if (selection.frameMode === "time" && selection.timestampSeconds !== null) {
+    inputs.timestampSeconds = selection.timestampSeconds;
+  }
+  return inputs;
+}
+
+function frameSelectionMatches(
+  cell: NotebookCell,
+  selection: ExtractFrameSelection,
+): boolean {
+  if (cell.inputs?.frameSelectionKey === selection.key) return true;
+  const frameMode = normalizedFrameMode(cell.inputs?.frameMode);
+  if (frameMode !== selection.frameMode) return false;
+  if (
+    frameMode === "time"
+    && normalizedTimestamp(cell.inputs?.timestampSeconds)
+      !== selection.timestampSeconds
+  ) {
+    return false;
+  }
+  const sourceCellId = typeof cell.inputs?.sourceCellId === "string"
+    ? cell.inputs.sourceCellId
+    : null;
+  return sourceCellId === null || sourceCellId === selection.sourceCellId;
+}
+
+function outputSlugStem(
+  extractFrame: NotebookCell,
+  selection: ExtractFrameSelection,
+): string {
+  const base = extractFrame.slug.replace(/^extract-frame-/, "");
+  if (selection.frameMode === "last") return `${base}-last`;
+  if (selection.frameMode !== "time") return base;
+  const timestamp = String(selection.timestampSeconds ?? 0).replace(".", "-");
+  return `${base}-${timestamp}s`;
+}
+
 export function findExtractFrameImageOutput(
   document: NotebookDocument,
   extractFrameCellId: string,
 ) {
+  const selection = extractFrameSelection(document, extractFrameCellId);
   for (const edge of document.edges) {
     if (
       edge.source !== extractFrameCellId
@@ -49,7 +162,10 @@ export function findExtractFrameImageOutput(
     }
     const outputCell = document.cells.find((cell) =>
       cell.id === edge.target);
-    if (outputCell?.type === "image") {
+    if (
+      outputCell?.type === "image"
+      && frameSelectionMatches(outputCell, selection)
+    ) {
       return { outputCell, outputEdge: edge };
     }
   }
@@ -66,25 +182,53 @@ export function ensureExtractFrameImageOutput(
   if (extractFrame?.type !== "extract_frame") {
     throw new Error(`Extract Frame cell not found: ${extractFrameCellId}`);
   }
+  const selection = extractFrameSelection(document, extractFrameCellId);
   const existing = findExtractFrameImageOutput(
     document,
     extractFrameCellId,
   );
   if (existing) {
-    return { document, ...existing, created: false };
+    const inputs = extractFrameOutputInputs(
+      existing.outputCell,
+      extractFrameCellId,
+      selection,
+    );
+    const unchanged = existing.outputCell.inputs?.frameSelectionKey
+        === selection.key
+      && existing.outputCell.inputs?.frameMode === selection.frameMode
+      && (existing.outputCell.inputs?.sourceCellId ?? null)
+        === selection.sourceCellId
+      && (selection.frameMode !== "time"
+        || existing.outputCell.inputs?.timestampSeconds
+          === selection.timestampSeconds);
+    if (unchanged) {
+      return { document, ...existing, created: false, updated: false };
+    }
+    const outputCell = { ...existing.outputCell, inputs };
+    return {
+      document: {
+        ...document,
+        cells: document.cells.map((cell) =>
+          cell.id === outputCell.id ? outputCell : cell),
+      },
+      outputCell,
+      outputEdge: existing.outputEdge,
+      created: false,
+      updated: true,
+    };
   }
   const outputCell = engine.notebooks.createCell({
     type: "image",
     slug: uniqueImageSlug(
       document.cells,
-      extractFrame.slug.replace(/^extract-frame-/, ""),
+      outputSlugStem(extractFrame, selection),
     ),
     slot: firstEmptyRowBelow(document.cells, extractFrame.slot),
-    inputs: {
-      mediaRole: "extract-frame-output",
-      producerCellId: extractFrame.id,
-      state: "pending",
-    },
+    inputs: extractFrameOutputInputs(
+      { ...extractFrame, inputs: { state: "pending" } },
+      extractFrame.id,
+      selection,
+    ),
   });
   const outputEdge = engine.notebooks.createEdge({
     source: extractFrame.id,
@@ -100,5 +244,6 @@ export function ensureExtractFrameImageOutput(
     outputCell,
     outputEdge,
     created: true,
+    updated: false,
   };
 }

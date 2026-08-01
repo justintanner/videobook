@@ -76,6 +76,12 @@ function notebookConnectionError(
   const target = notebook.cells.find((cell) => cell.id === targetId);
   if (!source) return `Source cell not found: ${sourceId}`;
   if (!target) return `Target cell not found: ${targetId}`;
+  if (
+    source.type === "extract_frame"
+    && (target.type !== "image" || targetInput !== "media")
+  ) {
+    return "Extract frame actions can connect only to their Image result cell";
+  }
   if (target.type === "analysis") {
     if (targetInput !== "result") {
       return "Analysis result cells accept only the result input";
@@ -157,12 +163,11 @@ function notebookConnectionError(
   return null;
 }
 
-function markCellAndDescendantsStale(
+function markCellStale(
   notebook: NotebookDocument,
   cellId: string,
 ): NotebookDocument {
-  const marked = markDescendantsStale(notebook, cellId);
-  const execution = { ...(marked.execution ?? {}) };
+  const execution = { ...(notebook.execution ?? {}) };
   const current = execution[cellId];
   execution[cellId] = current
     && typeof current === "object"
@@ -170,9 +175,9 @@ function markCellAndDescendantsStale(
     ? { ...current as Record<string, unknown>, stale: true }
     : { stale: true };
   return {
-    ...marked,
+    ...notebook,
     execution,
-    cells: marked.cells.map((cell) =>
+    cells: notebook.cells.map((cell) =>
       cell.id === cellId
         ? {
             ...cell,
@@ -184,6 +189,13 @@ function markCellAndDescendantsStale(
           }
         : cell),
   };
+}
+
+function markCellAndDescendantsStale(
+  notebook: NotebookDocument,
+  cellId: string,
+): NotebookDocument {
+  return markCellStale(markDescendantsStale(notebook, cellId), cellId);
 }
 
 function clearNotebookCellSlot(
@@ -3245,10 +3257,12 @@ export function videobookDomainDefs(
                 return next;
               });
               if (!found) throw new Error(`Cell not found: ${String(args.cell_id)}`);
-              return markDescendantsStale(
-                { ...document, cells },
-                String(args.cell_id),
-              );
+              const updated = { ...document, cells };
+              const updatedCell = cells.find((cell) =>
+                cell.id === args.cell_id);
+              return updatedCell?.type === "extract_frame"
+                ? markCellStale(updated, String(args.cell_id))
+                : markDescendantsStale(updated, String(args.cell_id));
             },
             { cellId: args.cell_id },
           );
@@ -3463,10 +3477,10 @@ export function videobookDomainDefs(
                 edgeId = edge.id;
                 edges = [...retained, edge];
               }
-              return markCellAndDescendantsStale(
-                { ...notebook, edges },
-                targetCellId,
-              );
+              const updated = { ...notebook, edges };
+              return target.type === "extract_frame"
+                ? markCellStale(updated, targetCellId)
+                : markCellAndDescendantsStale(updated, targetCellId);
             },
             {
               targetCellId,

@@ -228,7 +228,6 @@ export function notebookGenerationInputContract(
 function cellInputKind(cell: NotebookCell): NotebookGenerationInputKind | null {
   if (
     cell.type === "image"
-    || cell.type === "extract_frame"
     || cell.type === "generate_image"
   ) return "image";
   if (

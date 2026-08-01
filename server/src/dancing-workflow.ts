@@ -13,6 +13,7 @@ import type { BookManager } from "./book-manager.js";
 import { probeImage } from "./image.js";
 import { notebookCellFingerprint } from "./jobs/run-notebook.js";
 import { probeVideo, runFfmpeg } from "./ffmpeg.js";
+import { extractFrameSelectionKey } from "./notebook-cell-outputs.js";
 
 type ArtifactRecord = {
   artifactId: string;
@@ -26,7 +27,7 @@ export type DancingFixtureOptions = {
 };
 
 export const DANCING_FIXTURE_OWNER = "dancing-default";
-export const DANCING_FIXTURE_VERSION = 1;
+export const DANCING_FIXTURE_VERSION = 2;
 export const DANCING_SOURCE_URL = "https://www.youtube.com/watch?v=8GwZveBYRJI";
 export const DANCING_MOTION_DURATION_SECONDS = 10;
 
@@ -385,6 +386,8 @@ export async function seedDancingWorkflow(
       frameMode: "first",
       mediaRole: "extract-frame-output",
       producerCellId: extract.id,
+      sourceCellId: source.id,
+      frameSelectionKey: extractFrameSelectionKey(source.id, "first"),
       state: "completed",
     },
   });
@@ -440,7 +443,7 @@ export async function seedDancingWorkflow(
       targetInput: "media",
     }),
     engine.notebooks.createEdge({
-      source: extract.id,
+      source: frame.id,
       target: kittens.id,
       targetInput: "input",
     }),

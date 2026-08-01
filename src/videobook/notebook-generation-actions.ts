@@ -342,7 +342,6 @@ export function generationActionForSelection(
 function cellInputKind(cell: NotebookCell): GenerationInputKind | null {
   if (
     cell.type === 'image'
-    || cell.type === 'extract_frame'
     || cell.type === 'generate_image'
   ) return 'image'
   if (

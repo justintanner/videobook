@@ -15,6 +15,7 @@ import { MVP_CONTRACT_VERSION } from "videobook-engine";
 import { mutateNotebook } from "../notebook-mutations.js";
 import {
   ensureExtractFrameImageOutput,
+  extractFrameSelection,
   findExtractFrameImageOutput,
 } from "../notebook-cell-outputs.js";
 import { queue, registerJobHandler, waitForJob } from "../queue.js";
@@ -208,7 +209,6 @@ export function notebookCellMediaType(
 ): "image" | "video" | "audio" | null {
   if (
     cell.type === "image"
-    || cell.type === "extract_frame"
     || cell.type === "generate_image"
   ) return "image";
   if (
@@ -720,9 +720,13 @@ export function modelArgs(
     engine ? artifactSlugRef(engine, artifactId) : `@${artifactId}`;
 
   const firstFrame = upstream.find((entry) =>
-    entry.targetInput === "first_frame" && typeof entry.output === "string");
+    entry.targetInput === "first_frame"
+    && typeof entry.output === "string"
+    && isImageLikeCell(entry.cell));
   const lastFrame = upstream.find((entry) =>
-    entry.targetInput === "last_frame" && typeof entry.output === "string");
+    entry.targetInput === "last_frame"
+    && typeof entry.output === "string"
+    && isImageLikeCell(entry.cell));
   if (firstFrame?.output && "first_frame_slug" in definition.schema) {
     args.first_frame_slug = refFor(firstFrame.output);
   }
@@ -1364,32 +1368,33 @@ async function executeLocalOrGeneration(
 
   if (cell.type === "extract_frame" && cell.operation === "extract_frame") {
     const sourceId = requiredVideoInputArtifact(document, cell);
-    const outputCellIds = requiredMediaOutputCellIds(
-      document,
-      cell,
-      "image",
-    );
-    const configuredMode = cell.inputs?.frameMode;
-    const frameMode = configuredMode === "time" || configuredMode === "last"
-      ? configuredMode
-      : "first";
-    const timestampSeconds = Number(cell.inputs?.timestampSeconds);
-    if (
-      frameMode === "time"
-      && (!Number.isFinite(timestampSeconds) || timestampSeconds < 0)
-    ) {
+    const selection = extractFrameSelection(document, cell.id);
+    const output = findExtractFrameImageOutput(document, cell.id);
+    if (!output) {
       throw new Error(
-        `extract_frame cell ${cell.id} requires a nonnegative timestamp`,
+        `extract_frame cell ${cell.id} requires a matching downstream image media cell`,
       );
+    }
+    const outputCellIds = new Set([output.outputCell.id]);
+    const frameMode = selection.frameMode;
+    const timestampSeconds = selection.timestampSeconds;
+    const timestampInput: { timestampSeconds?: number } = {};
+    if (frameMode === "time") {
+      if (timestampSeconds === null) {
+        throw new Error(
+          `extract_frame cell ${cell.id} requires a nonnegative timestamp`,
+        );
+      }
+      timestampInput.timestampSeconds = timestampSeconds;
     }
     const result = await captureFrame(engine, sourceId, {
       role: frameMode,
-      ...(frameMode === "time" ? { timestampSeconds } : {}),
+      ...timestampInput,
       title: `${cell.slug} · ${frameMode} frame`,
     });
     const outputInputs = {
       frameMode,
-      ...(frameMode === "time" ? { timestampSeconds } : {}),
+      ...timestampInput,
       atSeconds: result.atSeconds,
     };
     return {
@@ -1598,10 +1603,14 @@ export async function runNotebookCell(
   let normalizedDocument = normalizeLegacyAnalyzeDocument(document);
   let normalizedCell = normalizedDocument.cells.find((candidate) =>
     candidate.id === cell.id) ?? normalizeLegacyAnalyzeCell(cell);
-  if (
-    normalizedCell.type === "extract_frame"
-    && !findExtractFrameImageOutput(normalizedDocument, normalizedCell.id)
-  ) {
+  const extractFrameOutput = normalizedCell.type === "extract_frame"
+    ? ensureExtractFrameImageOutput(
+        engine,
+        normalizedDocument,
+        normalizedCell.id,
+      )
+    : null;
+  if (extractFrameOutput && extractFrameOutput.document !== normalizedDocument) {
     const repaired = await mutateNotebook(
       engine,
       notebookId,

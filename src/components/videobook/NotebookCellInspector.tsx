@@ -437,6 +437,7 @@ function compatibleSource(
   if (target.type === 'image' && targetInput === 'media') {
     return source.type === 'extract_frame'
   }
+  if (source.type === 'extract_frame') return false
   if (target.type === 'image' && targetInput === 'segment') {
     return source.type === 'video'
   }

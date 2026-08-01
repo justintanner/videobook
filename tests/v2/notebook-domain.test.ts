@@ -403,6 +403,41 @@ describe('v2 notebook domain tools', () => {
       }))
     }
 
+    const invalidExtractActionSource = await invoke('connect_notebook_cells', {
+      notebook_id: notebookId,
+      source_cell_id: extractFrame.id,
+      target_cell_id: invalidImage.id,
+      target_input: 'input',
+    })
+    expect(invalidExtractActionSource.isError).toBe(true)
+    expect(invalidExtractActionSource.content[0]?.text).toContain(
+      'Image result cell',
+    )
+
+    const beforeFrameModeChange = managed.value.engine.notebooks.read(notebookId)
+    expect(beforeFrameModeChange.ok).toBe(true)
+    if (!beforeFrameModeChange.ok) return
+    const preparedFrameModeChange = await managed.value.engine.notebooks.write({
+      ...beforeFrameModeChange.value,
+      execution: {
+        ...(beforeFrameModeChange.value.execution ?? {}),
+        [imageOutput.id]: { status: 'completed' },
+      },
+    })
+    expect(preparedFrameModeChange.ok).toBe(true)
+    resultJson(await invoke('update_notebook_cell', {
+      notebook_id: notebookId,
+      cell_id: extractFrame.id,
+      cell: { inputs: { frameMode: 'last' } },
+    }))
+    const changedFrameMode = resultJson(await invoke('get_notebook', {
+      notebook_id: notebookId,
+    })) as {
+      execution?: Record<string, { stale?: boolean }>
+    }
+    expect(changedFrameMode.execution?.[extractFrame.id]?.stale).toBe(true)
+    expect(changedFrameMode.execution?.[imageOutput.id]?.stale).not.toBe(true)
+
     const invalidOutput = await invoke('connect_notebook_cells', {
       notebook_id: notebookId,
       source_cell_id: extractAudio.id,

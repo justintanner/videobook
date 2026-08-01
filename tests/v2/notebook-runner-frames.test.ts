@@ -151,6 +151,60 @@ describe("notebook runner frames and concat", () => {
     });
   });
 
+  it("ignores Extract Frame actions as generation image sources", () => {
+    const extractFrame = {
+      id: "019f0000-0000-7000-8000-000000000030",
+      type: "extract_frame" as const,
+      slug: "extract-frame-source",
+      slot: { row: 0, column: 0 },
+      outputArtifactId: "019f0000-0000-7000-8000-000000000031",
+    };
+    const image = {
+      id: "019f0000-0000-7000-8000-000000000032",
+      type: "image" as const,
+      slug: "img-source",
+      slot: { row: 1, column: 0 },
+      outputArtifactId: "019f0000-0000-7000-8000-000000000033",
+    };
+    const generate = {
+      id: "019f0000-0000-7000-8000-000000000034",
+      type: "generate_image" as const,
+      slug: "generate-image-source",
+      slot: { row: 2, column: 0 },
+    };
+    const document: NotebookDocument = {
+      id: "019f0000-0000-7000-8000-000000000035",
+      name: "Extracted image source",
+      cells: [extractFrame, image, generate],
+      edges: [
+        {
+          id: "019f0000-0000-7000-8000-000000000036",
+          source: extractFrame.id,
+          target: generate.id,
+          targetInput: "image",
+        },
+        {
+          id: "019f0000-0000-7000-8000-000000000037",
+          source: image.id,
+          target: generate.id,
+          targetInput: "image",
+        },
+      ],
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    const definition = {
+      name: "generate_test_image",
+      schema: {
+        book_id: {},
+        prompt: {},
+        image_slugs: {},
+      },
+    } as unknown as ToolDef;
+
+    expect(modelArgs(definition, document, generate, "book-id").image_slugs)
+      .toEqual([`@${image.outputArtifactId}`]);
+  });
+
   it("maps first_frame and last_frame image cells into Seedance payload fields", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-frames-"));
     engine = createEngine({ rootDir, initialBookSlug: "runner-frames" });
@@ -458,7 +512,7 @@ describe("notebook runner frames and concat", () => {
     ]);
   }, 90_000);
 
-  it("extracts first, timed, and last frames into a versioned Image cell", async () => {
+  it("stacks matching frame extractions and separates different selections", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-extract-frame-"));
     engine = createEngine({ rootDir, initialBookSlug: "runner-extract-frame" });
     await engine.ready;
@@ -563,6 +617,8 @@ describe("notebook runner frames and concat", () => {
       inputs: {
         mediaRole: "extract-frame-output",
         producerCellId: extractFrame.id,
+        sourceCellId: source.id,
+        frameSelectionKey: `${source.id}:first:frame`,
         frameMode: "first",
         atSeconds: 0,
         outputVersionArtifactIds: [first.outputArtifactId],
@@ -576,37 +632,70 @@ describe("notebook runner frames and concat", () => {
       }),
     ]);
 
+    const repeatedFirst = await runConfigured("first");
+    const repeatedFirstImage = repeatedFirst.document.cells.find((cell) =>
+      cell.id === imageId);
+    expect(repeatedFirstImage).toMatchObject({
+      outputArtifactId: repeatedFirst.outputArtifactId,
+      inputs: {
+        frameMode: "first",
+        outputVersionArtifactIds: [
+          first.outputArtifactId,
+          repeatedFirst.outputArtifactId,
+        ],
+      },
+    });
+
     const timed = await runConfigured("time", 1.25);
     const timedImage = timed.document.cells.find((cell) =>
-      cell.id === imageId);
+      cell.type === "image"
+      && cell.inputs?.producerCellId === extractFrame.id
+      && cell.inputs?.frameMode === "time");
     expect(timedImage).toMatchObject({
       outputArtifactId: timed.outputArtifactId,
       inputs: {
         frameMode: "time",
         timestampSeconds: 1.25,
+        frameSelectionKey: `${source.id}:time:1.25`,
         atSeconds: 1.25,
-        outputVersionArtifactIds: [
-          first.outputArtifactId,
-          timed.outputArtifactId,
-        ],
+        outputVersionArtifactIds: [timed.outputArtifactId],
       },
     });
+    expect(timedImage?.id).not.toBe(imageId);
+
+    const repeatedTimed = await runConfigured("time", 1.25);
+    const repeatedTimedImage = repeatedTimed.document.cells.find((cell) =>
+      cell.id === timedImage?.id);
+    expect(repeatedTimedImage?.inputs?.outputVersionArtifactIds).toEqual([
+      timed.outputArtifactId,
+      repeatedTimed.outputArtifactId,
+    ]);
 
     const last = await runConfigured("last");
     const lastImage = last.document.cells.find((cell) =>
-      cell.id === imageId);
+      cell.type === "image"
+      && cell.inputs?.producerCellId === extractFrame.id
+      && cell.inputs?.frameMode === "last");
     expect(lastImage?.outputArtifactId).toBe(last.outputArtifactId);
     expect(Number(lastImage?.inputs?.atSeconds)).toBeGreaterThan(2.9);
+    expect(lastImage?.inputs?.frameSelectionKey)
+      .toBe(`${source.id}:last:frame`);
     expect(lastImage?.inputs?.outputVersionArtifactIds).toEqual([
-      first.outputArtifactId,
-      timed.outputArtifactId,
       last.outputArtifactId,
     ]);
+    expect(lastImage?.id).not.toBe(imageId);
+    expect(lastImage?.id).not.toBe(timedImage?.id);
+    const preservedFirstImage = last.document.cells.find((cell) =>
+      cell.id === imageId);
+    expect(preservedFirstImage?.inputs?.outputVersionArtifactIds).toEqual([
+      first.outputArtifactId,
+      repeatedFirst.outputArtifactId,
+    ]);
     expect(last.document.cells.filter((cell) => cell.type === "image"))
-      .toHaveLength(2);
+      .toHaveLength(4);
     expect(last.document.edges.filter((edge) =>
       edge.source === extractFrame.id && edge.targetInput === "media"))
-      .toHaveLength(1);
+      .toHaveLength(3);
     expect(last.document.cells.some((cell) => cell.type === "audio")).toBe(false);
 
     const manifest = await engine.files.manifest(last.outputArtifactId);

@@ -325,6 +325,27 @@ describe('notebook generation actions', () => {
     )).toEqual([{ kind: 'image', target: 'first_frame' }])
   })
 
+  it('uses extracted Image results instead of Extract Frame actions', () => {
+    const extractFrame: NotebookCell = {
+      ...emptyImageCell,
+      id: '01900000-0000-7000-8000-000000000004',
+      type: 'extract_frame',
+      slug: 'extract-frame-source',
+      operation: 'extract_frame',
+    }
+    const edge: NotebookEdge = {
+      id: '01900000-0000-7000-8000-000000000005',
+      source: extractFrame.id,
+      target: emptyImageCell.id,
+      targetInput: 'image',
+    }
+    expect(generationConnectedInputs(
+      emptyImageCell.id,
+      [emptyImageCell, extractFrame],
+      [edge],
+    )).toEqual([])
+  })
+
   it('adds providers to every model label', () => {
     expect(generationActionLabel(actions[0]!)).toBe('Nano Banana Pro · Kie')
     expect(generationActionLabel(actions[2]!)).toBe('GPT Image 2 · Kie')

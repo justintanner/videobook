@@ -139,7 +139,7 @@ describe("Dancing workflow fixture", () => {
         targetInput: "video",
       }),
       expect.objectContaining({
-        source: extract?.id,
+        source: frame?.id,
         target: kittens?.id,
         targetInput: "input",
       }),
@@ -154,6 +154,8 @@ describe("Dancing workflow fixture", () => {
         targetInput: "video",
       }),
     ]));
+    expect(seeded.edges.some((edge) =>
+      edge.source === extract?.id && edge.target === kittens?.id)).toBe(false);
     if (!source?.outputArtifactId || !motion) {
       throw new Error("Dancing fixture source or motion cell is missing");
     }
