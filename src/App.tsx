@@ -182,6 +182,11 @@ import {
   parseNotebookFrameCommand,
   type NotebookFrameCommand,
 } from '@/videobook/notebook-frame-command'
+import {
+  materializeNotebookImageGenerationCommand,
+  parseNotebookImageGenerationCommand,
+  type NotebookImageGenerationCommand,
+} from '@/videobook/notebook-image-generation-command'
 import { parseNotebookGenerationCellCommand } from '@/videobook/notebook-generation-command'
 import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
 import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
@@ -5046,6 +5051,56 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const executeNotebookImageGenerationCommand = async (
+    command: NotebookImageGenerationCommand,
+  ): Promise<ComposerOutcome> => {
+    if (!bookId || !notebook) {
+      return { ok: false, message: 'Open a notebook before generating an image.' }
+    }
+    let createdCellId: string | null = null
+    let createdCellSlug: string | null = null
+    setBusy(true)
+    try {
+      const currentNotebook = asNotebook(await call('get_notebook', {
+        book_id: bookId,
+        notebook_id: notebook.id,
+      }))
+      if (!currentNotebook) {
+        throw new Error('The server returned an invalid notebook')
+      }
+      const materialized = await materializeNotebookImageGenerationCommand({
+        actions: generationActions,
+        bookId,
+        callTool: call,
+        command,
+        document: currentNotebook,
+        fallbackSlot: nextNotebookGridSlot(nodes),
+      })
+      createdCellId = materialized.cellId
+      createdCellSlug = materialized.cellSlug
+      setSelectedCellId(materialized.cellId)
+      await refreshBookData(bookId, currentNotebook.id)
+      await prepareGenerationPlan(materialized.cellId, 'chat')
+      const referenceMessage = materialized.sourceSlugs.length > 0
+        ? ` connected to ${materialized.sourceSlugs.map((slug) => `@${slug}`).join(', ')}`
+        : ''
+      return {
+        ok: true,
+        message: `Created @${materialized.cellSlug}${referenceMessage}; review the generation plan`,
+      }
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      await refreshBookData(bookId, notebook.id).catch(() => undefined)
+      const message = createdCellId && createdCellSlug
+        ? `Created @${createdCellSlug}, but could not prepare generation: ${detail}`
+        : detail
+      setNotice(message, 'error')
+      return { ok: false, message }
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const executeCommand = async (input: string): Promise<ComposerOutcome> => {
     try {
       if (!bookId) return { ok: false, message: 'Load or create a book first.' }
@@ -5057,6 +5112,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const frameCommand = parseNotebookFrameCommand(input)
         if (frameCommand) {
           return await executeNotebookFrameCommand(frameCommand)
+        }
+        const imageGenerationCommand = parseNotebookImageGenerationCommand(input)
+        if (imageGenerationCommand) {
+          return await executeNotebookImageGenerationCommand(imageGenerationCommand)
         }
         const generationCellReference = parseNotebookGenerationCellCommand(input)
         if (generationCellReference && notebook) {
