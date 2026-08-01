@@ -1,9 +1,25 @@
 import { useMemo, useRef, useState } from 'react'
-import { Check, ChevronUp, Loader2, Send, X } from 'lucide-react'
+import {
+  AudioWaveform,
+  Check,
+  ChevronUp,
+  FileText,
+  Film,
+  Image as ImageIcon,
+  Loader2,
+  Send,
+  X,
+} from 'lucide-react'
 import type { UseMcpResult } from 'use-mcp/react'
 import type { ServerCommand } from '@/lib/command-registry'
 import { RichPromptField } from '@/components/ui/RichPromptField'
-import { assetMentionSuggestions } from '@/videobook/mention-suggestions'
+import { MediaLibraryAssetPreview } from './MediaLibraryAssetPreview'
+import {
+  assetMentionMetadata,
+  assetMentionSuggestions,
+  type AssetMentionCandidate,
+  type AssetMentionSuggestion,
+} from '@/videobook/mention-suggestions'
 import { applyReadlineEdit } from '@/videobook/readline'
 import {
   commandSuggestionCandidates,
@@ -28,7 +44,7 @@ export interface PromptSession {
 
 interface CommandComposerProps {
   commands: ServerCommand[]
-  assetSlugs: string[]
+  assets: readonly AssetMentionCandidate[]
   bookId: string
   callTool: UseMcpResult['callTool']
   disabled: boolean
@@ -38,12 +54,14 @@ interface CommandComposerProps {
   onExecute: (input: string) => Promise<ComposerOutcome>
 }
 
-interface Suggestion {
+interface CommandSuggestion {
   value: string
   label: string
   description: string
-  type: 'command' | 'asset'
+  type: 'command'
 }
+
+type Suggestion = CommandSuggestion | AssetMentionSuggestion
 
 interface PromptHistoryEntry {
   prompt: string
@@ -79,7 +97,7 @@ function historyPayload(value: unknown): string[] {
 
 export function CommandComposer({
   commands,
-  assetSlugs,
+  assets,
   bookId,
   callTool,
   disabled,
@@ -114,8 +132,8 @@ export function CommandComposer({
           type: 'command',
         }))
     }
-    return assetMentionSuggestions(assetSlugs, input)
-  }, [assetSlugs, commands, dismissed, input])
+    return assetMentionSuggestions(assets, input)
+  }, [assets, commands, dismissed, input])
 
   const showOutcome = (next: ComposerOutcome) => {
     window.clearTimeout(successTimerRef.current)
@@ -322,12 +340,34 @@ export function CommandComposer({
               <button
                 type="button"
                 key={suggestion.label}
-                className={index === selectedIndex ? 'active' : ''}
+                className={`${index === selectedIndex ? 'active ' : ''}${
+                  suggestion.type === 'asset'
+                    ? 'command-asset-suggestion'
+                    : 'command-command-suggestion'
+                }`}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => acceptSuggestion(suggestion)}
               >
-                <strong>{suggestion.label}</strong>
-                <span>{suggestion.description}</span>
+                {suggestion.type === 'asset' ? (
+                  <>
+                    <span className="command-asset-preview" aria-hidden="true">
+                      <AssetSuggestionPreview asset={suggestion.asset} />
+                    </span>
+                    <span className="command-asset-copy">
+                      <strong>{suggestion.label}</strong>
+                      <span className="command-asset-metadata">
+                        {assetMentionMetadata(suggestion.asset).map((item, itemIndex) => (
+                          <span key={`${item}-${itemIndex}`}>{item}</span>
+                        ))}
+                      </span>
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <strong>{suggestion.label}</strong>
+                    <span>{suggestion.description}</span>
+                  </>
+                )}
               </button>
             ))}
           </div>
@@ -412,4 +452,27 @@ export function CommandComposer({
       </div>
     </section>
   )
+}
+
+function AssetSuggestionPreview({
+  asset,
+}: {
+  asset: AssetMentionCandidate
+}) {
+  const visual = Boolean(
+    asset.thumbnailUrl
+    || (
+      asset.mediaUrl
+      && (
+        asset.type === 'image'
+        || asset.type === 'video'
+        || asset.type === 'final'
+      )
+    ),
+  )
+  if (visual) return <MediaLibraryAssetPreview asset={asset} eager />
+  if (asset.type === 'audio') return <AudioWaveform size={17} />
+  if (asset.type === 'image') return <ImageIcon size={17} />
+  if (asset.type === 'video' || asset.type === 'final') return <Film size={17} />
+  return <FileText size={17} />
 }

@@ -188,6 +188,7 @@ import type {
   BookProjectMutationResult,
   BookProjectSummary,
 } from '@/videobook/book-project-selector'
+import { notebookMentionAssets } from '@/videobook/mention-suggestions'
 
 type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
 
@@ -2311,6 +2312,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const sourceAssets = useMemo(
     () => assets.filter((asset) => asset.type !== 'notebook'),
     [assets],
+  )
+  const commandMentionAssets = useMemo(
+    () => notebookMentionAssets(notebook?.cells ?? [], assets),
+    [assets, notebook],
   )
   const playbackAssets = useMemo(
     () => assets.flatMap((asset) =>
@@ -7163,7 +7168,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
       <CommandComposer
         commands={commands}
-        assetSlugs={assets.map((asset) => asset.id)}
+        assets={commandMentionAssets}
         bookId={bookId}
         callTool={mcp.callTool}
         disabled={busy || !bookId || mcp.state !== 'ready'}
