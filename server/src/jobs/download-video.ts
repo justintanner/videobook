@@ -8,7 +8,15 @@ import { queue, registerJobHandler } from "../queue.js";
 import { runFfmpeg, probeVideo, H264_MEDIUM, AUDIO_OPTS } from "../ffmpeg.js";
 import { downloadUrlIntoAsset } from "./_download-into-asset.js";
 import { withLockedLocalLease } from "./_lease.js";
-import { ingestWorkspaceOutputs } from "./_persist-output.js";
+import {
+  ingestWorkspaceOutputs,
+  replaceArtifactFileFromPath,
+} from "./_persist-output.js";
+import {
+  assertSaneTrimOutput,
+  trimRange,
+  trimRangeExact,
+} from "./trim-video.js";
 
 const LOCK_DURATION_MS = 600_000;
 
@@ -176,6 +184,49 @@ type InfoResult = {
 };
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+
+export async function applyRequestedDownloadRange(
+  fs: Engine,
+  bookId: string,
+  assetId: string,
+  assetDir: string,
+  outputPath: string,
+  requestedRange: { start?: number; end?: number },
+): Promise<boolean> {
+  const start = requestedRange.start ?? 0;
+  const end = requestedRange.end;
+  if (!Number.isFinite(start) || start < 0
+    || (end !== undefined && (!Number.isFinite(end) || end <= start))) {
+    throw new Error("Requested download range is invalid");
+  }
+  if (start === 0 && end === undefined) return false;
+  const rangeFilename = ".requested-range.mp4";
+  const rangePath = join(assetDir, rangeFilename);
+  try {
+    if (end !== undefined) {
+      await trimRangeExact(
+        outputPath,
+        rangePath,
+        start,
+        end - start,
+      );
+    } else {
+      await trimRange(outputPath, rangePath, start, undefined);
+    }
+    await assertSaneTrimOutput(outputPath, rangePath);
+    await replaceArtifactFileFromPath(
+      fs,
+      bookId,
+      assetId,
+      "original.mp4",
+      rangePath,
+    );
+    return true;
+  } catch (error) {
+    await fs.files.delete(assetId, rangeFilename);
+    throw error;
+  }
+}
 
 export function isImageContent(info: InfoResult): boolean {
   if (!info.ext) return false;
@@ -409,6 +460,18 @@ export function registerDownloadVideoJob(fs: Engine): void {
       // (d2) Validate download output
       await validateDownloadOutput(outputPath);
 
+      const rangeApplied = requestedRange
+        ? await applyRequestedDownloadRange(
+            fs,
+            slug,
+            assetId,
+            assetDir,
+            outputPath,
+            requestedRange,
+          )
+        : false;
+      if (rangeApplied) await validateDownloadOutput(outputPath);
+
       // (d3) Promote staged OG image to original.jpg so process_video uses
       // the curated platform thumbnail (e.g. YouTube maxres) rather than a
       // first-frame extraction. Best-effort — process_video falls back to a
@@ -449,7 +512,7 @@ export function registerDownloadVideoJob(fs: Engine): void {
         webpage_url: info.webpage_url ?? "",
         platform: info.extractor ?? "",
         thumbnail: info.thumbnail ?? "",
-        full: true,
+        full: !rangeApplied,
         ...(requestedRange ? { requested_range: requestedRange } : {}),
         downloaded_at: new Date().toISOString(),
       };

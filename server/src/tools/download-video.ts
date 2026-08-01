@@ -34,14 +34,14 @@ function sourcePrefix(url: string): string {
 export function downloadVideoDef(fs: Engine): ToolDef {
   return {
     name: "download_video",
-    description: "Download a full video from a URL (YouTube, Twitter/X, etc.) into a videocity project as original.mp4. Supports requested range metadata and auto-exports 16:9 and 9:16 versions.",
+    description: "Download a video or requested time range from a URL (YouTube, Twitter/X, etc.) into a Videobook as original.mp4. Supports auto-exports in 16:9 and 9:16.",
     schema: {
       url: z.string().describe("Video URL (YouTube, Twitter/X, Instagram, TikTok, etc.)"),
-      start_time: z.union([z.string(), z.number()]).optional().describe("Requested start time metadata in seconds or timestamp notation (e.g. '30', '1:30', '2m20s')"),
-      end_time: z.union([z.string(), z.number()]).optional().describe("Requested end time metadata in seconds or timestamp notation (e.g. '60', '2:00', '3m')"),
+      start_time: z.union([z.string(), z.number()]).optional().describe("Range start in seconds or timestamp notation (e.g. '30', '1:30', '2m20s')"),
+      end_time: z.union([z.string(), z.number()]).optional().describe("Range end in seconds or timestamp notation (e.g. '60', '2:00', '3m')"),
       book_id: z.string().describe("Project slug"),
       export_videos: z.boolean().optional().default(false).describe("Auto-export 16:9 and 9:16 versions (default: off)"),
-      full: z.boolean().optional().default(false).describe("Deprecated; downloads are always full"),
+      full: z.boolean().optional().default(false).describe("Deprecated; omit start_time and end_time to keep the full source"),
     },
     handler: async (args) => {
       const { url, start_time, end_time, book_id, export_videos } = args as {
@@ -56,6 +56,14 @@ export function downloadVideoDef(fs: Engine): ToolDef {
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         return { isError: true as const, content: [{ type: "text" as const, text: msg }] };
+      }
+
+      if ((startSecs !== undefined && startSecs < 0)
+        || (endSecs !== undefined && endSecs <= 0)) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "start_time must be >= 0 and end_time must be > 0." }],
+        };
       }
 
       if (startSecs !== undefined && endSecs !== undefined && startSecs >= endSecs) {
