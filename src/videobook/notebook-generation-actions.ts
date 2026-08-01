@@ -75,6 +75,23 @@ export type NotebookGenerationAction = {
   controls: GenerationControl[]
 }
 
+export function effectiveGenerationControlValue(
+  control: GenerationControl,
+  settings: Record<string, GenerationControlValue>,
+): GenerationControlValue | undefined {
+  return settings[control.name] ?? control.defaultValue
+}
+
+export function effectiveGenerationSettings(
+  controls: readonly GenerationControl[],
+  settings: Record<string, GenerationControlValue>,
+): Record<string, GenerationControlValue> {
+  return Object.fromEntries(controls.flatMap((control) => {
+    const value = effectiveGenerationControlValue(control, settings)
+    return value === undefined ? [] : [[control.name, value]]
+  }))
+}
+
 const generationCellTypes = new Set<string>([
   'generate_audio',
   'generate_image',

@@ -231,6 +231,7 @@ describe("slash commands e2e", () => {
       expect(result.isError).toBeFalsy();
       const parsed = parseResult(result);
       expect(parsed.status).toBe("enqueued");
+      expect(parsed.artifact_id).toBeDefined();
       expect(parsed.assetId).toBeDefined();
       expect(parsed.job_id).toBeDefined();
     });

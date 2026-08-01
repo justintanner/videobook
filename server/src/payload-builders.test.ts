@@ -115,6 +115,27 @@ describe("translateToolPayload", () => {
     expect(result?.payload.input).not.toHaveProperty("task_id");
   });
 
+  it("materializes all Kie Grok image-to-video defaults in previews", () => {
+    const result = translateToolPayload("generate_grok_imagine_video", {
+      image_slugs: ["@img-input"],
+      prompt: "wave at camera",
+      aspect_ratio: "9:16",
+    });
+
+    expect(result?.payload).toEqual({
+      model: "grok-imagine/image-to-video",
+      input: {
+        image_urls: ["@img-input"],
+        prompt: "wave at camera",
+        mode: "normal",
+        aspect_ratio: "9:16",
+        resolution: "480p",
+        duration: 6,
+        nsfw_checker: false,
+      },
+    });
+  });
+
   it("rewrites @img-* prompt mentions to Kie @imageN form", () => {
     const result = translateToolPayload("generate_grok_imagine_video", {
       image_slugs: ["@img-nbp-reference-1-reference"],

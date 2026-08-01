@@ -4,6 +4,7 @@ import {
   asNotebookGenerationActions,
   compatibleGenerationActions,
   compatibleGenerationModes,
+  effectiveGenerationSettings,
   generationActionForSelection,
   generationActionIsCompatible,
   generationActionLabel,
@@ -299,6 +300,58 @@ describe('notebook generation actions', () => {
       [{ kind: 'video', target: 'video' }],
     ).map((mode) => mode.id)).toEqual(['v2v'])
     expect(generationModeLabel('r2v')).toBe('R2V · Reference to video')
+  })
+
+  it('materializes control defaults alongside explicit settings', () => {
+    expect(effectiveGenerationSettings([
+      {
+        name: 'duration',
+        label: 'Duration',
+        kind: 'number',
+        valueType: 'number',
+        required: true,
+        defaultValue: 6,
+        options: [],
+        description: 'Duration',
+      },
+      {
+        name: 'resolution',
+        label: 'Resolution',
+        kind: 'select',
+        valueType: 'string',
+        required: false,
+        defaultValue: '480p',
+        options: ['480p', '720p'],
+        description: 'Resolution',
+      },
+      {
+        name: 'aspect_ratio',
+        label: 'Aspect ratio',
+        kind: 'select',
+        valueType: 'string',
+        required: false,
+        defaultValue: '16:9',
+        options: ['16:9', '9:16'],
+        description: 'Aspect ratio',
+      },
+      {
+        name: 'nsfw_checker',
+        label: 'NSFW checker',
+        kind: 'boolean',
+        valueType: 'boolean',
+        required: false,
+        defaultValue: false,
+        options: [],
+        description: 'NSFW checker',
+      },
+    ], {
+      aspect_ratio: '9:16',
+    })).toEqual({
+      duration: 6,
+      resolution: '480p',
+      aspect_ratio: '9:16',
+      nsfw_checker: false,
+    })
   })
 
   it('uses Gemini by default and Seedance for unsupported media combinations', () => {

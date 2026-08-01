@@ -158,7 +158,6 @@ import {
   notebookCellExecutionObservation,
   notebookCellIsActiveStatus,
   notebookCellRunObservation,
-  notebookCellSlugPrefix,
   notebookCellStatusLabel,
   notebookCellSupportsExecution,
   notebookOutputVersionArtifactIds,
@@ -173,6 +172,10 @@ import {
   selectEffectiveNotebookRunJob,
   type NotebookRunWatchOutcomeKind,
 } from '@/videobook/notebook-run-watch'
+import {
+  downloadVideoCellInput,
+  nextNotebookCellSlug,
+} from '@/videobook/notebook-download'
 import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
 import type {
   BookProjectMutationResult,
@@ -1419,18 +1422,6 @@ function CellIcon({ kind }: { kind: NotebookCellType }) {
 
 function cellTypeLabel(kind: NotebookCellType): string {
   return kind.replaceAll('_', ' ').toUpperCase()
-}
-
-function nextCellSlug(
-  type: NotebookCellType,
-  cells: NotebookDocument['cells'],
-): string {
-  const prefix = notebookCellSlugPrefix(type)
-  const occupied = new Set(cells.map((cell) => cell.slug))
-  for (let ordinal = 1; ; ordinal += 1) {
-    const slug = `${prefix}-${String(ordinal).padStart(2, '0')}`
-    if (!occupied.has(slug)) return slug
-  }
 }
 
 function emptyCellLabel(data: CanvasCellData): string {
@@ -3268,7 +3259,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       setNotice('Choose an empty grid square for the new cell')
       return
     }
-    const slug = nextCellSlug(type, notebook.cells)
+    const slug = nextNotebookCellSlug(type, notebook.cells)
     setBusy(true)
     try {
       await call('create_notebook_cell', {
@@ -5210,6 +5201,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return { ok: true, message: 'Settings opened' }
       }
       if (!command.mcpTool) return { ok: false, message: `${command.command} is available from its workspace.` }
+      if (command.mcpTool.tool === 'download_video' && !notebook) {
+        return { ok: false, message: 'Open a notebook before downloading media.' }
+      }
       const parsed = parseCommandArgs(rest, command.params)
       const adapted = adaptCommandArgs(command.mcpTool.adapter, command.mcpTool.tool, parsed)
       const args: CommandToolArgs = {
@@ -5218,6 +5212,34 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
       if (command.mcpTool.autoInject?.includes('book_id')) args.book_id = bookId
       const result = await call(command.mcpTool.tool, args)
+      if (command.mcpTool.tool === 'download_video' && notebook) {
+        const cell = downloadVideoCellInput(
+          result,
+          asString(args.url) ?? '',
+          nextNotebookGridSlot(nodes),
+          notebook.cells,
+        )
+        try {
+          const created = record(await call('create_notebook_cell', {
+            book_id: bookId,
+            notebook_id: notebook.id,
+            cell,
+          }))
+          setSelectedCellId(asString(created?.id))
+        } catch (error) {
+          await refreshBookData(bookId, notebook.id)
+          const message = error instanceof Error ? error.message : String(error)
+          return {
+            ok: false,
+            message: `Download queued in Library, but board placement failed: ${message}`,
+          }
+        }
+        await refreshBookData(bookId, notebook.id)
+        return {
+          ok: true,
+          message: messageFor(result, `Download queued as @${cell.slug}`),
+        }
+      }
       await refreshBookData(bookId, notebook?.id)
       return { ok: true, message: messageFor(result, `${command.command} complete`) }
     } catch (error) {

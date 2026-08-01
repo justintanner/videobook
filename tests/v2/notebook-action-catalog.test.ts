@@ -303,11 +303,14 @@ describe("notebook action catalog", () => {
       },
     })) as {
       tool: string;
-      input: { prompt: string };
+      payload: { input: { prompt: string } };
     };
     expect(preview).toMatchObject({
       tool: "generate_kie_gpt_image_2_text_to_image",
-      input: { prompt: "draft prompt" },
+      payload: {
+        model: "gpt-image-2-text-to-image",
+        input: { prompt: "draft prompt" },
+      },
     });
     const afterPreview = resultJson(await invoke("get_notebook", {
       notebook_id: notebookId,
@@ -347,14 +350,21 @@ describe("notebook action catalog", () => {
       },
     })) as {
       tool: string;
-      input: { prompt: string; duration: string; aspect_ratio: string };
+      provider_path: string;
+      payload: {
+        input: { prompt: string; duration: string; aspect_ratio: string };
+      };
     };
     expect(videoPreview).toMatchObject({
       tool: DEFAULT_VIDEO_TOOL,
-      input: {
-        prompt: "A moonlit garden in motion",
-        duration: "6",
-        aspect_ratio: "9:16",
+      provider_path: "kie.post.api.v1.jobs.createTask(request, { otp })",
+      payload: {
+        model: "gemini-omni-video",
+        input: {
+          prompt: "A moonlit garden in motion",
+          duration: "6",
+          aspect_ratio: "9:16",
+        },
       },
     });
     const incompatibleModePreview = await invoke("preview_notebook_generation", {
@@ -400,8 +410,8 @@ describe("notebook action catalog", () => {
           generationSettings: { voice_id: "voice-test" },
         },
       },
-    })) as { input: { text: string; voice_id: string } };
-    expect(audioPreview.input).toMatchObject({
+    })) as { payload: { text: string; voice_id: string } };
+    expect(audioPreview.payload).toMatchObject({
       text: "Welcome to the moon garden",
       voice_id: "voice-test",
     });

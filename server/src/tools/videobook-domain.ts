@@ -55,6 +55,7 @@ import {
 import { notebookGenerationInputContract } from "../notebook-generation-contract.js";
 import { notebookGenerationControls } from "../notebook-generation-controls.js";
 import { buildSevenStageScaffold } from "../notebook-workflow.js";
+import { translateToolPayload } from "../payload-builders.js";
 import {
   enqueueNotebookRunPlan,
   notebookRunPlanRecords,
@@ -3527,11 +3528,19 @@ export function videobookDomainDefs(
             previewCell,
             String(args.book_id),
           );
+          const translated = translateToolPayload(
+            prepared.tool,
+            prepared.input,
+            prepared.provider,
+          );
           return json({
             tool: prepared.tool,
             provider: prepared.provider,
             model: prepared.model,
-            input: prepared.input,
+            ...(translated?.provider_path
+              ? { provider_path: translated.provider_path }
+              : {}),
+            payload: translated?.payload ?? prepared.input,
           });
         } catch (cause) {
           return failure(cause instanceof Error ? cause.message : String(cause));

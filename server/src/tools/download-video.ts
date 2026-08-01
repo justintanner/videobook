@@ -83,7 +83,11 @@ export function downloadVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const { slug: assetId, path: assetDir } = assetResult.value;
+      const {
+        artifactId,
+        slug: assetId,
+        path: assetDir,
+      } = assetResult.value;
 
       const outputPath = join(assetDir, "original.mp4");
       const jobId = `download-${assetId}-${Date.now()}`;
@@ -102,7 +106,15 @@ export function downloadVideoDef(fs: Engine): ToolDef {
       } as unknown as Record<string, unknown>);
 
       return {
-        content: [{ type: "text" as const, text: JSON.stringify({ assetId, job_id: jobId, status: "enqueued" }) }],
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            artifact_id: artifactId,
+            assetId,
+            job_id: jobId,
+            status: "enqueued",
+          }),
+        }],
       };
     },
   };

@@ -5,7 +5,10 @@ import type { ServerCommand } from '@/lib/command-registry'
 import { RichPromptField } from '@/components/ui/RichPromptField'
 import { assetMentionSuggestions } from '@/videobook/mention-suggestions'
 import { applyReadlineEdit } from '@/videobook/readline'
-import { hasExactCommandSuggestion } from '@/videobook/command-suggestions'
+import {
+  commandSuggestionCandidates,
+  hasExactCommandSuggestion,
+} from '@/videobook/command-suggestions'
 
 export interface ComposerOutcome {
   ok: boolean
@@ -103,9 +106,7 @@ export function CommandComposer({
     const commandMatch = input.match(/^\/([\w-]*)$/)
     if (commandMatch) {
       const filter = commandMatch[1].toLowerCase()
-      return commands
-        .filter((command) => command.command.slice(1).toLowerCase().includes(filter))
-        .slice(0, 12)
+      return commandSuggestionCandidates(commands, filter)
         .map((command) => ({
           value: `${command.command} `,
           label: command.command,

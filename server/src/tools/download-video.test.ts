@@ -127,7 +127,15 @@ describe("download_video tool", () => {
 
     expect(result.isError).toBeFalsy();
     const content = result.content as TextContent;
-    const parsed = JSON.parse(content[0].text);
+    const parsed = JSON.parse(content[0].text) as {
+      artifact_id: string;
+      assetId: string;
+      job_id: string;
+      status: string;
+    };
+    expect(parsed.artifact_id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
     expect(parsed.assetId).toBeDefined();
     expect(parsed.job_id).toBeDefined();
     expect(parsed.status).toBe("enqueued");

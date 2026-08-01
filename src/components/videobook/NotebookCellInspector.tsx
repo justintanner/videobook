@@ -38,6 +38,8 @@ import {
 import {
   compatibleGenerationActions,
   compatibleGenerationModes,
+  effectiveGenerationControlValue,
+  effectiveGenerationSettings,
   generationActionForSelection,
   generationActionIsCompatible,
   generationActionLabel,
@@ -231,13 +233,6 @@ function generationInputsForDraft(
       ? { generationSettings: draft.generationSettings }
       : {}),
   }
-}
-
-function effectiveGenerationControlValue(
-  control: GenerationControl,
-  settings: Record<string, GenerationControlValue>,
-): GenerationControlValue | undefined {
-  return settings[control.name] ?? control.defaultValue
 }
 
 function generationControlIsValid(
@@ -1831,14 +1826,9 @@ function ExecutableCellInspector({
     : compatibleActions
   const selectedGenerationValue = selectedGenerationAction?.id
     ?? draft.tool
-  const payloadSummarySettings = Object.fromEntries(
-    generationControls.flatMap((control) => {
-      const value = effectiveGenerationControlValue(
-        control,
-        draft.generationSettings,
-      )
-      return value === undefined ? [] : [[control.name, value]]
-    }),
+  const payloadSettings = effectiveGenerationSettings(
+    generationControls,
+    draft.generationSettings,
   )
   const payloadSummary = JSON.stringify({
     ...(selectedGenerationAction
@@ -1852,7 +1842,7 @@ function ExecutableCellInspector({
         }),
     ...(effectiveGenerationMode ? { type: effectiveGenerationMode } : {}),
     inputs: connectedGenerationInputs.length,
-    settings: payloadSummarySettings,
+    settings: payloadSettings,
   })
   const action = notebookCellActionPresentation(
     generationCell
@@ -2216,7 +2206,11 @@ function ExecutableCellInspector({
               tool: draft.tool,
               inputs: generationInputsForDraft(
                 cell,
-                { ...draft, generationMode: effectiveGenerationMode },
+                {
+                  ...draft,
+                  generationMode: effectiveGenerationMode,
+                  generationSettings: payloadSettings,
+                },
                 allGenerationControls,
               ),
             })}
