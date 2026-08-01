@@ -50,6 +50,11 @@ interface HistoryPayload {
   }>
 }
 
+interface ChatModelsPayload {
+  defaultModel: string
+  models: Array<{ id: string; label: string; description: string }>
+}
+
 function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
@@ -165,6 +170,15 @@ describe('v2 MCP server', () => {
 
   it('serves multi-book notebooks, uploads, typed timelines, and durable history', async () => {
     if (!client || !server) throw new Error('MCP client was not initialized')
+
+    const chatModels = await callTool<ChatModelsPayload>(client, 'list_chat_models', {})
+    expect(chatModels).toEqual({
+      defaultModel: 'gpt-5.6-sol',
+      models: [
+        expect.objectContaining({ id: 'gpt-5.6-sol', label: 'Sol' }),
+        expect.objectContaining({ id: 'gpt-5.6-terra', label: 'Terra' }),
+      ],
+    })
 
     const book = await callTool<BookPayload>(client, 'create_book', { slug: 'mcp-story' })
     expect(book).toMatchObject({ slug: 'mcp-story', bookId: expect.any(String) })

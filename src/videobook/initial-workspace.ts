@@ -1,6 +1,7 @@
 export type InitialWorkspacePayload = {
   bookValue: unknown
   commandValue: unknown
+  chatModelValue: unknown
   bookId: string
   notebookValue: unknown
   notebookId: string
@@ -78,9 +79,10 @@ function savedValue(key: string): string {
 }
 
 export async function loadInitialWorkspace(): Promise<InitialWorkspacePayload | null> {
-  const [bookValue, commandValue] = await Promise.all([
+  const [bookValue, commandValue, chatModelValue] = await Promise.all([
     callTool('list_books', { sort: 'newest' }),
     callTool('slash_commands', {}),
+    callTool('list_chat_models', {}),
   ])
   const books = Array.isArray(bookValue) ? bookValue : []
   const selected = books
@@ -125,6 +127,7 @@ export async function loadInitialWorkspace(): Promise<InitialWorkspacePayload | 
   return {
     bookValue,
     commandValue,
+    chatModelValue,
     bookId,
     notebookValue,
     notebookId,

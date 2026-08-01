@@ -23,6 +23,11 @@ import {
   firstResponseText,
   intelligenceRequest,
 } from "../openai-intelligence.js";
+import {
+  chatModelSchema,
+  resolveChatModel,
+  type ChatModelId,
+} from "../chat-models.js";
 
 type ChatDecision = {
   tool: string;
@@ -374,16 +379,19 @@ export function chatDef(fs: Engine): ToolDef {
     schema: {
       prompt: z.string().min(1).optional().describe("Natural language query with optional @asset tags"),
       book_id: z.string().uuid().describe("Book UUID"),
+      model: chatModelSchema.optional().describe("Chat routing model"),
       action_plan: chatActionPlanSchema.optional().describe("Previously previewed action to apply"),
     },
     handler: async (args) => {
-      const { prompt, book_id: bookId, action_plan: actionPlan } = args as {
+      const { prompt, book_id: bookId, model, action_plan: actionPlan } = args as {
         prompt?: string;
         book_id: string;
+        model?: ChatModelId;
         action_plan?: ChatActionPlan;
       };
       if (actionPlan) return await applyChatActionPlan(fs, bookId, actionPlan);
       if (!prompt) return error("A chat prompt is required");
+      const chatModel = resolveChatModel(model);
       const book = fs.book.get();
 
       // 1. Expand @s01 slot refs → actual asset slugs
@@ -444,6 +452,8 @@ export function chatDef(fs: Engine): ToolDef {
       try {
         const responses = buildIntelligenceResponses(apiKey, {
           timeout: CHAT_ROUTING_TIMEOUT_MS,
+          model: chatModel.id,
+          reasoningEffort: chatModel.reasoningEffort,
         });
         let lastError: unknown;
         decision = { tool: "", params: {}, message: "" };
@@ -454,6 +464,9 @@ export function chatDef(fs: Engine): ToolDef {
               input: userMessage,
               text: { format: { type: "json_object" } },
               max_output_tokens: CHAT_ROUTING_MAX_OUTPUT_TOKENS,
+            }, {
+              model: chatModel.id,
+              reasoningEffort: chatModel.reasoningEffort,
             }), AbortSignal.timeout(CHAT_ROUTING_TIMEOUT_MS));
             const outputText = firstResponseText(response);
             decision = parseChatDecision(outputText);

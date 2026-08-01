@@ -212,6 +212,7 @@ import { createQartDef } from "./create-qart.js";
 import { createQrbtfDef } from "./create-qrbtf.js";
 import { getWatermarkConfigDef } from "./get-watermark-config.js";
 import { withLogging } from "./log-wrapper.js";
+import { listChatModelsDef } from "../chat-models.js";
 
 export function getVideoEditingToolDefs(fs: Engine): ToolDef[] {
   return [
@@ -316,6 +317,7 @@ export function getAllToolDefs(
 ): ToolDef[] {
   const rawDefs: ToolDef[] = [
     apiStatusDef(),
+    listChatModelsDef(),
     providerKeyStatusDef(),
     setEnvSecretDef(),
     listElevenLabsVoicesDef(),

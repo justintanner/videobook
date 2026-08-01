@@ -1,0 +1,237 @@
+import { spawn } from 'node:child_process'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { createServer } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { chromium } from 'playwright'
+import type { Browser, Page, Route } from 'playwright'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+
+interface StartedProcess {
+  child: ChildProcessWithoutNullStreams
+  output: string[]
+}
+
+interface ToolCall {
+  name: string
+  arguments: Record<string, unknown>
+}
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+async function availablePort(): Promise<number> {
+  return await new Promise((resolve, reject) => {
+    const server = createServer()
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        server.close(() => reject(new Error('Could not reserve a port')))
+        return
+      }
+      server.close((error) => {
+        if (error) reject(error)
+        else resolve(address.port)
+      })
+    })
+  })
+}
+
+function startProcess(
+  args: string[],
+  env: NodeJS.ProcessEnv,
+): StartedProcess {
+  const output: string[] = []
+  const child = spawn(process.execPath, args, {
+    cwd: process.cwd(),
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  child.stdout.on('data', (data: Buffer) => output.push(data.toString()))
+  child.stderr.on('data', (data: Buffer) => output.push(data.toString()))
+  return { child, output }
+}
+
+async function waitForHttp(
+  url: string,
+  processState: StartedProcess,
+  acceptedStatus: number,
+): Promise<void> {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (processState.child.exitCode !== null) {
+      throw new Error(`Process exited during startup:\n${processState.output.join('')}`)
+    }
+    try {
+      const response = await fetch(url)
+      if (response.status === acceptedStatus) return
+    } catch {
+      await wait(100)
+    }
+  }
+  throw new Error(`Process did not start:\n${processState.output.join('')}`)
+}
+
+async function stopProcess(processState: StartedProcess | undefined): Promise<void> {
+  if (!processState || processState.child.exitCode !== null) return
+  const exited = new Promise<void>((resolve) => {
+    processState.child.once('exit', () => resolve())
+  })
+  processState.child.kill('SIGINT')
+  const stopped = await Promise.race([
+    exited.then(() => true),
+    wait(5_000).then(() => false),
+  ])
+  if (stopped) return
+  processState.child.kill('SIGKILL')
+  await exited
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function toolCalls(value: unknown): ToolCall[] {
+  const envelopes = Array.isArray(value) ? value : [value]
+  return envelopes.flatMap((entry) => {
+    const envelope = record(entry)
+    const params = record(envelope?.params)
+    const args = record(params?.arguments)
+    return envelope?.method === 'tools/call'
+      && typeof params?.name === 'string'
+      && args
+      ? [{ name: params.name, arguments: args }]
+      : []
+  })
+}
+
+async function requestBody(route: Route): Promise<unknown> {
+  try {
+    return route.request().postDataJSON() as unknown
+  } catch {
+    return null
+  }
+}
+
+describe('chat composer browser flow', () => {
+  let rootDir = ''
+  let mcpProcess: StartedProcess | undefined
+  let viteProcess: StartedProcess | undefined
+  let browser: Browser | undefined
+  let page: Page | undefined
+  let appUrl = ''
+  const observedCalls: ToolCall[] = []
+  let delayedBootstrap = false
+
+  beforeAll(async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-chat-ui-e2e-'))
+    const mcpPort = await availablePort()
+    const vitePort = await availablePort()
+    const mcpOrigin = `http://127.0.0.1:${mcpPort}`
+    appUrl = `http://127.0.0.1:${vitePort}`
+    mcpProcess = startProcess(
+      ['--import', 'tsx', 'server/src/index.ts'],
+      {
+        ...process.env,
+        PORT: String(mcpPort),
+        VIDEOBOOK_APP_STATE_PATH: join(rootDir, 'runtime', 'app-state.json'),
+        VIDEOBOOK_LIBRARY_DIR: join(rootDir, 'books'),
+      },
+    )
+    await waitForHttp(`${mcpOrigin}/healthz`, mcpProcess, 200)
+    const client = new Client(
+      { name: 'videobook-chat-ui-e2e', version: '1.0.0' },
+      { capabilities: {} },
+    )
+    await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
+    await client.callTool({ name: 'create_book', arguments: { slug: 'chat-ui-e2e' } })
+    await client.close()
+    viteProcess = startProcess(
+      [join(process.cwd(), 'node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(vitePort)],
+      {
+        ...process.env,
+        VIDEOBOOK_SERVER_URL: mcpOrigin,
+      },
+    )
+    await waitForHttp(appUrl, viteProcess, 200)
+    browser = await chromium.launch({ headless: true })
+    page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+    await page.route('**/mcp', async (route) => {
+      const calls = toolCalls(await requestBody(route))
+      observedCalls.push(...calls)
+      if (!delayedBootstrap && calls.some((call) => call.name === 'list_books')) {
+        delayedBootstrap = true
+        await wait(700)
+      }
+      if (calls.some((call) => call.name === 'plan_chat_command')) {
+        await wait(850)
+      }
+      await route.continue()
+    })
+  }, 120_000)
+
+  afterAll(async () => {
+    await page?.close()
+    await browser?.close()
+    await stopProcess(viteProcess)
+    await stopProcess(mcpProcess)
+    if (rootDir) {
+      await rm(rootDir, { recursive: true, force: true, maxRetries: 3 })
+    }
+  })
+
+  it('shows MCP motion and sends the selected model through the real UI', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await page.goto(appUrl, { waitUntil: 'commit' })
+    const startup = page.locator('#startup-shell')
+    await startup.waitFor({ state: 'visible' })
+    await expect.poll(async () => await startup.textContent()).toContain('Loading workspace via MCP')
+    const startupAnimation = await page.locator('#startup-signal').evaluate((element) =>
+      window.getComputedStyle(element, '::after').animationName)
+    expect(startupAnimation).toContain('startup-scan')
+
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    const selector = page.getByLabel('Chat model')
+    expect(await selector.locator('option').allTextContents()).toEqual(['Sol', 'Terra'])
+    await selector.selectOption('gpt-5.6-terra')
+    expect(await page.evaluate(() => window.localStorage.getItem('videobook.chat-model')))
+      .toBe('gpt-5.6-terra')
+
+    await input.fill('Show me every asset in this book')
+    await wait(700)
+    observedCalls.length = 0
+    await page.getByLabel('Send command').click()
+    await page.waitForFunction(() =>
+      document.querySelector('[data-testid="mcp-activity"]')?.textContent
+        ?.includes('Planning chat command'))
+    const shell = page.locator('.command-line-shell')
+    expect(await shell.getAttribute('aria-busy')).toBe('true')
+    expect(await shell.evaluate((element) => window.getComputedStyle(element).animationName))
+      .toContain('command-transmit-pulse')
+    const screenshotPath = process.env.VIDEOBOOK_E2E_SCREENSHOT
+    if (screenshotPath) await page.screenshot({ path: screenshotPath, fullPage: true })
+
+    await expect.poll(() => observedCalls.find((call) => call.name === 'chat'), {
+      timeout: 20_000,
+    }).toBeTruthy()
+    const chatCall = observedCalls.find((call) => call.name === 'chat')
+    expect(chatCall?.arguments.model).toBe('gpt-5.6-terra')
+    const errorResult = page.locator('.command-result-error')
+    await errorResult.waitFor({ state: 'visible' })
+    expect(await errorResult.textContent()).toContain('OPENAI_API_KEY')
+
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await input.focus()
+    await page.locator('[data-testid="mcp-activity"]').waitFor({ state: 'visible' })
+    expect(await shell.evaluate((element) => window.getComputedStyle(element).animationName))
+      .toBe('none')
+  }, 60_000)
+})

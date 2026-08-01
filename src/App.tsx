@@ -217,6 +217,16 @@ import {
 import { parseNotebookGenerationCellCommand } from '@/videobook/notebook-generation-command'
 import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
 import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
+import {
+  asChatModelCatalog,
+  fallbackChatModelCatalog,
+  resolveChatModelSelection,
+  type ChatModelCatalog,
+} from '@/videobook/chat-models'
+import {
+  idleMcpActivity,
+  type McpActivity,
+} from '@/videobook/mcp-activity'
 import type {
   BookProjectMutationResult,
   BookProjectSummary,
@@ -452,6 +462,7 @@ type InitialWorkspace = {
   sequence: Sequence | null
   jobs: JobRecord[]
   commands: ServerCommand[]
+  chatModelCatalog: ChatModelCatalog
   generationActions: NotebookGenerationAction[]
 }
 
@@ -1477,6 +1488,7 @@ function asInitialWorkspace(
     sequence: asSequence(payload.sequenceValue),
     jobs: asJobs(payload.jobValue),
     commands: asCommands(payload.commandValue),
+    chatModelCatalog: asChatModelCatalog(payload.chatModelValue),
     generationActions: asNotebookGenerationActions(payload.actionValue),
   }
 }
@@ -2335,6 +2347,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [commands, setCommands] = useState<ServerCommand[]>(
     () => initialWorkspace?.commands ?? [],
   )
+  const [chatModelCatalog, setChatModelCatalog] = useState<ChatModelCatalog>(
+    () => initialWorkspace?.chatModelCatalog ?? fallbackChatModelCatalog,
+  )
+  const [chatModel, setChatModel] = useState(() => resolveChatModelSelection(
+    initialWorkspace?.chatModelCatalog ?? fallbackChatModelCatalog,
+    savedValue('videobook.chat-model'),
+  ))
   const [generationActions, setGenerationActions] = useState<
     NotebookGenerationAction[]
   >(() => initialWorkspace?.generationActions ?? [])
@@ -2395,6 +2414,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [secretKey, setSecretKey] = useState('KIE_API_KEY')
   const [secretValue, setSecretValue] = useState('')
   const [busy, setBusy] = useState(false)
+  const [mcpActivity, setMcpActivity] = useState<McpActivity>(idleMcpActivity)
   const [processingArtifactId, setProcessingArtifactId] = useState<string | null>(null)
   const [online, setOnline] = useState(() => window.navigator.onLine)
   const [notice, setNoticeState] = useState<WorkspaceNotice | null>({
@@ -2418,6 +2438,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const mediaLibraryRequestRef = useRef(0)
   const mediaLibraryOpenerRef = useRef<HTMLElement | null>(null)
   const activeWatchesRef = useRef(new Map<string, string>())
+  const activeMcpCallsRef = useRef(new Map<number, { tool: string; startedAt: number }>())
+  const mcpActivitySequenceRef = useRef(0)
+  const mcpActivityTimerRef = useRef(0)
   const watchScopeRef = useRef<{
     bookId: string | null
     notebookId: string | null
@@ -2585,8 +2608,67 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const call = useCallback(async (tool: string, args: Record<string, unknown>) => {
     if (mcp.state !== 'ready') throw new Error('MCP server is not ready')
-    return parseResult(await mcp.callTool(tool, args))
+    const sequence = mcpActivitySequenceRef.current + 1
+    mcpActivitySequenceRef.current = sequence
+    window.clearTimeout(mcpActivityTimerRef.current)
+    activeMcpCallsRef.current.set(sequence, { tool, startedAt: performance.now() })
+    setMcpActivity({
+      phase: 'active',
+      tool,
+      count: activeMcpCallsRef.current.size,
+      sequence,
+    })
+    let phase: 'success' | 'error' = 'success'
+    try {
+      return parseResult(await mcp.callTool(tool, args))
+    } catch (error) {
+      phase = 'error'
+      throw error
+    } finally {
+      const completed = activeMcpCallsRef.current.get(sequence)
+      activeMcpCallsRef.current.delete(sequence)
+      const remaining = [...activeMcpCallsRef.current.values()].at(-1)
+      if (remaining) {
+        mcpActivitySequenceRef.current += 1
+        setMcpActivity({
+          phase: 'active',
+          tool: remaining.tool,
+          count: activeMcpCallsRef.current.size,
+          sequence: mcpActivitySequenceRef.current,
+        })
+      } else {
+        const settle = () => {
+          if (activeMcpCallsRef.current.size > 0) return
+          mcpActivitySequenceRef.current += 1
+          setMcpActivity({
+            phase,
+            tool,
+            count: 0,
+            sequence: mcpActivitySequenceRef.current,
+          })
+          mcpActivityTimerRef.current = window.setTimeout(() => {
+            if (activeMcpCallsRef.current.size > 0) return
+            mcpActivitySequenceRef.current += 1
+            setMcpActivity({
+              ...idleMcpActivity,
+              sequence: mcpActivitySequenceRef.current,
+            })
+          }, phase === 'error' ? 1100 : 620)
+        }
+        const elapsed = completed ? performance.now() - completed.startedAt : 420
+        const remainingActiveTime = Math.max(0, 420 - elapsed)
+        if (remainingActiveTime > 0) {
+          mcpActivityTimerRef.current = window.setTimeout(settle, remainingActiveTime)
+        } else {
+          settle()
+        }
+      }
+    }
   }, [mcp])
+
+  useEffect(() => () => {
+    window.clearTimeout(mcpActivityTimerRef.current)
+  }, [])
 
   useEffect(() => {
     callRef.current = call
@@ -3578,6 +3660,27 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setCommands(asCommands(value))
   }, [call])
 
+  const refreshChatModels = useCallback(async () => {
+    const catalog = asChatModelCatalog(await call('list_chat_models', {}))
+    const persistedModel = savedValue('videobook.chat-model')
+    setChatModelCatalog(catalog)
+    setChatModel((current) => {
+      const next = resolveChatModelSelection(catalog, persistedModel || current)
+      saveValue('videobook.chat-model', next)
+      return next
+    })
+  }, [call])
+
+  const refreshComposerCatalog = useCallback(async () => {
+    await Promise.all([refreshBookCommands(), refreshChatModels()])
+  }, [refreshBookCommands, refreshChatModels])
+
+  const changeChatModel = useCallback((model: string) => {
+    const next = resolveChatModelSelection(chatModelCatalog, model)
+    setChatModel(next)
+    saveValue('videobook.chat-model', next)
+  }, [chatModelCatalog])
+
   const refreshBookCommandsAfterMutation = useCallback(async () => {
     try {
       await refreshBookCommands()
@@ -3593,6 +3696,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const [nextBooks] = await Promise.all([
         refreshBookList(),
         refreshBookCommands(),
+        refreshChatModels(),
       ])
       const target = nextBooks.find((book) => book.bookId === preferredBookId)
         ?? nextBooks.find((book) => book.slug === 'dancing')
@@ -3616,7 +3720,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     } finally {
       setBusy(false)
     }
-  }, [bookId, refreshBookCommands, refreshBookData, refreshBookList, setNotice])
+  }, [bookId, refreshBookCommands, refreshBookData, refreshBookList, refreshChatModels, setNotice])
 
   const openBookMenu = useCallback(async (): Promise<BookProjectMutationResult> => {
     const requestId = bookMenuRequestRef.current + 1
@@ -6034,6 +6138,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             const routed = await call('chat', {
               book_id: bookId,
               prompt: resolvedAssetInput,
+              model: chatModel,
             })
             const routedRecord = record(routed)
             if (routedRecord?.kind === 'chat-action-plan') {
@@ -8025,10 +8130,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         commands={commands}
         assets={commandMentionAssets}
         bookId={bookId}
-        callTool={mcp.callTool}
+        callTool={call}
+        chatModels={chatModelCatalog.models}
         disabled={busy || !bookId || mcp.state !== 'ready'}
         connectionLabel={mcp.state === 'ready' ? 'Load a book to begin' : 'Connecting to MCP…'}
+        mcpActivity={mcpActivity}
         promptSession={null}
+        selectedModel={chatModel}
         pendingInput={pendingChatAction?.kind === 'generation'
           ? '/apply '
           : pendingCommandPlan || pendingChatAction
@@ -8037,12 +8145,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         notice={notice?.tone === 'error'
           ? { message: notice.text, tone: 'error' }
           : null}
-        onEnsureCatalog={refreshBookCommands}
+        onEnsureCatalog={refreshComposerCatalog}
         onDismissNotice={() => setNoticeState(null)}
         onDismissPanel={pendingCommandPlan || pendingChatAction
           ? dismissPendingCommandPlan
           : undefined}
         onExecute={executeCommand}
+        onModelChange={changeChatModel}
         onSuccessfulExecute={revealLatestNotebookResult}
       >
         {pendingCommandPlan && (

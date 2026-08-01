@@ -28,6 +28,7 @@
     "mint:x-token": "op run --env-file=.env.tpl -- node scripts/mint-x-token.mjs",
     "test": "vitest run",
     "test:clean-install": "node tools/clean-install-smoke.mjs",
+    "pretest:e2e": "playwright install chromium",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:watch": "vitest",
     "postinstall": "patch-package --error-on-fail"

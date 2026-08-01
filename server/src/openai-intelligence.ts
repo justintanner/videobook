@@ -29,9 +29,12 @@ type IntelligenceResponsesOptions = {
   retries?: number;
   fetch?: typeof fetch;
   baseURL?: string;
+  model?: string;
+  reasoningEffort?: IntelligenceReasoningEffort;
 };
 
 type IntelligenceRequestOptions = {
+  model?: string;
   reasoningEffort?: IntelligenceReasoningEffort;
 };
 
@@ -41,7 +44,7 @@ export function intelligenceRequest(
 ): OpenAiResponseRequest {
   return {
     ...request,
-    model: INTELLIGENCE_MODEL,
+    model: options.model ?? INTELLIGENCE_MODEL,
     reasoning: {
       effort: options.reasoningEffort ?? INTELLIGENCE_REASONING_EFFORT,
     },
@@ -49,10 +52,16 @@ export function intelligenceRequest(
   };
 }
 
-function normalizeRequest(request: OpenAiResponseRequest): OpenAiResponseRequest {
+function normalizeRequest(
+  request: OpenAiResponseRequest,
+  options: IntelligenceRequestOptions,
+): OpenAiResponseRequest {
   const normalized = intelligenceRequest(request, {
+    model: options.model,
     reasoningEffort:
-      request.reasoning?.effort ?? INTELLIGENCE_REASONING_EFFORT,
+      request.reasoning?.effort
+      ?? options.reasoningEffort
+      ?? INTELLIGENCE_REASONING_EFFORT,
   });
   delete normalized.temperature;
   delete normalized.top_p;
@@ -90,7 +99,10 @@ export function buildIntelligenceResponses(
       : deadline.signal;
 
     try {
-      return await call(normalizeRequest(request), combinedSignal);
+      return await call(normalizeRequest(request, {
+        model: options.model,
+        reasoningEffort: options.reasoningEffort,
+      }), combinedSignal);
     } catch (error) {
       if (signal?.aborted) {
         throw signal.reason instanceof Error

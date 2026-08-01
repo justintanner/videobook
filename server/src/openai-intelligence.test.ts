@@ -84,6 +84,17 @@ describe("intelligenceRequest", () => {
     });
     expect(INTELLIGENCE_REASONING_EFFORT).toBe("medium");
   });
+
+  it("supports an explicit model for an allowlisted caller", () => {
+    expect(intelligenceRequest(
+      { input: "Route this edit." },
+      { model: "gpt-5.6-terra", reasoningEffort: "low" },
+    )).toMatchObject({
+      model: "gpt-5.6-terra",
+      reasoning: { effort: "low" },
+      store: false,
+    });
+  });
 });
 
 describe("buildIntelligenceResponses", () => {
@@ -137,6 +148,32 @@ describe("buildIntelligenceResponses", () => {
     ));
 
     expect(captured?.reasoning).toEqual({ effort: "high" });
+  });
+
+  it("enforces a caller-selected model through the provider wrapper", async () => {
+    let captured: OpenAiResponseRequest | undefined;
+    const doFetch = (async (_input, init) => {
+      captured = JSON.parse(String(init?.body)) as OpenAiResponseRequest;
+      return new Response(JSON.stringify(response({ model: "gpt-5.6-terra" })), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+    const responses = buildIntelligenceResponses("test-key", {
+      fetch: doFetch,
+      retries: 0,
+      timeout: 1_000,
+      model: "gpt-5.6-terra",
+      reasoningEffort: "low",
+    });
+
+    await responses({
+      model: "legacy-model",
+      input: "Route this edit.",
+    });
+
+    expect(captured?.model).toBe("gpt-5.6-terra");
+    expect(captured?.reasoning).toEqual({ effort: "low" });
   });
 
   it("honors an external abort signal", async () => {

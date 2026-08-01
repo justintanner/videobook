@@ -45,6 +45,50 @@
         text-transform: uppercase;
       }
 
+      #startup-signal {
+        position: relative;
+        width: 180px;
+        height: 3px;
+        margin: 4px auto 2px;
+        overflow: hidden;
+        background: rgba(114, 231, 170, 0.12);
+      }
+
+      #startup-signal::after {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 42%;
+        background: linear-gradient(90deg, transparent, #72e7aa, #63c7d8, transparent);
+        box-shadow: 0 0 12px rgba(114, 231, 170, 0.6);
+        content: '';
+        animation: startup-scan 1.35s ease-in-out infinite;
+      }
+
+      #startup-shell strong {
+        animation: startup-breathe 1.8s ease-in-out infinite;
+      }
+
+      @keyframes startup-scan {
+        from { transform: translateX(-110%); }
+        to { transform: translateX(350%); }
+      }
+
+      @keyframes startup-breathe {
+        0%, 100% { opacity: 0.72; text-shadow: 0 0 0 transparent; }
+        50% { opacity: 1; text-shadow: 0 0 18px rgba(114, 231, 170, 0.35); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #startup-signal::after,
+        #startup-shell strong {
+          animation: none;
+        }
+
+        #startup-signal::after {
+          left: 29%;
+        }
+      }
+
       #root:not(:empty) + #startup-shell {
         display: none;
       }
@@ -55,7 +99,8 @@
     <div id="root"></div>
     <div id="startup-shell" role="status" aria-live="polite">
       <strong>VIDEOBOOK</strong>
-      <span>Loading workspace…</span>
+      <div id="startup-signal" aria-hidden="true"></div>
+      <span>Loading workspace via MCP…</span>
     </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

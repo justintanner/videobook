@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   AudioWaveform,
+  Bot,
   Check,
+  ChevronDown,
   ChevronUp,
   FileText,
   Film,
@@ -10,7 +12,6 @@ import {
   Send,
   X,
 } from 'lucide-react'
-import type { UseMcpResult } from 'use-mcp/react'
 import type { ServerCommand } from '@/lib/command-registry'
 import { RichPromptField } from '@/components/ui/RichPromptField'
 import { MediaLibraryAssetPreview } from './MediaLibraryAssetPreview'
@@ -26,6 +27,11 @@ import {
   hasExactCommandSuggestion,
 } from '@/videobook/command-suggestions'
 import { composerInputAfterOutcome } from '@/videobook/command-composer-outcome'
+import type { ChatModelOption } from '@/videobook/chat-models'
+import {
+  mcpToolLabel,
+  type McpActivity,
+} from '@/videobook/mcp-activity'
 
 export interface ComposerOutcome {
   ok: boolean
@@ -57,16 +63,20 @@ interface CommandComposerProps {
   commands: ServerCommand[]
   assets: readonly AssetMentionCandidate[]
   bookId: string
-  callTool: UseMcpResult['callTool']
+  callTool: (tool: string, args: Record<string, unknown>) => Promise<unknown>
+  chatModels: readonly ChatModelOption[]
   disabled: boolean
   connectionLabel: string
+  mcpActivity: McpActivity
   promptSession: PromptSession | null
+  selectedModel: string
   pendingInput?: string
   notice?: ComposerNotice | null
   onEnsureCatalog: () => Promise<void>
   onDismissNotice?: () => void
   onDismissPanel?: () => void
   onExecute: (input: string) => Promise<ComposerOutcome>
+  onModelChange: (model: string) => void
   onSuccessfulExecute: () => void
 }
 
@@ -102,13 +112,25 @@ function resultText(result: unknown): string | null {
 
 function historyPayload(value: unknown): string[] {
   const text = resultText(value)
-  if (!text) return []
-  try {
-    const parsed = JSON.parse(text) as { entries?: PromptHistoryEntry[] }
-    return (parsed.entries ?? []).map((entry) => entry.prompt).reverse()
-  } catch {
-    return []
+  let parsed = value
+  if (text) {
+    try {
+      parsed = JSON.parse(text) as unknown
+    } catch {
+      return []
+    }
   }
+  if (typeof parsed !== 'object' || parsed === null || !('entries' in parsed)) return []
+  const entries = parsed.entries
+  if (!Array.isArray(entries)) return []
+  return entries.flatMap((entry) => (
+    typeof entry === 'object'
+    && entry !== null
+    && 'prompt' in entry
+    && typeof entry.prompt === 'string'
+      ? [entry as PromptHistoryEntry]
+      : []
+  )).map((entry) => entry.prompt).reverse()
 }
 
 export function CommandComposer({
@@ -117,15 +139,19 @@ export function CommandComposer({
   assets,
   bookId,
   callTool,
+  chatModels,
   disabled,
   connectionLabel,
+  mcpActivity,
   promptSession,
+  selectedModel,
   pendingInput,
   notice,
   onEnsureCatalog,
   onDismissNotice,
   onDismissPanel,
   onExecute,
+  onModelChange,
   onSuccessfulExecute,
 }: CommandComposerProps) {
   const [input, setInput] = useState('')
@@ -140,6 +166,11 @@ export function CommandComposer({
   const historyDraftRef = useRef('')
   const loadedHistoryProjectRef = useRef('')
   const successTimerRef = useRef(0)
+  const transmitting = sending || mcpActivity.phase === 'active'
+  const mcpSucceeded = !transmitting && mcpActivity.phase === 'success'
+  const mcpFailed = !transmitting && mcpActivity.phase === 'error'
+  const selectedModelOption = chatModels.find((model) => model.id === selectedModel)
+    ?? chatModels[0]
 
   const focusInput = (select = false) => {
     requestAnimationFrame(() => {
@@ -203,6 +234,7 @@ export function CommandComposer({
       book_id: bookId,
       surface: 'chat',
       prompt: message,
+      params: { model: selectedModel },
     }).catch(() => undefined)
   }
 
@@ -400,9 +432,39 @@ export function CommandComposer({
 
       {children}
 
+      {mcpActivity.phase !== 'idle' && (
+        <div
+          key={mcpActivity.sequence}
+          className={`mcp-activity mcp-activity-${mcpActivity.phase}`}
+          data-testid="mcp-activity"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="mcp-activity-signal" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className="mcp-activity-copy">
+            <strong>MCP</strong>
+            <span>{mcpToolLabel(mcpActivity.tool)}</span>
+          </span>
+          <span className="mcp-activity-state">
+            {mcpActivity.phase === 'active'
+              ? mcpActivity.count > 1
+                ? `${mcpActivity.count} calls`
+                : 'working'
+              : mcpActivity.phase === 'success'
+                ? 'complete'
+                : 'failed'}
+          </span>
+        </div>
+      )}
+
       <form
         id={COMMAND_COMPOSER_FORM_ID}
-        className="command-line-shell"
+        className={`command-line-shell ${transmitting ? 'command-line-shell-transmitting' : ''} ${mcpSucceeded ? 'command-line-shell-success' : ''} ${mcpFailed ? 'command-line-shell-error' : ''}`}
+        aria-busy={transmitting}
         onSubmit={(event) => {
           event.preventDefault()
           void execute()
@@ -519,6 +581,24 @@ export function CommandComposer({
             }
           }}
         />
+        <label
+          className="command-model-selector"
+          title={selectedModelOption?.description}
+        >
+          <Bot size={13} aria-hidden="true" />
+          <select
+            value={selectedModel}
+            disabled={disabled || sending}
+            aria-label="Chat model"
+            data-testid="chat-model-selector"
+            onChange={(event) => onModelChange(event.target.value)}
+          >
+            {chatModels.map((model) => (
+              <option key={model.id} value={model.id}>{model.label}</option>
+            ))}
+          </select>
+          <ChevronDown size={12} aria-hidden="true" />
+        </label>
         <button
           type="submit"
           className="command-send"
@@ -527,6 +607,7 @@ export function CommandComposer({
         >
           {sending ? <Loader2 size={16} className="spin" /> : <Send size={16} />}
         </button>
+        {transmitting && <span className="command-transmit-scan" aria-hidden="true" />}
       </form>
     </section>
   )
