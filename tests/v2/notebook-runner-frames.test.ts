@@ -93,6 +93,64 @@ describe("notebook runner frames and concat", () => {
       .toEqual([`@${video.outputArtifactId}`]);
   });
 
+  it("maps Kling motion control image and video inputs", () => {
+    const image = {
+      id: "019f0000-0000-7000-8000-000000000020",
+      type: "image" as const,
+      slug: "img-character",
+      slot: { row: 0, column: 0 },
+      outputArtifactId: "019f0000-0000-7000-8000-000000000021",
+    };
+    const video = {
+      id: "019f0000-0000-7000-8000-000000000022",
+      type: "video" as const,
+      slug: "vid-motion",
+      slot: { row: 0, column: 1 },
+      outputArtifactId: "019f0000-0000-7000-8000-000000000023",
+    };
+    const generate = {
+      id: "019f0000-0000-7000-8000-000000000024",
+      type: "generate_video" as const,
+      slug: "generate-video-motion",
+      slot: { row: 1, column: 0 },
+      prompt: "Follow the reference performance",
+    };
+    const document: NotebookDocument = {
+      id: "019f0000-0000-7000-8000-000000000025",
+      name: "Motion Control",
+      cells: [image, video, generate],
+      edges: [
+        {
+          id: "019f0000-0000-7000-8000-000000000026",
+          source: image.id,
+          target: generate.id,
+          targetInput: "image",
+        },
+        {
+          id: "019f0000-0000-7000-8000-000000000027",
+          source: video.id,
+          target: generate.id,
+          targetInput: "video",
+        },
+      ],
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    const definition = {
+      name: "generate_kie_kling_3_0_motion_control",
+      schema: {
+        book_id: {},
+        prompt: {},
+        character_image_slugs: {},
+        motion_video_slugs: {},
+      },
+    } as unknown as ToolDef;
+
+    expect(modelArgs(definition, document, generate, "book-id")).toMatchObject({
+      character_image_slugs: [`@${image.outputArtifactId}`],
+      motion_video_slugs: [`@${video.outputArtifactId}`],
+    });
+  });
+
   it("maps first_frame and last_frame image cells into Seedance payload fields", async () => {
     rootDir = await mkdtemp(join(tmpdir(), "vb-runner-frames-"));
     engine = createEngine({ rootDir, initialBookSlug: "runner-frames" });

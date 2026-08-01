@@ -98,7 +98,7 @@ export const GENERATION_ACTIONS: GenerationActionSpec[] = [
     apicity_identifier: "KlingMotionControlRequestSchema",
     media_type: "video",
     operation: "motion_control",
-    picker_visibility: "hidden_fal_variant",
+    picker_visibility: "visible",
     legacy_names: ["generate_kling30_motion_control_video"],
     schema_owner: "@apicity/kie/zod",
     job_task_discriminator: "kling_motion_control",

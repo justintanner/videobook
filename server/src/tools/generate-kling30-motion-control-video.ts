@@ -34,7 +34,7 @@ const generateKling30MotionControlVideoSchema = {
   book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(motionControlInput.prompt, "Optional motion description"),
   character_image_slugs: apicityStringArrayField(motionControlInput.input_urls, "Character image @slugs (input_urls)", { required: true }),
-  motion_video_slugs: apicityStringArrayField(motionControlInput.video_urls, "Motion reference video @slugs (video_urls)", { required: true }),
+  motion_video_slugs: apicityStringArrayField(motionControlInput.video_urls, "Motion reference video @slugs (video_urls)", { required: true }).max(1),
   mode: apicityField(motionControlInput.mode, "Output resolution: 720p / 1080p (default 720p)"),
   character_orientation: apicityField(motionControlInput.character_orientation, "Character orientation source: video / image (default video)"),
   background_source: apicityField(motionControlInput.background_source, "Background source: input_video / input_image (default input_video)"),

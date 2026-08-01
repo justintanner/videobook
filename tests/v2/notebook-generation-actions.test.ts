@@ -204,6 +204,42 @@ const seedanceAction: NotebookGenerationAction = {
   controls: [],
 }
 
+const motionControlAction: NotebookGenerationAction = {
+  id: 'generation.kling-motion-control',
+  cellTypes: ['generate_video'],
+  provider: 'kie',
+  providerLabel: 'Kie',
+  model: 'KlingMotionControlRequestSchema',
+  operation: 'motion_control',
+  tool: 'generate_kie_kling_3_0_motion_control',
+  title: 'Kling 3.0 Motion Control',
+  isDefault: false,
+  defaultPriority: null,
+  inputContract: {
+    modes: [{
+      id: 'default',
+      slots: [
+        {
+          field: 'character_image_slugs',
+          kind: 'image',
+          targets: ['image'],
+          min: 1,
+          max: 1,
+        },
+        {
+          field: 'motion_video_slugs',
+          kind: 'video',
+          targets: ['video'],
+          min: 1,
+          max: 1,
+        },
+      ],
+      requiredGroups: [],
+    }],
+  },
+  controls: [],
+}
+
 const emptyImageCell: NotebookCell = {
   id: '01900000-0000-7000-8000-000000000001',
   type: 'generate_image',
@@ -300,6 +336,24 @@ describe('notebook generation actions', () => {
       [{ kind: 'video', target: 'video' }],
     ).map((mode) => mode.id)).toEqual(['v2v'])
     expect(generationModeLabel('r2v')).toBe('R2V · Reference to video')
+  })
+
+  it('offers Kling motion control for a character image and motion video', () => {
+    expect(compatibleGenerationActions(
+      [motionControlAction],
+      'generate_video',
+      [{ kind: 'image', target: 'image' }],
+    )).toEqual([])
+    expect(compatibleGenerationActions(
+      [motionControlAction],
+      'generate_video',
+      [
+        { kind: 'image', target: 'image' },
+        { kind: 'video', target: 'video' },
+      ],
+    ).map((action) => action.tool)).toEqual([
+      'generate_kie_kling_3_0_motion_control',
+    ])
   })
 
   it('materializes control defaults alongside explicit settings', () => {

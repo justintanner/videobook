@@ -54,6 +54,7 @@ import {
 } from "../notebook-action-catalog.js";
 import { notebookGenerationInputContract } from "../notebook-generation-contract.js";
 import { notebookGenerationControls } from "../notebook-generation-controls.js";
+import { hydrateNotebookProviderFailures } from "../notebook-provider-failure.js";
 import { buildSevenStageScaffold } from "../notebook-workflow.js";
 import { translateToolPayload } from "../payload-builders.js";
 import {
@@ -1241,8 +1242,14 @@ function cellPayload(cell: NotebookCell): Record<string, unknown> {
   };
 }
 
-function notebookPayload(notebook: NotebookDocument): Record<string, unknown> {
-  const normalized = normalizeLegacyAnalyzeDocument(notebook);
+function notebookPayload(
+  engine: Engine,
+  notebook: NotebookDocument,
+): Record<string, unknown> {
+  const normalized = hydrateNotebookProviderFailures(
+    engine,
+    normalizeLegacyAnalyzeDocument(notebook),
+  );
   return {
     id: normalized.id,
     name: normalized.name,
@@ -1455,7 +1462,8 @@ export function videobookDomainDefs(
       description: "List canonical notebook documents",
       scope: "book",
       schema: bookSchema,
-      handler: async () => json(engine.notebooks.list().map(notebookPayload)),
+      handler: async () => json(engine.notebooks.list().map((notebook) =>
+        notebookPayload(engine, notebook))),
     },
     {
       name: "get_primary_sequence",
@@ -1940,7 +1948,7 @@ export function videobookDomainDefs(
       schema: { ...bookSchema, name: z.string().min(1) },
       handler: async (args) => {
         const result = await engine.notebooks.create(String(args.name));
-        return result.ok ? json(notebookPayload(result.value)) : failure(result.error.message);
+        return result.ok ? json(notebookPayload(engine, result.value)) : failure(result.error.message);
       },
     },
     {
@@ -1950,7 +1958,7 @@ export function videobookDomainDefs(
       schema: { ...bookSchema, notebook_id: z.string().uuid() },
       handler: async (args) => {
         const result = engine.notebooks.read(String(args.notebook_id));
-        return result.ok ? json(notebookPayload(result.value)) : failure(result.error.message);
+        return result.ok ? json(notebookPayload(engine, result.value)) : failure(result.error.message);
       },
     },
     {
@@ -2020,7 +2028,7 @@ export function videobookDomainDefs(
         try {
           return json(selectedCellDetails(
             String(args.notebook_id),
-            result.value,
+            hydrateNotebookProviderFailures(engine, result.value),
             String(args.cell_id),
           ));
         } catch (cause) {
@@ -2053,7 +2061,7 @@ export function videobookDomainDefs(
         if (!result.ok) return failure(result.error.message);
         const read = engine.notebooks.read(String(args.notebook_id));
         return read.ok
-          ? json(notebookPayload(read.value))
+          ? json(notebookPayload(engine, read.value))
           : failure(read.error.message);
       },
     },

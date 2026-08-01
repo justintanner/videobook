@@ -6,7 +6,9 @@ describe("notebook generation controls", () => {
     expect(notebookGenerationControls({
       properties: {
         prompt: { type: "string" },
+        character_image_slugs: { type: "array" },
         image_slugs: { type: "array" },
+        motion_video_slugs: { type: "array" },
         aspect_ratio: {
           type: "string",
           enum: ["16:9", "9:16"],

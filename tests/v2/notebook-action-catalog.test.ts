@@ -199,7 +199,17 @@ describe("notebook action catalog", () => {
         title: string;
         providerLabel: string;
         defaultPriority?: number;
-        inputContract?: { modes: Array<{ id: string }> };
+        inputContract?: {
+          modes: Array<{
+            id: string;
+            slots: Array<{
+              field: string;
+              kind: string;
+              min: number;
+              max: number | null;
+            }>;
+          }>;
+        };
         controls?: Array<{
           name: string;
           defaultValue?: string | number | boolean;
@@ -224,6 +234,36 @@ describe("notebook action catalog", () => {
       control.name === "duration")).toMatchObject({
       defaultValue: "8",
       options: ["4", "6", "8", "10"],
+    });
+    const motionControlAction = generationCatalog.actions.find((action) =>
+      action.tool === "generate_kie_kling_3_0_motion_control");
+    expect(motionControlAction).toMatchObject({
+      title: "Kling 3.0 Motion Control",
+      providerLabel: "Kie",
+    });
+    expect(motionControlAction?.inputContract?.modes).toEqual([{
+      id: "default",
+      slots: [
+        {
+          field: "character_image_slugs",
+          kind: "image",
+          min: 1,
+          max: 1,
+          targets: ["image"],
+        },
+        {
+          field: "motion_video_slugs",
+          kind: "video",
+          min: 1,
+          max: 1,
+          targets: ["video"],
+        },
+      ],
+      requiredGroups: [],
+    }]);
+    expect(motionControlAction?.controls?.find((control) =>
+      control.name === "mode")).toMatchObject({
+      options: ["720p", "1080p"],
     });
     const fullCatalog = resultJson(await invoke("list_notebook_actions", {})) as {
       actions: Array<{

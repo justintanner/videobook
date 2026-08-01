@@ -39,6 +39,37 @@ describe("notebook generation input contracts", () => {
     });
   });
 
+  it("publishes Kling motion control image and video requirements", () => {
+    expect(notebookGenerationInputContract(
+      "generate_kie_kling_3_0_motion_control",
+      {
+        character_image_slugs: z.array(z.string()).min(1).max(1),
+        motion_video_slugs: z.array(z.string()).min(1).max(1),
+      },
+    )).toEqual({
+      modes: [{
+        id: "default",
+        slots: [
+          {
+            field: "character_image_slugs",
+            kind: "image",
+            targets: ["image"],
+            min: 1,
+            max: 1,
+          },
+          {
+            field: "motion_video_slugs",
+            kind: "video",
+            targets: ["video"],
+            min: 1,
+            max: 1,
+          },
+        ],
+        requiredGroups: [],
+      }],
+    });
+  });
+
   it("keeps Seedance frame and reference modes exclusive", () => {
     const contract = notebookGenerationInputContract(
       "generate_kie_seedance_2_0_video",

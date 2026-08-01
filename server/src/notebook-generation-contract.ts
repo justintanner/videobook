@@ -33,6 +33,10 @@ type InputFieldSpec = {
 };
 
 const inputFieldSpecs: Record<string, InputFieldSpec> = {
+  character_image_slugs: {
+    kind: "image",
+    targets: ["image"],
+  },
   image_slugs: {
     kind: "image",
     targets: ["image"],
@@ -45,6 +49,7 @@ const inputFieldSpecs: Record<string, InputFieldSpec> = {
   last_frame_slug: { kind: "image", targets: ["last_frame"] },
   end_frame_slug: { kind: "image", targets: ["last_frame"] },
   video_slugs: { kind: "video", targets: ["video"] },
+  motion_video_slugs: { kind: "video", targets: ["video"] },
   video_slug: { kind: "video", targets: ["video"] },
   first_clip_slug: { kind: "video", targets: ["video"] },
   audio_slugs: { kind: "audio", targets: ["audio"] },

@@ -49,6 +49,7 @@ import {
   notebookGenerationInputContract,
   notebookGenerationInputsAreCompatible,
 } from "../notebook-generation-contract.js";
+import { notebookProviderFailureMessage } from "../notebook-provider-failure.js";
 
 export interface RunNotebookPayload {
   type: "run_notebook";
@@ -742,6 +743,12 @@ export function modelArgs(
   if ("image_slugs" in definition.schema && imageReferences.length > 0) {
     args.image_slugs = imageReferences;
   }
+  if (
+    "character_image_slugs" in definition.schema
+    && imageReferences.length > 0
+  ) {
+    args.character_image_slugs = imageReferences;
+  }
   if ("image_slug" in definition.schema && imageReferences[0]) {
     args.image_slug = imageReferences[0];
   }
@@ -752,6 +759,12 @@ export function modelArgs(
     .map(({ output }) => refFor(output!));
   if ("video_slugs" in definition.schema && videoReferences.length > 0) {
     args.video_slugs = videoReferences;
+  }
+  if (
+    "motion_video_slugs" in definition.schema
+    && videoReferences.length > 0
+  ) {
+    args.motion_video_slugs = videoReferences;
   }
   if ("video_slug" in definition.schema && videoReferences[0]) {
     args.video_slug = videoReferences[0];
@@ -1790,7 +1803,7 @@ function ancestorsOf(
   return seen;
 }
 
-interface AwaitNotebookOutputPayload {
+export interface AwaitNotebookOutputPayload {
   type: "await_notebook_output";
   bookId: string;
   notebookId: string;
@@ -2010,6 +2023,17 @@ async function failAwaitingNotebookCell(
   return read.value;
 }
 
+export async function failNotebookProviderOutput(
+  engine: Engine,
+  input: AwaitNotebookOutputPayload,
+): Promise<NotebookDocument> {
+  return await failAwaitingNotebookCell(
+    engine,
+    input,
+    notebookProviderFailureMessage(engine, input),
+  );
+}
+
 function runHasAwaitingCells(
   document: NotebookDocument,
   runId: string,
@@ -2064,11 +2088,7 @@ async function awaitNotebookOutput(
       return;
     }
     if (status.value === "error") {
-      const document = await failAwaitingNotebookCell(
-        engine,
-        input,
-        `Provider output ${input.providerArtifactId} failed`,
-      );
+      const document = await failNotebookProviderOutput(engine, input);
       await enqueueNotebookResume(input, document);
       return;
     }
