@@ -182,6 +182,7 @@ import {
   parseNotebookFrameCommand,
   type NotebookFrameCommand,
 } from '@/videobook/notebook-frame-command'
+import { parseNotebookGenerationCellCommand } from '@/videobook/notebook-generation-command'
 import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
 import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
 import type {
@@ -5057,14 +5058,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (frameCommand) {
           return await executeNotebookFrameCommand(frameCommand)
         }
-        const generationMatch = input.match(
-          /\b(?:generate|run)\s+(?:the\s+)?(?:cell\s+)?@?([a-z0-9-]+)/iu,
-        )
-        if (generationMatch && notebook) {
-          const token = generationMatch[1].toLowerCase()
+        const generationCellReference = parseNotebookGenerationCellCommand(input)
+        if (generationCellReference && notebook) {
           const cell = notebook.cells.find((candidate) =>
-            candidate.id.toLowerCase().startsWith(token)
-            || candidate.slug === token)
+            candidate.id.toLowerCase().startsWith(generationCellReference)
+            || candidate.slug === generationCellReference)
           if (
             !cell
             || !isGenerationCell(cell)
