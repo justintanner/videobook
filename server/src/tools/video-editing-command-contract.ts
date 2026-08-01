@@ -247,7 +247,7 @@ export const VIDEO_EDITING_COMMANDS: Command[] = [
 export const VIDEO_EDITING_TOOL_CONTRACTS: VideoEditingToolContract[] = [
   { tool: "trim_video", exposure: "direct", command: "/trim-video", purpose: "Keep or remove a time range from video" },
   { tool: "trim_audio", exposure: "direct", command: "/trim-audio", purpose: "Keep or remove a time range from audio" },
-  { tool: "split_video", exposure: "ui", command: "/split", purpose: "Frame-accurate interactive video split" },
+  { tool: "split_video", exposure: "composite", command: "/split", purpose: "Create and run two notebook split branches" },
   { tool: "split_video_by_durations", exposure: "direct", command: "/split-chunks", purpose: "Split video into target-duration chunks" },
   { tool: "pad_video", exposure: "direct", command: "/pad", purpose: "Append black frames and silence" },
   { tool: "crop_video", exposure: "ui", command: "/crop", purpose: "Interactive video crop" },

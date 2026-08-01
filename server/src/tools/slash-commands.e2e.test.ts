@@ -956,22 +956,26 @@ describe("slash commands e2e", () => {
       expect(renderCmd.mcpTool?.tool).toBe("render_video");
     });
 
-    it("/split opens the split editor via uiAction", () => {
+    it("/split is a composite notebook split command", () => {
       const cmd = findCommand("/split");
-      expect(cmd.uiAction).toBe("open_split");
+      expect(cmd.exposure).toBe("composite");
+      expect(cmd.uiAction).toBeUndefined();
       expect(cmd.mcpTool).toBeUndefined();
     });
 
-    it("parses '/split @vid-clip 10'", () => {
-      const args = simulateParse("/split", "@vid-clip 10");
-      expect(args.asset_id).toBe("vid-clip");
-      expect(args.at).toBe("10");
+    it("parses '/split @vid-clip into 15s and the remaining'", () => {
+      const args = simulateParse(
+        "/split",
+        "@vid-clip into 15s and the remaining",
+      );
+      expect(args.cell_slug).toBe("vid-clip");
+      expect(args.split_spec).toBe("into 15s and the remaining");
     });
 
-    it("parses '/split @vid-clip' (no at)", () => {
-      const args = simulateParse("/split", "@vid-clip");
-      expect(args.asset_id).toBe("vid-clip");
-      expect(args.at).toBeUndefined();
+    it("keeps canonical-sequence splitting under /split-clip", () => {
+      const args = simulateParse("/split-clip", "@clip-id 45");
+      expect(args.clip_id).toBe("clip-id");
+      expect(args.sequence_frame).toBe(45);
     });
 
     it("/final dispatches render_timeline via mcpTool", () => {

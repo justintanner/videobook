@@ -256,7 +256,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `revise_notebook_generation_plan` — Retry, switch the allowed generation model, or omit a preserved notebook generation plan
 - `rewrite_prompt` — Rewrite a generation prompt using model-specific best practices. Supports standard mode (rewrite any prompt) and scene mode (rewrite a specific scene in a Kling 3.0 multi-shot asset).
 - `rewrite_script` — Rewrite a generated script asset in-place as a text-to-text transformation of its existing markdown (the source image is NOT re-read). Variants: "full" (full reproduction prompt + breakdown) or "tldr" (1–2 sentence summary). Optional platform preset ("ig" | "tiktok" | "youtube") tunes authentic-capture cues for that feed. Optional custom_prompt applies a transformation instruction (e.g. "replace the pig with a man in a blue suit"). Previous versions are preserved as immutable Dolt revisions. Returns immediately; reconcile_project_work reports status="generating" until the new markdown is written.
-- `run_notebook` — Run missing or stale configured notebook cells topologically
+- `run_notebook` — Run missing, stale, or explicitly selected notebook cells topologically
 - `run_notebook_cell` — Run one selected notebook cell and any stale prerequisites
 - `search_archive` — Search the global clip archive (B2 if configured, otherwise the local archive folder) by topics, named people, or text query.
 - `search_library_assets` — Search ready audio, image, and video assets across all books
@@ -304,7 +304,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at? } so the client can poll while the user authorizes in the browser.
 
-## Slash commands (118 static commands)
+## Slash commands (119 static commands)
 
 - `/activity` (aliases: `/status`) — View project activity log; UI: `open_status`
 - `/analyze-jokes` — Identify the jokes in a clip's transcript, classified by type; MCP: `analyze_jokes`
@@ -404,8 +404,9 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `/sort` — Set sidebar sort order (no value toggles); UI: `sidebar_sort`
 - `/speed` — Change video playback speed (0.25-4.0x) or exact duration (e.g. 8.32s); MCP: `change_video_speed`
 - `/splice` — Splice two videos with an overlap window; use 0 to concatenate both complete clips; MCP: `splice_video`
-- `/split` — Open frame-accurate split editor; creates two video assets. Original preserved.; UI: `open_split`
+- `/split` — Split a notebook video into a timed first clip and the remaining clip, then run both branches
 - `/split-chunks` (aliases: `/even-split`) — Split a video into targeted chunks plus a leftover while preserving the source; MCP: `split_video_by_durations`
+- `/split-clip` — Split a canonical-sequence clip at an exact sequence frame
 - `/storage` — Open DoltLite and content-store diagnostics; UI: `open_diagnostics`
 - `/subs` — Subtitle settings; UI: `settings_subs`
 - `/suggest-cuts` — Suggest trim cuts for a video (dead air, fillers, awkward sections); MCP: `suggest_cuts`

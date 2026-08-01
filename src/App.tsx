@@ -193,6 +193,14 @@ import {
   type NotebookFrameCommand,
 } from '@/videobook/notebook-frame-command'
 import {
+  enqueueNotebookSplitCommand,
+  parseNotebookSplitCommand,
+  planNotebookSplitCommand,
+  resolveNotebookSplitSource,
+  type NotebookSplitCommand,
+  type NotebookSplitRun,
+} from '@/videobook/notebook-split-command'
+import {
   generationCellTypeForRoutedTool,
   materializeNotebookChatGeneration,
   notebookChatGenerationConnectedInputs,
@@ -457,6 +465,7 @@ const supportedUiActions = new Set([
 interface CanvasCellData extends NotebookCellData {
   asset?: AssetRecord
   deleting?: boolean
+  revealing?: boolean
   splitFrames?: {
     first: { artifactId: string | null; asset?: AssetRecord }
     last: { artifactId: string | null; asset?: AssetRecord }
@@ -2148,6 +2157,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         failed ? 'cell-node-error' : '',
         versionedOutput ? 'cell-node-version-stack' : '',
         data.deleting ? 'cell-node-deleting' : '',
+        data.revealing ? 'cell-node-created' : '',
       ].filter(Boolean).join(' ')}
       aria-busy={running}
       data-version-count={outputVersions.length}
@@ -2332,6 +2342,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [storage, setStorage] = useState<unknown>(null)
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null)
   const [queuedCellIds, setQueuedCellIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
+  const [revealingCellIds, setRevealingCellIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
   const [deletingCellId, setDeletingCellId] = useState<string | null>(null)
@@ -2611,6 +2624,17 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     })
   }, [])
 
+  const revealCells = useCallback((cellIds: readonly string[]) => {
+    setRevealingCellIds((current) => new Set([...current, ...cellIds]))
+    window.setTimeout(() => {
+      setRevealingCellIds((current) => {
+        const next = new Set(current)
+        for (const cellId of cellIds) next.delete(cellId)
+        return next.size === current.size ? current : next
+      })
+    }, 900)
+  }, [])
+
   useEffect(() => {
     const updateOnlineState = () => setOnline(window.navigator.onLine)
     window.addEventListener('online', updateOnlineState)
@@ -2680,6 +2704,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setNotebook(next)
     const cellIds = new Set(next.cells.map((cell) => cell.id))
     setQueuedCellIds((current) => {
+      const retained = new Set([...current].filter((cellId) => cellIds.has(cellId)))
+      return retained.size === current.size ? current : retained
+    })
+    setRevealingCellIds((current) => {
       const retained = new Set([...current].filter((cellId) => cellIds.has(cellId)))
       return retained.size === current.size ? current : retained
     })
@@ -3092,6 +3120,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     for (const cellId of queuedCellIds) {
       next = notebookNodesWithCellStatus(next, cellId, 'queued')
     }
+    if (revealingCellIds.size > 0) {
+      next = next.map((node) => revealingCellIds.has(node.id)
+        ? { ...node, data: { ...node.data, revealing: true } }
+        : node)
+    }
     if (Object.keys(cellRunErrors).length === 0) return next
     return next.map((node) => {
       const liveError = cellRunErrors[node.id]
@@ -3105,7 +3138,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         },
       }
     })
-  }, [cellRunErrors, nodes, queuedCellIds])
+  }, [cellRunErrors, nodes, queuedCellIds, revealingCellIds])
   const focusedEdges = useMemo(
     () => notebookEdgesWithCellFocus(edges, selectedCellId),
     [edges, selectedCellId],
@@ -5384,6 +5417,139 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
+  const watchNotebookSplitRun = async (input: {
+    bookId: string
+    notebookId: string
+    run: NotebookSplitRun
+  }) => {
+    const outcomes = await Promise.all(input.run.branches.map(async (branch) => {
+      try {
+        const outcome = await watchNotebookRun({
+          bookId: input.bookId,
+          notebookId: input.notebookId,
+          cellId: branch.actionCellId,
+          slug: branch.actionSlug,
+          runId: input.run.runId,
+          jobOperationId: input.run.jobId,
+          intervalMs: notebookRunPollIntervalMs,
+          timeoutMs: notebookRunPollTimeoutMs,
+          maxPollFailures: 10,
+        })
+        if (outcome.kind === 'failed') {
+          setCellRunError(
+            branch.actionCellId,
+            outcome.message ?? `@${branch.actionSlug} failed`,
+          )
+        }
+        return { branch, outcome }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        setCellRunError(branch.actionCellId, message)
+        return {
+          branch,
+          outcome: { kind: 'failed' as const, message },
+        }
+      } finally {
+        setCellQueued(branch.actionCellId, false)
+      }
+    }))
+    const failed = outcomes.find(({ outcome }) => outcome.kind === 'failed')
+    if (failed) {
+      setNotice(
+        failed.outcome.message ?? `@${failed.branch.actionSlug} failed`,
+        'error',
+      )
+      return
+    }
+    if (outcomes.some(({ outcome }) => outcome.kind === 'timeout')) {
+      setNotice(
+        `@${input.run.sourceSlug} is still splitting — check the Jobs screen`,
+      )
+      return
+    }
+    if (outcomes.some(({ outcome }) => outcome.kind === 'superseded')) return
+    const outputSlugs = input.run.branches.map((branch) => `@${branch.outputSlug}`)
+    setSelectedCellId(input.run.branches.at(-1)?.outputCellId ?? null)
+    setNotice(
+      `Split @${input.run.sourceSlug} into ${outputSlugs.join(' and ')}`,
+    )
+  }
+
+  const executeNotebookSplitCommand = async (
+    command: NotebookSplitCommand,
+  ): Promise<ComposerOutcome> => {
+    if (!bookId || !notebook) {
+      return { ok: false, message: 'Open a notebook before splitting a video.' }
+    }
+    const actionCellIds: string[] = []
+    setBusy(true)
+    try {
+      const [notebookValue, assetValue] = await Promise.all([
+        call('get_notebook', {
+          book_id: bookId,
+          notebook_id: notebook.id,
+        }),
+        call('list_assets', {
+          book_id: bookId,
+          sort: 'newest',
+          limit: 200,
+          include_referenced: true,
+        }),
+      ])
+      const currentNotebook = asNotebook(notebookValue)
+      if (!currentNotebook) {
+        throw new Error('The server returned an invalid notebook')
+      }
+      const currentAssets = asAssets(assetValue)
+      const source = resolveNotebookSplitSource(
+        currentNotebook,
+        command.sourceReference,
+      )
+      const sourceDuration = currentAssets.find((asset) =>
+        asset.artifactId === source.outputArtifactId)?.duration
+        ?? asNumber(source.inputs?.durationSeconds)
+      const draft = planNotebookSplitCommand({
+        command,
+        document: currentNotebook,
+        sourceDurationSeconds: sourceDuration ?? Number.NaN,
+      })
+      actionCellIds.push(...draft.branches.map((branch) => branch.actionCell.id))
+      setAssets(currentAssets)
+      applyNotebook(draft.document, currentAssets, jobs)
+      revealCells(draft.createdCellIds)
+      for (const cellId of actionCellIds) {
+        setCellRunError(cellId, null)
+        setCellQueued(cellId, true)
+      }
+      setSelectedCellId(draft.branches[0].outputCell.id)
+      setNotice(`Splitting @${draft.sourceSlug} at ${draft.splitAtSeconds}s`)
+      const run = await enqueueNotebookSplitCommand({
+        actor: 'videobook-user',
+        bookId,
+        callTool: call,
+        draft,
+      })
+      await refreshBookData(bookId, currentNotebook.id).catch(() => undefined)
+      void watchNotebookSplitRun({
+        bookId,
+        notebookId: currentNotebook.id,
+        run,
+      })
+      return {
+        ok: true,
+        message: `Splitting @${run.sourceSlug} into ${run.branches.map((branch) => `@${branch.outputSlug}`).join(' and ')}`,
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      for (const cellId of actionCellIds) setCellQueued(cellId, false)
+      await refreshBookData(bookId, notebook.id).catch(() => undefined)
+      setNotice(message, 'error')
+      return { ok: false, message }
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const executeNotebookFrameCommand = async (
     command: NotebookFrameCommand,
   ): Promise<ComposerOutcome> => {
@@ -5803,6 +5969,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return { ok: true, message: 'Pending action cancelled' }
       }
       if (!bookId) return { ok: false, message: 'Load or create a book first.' }
+      const splitCommand = parseNotebookSplitCommand(input)
+      if (splitCommand) {
+        return await executeNotebookSplitCommand(splitCommand)
+      }
       const resolvedAssetInput = resolveNotebookMentionAliases(
         input,
         commandMentionAssets,
@@ -6043,12 +6213,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           timeline_start_frame: startFrame,
         }, 'slash')
       }
-      if (commandToken === '/split') {
+      if (commandToken === '/split-clip') {
         const [clipValue, frameValue] = restParts
         const clip = sequenceClipReference(sequence, clipValue)
         const splitFrame = Number(frameValue)
         if (!clip || !Number.isSafeInteger(splitFrame)) {
-          return { ok: false, message: 'Usage: /split @clip-id <sequence-frame>' }
+          return { ok: false, message: 'Usage: /split-clip @clip-id <sequence-frame>' }
         }
         return await prepareSequenceEdit({
           kind: 'split',

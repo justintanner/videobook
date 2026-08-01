@@ -3713,10 +3713,35 @@ export function videobookDomainDefs(
     },
     {
       name: "run_notebook",
-      description: "Run missing or stale configured notebook cells topologically",
+      description: "Run missing, stale, or explicitly selected notebook cells topologically",
       scope: "book",
-      schema: { ...bookSchema, notebook_id: z.string().uuid() },
+      schema: {
+        ...bookSchema,
+        notebook_id: z.string().uuid(),
+        cell_ids: z.array(z.string().uuid()).min(1).max(100).optional(),
+        actor: z.string().min(1).optional(),
+      },
       handler: async (args) => {
+        const cellIds = Array.isArray(args.cell_ids)
+          ? [...new Set(args.cell_ids.map(String))]
+          : undefined;
+        if (cellIds) {
+          const notebook = engine.notebooks.read(String(args.notebook_id));
+          if (!notebook.ok) return failure(notebook.error.message);
+          for (const cellId of cellIds) {
+            const cell = notebook.value.cells.find((candidate) =>
+              candidate.id === cellId);
+            if (!cell) return failure(`Notebook cell not found: ${cellId}`);
+            if (!notebookCellIsRunnable(cell)) {
+              return failure(`Notebook cell @${cell.slug} is not runnable`);
+            }
+            if (notebookCellIsPaid(cell)) {
+              return failure(
+                `Paid notebook cell @${cell.slug} requires its own persisted generation plan`,
+              );
+            }
+          }
+        }
         const runId = uuidv7();
         const jobId = `run-notebook-${String(args.notebook_id)}-${runId}`;
         await queue.enqueue(jobId, {
@@ -3724,9 +3749,24 @@ export function videobookDomainDefs(
           bookId: String(args.book_id),
           notebookId: String(args.notebook_id),
           runId,
-          force: false,
+          force: cellIds !== undefined,
+          ...(cellIds ? { cellIds } : {}),
+          ...(typeof args.actor === "string" ? { actor: args.actor } : {}),
         });
-        return json({ job_id: jobId, run_id: runId });
+        if (cellIds) {
+          await Promise.all(cellIds.map((cellId) =>
+            markNotebookCellQueued(
+              engine,
+              String(args.notebook_id),
+              cellId,
+              runId,
+            ).catch(() => undefined)));
+        }
+        return json({
+          job_id: jobId,
+          run_id: runId,
+          ...(cellIds ? { cell_ids: cellIds } : {}),
+        });
       },
     },
     {
