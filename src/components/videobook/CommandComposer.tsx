@@ -52,6 +52,7 @@ interface CommandComposerProps {
   promptSession: PromptSession | null
   onEnsureCatalog: () => Promise<void>
   onExecute: (input: string) => Promise<ComposerOutcome>
+  onSuccessfulExecute: () => void
 }
 
 interface CommandSuggestion {
@@ -105,6 +106,7 @@ export function CommandComposer({
   promptSession,
   onEnsureCatalog,
   onExecute,
+  onSuccessfulExecute,
 }: CommandComposerProps) {
   const [input, setInput] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -118,6 +120,10 @@ export function CommandComposer({
   const historyDraftRef = useRef('')
   const loadedHistoryProjectRef = useRef('')
   const successTimerRef = useRef(0)
+
+  const focusInput = () => {
+    requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }))
+  }
 
   const suggestions = useMemo<Suggestion[]>(() => {
     if (dismissed) return []
@@ -184,10 +190,12 @@ export function CommandComposer({
     setDismissed(false)
     setSending(true)
     try {
-      showOutcome(await onExecute(message))
+      const nextOutcome = await onExecute(message)
+      showOutcome(nextOutcome)
+      if (nextOutcome.ok) onSuccessfulExecute()
     } finally {
       setSending(false)
-      requestAnimationFrame(() => inputRef.current?.focus())
+      focusInput()
     }
   }
 
@@ -198,7 +206,7 @@ export function CommandComposer({
       setInput((current) => current.replace(/@[\w-]*$/, suggestion.value) + ' ')
     }
     setDismissed(true)
-    requestAnimationFrame(() => inputRef.current?.focus())
+    focusInput()
   }
 
   const navigateHistory = (direction: -1 | 1) => {
@@ -250,13 +258,13 @@ export function CommandComposer({
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
       event.preventDefault()
       void promptSession.onCommit().then(showOutcome)
-      requestAnimationFrame(() => inputRef.current?.focus())
+      focusInput()
       return true
     }
     if (event.key === 'Escape') {
       event.preventDefault()
       void promptSession.onCollapse().then(showOutcome)
-      requestAnimationFrame(() => inputRef.current?.focus())
+      focusInput()
       return true
     }
     const target = event.currentTarget

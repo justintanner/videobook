@@ -192,6 +192,7 @@ import {
   notebookMentionAssets,
   resolveNotebookMentionAliases,
 } from '@/videobook/mention-suggestions'
+import { revealNotebookResult } from '@/videobook/notebook-result-reveal'
 
 type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
 
@@ -2258,6 +2259,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setNoticeState({ text, tone })
   }, [])
   const flowRef = useRef<ReactFlowInstance<CanvasNode, NotebookFlowEdge> | null>(null)
+  const notebookCanvasRef = useRef<HTMLElement | null>(null)
   const notebookScrollRef = useRef<HTMLDivElement | null>(null)
   const bookMenuRequestRef = useRef(0)
   const recorderRef = useRef<MediaRecorder | null>(null)
@@ -3000,6 +3002,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const resetNotebookZoom = useCallback(() => {
     setNotebookView({ y: 0, zoom: 1 })
   }, [])
+  const revealLatestNotebookResult = useCallback(() => {
+    if (screen !== 'notebook') return
+    revealNotebookResult(() => notebookCanvasRef.current)
+  }, [screen])
 
   useLayoutEffect(() => {
     const container = notebookScrollRef.current
@@ -5764,7 +5770,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       <>
           {screen === 'notebook' && (
             <>
-              <section className="canvas">
+              <section className="canvas" ref={notebookCanvasRef}>
                 {notebook && (
                   <div className="canvas-add-panel">
                     <details className="canvas-add-menu">
@@ -7189,6 +7195,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         promptSession={null}
         onEnsureCatalog={refreshBookCommands}
         onExecute={executeCommand}
+        onSuccessfulExecute={revealLatestNotebookResult}
       />
     </main>
   )
