@@ -198,6 +198,7 @@ import {
   notebookMentionAssets,
   resolveNotebookMentionAliases,
 } from '@/videobook/mention-suggestions'
+import { restoreCommandComposerFocus } from '@/videobook/command-composer-focus'
 import { revealNotebookResult } from '@/videobook/notebook-result-reveal'
 
 type Screen = 'notebook' | 'library' | 'timeline' | 'jobs' | 'settings'
@@ -3012,6 +3013,14 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (screen !== 'notebook') return
     revealNotebookResult(() => notebookCanvasRef.current)
   }, [screen])
+  const focusCommandComposer = useCallback(() => {
+    restoreCommandComposerFocus(() =>
+      document.querySelector<HTMLInputElement>('.command-composer input'))
+  }, [])
+  const dismissPendingCommandPlan = useCallback(() => {
+    setPendingCommandPlan(null)
+    focusCommandComposer()
+  }, [focusCommandComposer])
 
   useLayoutEffect(() => {
     const container = notebookScrollRef.current
@@ -4690,6 +4699,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
     } finally {
       setBusy(false)
+      focusCommandComposer()
     }
   }
 
@@ -4899,7 +4909,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return
     }
     if (action === 'search') {
-      document.querySelector<HTMLInputElement>('.command-composer input')?.focus()
+      focusCommandComposer()
       return
     }
     if (action === 'zoom-in' || action === 'zoom-out') {
@@ -7111,108 +7121,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           )}
       </>
 
-      {pendingCommandPlan && (
-        <aside className="command-plan-drawer" aria-label="Command plan review">
-          <header>
-            <div>
-              <span className="section-label">COMMANDPLAN · {pendingCommandPlan.plan.sourceSurface.toUpperCase()}</span>
-              <h2>{pendingCommandPlan.plan.summary}</h2>
-            </div>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setPendingCommandPlan(null)}
-            >
-              Cancel
-            </button>
-          </header>
-          <p>{pendingCommandPlan.plan.confirmation.reason}</p>
-          {pendingCommandPlan.plan.suggestions && (
-            <fieldset className="command-plan-suggestions">
-              <legend>Include suggestions</legend>
-              {pendingCommandPlan.plan.suggestions.map((suggestion) => (
-                <label key={suggestion.suggestionId}>
-                  <input
-                    type="checkbox"
-                    checked={suggestion.included}
-                    disabled={busy}
-                    onChange={() => void toggleCommandSuggestion(suggestion.suggestionId)}
-                  />
-                  <span>
-                    <strong>{suggestion.label}</strong>
-                    {suggestion.detail && <small>{suggestion.detail}</small>}
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-          )}
-          <ol className="command-plan-stages">
-            {pendingCommandPlan.plan.stages.map((stage) => {
-              const preview = stage.kind === 'edit'
-                ? pendingCommandPlan.previews[stage.stageId]
-                : undefined
-              return (
-                <li key={stage.stageId}>
-                  <span>{stage.kind.toUpperCase()}</span>
-                  <strong>{stage.summary}</strong>
-                  {preview && (
-                    <>
-                      <small>
-                        {preview.diff.changedClipIds.length} clips · duration {preview.diff.beforeDurationFrames} → {preview.diff.afterDurationFrames} frames
-                      </small>
-                      {preview.warnings.map((warning, index) => (
-                        <p className="plan-warning" key={`${stage.stageId}:warning:${index}`}>
-                          {warning.message}
-                        </p>
-                      ))}
-                      {preview.conflicts.map((conflict, index) => (
-                        <p className="plan-conflict" key={`${stage.stageId}:conflict:${index}`}>
-                          {conflict.message}
-                        </p>
-                      ))}
-                    </>
-                  )}
-                  {stage.kind === 'queued' && (
-                    <small>
-                      {stage.provider && stage.model
-                        ? `${stage.provider} · ${stage.model}`
-                        : stage.tool}
-                      {stage.estimatedCostUsd !== undefined
-                        ? ` · estimated $${stage.estimatedCostUsd.toFixed(4)}`
-                        : stage.estimateUnavailable
-                          ? ' · cost estimate unavailable'
-                          : ''}
-                    </small>
-                  )}
-                </li>
-              )
-            })}
-          </ol>
-          <div className="command-plan-actions">
-            {lastEditActionId && (
-              <button type="button" disabled={busy} onClick={() => void restoreLastCommandPlan()}>
-                <Undo2 size={14} />Restore last edit
-              </button>
-            )}
-            <button
-              type="button"
-              disabled={
-                busy
-                || (
-                  pendingCommandPlan.plan.suggestions?.every(
-                    (suggestion) => !suggestion.included,
-                  ) ?? false
-                )
-                || Object.values(pendingCommandPlan.previews).some((preview) => !preview.valid)
-              }
-              onClick={() => void applyPendingCommandPlan()}
-            >
-              <Check size={14} />Apply plan
-            </button>
-          </div>
-        </aside>
-      )}
-
       {mediaLibraryPicker && mediaLibraryKind && (
         <MediaLibraryDialog
           state={mediaLibraryPicker}
@@ -7251,9 +7159,139 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         connectionLabel={mcp.state === 'ready' ? 'Load a book to begin' : 'Connecting to MCP…'}
         promptSession={null}
         onEnsureCatalog={refreshBookCommands}
+        onDismissPanel={pendingCommandPlan ? dismissPendingCommandPlan : undefined}
         onExecute={executeCommand}
         onSuccessfulExecute={revealLatestNotebookResult}
-      />
+      >
+        {pendingCommandPlan && (
+          <aside
+            className="command-plan-drawer"
+            aria-label="Command plan review"
+            aria-keyshortcuts="Escape"
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape' || busy) return
+              event.preventDefault()
+              event.stopPropagation()
+              dismissPendingCommandPlan()
+            }}
+          >
+            <header>
+              <div className="command-plan-heading">
+                <span className="section-label">
+                  COMMANDPLAN · {pendingCommandPlan.plan.sourceSurface.toUpperCase()}
+                </span>
+                <h2>{pendingCommandPlan.plan.summary}</h2>
+              </div>
+              <div className="command-plan-primary-actions">
+                <button
+                  type="button"
+                  className="command-plan-apply"
+                  disabled={
+                    busy
+                    || (
+                      pendingCommandPlan.plan.suggestions?.every(
+                        (suggestion) => !suggestion.included,
+                      ) ?? false
+                    )
+                    || Object.values(pendingCommandPlan.previews).some(
+                      (preview) => !preview.valid,
+                    )
+                  }
+                  onClick={() => void applyPendingCommandPlan()}
+                >
+                  <Check size={14} />Apply plan
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={dismissPendingCommandPlan}
+                >
+                  Cancel
+                </button>
+              </div>
+            </header>
+            <div className="command-plan-content">
+              <div className="command-plan-context">
+                <p>{pendingCommandPlan.plan.confirmation.reason}</p>
+                {pendingCommandPlan.plan.suggestions && (
+                  <fieldset className="command-plan-suggestions">
+                    <legend>Include suggestions</legend>
+                    {pendingCommandPlan.plan.suggestions.map((suggestion) => (
+                      <label key={suggestion.suggestionId}>
+                        <input
+                          type="checkbox"
+                          checked={suggestion.included}
+                          disabled={busy}
+                          onChange={() => void toggleCommandSuggestion(
+                            suggestion.suggestionId,
+                          )}
+                        />
+                        <span>
+                          <strong>{suggestion.label}</strong>
+                          {suggestion.detail && <small>{suggestion.detail}</small>}
+                        </span>
+                      </label>
+                    ))}
+                  </fieldset>
+                )}
+              </div>
+              <ol className="command-plan-stages">
+                {pendingCommandPlan.plan.stages.map((stage) => {
+                  const preview = stage.kind === 'edit'
+                    ? pendingCommandPlan.previews[stage.stageId]
+                    : undefined
+                  return (
+                    <li key={stage.stageId}>
+                      <span>{stage.kind.toUpperCase()}</span>
+                      <strong>{stage.summary}</strong>
+                      {preview && (
+                        <>
+                          <small>
+                            {preview.diff.changedClipIds.length} clips · duration {preview.diff.beforeDurationFrames} → {preview.diff.afterDurationFrames} frames
+                          </small>
+                          {preview.warnings.map((warning, index) => (
+                            <p className="plan-warning" key={`${stage.stageId}:warning:${index}`}>
+                              {warning.message}
+                            </p>
+                          ))}
+                          {preview.conflicts.map((conflict, index) => (
+                            <p className="plan-conflict" key={`${stage.stageId}:conflict:${index}`}>
+                              {conflict.message}
+                            </p>
+                          ))}
+                        </>
+                      )}
+                      {stage.kind === 'queued' && (
+                        <small>
+                          {stage.provider && stage.model
+                            ? `${stage.provider} · ${stage.model}`
+                            : stage.tool}
+                          {stage.estimatedCostUsd !== undefined
+                            ? ` · estimated $${stage.estimatedCostUsd.toFixed(4)}`
+                            : stage.estimateUnavailable
+                              ? ' · cost estimate unavailable'
+                              : ''}
+                        </small>
+                      )}
+                    </li>
+                  )
+                })}
+              </ol>
+            </div>
+            {lastEditActionId && (
+              <div className="command-plan-secondary-actions">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void restoreLastCommandPlan()}
+                >
+                  <Undo2 size={14} />Restore last edit
+                </button>
+              </div>
+            )}
+          </aside>
+        )}
+      </CommandComposer>
     </main>
   )
 }

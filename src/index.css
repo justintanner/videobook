@@ -4796,24 +4796,82 @@ textarea:focus-visible {
 }
 
 .command-plan-drawer {
-  position: fixed;
-  z-index: 40;
-  right: 18px;
-  bottom: 100px;
-  width: min(440px, calc(100vw - 36px));
-  max-height: calc(100vh - 190px);
+  order: 2;
+  width: 100%;
+  max-height: min(48vh, 440px);
   overflow: auto;
-  padding: 20px;
+  padding: 14px 16px 16px;
   border: 1px solid var(--green);
+  border-bottom: 0;
   background: rgba(3, 15, 9, 0.98);
-  box-shadow: 0 18px 70px rgba(0, 0, 0, 0.62);
+  box-shadow:
+    inset 0 1px rgba(114, 231, 170, 0.08),
+    0 -18px 54px rgba(0, 0, 0, 0.5);
+}
+
+.command-plan-drawer > header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 18px;
+}
+
+.command-plan-heading {
+  min-width: 0;
+}
+
+.command-plan-drawer h2 {
+  overflow: hidden;
+  margin: 4px 0 0;
+  font-size: 15px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-plan-primary-actions,
+.command-plan-secondary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.command-plan-primary-actions button,
+.command-plan-secondary-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 32px;
+  white-space: nowrap;
+}
+
+.command-plan-primary-actions .command-plan-apply {
+  border-color: var(--green);
+  color: var(--green);
+  background: rgba(50, 147, 91, 0.16);
+}
+
+.command-plan-content {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(340px, 1.28fr);
+  align-items: start;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.command-plan-context > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .command-plan-suggestions {
   display: grid;
   gap: 8px;
-  margin: 14px 0;
-  padding: 12px;
+  margin: 12px 0 0;
+  padding: 10px;
   border: 1px solid var(--line);
 }
 
@@ -4829,36 +4887,20 @@ textarea:focus-visible {
   gap: 3px;
 }
 
-.command-plan-drawer > header,
-.command-plan-actions {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.command-plan-drawer h2 {
-  margin: 5px 0 0;
-  font-size: 17px;
-}
-
-.command-plan-drawer > p {
-  color: var(--muted);
-  font-size: 12px;
-}
-
 .command-plan-stages {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .command-plan-stages li {
   display: grid;
-  gap: 6px;
-  padding: 12px;
+  gap: 5px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
+  background: rgba(2, 11, 7, 0.44);
 }
 
 .command-plan-stages span,
@@ -4880,8 +4922,18 @@ textarea:focus-visible {
   color: #ff8b8b;
 }
 
+.command-plan-secondary-actions {
+  justify-content: flex-start;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
 .command-plan-actions {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 14px;
   margin-top: 16px;
 }
 
@@ -5201,6 +5253,7 @@ textarea:focus-visible {
 
 .command-line-shell {
   position: relative;
+  order: 3;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -5548,6 +5601,28 @@ textarea:focus-visible {
 
   .prompt-drawer-field {
     max-height: 50vh;
+  }
+
+  .command-plan-drawer {
+    max-height: min(58vh, 500px);
+    padding: 12px;
+  }
+
+  .command-plan-drawer > header,
+  .command-plan-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .command-plan-drawer > header {
+    gap: 10px;
+  }
+
+  .command-plan-primary-actions {
+    width: 100%;
+  }
+
+  .command-plan-primary-actions button {
+    flex: 1 1 0;
   }
 
   .command-suggestions button {

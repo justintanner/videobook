@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   AudioWaveform,
   Check,
@@ -43,6 +43,7 @@ export interface PromptSession {
 }
 
 interface CommandComposerProps {
+  children?: ReactNode
   commands: ServerCommand[]
   assets: readonly AssetMentionCandidate[]
   bookId: string
@@ -51,6 +52,7 @@ interface CommandComposerProps {
   connectionLabel: string
   promptSession: PromptSession | null
   onEnsureCatalog: () => Promise<void>
+  onDismissPanel?: () => void
   onExecute: (input: string) => Promise<ComposerOutcome>
   onSuccessfulExecute: () => void
 }
@@ -97,6 +99,7 @@ function historyPayload(value: unknown): string[] {
 }
 
 export function CommandComposer({
+  children,
   commands,
   assets,
   bookId,
@@ -105,6 +108,7 @@ export function CommandComposer({
   connectionLabel,
   promptSession,
   onEnsureCatalog,
+  onDismissPanel,
   onExecute,
   onSuccessfulExecute,
 }: CommandComposerProps) {
@@ -431,6 +435,11 @@ export function CommandComposer({
                 return
               }
             }
+            if (event.key === 'Escape' && onDismissPanel) {
+              event.preventDefault()
+              onDismissPanel()
+              return
+            }
             if (event.ctrlKey && event.key.toLowerCase() === 'p') {
               event.preventDefault()
               navigateHistory(-1)
@@ -458,6 +467,7 @@ export function CommandComposer({
           {sending ? <Loader2 size={16} className="spin" /> : <Send size={16} />}
         </button>
       </div>
+      {children}
     </section>
   )
 }
