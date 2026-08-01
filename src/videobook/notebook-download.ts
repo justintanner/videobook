@@ -13,6 +13,22 @@ type DownloadVideoCellInput = {
   output_artifact_id: string
 }
 
+type DownloadWatchAsset = {
+  artifactId: string
+  status: string
+}
+
+type DownloadWatchJob = {
+  artifactId: string | null
+  error: { message: string } | null
+  state: string
+}
+
+export type DownloadWatchStep =
+  | { kind: 'continue' }
+  | { kind: 'completed' }
+  | { kind: 'failed'; message: string }
+
 function objectValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -58,4 +74,22 @@ export function downloadVideoCellInput(
     },
     output_artifact_id: artifactId,
   }
+}
+
+export function downloadWatchStep(
+  artifactId: string,
+  asset: DownloadWatchAsset | undefined,
+  jobs: readonly DownloadWatchJob[],
+): DownloadWatchStep {
+  if (asset?.status === 'ready') return { kind: 'completed' }
+  const failed = jobs.find((job) =>
+    job.artifactId === artifactId
+    && (job.state === 'failed' || job.state === 'aborted'))
+  if (asset?.status === 'error' || failed) {
+    return {
+      kind: 'failed',
+      message: failed?.error?.message ?? 'Download or media processing failed',
+    }
+  }
+  return { kind: 'continue' }
 }

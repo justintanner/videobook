@@ -173,9 +173,11 @@ import {
   type NotebookRunWatchOutcomeKind,
 } from '@/videobook/notebook-run-watch'
 import {
+  downloadWatchStep,
   downloadVideoCellInput,
   nextNotebookCellSlug,
 } from '@/videobook/notebook-download'
+import { notebookMediaWorkState } from '@/videobook/notebook-media-work'
 import type { InitialWorkspacePayload } from '@/videobook/initial-workspace'
 import type {
   BookProjectMutationResult,
@@ -405,6 +407,8 @@ const notebookRunPollIntervalMs = 500
 const notebookRunPollTimeoutMs = 5 * 60_000
 const notebookGenerationWatchIntervalMs = 2_000
 const notebookGenerationWatchTimeoutMs = 45 * 60_000
+const downloadWatchIntervalMs = 5_000
+const downloadWatchTimeoutMs = 45 * 60_000
 const activeJobStates = new Set(['queued', 'running', 'completing'])
 
 function delay(ms: number): Promise<void> {
@@ -1364,20 +1368,32 @@ function cellExecutionError(
 function canvasNodes(
   document: NotebookDocument,
   assets: AssetRecord[],
+  jobs: JobRecord[],
 ): CanvasNode[] {
   const byArtifactId = new Map(assets.map((asset) => [asset.artifactId, asset]))
   return notebookNodes(document).map((node) => {
     const frameIds = notebookSplitFrameIds(node.data.inputs)
-    const statusError = cellExecutionError(document, node.id)
-    const statusStartedAt = cellExecutionStartedAt(document, node.id)
+    const asset = artifactForCell(byArtifactId, node.data.outputArtifactId)
+    const fallbackStartedAt = cellExecutionStartedAt(document, node.id)
+    const fallbackError = cellExecutionError(document, node.id)
+    const work = notebookMediaWorkState(
+      node.data.kind,
+      asset,
+      jobs,
+      {
+        status: cellExecutionStatus(document, node.id),
+        ...(fallbackStartedAt ? { startedAt: fallbackStartedAt } : {}),
+        ...(fallbackError ? { error: fallbackError } : {}),
+      },
+    )
     return {
       ...node,
       data: {
         ...node.data,
-        status: cellExecutionStatus(document, node.id),
-        ...(statusStartedAt ? { statusStartedAt } : {}),
-        ...(statusError ? { statusError } : {}),
-        asset: artifactForCell(byArtifactId, node.data.outputArtifactId),
+        status: work.status,
+        ...(work.startedAt ? { statusStartedAt: work.startedAt } : {}),
+        ...(work.error ? { statusError: work.error } : {}),
+        asset,
         ...(node.data.kind === 'split_video'
           ? {
               splitFrames: {
@@ -2093,7 +2109,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
           statusStartedAt={data.statusStartedAt}
           statusError={data.statusError}
           icon={<CellIcon kind={data.kind} />}
-          onRetry={() => {
+          onRetry={slotKind ? undefined : () => {
             void runCell(id)
           }}
         />
@@ -2438,6 +2454,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       ? canvasNodes(
           initialWorkspace.notebook,
           initialWorkspace.assets,
+          initialWorkspace.jobs,
         )
       : [])
   const [edges, setEdges] = useState<NotebookFlowEdge[]>(() =>
@@ -2446,6 +2463,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const applyNotebook = useCallback((
     next: NotebookDocument,
     nextAssets: AssetRecord[],
+    nextJobs: JobRecord[],
   ) => {
     setNotebook(next)
     const cellIds = new Set(next.cells.map((cell) => cell.id))
@@ -2465,7 +2483,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       const selectedIds = new Set(
         current.filter((node) => node.selected).map((node) => node.id),
       )
-      return canvasNodes(next, nextAssets)
+      return canvasNodes(next, nextAssets, nextJobs)
         .map((node) => selectedIds.has(node.id)
           ? { ...node, selected: true }
           : node)
@@ -2547,7 +2565,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           if (observation.state !== 'pending') {
             setCellQueued(params.cellId, false)
           }
-          applyNotebook(nextNotebook, afterScope.assets)
+          applyNotebook(nextNotebook, afterScope.assets, nextJobs)
           const step = notebookRunWatchStep({
             observation,
             job: effectiveJob,
@@ -2568,7 +2586,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             })
             const nextAssets = asAssets(assetValue)
             setAssets(nextAssets)
-            applyNotebook(nextNotebook, nextAssets)
+            applyNotebook(nextNotebook, nextAssets, nextJobs)
             setCellRunError(params.cellId, null)
             return { kind: 'completed' }
           }
@@ -2637,6 +2655,105 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }, [setCellQueued, setCellRunError, setNotice, watchNotebookRun])
 
+  const watchDownloadedAsset = useCallback(async (params: {
+    bookId: string
+    notebookId: string
+    cellId: string
+    slug: string
+    artifactId: string
+  }) => {
+    const token = `download:${params.artifactId}`
+    activeWatchesRef.current.set(params.cellId, token)
+    let consecutiveFailures = 0
+    const deadline = Date.now() + downloadWatchTimeoutMs
+    try {
+      while (Date.now() < deadline) {
+        const scope = watchScopeRef.current
+        if (
+          activeWatchesRef.current.get(params.cellId) !== token
+          || scope.bookId !== params.bookId
+          || scope.notebookId !== params.notebookId
+        ) {
+          return
+        }
+        try {
+          const [notebookValue, assetValue, jobValue] = await Promise.all([
+            callRef.current('get_notebook', {
+              book_id: params.bookId,
+              notebook_id: params.notebookId,
+            }),
+            callRef.current('list_assets', {
+              book_id: params.bookId,
+              sort: 'newest',
+              limit: 200,
+              include_referenced: true,
+            }),
+            callRef.current('list_jobs', {
+              book_id: params.bookId,
+              limit: 200,
+            }),
+          ])
+          consecutiveFailures = 0
+          const afterScope = watchScopeRef.current
+          if (
+            activeWatchesRef.current.get(params.cellId) !== token
+            || afterScope.bookId !== params.bookId
+            || afterScope.notebookId !== params.notebookId
+          ) {
+            return
+          }
+          const nextNotebook = asNotebook(notebookValue)
+          if (!nextNotebook) {
+            throw new Error('The server returned an invalid notebook')
+          }
+          const cell = nextNotebook.cells.find((candidate) =>
+            candidate.id === params.cellId)
+          if (!cell || cell.outputArtifactId !== params.artifactId) return
+          const nextAssets = asAssets(assetValue)
+          const nextJobs = asJobs(jobValue)
+          setAssets(nextAssets)
+          setJobs(nextJobs)
+          setJobSnapshotAt(Date.now())
+          applyNotebook(nextNotebook, nextAssets, nextJobs)
+          const step = downloadWatchStep(
+            params.artifactId,
+            nextAssets.find((asset) => asset.artifactId === params.artifactId),
+            nextJobs,
+          )
+          if (step.kind === 'completed') {
+            setCellRunError(params.cellId, null)
+            setNotice(`@${params.slug} downloaded`)
+            return
+          }
+          if (step.kind === 'failed') {
+            setCellRunError(params.cellId, step.message)
+            setNotice(step.message, 'error')
+            return
+          }
+          await delay(downloadWatchIntervalMs)
+        } catch (error) {
+          consecutiveFailures += 1
+          if (consecutiveFailures >= 10) {
+            const detail = error instanceof Error ? error.message : String(error)
+            setNotice(
+              `Stopped watching @${params.slug}: ${detail}. Check the Jobs screen.`,
+              'error',
+            )
+            return
+          }
+          await delay(downloadWatchIntervalMs)
+        }
+      }
+      setNotice(
+        `@${params.slug} is still downloading — check the Jobs screen`,
+      )
+    } finally {
+      if (activeWatchesRef.current.get(params.cellId) === token) {
+        activeWatchesRef.current.delete(params.cellId)
+      }
+    }
+  }, [applyNotebook, setCellRunError, setNotice])
+
   const runCell = useCallback(async (cellId: string) => {
     if (!bookId || !notebook) return
     setBusy(true)
@@ -2685,7 +2802,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           book_id: bookId,
           notebook_id: currentNotebook.id,
         }))
-        if (refreshed) applyNotebook(refreshed, assets)
+        if (refreshed) applyNotebook(refreshed, assets, jobs)
         setNotice(`@${cell.slug} queued`)
         watching = true
         void watchGenerationRun({
@@ -2748,6 +2865,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     bookId,
     call,
     createGenerationPlan,
+    jobs,
     notebook,
     online,
     setCellQueued,
@@ -2967,12 +3085,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     ])
     const next = asNotebook(value)
     if (!next) throw new Error('The server returned an invalid notebook')
-    applyNotebook(next, assets)
+    applyNotebook(next, assets, jobs)
     const nextAudio = asAudioNotebook(audioValue)
     setAudioNotebook(nextAudio)
     setAudioSpineAssetId(nextAudio.spine?.artifactId ?? '')
     return next
-  }, [applyNotebook, assets, call])
+  }, [applyNotebook, assets, call, jobs])
 
   const refreshBookData = useCallback(async (targetBookId: string, preferredNotebookId?: string) => {
     const [
@@ -2997,6 +3115,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     ])
     const nextNotebooks = asNotebooks(notebookValue)
     const nextAssets = asAssets(assetValue)
+    const nextJobs = asJobs(jobValue)
     const remembered = savedValue(`videobook.active-notebook:${targetBookId}`)
     const nextNotebook = nextNotebooks.find((entry) => entry.id === preferredNotebookId)
       ?? nextNotebooks.find((entry) => entry.id === remembered)
@@ -3007,7 +3126,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setAssets(nextAssets)
     setIngestStatuses(asIngestStatuses(ingestStatusValue))
     setSequence(asSequence(sequenceValue))
-    setJobs(asJobs(jobValue))
+    setJobs(nextJobs)
     setGenerationActions(asNotebookGenerationActions(actionValue))
     setJobSnapshotAt(Date.now())
     if (!nextNotebook) {
@@ -3026,7 +3145,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setAudioNotebook(nextAudio)
     setAudioSpineAssetId(nextAudio.spine?.artifactId ?? '')
     saveValue(`videobook.active-notebook:${targetBookId}`, nextNotebook.id)
-    applyNotebook(nextNotebook, nextAssets)
+    applyNotebook(nextNotebook, nextAssets, nextJobs)
   }, [applyNotebook, call])
 
   const refreshBookList = useCallback(async () => {
@@ -5219,13 +5338,19 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           nextNotebookGridSlot(nodes),
           notebook.cells,
         )
+        let createdCellId: string
         try {
           const created = record(await call('create_notebook_cell', {
             book_id: bookId,
             notebook_id: notebook.id,
             cell,
           }))
-          setSelectedCellId(asString(created?.id))
+          const nextCellId = asString(created?.id)
+          if (!nextCellId) {
+            throw new Error('The server did not return the new notebook cell')
+          }
+          createdCellId = nextCellId
+          setSelectedCellId(nextCellId)
         } catch (error) {
           await refreshBookData(bookId, notebook.id)
           const message = error instanceof Error ? error.message : String(error)
@@ -5235,6 +5360,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           }
         }
         await refreshBookData(bookId, notebook.id)
+        void watchDownloadedAsset({
+          bookId,
+          notebookId: notebook.id,
+          cellId: createdCellId,
+          slug: cell.slug,
+          artifactId: cell.output_artifact_id,
+        })
         return {
           ok: true,
           message: messageFor(result, `Download queued as @${cell.slug}`),

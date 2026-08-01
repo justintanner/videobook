@@ -36,10 +36,34 @@ const cellSlugPrefixes = {
 } satisfies Record<NotebookCellType, string>
 
 const activeStatuses = new Set([
+  'analyzing',
+  'archiving',
   'awaiting-output',
+  'changing-speed',
   'completing',
+  'cropping',
+  'deleting',
+  'downloading',
+  'generating',
+  'isolating',
+  'loading',
+  'processing',
   'queued',
+  'render-queued',
+  'render-queued-landscape',
+  'render-queued-portrait',
+  'render-queued-square',
+  'rendering',
+  'rendering-landscape',
+  'rendering-portrait',
+  'rendering-square',
+  'replacing-audio',
+  'reversing',
   'running',
+  'splicing',
+  'transcribing',
+  'trimming',
+  'uploading',
 ])
 
 const inspectorActionVerbs: Partial<Record<NotebookCellType, string>> = {
@@ -193,8 +217,26 @@ export function notebookCellClockLabel(
   status: string,
   kind: NotebookCellType,
 ): string {
+  if (status === 'analyzing') return 'ANALYZING'
+  if (status === 'archiving') return 'ARCHIVING'
+  if (status === 'changing-speed') return 'CHANGING SPEED'
   if (status === 'queued') return 'QUEUED'
   if (status === 'completing') return 'FINISHING'
+  if (status === 'cropping') return 'CROPPING'
+  if (status === 'deleting') return 'DELETING'
+  if (status === 'downloading') return 'DOWNLOADING'
+  if (status === 'generating') return 'GENERATING'
+  if (status === 'isolating') return 'ISOLATING VOCALS'
+  if (status === 'loading') return 'LOADING'
+  if (status === 'processing') return 'PROCESSING'
+  if (status.startsWith('render-queued')) return 'QUEUED TO RENDER'
+  if (status.startsWith('rendering')) return 'RENDERING'
+  if (status === 'replacing-audio') return 'REPLACING AUDIO'
+  if (status === 'reversing') return 'REVERSING'
+  if (status === 'splicing') return 'SPLICING'
+  if (status === 'transcribing') return 'TRANSCRIBING'
+  if (status === 'trimming') return 'TRIMMING'
+  if (status === 'uploading') return 'UPLOADING'
   if (status === 'awaiting-output') return 'GENERATING'
   if (kind.startsWith('generate_')) return 'GENERATING'
   if (kind === 'analyze') return 'ANALYZING'
@@ -230,7 +272,10 @@ export function notebookCellStateFromStatus(
       overlay: 'failed',
       label: null,
       startedAt: null,
-      error: options?.error ?? 'Generation failed',
+      error: options?.error
+        ?? (isNotebookMediaCellType(kind)
+          ? 'Media processing failed'
+          : 'Generation failed'),
       tone: 'error',
     }
   }

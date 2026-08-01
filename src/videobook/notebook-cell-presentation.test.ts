@@ -47,6 +47,12 @@ describe('notebookCellClockLabel', () => {
     expect(notebookCellClockLabel('awaiting-output', 'generate_image')).toBe('GENERATING')
   })
 
+  it('maps durable media work to explicit labels', () => {
+    expect(notebookCellClockLabel('downloading', 'video')).toBe('DOWNLOADING')
+    expect(notebookCellClockLabel('processing', 'video')).toBe('PROCESSING')
+    expect(notebookCellClockLabel('uploading', 'video')).toBe('UPLOADING')
+  })
+
   it('maps running labels by cell kind', () => {
     expect(notebookCellClockLabel('running', 'generate_video')).toBe('GENERATING')
     expect(notebookCellClockLabel('running', 'analyze')).toBe('ANALYZING')
@@ -96,6 +102,11 @@ describe('notebookCellStateFromStatus', () => {
       overlay: 'clock',
       label: 'FINISHING',
     })
+    expect(notebookCellStateFromStatus('video', 'downloading')).toMatchObject({
+      overlay: 'clock',
+      label: 'DOWNLOADING',
+      tone: 'active',
+    })
   })
 
   it('returns failed overlay with error message and retry path data', () => {
@@ -111,6 +122,11 @@ describe('notebookCellStateFromStatus', () => {
     expect(notebookCellStateFromStatus('generate_image', 'error')).toMatchObject({
       overlay: 'failed',
       error: 'Generation failed',
+      tone: 'error',
+    })
+    expect(notebookCellStateFromStatus('video', 'error')).toMatchObject({
+      overlay: 'failed',
+      error: 'Media processing failed',
       tone: 'error',
     })
   })

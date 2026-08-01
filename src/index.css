@@ -1483,6 +1483,29 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
+.cell-state-streaks {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.cell-state-streak {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 30%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--cell-state-color) 72%, transparent)
+  );
+  box-shadow: 0 0 4px var(--cell-state-glow);
+  animation-name: cell-downloading-streak-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
 .cell-state-particle {
   position: absolute;
   left: 50%;
@@ -1524,6 +1547,26 @@ textarea:focus-visible {
 
   100% {
     transform: translateY(-110%) translateX(calc(-50% + 12px));
+    opacity: 0;
+  }
+}
+
+@keyframes cell-downloading-streak-fall {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+
+  15% {
+    opacity: 0.85;
+  }
+
+  85% {
+    opacity: 0.85;
+  }
+
+  100% {
+    transform: translateY(350%);
     opacity: 0;
   }
 }
@@ -5969,7 +6012,8 @@ textarea:focus-visible {
     transition-duration: 0.01ms !important;
   }
 
-  .cell-state-particle {
+  .cell-state-particle,
+  .cell-state-streak {
     animation: none !important;
     opacity: 0.55;
   }

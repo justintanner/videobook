@@ -18,11 +18,13 @@ export function CellClockOverlay({
   label,
   slug,
   startedAt,
+  variant,
 }: {
   icon: ReactNode
   label: string
   slug: string
   startedAt: number | null
+  variant?: 'rise' | 'stream'
 }) {
   const [fallbackStart] = useState(() => Date.now())
   const effectiveStart = startedAt ?? fallbackStart
@@ -42,7 +44,7 @@ export function CellClockOverlay({
       aria-label={`@${slug} ${label.toLowerCase()}`}
       aria-live="polite"
     >
-      <CellAnimatedBackground />
+      <CellAnimatedBackground variant={variant} />
       <div className="cell-state-overlay-body">
         <span className="cell-state-overlay-icon" aria-hidden="true">
           {icon}

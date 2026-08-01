@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NotebookCell } from 'videobook-engine'
 import {
+  downloadWatchStep,
   downloadVideoCellInput,
   nextNotebookCellSlug,
 } from '../../src/videobook/notebook-download'
@@ -39,5 +40,37 @@ describe('notebook download placement', () => {
 
   it('uses the first unoccupied slug for any cell type', () => {
     expect(nextNotebookCellSlug('video', cells)).toBe('vid-02')
+  })
+
+  it('keeps watching while the downloaded artifact is active', () => {
+    expect(downloadWatchStep('artifact-01', {
+      artifactId: 'artifact-01',
+      status: 'downloading',
+    }, [{
+      artifactId: 'artifact-01',
+      error: null,
+      state: 'running',
+    }])).toEqual({ kind: 'continue' })
+  })
+
+  it('completes when the downloaded artifact is ready', () => {
+    expect(downloadWatchStep('artifact-01', {
+      artifactId: 'artifact-01',
+      status: 'ready',
+    }, [])).toEqual({ kind: 'completed' })
+  })
+
+  it('surfaces the durable job failure', () => {
+    expect(downloadWatchStep('artifact-01', {
+      artifactId: 'artifact-01',
+      status: 'error',
+    }, [{
+      artifactId: 'artifact-01',
+      error: { message: 'Remote host returned 403' },
+      state: 'failed',
+    }])).toEqual({
+      kind: 'failed',
+      message: 'Remote host returned 403',
+    })
   })
 })

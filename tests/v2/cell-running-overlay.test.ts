@@ -44,6 +44,33 @@ describe('CellStateOverlay', () => {
     expect(html).toContain('class="cell-state-retry nodrag"')
   })
 
+  it('renders a streaming download animation', () => {
+    const html = renderToStaticMarkup(createElement(CellStateOverlay, {
+      kind: 'video',
+      slug: 'vid-01',
+      status: 'downloading',
+      icon: createElement('span', { 'data-icon': 'video' }),
+    }))
+
+    expect(html).toContain('>DOWNLOADING</strong>')
+    expect(html).toContain('class="cell-state-streaks"')
+    expect(html).toContain('class="cell-state-streak"')
+  })
+
+  it('renders a passive media failure without generation retry', () => {
+    const html = renderToStaticMarkup(createElement(CellStateOverlay, {
+      kind: 'video',
+      slug: 'vid-01',
+      status: 'error',
+      statusError: 'Remote host returned 403',
+      icon: createElement('span', { 'data-icon': 'video' }),
+    }))
+
+    expect(html).toContain('MEDIA FAILED')
+    expect(html).toContain('Remote host returned 403')
+    expect(html).not.toContain('RETRY')
+  })
+
   it('renders nothing for an inactive cell', () => {
     const html = renderToStaticMarkup(createElement(CellStateOverlay, {
       kind: 'generate_image',
