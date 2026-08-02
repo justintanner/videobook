@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   assetMentionMetadata,
   assetMentionSuggestions,
+  notebookCellRenamePlan,
   notebookMentionAssets,
   resolveNotebookMentionAliases,
   type AssetMentionCandidate,
@@ -190,5 +191,83 @@ describe('asset mention suggestions', () => {
     )).toBe(
       'combine @vid-yt-8gwzvebyrji-2 with @img-generated-source and leave @vid-010 alone',
     )
+  })
+
+  it('plans a visible cell rename from a completed backing asset rename', () => {
+    const candidate = mentionCandidate(
+      'img-02',
+      'img-extract-frame-first',
+      'artifact-image',
+      { type: 'image' },
+    )
+    const cells = [
+      {
+        id: 'cell-image',
+        slug: 'img-02',
+        type: 'image',
+        outputArtifactId: 'artifact-image',
+      },
+      {
+        id: 'cell-other',
+        slug: 'img-other',
+        type: 'image',
+        outputArtifactId: 'artifact-other',
+      },
+    ]
+
+    expect(notebookCellRenamePlan(
+      'img-02',
+      {
+        old_asset_id: 'img-extract-frame-first',
+        new_asset_id: 'img-hero-frame',
+      },
+      cells,
+      [candidate],
+    )).toEqual({
+      cellId: 'cell-image',
+      previousSlug: 'img-02',
+      nextSlug: 'img-hero-frame',
+      conflict: false,
+    })
+  })
+
+  it('keeps raw asset renames asset-only and detects cell slug conflicts', () => {
+    const candidate = mentionCandidate(
+      'img-02',
+      'img-source',
+      'artifact-image',
+      { type: 'image' },
+    )
+    const cells = [
+      {
+        id: 'cell-image',
+        slug: 'img-02',
+        type: 'image',
+        outputArtifactId: 'artifact-image',
+      },
+      {
+        id: 'cell-existing',
+        slug: 'img-hero',
+        type: 'image',
+        outputArtifactId: 'artifact-existing',
+      },
+    ]
+    const result = {
+      old_asset_id: 'img-source',
+      new_asset_id: 'img-hero',
+    }
+
+    expect(notebookCellRenamePlan(
+      'img-source',
+      result,
+      cells,
+      [candidate],
+    )).toBeNull()
+    expect(notebookCellRenamePlan(
+      'img-02',
+      result,
+      cells,
+      [candidate],
+    )?.conflict).toBe(true)
   })
 })

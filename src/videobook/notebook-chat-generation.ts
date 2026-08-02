@@ -126,6 +126,30 @@ function mediaInputKind(cell: NotebookCell): GenerationConnectedInput['kind'] | 
   return null
 }
 
+function normalizedConnectionTarget(
+  kind: GenerationConnectedInput['kind'],
+  targetInput: string,
+): string {
+  if (targetInput === 'first_frame' || targetInput === 'last_frame') {
+    return targetInput
+  }
+  if (kind === 'audio' && targetInput === 'replace_audio') {
+    return targetInput
+  }
+  return kind
+}
+
+function uniqueConnectionTargets(
+  inputs: readonly GenerationConnectedInput[],
+): string[] {
+  const counts = new Map<string, number>()
+  return inputs.map((input) => {
+    const count = (counts.get(input.target) ?? 0) + 1
+    counts.set(input.target, count)
+    return count === 1 ? input.target : `${input.target}_${count}`
+  })
+}
+
 function firstEmptyRowBelow(
   cells: readonly NotebookCell[],
   source: NotebookGridSlot,
@@ -314,12 +338,13 @@ export function planNotebookChatGeneration(input: {
     ...selection,
     ...(Object.keys(cellInputs).length > 0 ? { inputs: cellInputs } : {}),
   }
+  const targetInputs = uniqueConnectionTargets(connectedInputs)
   return {
     action,
     cell,
     connections: sources.map((source, index) => ({
       sourceCellId: source.cell.id,
-      targetInput: connectedInputs[index]?.target ?? source.kind,
+      targetInput: targetInputs[index] ?? source.kind,
     })),
     sourceCellIds: sources.map((source) => source.cell.id),
     sourceSlugs: sources.map((source) => source.cell.slug),
@@ -333,7 +358,9 @@ export function notebookChatGenerationConnectedInputs(
   return draft.connections.flatMap((connection) => {
     const source = document.cells.find((cell) => cell.id === connection.sourceCellId)
     const kind = source ? mediaInputKind(source) : null
-    return kind ? [{ kind, target: connection.targetInput }] : []
+    return kind
+      ? [{ kind, target: normalizedConnectionTarget(kind, connection.targetInput) }]
+      : []
   })
 }
 

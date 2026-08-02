@@ -22,6 +22,7 @@ import {
   reviseNotebookChatGenerationMode,
   reviseNotebookChatGenerationPrompt,
   reviseNotebookChatGenerationSetting,
+  type NotebookChatGenerationCommand,
 } from '../../src/videobook/notebook-chat-generation'
 
 function resultJson(result: Awaited<ReturnType<ToolDef['handler']>>): unknown {
@@ -299,5 +300,131 @@ describe('notebook image generation commands', () => {
         generation_input: { image_slugs: [`@${artifact.value.slug}`] },
       },
     })
+  })
+
+  it('translates cell aliases and persists distinct multi-reference inputs', async () => {
+    const defs = videobookDomainDefs(scopedBookEngine, books)
+    const byName = new Map(defs.map((def) => [def.name, def]))
+    const created = resultJson(await byName.get('create_book')!.handler({
+      slug: 'aliased-image-generation',
+    })) as { bookId: string }
+    const managed = books.get(created.bookId)
+    expect(managed.ok).toBe(true)
+    if (!managed.ok) return
+    const notebookId = managed.value.engine.notebooks.list()[0]!.id
+    const invoke = async (name: string, args: Record<string, unknown>) => {
+      const definition = byName.get(name)
+      if (!definition) throw new Error(`Missing ${name}`)
+      return resultJson(await withBookContext(
+        { bookId: created.bookId, engine: managed.value.engine },
+        () => definition.handler({ book_id: created.bookId, ...args }),
+      ))
+    }
+    const firstArtifact = await managed.value.engine.artifacts.create(
+      'image',
+      'img ff',
+    )
+    const secondArtifact = await managed.value.engine.artifacts.create(
+      'image',
+      'img jamie',
+    )
+    expect(firstArtifact.ok && secondArtifact.ok).toBe(true)
+    if (!firstArtifact.ok || !secondArtifact.ok) return
+    const firstSource = await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'image',
+        slug: 'img-ff2',
+        slot: { row: 0, column: 0 },
+        output_artifact_id: firstArtifact.value.artifactId,
+      },
+    }) as { id: string }
+    const secondSource = await invoke('create_notebook_cell', {
+      notebook_id: notebookId,
+      cell: {
+        type: 'image',
+        slug: 'img-jamie',
+        slot: { row: 0, column: 1 },
+        output_artifact_id: secondArtifact.value.artifactId,
+      },
+    }) as { id: string }
+    const current = managed.value.engine.notebooks.read(notebookId)
+    expect(current.ok).toBe(true)
+    if (!current.ok) return
+    const actions = asNotebookGenerationActions(
+      await invoke('list_notebook_actions', { cell_type: 'generate_image' }),
+    )
+    const command = {
+      cellType: 'generate_image',
+      mediaKind: 'image',
+      prompt: 'exactly frame as @img-ff2 but the man in the red hat is on the piano @img-jamie',
+      sourceReferences: ['img-ff2', 'img-jamie'],
+    } satisfies NotebookChatGenerationCommand
+    const draft = planNotebookChatGeneration({
+      actions,
+      cellId: '01900000-0000-7000-8000-000000000020',
+      command,
+      document: current.value,
+      fallbackSlot: { row: 1, column: 0 },
+      preferredTool: 'generate_google_flow_nano_banana_pro_image',
+    })
+    expect(draft.connections).toEqual([
+      { sourceCellId: firstSource.id, targetInput: 'image' },
+      { sourceCellId: secondSource.id, targetInput: 'image_2' },
+    ])
+    expect(notebookChatGenerationConnectedInputs(draft, current.value)).toEqual([
+      { kind: 'image', target: 'image' },
+      { kind: 'image', target: 'image' },
+    ])
+    const preview = await invoke('preview_notebook_generation', {
+      notebook_id: notebookId,
+      cell_id: draft.cell.id,
+      draft: {
+        type: draft.cell.type,
+        slug: draft.cell.slug,
+        slot: draft.cell.slot,
+        prompt: draft.cell.prompt,
+        provider: draft.cell.provider,
+        model: draft.cell.model,
+        operation: draft.cell.operation,
+        tool: draft.cell.tool,
+        inputs: draft.cell.inputs,
+      },
+      connections: draft.connections.map((connection) => ({
+        source_cell_id: connection.sourceCellId,
+        target_input: connection.targetInput,
+      })),
+    }) as {
+      payload: {
+        prompt: string
+        reference_1: string
+        reference_2: string
+      }
+    }
+    expect(preview.payload).toMatchObject({
+      prompt: 'exactly frame as @reference_1 but the man in the red hat is on the piano @reference_2',
+      reference_1: `@${firstArtifact.value.slug}`,
+      reference_2: `@${secondArtifact.value.slug}`,
+    })
+    const materialized = await materializeNotebookChatGeneration({
+      bookId: created.bookId,
+      callTool: invoke,
+      document: current.value,
+      draft,
+    })
+    const connected = managed.value.engine.notebooks.read(notebookId)
+    expect(connected.ok).toBe(true)
+    if (!connected.ok) return
+    expect(connected.value.edges.filter((edge) =>
+      edge.target === materialized.cellId)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        source: firstSource.id,
+        targetInput: 'image',
+      }),
+      expect.objectContaining({
+        source: secondSource.id,
+        targetInput: 'image_2',
+      }),
+    ]))
   })
 })

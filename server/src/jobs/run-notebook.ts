@@ -741,6 +741,34 @@ function artifactSlugRef(engine: Engine, artifactId: string): string {
   return `@${artifactId}`;
 }
 
+function rewriteNotebookCellMentions(
+  prompt: string,
+  upstream: ReadonlyArray<{
+    cell: NotebookCell;
+    output: string | undefined;
+  }>,
+  refFor: (artifactId: string) => string,
+): string {
+  const aliases = new Map<string, string>();
+  for (const { cell, output } of upstream) {
+    if (
+      typeof output === "string"
+      && notebookCellMediaType(cell) !== null
+    ) {
+      aliases.set(cell.slug, refFor(output));
+    }
+  }
+  if (aliases.size === 0) return prompt;
+  const pattern = [...aliases.keys()]
+    .sort((left, right) => right.length - left.length)
+    .map((slug) => slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  return prompt.replace(
+    new RegExp(`@(${pattern})(?![\\w-])`, "g"),
+    (mention, slug: string) => aliases.get(slug) ?? mention,
+  );
+}
+
 function isImageLikeCell(source: NotebookCell): boolean {
   return notebookCellMediaType(source) === "image";
 }
@@ -758,16 +786,24 @@ export function modelArgs(
     && !Array.isArray(settings)
     ? settings as Record<string, unknown>
     : {};
+  const upstream = upstreamValues(document, cell);
+  const refFor = (artifactId: string): string =>
+    engine ? artifactSlugRef(engine, artifactId) : `@${artifactId}`;
+  const prompt = rewriteNotebookCellMentions(
+    promptFor(document, cell),
+    upstream,
+    refFor,
+  );
   const args: Record<string, unknown> = {
     ...(cell.inputs ?? {}),
     ...generationSettings,
     book_id: bookId,
-    prompt: promptFor(document, cell),
+    prompt,
   };
   delete args.generationMode;
   delete args.generationSettings;
   if ("text" in definition.schema) {
-    args.text = promptFor(document, cell);
+    args.text = prompt;
   }
   if (
     definition.name === "generate_kie_gemini_omni_video"
@@ -780,10 +816,6 @@ export function modelArgs(
       ? cell.inputs.targetModel
       : "seedance2";
   }
-  const upstream = upstreamValues(document, cell);
-  const refFor = (artifactId: string): string =>
-    engine ? artifactSlugRef(engine, artifactId) : `@${artifactId}`;
-
   const firstFrame = upstream.find((entry) =>
     entry.targetInput === "first_frame"
     && typeof entry.output === "string"

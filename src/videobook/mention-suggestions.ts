@@ -19,9 +19,17 @@ export interface AssetMentionCandidate
 }
 
 interface NotebookMentionCell {
+  id?: string
   slug: string
   type: string
   outputArtifactId?: string
+}
+
+export interface NotebookCellRenamePlan {
+  cellId: string
+  previousSlug: string
+  nextSlug: string
+  conflict: boolean
 }
 
 export interface AssetMentionSuggestion {
@@ -78,6 +86,38 @@ export function resolveNotebookMentionAliases(
     const assetSlug = assetSlugsByCellSlug.get(value.toLowerCase())
     return assetSlug ? `@${assetSlug}` : mention
   })
+}
+
+export function notebookCellRenamePlan(
+  assetId: unknown,
+  result: unknown,
+  cells: readonly NotebookMentionCell[],
+  assets: readonly AssetMentionCandidate[],
+): NotebookCellRenamePlan | null {
+  if (typeof assetId !== 'string' || !assetId.trim()) return null
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return null
+  const value = result as Record<string, unknown>
+  const oldAssetId = value.old_asset_id
+  const newAssetId = value.new_asset_id
+  if (typeof oldAssetId !== 'string' || typeof newAssetId !== 'string') return null
+  const requested = assetId.trim().replace(/^@/u, '').toLowerCase()
+  const candidate = assets.find((asset) =>
+    asset.cellSlug.toLowerCase() === requested
+    && asset.assetSlug === oldAssetId)
+  if (!candidate) return null
+  const cell = cells.find((item) =>
+    item.id
+    && item.slug.toLowerCase() === candidate.cellSlug.toLowerCase()
+    && item.outputArtifactId === candidate.artifactId)
+  if (!cell?.id) return null
+  return {
+    cellId: cell.id,
+    previousSlug: cell.slug,
+    nextSlug: newAssetId,
+    conflict: cells.some((item) =>
+      item.id !== cell.id
+      && item.slug.toLowerCase() === newAssetId.toLowerCase()),
+  }
 }
 
 export function assetMentionMetadata(

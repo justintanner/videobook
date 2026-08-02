@@ -233,6 +233,7 @@ import type {
   BookProjectSummary,
 } from '@/videobook/book-project-selector'
 import {
+  notebookCellRenamePlan,
   notebookMentionAssets,
   resolveNotebookMentionAliases,
 } from '@/videobook/mention-suggestions'
@@ -6619,6 +6620,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         return { ok: false, message: 'Open a notebook before downloading media.' }
       }
       const parsed = parseCommandArgs(resolvedRest, command.params)
+      const renameAssetId = command.mcpTool.tool === 'rename_asset'
+        ? parseCommandArgs(rest, command.params).asset_id
+        : undefined
       const adapted = adaptCommandArgs(command.mcpTool.adapter, command.mcpTool.tool, parsed)
       const args: CommandToolArgs = {
         ...adapted,
@@ -6629,7 +6633,45 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (command.mcpTool.tool === 'download_video' && notebook) {
         return await completeVideoDownload(result, asString(args.url) ?? '')
       }
+      const renamePlan = command.mcpTool.tool === 'rename_asset' && notebook
+        ? notebookCellRenamePlan(
+            renameAssetId,
+            result,
+            notebook.cells,
+            commandMentionAssets,
+          )
+        : null
+      if (
+        renamePlan
+        && notebook
+        && !renamePlan.conflict
+        && renamePlan.previousSlug !== renamePlan.nextSlug
+      ) {
+        await call('update_notebook_cell', {
+          book_id: bookId,
+          notebook_id: notebook.id,
+          cell_id: renamePlan.cellId,
+          cell: { slug: renamePlan.nextSlug },
+        })
+      }
       await refreshBookData(bookId, notebook?.id)
+      if (command.mcpTool.tool === 'rename_asset') {
+        const renamed = record(result)
+        const oldAssetId = asString(renamed?.old_asset_id)
+        const newAssetId = asString(renamed?.new_asset_id)
+        if (oldAssetId && newAssetId) {
+          if (renamePlan?.conflict) {
+            return {
+              ok: true,
+              message: `Renamed asset @${oldAssetId} to @${newAssetId}; cell @${renamePlan.previousSlug} kept because @${newAssetId} is already in use`,
+            }
+          }
+          return {
+            ok: true,
+            message: `Renamed @${renamePlan?.previousSlug ?? oldAssetId} to @${newAssetId}`,
+          }
+        }
+      }
       return { ok: true, message: messageFor(result, `${command.command} complete`) }
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
