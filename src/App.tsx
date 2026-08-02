@@ -6873,23 +6873,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           Offline · local import, search, editing, playback, history, and export remain available
         </div>
       )}
-      {notice?.tone === 'info' && (
-        <div
-          className="workspace-status-strip"
-          role="status"
-          aria-live="polite"
-        >
-          <span>{notice.text}</span>
-          <button
-            type="button"
-            aria-label="Dismiss notice"
-            onClick={() => setNoticeState(null)}
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
-
       <>
           {screen === 'notebook' && (
             <>
@@ -8229,8 +8212,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           : pendingCommandPlan || pendingChatAction
             ? '/apply'
             : undefined}
-        notice={notice?.tone === 'error'
-          ? { message: notice.text, tone: 'error' }
+        notice={notice
+          ? { message: notice.text, tone: notice.tone }
           : null}
         onEnsureCatalog={refreshComposerCatalog}
         onDismissNotice={() => setNoticeState(null)}

@@ -132,57 +132,6 @@ textarea:focus-visible {
   text-align: center;
 }
 
-.workspace-status-strip {
-  position: fixed;
-  z-index: 28;
-  top: 72px;
-  right: 0;
-  left: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  padding: 8px 16px;
-  border-bottom: 1px solid rgba(79, 183, 125, 0.42);
-  color: #b7e3c7;
-  background: rgba(8, 36, 20, 0.96);
-  font-size: 11px;
-  letter-spacing: 0.03em;
-}
-
-.workspace-status-strip.error {
-  border-bottom-color: rgba(210, 111, 111, 0.48);
-  color: #e0b0b0;
-  background: rgba(52, 16, 16, 0.96);
-}
-
-.workspace-status-strip > span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.workspace-status-strip > button {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid rgba(183, 227, 199, 0.28);
-  color: inherit;
-  background: transparent;
-  cursor: pointer;
-}
-
-.workspace-status-strip.error > button {
-  border-color: rgba(224, 176, 176, 0.32);
-}
-
-.offline-banner + .workspace-status-strip {
-  top: 100px;
-}
-
 .topbar-book-controls {
   display: flex;
   align-items: stretch;
