@@ -28,9 +28,5 @@ export function CellAnimatedBackground({
       </div>
     )
   }
-  return (
-    <div className="cell-state-shimmer" aria-hidden="true">
-      <span />
-    </div>
-  )
+  return <div className="cell-state-shimmer" aria-hidden="true" />
 }

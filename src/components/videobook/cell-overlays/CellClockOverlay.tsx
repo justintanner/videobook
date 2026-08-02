@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { CellAnimatedBackground } from './CellAnimatedBackground'
 
-const TICK_MS = 250
+const TICK_MS = 1000
 
 function formatElapsed(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000))

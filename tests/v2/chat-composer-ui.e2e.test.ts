@@ -97,6 +97,17 @@ function record(value: unknown): Record<string, unknown> | null {
     : null
 }
 
+function resultValue(value: unknown): unknown {
+  const result = record(value)
+  const content = Array.isArray(result?.content) ? result.content : []
+  const textItem = content.map(record).find((item) => item?.type === 'text')
+  const text = typeof textItem?.text === 'string' ? textItem.text : ''
+  if (!text || result?.isError === true) {
+    throw new Error(text || 'MCP tool returned no result')
+  }
+  return JSON.parse(text) as unknown
+}
+
 function toolCalls(value: unknown): ToolCall[] {
   const envelopes = Array.isArray(value) ? value : [value]
   return envelopes.flatMap((entry) => {
@@ -151,6 +162,67 @@ describe('chat composer browser flow', () => {
     )
     await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
     await client.callTool({ name: 'create_book', arguments: { slug: 'chat-ui-e2e' } })
+    const booksValue = resultValue(await client.callTool({
+      name: 'list_books',
+      arguments: { sort: 'newest' },
+    }))
+    const book = (Array.isArray(booksValue) ? booksValue : [])
+      .map(record)
+      .find((entry) => entry?.slug === 'chat-ui-e2e')
+    const bookId = typeof book?.bookId === 'string' ? book.bookId : ''
+    if (!bookId) throw new Error('Could not create browser fixture book')
+    const notebooksValue = resultValue(await client.callTool({
+      name: 'list_notebooks',
+      arguments: { book_id: bookId },
+    }))
+    const notebook = (Array.isArray(notebooksValue) ? notebooksValue : [])
+      .map(record)
+      .find(Boolean)
+    const notebookId = typeof notebook?.id === 'string' ? notebook.id : ''
+    if (!notebookId) throw new Error('Could not create browser fixture notebook')
+    const createCell = async (cell: Record<string, unknown>): Promise<string> => {
+      const value = record(resultValue(await client.callTool({
+        name: 'create_notebook_cell',
+        arguments: { book_id: bookId, notebook_id: notebookId, cell },
+      })))
+      const id = typeof value?.id === 'string' ? value.id : ''
+      if (!id) throw new Error('Could not create browser fixture cell')
+      return id
+    }
+    const videoCellId = await createCell({
+      type: 'video',
+      slug: 'vid-source-one',
+      slot: { row: 0, column: 0 },
+    })
+    const imageCellId = await createCell({
+      type: 'image',
+      slug: 'img-source-two',
+      slot: { row: 0, column: 2 },
+    })
+    const generationCellId = await createCell({
+      type: 'generate_video',
+      slug: 'generate-video-target',
+      slot: { row: 1, column: 0 },
+      provider: 'kie',
+      model: 'Seedance2MiniInputSchema',
+      operation: 'image_to_video',
+      tool: 'generate_kie_seedance_2_0_mini_video',
+      inputs: { state: 'running' },
+    })
+    for (const connection of [
+      { source_cell_id: videoCellId, target_input: 'video' },
+      { source_cell_id: imageCellId, target_input: 'image' },
+    ]) {
+      resultValue(await client.callTool({
+        name: 'connect_notebook_cells',
+        arguments: {
+          book_id: bookId,
+          notebook_id: notebookId,
+          target_cell_id: generationCellId,
+          ...connection,
+        },
+      }))
+    }
     await client.close()
     viteProcess = startProcess(
       [join(process.cwd(), 'node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(vitePort)],
@@ -199,6 +271,25 @@ describe('chat composer browser flow', () => {
     const input = page.getByLabel('Videobook command input')
     await input.waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(async () => await input.isEnabled()).toBe(true)
+    const routePaths = page.locator('.notebook-flow .workflow-edge .react-flow__edge-path')
+    await expect.poll(async () => await routePaths.count()).toBe(2)
+    const routeStyles = await routePaths.evaluateAll((paths) => paths.map((path) => ({
+      d: path.getAttribute('d'),
+      stroke: window.getComputedStyle(path).stroke,
+      strokeWidth: window.getComputedStyle(path).strokeWidth,
+    })))
+    expect(routeStyles).toHaveLength(2)
+    expect(routeStyles.every((style) => style.d?.startsWith('M '))).toBe(true)
+    expect(routeStyles.every((style) => style.stroke === 'rgba(114, 231, 170, 0.62)'))
+      .toBe(true)
+    expect(routeStyles.every((style) => style.strokeWidth === '1.6px')).toBe(true)
+    const runningCell = page.locator('.cell-node-running')
+    await runningCell.waitFor({ state: 'visible' })
+    expect(await runningCell.evaluate((element) =>
+      window.getComputedStyle(element).animationName)).toBe('none')
+    expect(await runningCell.getAttribute('aria-busy')).toBe('true')
+    expect(await runningCell.locator('.cell-state-shimmer > span').count()).toBe(0)
+    expect(await runningCell.locator('.cell-target-connection-count').textContent()).toBe('2')
     const selector = page.getByLabel('Chat model')
     expect(await selector.locator('option').allTextContents()).toEqual(['Sol', 'Terra'])
     await selector.selectOption('gpt-5.6-terra')

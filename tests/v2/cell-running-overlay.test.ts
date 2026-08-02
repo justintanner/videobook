@@ -24,6 +24,7 @@ describe('CellStateOverlay', () => {
     expect(html).toContain(`>${label}</strong>`)
     expect(html).toContain('class="cell-state-timer"')
     expect(html).toContain('class="cell-state-shimmer"')
+    expect(html).not.toContain('cell-state-shimmer"><span')
   })
 
   it('renders a failed overlay with error text and retry control', () => {
