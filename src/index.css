@@ -840,11 +840,11 @@ textarea:focus-visible {
 .canvas-add-panel {
   position: sticky;
   top: 62px;
-  left: 16px;
+  left: var(--notebook-edge-inset);
   z-index: 20;
   width: max-content;
   height: 0;
-  margin-left: 16px;
+  margin-left: var(--notebook-edge-inset);
   pointer-events: none;
 }
 
@@ -856,7 +856,7 @@ textarea:focus-visible {
   width: 100%;
   height: 0;
   justify-content: flex-start;
-  padding-left: 16px;
+  padding-left: var(--notebook-edge-inset);
   pointer-events: none;
 }
 
@@ -975,16 +975,15 @@ textarea:focus-visible {
 }
 
 .canvas {
+  --notebook-edge-inset: 24px;
+  --notebook-composer-clearance: 86px;
   position: relative;
   grid-row: 2;
   grid-column: 1;
   min-width: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior-x: none;
-  overscroll-behavior-y: contain;
-  scrollbar-color: rgba(114, 231, 170, 0.34) rgba(3, 15, 9, 0.8);
-  scrollbar-gutter: stable;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: var(--notebook-composer-clearance);
   background: #030907;
 }
 
@@ -1094,20 +1093,58 @@ textarea:focus-visible {
 .inspector-reopen {
   position: absolute;
   top: 18px;
-  right: 18px;
+  right: var(--notebook-edge-inset);
   z-index: 12;
   width: 38px;
   padding: 0;
 }
 
 .notebook-horizontal-scroll {
-  width: 100%;
+  width: auto;
+  height: 100%;
   min-width: 0;
-  min-height: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
+  min-height: 0;
+  margin-inline: var(--notebook-edge-inset);
+  overflow: auto;
   overscroll-behavior-x: contain;
-  scrollbar-color: rgba(114, 231, 170, 0.42) rgba(3, 15, 9, 0.9);
+  overscroll-behavior-y: contain;
+  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
+}
+
+.notebook-horizontal-scroll:hover,
+.notebook-horizontal-scroll:focus,
+.notebook-horizontal-scroll:focus-within {
+  scrollbar-color: rgba(114, 231, 170, 0.5) transparent;
+}
+
+.notebook-horizontal-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.notebook-horizontal-scroll::-webkit-scrollbar-track,
+.notebook-horizontal-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.notebook-horizontal-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  background-clip: padding-box;
+}
+
+.notebook-horizontal-scroll:hover::-webkit-scrollbar-thumb,
+.notebook-horizontal-scroll:focus::-webkit-scrollbar-thumb,
+.notebook-horizontal-scroll:focus-within::-webkit-scrollbar-thumb {
+  background: rgba(114, 231, 170, 0.5);
+  background-clip: padding-box;
+}
+
+.notebook-horizontal-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(114, 231, 170, 0.82);
+  background-clip: padding-box;
 }
 
 .notebook-flow-frame {
@@ -1421,14 +1458,10 @@ textarea:focus-visible {
 .cell-node-running.cell-kind-audio,
 .cell-node-running.cell-kind-video,
 .cell-node-running.cell-kind-generate_audio,
-.cell-node-running.cell-kind-generate_video,
-.cell-node-queued.cell-kind-audio,
-.cell-node-queued.cell-kind-video,
-.cell-node-queued.cell-kind-generate_audio,
-.cell-node-queued.cell-kind-generate_video {
-  --cell-state-color: #a78bfa;
-  --cell-state-soft: rgba(167, 139, 250, 0.2);
-  --cell-state-glow: rgba(167, 139, 250, 0.4);
+.cell-node-running.cell-kind-generate_video {
+  --cell-state-color: #22c55e;
+  --cell-state-soft: rgba(34, 197, 94, 0.2);
+  --cell-state-glow: rgba(34, 197, 94, 0.4);
 }
 
 .cell-node-error {
@@ -1544,11 +1577,17 @@ textarea:focus-visible {
   letter-spacing: 0.04em;
 }
 
-.cell-state-particles {
+.cell-state-shimmer {
   position: absolute;
   inset: 0;
   overflow: hidden;
   pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--cell-state-color) 4%, transparent) 0%,
+    color-mix(in srgb, var(--cell-state-color) 12%, transparent) 70%,
+    color-mix(in srgb, var(--cell-state-color) 20%, transparent) 100%
+  );
 }
 
 .cell-state-streaks {
@@ -1574,48 +1613,30 @@ textarea:focus-visible {
   animation-iteration-count: infinite;
 }
 
-.cell-state-particle {
+.cell-state-shimmer > span {
   position: absolute;
-  left: 50%;
-  bottom: 12%;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--cell-state-color) 70%, transparent);
-  box-shadow: 0 0 4px color-mix(in srgb, var(--cell-state-color) 45%, transparent);
-  transform: translateX(-50%);
-  animation: generating-particle-rise 2.8s linear infinite;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 128px;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    color-mix(in srgb, white 8%, transparent) 45%,
+    color-mix(in srgb, var(--cell-state-color) 28%, transparent) 50%,
+    color-mix(in srgb, white 8%, transparent) 55%,
+    transparent 100%
+  );
+  animation: cell-state-shimmer-sweep 4s ease-in-out infinite;
 }
 
-.cell-state-particle:nth-child(2) {
-  bottom: 32%;
-}
-
-.cell-state-particle:nth-child(3) {
-  bottom: 52%;
-}
-
-.cell-state-particle:nth-child(4) {
-  bottom: 72%;
-}
-
-@keyframes generating-particle-rise {
-  0% {
-    transform: translateY(0) translateX(-50%);
-    opacity: 0;
+@keyframes cell-state-shimmer-sweep {
+  from {
+    transform: translateX(-100%);
   }
 
-  10% {
-    opacity: 0.85;
-  }
-
-  90% {
-    opacity: 0.85;
-  }
-
-  100% {
-    transform: translateY(-110%) translateX(calc(-50% + 12px));
-    opacity: 0;
+  to {
+    transform: translateX(400%);
   }
 }
 
@@ -6252,6 +6273,11 @@ textarea:focus-visible {
 }
 
 @media (max-width: 720px) {
+  .canvas {
+    --notebook-edge-inset: 10px;
+    --notebook-composer-clearance: 76px;
+  }
+
   .app-shell {
     grid-template: 62px minmax(0, 1fr) / minmax(0, 1fr);
   }
@@ -6295,10 +6321,6 @@ textarea:focus-visible {
     grid-column: 1;
   }
 
-  .canvas-add-panel {
-    margin: 10px !important;
-  }
-
   .canvas-welcome {
     width: min(380px, calc(100% - 40px));
     min-width: 0;
@@ -6335,7 +6357,8 @@ textarea:focus-visible {
   }
 
   .command-composer,
-  .app-screen-notebook .command-composer {
+  .app-screen-notebook .command-composer,
+  .app-screen-notebook.inspector-hidden .command-composer {
     right: 10px;
     bottom: 10px;
     left: 10px;
@@ -6442,10 +6465,6 @@ textarea:focus-visible {
   .canvas,
   .workspace-screen {
     grid-row: 2;
-  }
-
-  .canvas-add-panel {
-    margin: 10px !important;
   }
 
   .canvas-welcome {
@@ -6951,7 +6970,7 @@ textarea:focus-visible {
     transition-duration: 0.01ms !important;
   }
 
-  .cell-state-particle,
+  .cell-state-shimmer > span,
   .cell-state-streak {
     animation: none !important;
     opacity: 0.55;

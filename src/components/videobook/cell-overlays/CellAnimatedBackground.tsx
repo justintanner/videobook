@@ -1,5 +1,3 @@
-const PARTICLES = [0, 1, 2, 3]
-
 const STREAKS = [
   { left: '12%', delay: 0, duration: 1.6 },
   { left: '32%', delay: 0.7, duration: 2.2 },
@@ -31,14 +29,8 @@ export function CellAnimatedBackground({
     )
   }
   return (
-    <div className="cell-state-particles" aria-hidden="true">
-      {PARTICLES.map((index) => (
-        <span
-          key={index}
-          className="cell-state-particle"
-          style={{ animationDelay: `${index * 0.25}s` }}
-        />
-      ))}
+    <div className="cell-state-shimmer" aria-hidden="true">
+      <span />
     </div>
   )
 }

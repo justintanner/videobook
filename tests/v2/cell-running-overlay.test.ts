@@ -23,7 +23,7 @@ describe('CellStateOverlay', () => {
     expect(html).toContain('aria-live="polite"')
     expect(html).toContain(`>${label}</strong>`)
     expect(html).toContain('class="cell-state-timer"')
-    expect(html).toContain('class="cell-state-particles"')
+    expect(html).toContain('class="cell-state-shimmer"')
   })
 
   it('renders a failed overlay with error text and retry control', () => {

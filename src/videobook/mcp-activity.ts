@@ -23,6 +23,10 @@ const toolLabels: Readonly<Record<string, string>> = {
   slash_commands: 'Loading commands',
 }
 
+export function shouldNotifyMcpActivity(tool: string): boolean {
+  return tool !== 'list_jobs'
+}
+
 export function mcpToolLabel(tool: string): string {
   const known = toolLabels[tool]
   if (known) return known

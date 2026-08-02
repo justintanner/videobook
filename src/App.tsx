@@ -225,6 +225,7 @@ import {
 } from '@/videobook/chat-models'
 import {
   idleMcpActivity,
+  shouldNotifyMcpActivity,
   type McpActivity,
 } from '@/videobook/mcp-activity'
 import type {
@@ -2428,7 +2429,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setNoticeState({ text, tone })
   }, [])
   const flowRef = useRef<ReactFlowInstance<CanvasNode, NotebookFlowEdge> | null>(null)
-  const notebookCanvasRef = useRef<HTMLElement | null>(null)
   const notebookScrollRef = useRef<HTMLDivElement | null>(null)
   const bookMenuRequestRef = useRef(0)
   const recorderRef = useRef<MediaRecorder | null>(null)
@@ -2608,6 +2608,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
 
   const call = useCallback(async (tool: string, args: Record<string, unknown>) => {
     if (mcp.state !== 'ready') throw new Error('MCP server is not ready')
+    if (!shouldNotifyMcpActivity(tool)) {
+      return parseResult(await mcp.callTool(tool, args))
+    }
     const sequence = mcpActivitySequenceRef.current + 1
     mcpActivitySequenceRef.current = sequence
     window.clearTimeout(mcpActivityTimerRef.current)
@@ -3305,7 +3308,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }, [])
   const revealLatestNotebookResult = useCallback(() => {
     if (screen !== 'notebook') return
-    revealNotebookResult(() => notebookCanvasRef.current)
+    revealNotebookResult(() => notebookScrollRef.current)
   }, [screen])
   const focusCommandComposer = useCallback(() => {
     restoreCommandComposerFocus(() =>
@@ -3480,13 +3483,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   useLayoutEffect(() => {
     const container = notebookScrollRef.current
     if (!container) return
-    const surface = container.parentElement
-    if (!surface) return
     const sync = () => {
       setNotebookSurface((current) => {
         const next = {
-          width: surface.clientWidth,
-          height: surface.clientHeight,
+          width: container.clientWidth,
+          height: container.clientHeight,
         }
         return current.width === next.width && current.height === next.height
           ? current
@@ -3499,7 +3500,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     sync()
     const observer = new ResizeObserver(sync)
-    observer.observe(surface)
+    observer.observe(container)
     return () => observer.disconnect()
   }, [notebookFrameSize.width])
 
@@ -6809,7 +6810,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       <>
           {screen === 'notebook' && (
             <>
-              <section className="canvas" ref={notebookCanvasRef}>
+              <section className="canvas">
                 {notebook && (
                   <div className="canvas-add-panel">
                     <details className="canvas-add-menu">
@@ -6877,6 +6878,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                   <div
                     className="notebook-horizontal-scroll"
                     ref={notebookScrollRef}
+                    tabIndex={0}
+                    aria-label="Notebook canvas"
                   >
                     <div
                       className="notebook-flow-frame"
@@ -8133,6 +8136,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         callTool={call}
         chatModels={chatModelCatalog.models}
         disabled={busy || !bookId || mcp.state !== 'ready'}
+        modelSelectionDisabled={!bookId || mcp.state !== 'ready'}
         connectionLabel={mcp.state === 'ready' ? 'Load a book to begin' : 'Connecting to MCP…'}
         mcpActivity={mcpActivity}
         promptSession={null}

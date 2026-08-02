@@ -66,6 +66,7 @@ interface CommandComposerProps {
   callTool: (tool: string, args: Record<string, unknown>) => Promise<unknown>
   chatModels: readonly ChatModelOption[]
   disabled: boolean
+  modelSelectionDisabled: boolean
   connectionLabel: string
   mcpActivity: McpActivity
   promptSession: PromptSession | null
@@ -141,6 +142,7 @@ export function CommandComposer({
   callTool,
   chatModels,
   disabled,
+  modelSelectionDisabled,
   connectionLabel,
   mcpActivity,
   promptSession,
@@ -588,7 +590,7 @@ export function CommandComposer({
           <Bot size={13} aria-hidden="true" />
           <select
             value={selectedModel}
-            disabled={disabled || sending}
+            disabled={modelSelectionDisabled || sending}
             aria-label="Chat model"
             data-testid="chat-model-selector"
             onChange={(event) => onModelChange(event.target.value)}
