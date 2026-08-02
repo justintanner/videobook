@@ -1,10 +1,17 @@
 import type { ToolDef } from "./tools/tool-def.js";
+import {
+  zodEnumOptionsOrNull,
+  zodIsRequired,
+  zodUnionEnumOptions,
+} from "./zod-slots.js";
 
 type RoutableToolInfo = {
   name: string;
   actualTool: string;
   description: string;
   params: string[];
+  requiredParams: string[];
+  constraints: string[];
   category: "action" | "generation";
   effect: "read" | "mutation" | "generation";
 };
@@ -22,6 +29,8 @@ type ChatRoutingUserMessageContext = {
   videoFiles: unknown[];
   scriptContents: Array<{ tag: string; content: string }>;
 };
+
+type ZodConstraintSchema = { _def?: unknown; unwrap?: () => unknown };
 
 const CHAT_TOOL_ALIASES: ChatToolAlias[] = [
   {
@@ -101,6 +110,26 @@ function paramsForTool(definition: ToolDef): string[] {
   return Object.keys(definition.schema).filter((name) => name !== "book_id");
 }
 
+function requiredParamsForTool(definition: ToolDef): string[] {
+  return Object.entries(definition.schema)
+    .filter(([name, schema]) =>
+      name !== "book_id"
+      && zodIsRequired(schema as unknown as ZodConstraintSchema))
+    .map(([name]) => name);
+}
+
+function constraintsForTool(definition: ToolDef): string[] {
+  return Object.entries(definition.schema).flatMap(([name, schema]) => {
+    if (name === "book_id") return [];
+    const constraintSchema = schema as unknown as ZodConstraintSchema;
+    const values = zodEnumOptionsOrNull(constraintSchema)
+      ?? zodUnionEnumOptions(constraintSchema);
+    return values
+      ? [`${name}=${values.map((value) => JSON.stringify(value)).join("|")}`]
+      : [];
+  });
+}
+
 function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
   const definitionByName = new Map(
     definitions.map((definition) => [definition.name, definition]),
@@ -112,6 +141,8 @@ function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
     return [{
       ...alias,
       params: paramsForTool(target),
+      requiredParams: requiredParamsForTool(target),
+      constraints: constraintsForTool(target),
       category,
       effect: effectForTool(alias.actualTool, category),
     }];
@@ -125,6 +156,8 @@ function buildRoutableTools(definitions: ToolDef[]): RoutableToolInfo[] {
         actualTool: definition.name,
         description: definition.description,
         params: paramsForTool(definition),
+        requiredParams: requiredParamsForTool(definition),
+        constraints: constraintsForTool(definition),
         category,
         effect: effectForTool(definition.name, category),
       };
@@ -137,9 +170,15 @@ function buildChatRoutingPrompt(
   tools: RoutableToolInfo[],
   historyContext?: string,
 ): string {
-  const toolLines = tools.map(
-    (tool) => `- ${tool.name}: ${tool.description} (params: ${tool.params.join(", ")})`,
-  ).join("\n");
+  const toolLines = tools.map((tool) => {
+    const required = tool.requiredParams.length > 0
+      ? `; required: ${tool.requiredParams.join(", ")}`
+      : "";
+    const constraints = tool.constraints.length > 0
+      ? `; allowed: ${tool.constraints.join(", ")}`
+      : "";
+    return `- ${tool.name}: ${tool.description} (params: ${tool.params.join(", ")}${required}${constraints})`;
+  }).join("\n");
 
   const historyBlock = historyContext
     ? `\n${historyContext}\n\nUse conversation history to resolve pronouns and follow-up references (e.g. "reverse it" refers to the asset from the previous turn).\n`
@@ -158,11 +197,14 @@ Given a user query (possibly with @asset references), determine:
 3. message: A brief present-progressive status message (2-5 words, e.g. "Trimming video.")
 
 Parameter guidelines:
+- For a generic video or image generation request that does not name a concrete model or provider, use generate_video or generate_image instead of a provider-specific generation tool
+- Include every required parameter. Omit optional parameters unless the user explicitly requests them so the tool can apply its defaults
+- For parameters with listed allowed values, use exactly one listed value and never borrow an option from another tool
 - For asset_id: use the resolved asset ID from the referenced @tag (e.g., @vid-foo → asset_id: "vid-foo")
 - For timestamps (trim_start, trim_end, cut_start, cut_end, start_time, end_time, start_seconds, end_seconds): parse to seconds as a number (e.g., "1:30" → 90, "2m20s" → 140)
 - For timewarp_video: stretch_factor is a duration multiplier; values above 1 slow and lengthen the selected picture, while values below 1 accelerate and shorten it
 - For sync_video_to_audio: anchors is an ordered array. Each anchor has video_seconds plus exactly one target: audio_seconds for an explicit audio time or audio_cue for transcript words. Convert nested timestamp values to seconds and preserve audio_cue text exactly. The original audio stays fixed; only the picture is retimed
-- For generate_video: put the generation description in "prompt"
+- For generate_video: put the generation description in "prompt" and preserve every @asset reference
 - For generate_image: put the image description in "prompt"; use image_slugs ONLY for @img-* reference images (include @ prefix). Never put @vid-* or @aud-* in image_slugs — if the user wants an image inspired by a video, describe that in the text prompt instead
 - For create_watermark_card (QR code / watermark card): use this tool for real scannable QR codes — never generate_image. Pass url from the referenced asset's source_url/webpage_url when the user says "from the url in @vid-…" or similar; optional handle is an X handle without @
 - For create_qart (artistic / picture QR): use when turning an @img-* into scan-safe color and monochrome QR mosaics; pass image_slug and value (URL/text). Prefer over create_watermark_card when the user wants a photo integrated into the QR modules

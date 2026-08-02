@@ -83,6 +83,14 @@ describe('notebook image generation commands', () => {
       mediaKind: 'audio',
       prompt: 'distant thunder',
     })
+    expect(parseNotebookChatGenerationCommand(
+      'gen vid with @vid-dance and @generate-image-01',
+    )).toEqual({
+      cellType: 'generate_video',
+      mediaKind: 'video',
+      prompt: 'Create new video media based on the connected references.',
+      sourceReferences: ['vid-dance', 'generate-image-01'],
+    })
   })
 
   it('rejects non-image and unfinished sources before materialization', () => {

@@ -68,6 +68,28 @@ describe("chat routing catalog", () => {
     expect(downloadDefinition?.schema.start_time?.safeParse(30).success).toBe(true);
   });
 
+  it("publishes required parameters and enum domains to the router", () => {
+    const tools = buildRoutableTools(definitions);
+    const motionControl = getRoutableTool(
+      tools,
+      "generate_kie_kling_3_0_motion_control",
+    );
+    expect(motionControl?.requiredParams).toEqual([
+      "character_image_slugs",
+      "motion_video_slugs",
+    ]);
+    expect(motionControl?.constraints).toEqual([
+      'mode="720p"|"1080p"',
+      'character_orientation="video"|"image"',
+      'background_source="input_video"|"input_image"',
+    ]);
+    const prompt = buildChatRoutingPrompt("my-book", tools);
+    expect(prompt).toContain(
+      'allowed: mode="720p"|"1080p", character_orientation="video"|"image", background_source="input_video"|"input_image"',
+    );
+    expect(prompt).toContain("Omit optional parameters");
+  });
+
   it("keeps generic generation aliases", () => {
     const tools = buildRoutableTools(definitions);
     expect(getRoutableTool(tools, "generate_video")).toMatchObject({

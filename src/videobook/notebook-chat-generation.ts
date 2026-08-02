@@ -65,6 +65,7 @@ const generationKinds: Record<string, {
   photo: { cellType: 'generate_image', mediaKind: 'image' },
   picture: { cellType: 'generate_image', mediaKind: 'image' },
   clip: { cellType: 'generate_video', mediaKind: 'video' },
+  vid: { cellType: 'generate_video', mediaKind: 'video' },
   video: { cellType: 'generate_video', mediaKind: 'video' },
 }
 
@@ -98,7 +99,7 @@ function generationPrompt(
     .replace(/\s+/gu, ' ')
     .trim()
     .replace(/^(?:of|showing|that\s+shows?)\s+/iu, '')
-    .replace(/^(?:and|but)\s+/iu, '')
+    .replace(/^(?:and|but)(?:\s+|$)/iu, '')
     .replace(/\s+(?:and|with|using|from|based\s+on)$/iu, '')
     .replace(/^[,;:\s]+|[,;:\s]+$/gu, '')
   if (withoutReferences) return withoutReferences
@@ -204,7 +205,7 @@ export function parseNotebookChatGenerationCommand(
   input: string,
 ): NotebookChatGenerationCommand | null {
   const match = input.trim().match(
-    /^(?:please\s+)?(?:generate|create|make)\s+(?:me\s+)?(?:an?\s+)?(?:new\s+)?(image|photo|picture|video|clip|audio|music|song|soundtrack|voice[\s-]?over)\b([\s\S]*?)(?:\s+please)?[.!]?$/iu,
+    /^(?:please\s+)?(?:generate|gen|create|make)\s+(?:me\s+)?(?:an?\s+)?(?:new\s+)?(image|photo|picture|video|vid|clip|audio|music|song|soundtrack|voice[\s-]?over)\b([\s\S]*?)(?:\s+please)?[.!]?$/iu,
   )
   if (!match) return null
   const key = match[1]!.toLowerCase().replace(/[\s-]/gu, '')

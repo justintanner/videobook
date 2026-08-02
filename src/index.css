@@ -26,10 +26,39 @@
   --cyan: #63c7d8;
   --selection-accent: #4fb77d;
   --danger: #f07e7e;
+  --scrollbar-track: #020b07;
+  --scrollbar-thumb: #315f45;
+  --scrollbar-thumb-hover: #4b8c65;
+  --scrollbar-thumb-active: #72e7aa;
 }
 
 * {
   box-sizing: border-box;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid var(--scrollbar-track);
+  background: var(--scrollbar-thumb);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: var(--scrollbar-thumb-active);
 }
 
 html,
@@ -2463,7 +2492,7 @@ textarea:focus-visible {
   overflow: auto;
   padding: 18px 22px 28px;
   animation: inspector-body-enter 180ms ease-out;
-  scrollbar-color: #315f45 #020b07;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   scrollbar-width: thin;
 }
 
@@ -2838,7 +2867,7 @@ textarea:focus-visible {
   flex: 1;
   overflow: auto;
   padding-top: 28px;
-  scrollbar-color: #315f45 #020b07;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   scrollbar-width: thin;
 }
 
@@ -3559,7 +3588,7 @@ textarea:focus-visible {
   overflow: auto;
   border-top: 1px solid rgba(114, 231, 170, 0.1);
   background: rgba(1, 8, 5, 0.9);
-  scrollbar-color: #315f45 #020b07;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   scrollbar-width: thin;
   user-select: text;
 }
@@ -3841,7 +3870,7 @@ textarea:focus-visible {
   border: 1px solid var(--line-bright);
   background: #04100a;
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.48);
-  scrollbar-color: #315f45 #020b07;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   scrollbar-width: thin;
 }
 
@@ -6647,7 +6676,7 @@ textarea:focus-visible {
   min-height: 220px;
   overflow: auto;
   padding: 18px 24px 24px;
-  scrollbar-color: #315f45 #020b07;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   scrollbar-gutter: stable;
   scrollbar-width: thin;
 }
