@@ -10,30 +10,30 @@ export type NotebookSplitCommand = {
   splitAtSeconds: number
 }
 
-export type NotebookSplitBranchRole = 'first' | 'remaining'
+export type NotebookSplitOutputRole = 'first' | 'remaining'
 
-export type NotebookSplitBranchDraft = {
-  actionCell: NotebookCell
+export type NotebookSplitOutputDraft = {
   outputCell: NotebookCell
-  role: NotebookSplitBranchRole
+  role: NotebookSplitOutputRole
 }
 
 export type NotebookSplitDraft = {
-  branches: [NotebookSplitBranchDraft, NotebookSplitBranchDraft]
+  actionCell: NotebookCell
   createdCellIds: string[]
   document: NotebookDocument
+  outputs: [NotebookSplitOutputDraft, NotebookSplitOutputDraft]
   sourceCellId: string
   sourceSlug: string
   splitAtSeconds: number
 }
 
 export type NotebookSplitRun = {
-  branches: Array<{
-    actionCellId: string
-    actionSlug: string
+  actionCellId: string
+  actionSlug: string
+  outputs: Array<{
     outputCellId: string
     outputSlug: string
-    role: NotebookSplitBranchRole
+    role: NotebookSplitOutputRole
   }>
   jobId: string
   runId: string
@@ -127,83 +127,66 @@ function splitTimeSlug(seconds: number): string {
   return `${String(seconds).replace('.', '-')}s`
 }
 
-function splitBranchSlots(
+function splitSlots(
   cells: readonly NotebookCell[],
   source: NotebookGridSlot,
-): [
-  { action: NotebookGridSlot; output: NotebookGridSlot },
-  { action: NotebookGridSlot; output: NotebookGridSlot },
-] {
+): {
+  action: NotebookGridSlot
+  outputs: [NotebookGridSlot, NotebookGridSlot]
+} {
   const occupied = new Set(cells.map((cell) =>
     `${cell.slot.row}:${cell.slot.column}`))
   const columns = [source.column - 1, source.column + 1] as const
   for (let actionRow = source.row + 1; ; actionRow += 2) {
-    const slots = columns.map((column) => ({
-      action: { row: actionRow, column },
-      output: { row: actionRow + 1, column },
-    })) as [
-      { action: NotebookGridSlot; output: NotebookGridSlot },
-      { action: NotebookGridSlot; output: NotebookGridSlot },
-    ]
-    if (slots.every(({ action, output }) =>
+    const action = { row: actionRow, column: source.column }
+    const outputs = columns.map((column) => ({
+      row: actionRow + 1,
+      column,
+    })) as [NotebookGridSlot, NotebookGridSlot]
+    if (
       !occupied.has(`${action.row}:${action.column}`)
-      && !occupied.has(`${output.row}:${output.column}`))) {
-      return slots
+      && outputs.every((output) =>
+        !occupied.has(`${output.row}:${output.column}`))
+    ) {
+      return { action, outputs }
     }
   }
 }
 
-function createBranch(input: {
+function createOutput(input: {
+  actionCell: NotebookCell
   cells: readonly NotebookCell[]
   endSeconds: number
-  role: NotebookSplitBranchRole
-  slot: { action: NotebookGridSlot; output: NotebookGridSlot }
+  role: NotebookSplitOutputRole
+  slot: NotebookGridSlot
   source: NotebookCell
-  sourceDurationSeconds: number
   startSeconds: number
   timeSlug: string
-}): NotebookSplitBranchDraft {
+}): NotebookSplitOutputDraft {
   const sourceStem = input.source.slug.replace(/^vid-/u, '')
   const stem = input.role === 'first'
     ? `${sourceStem}-first-${input.timeSlug}`
     : `${sourceStem}-remaining`
-  const actionCell: NotebookCell = {
-    id: uuidv7(),
-    type: 'split_video',
-    slug: uniqueSlug(input.cells, 'split-video', stem),
-    slot: input.slot.action,
-    provider: 'local',
-    operation: 'split_range',
-    tool: 'ffmpeg',
-    inputs: {
-      endSeconds: input.endSeconds,
-      sourceCellId: input.source.id,
-      sourceDurationSeconds: input.sourceDurationSeconds,
-      splitRole: input.role,
-      startSeconds: input.startSeconds,
-      state: 'ready',
-    },
-  }
   const outputCell: NotebookCell = {
     id: uuidv7(),
     type: 'video',
     slug: uniqueSlug(
-      [...input.cells, actionCell],
+      input.cells,
       'vid',
       stem,
     ),
-    slot: input.slot.output,
+    slot: input.slot,
     inputs: {
       endSeconds: input.endSeconds,
       mediaRole: 'split-video-output',
-      producerCellId: actionCell.id,
+      producerCellId: input.actionCell.id,
       sourceCellId: input.source.id,
       splitRole: input.role,
       startSeconds: input.startSeconds,
       state: 'pending',
     },
   }
-  return { actionCell, outputCell, role: input.role }
+  return { outputCell, role: input.role }
 }
 
 function cellCreateInput(cell: NotebookCell): Record<string, unknown> {
@@ -294,59 +277,79 @@ export function planNotebookSplitCommand(input: {
     )
   }
 
-  const slots = splitBranchSlots(input.document.cells, source.slot)
+  const slots = splitSlots(input.document.cells, source.slot)
   const timeSlug = splitTimeSlug(firstDuration)
-  const first = createBranch({
-    cells: input.document.cells,
+  const sourceStem = source.slug.replace(/^vid-/u, '')
+  const actionCell: NotebookCell = {
+    id: uuidv7(),
+    type: 'split_video',
+    slug: uniqueSlug(
+      input.document.cells,
+      'split-video',
+      `${sourceStem}-at-${timeSlug}`,
+    ),
+    slot: slots.action,
+    provider: 'local',
+    operation: 'split_range',
+    tool: 'ffmpeg',
+    inputs: {
+      endSeconds: input.sourceDurationSeconds,
+      sourceCellId: source.id,
+      sourceDurationSeconds: input.sourceDurationSeconds,
+      splitAtSeconds: firstDuration,
+      startSeconds: 0,
+      state: 'ready',
+    },
+  }
+  const first = createOutput({
+    actionCell,
+    cells: [...input.document.cells, actionCell],
     endSeconds: firstDuration,
     role: 'first',
-    slot: slots[0],
+    slot: slots.outputs[0],
     source,
-    sourceDurationSeconds: input.sourceDurationSeconds,
     startSeconds: 0,
     timeSlug,
   })
-  const remaining = createBranch({
+  const remaining = createOutput({
+    actionCell,
     cells: [
       ...input.document.cells,
-      first.actionCell,
+      actionCell,
       first.outputCell,
     ],
     endSeconds: input.sourceDurationSeconds,
     role: 'remaining',
-    slot: slots[1],
+    slot: slots.outputs[1],
     source,
-    sourceDurationSeconds: input.sourceDurationSeconds,
     startSeconds: firstDuration,
     timeSlug,
   })
-  const branches: NotebookSplitDraft['branches'] = [first, remaining]
-  const createdCells = branches.flatMap((branch) => [
-    branch.actionCell,
-    branch.outputCell,
-  ])
-  const createdEdges = branches.flatMap((branch) => [
+  const outputs: NotebookSplitDraft['outputs'] = [first, remaining]
+  const createdCells = [actionCell, ...outputs.map((output) => output.outputCell)]
+  const createdEdges = [
     {
       id: uuidv7(),
       source: source.id,
-      target: branch.actionCell.id,
+      target: actionCell.id,
       targetInput: 'video',
     },
-    {
+    ...outputs.map((output) => ({
       id: uuidv7(),
-      source: branch.actionCell.id,
-      target: branch.outputCell.id,
+      source: actionCell.id,
+      target: output.outputCell.id,
       targetInput: 'media',
-    },
-  ])
+    })),
+  ]
   return {
-    branches,
+    actionCell,
     createdCellIds: createdCells.map((cell) => cell.id),
     document: {
       ...input.document,
       cells: [...input.document.cells, ...createdCells],
       edges: [...input.document.edges, ...createdEdges],
     },
+    outputs,
     sourceCellId: source.id,
     sourceSlug: source.slug,
     splitAtSeconds: firstDuration,
@@ -362,35 +365,37 @@ export async function enqueueNotebookSplitCommand(input: {
   const createdCellIds: string[] = []
   let runRequested = false
   try {
-    for (const branch of input.draft.branches) {
-      for (const cell of [branch.actionCell, branch.outputCell]) {
-        createdCellIds.push(cell.id)
-        const createdValue = await input.callTool('create_notebook_cell', {
-          book_id: input.bookId,
-          notebook_id: input.draft.document.id,
-          cell: cellCreateInput(cell),
-        })
-        const created = objectValue(createdValue)
-        const createdId = stringValue(created?.id)
-        if (createdId !== cell.id) {
-          throw new Error('The server did not preserve the planned split cell')
-        }
+    const cells = [
+      input.draft.actionCell,
+      ...input.draft.outputs.map((output) => output.outputCell),
+    ]
+    for (const cell of cells) {
+      createdCellIds.push(cell.id)
+      const createdValue = await input.callTool('create_notebook_cell', {
+        book_id: input.bookId,
+        notebook_id: input.draft.document.id,
+        cell: cellCreateInput(cell),
+      })
+      const created = objectValue(createdValue)
+      const createdId = stringValue(created?.id)
+      if (createdId !== cell.id) {
+        throw new Error('The server did not preserve the planned split cell')
       }
     }
 
-    for (const branch of input.draft.branches) {
+    await input.callTool('connect_notebook_cells', {
+      book_id: input.bookId,
+      notebook_id: input.draft.document.id,
+      source_cell_id: input.draft.sourceCellId,
+      target_cell_id: input.draft.actionCell.id,
+      target_input: 'video',
+    })
+    for (const output of input.draft.outputs) {
       await input.callTool('connect_notebook_cells', {
         book_id: input.bookId,
         notebook_id: input.draft.document.id,
-        source_cell_id: input.draft.sourceCellId,
-        target_cell_id: branch.actionCell.id,
-        target_input: 'video',
-      })
-      await input.callTool('connect_notebook_cells', {
-        book_id: input.bookId,
-        notebook_id: input.draft.document.id,
-        source_cell_id: branch.actionCell.id,
-        target_cell_id: branch.outputCell.id,
+        source_cell_id: input.draft.actionCell.id,
+        target_cell_id: output.outputCell.id,
         target_input: 'media',
       })
     }
@@ -400,7 +405,7 @@ export async function enqueueNotebookSplitCommand(input: {
       actor: input.actor,
       book_id: input.bookId,
       notebook_id: input.draft.document.id,
-      cell_ids: input.draft.branches.map((branch) => branch.actionCell.id),
+      cell_ids: [input.draft.actionCell.id],
     })
     const accepted = objectValue(acceptedValue)
     const jobId = stringValue(accepted?.job_id)
@@ -409,12 +414,12 @@ export async function enqueueNotebookSplitCommand(input: {
       throw new Error('The server did not return a notebook split run')
     }
     return {
-      branches: input.draft.branches.map((branch) => ({
-        actionCellId: branch.actionCell.id,
-        actionSlug: branch.actionCell.slug,
-        outputCellId: branch.outputCell.id,
-        outputSlug: branch.outputCell.slug,
-        role: branch.role,
+      actionCellId: input.draft.actionCell.id,
+      actionSlug: input.draft.actionCell.slug,
+      outputs: input.draft.outputs.map((output) => ({
+        outputCellId: output.outputCell.id,
+        outputSlug: output.outputCell.slug,
+        role: output.role,
       })),
       jobId,
       runId,

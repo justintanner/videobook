@@ -86,7 +86,7 @@ describe('notebook split commands', () => {
       .toThrow('Name a positive split time')
   })
 
-  it('creates two animated-ready branches and runs both into playable tiles', async () => {
+  it('runs one split operation into two playable video tiles', async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-split-command-'))
     books = new BookManager({
       libraryDir: join(rootDir, 'books'),
@@ -173,15 +173,20 @@ describe('notebook split commands', () => {
       document: before,
       sourceDurationSeconds: 3,
     })
-    expect(draft.createdCellIds).toHaveLength(4)
-    expect(draft.branches).toMatchObject([
+    expect(draft.createdCellIds).toHaveLength(3)
+    expect(draft.actionCell).toMatchObject({
+      type: 'split_video',
+      operation: 'split_range',
+      slot: { row: 1, column: 0 },
+      inputs: {
+        startSeconds: 0,
+        splitAtSeconds: 1,
+        endSeconds: 3,
+      },
+    })
+    expect(draft.outputs).toMatchObject([
       {
         role: 'first',
-        actionCell: {
-          type: 'split_video',
-          slot: { row: 1, column: -1 },
-          inputs: { startSeconds: 0, endSeconds: 1 },
-        },
         outputCell: {
           type: 'video',
           slug: 'vid-source-first-1s',
@@ -191,11 +196,6 @@ describe('notebook split commands', () => {
       },
       {
         role: 'remaining',
-        actionCell: {
-          type: 'split_video',
-          slot: { row: 1, column: 1 },
-          inputs: { startSeconds: 1, endSeconds: 3 },
-        },
         outputCell: {
           type: 'video',
           slug: 'vid-source-remaining',
@@ -211,48 +211,78 @@ describe('notebook split commands', () => {
       callTool,
       draft,
     })
-    expect(run.branches).toHaveLength(2)
+    expect(run.outputs).toHaveLength(2)
     const activeResult = engine.notebooks.read(notebookId)
     expect(activeResult.ok).toBe(true)
     if (!activeResult.ok) return
-    for (const branch of run.branches) {
-      expect(['queued', 'running', 'completed']).toContain(
-        activeResult.value.execution?.[branch.actionCellId]?.status,
-      )
-    }
+    expect(['queued', 'running', 'completed']).toContain(
+      activeResult.value.execution?.[run.actionCellId]?.status,
+    )
 
     await waitForJob(run.jobId)
     const completedResult = engine.notebooks.read(notebookId)
     expect(completedResult.ok).toBe(true)
     if (!completedResult.ok) return
     const completed = completedResult.value
-    expect(completed.edges).toEqual(expect.arrayContaining(
-      run.branches.flatMap((branch) => [
+    expect(completed.cells.filter((cell) => cell.type === 'split_video'))
+      .toHaveLength(1)
+    expect(completed.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        source: source.id,
+        target: run.actionCellId,
+        targetInput: 'video',
+      }),
+      ...run.outputs.map((output) =>
         expect.objectContaining({
-          source: source.id,
-          target: branch.actionCellId,
-          targetInput: 'video',
-        }),
-        expect.objectContaining({
-          source: branch.actionCellId,
-          target: branch.outputCellId,
+          source: run.actionCellId,
+          target: output.outputCellId,
           targetInput: 'media',
         }),
-      ]),
-    ))
-    const outputDurations = run.branches.map((branch) => {
+      ),
+    ]))
+    const outputArtifactIds: string[] = []
+    const outputDurations = run.outputs.map((outputRun) => {
       const output = completed.cells.find((cell) =>
-        cell.id === branch.outputCellId)
+        cell.id === outputRun.outputCellId)
       expect(output).toMatchObject({
         type: 'video',
         outputArtifactId: expect.any(String),
         inputs: { state: 'completed' },
       })
+      outputArtifactIds.push(output!.outputArtifactId!)
       return Number(output?.inputs?.durationSeconds)
     })
+    expect(new Set(outputArtifactIds)).toHaveProperty('size', 2)
     expect(outputDurations[0]).toBeGreaterThan(0.8)
     expect(outputDurations[0]).toBeLessThan(1.2)
     expect(outputDurations[1]).toBeGreaterThan(1.8)
     expect(outputDurations[1]).toBeLessThan(2.2)
+
+    const rerun = await callTool('run_notebook_cell', {
+      actor: 'split-command-test',
+      book_id: bookId,
+      notebook_id: notebookId,
+      cell_id: run.actionCellId,
+    }) as { job_id: string }
+    await waitForJob(rerun.job_id)
+    const rerunResult = engine.notebooks.read(notebookId)
+    expect(rerunResult.ok).toBe(true)
+    if (!rerunResult.ok) return
+    expect(rerunResult.value.cells.filter((cell) => cell.type === 'split_video'))
+      .toHaveLength(1)
+    const rerunOutputs = run.outputs.map((outputRun) =>
+      rerunResult.value.cells.find((cell) => cell.id === outputRun.outputCellId)!)
+    const rerunArtifactIds = rerunOutputs.map((output) =>
+      output.outputArtifactId!)
+    expect(new Set(rerunArtifactIds)).toHaveProperty('size', 2)
+    for (const [index, output] of rerunOutputs.entries()) {
+      expect(output.outputArtifactId).not.toBe(outputArtifactIds[index])
+      expect(output.inputs?.outputVersionArtifactIds).toEqual(
+        expect.arrayContaining([
+          outputArtifactIds[index],
+          output.outputArtifactId,
+        ]),
+      )
+    }
   }, 30_000)
 })

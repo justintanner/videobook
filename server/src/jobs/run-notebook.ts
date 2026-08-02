@@ -576,6 +576,36 @@ function requiredMediaOutputCellIds(
   return outputIds;
 }
 
+function requiredTwoWaySplitVideoOutputCellIds(
+  document: NotebookDocument,
+  cell: NotebookCell,
+): { first: Set<string>; remaining: Set<string> } {
+  const videoCellIds = requiredMediaOutputCellIds(
+    document,
+    cell,
+    "video",
+  );
+  const first = new Set<string>();
+  const remaining = new Set<string>();
+  for (const candidate of document.cells) {
+    if (!videoCellIds.has(candidate.id)) continue;
+    if (candidate.inputs?.splitRole === "first") first.add(candidate.id);
+    if (candidate.inputs?.splitRole === "remaining") {
+      remaining.add(candidate.id);
+    }
+  }
+  if (
+    videoCellIds.size !== 2
+    || first.size !== 1
+    || remaining.size !== 1
+  ) {
+    throw new Error(
+      `split_video cell ${cell.id} requires first and remaining video outputs`,
+    );
+  }
+  return { first, remaining };
+}
+
 function splitFrameOutputCellIds(
   document: NotebookDocument,
   videoCellIds: Set<string>,
@@ -1329,6 +1359,80 @@ async function executeLocalOrGeneration(
   cellInputs?: Record<string, unknown>;
   awaitingOutput?: boolean;
 }> {
+  if (
+    cell.type === "split_video"
+    && cell.operation === "split_range"
+    && typeof cell.inputs?.splitAtSeconds === "number"
+  ) {
+    const sourceId = requiredVideoInputArtifact(document, cell);
+    const splitAtSeconds = cell.inputs.splitAtSeconds;
+    const sourceDurationSeconds = Number(
+      cell.inputs.sourceDurationSeconds ?? cell.inputs.endSeconds,
+    );
+    if (
+      !Number.isFinite(splitAtSeconds)
+      || !Number.isFinite(sourceDurationSeconds)
+      || !(splitAtSeconds > 0)
+      || !(sourceDurationSeconds > splitAtSeconds)
+    ) {
+      throw new Error(
+        `split_video cell ${cell.id} requires a split boundary within the source duration`,
+      );
+    }
+    const outputCellIds = requiredTwoWaySplitVideoOutputCellIds(
+      document,
+      cell,
+    );
+    const [first, remaining] = await Promise.all([
+      splitSourceRange(
+        engine,
+        sourceId,
+        { startSeconds: 0, endSeconds: splitAtSeconds },
+        `${cell.slug} first`,
+      ),
+      splitSourceRange(
+        engine,
+        sourceId,
+        {
+          startSeconds: splitAtSeconds,
+          endSeconds: sourceDurationSeconds,
+        },
+        `${cell.slug} remaining`,
+      ),
+    ]);
+    const [firstFrame, lastFrame] = await Promise.all([
+      captureFrame(engine, first.artifactId, {
+        role: "first",
+        title: `${cell.slug} · first frame`,
+      }),
+      captureFrame(engine, remaining.artifactId, {
+        role: "last",
+        title: `${cell.slug} · last frame`,
+      }),
+    ]);
+    const withFirstOutput = withMediaOutput(
+      document,
+      outputCellIds.first,
+      first.artifactId,
+      { durationSeconds: first.durationSeconds },
+    );
+    return {
+      artifactId: first.artifactId,
+      tool: "ffmpeg",
+      document: withMediaOutput(
+        withFirstOutput,
+        outputCellIds.remaining,
+        remaining.artifactId,
+        { durationSeconds: remaining.durationSeconds },
+      ),
+      cellInputs: {
+        durationSeconds: first.durationSeconds + remaining.durationSeconds,
+        firstFrameArtifactId: firstFrame.artifactId,
+        lastFrameArtifactId: lastFrame.artifactId,
+      },
+    };
+  }
+
   if (cell.type === "split_video" && cell.operation === "split_range") {
     const sourceId = requiredVideoInputArtifact(document, cell);
     const videoCellIds = requiredMediaOutputCellIds(

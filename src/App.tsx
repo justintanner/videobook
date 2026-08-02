@@ -5527,54 +5527,45 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     notebookId: string
     run: NotebookSplitRun
   }) => {
-    const outcomes = await Promise.all(input.run.branches.map(async (branch) => {
-      try {
-        const outcome = await watchNotebookRun({
-          bookId: input.bookId,
-          notebookId: input.notebookId,
-          cellId: branch.actionCellId,
-          slug: branch.actionSlug,
-          runId: input.run.runId,
-          jobOperationId: input.run.jobId,
-          intervalMs: notebookRunPollIntervalMs,
-          timeoutMs: notebookRunPollTimeoutMs,
-          maxPollFailures: 10,
-        })
-        if (outcome.kind === 'failed') {
-          setCellRunError(
-            branch.actionCellId,
-            outcome.message ?? `@${branch.actionSlug} failed`,
-          )
-        }
-        return { branch, outcome }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        setCellRunError(branch.actionCellId, message)
-        return {
-          branch,
-          outcome: { kind: 'failed' as const, message },
-        }
-      } finally {
-        setCellQueued(branch.actionCellId, false)
+    let outcome: Awaited<ReturnType<typeof watchNotebookRun>>
+    try {
+      outcome = await watchNotebookRun({
+        bookId: input.bookId,
+        notebookId: input.notebookId,
+        cellId: input.run.actionCellId,
+        slug: input.run.actionSlug,
+        runId: input.run.runId,
+        jobOperationId: input.run.jobId,
+        intervalMs: notebookRunPollIntervalMs,
+        timeoutMs: notebookRunPollTimeoutMs,
+        maxPollFailures: 10,
+      })
+      if (outcome.kind === 'failed') {
+        setCellRunError(
+          input.run.actionCellId,
+          outcome.message ?? `@${input.run.actionSlug} failed`,
+        )
       }
-    }))
-    const failed = outcomes.find(({ outcome }) => outcome.kind === 'failed')
-    if (failed) {
-      setNotice(
-        failed.outcome.message ?? `@${failed.branch.actionSlug} failed`,
-        'error',
-      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setCellRunError(input.run.actionCellId, message)
+      outcome = { kind: 'failed', message }
+    } finally {
+      setCellQueued(input.run.actionCellId, false)
+    }
+    if (outcome.kind === 'failed') {
+      setNotice(outcome.message ?? `@${input.run.actionSlug} failed`, 'error')
       return
     }
-    if (outcomes.some(({ outcome }) => outcome.kind === 'timeout')) {
+    if (outcome.kind === 'timeout') {
       setNotice(
         `@${input.run.sourceSlug} is still splitting — check the Jobs screen`,
       )
       return
     }
-    if (outcomes.some(({ outcome }) => outcome.kind === 'superseded')) return
-    const outputSlugs = input.run.branches.map((branch) => `@${branch.outputSlug}`)
-    setSelectedCellId(input.run.branches.at(-1)?.outputCellId ?? null)
+    if (outcome.kind === 'superseded') return
+    const outputSlugs = input.run.outputs.map((output) => `@${output.outputSlug}`)
+    setSelectedCellId(input.run.outputs.at(-1)?.outputCellId ?? null)
     setNotice(
       `Split @${input.run.sourceSlug} into ${outputSlugs.join(' and ')}`,
     )
@@ -5586,7 +5577,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!bookId || !notebook) {
       return { ok: false, message: 'Open a notebook before splitting a video.' }
     }
-    const actionCellIds: string[] = []
+    let actionCellId: string | null = null
     setBusy(true)
     try {
       const [notebookValue, assetValue] = await Promise.all([
@@ -5618,15 +5609,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         document: currentNotebook,
         sourceDurationSeconds: sourceDuration ?? Number.NaN,
       })
-      actionCellIds.push(...draft.branches.map((branch) => branch.actionCell.id))
+      actionCellId = draft.actionCell.id
       setAssets(currentAssets)
       applyNotebook(draft.document, currentAssets, jobs)
       revealCells(draft.createdCellIds)
-      for (const cellId of actionCellIds) {
-        setCellRunError(cellId, null)
-        setCellQueued(cellId, true)
-      }
-      setSelectedCellId(draft.branches[0].outputCell.id)
+      setCellRunError(actionCellId, null)
+      setCellQueued(actionCellId, true)
+      setSelectedCellId(draft.outputs[0].outputCell.id)
       setNotice(`Splitting @${draft.sourceSlug} at ${draft.splitAtSeconds}s`)
       const run = await enqueueNotebookSplitCommand({
         actor: 'videobook-user',
@@ -5642,11 +5631,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       })
       return {
         ok: true,
-        message: `Splitting @${run.sourceSlug} into ${run.branches.map((branch) => `@${branch.outputSlug}`).join(' and ')}`,
+        message: `Splitting @${run.sourceSlug} into ${run.outputs.map((output) => `@${output.outputSlug}`).join(' and ')}`,
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      for (const cellId of actionCellIds) setCellQueued(cellId, false)
+      if (actionCellId) setCellQueued(actionCellId, false)
       await refreshBookData(bookId, notebook.id).catch(() => undefined)
       setNotice(message, 'error')
       return { ok: false, message }
