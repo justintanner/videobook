@@ -5,8 +5,7 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { FFMPEG } from '../../server/src/ffmpeg.js'
 
@@ -158,7 +157,14 @@ describe('v2 MCP server', () => {
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), 'videobook-v2-e2e-'))
     server = await startServer(rootDir)
-    client = new Client({ name: 'videobook-v2-e2e', version: '1.0.0' }, { capabilities: {} })
+    client = new Client(
+      { name: 'videobook-v2-e2e', version: '1.0.0' },
+      {
+        capabilities: {},
+        supportedProtocolVersions: ['2026-07-28'],
+        versionNegotiation: { mode: { pin: '2026-07-28' } },
+      },
+    )
     await client.connect(new StreamableHTTPClientTransport(new URL(server.url)))
   })
 
@@ -166,6 +172,76 @@ describe('v2 MCP server', () => {
     await client?.close()
     await stopServer(server)
     await rm(rootDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+  })
+
+  it('serves only MCP 2026-07-28 with stateless cache metadata', async () => {
+    if (!client || !server) throw new Error('MCP client was not initialized')
+
+    expect(client.getProtocolEra()).toBe('modern')
+    expect(client.getNegotiatedProtocolVersion()).toBe('2026-07-28')
+    expect(client.getDiscoverResult()).toMatchObject({
+      supportedVersions: ['2026-07-28'],
+      capabilities: { tools: { listChanged: true } },
+    })
+    expect(client.getServerVersion()).toEqual({ name: 'videobook', version: '0.1.0' })
+
+    const tools = await client.listTools()
+    expect(tools.ttlMs).toBe(0)
+    expect(tools.cacheScope).toBe('private')
+    expect(tools.tools.length).toBeGreaterThan(0)
+
+    const legacy = await fetch(server.url, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/list',
+        params: {},
+      }),
+    })
+    expect(legacy.status).toBe(400)
+    expect(legacy.headers.get('mcp-session-id')).toBeNull()
+    expect(await legacy.json()).toMatchObject({
+      error: {
+        code: -32022,
+        data: { supported: ['2026-07-28'] },
+      },
+      id: 1,
+    })
+
+    const missingHeaders = await fetch(server.url, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: {
+          name: 'list_books',
+          arguments: {},
+          _meta: {
+            'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+            'io.modelcontextprotocol/clientCapabilities': {},
+            'io.modelcontextprotocol/clientInfo': {
+              name: 'videobook-header-check',
+              version: '1.0.0',
+            },
+          },
+        },
+      }),
+    })
+    expect(missingHeaders.status).toBe(400)
+    expect(await missingHeaders.json()).toMatchObject({
+      error: { code: -32020 },
+      id: 2,
+    })
   })
 
   it('serves multi-book notebooks, uploads, typed timelines, and durable history', async () => {

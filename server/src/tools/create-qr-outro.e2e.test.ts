@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 import { createEngineForTest } from "../fs.js";
 import { probeVideo, runFfmpeg } from "../ffmpeg.js";

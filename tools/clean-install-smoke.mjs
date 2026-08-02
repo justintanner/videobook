@@ -169,19 +169,22 @@ async function stop(child) {
 async function verifyMcp(serverUrl) {
   const requireFromServer = createRequire(join(appRoot, 'server/package.json'))
   const clientEntry = requireFromServer.resolve(
-    '@modelcontextprotocol/sdk/client/index.js',
+    '@modelcontextprotocol/client',
   )
-  const transportEntry = requireFromServer.resolve(
-    '@modelcontextprotocol/sdk/client/streamableHttp.js',
+  const { Client, StreamableHTTPClientTransport } = await import(
+    pathToFileURL(clientEntry).href
   )
-  const [{ Client }, { StreamableHTTPClientTransport }] = await Promise.all([
-    import(pathToFileURL(clientEntry).href),
-    import(pathToFileURL(transportEntry).href),
-  ])
-  const client = new Client({
-    name: 'videobook-clean-install',
-    version: '1.0.0',
-  })
+  const client = new Client(
+    {
+      name: 'videobook-clean-install',
+      version: '1.0.0',
+    },
+    {
+      capabilities: {},
+      supportedProtocolVersions: ['2026-07-28'],
+      versionNegotiation: { mode: { pin: '2026-07-28' } },
+    },
+  )
   const transport = new StreamableHTTPClientTransport(
     new URL(`${serverUrl}/mcp`),
   )

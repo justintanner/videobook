@@ -13,7 +13,7 @@ import {
   enrichAssetContext,
 } from "./chat.js";
 import { SCRIPT_FILENAME } from "../jobs/describe-image.js";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 
 type TextContent = Array<{ type: string; text: string }>;
 

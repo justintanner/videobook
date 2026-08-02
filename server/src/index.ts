@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { toNodeHandler } from "@modelcontextprotocol/node";
 import { SCHEMA_VERSION } from "videobook-engine";
 import { v7 as uuidv7 } from "uuid";
 import { localArchiveDir } from "./archive-store.js";
@@ -20,7 +20,7 @@ import { uploadLocalStream } from "./local-upload.js";
 import { queue } from "./queue.js";
 import { searchReferenceStore } from "./search-reference-store.js";
 import { loadAndArmAll, stopScheduler } from "./scheduled-posts.js";
-import { createServer } from "./server.js";
+import { createHttpHandler } from "./server.js";
 
 const require = createRequire(import.meta.url);
 const enginePackage = require("videobook-engine/package.json") as {
@@ -28,6 +28,8 @@ const enginePackage = require("videobook-engine/package.json") as {
 };
 const app = express();
 const SEARCH_REFERENCE_LIMIT_BYTES = 500 * 1024 * 1024;
+const mcpHandler = createHttpHandler(scopedBookEngine, bookManager);
+const handleMcpRequest = toNodeHandler(mcpHandler);
 
 function limitUploadBytes(maxBytes: number): Transform {
   let received = 0;
@@ -180,23 +182,8 @@ app.get("/api/books/:bookId/artifacts/:artifactId/manifest", async (req, res) =>
   res.json(result.value);
 });
 
-app.post("/mcp", async (req, res) => {
-  const server = createServer(scopedBookEngine, bookManager);
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-  res.on("close", () => {
-    transport.close();
-    server.close();
-  });
-  await server.connect(transport);
-  await transport.handleRequest(req, res, req.body);
-});
-
-app.get("/mcp", (_req, res) => {
-  res.writeHead(405).end(JSON.stringify({
-    jsonrpc: "2.0",
-    error: { code: -32000, message: "Method not allowed. Use POST." },
-    id: null,
-  }));
+app.all("/mcp", (req, res) => {
+  void handleMcpRequest(req, res, req.body);
 });
 
 async function start(): Promise<void> {
@@ -225,6 +212,7 @@ async function shutdown(): Promise<void> {
   let exitCode = 0;
   try {
     stopScheduler();
+    await mcpHandler.close();
     await queue.stop();
     await bookManager.close();
   } catch (error) {

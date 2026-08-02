@@ -1,8 +1,8 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { buildDownloadVideoArguments } from "./url-target.js";
 
 const LOCAL_MCP_URL = "http://127.0.0.1:3001/mcp";
+const MCP_PROTOCOL_VERSION = "2026-07-28";
 
 type QueueDownloadResult = {
   assetId: string;
@@ -64,7 +64,11 @@ function parseDownloadResult(text: string): QueueDownloadResult {
 export async function queueVideocityDownload(url: string): Promise<QueueDownloadResult> {
   const client = new Client(
     { name: "videocity-chrome-extension", version: "0.1.0" },
-    { capabilities: {} },
+    {
+      capabilities: {},
+      supportedProtocolVersions: [MCP_PROTOCOL_VERSION],
+      versionNegotiation: { mode: { pin: MCP_PROTOCOL_VERSION } },
+    },
   );
   const transport = new StreamableHTTPClientTransport(new URL(LOCAL_MCP_URL));
 

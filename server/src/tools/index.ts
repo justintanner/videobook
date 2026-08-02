@@ -1,4 +1,5 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import { z } from "zod";
 import type { Engine } from "videobook-engine";
 import type { BookManager } from "../book-manager.js";
 import { withBookContext } from "../book-context.js";
@@ -307,7 +308,10 @@ export function registerAllTools(
     .map((def) => withLogging(def, fs))
     .map((def) => scopeTool(def, books));
   for (const def of defs) {
-    server.tool(def.name, def.description, def.schema, def.handler);
+    server.registerTool(def.name, {
+      description: def.description,
+      inputSchema: z.object(def.schema),
+    }, def.handler);
   }
 }
 

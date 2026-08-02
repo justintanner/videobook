@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import { type Engine } from "videobook-engine";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 
 type TextContent = Array<{ type: string; text: string }>;
 

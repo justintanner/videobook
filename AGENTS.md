@@ -23,8 +23,8 @@ Guidance for AI coding agents working in the Videobook repository.
 
 ## Architecture
 
-- **Frontend (`src/`)**: React 19 + TypeScript + Vite 7 SPA. Entry: `main.tsx` → `App.tsx`. Uses `use-mcp` to connect to MCP server at `/mcp`.
-- **Backend (`server/src/`)**: Express MCP server on port 3001. Entry: `server/src/index.ts`. Tools in `server/src/tools/*.ts` registered via `server/src/tools/index.ts`.
+- **Frontend (`src/`)**: React 19 + TypeScript + Vite 7 SPA. Entry: `main.tsx` → `App.tsx`. Uses `useMcpConnection()` over `@modelcontextprotocol/client` to connect to `/mcp` with MCP `2026-07-28` pinned.
+- **Backend (`server/src/`)**: Express MCP server on port 3001. Entry: `server/src/index.ts`. The modern-only `createMcpHandler` endpoint rejects legacy protocol traffic. Tools in `server/src/tools/*.ts` are registered via `server/src/tools/index.ts`.
 - **Domain/storage (`videobook-engine` 4.2.0, schema 19)**: one isolated UUIDv7 engine root per book, providing Dolt-native artifact, file/CAS, metadata, history, notebook, canonical-sequence, and runtime-job operations. All managed data goes through the scoped book `Engine`.
 
 ## Code Style
@@ -103,14 +103,19 @@ const result = await queue.enqueueAndWait(jobId, payload);
 
 ### MCP Tool Development
 ```typescript
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 export function registerMyTool(server: McpServer): void {
-  server.tool("tool_name", "Description", { param: z.string() },
+  server.registerTool(
+    "tool_name",
+    {
+      description: "Description",
+      inputSchema: z.object({ param: z.string() }),
+    },
     async ({ param }) => ({
       content: [{ type: "text", text: `Result: ${param}` }],
-    })
+    }),
   );
 }
 ```
@@ -163,8 +168,8 @@ Always build client before server if both change: `npm run build && npm run buil
 | Build | Vite 7 |
 | UI | React 19 |
 | Language | TypeScript 5.9 |
-| MCP Client | use-mcp |
-| MCP Server | @modelcontextprotocol/sdk |
+| MCP Client | @modelcontextprotocol/client 2 |
+| MCP Server | @modelcontextprotocol/server 2 + @modelcontextprotocol/node 2 |
 | Server | Express |
 | Validation | Zod |
 | Domain/storage | videobook-engine + embedded DoltLite |

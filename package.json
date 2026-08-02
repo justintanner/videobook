@@ -30,8 +30,7 @@
     "test:clean-install": "node tools/clean-install-smoke.mjs",
     "pretest:e2e": "playwright install chromium",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    "test:watch": "vitest",
-    "postinstall": "patch-package --error-on-fail"
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@apicity/alibaba": "^0.8.4",
@@ -46,6 +45,7 @@
     "@apicity/openai": "^0.8.4",
     "@apicity/x": "^0.8.4",
     "@apicity/xai": "^0.8.4",
+    "@modelcontextprotocol/client": "^2.0.0",
     "@remotion/bundler": "^4.0.494",
     "@remotion/google-fonts": "^4.0.467",
     "@remotion/player": "4.0.467",
@@ -59,7 +59,6 @@
     "react-dom": "^19.2.0",
     "remotion": "^4.0.467",
     "tailwind-merge": "^3.5.0",
-    "use-mcp": "^0.0.21",
     "uuid": "^14.0.0",
     "videobook-engine": "file:../videobook-engine"
   },
@@ -89,7 +88,6 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "knip": "^6.11.0",
-    "patch-package": "^8.0.1",
     "tailwindcss": "^4.2.1",
     "tsx": "^4.21.0",
     "typescript": "~5.9.3",

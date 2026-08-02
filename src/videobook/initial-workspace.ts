@@ -1,3 +1,6 @@
+import type { Client } from '@modelcontextprotocol/client'
+import { connectMcpClient } from './mcp-client'
+
 export type InitialWorkspacePayload = {
   bookValue: unknown
   commandValue: unknown
@@ -39,35 +42,11 @@ function resultValue(value: unknown): unknown {
 }
 
 async function callTool(
+  client: Client,
   tool: string,
   args: Record<string, unknown>,
 ): Promise<unknown> {
-  const response = await fetch(mcpUrl, {
-    method: 'POST',
-    headers: {
-      accept: 'application/json, text/event-stream',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: tool,
-      method: 'tools/call',
-      params: { name: tool, arguments: args },
-    }),
-    signal: AbortSignal.timeout(10_000),
-  })
-  if (!response.ok) throw new Error(`Bootstrap ${tool} failed: ${response.status}`)
-  const body = await response.text()
-  const data = body
-    .split('\n')
-    .find((line) => line.startsWith('data: '))
-    ?.slice(6)
-  if (!data) throw new Error(`Bootstrap ${tool} returned no data`)
-  const envelope = record(JSON.parse(data) as unknown)
-  if (!envelope || envelope.error) {
-    throw new Error(`Bootstrap ${tool} returned an error`)
-  }
-  return resultValue(envelope.result)
+  return resultValue(await client.callTool({ name: tool, arguments: args }))
 }
 
 function savedValue(key: string): string {
@@ -78,11 +57,13 @@ function savedValue(key: string): string {
   }
 }
 
-export async function loadInitialWorkspace(): Promise<InitialWorkspacePayload | null> {
+async function loadInitialWorkspaceFromClient(
+  client: Client,
+): Promise<InitialWorkspacePayload | null> {
   const [bookValue, commandValue, chatModelValue] = await Promise.all([
-    callTool('list_books', { sort: 'newest' }),
-    callTool('slash_commands', {}),
-    callTool('list_chat_models', {}),
+    callTool(client, 'list_books', { sort: 'newest' }),
+    callTool(client, 'slash_commands', {}),
+    callTool(client, 'list_chat_models', {}),
   ])
   const books = Array.isArray(bookValue) ? bookValue : []
   const selected = books
@@ -99,17 +80,17 @@ export async function loadInitialWorkspace(): Promise<InitialWorkspacePayload | 
     ingestStatusValue,
     actionValue,
   ] = await Promise.all([
-    callTool('list_notebooks', { book_id: bookId }),
-    callTool('list_assets', {
+    callTool(client, 'list_notebooks', { book_id: bookId }),
+    callTool(client, 'list_assets', {
       book_id: bookId,
       sort: 'newest',
       limit: 200,
       include_referenced: true,
     }),
-    callTool('get_primary_sequence', { book_id: bookId }),
-    callTool('list_jobs', { book_id: bookId, limit: 200 }),
-    callTool('list_ingest_status', { book_id: bookId, limit: 200 }),
-    callTool('list_notebook_actions', { book_id: bookId }),
+    callTool(client, 'get_primary_sequence', { book_id: bookId }),
+    callTool(client, 'list_jobs', { book_id: bookId, limit: 200 }),
+    callTool(client, 'list_ingest_status', { book_id: bookId, limit: 200 }),
+    callTool(client, 'list_notebook_actions', { book_id: bookId }),
   ])
   const notebooks = Array.isArray(notebookValue)
     ? notebookValue.map(record).filter((entry) => entry !== null)
@@ -119,7 +100,7 @@ export async function loadInitialWorkspace(): Promise<InitialWorkspacePayload | 
     ?? notebooks[0]
   const notebookId = typeof notebook?.id === 'string' ? notebook.id : ''
   const audioValue = notebookId
-    ? await callTool('get_notebook_audio_spine', {
+    ? await callTool(client, 'get_notebook_audio_spine', {
         book_id: bookId,
         notebook_id: notebookId,
       })
@@ -137,5 +118,14 @@ export async function loadInitialWorkspace(): Promise<InitialWorkspacePayload | 
     ingestStatusValue,
     actionValue,
     audioValue,
+  }
+}
+
+export async function loadInitialWorkspace(): Promise<InitialWorkspacePayload | null> {
+  const client = await connectMcpClient(mcpUrl, 'videobook-bootstrap')
+  try {
+    return await loadInitialWorkspaceFromClient(client)
+  } finally {
+    await client.close()
   }
 }

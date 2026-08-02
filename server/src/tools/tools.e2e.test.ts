@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
 import { queue, waitForJob } from "../queue.js";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 import { createEngineForTest } from "../fs.js";
 

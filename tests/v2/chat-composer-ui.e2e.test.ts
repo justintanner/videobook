@@ -4,8 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { chromium } from 'playwright'
 import type { Browser, Page, Route } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -158,7 +157,11 @@ describe('chat composer browser flow', () => {
     await waitForHttp(`${mcpOrigin}/healthz`, mcpProcess, 200)
     const client = new Client(
       { name: 'videobook-chat-ui-e2e', version: '1.0.0' },
-      { capabilities: {} },
+      {
+        capabilities: {},
+        supportedProtocolVersions: ['2026-07-28'],
+        versionNegotiation: { mode: { pin: '2026-07-28' } },
+      },
     )
     await client.connect(new StreamableHTTPClientTransport(new URL(`${mcpOrigin}/mcp`)))
     await client.callTool({ name: 'create_book', arguments: { slug: 'chat-ui-e2e' } })

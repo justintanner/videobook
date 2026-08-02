@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { createEngineForTest } from "../fs.js";
 import { failPendingTaskAndLog } from "../jobs/task-failure.js";
 import { createTestClient } from "../test-client.js";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 
 async function createImageAsset(fs: Engine, bookId: string, name: string): Promise<string> {

@@ -17,9 +17,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 React 19 + TypeScript + Vite 7 SPA using MCP (Model Context Protocol) as the API layer.
 
-**Frontend:** `index.html` → `src/main.tsx` → `src/App.tsx`. Connects to MCP server via `use-mcp` hook. Vite proxies `/mcp` to the server in dev.
+**Frontend:** `index.html` → `src/main.tsx` → `src/App.tsx`. Connects through `useMcpConnection()` and `@modelcontextprotocol/client` with MCP `2026-07-28` pinned. Vite proxies `/mcp` to the server in dev.
 
-**MCP Server:** `server/src/index.ts` — Express app exposing `POST /mcp` with `StreamableHTTPServerTransport` (stateless). Tools are registered in `server/src/tools/`. The server is also accessible to external MCP clients (Claude Desktop, etc.) at `http://localhost:3001/mcp`.
+**MCP Server:** `server/src/index.ts` — Express app exposing a modern-only `createMcpHandler` endpoint at `/mcp`. It serves MCP `2026-07-28` per request and rejects legacy protocol traffic. Tools are registered in `server/src/tools/`.
 
 **Domain/storage layer:** `videobook-engine` 4.2.0, schema 19 — each book has an isolated UUIDv7 root under `VIDEOBOOK_LIBRARY_DIR`, with its own Dolt-native catalog, files/CAS, metadata, history, notebooks, canonical primary sequence, and runtime jobs. Per-book schedules use engine runtime settings; only application credentials such as X OAuth tokens live at `VIDEOBOOK_APP_STATE_PATH`.
 
@@ -58,7 +58,7 @@ IMPORTANT: All long-running or async processes on the server MUST be submitted t
 - Reserve `useEffect` for genuine side effects (analytics, imperative DOM via refs)
 
 ### MCP Data Layer
-- The `use-mcp` hook owns connection lifecycle, tool discovery, and invocation — treat its state as read-only
+- `useMcpConnection()` owns connection lifecycle and invocation through the official v2 client — treat its state as read-only
 - Wrap tool invocations in **domain-specific custom hooks** (e.g., `useSearchTool`) that encapsulate tool names, argument construction, and result parsing
 - Guard tool calls with `state === "ready"` checks
 - On the server, tools return errors as content (`{ isError: true, content: [...] }`) rather than throwing

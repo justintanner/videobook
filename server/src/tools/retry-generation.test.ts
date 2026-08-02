@@ -6,7 +6,7 @@ import { createEngineForTest } from "../fs.js";
 import { failPendingTaskAndLog } from "../jobs/task-failure.js";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 
 type TextContent = Array<{ type: string; text: string }>;

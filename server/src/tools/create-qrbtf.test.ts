@@ -9,7 +9,7 @@ import { type Engine } from "videobook-engine";
 import { createTestClient } from "../test-client.js";
 import { buildQrbtfPng, DEFAULT_QRBTF_SIZE } from "./create-qrbtf.js";
 import type { QrbtfParams } from "./qrbtf-render.js";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 
 type TextContent = Array<{ type: string; text: string }>;
 

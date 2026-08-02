@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 import sharp from "sharp";
 import { type Engine } from "videobook-engine";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import sharp from "sharp";
 import { createTestClient } from "../test-client.js";
 import { readWatermarkConfig } from "../watermark-config.js";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 
 type TextContent = Array<{ type: string; text: string }>;
 

@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import { FFMPEG, FFPROBE } from "../ffmpeg.js";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 
 const execFileAsync = promisify(execFile);
 type TextContent = Array<{ type: string; text: string }>;

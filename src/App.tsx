@@ -55,7 +55,6 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react'
-import { useMcp } from 'use-mcp/react'
 import { v7 as uuidv7 } from 'uuid'
 import type {
   EditPreview,
@@ -228,6 +227,7 @@ import {
   shouldNotifyMcpActivity,
   type McpActivity,
 } from '@/videobook/mcp-activity'
+import { useMcpConnection } from '@/videobook/useMcpConnection'
 import type {
   BookProjectMutationResult,
   BookProjectSummary,
@@ -2369,10 +2369,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => asInitialWorkspace(initialPayload),
     [initialPayload],
   )
-  const mcp = useMcp({
+  const mcp = useMcpConnection({
     url: mcpUrl,
     clientName: 'videobook',
-    transportType: 'http',
     autoReconnect: 3000,
   })
   const [screen, setScreen] = useState<Screen>('notebook')

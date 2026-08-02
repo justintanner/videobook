@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { createEngineForTest } from "../fs.js";
 import { failPendingTaskAndLog } from "./task-failure.js";
 import { createTestClient } from "../test-client.js";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 import type { Engine } from "videobook-engine";
 
 const SLUG = "doc-proj";

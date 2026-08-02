@@ -8,7 +8,7 @@ import { createRequire } from "node:module";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import { FFPROBE } from "../ffmpeg.js";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);

@@ -6,7 +6,7 @@ import sharp from "sharp";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
 import { probeImage } from "../image.js";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 
 type TextContent = Array<{ type: string; text: string }>;
 

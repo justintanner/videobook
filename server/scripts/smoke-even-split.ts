@@ -12,9 +12,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createServer } from "../src/server.js";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { createHttpHandler, MCP_PROTOCOL_VERSION } from "../src/server.js";
 import { fs as liveFs } from "../src/fs.js";
 import { registerAllJobHandlers } from "../src/jobs/index.js";
 import { queue } from "../src/queue.js";
@@ -45,11 +44,20 @@ async function main(): Promise<void> {
 
   await queue.start();
   registerAllJobHandlers(liveFs);
-  const server = createServer(liveFs);
-  const client = new Client({ name: "smoke-even-split", version: "0.0.1" }, { capabilities: {} });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await server.connect(serverTransport);
-  await client.connect(clientTransport);
+  const handler = createHttpHandler(liveFs);
+  const client = new Client(
+    { name: "smoke-even-split", version: "0.0.1" },
+    {
+      capabilities: {},
+      supportedProtocolVersions: [MCP_PROTOCOL_VERSION],
+      versionNegotiation: { mode: { pin: MCP_PROTOCOL_VERSION } },
+    },
+  );
+  const transport = new StreamableHTTPClientTransport(
+    new URL("http://test.local/mcp"),
+    { fetch: (url, init) => handler.fetch(new Request(url, init)) },
+  );
+  await client.connect(transport);
   try {
     const targetsLabel = targetArgs.length > 0 ? targetArgs.join(" ") : "10 (default)";
     console.log(`/even-split @${assetId} ${targetsLabel} (project: ${bookId})`);
@@ -96,6 +104,7 @@ async function main(): Promise<void> {
     }
   } finally {
     await client.close();
+    await handler.close();
     await queue.stop();
   }
 }

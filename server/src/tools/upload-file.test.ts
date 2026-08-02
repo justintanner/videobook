@@ -6,7 +6,7 @@ import type { Engine } from "videobook-engine";
 import { createEngineForTest } from "../fs.js";
 import { createTestClient } from "../test-client.js";
 import { queue } from "../queue.js";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 
 // Minimal valid 1x1 red PNG (67 bytes)
 const MINIMAL_PNG = Buffer.from(

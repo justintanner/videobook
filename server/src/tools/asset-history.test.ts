@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { createEngineForTest } from "../fs.js";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 
 // Single shared client/project. Tests use unique asset ids and only read
 // history; no test mutates state visible to another. Per-test setup under

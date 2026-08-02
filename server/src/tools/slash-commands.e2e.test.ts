@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTestClient } from "../test-client.js";
 import { registerJobHandler } from "../queue.js";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 import { parseCommandArgs, filterCommandsByMountKeys, normalizeApplySfxCommandArgs, normalizeSyncAudioCommandArgs, normalizeTimewarpCommandArgs, selectCommandForInput } from "../../../src/lib/command-registry.js";
 import type { ServerCommand } from "../../../src/lib/command-registry.js";
 

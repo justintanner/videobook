@@ -9,7 +9,7 @@ import type { Engine } from "videobook-engine";
 import { createEngineForTest } from "../fs.js";
 import { createTestClient } from "../test-client.js";
 import { queue, waitForJob } from "../queue.js";
-import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Client } from "@modelcontextprotocol/client";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
