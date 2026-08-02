@@ -83,6 +83,7 @@ import {
   GrokImageToImageRequestSchema,
   GrokImageToVideoRequestSchema,
   GrokTextToVideoRequestSchema,
+  KlingMotionControlRequestSchema,
   KlingV3TurboImageToVideoRequestSchema,
   KlingV3TurboTextToVideoRequestSchema,
   NanoBananaProRequestSchema,
@@ -196,17 +197,17 @@ function buildKling30MotionControlPayload(
   inputUrls: string[],
   videoUrls: string[],
 ): KlingMotionControlRequest {
-  return {
+  return KlingMotionControlRequestSchema.parse({
     model: "kling-3.0/motion-control",
     input: {
       input_urls: inputUrls,
       video_urls: videoUrls,
       ...(args.prompt !== undefined ? { prompt: args.prompt } : {}),
-      ...(args.mode !== undefined ? { mode: args.mode } : {}),
-      ...(args.character_orientation !== undefined ? { character_orientation: args.character_orientation } : {}),
-      ...(args.background_source !== undefined ? { background_source: args.background_source } : {}),
+      mode: args.mode || "720p",
+      character_orientation: args.character_orientation || "video",
+      background_source: args.background_source || "input_video",
     },
-  };
+  });
 }
 
 type GrokImagineVideoArgs = {

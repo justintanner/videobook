@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { computeEstimate } from "@apicity/cost";
 import {
   GrokVideoExtendRequestSchema,
+  KlingMotionControlRequestSchema,
   KlingV3TurboImageToVideoRequestSchema,
   KlingV3TurboTextToVideoRequestSchema,
   Seedance2MiniRequestSchema,
@@ -8,9 +10,55 @@ import {
   Wan27ImageRequestSchema,
 } from "@apicity/kie/zod";
 import { GoogleFlowVideosRequestSchema } from "@apicity/googleflow/zod";
+import { normalizeKieCostPayload } from "./cost-adapters.js";
 import { translateToolPayload } from "./payload-builders.js";
 
 describe("translateToolPayload", () => {
+  it("materializes Kling motion-control defaults when controls are Auto", () => {
+    const result = translateToolPayload("generate_kie_kling_3_0_motion_control", {
+      character_image_slugs: ["@img-character"],
+      motion_video_slugs: ["@vid-motion"],
+      mode: "",
+      character_orientation: "",
+      background_source: "",
+    });
+
+    expect(result?.payload).toEqual({
+      model: "kling-3.0/motion-control",
+      input: {
+        input_urls: ["@img-character"],
+        video_urls: ["@vid-motion"],
+        mode: "720p",
+        character_orientation: "video",
+        background_source: "input_video",
+      },
+    });
+    expect(KlingMotionControlRequestSchema.safeParse(result?.payload).success).toBe(true);
+    if (!result) throw new Error("Expected Kling motion-control payload");
+    const estimate = computeEstimate({
+      provider: "kie",
+      payload: normalizeKieCostPayload(result.payload, { duration: 6 }),
+    });
+    expect(estimate.warnings).toEqual([]);
+  });
+
+  it("preserves explicit Kling motion-control settings", () => {
+    const result = translateToolPayload("generate_kie_kling_3_0_motion_control", {
+      character_image_slugs: ["@img-character"],
+      motion_video_slugs: ["@vid-motion"],
+      mode: "1080p",
+      character_orientation: "image",
+      background_source: "input_image",
+    });
+
+    expect(result?.payload.input).toMatchObject({
+      mode: "1080p",
+      character_orientation: "image",
+      background_source: "input_image",
+    });
+    expect(KlingMotionControlRequestSchema.safeParse(result?.payload).success).toBe(true);
+  });
+
   it("uses Apicity defaults for Kling Turbo text-to-video", () => {
     const result = translateToolPayload("generate_kling30_turbo_video", {
       prompt: "clouds crossing a mountain",
