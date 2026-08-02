@@ -535,10 +535,14 @@ async function readAnalysisRecommendations(
 // whenever any file is added, removed, resized, or rewritten, so every URL
 // derived from an asset's filePath (including alternate-orientation renders
 // like portrait.mp4 / landscape.mp4) invalidates together. Cheap: no file
-// reads — just hashes the immutable manifest tuples.
+// reads — just hashes the immutable manifest tuples. Partial downloads are
+// excluded: their size grows on every poll while no served URL points at
+// them, and including them made every media URL churn (and the browser
+// refetch) once per poll tick for the whole duration of a download.
 function computeAssetFingerprint(files: ArtifactManifestFile[]): string {
-  if (files.length === 0) return "";
-  const sorted = [...files].sort((a, b) => a.name.localeCompare(b.name));
+  const settled = files.filter((f) => !PARTIAL_DOWNLOAD_RE.test(f.name));
+  if (settled.length === 0) return "";
+  const sorted = [...settled].sort((a, b) => a.name.localeCompare(b.name));
   const hash = createHash("sha1");
   for (const f of sorted) {
     hash.update(f.name);

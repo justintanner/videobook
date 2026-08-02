@@ -1,0 +1,21 @@
+diff --git a/node_modules/use-mcp/dist/react/index.js b/node_modules/use-mcp/dist/react/index.js
+index 3412d02..08c0ef9 100644
+--- a/node_modules/use-mcp/dist/react/index.js
++++ b/node_modules/use-mcp/dist/react/index.js
+@@ -69,14 +69,14 @@ function useMcp(options) {
+   }, [state, autoReconnect]);
+   const addLog = useCallback(
+     (level, message, ...args) => {
++      if (!debug && (level === "debug" || level === "info")) return;
+       const fullMessage = args.length > 0 ? `${message} ${args.map((arg) => JSON.stringify(arg)).join(" ")}` : message;
+       console[level](`[useMcp] ${fullMessage}`);
+       if (isMountedRef.current) {
+         setLog((prevLog) => [...prevLog.slice(-100), { level, message: fullMessage, timestamp: Date.now() }]);
+       }
+     },
+-    []
+-    // Empty dependency array makes this stable
++    [debug]
+   );
+   const disconnect = useCallback(
+     async (quiet = false) => {

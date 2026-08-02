@@ -436,7 +436,6 @@ export function CommandComposer({
 
       {mcpActivity.phase !== 'idle' && (
         <div
-          key={mcpActivity.sequence}
           className={`mcp-activity mcp-activity-${mcpActivity.phase}`}
           data-testid="mcp-activity"
           role="status"

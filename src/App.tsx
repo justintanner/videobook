@@ -1595,6 +1595,57 @@ function canvasNodes(
   })
 }
 
+function jsonEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
+// Rebuilt nodes/edges carry fresh object identities on every poll tick. Reuse
+// the previous object whenever content is unchanged so React Flow skips
+// re-rendering (and re-measuring) untouched cells, and carry over the runtime
+// state React Flow manages outside our data pipeline (selection, measurement,
+// in-flight drags).
+function reconcileCanvasNodes(
+  current: CanvasNode[],
+  next: CanvasNode[],
+): CanvasNode[] {
+  const previousById = new Map(current.map((node) => [node.id, node]))
+  const merged = next.map((node) => {
+    const previous = previousById.get(node.id)
+    if (!previous) return node
+    const candidate: CanvasNode = {
+      ...node,
+      ...(previous.selected !== undefined ? { selected: previous.selected } : {}),
+      ...(previous.measured !== undefined ? { measured: previous.measured } : {}),
+      ...(previous.dragging !== undefined ? { dragging: previous.dragging } : {}),
+      ...(previous.dragging ? { position: previous.position } : {}),
+    }
+    return jsonEqual(candidate, previous) ? previous : candidate
+  })
+  const unchanged = merged.length === current.length
+    && merged.every((node, index) => node === current[index])
+  return unchanged ? current : merged
+}
+
+function reconcileFlowEdges(
+  current: NotebookFlowEdge[],
+  next: NotebookFlowEdge[],
+): NotebookFlowEdge[] {
+  const previousById = new Map(current.map((edge) => [edge.id, edge]))
+  const merged = next.map((edge) => {
+    const previous = previousById.get(edge.id)
+    if (!previous) return edge
+    const candidate: NotebookFlowEdge = {
+      ...edge,
+      ...(previous.selected !== undefined ? { selected: previous.selected } : {}),
+    }
+    return jsonEqual(candidate, previous) ? previous : candidate
+  })
+  const unchanged = merged.length === current.length
+    && merged.every((edge, index) => edge === current[index])
+  return unchanged ? current : merged
+}
+
 function CellIcon({ kind }: { kind: NotebookCellType }) {
   if (kind === 'video' || kind === 'generate_video' || kind === 'split_video') {
     return <Video size={14} />
@@ -2449,9 +2500,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const callRef = useRef<(
     tool: string,
     args: Record<string, unknown>,
+    options?: { background?: boolean },
   ) => Promise<unknown>>(async () => {
     throw new Error('MCP call is not ready')
   })
+  // Monotonic clock over applied poll snapshots. Concurrent watch loops can
+  // resolve out of order; a response older than the newest applied snapshot
+  // must not clobber global state (it flips statuses back and forth).
+  const watchSnapshotClockRef = useRef(0)
+  const jobsRef = useRef<JobRecord[]>(jobs)
+  const screenRef = useRef<Screen>(screen)
 
   const setCellRunError = useCallback((cellId: string, message: string | null) => {
     setCellRunErrors((current) => {
@@ -2606,9 +2664,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     timelineSelectionStart,
   ])
 
-  const call = useCallback(async (tool: string, args: Record<string, unknown>) => {
+  const call = useCallback(async (
+    tool: string,
+    args: Record<string, unknown>,
+    options?: { background?: boolean },
+  ) => {
     if (mcp.state !== 'ready') throw new Error('MCP server is not ready')
-    if (!shouldNotifyMcpActivity(tool)) {
+    if (options?.background || !shouldNotifyMcpActivity(tool)) {
       return parseResult(await mcp.callTool(tool, args))
     }
     const sequence = mcpActivitySequenceRef.current + 1
@@ -2684,6 +2746,29 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       assets,
     }
   }, [assets, bookId, notebook?.id])
+
+  useEffect(() => {
+    jobsRef.current = jobs
+  }, [jobs])
+
+  useEffect(() => {
+    screenRef.current = screen
+  }, [screen])
+
+  // Poll loops feed job snapshots through here instead of raw setJobs so an
+  // unchanged jobs list never re-renders the app. The snapshot timestamp only
+  // matters for elapsed-time display on the jobs screen, so it advances only
+  // when the list changes or that screen is watching a live job.
+  const applyJobsSnapshot = useCallback((nextJobs: JobRecord[]) => {
+    const changed = !jsonEqual(jobsRef.current, nextJobs)
+    if (changed) {
+      jobsRef.current = nextJobs
+      setJobs(nextJobs)
+    }
+    const ticking = screenRef.current === 'jobs'
+      && nextJobs.some((job) => activeJobStates.has(job.state))
+    if (changed || ticking) setJobSnapshotAt(Date.now())
+  }, [])
 
   const setMediaSlotOperation = useCallback((
     cellId: string,
@@ -2786,7 +2871,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     nextAssets: AssetRecord[],
     nextJobs: JobRecord[],
   ) => {
-    setNotebook(next)
+    setNotebook((current) => jsonEqual(current, next) ? current : next)
     const cellIds = new Set(next.cells.map((cell) => cell.id))
     setQueuedCellIds((current) => {
       const retained = new Set([...current].filter((cellId) => cellIds.has(cellId)))
@@ -2804,16 +2889,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     ))
     setMediaLibraryPicker((current) =>
       current && cellIds.has(current.cellId) ? current : null)
-    setNodes((current) => {
-      const selectedIds = new Set(
-        current.filter((node) => node.selected).map((node) => node.id),
-      )
-      return canvasNodes(next, nextAssets, nextJobs)
-        .map((node) => selectedIds.has(node.id)
-          ? { ...node, selected: true }
-          : node)
-    })
-    setEdges(notebookEdges(next))
+    setNodes((current) =>
+      reconcileCanvasNodes(current, canvasNodes(next, nextAssets, nextJobs)))
+    setEdges((current) => reconcileFlowEdges(current, notebookEdges(next)))
     setSelectedCellId((current) =>
       current && next.cells.some((cell) => cell.id === current) ? current : null)
   }, [])
@@ -2849,15 +2927,16 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           return { kind: 'superseded' }
         }
         try {
+          const fetchedAt = performance.now()
           const [notebookValue, jobValue] = await Promise.all([
             callRef.current('get_notebook', {
               book_id: params.bookId,
               notebook_id: params.notebookId,
-            }),
+            }, { background: true }),
             callRef.current('list_jobs', {
               book_id: params.bookId,
               limit: 200,
-            }),
+            }, { background: true }),
           ])
           consecutiveFailures = 0
           const afterScope = watchScopeRef.current
@@ -2873,8 +2952,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             throw new Error('The server returned an invalid notebook')
           }
           const nextJobs = asJobs(jobValue)
-          setJobs(nextJobs)
-          setJobSnapshotAt(Date.now())
+          const fresh = fetchedAt >= watchSnapshotClockRef.current
+          if (fresh) {
+            watchSnapshotClockRef.current = fetchedAt
+            applyJobsSnapshot(nextJobs)
+          }
           const jobViews = nextJobs.map(notebookRunJobViewFromRecord)
           const effectiveJob = selectEffectiveNotebookRunJob({
             jobs: jobViews,
@@ -2890,7 +2972,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           if (observation.state !== 'pending') {
             setCellQueued(params.cellId, false)
           }
-          applyNotebook(nextNotebook, afterScope.assets, nextJobs)
+          if (fresh) applyNotebook(nextNotebook, afterScope.assets, nextJobs)
           const step = notebookRunWatchStep({
             observation,
             job: effectiveJob,
@@ -2903,15 +2985,20 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             continue
           }
           if (step.kind === 'completed') {
+            const assetsFetchedAt = performance.now()
             const assetValue = await callRef.current('list_assets', {
               book_id: params.bookId,
               sort: 'newest',
               limit: 200,
               include_referenced: true,
-            })
+            }, { background: true })
             const nextAssets = asAssets(assetValue)
-            setAssets(nextAssets)
-            applyNotebook(nextNotebook, nextAssets, nextJobs)
+            if (assetsFetchedAt >= watchSnapshotClockRef.current) {
+              watchSnapshotClockRef.current = assetsFetchedAt
+              setAssets((current) =>
+                jsonEqual(current, nextAssets) ? current : nextAssets)
+              applyNotebook(nextNotebook, nextAssets, nextJobs)
+            }
             setCellRunError(params.cellId, null)
             return { kind: 'completed' }
           }
@@ -2938,7 +3025,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         activeWatchesRef.current.delete(params.cellId)
       }
     }
-  }, [applyNotebook, setCellQueued, setCellRunError])
+  }, [applyJobsSnapshot, applyNotebook, setCellQueued, setCellRunError])
 
   const watchGenerationRun = useCallback(async (params: {
     bookId: string
@@ -3002,21 +3089,22 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           return
         }
         try {
+          const fetchedAt = performance.now()
           const [notebookValue, assetValue, jobValue] = await Promise.all([
             callRef.current('get_notebook', {
               book_id: params.bookId,
               notebook_id: params.notebookId,
-            }),
+            }, { background: true }),
             callRef.current('list_assets', {
               book_id: params.bookId,
               sort: 'newest',
               limit: 200,
               include_referenced: true,
-            }),
+            }, { background: true }),
             callRef.current('list_jobs', {
               book_id: params.bookId,
               limit: 200,
-            }),
+            }, { background: true }),
           ])
           consecutiveFailures = 0
           const afterScope = watchScopeRef.current
@@ -3036,10 +3124,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           if (!cell || cell.outputArtifactId !== params.artifactId) return
           const nextAssets = asAssets(assetValue)
           const nextJobs = asJobs(jobValue)
-          setAssets(nextAssets)
-          setJobs(nextJobs)
-          setJobSnapshotAt(Date.now())
-          applyNotebook(nextNotebook, nextAssets, nextJobs)
+          if (fetchedAt >= watchSnapshotClockRef.current) {
+            watchSnapshotClockRef.current = fetchedAt
+            setAssets((current) =>
+              jsonEqual(current, nextAssets) ? current : nextAssets)
+            applyJobsSnapshot(nextJobs)
+            applyNotebook(nextNotebook, nextAssets, nextJobs)
+          }
           const step = downloadWatchStep(
             params.artifactId,
             nextAssets.find((asset) => asset.artifactId === params.artifactId),
@@ -3077,7 +3168,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         activeWatchesRef.current.delete(params.cellId)
       }
     }
-  }, [applyNotebook, setCellRunError, setNotice])
+  }, [applyJobsSnapshot, applyNotebook, setCellRunError, setNotice])
 
   const runCell = useCallback(async (cellId: string) => {
     if (!bookId || !notebook) return
@@ -4488,9 +4579,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     let lastError: unknown = null
     while (Date.now() < deadline) {
       try {
+        const fetchedAt = performance.now()
         const [jobValue, ingestValue] = await Promise.all([
-          call('list_jobs', { book_id: targetBookId, limit: 200 }),
-          call('list_ingest_status', { book_id: targetBookId, limit: 200 }),
+          call('list_jobs', { book_id: targetBookId, limit: 200 }, { background: true }),
+          call('list_ingest_status', { book_id: targetBookId, limit: 200 }, { background: true }),
         ])
         const nextJobs = asJobs(jobValue)
         const nextStatuses = asIngestStatuses(ingestValue)
@@ -4500,9 +4592,12 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         const active = nextJobs.some((candidate) =>
           candidate.artifactId === artifactId
           && activeJobStates.has(candidate.state))
-        setJobs(nextJobs)
-        setIngestStatuses(nextStatuses)
-        setJobSnapshotAt(Date.now())
+        if (fetchedAt >= watchSnapshotClockRef.current) {
+          watchSnapshotClockRef.current = fetchedAt
+          applyJobsSnapshot(nextJobs)
+          setIngestStatuses((current) =>
+            jsonEqual(current, nextStatuses) ? current : nextStatuses)
+        }
         failedPolls = 0
         if (job?.state === 'failed' || job?.state === 'aborted') {
           const error = new Error(
@@ -4530,7 +4625,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
     if (lastError instanceof Error) throw lastError
     throw new Error('Processing did not finish within five minutes')
-  }, [call])
+  }, [applyJobsSnapshot, call])
 
   const retryIngest = async (artifactId: string) => {
     if (!bookId) return
