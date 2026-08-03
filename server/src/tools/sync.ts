@@ -29,6 +29,16 @@ import {
   DEFAULT_KEYWORD_GRAPHICS_LINGER_SECONDS,
   DEFAULT_KEYWORD_GRAPHICS_MAX_COUNT,
 } from "../remotion/keyword-graphics.js";
+import {
+  invalidVideoProxyMetadata,
+  probeStoredVideoFile,
+  videoProxyAssessmentMatches,
+  videoProxyMetadata,
+  videoProxyMetadataMatches,
+  videoProxyValidationError,
+  type VideoProxyAssessment,
+  type VideoProxySourceProfile,
+} from "../video-proxy.js";
 
 /** Upper bound on how long a pending task may sit without reaching success/fail
  *  before sync ages it out. Guards against providers leaving jobs in an
@@ -263,7 +273,31 @@ function findAssetMediaFile(
 ): ArtifactManifestFile | null {
   return asset.kind === "audio"
     ? findAudioFile(files, asset.slug)
+    : asset.kind === "video"
+      ? findVideoFile(files.filter((file) => file.name !== "proxy.mp4"))
     : findPrimaryMediaFile(files, asset.slug);
+}
+
+async function assessStoredVideoProxy(
+  fs: Engine,
+  assetId: string,
+  sourceFile: ArtifactManifestFile,
+  proxyFile: ArtifactManifestFile,
+  sourceProfile: VideoProxySourceProfile,
+): Promise<boolean> {
+  let assessment: VideoProxyAssessment;
+  try {
+    const proxy = await probeStoredVideoFile(fs, assetId, proxyFile.name);
+    const error = videoProxyValidationError(sourceProfile, proxy);
+    assessment = error
+      ? invalidVideoProxyMetadata(sourceFile, proxyFile, error)
+      : videoProxyMetadata(sourceFile, proxyFile, proxy);
+  } catch (cause) {
+    const error = cause instanceof Error ? cause.message : String(cause);
+    assessment = invalidVideoProxyMetadata(sourceFile, proxyFile, error);
+  }
+  await fs.metadata.artifacts.write(assetId, "proxy", assessment);
+  return assessment.valid;
 }
 
 /** Read the OSG overlay summary from the asset's render metadata. OSG is stored
@@ -570,7 +604,7 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
   const assets = fs.artifacts.list({ ...(sort ? { sort } : {}) });
   const assetRows = await Promise.all(
     assets.map(async (a): Promise<SyncAsset> => {
-      const [manifestResult, lockData, pendingTask, generationError, metadata, archiveMetadata, assetWorkRow] = await Promise.all([
+      const [manifestResult, lockData, pendingTask, generationError, metadata, archiveMetadata, assetWorkRow, proxyMetadata] = await Promise.all([
         fs.files.manifest(a.slug),
         fs.jobs.locks.get(a.path),
         fs.jobs.pending.read(a.slug),
@@ -578,6 +612,7 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
         fs.metadata.artifacts.read<Record<string, unknown>>(a.slug, "original"),
         fs.metadata.artifacts.read<ArchiveMetadata>(a.slug, "archive"),
         fs.jobs.artifactWork.read(a.slug),
+        fs.metadata.artifacts.read<VideoProxyAssessment>(a.slug, "proxy"),
       ]);
 
       // If the asset directory disappeared between listAssets and getManifest,
@@ -586,6 +621,34 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
       const directories = manifestResult.ok ? manifestResult.value.directories : undefined;
 
       const mediaFile = findAssetMediaFile(files, a);
+      const meta = metadata.ok ? metadata.value : null;
+      const streams = fs.streams.list(a.artifactId);
+      const videoStream = streams.ok
+        ? streams.value.find((stream) => stream.kind === "video" && stream.video)
+        : undefined;
+      const audioStream = streams.ok
+        ? streams.value.find((stream) => stream.kind === "audio" && stream.audio)
+        : undefined;
+      const frameRate = videoStream?.video?.averageFrameRate
+        ?? videoStream?.video?.nominalFrameRate;
+      const streamDuration = videoStream
+        ? videoStream.durationTicks
+          * videoStream.timeBase.numerator
+          / videoStream.timeBase.denominator
+        : 0;
+      const metadataDuration = Number(meta?.duration);
+      const sourceDuration = streamDuration > 0
+        ? streamDuration
+        : Number.isFinite(metadataDuration) ? metadataDuration : 0;
+      const sourceProfile: VideoProxySourceProfile | null = sourceDuration > 0
+        ? {
+            videoDuration: sourceDuration,
+            avgFps: frameRate
+              ? frameRate.numerator / frameRate.denominator
+              : null,
+            hasAudio: audioStream !== undefined || meta?.hasAudio === true,
+          }
+        : null;
       const fileNames = new Set(files.map((f) => f.name));
       const hasThumbnail = fileNames.has("original.jpg");
       const renders = renderedOrientationsFor(files, a.slug);
@@ -619,9 +682,34 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
         charImage = files.find((f) => /\.(jpg|jpeg|png|webp|gif)$/i.test(f.name)) ?? null;
       }
       
-      const proxyFile = a.kind === "video"
+      const proxyCandidate = a.kind === "video"
         ? files.find((file) => file.name === "proxy.mp4")
         : null;
+      let proxyFile: ArtifactManifestFile | null = null;
+      if (proxyCandidate && mediaFile) {
+        if (
+          proxyMetadata.ok
+          && videoProxyMetadataMatches(proxyMetadata.value, mediaFile, proxyCandidate)
+        ) {
+          proxyFile = proxyCandidate;
+        } else {
+          const assessmentMatches = proxyMetadata.ok
+            && videoProxyAssessmentMatches(proxyMetadata.value, mediaFile, proxyCandidate);
+          const active = assetWorkRow.ok
+            && assetWorkRow.value !== null
+            && (assetWorkRow.value.status === "pending" || assetWorkRow.value.status === "working");
+          if (!assessmentMatches && !active && sourceProfile) {
+            const valid = await assessStoredVideoProxy(
+              fs,
+              a.slug,
+              mediaFile,
+              proxyCandidate,
+              sourceProfile,
+            );
+            if (valid) proxyFile = proxyCandidate;
+          }
+        }
+      }
       const media_url = charImage
         ? `/files/${book_id}/${a.slug}/${charImage.name}${cacheBust}`
         : proxyFile
@@ -658,7 +746,6 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
             : null,
       });
 
-      const meta = metadata.ok ? metadata.value : null;
       const archiveMeta = archiveMetadata.ok ? archiveMetadata.value : null;
       const analysisInfo = analysisInfoFromMetadata(meta);
       if (analysisInfo) {
@@ -686,10 +773,6 @@ export async function buildAssetList(fs: Engine, book_id: string, sort?: "newest
           }
         } catch { /* non-fatal */ }
       }
-      const streams = fs.streams.list(a.artifactId);
-      const audioStream = streams.ok
-        ? streams.value.find((stream) => stream.kind === "audio" && stream.audio)
-        : undefined;
       const audio_info = audioStream?.audio
         ? {
             codec: audioStream.codec,

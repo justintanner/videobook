@@ -10,6 +10,7 @@ import type {
 import {
   firstEmptyNotebookGridSlot,
   findAudioFile,
+  findPrimaryMediaFile,
   findVideoFile,
   isNotebookGridSlot,
   MVP_CONTRACT_VERSION,
@@ -29,6 +30,10 @@ import { searchReferenceStore } from "../search-reference-store.js";
 import { extname, join } from "node:path";
 import type { ToolDef, ToolResult } from "./tool-def.js";
 import { buildAssetList } from "./sync.js";
+import {
+  videoProxyMetadataMatches,
+  type VideoProxyAssessment,
+} from "../video-proxy.js";
 
 const bookSchema = { book_id: z.string().uuid() };
 const rationalSchema = z.object({
@@ -231,14 +236,23 @@ export function semanticSearchDefs(
         const limit = Number(args.limit) || 200;
         const artifacts = engine.artifacts.list().slice(-limit).reverse();
         const statuses = await Promise.all(artifacts.map(async (artifact) => {
-          const [manifest, streams, waveform, transcripts, coverage] = await Promise.all([
+          const [manifest, streams, waveform, transcripts, coverage, proxyMetadata] = await Promise.all([
             engine.files.manifest(artifact.artifactId),
             Promise.resolve(engine.streams.list(artifact.artifactId)),
             engine.metadata.waveforms.read(artifact.artifactId),
             Promise.resolve(engine.transcripts.list(artifact.artifactId)),
             Promise.resolve(engine.temporalSearch.coverage(artifact.artifactId)),
+            engine.metadata.artifacts.read<VideoProxyAssessment>(artifact.artifactId, "proxy"),
           ]);
           const files = manifest.ok ? manifest.value.files : [];
+          const sourceFile = artifact.kind === "video"
+            ? findVideoFile(files.filter((file) => file.name !== "proxy.mp4"))
+            : findPrimaryMediaFile(files, artifact.slug);
+          const proxyFile = files.find((file) => file.name === "proxy.mp4");
+          const hasValidVideoProxy = sourceFile !== null
+            && proxyFile !== undefined
+            && proxyMetadata.ok
+            && videoProxyMetadataMatches(proxyMetadata.value, sourceFile, proxyFile);
           const modalities = coverage.ok ? coverage.value.modalities : [];
           const phase = (name: string) =>
             modalities.find((item) => item.modality === name)?.state ?? "not-indexed";
@@ -249,7 +263,7 @@ export function semanticSearchDefs(
               ? "ready"
               : artifact.kind === "image" ? "not-applicable" : "not-indexed",
             proxy: (artifact.kind === "video"
-              ? files.some((file) => file.name === "proxy.mp4")
+              ? hasValidVideoProxy
               : files.some((file) =>
                 /^original\.(?:jpe?g|png|webp|gif|svg|mp3|wav|m4a|weba|ogg|aac|flac)$/i
                   .test(file.name)))

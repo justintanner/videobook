@@ -101,6 +101,10 @@ textarea:focus-visible {
   transition: grid-template-columns 180ms ease;
 }
 
+.app-shell.inspector-detail {
+  --inspector-width: clamp(380px, 24vw, 440px);
+}
+
 .app-shell.inspector-hidden {
   grid-template-columns: minmax(0, 1fr) 0;
 }
@@ -6227,6 +6231,12 @@ textarea:focus-visible {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (min-width: 1101px) {
+  .app-screen-notebook.inspector-visible .notebook-horizontal-scroll {
+    margin-right: 0;
   }
 }
 

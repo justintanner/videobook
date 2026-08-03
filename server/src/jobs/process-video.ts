@@ -1,6 +1,13 @@
 import type { Engine } from "videobook-engine";
-import { basename, extname, join } from "node:path";
-import { mkdir, mkdtemp, readFile as fsReadFile, rm } from "node:fs/promises";
+import { basename, dirname, extname, join } from "node:path";
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile as fsReadFile,
+  rm,
+  writeFile as fsWriteFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { registerJobHandler, queue } from "../queue.js";
 import { withLocalLease } from "./_lease.js";
@@ -18,6 +25,10 @@ import { formatTimestamp, generateTimestamps } from "../frame-utils.js";
 import { ingestWorkspaceOutputs } from "./_persist-output.js";
 import { getApiKey } from "../api-key.js";
 import { withTransientStorageRetry } from "./_storage-retry.js";
+import {
+  videoProxyMetadata,
+  videoProxyValidationError,
+} from "../video-proxy.js";
 
 export type ProcessVideoPayload = {
   type: "process_video";
@@ -98,7 +109,77 @@ export async function registerMediaStreams(
   }
 }
 
+async function snapshotAssetFile(
+  fs: Engine,
+  assetId: string,
+  filename: string,
+  targetPath: string,
+): Promise<boolean> {
+  const manifest = await fs.files.manifest(assetId);
+  if (!manifest.ok) {
+    throw new Error(`Failed to read media manifest for ${assetId}: ${manifest.error.message}`);
+  }
+  if (!manifest.value.files.some((file) => file.name === filename)) return false;
+  const snapshot = await fs.files.readAtRevision(
+    manifest.value.artifactId,
+    filename,
+    fs.head,
+  );
+  if (!snapshot.ok) {
+    throw new Error(`Failed to read immutable ${filename} for ${assetId}: ${snapshot.error.message}`);
+  }
+  await fsWriteFile(targetPath, snapshot.value);
+  return true;
+}
+
+async function persistProxyMetadata(
+  fs: Engine,
+  assetId: string,
+  sourceFilename: string,
+  proxy: ProbeResult,
+): Promise<void> {
+  const manifest = await fs.files.manifest(assetId);
+  if (!manifest.ok) {
+    throw new Error(`Failed to read media manifest for ${assetId}: ${manifest.error.message}`);
+  }
+  const sourceFile = manifest.value.files.find((file) => file.name === sourceFilename);
+  const proxyFile = manifest.value.files.find((file) => file.name === "proxy.mp4");
+  if (!sourceFile || !proxyFile) {
+    throw new Error(`Failed to record video proxy metadata for ${assetId}`);
+  }
+  const written = await fs.metadata.artifacts.write(
+    assetId,
+    "proxy",
+    videoProxyMetadata(sourceFile, proxyFile, proxy),
+  );
+  if (!written.ok) {
+    throw new Error(`Failed to record video proxy metadata for ${assetId}: ${written.error.message}`);
+  }
+}
+
 export async function processVideoFiles(
+  fs: Engine,
+  payload: ProcessVideoPayload,
+  signal?: AbortSignal,
+): Promise<ProcessVideoResult> {
+  const sourceWorkspace = await mkdtemp(join(tmpdir(), "videobook-source-"));
+  const sourceFilename = basename(payload.videoPath);
+  const sourcePath = join(sourceWorkspace, sourceFilename);
+  try {
+    if (!await snapshotAssetFile(fs, payload.assetId, sourceFilename, sourcePath)) {
+      await copyFile(payload.videoPath, sourcePath);
+    }
+    return await processVideoSnapshot(
+      fs,
+      { ...payload, videoPath: sourcePath },
+      signal,
+    );
+  } finally {
+    await rm(sourceWorkspace, { recursive: true, force: true });
+  }
+}
+
+async function processVideoSnapshot(
   fs: Engine,
   payload: ProcessVideoPayload,
   signal?: AbortSignal,
@@ -130,7 +211,7 @@ export async function processVideoFiles(
     let activeVideoPath = videoPath;
     const sourceExt = extname(videoPath).toLowerCase();
     if (sourceExt !== ".mp4") {
-      const tempPath = join(assetDir, "original.mp4.tmp");
+      const tempPath = join(dirname(videoPath), "canonical.mp4");
       // Explicit -map drops subtitle/data/attachment streams that the mp4
       // muxer can't handle (e.g. subrip from MKV rips), which would otherwise
       // fail the whole transcode. Also pin to the first audio track so files
@@ -159,14 +240,10 @@ export async function processVideoFiles(
         "-f", "mp4",
         tempPath,
       ];
-      try {
-        await runFfmpeg(transcodeArgs, { signal });
-        const mp4Buf = await fsReadFile(tempPath);
-        await writeBinaryIfChanged(fs, assetId, "original.mp4", mp4Buf, bookId);
-      } finally {
-        await rm(tempPath, { force: true });
-      }
-      activeVideoPath = join(assetDir, "original.mp4");
+      await runFfmpeg(transcodeArgs, { signal });
+      const mp4Buf = await fsReadFile(tempPath);
+      await writeBinaryIfChanged(fs, assetId, "original.mp4", mp4Buf, bookId);
+      activeVideoPath = tempPath;
     }
     const activeSourcePath = sourceExt === ".mp4" ? sourceFilename : "original.mp4";
     const activeProbe = sourceExt === ".mp4" ? probe : await probeVideo(activeVideoPath, { signal });
@@ -208,16 +285,42 @@ export async function processVideoFiles(
         await rm(join(assetDir, `${orient}_frames`), { recursive: true, force: true }).catch(() => {});
         await fs.metadata.artifacts.delete(assetId, `${orient}.render`);
       }
+      await fs.metadata.artifacts.delete(assetId, "proxy");
     }
 
-    const existingProxy = await fs.files.read(assetId, "proxy.mp4");
-    if (!existingProxy.ok) {
-      const proxyWorkspace = await mkdtemp(join(tmpdir(), "videobook-proxy-"));
-      const proxyPath = join(proxyWorkspace, "proxy.mp4");
-      try {
+    const proxyWorkspace = await mkdtemp(join(tmpdir(), "videobook-proxy-"));
+    const proxyPath = join(proxyWorkspace, "proxy.mp4");
+    try {
+      let proxyProbe: ProbeResult | null = null;
+      if (await snapshotAssetFile(fs, assetId, "proxy.mp4", proxyPath)) {
+        try {
+          const candidate = await probeVideo(proxyPath, { signal });
+          if (videoProxyValidationError(activeProbe, candidate) === null) {
+            proxyProbe = candidate;
+          }
+        } catch {
+          proxyProbe = null;
+        }
+      }
+      if (!proxyProbe) {
+        const currentManifest = await fs.files.manifest(assetId);
+        if (!currentManifest.ok) {
+          throw new Error(
+            `Failed to read media manifest for ${assetId}: ${currentManifest.error.message}`,
+          );
+        }
+        if (currentManifest.value.files.some((file) => file.name === "proxy.mp4")) {
+          const deleted = await fs.files.delete(assetId, "proxy.mp4");
+          if (!deleted.ok) throw new Error(deleted.error.message);
+        }
+        await fs.metadata.artifacts.delete(assetId, "proxy");
+        const proxySourcePath = join(proxyWorkspace, `source${extname(activeSourcePath)}`);
+        if (!await snapshotAssetFile(fs, assetId, activeSourcePath, proxySourcePath)) {
+          throw new Error(`Media source is missing from the manifest: ${activeSourcePath}`);
+        }
         await runFfmpeg([
           "-y",
-          "-i", activeVideoPath,
+          "-i", proxySourcePath,
           "-map", "0:v:0",
           ...(activeProbe.hasAudio ? ["-map", "0:a:0"] : []),
           "-vf",
@@ -230,11 +333,18 @@ export async function processVideoFiles(
           "-movflags", "+faststart",
           proxyPath,
         ], { signal });
+        const candidate = await probeVideo(proxyPath, { signal });
+        const validationError = videoProxyValidationError(activeProbe, candidate);
+        if (validationError) {
+          throw new Error(`Invalid video proxy for ${assetId}: ${validationError}`);
+        }
         const proxy = await fs.files.writeFromPath(assetId, "proxy.mp4", proxyPath);
         if (!proxy.ok) throw new Error(proxy.error.message);
-      } finally {
-        await rm(proxyWorkspace, { recursive: true, force: true });
+        proxyProbe = candidate;
       }
+      await persistProxyMetadata(fs, assetId, activeSourcePath, proxyProbe);
+    } finally {
+      await rm(proxyWorkspace, { recursive: true, force: true });
     }
 
     const timestamps = generateTimestamps(duration);

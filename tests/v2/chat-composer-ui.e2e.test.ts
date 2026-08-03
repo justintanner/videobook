@@ -282,7 +282,7 @@ describe('chat composer browser flow', () => {
     }
   })
 
-  it('keeps compact canvas controls clear of cells and narrows the inspector', async () => {
+  it('keeps canvas controls clear and adapts the inspector without a seam', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await page.goto(appUrl, { waitUntil: 'commit' })
     const input = page.getByLabel('Videobook command input')
@@ -317,6 +317,22 @@ describe('chat composer browser flow', () => {
     const inspectorBox = await page.locator('.inspector').boundingBox()
     expect(inspectorBox?.width).toBeGreaterThanOrEqual(280)
     expect(inspectorBox?.width).toBeLessThanOrEqual(320)
+
+    const detailCell = page.locator('.cell-node.cell-kind-generate_image').filter({
+      hasText: '@b3',
+    })
+    await detailCell.click()
+    await page.locator('.inspector-cell-title').waitFor({ state: 'visible' })
+    await wait(250)
+    const detailInspectorBox = await page.locator('.inspector').boundingBox()
+    const scrollBox = await page.locator('.notebook-horizontal-scroll').boundingBox()
+    if (!detailInspectorBox || !scrollBox) {
+      throw new Error('Could not measure selected-cell inspector layout')
+    }
+    expect(detailInspectorBox.width).toBeGreaterThanOrEqual(380)
+    expect(detailInspectorBox.width).toBeLessThanOrEqual(440)
+    expect(Math.abs(scrollBox.x + scrollBox.width - detailInspectorBox.x))
+      .toBeLessThanOrEqual(1)
   }, 60_000)
 
   it('recalls failed commands backwards and restores the unsent draft', async () => {

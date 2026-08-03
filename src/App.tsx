@@ -7216,7 +7216,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   }
 
   return (
-    <main className={`app-shell app-screen-${screen} ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'} ${fullscreenCell && fullscreenNode?.data.asset ? 'media-fullscreen-open' : ''}`}>
+    <main className={`app-shell app-screen-${screen} ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'} ${selectedCell ? 'inspector-detail' : 'inspector-overview'} ${fullscreenCell && fullscreenNode?.data.asset ? 'media-fullscreen-open' : ''}`}>
       <header className="topbar">
         <div className="topbar-book-controls">
           <div className="brand-project">

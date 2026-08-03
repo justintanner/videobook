@@ -86,8 +86,88 @@ describe('video ingest stream identity', () => {
         const proxyProfile = await probeVideo(join(manifest.value.path, proxy.name))
         expect(proxyProfile.width).toBeLessThanOrEqual(1280)
         expect(proxyProfile.height).toBeLessThanOrEqual(720)
+        expect(proxyProfile.videoDuration).toBeGreaterThan(0.9)
+        expect(proxyProfile.hasAudio).toBe(true)
       }
     }
+    await engine.metadata.artifacts.delete(artifact.value.artifactId, 'proxy')
+    const projected = await buildAssetList(engine, engine.book.get().bookId)
+    expect(projected[0]?.media_url).toContain('/proxy.mp4')
+    const proxyMetadata = await engine.metadata.artifacts.read<Record<string, unknown>>(
+      artifact.value.artifactId,
+      'proxy',
+    )
+    expect(proxyMetadata.ok && proxyMetadata.value.valid).toBe(true)
+    engine.close()
+  })
+
+  it('falls back to the source and regenerates a truncated proxy', async () => {
+    rootDir = await mkdtemp(join(tmpdir(), 'videobook-video-proxy-repair-'))
+    const sourcePath = join(rootDir, 'original.mp4')
+    const truncatedProxyPath = join(rootDir, 'truncated-proxy.mp4')
+    await execFileAsync(FFMPEG, [
+      '-y',
+      '-f', 'lavfi', '-i', 'testsrc=duration=2:size=640x360:rate=24',
+      '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2:sample_rate=48000',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-shortest',
+      sourcePath,
+    ])
+    const engine = createEngine({
+      rootDir: join(rootDir, 'book'),
+      initialBookSlug: 'video-proxy-repair',
+    })
+    await engine.ready
+    const artifact = await engine.artifacts.create('video', 'repair-source')
+    expect(artifact.ok).toBe(true)
+    if (!artifact.ok) return
+
+    const payload = {
+      type: 'process_video' as const,
+      videoPath: sourcePath,
+      assetId: artifact.value.artifactId,
+      assetDir: artifact.value.path,
+      bookId: engine.book.get().bookId,
+      provenance: { origin: 'integration-test' },
+      skipDownstreamJobs: true,
+    }
+    await processVideoFiles(engine, payload)
+    await execFileAsync(FFMPEG, [
+      '-y',
+      '-i', sourcePath,
+      '-frames:v', '1',
+      '-an',
+      truncatedProxyPath,
+    ])
+    const corrupted = await engine.files.writeFromPath(
+      artifact.value.artifactId,
+      'proxy.mp4',
+      truncatedProxyPath,
+    )
+    expect(corrupted.ok).toBe(true)
+
+    const fallback = await buildAssetList(engine, engine.book.get().bookId)
+    expect(fallback[0]?.media_url).toContain('/original.mp4')
+
+    let keepReading = true
+    const concurrentReads = (async () => {
+      while (keepReading) {
+        await engine.files.read(artifact.value.artifactId, 'original.mp4')
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+    })()
+    try {
+      await processVideoFiles(engine, {
+        ...payload,
+        videoPath: join(artifact.value.path, 'original.mp4'),
+      })
+    } finally {
+      keepReading = false
+      await concurrentReads
+    }
+    const repaired = await probeVideo(join(artifact.value.path, 'proxy.mp4'))
+    expect(repaired.videoDuration).toBeGreaterThan(1.9)
+    expect(repaired.hasAudio).toBe(true)
     const projected = await buildAssetList(engine, engine.book.get().bookId)
     expect(projected[0]?.media_url).toContain('/proxy.mp4')
     engine.close()
