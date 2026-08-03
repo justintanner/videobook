@@ -417,17 +417,13 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('dateTime="PT30S"')
     expect(html).toContain('aria-label="Duration 0:30"')
     expect(html).not.toContain('role="tab"')
-    expect(html).toContain('class="inspector-slug-field"')
-    expect(html).toContain('<label>Address</label>')
-    expect(html).toContain('class="inspector-slug-prefix">@b3</span>')
+    expect(html).not.toContain('class="inspector-slug-field"')
+    expect(html).not.toContain('<label>Address</label>')
     expect(html).not.toContain('value="vid-source"')
     expect(html).not.toContain('aria-label="Edit slug"')
     expect(html).not.toContain('aria-label="Save slug"')
     expect(html).toContain('class="inspector-media-field-label">VIDEO</span>')
     expect(html).toContain('<h3>Inputs</h3>')
-    expect(html.indexOf('class="inspector-slug-field"')).toBeLessThan(
-      html.indexOf('class="inspector-media-field-label"'),
-    )
     expect(html.indexOf('class="inspector-media-field-label"')).toBeLessThan(
       html.indexOf('aria-label="Cell output media"'),
     )
@@ -447,9 +443,58 @@ describe('NotebookCellInspector', () => {
     expect(html.indexOf('<h3>Inputs</h3>')).toBeLessThan(
       html.indexOf('class="inspector-cell-actions inspector-compact-actions"'),
     )
+    expect(html).toContain('aria-label="Open @b3 fullscreen"')
     expect(html).toMatch(
       /inspector-clear-slot-button[\s\S]*<\/button><button[^>]*inspector-delete-cell-button/,
     )
+  })
+
+  it('opens generated video output in the shared fullscreen viewer', () => {
+    const generationCell: NotebookCell = {
+      ...cell,
+      type: 'generate_video',
+      slug: 'generated-video',
+      prompt: 'A cat running on a track',
+      provider: 'kie',
+      model: 'GeminiOmniVideoRequestSchema',
+      operation: 'image_to_video',
+      tool: 'generate_kie_gemini_omni_video',
+    }
+    const html = renderToStaticMarkup(createElement(NotebookCellInspector, {
+      notebookId: '01900000-0000-7000-8000-000000000003',
+      cell: generationCell,
+      cells: [generationCell],
+      edges: [],
+      asset: {
+        artifactId: generationCell.outputArtifactId!,
+        id: 'generated-video',
+        type: 'video',
+        mediaUrl: '/files/generated-video/original.mp4',
+        thumbnailUrl: '/files/generated-video/original.jpg',
+        width: 3840,
+        height: 2160,
+        duration: 9,
+        audioInfo: null,
+      },
+      status: 'completed',
+      error: null,
+      busy: false,
+      clearing: false,
+      deleting: false,
+      sourceVisible: false,
+      generationActions,
+      onUpdate: async () => undefined,
+      onSetInput: async () => undefined,
+      onRun: async () => undefined,
+      onClearSlot: async () => undefined,
+      onDelete: async () => undefined,
+      onOpenFullscreen: () => undefined,
+    }))
+
+    expect(html).toContain('aria-label="Open @b3 fullscreen"')
+    expect(html).toContain('<span>3840×2160</span>')
+    expect(html).toContain('<svg')
+    expect(html).toContain('Fullscreen</button>')
   })
 
   it('marks audio output for a compact media preview', () => {
@@ -789,9 +834,6 @@ describe('NotebookCellInspector', () => {
     }))
 
     expect(html).toContain('Output pending')
-    expect(html.indexOf('class="inspector-slug-field"')).toBeLessThan(
-      html.indexOf('Output pending'),
-    )
     expect(html.indexOf('Output pending')).toBeLessThan(
       html.indexOf('<h3>Inputs</h3>'),
     )
@@ -982,7 +1024,7 @@ describe('NotebookCellInspector', () => {
     expect(html.indexOf('Run failed')).toBeLessThan(html.indexOf('Clear slot'))
   })
 
-  it('keeps Analyze inputs concise and makes its prompt collapsible', () => {
+  it('keeps Analyze inputs concise and gives its prompt a copy action', () => {
     const analyzeCell: NotebookCell = {
       ...cell,
       type: 'analyze',
@@ -1030,8 +1072,10 @@ describe('NotebookCellInspector', () => {
     expect(html).toContain('aria-label="source input"')
     expect(html).not.toContain('Select the upstream cell that supplies each input.')
     expect(html).not.toContain('Changing a source clears this preview until its producer is rerun.')
-    expect(html).toContain('<details class="inspector-prompt-disclosure" open="">')
-    expect(html).toContain('<summary>Prompt</summary>')
+    expect(html).toContain('<section class="inspector-prompt-field">')
+    expect(html).toContain('<header class="inspector-prompt-header"><h3>Prompt</h3>')
+    expect(html).toContain('aria-label="Copy prompt"')
+    expect(html).toContain('title="Copy prompt"')
     expect(html).toContain('aria-label="Prompt"')
     expect(html).toContain('class="inspector-prompt-textarea"')
     expect(html).toContain('Split the source into narrative shots.')
@@ -1343,7 +1387,7 @@ describe('NotebookCellInspector', () => {
       onOpenFullscreen: () => undefined,
     }))
 
-    expect(html).toContain('class="inspector-slug-field"')
+    expect(html).not.toContain('class="inspector-slug-field"')
     expect(html).toContain('inspector-clear-slot-button')
     expect(html).toContain('Clear slot')
     expect(html).toContain('inspector-delete-cell-button')

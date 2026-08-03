@@ -7492,6 +7492,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     >
                       <CellIcon kind={selectedCell.data.kind} />
                       <strong>{cellTypeLabel(selectedCell.data.kind)}</strong>
+                      {selectedNotebookCell && (
+                        <code className="inspector-cell-address">
+                          {notebookGridTag(selectedNotebookCell.slot)}
+                        </code>
+                      )}
                     </span>
                   ) : (
                     <span>INSPECTOR</span>

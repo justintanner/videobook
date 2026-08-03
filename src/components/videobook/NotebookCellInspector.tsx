@@ -1,9 +1,11 @@
 import {
   AudioWaveform,
   Braces,
+  Check,
   ChevronDown,
   CircleAlert,
   CircleX,
+  Copy,
   Film,
   Image as ImageIcon,
   Layers2,
@@ -522,6 +524,7 @@ function NotebookCellMedia({
         <button
           type="button"
           className="inspector-fullscreen-button"
+          aria-label={`Open @${slug} fullscreen`}
           onClick={onOpenFullscreen}
         >
           <Maximize2 size={14} />Fullscreen
@@ -825,17 +828,6 @@ function InputSources({
   )
 }
 
-function AddressField({ cell }: { cell: NotebookCell }) {
-  return (
-    <div className="inspector-slug-field">
-      <label>Address</label>
-      <div className="inspector-slug-control inspector-address-control">
-        <span className="inspector-slug-prefix">{notebookGridTag(cell.slot)}</span>
-      </div>
-    </div>
-  )
-}
-
 function InspectorClearButton({
   className,
   label,
@@ -1066,7 +1058,6 @@ function MediaCellInspector({
   return (
     <div className="inspector-body inspector-media-body">
       <div className="inspector-media-content">
-        <AddressField cell={cell} />
         <span className="inspector-media-field-label">
           {cell.type.replaceAll('_', ' ').toUpperCase()}
         </span>
@@ -1419,7 +1410,6 @@ function AnalysisCellInspector({
   return (
     <div className="inspector-body inspector-analysis-body">
       <div className="inspector-analysis-content">
-        <AddressField cell={cell} />
         {artifactIds.length > 1 && (
           <OutputVersionSelector
             artifactIds={artifactIds}
@@ -1638,6 +1628,9 @@ function ExecutableCellInspector({
     error: string
     state: 'copied' | 'failed'
   } | null>(null)
+  const [promptCopyState, setPromptCopyState] = useState<
+    'idle' | 'copied' | 'failed'
+  >('idle')
   const textCell = cell.type === 'prompt'
     || cell.type === 'analyze'
     || cell.type === 'generate_video'
@@ -1774,6 +1767,11 @@ function ExecutableCellInspector({
     : copyState === 'failed'
       ? 'Retry copy'
       : 'Copy'
+  const promptCopyLabel = promptCopyState === 'copied'
+    ? 'Copied'
+    : promptCopyState === 'failed'
+      ? 'Retry copy'
+      : 'Copy'
 
   const updateDraft = <Field extends keyof CellFormDraft,>(
     field: Field,
@@ -1814,6 +1812,14 @@ function ExecutableCellInspector({
       setCopyResult({ error: runError, state: 'failed' })
     }
   }
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(draft.prompt)
+      setPromptCopyState('copied')
+    } catch {
+      setPromptCopyState('failed')
+    }
+  }
   const save = async () => {
     if (!dirty || !valid) return
     setSaving(true)
@@ -1852,12 +1858,13 @@ function ExecutableCellInspector({
 
   return (
     <div className="inspector-body inspector-executable-body">
-      <AddressField cell={cell} />
       {asset && previewCell && (
         <NotebookCellMedia
           asset={asset}
           slug={notebookGridAddress(cell.slot)}
-          allowFullscreen={false}
+          allowFullscreen={asset.type === 'image'
+            || asset.type === 'video'
+            || asset.type === 'final'}
           onOpenFullscreen={onOpenFullscreen}
         />
       )}
@@ -1885,16 +1892,42 @@ function ExecutableCellInspector({
         }}
       >
         {textCell && (
-          <details className="inspector-prompt-disclosure" open>
-            <summary>Prompt</summary>
+          <section className="inspector-prompt-field">
+            <header className="inspector-prompt-header">
+              <h3>Prompt</h3>
+              <button
+                type="button"
+                className={`inspector-prompt-copy${promptCopyState === 'copied' ? ' copied' : ''}`}
+                aria-label={promptCopyState === 'copied'
+                  ? 'Prompt copied'
+                  : promptCopyState === 'failed'
+                    ? 'Retry copying prompt'
+                    : 'Copy prompt'}
+                title={promptCopyState === 'copied'
+                  ? 'Prompt copied'
+                  : promptCopyState === 'failed'
+                    ? 'Retry copying prompt'
+                    : 'Copy prompt'}
+                disabled={!draft.prompt}
+                onClick={() => void copyPrompt()}
+              >
+                {promptCopyState === 'copied'
+                  ? <Check size={12} />
+                  : <Copy size={12} />}
+                <span aria-live="polite">{promptCopyLabel}</span>
+              </button>
+            </header>
             <textarea
               aria-label="Prompt"
               className="inspector-prompt-textarea"
               value={draft.prompt}
               rows={8}
-              onChange={(event) => updateDraft('prompt', event.target.value)}
+              onChange={(event) => {
+                setPromptCopyState('idle')
+                updateDraft('prompt', event.target.value)
+              }}
             />
-          </details>
+          </section>
         )}
         {cell.type === 'split_video' && (
           <div className="inspector-field-pair">

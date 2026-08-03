@@ -335,6 +335,59 @@ describe('chat composer browser flow', () => {
       .toBeLessThanOrEqual(1)
   }, 60_000)
 
+  it('keeps cell identity and prompt actions in compact inspector headers', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          writeText: async (value: string) => {
+            sessionStorage.setItem('videobook-test-clipboard', value)
+          },
+        },
+      })
+    })
+    await page.goto(appUrl, { waitUntil: 'commit' })
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+
+    const reopenInspector = page.getByLabel('Open inspector')
+    if (await reopenInspector.isVisible()) await reopenInspector.click()
+    const generationCell = page.locator('.cell-node.cell-kind-generate_video').filter({
+      hasText: '@b1',
+    })
+    await generationCell.click()
+
+    const inspector = page.locator('.inspector')
+    await inspector.locator('.inspector-cell-address').waitFor({ state: 'visible' })
+    expect(await inspector.locator('.inspector-cell-address').textContent()).toBe('@b1')
+    expect(await inspector.locator('.inspector-slug-field').count()).toBe(0)
+
+    const inputsHeading = inspector.locator('.inspector-input-sources h3')
+    const promptHeading = inspector.locator('.inspector-prompt-header h3')
+    const headingStyles = async (selector: typeof inputsHeading) => await selector.evaluate(
+      (element) => {
+        const style = getComputedStyle(element)
+        return {
+          color: style.color,
+          fontSize: style.fontSize,
+          fontWeight: style.fontWeight,
+          letterSpacing: style.letterSpacing,
+          textTransform: style.textTransform,
+        }
+      },
+    )
+    expect(await headingStyles(promptHeading)).toEqual(await headingStyles(inputsHeading))
+
+    const prompt = 'Inspector prompt clipboard check'
+    await inspector.getByLabel('Prompt', { exact: true }).fill(prompt)
+    await inspector.getByLabel('Copy prompt').click()
+    await inspector.getByLabel('Prompt copied').waitFor({ state: 'visible' })
+    expect(await page.evaluate(() =>
+      sessionStorage.getItem('videobook-test-clipboard'))).toBe(prompt)
+  }, 60_000)
+
   it('recalls failed commands backwards and restores the unsent draft', async () => {
     if (!page) throw new Error('Browser page was not initialized')
     await page.goto(appUrl, { waitUntil: 'commit' })
