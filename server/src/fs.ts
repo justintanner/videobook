@@ -32,12 +32,10 @@ function catalogBackupTemplate(): string | undefined {
   return template || undefined;
 }
 
-export const BOOK_LIBRARY_DIR = environmentValue(
+const BOOK_LIBRARY_DIR = environmentValue(
   process.env.VIDEOBOOK_LIBRARY_DIR,
   DEFAULT_LIBRARY_DIR,
 );
-export const DATA_DIR = BOOK_LIBRARY_DIR;
-export const WORKSPACE_DIR = BOOK_LIBRARY_DIR;
 
 const objectStore = contentStoreFromEnvironment();
 

@@ -1,0 +1,241 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  createEngine,
+  type Engine,
+  type NotebookDocument,
+} from "videobook-engine";
+import { BookManager } from "../../server/src/book-manager.js";
+import {
+  assertKlingMotionControlDuration,
+  type KlingMotionControlOrientation,
+} from "../../server/src/kling-motion-control-duration.js";
+import { generateKling30MotionControlVideoDef } from "../../server/src/tools/generate-kling30-motion-control-video.js";
+import { videobookDomainDefs } from "../../server/src/tools/videobook-domain.js";
+
+describe("Kling motion-control duration", () => {
+  let rootDir: string;
+  let engine: Engine;
+
+  beforeEach(async () => {
+    rootDir = await mkdtemp(join(tmpdir(), "videobook-kling-motion-duration-"));
+    engine = createEngine({
+      rootDir,
+      initialBookSlug: "kling-motion-duration",
+    });
+    await engine.ready;
+  });
+
+  afterEach(async () => {
+    engine.close();
+    await rm(rootDir, { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  async function createMotionAsset(duration?: number): Promise<string> {
+    const created = await engine.artifacts.create("vid", "motion source");
+    expect(created.ok).toBe(true);
+    if (!created.ok) throw new Error(created.error.message);
+    const written = await engine.files.write(
+      created.value.artifactId,
+      "original.mp4",
+      Buffer.from("motion video"),
+    );
+    expect(written.ok).toBe(true);
+    if (duration !== undefined) {
+      const metadata = await engine.metadata.artifacts.write(
+        created.value.artifactId,
+        "original",
+        { duration },
+      );
+      expect(metadata.ok).toBe(true);
+    }
+    return created.value.slug;
+  }
+
+  it("accepts the exact duration boundaries for both orientations", async () => {
+    const motionSlug = await createMotionAsset(3);
+    const cases: Array<[KlingMotionControlOrientation, number]> = [
+      ["image", 3],
+      ["image", 10],
+      ["video", 3],
+      ["video", 30],
+    ];
+    for (const [orientation, duration] of cases) {
+      const metadata = await engine.metadata.artifacts.write(
+        motionSlug,
+        "original",
+        { duration },
+      );
+      expect(metadata.ok).toBe(true);
+      await expect(assertKlingMotionControlDuration(
+        engine,
+        motionSlug,
+        orientation,
+      )).resolves.toBe(duration);
+    }
+  });
+
+  it("rejects durations outside each orientation range with actionable guidance", async () => {
+    const motionSlug = await createMotionAsset(2.5);
+    await expect(assertKlingMotionControlDuration(
+      engine,
+      motionSlug,
+      "image",
+    )).rejects.toThrow(/is 2\.5s.*at least 3s.*\/split/s);
+
+    await engine.metadata.artifacts.write(motionSlug, "original", { duration: 10.5 });
+    await expect(assertKlingMotionControlDuration(
+      engine,
+      `@${motionSlug}`,
+      "image",
+    )).rejects.toThrow(/is 10\.5s.*character_orientation=image.*character_orientation=video.*\/split/s);
+
+    await engine.metadata.artifacts.write(motionSlug, "original", { duration: 30.5 });
+    await expect(assertKlingMotionControlDuration(
+      engine,
+      motionSlug,
+      "video",
+    )).rejects.toThrow(/is 30\.5s.*character_orientation=video.*\/split/s);
+  });
+
+  it("rejects an invalid direct tool call before credentials or output creation", async () => {
+    const image = await engine.artifacts.create("img", "character image");
+    expect(image.ok).toBe(true);
+    if (!image.ok) return;
+    expect((await engine.files.write(
+      image.value.artifactId,
+      "original.png",
+      Buffer.from("character image"),
+    )).ok).toBe(true);
+    const motionSlug = await createMotionAsset(12);
+    const before = engine.artifacts.list().length;
+    const previousApiKey = process.env.KIE_API_KEY;
+    delete process.env.KIE_API_KEY;
+    try {
+      const result = await generateKling30MotionControlVideoDef(engine).handler({
+        book_id: engine.book.get().bookId,
+        character_image_slugs: [`@${image.value.slug}`],
+        motion_video_slugs: [`@${motionSlug}`],
+        character_orientation: "image",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.content[0]?.text).toMatch(
+        /is 12s.*character_orientation=video.*\/split/s,
+      );
+      expect(engine.artifacts.list()).toHaveLength(before);
+    } finally {
+      if (previousApiKey === undefined) delete process.env.KIE_API_KEY;
+      else process.env.KIE_API_KEY = previousApiKey;
+    }
+  });
+
+  it("returns the same preflight from the notebook preview surface", async () => {
+    const image = await engine.artifacts.create("img", "preview character");
+    expect(image.ok).toBe(true);
+    if (!image.ok) return;
+    await engine.files.write(
+      image.value.artifactId,
+      "original.png",
+      Buffer.from("preview character"),
+    );
+    const motionSlug = await createMotionAsset(12);
+    const motion = engine.artifacts.get(motionSlug);
+    expect(motion.ok).toBe(true);
+    if (!motion.ok) return;
+    const notebook = await engine.notebooks.create("Main");
+    expect(notebook.ok).toBe(true);
+    if (!notebook.ok) return;
+    const imageCell = engine.notebooks.createCell({
+      type: "image",
+      slug: "img-preview-character",
+      slot: { row: 0, column: 0 },
+      outputArtifactId: image.value.artifactId,
+    });
+    const videoCell = engine.notebooks.createCell({
+      type: "video",
+      slug: "vid-preview-motion",
+      slot: { row: 0, column: 1 },
+      outputArtifactId: motion.value.artifactId,
+    });
+    const generationCell = engine.notebooks.createCell({
+      type: "generate_video",
+      slug: "generate-video-preview-motion",
+      slot: { row: 1, column: 0 },
+      prompt: "Follow the reference motion",
+      provider: "kie",
+      model: "KlingMotionControlRequestSchema",
+      operation: "motion_control",
+      tool: "generate_kie_kling_3_0_motion_control",
+      inputs: {
+        generationSettings: {
+          character_orientation: "image",
+        },
+      },
+    });
+    const document: NotebookDocument = {
+      ...notebook.value,
+      cells: [imageCell, videoCell, generationCell],
+      edges: [
+        engine.notebooks.createEdge({
+          source: imageCell.id,
+          target: generationCell.id,
+          targetInput: "image",
+        }),
+        engine.notebooks.createEdge({
+          source: videoCell.id,
+          target: generationCell.id,
+          targetInput: "video",
+        }),
+      ],
+    };
+    await engine.notebooks.write(document);
+
+    const books = new BookManager({
+      libraryDir: join(rootDir, "preview-books"),
+      objectPrefix: "preview-objects",
+    });
+    await books.ready();
+    try {
+      const preview = videobookDomainDefs(engine, books).find((definition) =>
+        definition.name === "preview_notebook_generation");
+      if (!preview) throw new Error("Missing preview_notebook_generation");
+      const invalid = await preview.handler({
+        book_id: engine.book.get().bookId,
+        notebook_id: document.id,
+        cell_id: generationCell.id,
+      });
+      expect(invalid.isError).toBe(true);
+      expect(invalid.content[0]?.text).toMatch(
+        /is 12s.*character_orientation=image.*character_orientation=video.*\/split/s,
+      );
+
+      const videoOrientation = {
+        ...generationCell,
+        inputs: {
+          generationSettings: {
+            character_orientation: "video",
+          },
+        },
+      };
+      const validDocument: NotebookDocument = {
+        ...document,
+        cells: [imageCell, videoCell, videoOrientation],
+      };
+      await engine.notebooks.write(validDocument);
+      const valid = await preview.handler({
+        book_id: engine.book.get().bookId,
+        notebook_id: document.id,
+        cell_id: generationCell.id,
+      });
+      expect(valid.isError, valid.content[0]?.text).toBeUndefined();
+      const value = JSON.parse(valid.content[0]!.text) as {
+        payload: { input: { character_orientation: string } };
+      };
+      expect(value.payload.input.character_orientation).toBe("video");
+    } finally {
+      await books.close();
+    }
+  });
+});

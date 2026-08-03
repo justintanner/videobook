@@ -124,7 +124,6 @@ import {
 } from '@/videobook/notebook-generation-actions'
 import {
   startNotebookCellRun,
-  startPlannedNotebookGeneration,
 } from '@/videobook/notebook-cell-actions'
 import {
   asSearchReferenceDescriptor,
@@ -2805,6 +2804,11 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }, 900)
   }, [])
 
+  const focusCommandComposer = useCallback(() => {
+    restoreCommandComposerFocus(() =>
+      document.querySelector<HTMLInputElement>('.command-composer input'))
+  }, [])
+
   useEffect(() => {
     const updateOnlineState = () => setOnline(window.navigator.onLine)
     window.addEventListener('online', updateOnlineState)
@@ -2852,8 +2856,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     const plan = await createGenerationPlan(cellId, sourceSurface)
     setPendingChatAction(null)
     setPendingCommandPlan({ plan, previews: {} })
+    focusCommandComposer()
     return applyReadyOutcome('Generation plan ready for review')
-  }, [createGenerationPlan])
+  }, [createGenerationPlan, focusCommandComposer])
 
   const [nodes, setNodes] = useState<CanvasNode[]>(() =>
     initialWorkspace?.notebook
@@ -3174,7 +3179,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (!bookId || !notebook) return
     setBusy(true)
     setCellRunError(cellId, null)
-    let watching = false
     try {
       const currentValue = await call('get_notebook', {
         book_id: bookId,
@@ -3197,97 +3201,63 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         )
       }
       if (cloud) {
-        const accepted = await startPlannedNotebookGeneration({
-          createPlan: () => createGenerationPlan(cellId, 'ui'),
-          start: (plan) => call('run_notebook_cell', {
-            book_id: bookId,
-            notebook_id: currentNotebook.id,
-            cell_id: cellId,
-            plan,
-            actor: 'videobook-user',
-          }),
-          onStarting: () => setCellQueued(cellId, true),
-          onRejected: () => setCellQueued(cellId, false),
-        })
-        const runId = asString(record(accepted)?.run_id)
-        const jobOperationId = asString(record(accepted)?.job_id)
-        if (!runId || !jobOperationId) {
-          throw new Error('The server did not return a notebook run')
-        }
-        const refreshed = asNotebook(await call('get_notebook', {
+        const outcome = await prepareGenerationPlan(cellId, 'ui')
+        setNotice(outcome.message, outcome.ok ? 'info' : 'error')
+        return
+      }
+      const accepted = await startNotebookCellRun({
+        start: () => call('run_notebook_cell', {
           book_id: bookId,
           notebook_id: currentNotebook.id,
-        }))
-        if (refreshed) applyNotebook(refreshed, assets, jobs)
-        setNotice(`@${cell.slug} queued`)
-        watching = true
-        void watchGenerationRun({
-          bookId,
-          notebookId: currentNotebook.id,
-          cellId,
-          slug: cell.slug,
-          runId,
-          jobOperationId,
-        })
-      } else {
-        const accepted = await startNotebookCellRun({
-          start: () => call('run_notebook_cell', {
-            book_id: bookId,
-            notebook_id: currentNotebook.id,
-            cell_id: cellId,
-            actor: 'videobook-user',
-          }),
-          onStarting: () => setCellQueued(cellId, true),
-          onRejected: () => setCellQueued(cellId, false),
-        })
-        const runId = asString(record(accepted)?.run_id)
-        const jobOperationId = asString(record(accepted)?.job_id)
-        if (!runId || !jobOperationId) {
-          throw new Error('The server did not return a notebook run')
-        }
-        setNotice(`@${cell.slug} queued`)
-        const outcome = await watchNotebookRun({
-          bookId,
-          notebookId: currentNotebook.id,
-          cellId,
-          slug: cell.slug,
-          runId,
-          jobOperationId,
-          intervalMs: notebookRunPollIntervalMs,
-          timeoutMs: notebookRunPollTimeoutMs,
-          maxPollFailures: 1,
-        })
-        if (outcome.kind === 'failed') {
-          throw new Error(outcome.message ?? `@${cell.slug} failed`)
-        }
-        if (outcome.kind === 'timeout') {
-          throw new Error('Notebook run did not finish within five minutes')
-        }
-        if (outcome.kind === 'completed') {
-          setNotice(`@${cell.slug} updated`)
-        }
+          cell_id: cellId,
+          actor: 'videobook-user',
+        }),
+        onStarting: () => setCellQueued(cellId, true),
+        onRejected: () => setCellQueued(cellId, false),
+      })
+      const runId = asString(record(accepted)?.run_id)
+      const jobOperationId = asString(record(accepted)?.job_id)
+      if (!runId || !jobOperationId) {
+        throw new Error('The server did not return a notebook run')
+      }
+      setNotice(`@${cell.slug} queued`)
+      const outcome = await watchNotebookRun({
+        bookId,
+        notebookId: currentNotebook.id,
+        cellId,
+        slug: cell.slug,
+        runId,
+        jobOperationId,
+        intervalMs: notebookRunPollIntervalMs,
+        timeoutMs: notebookRunPollTimeoutMs,
+        maxPollFailures: 1,
+      })
+      if (outcome.kind === 'failed') {
+        throw new Error(outcome.message ?? `@${cell.slug} failed`)
+      }
+      if (outcome.kind === 'timeout') {
+        throw new Error('Notebook run did not finish within five minutes')
+      }
+      if (outcome.kind === 'completed') {
+        setNotice(`@${cell.slug} updated`)
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setCellRunError(cellId, message)
       setNotice(message, 'error')
     } finally {
-      if (!watching) setCellQueued(cellId, false)
+      setCellQueued(cellId, false)
       setBusy(false)
     }
   }, [
-    applyNotebook,
-    assets,
     bookId,
     call,
-    createGenerationPlan,
-    jobs,
     notebook,
     online,
+    prepareGenerationPlan,
     setCellQueued,
     setCellRunError,
     setNotice,
-    watchGenerationRun,
     watchNotebookRun,
   ])
 
@@ -3401,10 +3371,6 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     if (screen !== 'notebook') return
     revealNotebookResult(() => notebookScrollRef.current)
   }, [screen])
-  const focusCommandComposer = useCallback(() => {
-    restoreCommandComposerFocus(() =>
-      document.querySelector<HTMLInputElement>('.command-composer input'))
-  }, [])
   const dismissPendingCommandPlan = useCallback(() => {
     setPendingCommandPlan(null)
     setPendingChatAction(null)

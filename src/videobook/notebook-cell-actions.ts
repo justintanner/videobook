@@ -35,19 +35,3 @@ export async function persistAndRunNotebookCell(input: {
   await input.onRun(input.cellId)
   return true
 }
-
-export async function startPlannedNotebookGeneration<Plan, Result>(input: {
-  createPlan: () => Promise<Plan>
-  start: (plan: Plan) => Promise<Result>
-  onStarting?: () => void
-  onAccepted?: () => void
-  onRejected?: () => void
-}): Promise<Result> {
-  const plan = await input.createPlan()
-  return await startNotebookCellRun({
-    start: () => input.start(plan),
-    onStarting: input.onStarting,
-    onAccepted: input.onAccepted,
-    onRejected: input.onRejected,
-  })
-}

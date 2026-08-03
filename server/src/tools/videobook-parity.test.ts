@@ -14,39 +14,42 @@ describe("Videobook MCP parity", () => {
     if (root) await rm(root, { recursive: true, force: true });
   });
 
-  it("preserves all 211 fork endpoints and adds notebook-native tools", async () => {
+  it("registers unique canonical and notebook-native tools", async () => {
     root = await mkdtemp(join(tmpdir(), "videobook-parity-"));
-    const fs = createEngine({ rootDir: root });
+    const fs = createEngine({ rootDir: root, initialBookSlug: "parity" });
     const names = getAllToolDefs(fs).map((definition) => definition.name);
     fs.close();
 
-    expect(names).toHaveLength(240);
-    expect(new Set(names).size).toBe(240);
-    expect(names.slice(0, 211)).toHaveLength(211);
+    expect(names).toHaveLength(302);
+    expect(new Set(names).size).toBe(302);
     expect(names).toEqual(
       expect.arrayContaining([
+        "list_books",
+        "create_book",
+        "get_book",
         "list_notebooks",
         "create_notebook",
-        "create_character_entity",
-        "update_character",
-        "get_project_book",
-        "get_book_action",
-        "record_book_action",
-        "record_book_layout",
         "get_notebook",
-        "update_notebook",
+        "create_notebook_cell",
+        "update_notebook_cell",
         "delete_notebook",
         "run_notebook",
         "list_jobs",
-        "create_prompt",
+        "cancel_job",
+        "retry_job",
+        "create_prompt_entity",
         "list_prompts",
-        "create_scene",
+        "get_prompt_entity",
+        "create_scene_entity",
         "list_scenes",
+        "get_scene_entity",
+        "create_character_entity",
         "list_characters",
-        "get_character",
+        "get_character_entity",
         "storage_status",
         "storage_sync",
-        "revision_history",
+        "list_book_actions",
+        "get_history_action",
       ]),
     );
   });

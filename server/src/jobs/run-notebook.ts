@@ -51,6 +51,7 @@ import {
   notebookGenerationInputsAreCompatible,
 } from "../notebook-generation-contract.js";
 import { notebookProviderFailureMessage } from "../notebook-provider-failure.js";
+import { assertKlingMotionControlDuration } from "../kling-motion-control-duration.js";
 
 export interface RunNotebookPayload {
   type: "run_notebook";
@@ -985,6 +986,20 @@ export async function prepareNotebookGeneration(
   );
   if (!parsed.success) {
     throw new Error(parsed.error.issues.map((issue) => issue.message).join("; "));
+  }
+  if (tool === "generate_kie_kling_3_0_motion_control") {
+    const motionSlugs = parsed.data.motion_video_slugs;
+    const motionSlug = Array.isArray(motionSlugs)
+      ? motionSlugs.find((value): value is string => typeof value === "string")
+      : undefined;
+    if (!motionSlug) {
+      throw new Error("Kling 3.0 Motion Control requires one motion video");
+    }
+    await assertKlingMotionControlDuration(
+      engine,
+      motionSlug,
+      parsed.data.character_orientation === "image" ? "image" : "video",
+    );
   }
   return {
     tool,

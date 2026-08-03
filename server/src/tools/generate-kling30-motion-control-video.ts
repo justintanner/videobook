@@ -7,6 +7,7 @@ import { queue } from "../queue.js";
 import { findVideoFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
 import { apicityField, apicityStringArrayField, apicityStringField } from "./schema-from-apicity.js";
+import { assertKlingMotionControlDuration } from "../kling-motion-control-duration.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
 
@@ -55,13 +56,6 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
         mode, character_orientation, background_source,
       } = args as Args;
 
-      if (!process.env.KIE_API_KEY) {
-        return {
-          isError: true as const,
-          content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
-        };
-      }
-
       const imageInputs: RefInput[] = [];
       for (const raw of character_image_slugs) {
         const assetId = raw.replace(/^@/, "");
@@ -90,6 +84,29 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
         const file = findVideoFile(manifest.value.files);
         if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${assetId}` }] };
         videoInputs.push({ assetId, filename: file.name });
+      }
+
+      try {
+        await assertKlingMotionControlDuration(
+          fs,
+          motion_video_slugs[0],
+          character_orientation === "image" ? "image" : "video",
+        );
+      } catch (cause) {
+        return {
+          isError: true as const,
+          content: [{
+            type: "text" as const,
+            text: cause instanceof Error ? cause.message : String(cause),
+          }],
+        };
+      }
+
+      if (!process.env.KIE_API_KEY) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: "KIE_API_KEY environment variable is not set" }],
+        };
       }
 
       const baseName = prompt ? slugify(prompt) : imageInputs[0].assetId.replace(/^img-/, "");

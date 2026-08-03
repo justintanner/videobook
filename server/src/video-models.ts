@@ -57,6 +57,7 @@ import {
   zodNumberRange,
   zodStringMaxLength,
   zodStringMinLength,
+  zodUnionEnumOptions,
   type SlotConstraints,
 } from "./zod-slots.js";
 import { totalOmniReferenceSlots } from "./google-flow-refs.js";
@@ -1237,7 +1238,8 @@ function applyApicityConstraints(prop: ParamSchema, schema: ZodLike): void {
     if (slots.max === null) delete prop.maxItems;
     else prop.maxItems = slots.max;
   }
-  const enumOpts = zodEnumOptionsOrNull(schema);
+  const enumOpts = zodEnumOptionsOrNull(schema)
+    ?? zodUnionEnumOptions(schema);
   if (enumOpts) {
     if (enumOpts.every((x) => typeof x === "number" && Number.isInteger(x))) {
       prop.type = "integer";

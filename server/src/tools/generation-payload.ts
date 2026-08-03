@@ -38,7 +38,7 @@ export function generationPayloadDef(fs: Engine): ToolDef {
       const error: GenerationErrorOut | null = errorRecord
         ? {
             message: errorRecord.message,
-            failedAt: new Date(errorRecord.failedAt * 1000).toISOString(),
+            failedAt: new Date(errorRecord.failedAt).toISOString(),
             ...(errorRecord.failCode !== undefined ? { failCode: errorRecord.failCode } : {}),
             ...(errorRecord.prompt !== undefined && errorRecord.prompt !== null ? { prompt: errorRecord.prompt } : {}),
           }

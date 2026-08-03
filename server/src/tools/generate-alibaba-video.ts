@@ -9,7 +9,11 @@ import { extname } from "node:path";
 import { queue } from "../queue.js";
 import { findVideoFile, findAudioFile } from "videobook-engine";
 import type { SchemaArgs, ToolDef } from "./tool-def.js";
-import { apicityField, apicityStringField } from "./schema-from-apicity.js";
+import {
+  apicityField,
+  apicityStringField,
+  apicityUnionEnumField,
+} from "./schema-from-apicity.js";
 import { requireAtLeastOne, toolError } from "./_shared.js";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
@@ -93,7 +97,7 @@ const generateAlibabaVideoSchema = {
   book_id: z.string().describe("Project slug"),
   prompt: apicityStringField(AlibabaVideoSynthesisInputSchema.shape.prompt, "Video description", { required: true }),
   negative_prompt: apicityStringField(AlibabaVideoSynthesisInputSchema.shape.negative_prompt, "Negative prompt — things to avoid"),
-  model: apicityField(AlibabaVideoSynthesisModelSchema, "DashScope video model name ('wan2.7-i2v' or 'wan2.7-videoedit')", { required: true }),
+  model: apicityUnionEnumField(AlibabaVideoSynthesisModelSchema, "DashScope video model name ('wan2.7-i2v' or 'wan2.7-videoedit')", { required: true }),
   first_frame_slug: z.string().optional().describe("First frame image asset (e.g., @img-start)"),
   last_frame_slug: z.string().optional().describe("Last frame image asset (e.g., @img-end)"),
   first_clip_slug: z.string().optional().describe("Video asset for clip continuation (e.g., @vid-scene)"),

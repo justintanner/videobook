@@ -20,7 +20,7 @@ Provider-backed actions use `<verb>_<provider>_<model>_<operation>`. Workflow ac
 | `extend_kie_grok_imagine_video` | kie | `GrokVideoExtendRequestSchema` | video | extend_video | hidden_fal_variant | `extend_grok_imagine_video` |
 | `upscale_kie_grok_imagine_video` | kie | `GrokVideoUpscaleRequestSchema` | video | upscale_video | hidden_fal_variant | `upscale_grok_imagine_video` |
 | `generate_kie_kling_3_0_video` | kie | `KlingVideoRequestSchema` | video | image_to_video | visible | `generate_kling30_video` |
-| `generate_kie_kling_3_0_motion_control` | kie | `KlingMotionControlRequestSchema` | video | motion_control | hidden_fal_variant | `generate_kling30_motion_control_video` |
+| `generate_kie_kling_3_0_motion_control` | kie | `KlingMotionControlRequestSchema` | video | motion_control | visible | `generate_kling30_motion_control_video` |
 | `generate_kie_kling_3_0_turbo_video` | kie | `KlingV3TurboImageToVideoRequestSchema` | video | image_to_video | visible | `generate_kling30_turbo_video` |
 | `generate_kie_seedance_2_0_video` | kie | `Seedance2InputSchema` | video | image_to_video | visible | `generate_seedance2_video` |
 | `generate_kie_seedance_2_0_fast_video` | kie | `Seedance2FastInputSchema` | video | image_to_video | visible | `generate_seedance2_fast_video` |

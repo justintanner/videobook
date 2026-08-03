@@ -136,6 +136,7 @@ describe('chat composer browser flow', () => {
   let browser: Browser | undefined
   let page: Page | undefined
   let appUrl = ''
+  let reviewGenerationCellId = ''
   const observedCalls: ToolCall[] = []
   let delayedBootstrap = false
 
@@ -211,6 +212,12 @@ describe('chat composer browser flow', () => {
       operation: 'image_to_video',
       tool: 'generate_kie_seedance_2_0_mini_video',
       inputs: { state: 'running' },
+    })
+    reviewGenerationCellId = await createCell({
+      type: 'generate_image',
+      slug: 'generate-image-review',
+      slot: { row: 1, column: 2 },
+      prompt: 'A moonlit garden ready for review',
     })
     for (const connection of [
       { source_cell_id: videoCellId, target_input: 'video' },
@@ -327,5 +334,51 @@ describe('chat composer browser flow', () => {
     await page.locator('[data-testid="mcp-activity"]').waitFor({ state: 'visible' })
     expect(await shell.evaluate((element) => window.getComputedStyle(element).animationName))
       .toBe('none')
+  }, 60_000)
+
+  it('reviews cell-level cloud generation before starting the run', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await page.goto(appUrl, { waitUntil: 'commit' })
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+    const reviewCell = page.locator('.cell-node').filter({
+      hasText: '@generate-image-review',
+    })
+    const generate = reviewCell.getByRole('button', { name: 'Gen' })
+    await expect.poll(async () => await generate.isEnabled()).toBe(true)
+
+    observedCalls.length = 0
+    await generate.click()
+    const review = page.getByLabel('Command plan review')
+    await review.waitFor({ state: 'visible' })
+    await expect.poll(() => observedCalls.some((call) =>
+      call.name === 'plan_notebook_generation')).toBe(true)
+    expect(observedCalls.some((call) => call.name === 'run_notebook_cell')).toBe(false)
+    await expect.poll(async () => await input.inputValue()).toBe('/apply')
+
+    await input.press('Escape')
+    await review.waitFor({ state: 'hidden' })
+    expect(observedCalls.some((call) => call.name === 'run_notebook_cell')).toBe(false)
+    await expect.poll(async () => await input.inputValue()).toBe('')
+    expect(await input.evaluate((element) => document.activeElement === element)).toBe(true)
+
+    observedCalls.length = 0
+    await generate.click()
+    await review.waitFor({ state: 'visible' })
+    await expect.poll(() => observedCalls.some((call) =>
+      call.name === 'plan_notebook_generation')).toBe(true)
+    expect(observedCalls.some((call) => call.name === 'run_notebook_cell')).toBe(false)
+    await page.evaluate(() => window.localStorage.setItem(
+      'videobook.cloud-generation-consent',
+      'accepted',
+    ))
+    await review.getByRole('button', { name: 'Apply' }).click()
+    await expect.poll(() => observedCalls.some((call) =>
+      call.name === 'run_notebook_cell'), {
+      timeout: 20_000,
+    }).toBe(true)
+    const runCall = observedCalls.find((call) => call.name === 'run_notebook_cell')
+    expect(runCall?.arguments.cell_id).toBe(reviewGenerationCellId)
   }, 60_000)
 })

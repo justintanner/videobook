@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (299)
+## MCP endpoints (302)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -21,11 +21,12 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `build_generation_provider_payload` (historical names, not exposed: `translate_payload`) — Translate gen tool args to the @apicity provider payload. Returns the exact request body that would be sent, with asset slugs in place of upload URLs.
 - `cancel_job` — Cancel a queued or running persistent job
 - `change_video_speed` — Change video playback speed (speed up or slow down). Operates in-place with git versioning.
-- `chat` — Natural language interface — routes free-form prompts to the appropriate tool. Supports @asset tags (e.g., @vid-foo, @img-bar).
+- `chat` — Natural language interface — executes reads and previews mutations or generation for explicit application. Supports @asset tags (e.g., @vid-foo, @img-bar).
 - `check_duplicate_bytes` — Find existing book files with the same immutable content hash before import
 - `check_kimi_coding_api` — Check whether the Kimi Coding API is reachable and its configured API key is valid
 - `clean_failed_assets` (historical names, not exposed: `clear_failed_tasks`) — Clean up assets with a persisted generation error: delete unmaterialized generation husks (returned as 'cleared'), but keep assets that already hold media and only clear their error row (returned as 'error_cleared').
 - `clean_video_audio` — Clean a vid-* asset's audio in place with ElevenLabs Voice Isolator. Preserves dialogue as the main track, keeps a quiet denoised source bed for important sound effects, suppresses odd start/end sounds with fades, and can add subtle instrumental ElevenLabs music. The video stream is copied unchanged and process_video refreshes derived audio artifacts.
+- `clear_notebook_cell_slot` — Clear one notebook cell output and incoming connections without deleting the cell
 - `commit_edit_intent` — Commit an unchanged previewed CommandPlan edit stage atomically
 - `concat_images` — Concatenate 1-9 image assets into a new img-* asset. One or two inputs use a fixed two-slot sheet, with landscape images side-by-side and portrait images stacked. A missing slot stays as background, and each source image is fit into its cell without stretching.
 - `connect_notebook_cells` — Create a UUIDv7 notebook edge
@@ -61,7 +62,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `detect_scenes` — Run ffmpeg scdet over a video asset and return a candidate timeline of natural visual breaks. Each candidate is { t, score, kind } where kind="shot" is a camera/cut change (scdet score ≥ 10) and kind="settle" is a motion-settle moment inside a steady shot (the falling edge of a sustained high-motion run, e.g. "the man finished standing up"). Runs in the background and persists to .detect-scenes.json and is useful as a standalone read-only diagnostic.
 - `disconnect_notebook_cells` — Delete a notebook edge
 - `doctor` — Diagnose the health of every asset in a project (all asset types: video, image, audio, script, final, character, plan). Reports assets stuck in the error state and assets wedged in-progress past their work deadline. Pass fix:true with an explicit asset_id to restore that one asset to its last usable state before the current error — clears a stale error or lease when the media is intact, otherwise restores the asset from Dolt history. A bare fix:true scan never bulk-fixes; it just reports.
-- `download_video` — Download a full video from a URL (YouTube, Twitter/X, etc.) into a videocity project as original.mp4. Supports requested range metadata and auto-exports 16:9 and 9:16 versions.
+- `download_video` — Download a video or requested time range from a URL (YouTube, Twitter/X, etc.) into a Videobook as original.mp4. Supports auto-exports in 16:9 and 9:16.
 - `duplicate_asset` — Duplicate an asset within the same project
 - `enqueue_notebook_run` — Revalidate and enqueue a persisted aggregate workbook plan
 - `enqueue_sequence_export` — Queue a confirmed canonical sequence export after revalidating its exact revision
@@ -183,6 +184,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `list_books` — List all Videobook books
 - `list_characters` — List reusable characters
 - `list_chat_history` — List recent chat input history entries.
+- `list_chat_models` — List supported chat routing models and the default selection
 - `list_elevenlabs_voices` — List available ElevenLabs voice IDs with custom voices first and generic voices after them
 - `list_google_flow_characters` — List Google Flow characters for an account (display names + optional signed thumbnail previews).
 - `list_google_flow_voices` — List Google Flow voices (custom 'user' voices and/or the 'system' presets) for an account.
@@ -220,6 +222,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `prepare_search_reference` — Prepare an existing image or video asset for temporary reverse search
 - `prepare_video_generation` (historical names, not exposed: `preview_video`) — Route a natural language prompt to the best video generation tool and return a preview with schema, prefilled parameters, validation, and model options for all available video models.
 - `preview_edit_intent` — Preview one CommandPlan edit stage through the canonical engine diff
+- `preview_notebook_generation` — Preview the exact provider payload a generation cell would submit, without running it
 - `provider_key_status` — List all managed environment keys with their source (1password = injected via op run, read-only; env = from .env, editable), masked values, and live credit/token lookups for supported providers. Never exposes secret values.
 - `push_chat_history` — Append a message to the chat input history log.
 - `read_asset_metadata` — Read native artifact metadata at the current Dolt revision. Returns the parsed value or an error if the key is missing.
@@ -235,7 +238,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `remove_sound` — Remove a described sound (e.g. a horse neigh) from a vid-* or aud-* asset in place. ElevenLabs Scribe tags audio events with timestamps, events matching the description are silenced with short fades, and video streams are preserved untouched with git versioning.
 - `remove_timeline_audio` — Remove an audio overlay by its UUIDv7 id
 - `remove_timeline_slot` — Remove a typed timeline slot and shift later slots left
-- `rename_all` — Bulk-rename vid-*/img-* assets with an explicit dry run. Dry run proposes descriptive names via GPT-5.5 over stored analysis/transcript/prompt context; re-run dry_run with edited `renames` to revalidate; set dry_run=false to apply via fs.renameAsset and update timeline/OSG/plan references.
+- `rename_all` — Bulk-rename vid-*/img-* assets with an explicit dry run. Dry run proposes descriptive names via GPT-5.6 Sol over stored analysis/transcript/prompt context; re-run dry_run with edited `renames` to revalidate; set dry_run=false to apply via fs.renameAsset and update timeline/OSG/plan references.
 - `rename_asset` — Rename an asset with a new name
 - `rename_book` — Rename a book
 - `rename_notebook` — Rename a notebook
@@ -299,7 +302,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `upload_file` — Upload a media or markdown file into a videocity project as an asset
 - `upscale_kie_grok_imagine_video` (historical names, not exposed: `upscale_grok_imagine_video`) — Upscale an existing Grok-Imagine video asset using Kie's grok-imagine/upscale. Source must have been generated by grok-imagine. Creates a new vid- asset and enqueues a background job.
 - `validate_sequence_export` — Validate a revision-pinned canonical sequence export and resolve immutable inputs
-- `verify_x_mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using xAI live X search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.
+- `verify_x_mentions` — Verify that @-mentions in post text are real X (Twitter) accounts using OpenAI web search. Returns per-handle verdicts (exists true/false/null) with display names and one-line summaries.
 - `wait_for_asset_ready` — Wait until an asset's asynchronous generation, reconciliation, and file writes finish or the timeout expires.
 - `x_connect_start` — Begin the X (Twitter) OAuth 2.0 user-context login flow. Spawns a local listener on 127.0.0.1:8765 and returns the authorize_url. After approval, the server exchanges the code and persists refreshable tokens in the application credential store outside public book records.
 - `x_connect_status` — Report the current X login state. Returns { connected, pending, has_credentials, error?, expires_at? } so the client can poll while the user authorizes in the browser.

@@ -5,6 +5,32 @@ import path from 'path'
 
 const serverTarget = process.env.VIDEOBOOK_SERVER_URL ?? 'http://127.0.0.1:3001'
 
+function clientManualChunk(id: string): string | undefined {
+  if (!id.includes('/node_modules/')) return undefined
+  if (id.includes('/@modelcontextprotocol/') || id.includes('/zod/')) {
+    return 'vendor-mcp'
+  }
+  if (
+    id.includes('/@xyflow/')
+    || id.includes('/d3-')
+    || id.includes('/zustand/')
+    || id.includes('/use-sync-external-store/')
+  ) {
+    return 'vendor-flow'
+  }
+  if (id.includes('/@remotion/') || id.includes('/remotion/')) {
+    return 'vendor-remotion'
+  }
+  if (
+    id.includes('/react/')
+    || id.includes('/react-dom/')
+    || id.includes('/scheduler/')
+  ) {
+    return 'vendor-react'
+  }
+  return 'vendor'
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -18,6 +44,13 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: clientManualChunk,
+      },
     },
   },
   server: {

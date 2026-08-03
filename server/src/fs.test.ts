@@ -2,27 +2,39 @@ import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { withBookContext } from "./book-context.js";
 import {
   fs as defaultFs,
+  closeEngineForTest,
   createEngineForTest,
   environmentValue,
 } from "./fs.js";
 
 describe("fs module", () => {
   let tempDir: string;
+  let testEngine: ReturnType<typeof createEngineForTest> | undefined;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-test-"));
   });
 
   afterEach(async () => {
+    if (testEngine) {
+      closeEngineForTest(tempDir, testEngine);
+      testEngine = undefined;
+    }
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
-  it("default fs export exists and has expected methods", () => {
-    expect(defaultFs).toBeDefined();
-    expect(typeof defaultFs.projects.create).toBe("function");
-    expect(typeof defaultFs.artifacts.list).toBe("function");
+  function currentTestEngine() {
+    testEngine ??= createEngineForTest(tempDir);
+    return testEngine;
+  }
+
+  it("requires a book context for the default fs", () => {
+    expect(() => defaultFs.artifacts).toThrow(
+      "A book context is required for this operation",
+    );
   });
 
   it("uses defaults for missing and blank environment values", () => {
@@ -33,9 +45,9 @@ describe("fs module", () => {
   });
 
   it("createEngineForTest returns an Engine instance", () => {
-    const testFs = createEngineForTest(tempDir);
+    const testFs = currentTestEngine();
     expect(testFs).toBeDefined();
-    expect(typeof testFs.projects.create).toBe("function");
+    expect(testFs.book.get().slug).toBe("test-book");
     expect(typeof testFs.artifacts.list).toBe("function");
     expect(typeof testFs.artifacts.create).toBe("function");
     expect(typeof testFs.files.manifest).toBe("function");
@@ -44,12 +56,23 @@ describe("fs module", () => {
     expect(typeof testFs.files.delete).toBe("function");
   });
 
-  it("createEngineForTest instance can create a project", async () => {
-    const testFs = createEngineForTest(tempDir);
-    const result = await testFs.projects.create("my-test");
+  it("routes the default fs through the active book context", async () => {
+    const testFs = currentTestEngine();
+    await withBookContext(
+      { bookId: testFs.book.get().bookId, engine: testFs },
+      async () => {
+        expect(defaultFs.artifacts).toBe(testFs.artifacts);
+        expect(defaultFs.book.get()).toEqual(testFs.book.get());
+      },
+    );
+  });
+
+  it("createEngineForTest instance can create an artifact", async () => {
+    const testFs = currentTestEngine();
+    const result = await testFs.artifacts.create("video", "my-test");
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.slug).toBe("my-test");
+      expect(result.value.kind).toBe("video");
     }
   });
 });

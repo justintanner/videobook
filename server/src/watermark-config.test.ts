@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Engine } from "videobook-engine";
 import { closeEngineForTest, createEngineForTest } from "./fs.js";
-import { queue, setEngineRoot } from "./queue.js";
 import { normalizeHandle, readWatermarkConfig, recordHandle, setAuthenticatedHandle } from "./watermark-config.js";
 
 describe("watermark-config store", () => {
@@ -14,17 +13,30 @@ describe("watermark-config store", () => {
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "videocity-watermark-config-"));
     engine = createEngineForTest(tempDir);
-    await setEngineRoot(tempDir, engine);
   });
 
   afterEach(async () => {
-    await queue.stop();
     closeEngineForTest(tempDir, engine);
     await rm(tempDir, { recursive: true, force: true, maxRetries: 3 });
   });
 
+  function readConfig() {
+    return readWatermarkConfig(engine);
+  }
+
+  function recordTestHandle(
+    handle: string,
+    opts: { saveDefault?: boolean } = {},
+  ) {
+    return recordHandle(handle, opts, engine);
+  }
+
+  function setTestAuthenticatedHandle(handle: string | null) {
+    return setAuthenticatedHandle(handle, engine);
+  }
+
   it("returns an empty config when nothing is stored", async () => {
-    expect(await readWatermarkConfig()).toEqual({ savedHandle: null, recent: [], authenticatedHandle: null });
+    expect(await readConfig()).toEqual({ savedHandle: null, recent: [], authenticatedHandle: null });
   });
 
   it("normalizes handles (strips @ and whitespace)", () => {
@@ -35,62 +47,62 @@ describe("watermark-config store", () => {
   });
 
   it("unshifts most-recent-first and dedupes case-insensitively", async () => {
-    await recordHandle("alice");
-    await recordHandle("bob");
-    await recordHandle("ALICE"); // moves alice to front, no duplicate
+    await recordTestHandle("alice");
+    await recordTestHandle("bob");
+    await recordTestHandle("ALICE"); // moves alice to front, no duplicate
 
-    const config = await readWatermarkConfig();
+    const config = await readConfig();
     expect(config.recent).toEqual(["ALICE", "bob"]);
   });
 
   it("pins savedHandle only when saveDefault is set", async () => {
-    await recordHandle("alice", { saveDefault: true });
-    await recordHandle("bob");
+    await recordTestHandle("alice", { saveDefault: true });
+    await recordTestHandle("bob");
 
-    const config = await readWatermarkConfig();
+    const config = await readConfig();
     expect(config.savedHandle).toBe("alice");
     expect(config.recent).toEqual(["bob", "alice"]);
   });
 
   it("caps recent at 8 entries", async () => {
     for (let i = 0; i < 12; i++) {
-      await recordHandle(`handle${i}`);
+      await recordTestHandle(`handle${i}`);
     }
-    const config = await readWatermarkConfig();
+    const config = await readConfig();
     expect(config.recent).toHaveLength(8);
     expect(config.recent[0]).toBe("handle11");
   });
 
   it("ignores blank handles", async () => {
-    await recordHandle("   ");
-    expect(await readWatermarkConfig()).toEqual({ savedHandle: null, recent: [], authenticatedHandle: null });
+    await recordTestHandle("   ");
+    expect(await readConfig()).toEqual({ savedHandle: null, recent: [], authenticatedHandle: null });
   });
 
   it("caches and clears the authenticated handle (read-through fallback)", async () => {
-    expect((await readWatermarkConfig()).authenticatedHandle).toBeNull();
+    expect((await readConfig()).authenticatedHandle).toBeNull();
 
-    await setAuthenticatedHandle("liveuser");
-    expect((await readWatermarkConfig()).authenticatedHandle).toBe("liveuser");
+    await setTestAuthenticatedHandle("liveuser");
+    expect((await readConfig()).authenticatedHandle).toBe("liveuser");
 
     // setAuthenticatedHandle is idempotent when the value is unchanged.
-    const before = await readWatermarkConfig();
-    const after = await setAuthenticatedHandle("liveuser");
+    const before = await readConfig();
+    const after = await setTestAuthenticatedHandle("liveuser");
     expect(after).toEqual(before);
 
     // Normalizes incoming handles (strips @ / whitespace).
-    await setAuthenticatedHandle("  @newhandle  ");
-    expect((await readWatermarkConfig()).authenticatedHandle).toBe("newhandle");
+    await setTestAuthenticatedHandle("  @newhandle  ");
+    expect((await readConfig()).authenticatedHandle).toBe("newhandle");
 
     // Preserves savedHandle + recent across updates.
-    await recordHandle("alice", { saveDefault: true });
-    await setAuthenticatedHandle("someone");
-    const config = await readWatermarkConfig();
+    await recordTestHandle("alice", { saveDefault: true });
+    await setTestAuthenticatedHandle("someone");
+    const config = await readConfig();
     expect(config.savedHandle).toBe("alice");
     expect(config.recent).toEqual(["alice"]);
     expect(config.authenticatedHandle).toBe("someone");
 
     // null clears the cache.
-    await setAuthenticatedHandle(null);
-    expect((await readWatermarkConfig()).authenticatedHandle).toBeNull();
+    await setTestAuthenticatedHandle(null);
+    expect((await readConfig()).authenticatedHandle).toBeNull();
   });
 });

@@ -11,7 +11,6 @@ import { NotebookMediaFullscreen } from '../../src/components/videobook/Notebook
 import {
   persistAndRunNotebookCell,
   startNotebookCellRun,
-  startPlannedNotebookGeneration,
 } from '../../src/videobook/notebook-cell-actions'
 import {
   doltCellDisplayValue,
@@ -1134,30 +1133,6 @@ describe('NotebookCellInspector', () => {
     })
 
     expect(calls).toEqual(['start', 'queued'])
-  })
-
-  it('plans and starts generation directly without a review step', async () => {
-    const calls: string[] = []
-    const result = await startPlannedNotebookGeneration({
-      createPlan: async () => {
-        calls.push('plan')
-        return { planId: 'generation-plan' }
-      },
-      start: async (plan) => {
-        calls.push(`run:${plan.planId}`)
-        return { jobId: 'generation-job' }
-      },
-      onStarting: () => calls.push('starting'),
-      onAccepted: () => calls.push('accepted'),
-    })
-
-    expect(result).toEqual({ jobId: 'generation-job' })
-    expect(calls).toEqual([
-      'plan',
-      'starting',
-      'run:generation-plan',
-      'accepted',
-    ])
   })
 
   it('does not mark a cell queued when its run is rejected', async () => {

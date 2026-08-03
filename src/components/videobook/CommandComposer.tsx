@@ -161,6 +161,7 @@ export function CommandComposer({
   const [dismissed, setDismissed] = useState(false)
   const [sending, setSending] = useState(false)
   const [outcome, setOutcome] = useState<ComposerOutcome | null>(null)
+  const [renderedPendingInput, setRenderedPendingInput] = useState(pendingInput)
   const inputRef = useRef<HTMLInputElement>(null)
   const killBufferRef = useRef('')
   const historyRef = useRef<string[]>([])
@@ -173,6 +174,12 @@ export function CommandComposer({
   const mcpFailed = !transmitting && mcpActivity.phase === 'error'
   const selectedModelOption = chatModels.find((model) => model.id === selectedModel)
     ?? chatModels[0]
+
+  if (pendingInput !== renderedPendingInput) {
+    setRenderedPendingInput(pendingInput)
+    setInput(pendingInput ?? '')
+    setDismissed(pendingInput !== undefined)
+  }
 
   const focusInput = (select = false) => {
     requestAnimationFrame(() => {

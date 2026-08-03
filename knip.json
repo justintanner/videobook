@@ -1,31 +1,33 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": [
-    "index.html",
-    "src/main.tsx",
-    "vite.config.ts",
-    "eslint.config.js",
-    "vitest.config.ts",
-    "vitest.e2e.config.ts",
-    "server/src/index.ts",
-    "server/src/cli.ts",
-    "server/src/test-client.ts",
-    "server/src/**/*.test.ts",
-    "server/scripts/**/*.ts",
-    "scripts/**/*.{mjs,ts}",
-    "server/src/remotion/index.tsx",
-    "extension/vite.config.ts",
-    "extension/src/background.ts",
-    "extension/src/x-post-content.ts",
-    "extension/src/**/*.test.ts"
-  ],
-  "ignore": [
-    "**/dist/**",
-    "**/node_modules/**",
-    "server/dist/**",
-    "dist-extension/**"
-  ],
+  "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreBinaries": [
-    "tsx"
-  ]
+    "op"
+  ],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "index.html",
+        "src/main.tsx",
+        "vite.config.ts",
+        "eslint.config.js",
+        "vitest.config.ts",
+        "vitest.e2e.config.ts",
+        "scripts/**/*.{mjs,ts}",
+        "extension/vite.config.ts",
+        "extension/src/background.ts",
+        "extension/src/x-post-content.ts",
+        "extension/src/**/*.test.ts"
+      ]
+    },
+    "server": {
+      "entry": [
+        "src/index.ts",
+        "src/cli.ts",
+        "src/test-client.ts",
+        "src/**/*.test.ts",
+        "scripts/**/*.ts",
+        "src/remotion/index.tsx"
+      ]
+    }
+  }
 }
