@@ -209,7 +209,9 @@ export function splitVideoDef(fs: Engine): ToolDef {
           text: JSON.stringify({
             source_asset_id: assetId,
             chunk_a_asset_id: assetIdA,
+            chunk_a_artifact_id: createA.value.artifactId,
             chunk_b_asset_id: assetIdB,
+            chunk_b_artifact_id: createB.value.artifactId,
             chunk_a_end: validated.chunkAEnd,
             chunk_b_start: validated.chunkBStart,
             overlap_sec: Math.max(0, validated.chunkAEnd - validated.chunkBStart),

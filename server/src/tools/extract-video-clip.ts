@@ -104,6 +104,7 @@ export function extractVideoClipDef(fs: Engine): ToolDef {
           text: JSON.stringify({
             source_asset_id: assetId,
             output_asset_id: outputAssetId,
+            output_artifact_id: extracted.artifactId,
             start_time: startTime,
             end_time: actualEndTime,
             duration: extracted.durationSeconds,

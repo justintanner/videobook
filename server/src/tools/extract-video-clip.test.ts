@@ -90,6 +90,7 @@ describe("source-preserving video clip tools", () => {
       expect(result.isError).toBeFalsy();
       const extracted = resultValue(result);
       expect(extracted.source_asset_id).toBe(sourceAssetId);
+      expect(extracted.output_artifact_id).toEqual(expect.any(String));
       expect(extracted.start_time).toBe(1);
       expect(extracted.end_time).toBe(3);
       expect(extracted.duration).toBe(2);
@@ -124,6 +125,8 @@ describe("source-preserving video clip tools", () => {
     expect(split.chunk_b_start).toBe(2);
     expect(split.chunk_a_asset_id).not.toBe(sourceAssetId);
     expect(split.chunk_b_asset_id).not.toBe(sourceAssetId);
+    expect(split.chunk_a_artifact_id).toEqual(expect.any(String));
+    expect(split.chunk_b_artifact_id).toEqual(expect.any(String));
     const sourceManifest = await engine.files.manifest(sourceAssetId);
     expect(sourceManifest.ok).toBe(true);
   }, 120_000);

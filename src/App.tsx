@@ -186,6 +186,7 @@ import {
   downloadVideoCellInput,
   nextNotebookCellSlug,
 } from '@/videobook/notebook-download'
+import { routedVideoCellInputs } from '@/videobook/notebook-routed-action'
 import {
   enqueueNotebookFrameCommand,
   parseNotebookFrameCommand,
@@ -6435,34 +6436,68 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
     }
     setBusy(true)
+    let applied = false
     try {
+      const plan = pendingChatAction.plan
       const result = await call('chat', {
         book_id: bookId,
-        action_plan: pendingChatAction.plan,
+        action_plan: plan,
       })
-      const outcome = isDownloadVideoResult(result)
-        ? await completeVideoDownload(
-            result,
-            urlFromText(pendingChatAction.plan.prompt),
-          )
-        : {
-            ok: true,
-            message: messageFor(result, pendingChatAction.plan.message || 'Action applied'),
-          }
-      if (outcome.ok) {
-        setPendingChatAction(null)
-        await refreshBookData(bookId, notebook?.id)
+      applied = true
+      setPendingChatAction(null)
+      if (isDownloadVideoResult(result)) {
+        const outcome = await completeVideoDownload(
+          result,
+          urlFromText(plan.prompt),
+        )
         setNotice(outcome.message, outcome.ok ? 'info' : 'error')
+        return outcome.ok
+          ? outcome
+          : { ...outcome, nextInput: '', selectInput: false }
       }
-      return outcome
+      const routedCells = notebook
+        ? routedVideoCellInputs(plan.tool, result, notebook.cells)
+        : []
+      if (notebook && routedCells.length > 0) {
+        const placements: string[] = []
+        let firstCellId: string | null = null
+        for (const cell of routedCells) {
+          const created = record(await call('create_notebook_cell', {
+            book_id: bookId,
+            notebook_id: notebook.id,
+            cell,
+          }))
+          const cellId = asString(created?.id)
+          if (!cellId) {
+            throw new Error('The server did not return the new notebook cell')
+          }
+          firstCellId ??= cellId
+          placements.push(`@${cell.slug} at ${notebookGridTag(cell.slot)}`)
+        }
+        setSelectedCellId(firstCellId)
+        await refreshBookData(bookId, notebook.id)
+        const message = `Created ${placements.join(' and ')}`
+        setNotice(message)
+        return { ok: true, message }
+      }
+      await refreshBookData(bookId, notebook?.id)
+      const message = messageFor(result, plan.message || 'Action applied')
+      setNotice(message)
+      return { ok: true, message }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const detail = error instanceof Error ? error.message : String(error)
+      const message = applied
+        ? `Action completed, but its notebook result could not be shown: ${detail}`
+        : detail
+      if (applied) {
+        await refreshBookData(bookId, notebook?.id).catch(() => undefined)
+      }
       setNotice(message, 'error')
       return {
         ok: false,
         message,
-        nextInput: '/apply',
-        selectInput: true,
+        nextInput: applied ? '' : '/apply',
+        selectInput: !applied,
       }
     } finally {
       setBusy(false)
