@@ -536,4 +536,64 @@ describe('chat composer browser flow', () => {
     const runCall = observedCalls.find((call) => call.name === 'run_notebook_cell')
     expect(runCall?.arguments.cell_id).toBe(reviewGenerationCellId)
   }, 60_000)
+
+  it('selects multiple cells and confirms before deleting the set', async () => {
+    if (!page) throw new Error('Browser page was not initialized')
+    await page.goto(appUrl, { waitUntil: 'commit' })
+    const input = page.getByLabel('Videobook command input')
+    await input.waitFor({ state: 'visible', timeout: 30_000 })
+    await expect.poll(async () => await input.isEnabled()).toBe(true)
+
+    const firstCell = page.locator('.cell-node.cell-kind-video')
+    const secondCell = page.locator('.cell-node.cell-kind-generate_video')
+    await firstCell.waitFor({ state: 'visible' })
+    await secondCell.waitFor({ state: 'visible' })
+    await firstCell.click()
+    await secondCell.click({ modifiers: ['Shift'] })
+
+    const actions = page.getByLabel('Notebook selection actions')
+    await actions.waitFor({ state: 'visible' })
+    await expect.poll(async () => await actions.textContent()).toContain('2 selected')
+    expect(await actions.textContent()).toContain('@b1 active')
+    expect(await firstCell.getAttribute('data-selection')).toBe('selected')
+    expect(await secondCell.getAttribute('data-selection')).toBe('primary')
+
+    await secondCell.click({ modifiers: ['Shift'] })
+    await expect.poll(async () => await actions.textContent()).toContain('1 selected')
+    expect(await firstCell.getAttribute('data-selection')).toBe('primary')
+    expect(await secondCell.getAttribute('data-selection')).toBeNull()
+    await secondCell.click({ modifiers: ['Shift'] })
+    await expect.poll(async () => await actions.textContent()).toContain('2 selected')
+
+    observedCalls.length = 0
+    const deleteSelection = page.getByLabel('Delete 2 selected cells')
+    const cancelledDialog = new Promise<string>((resolve) => {
+      page!.once('dialog', async (dialog) => {
+        resolve(dialog.message())
+        await dialog.dismiss()
+      })
+    })
+    await deleteSelection.click()
+    const cancelMessage = await cancelledDialog
+    expect(cancelMessage).toContain('Delete 2 selected cells?')
+    expect(cancelMessage).toContain('@a1, @b1')
+    expect(observedCalls.some((call) => call.name === 'delete_notebook_cell')).toBe(false)
+    expect(await firstCell.count()).toBe(1)
+    expect(await secondCell.count()).toBe(1)
+
+    const acceptedDialog = new Promise<string>((resolve) => {
+      page!.once('dialog', async (dialog) => {
+        resolve(dialog.message())
+        await dialog.accept()
+      })
+    })
+    await deleteSelection.click()
+    expect(await acceptedDialog).toContain('@a1, @b1')
+    await firstCell.waitFor({ state: 'hidden' })
+    await secondCell.waitFor({ state: 'hidden' })
+    await actions.waitFor({ state: 'hidden' })
+    const deleteCalls = observedCalls.filter((call) =>
+      call.name === 'delete_notebook_cell')
+    expect(deleteCalls).toHaveLength(2)
+  }, 60_000)
 })

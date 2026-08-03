@@ -17,7 +17,6 @@ import {
   Handle,
   Position,
   ReactFlow,
-  SelectionMode,
   applyEdgeChanges,
   applyNodeChanges,
   type Connection,
@@ -526,6 +525,7 @@ const CellRunContext = createContext<(
 ) => Promise<ComposerOutcome | undefined>>(
   async () => undefined,
 )
+const PrimaryCellContext = createContext<string | null>(null)
 
 const mcpUrl = typeof window === 'undefined'
   ? 'http://localhost/mcp'
@@ -2205,6 +2205,8 @@ function CellStatusBadge({ status }: { status: string | null }) {
 function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
   const slotContext = useContext(MediaSlotContext)
   const runCell = useContext(CellRunContext)
+  const primaryCellId = useContext(PrimaryCellContext)
+  const primarySelected = selected && primaryCellId === id
   const mediaUrl = data.asset?.mediaUrl
   const thumbnailUrl = data.asset?.thumbnailUrl
   const targetInputs = data.targetInputs?.length ? data.targetInputs : ['input']
@@ -2254,6 +2256,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         'cell-node',
         `cell-kind-${data.kind}`,
         selected ? 'cell-node-selected' : '',
+        primarySelected ? 'cell-node-primary' : '',
         running ? 'cell-node-running' : '',
         data.status === 'queued' ? 'cell-node-queued' : '',
         failed ? 'cell-node-error' : '',
@@ -2262,6 +2265,7 @@ function CellNode({ id, data, selected }: NodeProps<CanvasNode>) {
         data.revealing ? 'cell-node-created' : '',
       ].filter(Boolean).join(' ')}
       aria-busy={running}
+      data-selection={primarySelected ? 'primary' : selected ? 'selected' : undefined}
       data-version-count={outputVersions.length}
       data-cell-status={data.status}
     >
@@ -2449,13 +2453,18 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [providers, setProviders] = useState<ProviderRecord[]>([])
   const [storage, setStorage] = useState<unknown>(null)
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null)
+  const [selectedCellIds, setSelectedCellIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
   const [queuedCellIds, setQueuedCellIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
   const [revealingCellIds, setRevealingCellIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
-  const [deletingCellId, setDeletingCellId] = useState<string | null>(null)
+  const [deletingCellIds, setDeletingCellIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
   const [mediaSlotStates, setMediaSlotStates] = useState<Record<string, MediaSlotState>>({})
   const [cellRunErrors, setCellRunErrors] = useState<Record<string, string>>({})
   const [mediaLibraryPicker, setMediaLibraryPicker] = useState<MediaLibraryPickerState | null>(null)
@@ -2529,6 +2538,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const activeMcpCallsRef = useRef(new Map<number, { tool: string; startedAt: number }>())
   const mcpActivitySequenceRef = useRef(0)
   const mcpActivityTimerRef = useRef(0)
+  const selectedCellIdsRef = useRef<ReadonlySet<string>>(new Set())
   const watchScopeRef = useRef<{
     bookId: string | null
     notebookId: string | null
@@ -2916,6 +2926,21 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
   const [edges, setEdges] = useState<NotebookFlowEdge[]>(() =>
     initialWorkspace?.notebook ? notebookEdges(initialWorkspace.notebook) : [])
 
+  const updateSelectedCellIds = useCallback((next: ReadonlySet<string>) => {
+    const current = selectedCellIdsRef.current
+    if (
+      current.size === next.size
+      && [...next].every((cellId) => current.has(cellId))
+    ) return
+    selectedCellIdsRef.current = next
+    setSelectedCellIds(next)
+  }, [])
+
+  const selectCanvasCell = useCallback((cellId: string | null) => {
+    setSelectedCellId(cellId)
+    updateSelectedCellIds(cellId ? new Set([cellId]) : new Set())
+  }, [updateSelectedCellIds])
+
   const applyNotebook = useCallback((
     next: NotebookDocument,
     nextAssets: AssetRecord[],
@@ -2937,6 +2962,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setCellRunErrors((current) => Object.fromEntries(
       Object.entries(current).filter(([cellId]) => cellIds.has(cellId)),
     ))
+    updateSelectedCellIds(new Set(
+      [...selectedCellIdsRef.current].filter((cellId) => cellIds.has(cellId)),
+    ))
     setMediaLibraryPicker((current) =>
       current && cellIds.has(current.cellId) ? current : null)
     setNodes((current) =>
@@ -2944,7 +2972,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setEdges((current) => reconcileFlowEdges(current, notebookEdges(next)))
     setSelectedCellId((current) =>
       current && next.cells.some((cell) => cell.id === current) ? current : null)
-  }, [])
+    setSourceViewCellId((current) =>
+      current && cellIds.has(current) ? current : null)
+  }, [updateSelectedCellIds])
 
   const watchNotebookRun = useCallback(async (params: {
     bookId: string
@@ -3343,6 +3373,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       }
     })
   }, [cellRunErrors, nodes, queuedCellIds, revealingCellIds])
+  const canvasPresentationNodes = useMemo(() => presentedNodes.map((node) => {
+    const selected = selectedCellIds.has(node.id)
+    return node.selected === selected ? node : { ...node, selected }
+  }), [presentedNodes, selectedCellIds])
   const focusedEdges = useMemo(
     () => notebookEdgesWithCellFocus(edges, selectedCellId),
     [edges, selectedCellId],
@@ -3591,9 +3625,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     requestPendingGenerationPreview(pendingGenerationDraft, notebook)
   }, [notebook, pendingGenerationDraft, requestPendingGenerationPreview])
   const selectPendingGenerationSource = useCallback((cellId: string) => {
-    setSelectedCellId(cellId)
+    selectCanvasCell(cellId)
     setInspectorOpen(true)
-  }, [])
+  }, [selectCanvasCell])
 
   useLayoutEffect(() => {
     const container = notebookScrollRef.current
@@ -3630,6 +3664,13 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     () => notebook?.cells.find((cell) => cell.id === selectedCellId) ?? null,
     [notebook, selectedCellId],
   )
+  const selectedNotebookCells = useMemo(() => (notebook?.cells ?? [])
+    .filter((cell) => selectedCellIds.has(cell.id))
+    .sort((left, right) =>
+      left.slot.row - right.slot.row || left.slot.column - right.slot.column), [
+    notebook,
+    selectedCellIds,
+  ])
   const notebookCellAssets = useMemo(
     () => new Map((notebook?.cells ?? []).flatMap((cell) => {
       const cellAsset = artifactForCell(assetById, cell.outputArtifactId)
@@ -4098,36 +4139,97 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     }
   }
 
-  const deleteSelectedCell = async () => {
-    if (!bookId || !notebook || !selectedCell) return
-    const cellId = selectedCell.id
-    setDeletingCellId(cellId)
-    setNodes((current) => current.map((node) => node.id === cellId
+  const deleteNotebookCells = async (
+    cells: readonly NotebookDocument['cells'][number][],
+  ) => {
+    if (!bookId || !notebook || cells.length === 0) return
+    const uniqueCells = [...new Map(cells.map((cell) => [cell.id, cell])).values()]
+    const cellIds = new Set(uniqueCells.map((cell) => cell.id))
+    const addresses = uniqueCells.map((cell) => notebookGridTag(cell.slot))
+    const count = uniqueCells.length
+    const confirmed = window.confirm(count === 1
+      ? `Delete ${addresses[0]}?\n\nThis removes the cell and its connections. This cannot be undone.`
+      : `Delete ${count} selected cells?\n\n${addresses.join(', ')}\n\nThis removes the cells and their connections. This cannot be undone.`)
+    if (!confirmed) return
+
+    const deletedIds = new Set<string>()
+    const reconcileDeletedSelection = () => {
+      const fallbackCellId = selectedNotebookCells
+        .map((cell) => cell.id)
+        .filter((cellId) => !deletedIds.has(cellId))
+        .at(-1) ?? null
+      updateSelectedCellIds(new Set(
+        [...selectedCellIdsRef.current].filter((cellId) => !deletedIds.has(cellId)),
+      ))
+      setSelectedCellId((current) =>
+        current && !deletedIds.has(current) ? current : fallbackCellId)
+      setSourceViewCellId((current) =>
+        current && deletedIds.has(current) ? null : current)
+    }
+
+    setDeletingCellIds(cellIds)
+    setNodes((current) => current.map((node) => cellIds.has(node.id)
       ? { ...node, data: { ...node.data, deleting: true } }
       : node))
     setBusy(true)
     try {
       await delay(180)
-      await call('delete_notebook_cell', {
-        book_id: bookId,
-        notebook_id: notebook.id,
-        cell_id: cellId,
-      })
-      if (fullscreenCellId === cellId) setFullscreenCellId(null)
+      for (const cell of uniqueCells) {
+        await call('delete_notebook_cell', {
+          book_id: bookId,
+          notebook_id: notebook.id,
+          cell_id: cell.id,
+        })
+        deletedIds.add(cell.id)
+      }
+      if (fullscreenCellId && deletedIds.has(fullscreenCellId)) {
+        setFullscreenCellId(null)
+      }
       await refreshBookData(bookId, notebook.id)
-      setNotice('Cell deleted')
+      reconcileDeletedSelection()
+      setNotice(count === 1 ? `${addresses[0]} deleted` : `${count} cells deleted`)
     } catch (error) {
+      if (fullscreenCellId && deletedIds.has(fullscreenCellId)) {
+        setFullscreenCellId(null)
+      }
+      await refreshBookData(bookId, notebook.id).catch(() => undefined)
+      reconcileDeletedSelection()
+      const message = error instanceof Error ? error.message : String(error)
       setNotice(
-        error instanceof Error ? error.message : String(error),
+        deletedIds.size > 0
+          ? `Deleted ${deletedIds.size} of ${count} cells. ${message}`
+          : message,
         'error',
       )
     } finally {
-      setNodes((current) => current.map((node) => node.id === cellId
+      setNodes((current) => current.map((node) => cellIds.has(node.id)
         ? { ...node, data: { ...node.data, deleting: false } }
         : node))
-      setDeletingCellId(null)
+      setDeletingCellIds(new Set())
       setBusy(false)
     }
+  }
+
+  const deleteSelectedCell = async () => {
+    if (!selectedNotebookCell) return
+    await deleteNotebookCells([selectedNotebookCell])
+  }
+
+  const deleteSelectedCells = async () => {
+    await deleteNotebookCells(selectedNotebookCells)
+  }
+
+  const handleNotebookCanvasKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Backspace' && event.key !== 'Delete') return
+    const target = event.target
+    if (
+      target instanceof HTMLElement
+      && target.closest('input, textarea, select, button, a, [contenteditable="true"]')
+    ) return
+    if (busy || selectedNotebookCells.length === 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    void deleteSelectedCells()
   }
 
   const persistSlots = async (nextNodes: CanvasNode[]) => {
@@ -5621,7 +5723,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         throw new Error('The server did not return the new notebook cell')
       }
       createdCellId = nextCellId
-      setSelectedCellId(nextCellId)
+      selectCanvasCell(nextCellId)
     } catch (error) {
       await refreshBookData(bookId, notebook.id)
       const message = error instanceof Error ? error.message : String(error)
@@ -5689,7 +5791,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       return
     }
     if (outcome.kind === 'superseded') return
-    setSelectedCellId(input.run.outputs.at(-1)?.outputCellId ?? null)
+    selectCanvasCell(input.run.outputs.at(-1)?.outputCellId ?? null)
     setNotice(
       `Split ${input.sourceAddress} into ${input.outputAddresses.join(' and ')}`,
     )
@@ -5734,7 +5836,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       revealCells(draft.createdCellIds)
       setCellRunError(actionCellId, null)
       setCellQueued(actionCellId, true)
-      setSelectedCellId(draft.outputs[0].outputCell.id)
+      selectCanvasCell(draft.outputs[0].outputCell.id)
       setNotice(`Splitting ${sourceAddress} at ${draft.splitAtSeconds}s`)
       const run = await enqueueNotebookSplitCommand({
         actor: 'videobook-user',
@@ -5797,7 +5899,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       actionCellId = run.actionCellId
       setCellRunError(actionCellId, null)
       setCellQueued(actionCellId, true)
-      setSelectedCellId(run.outputCellId ?? actionCellId)
+      selectCanvasCell(run.outputCellId ?? actionCellId)
       setNotice(`Frame extraction queued for ${sourceAddress}`)
       const outcome = await watchNotebookRun({
         bookId,
@@ -5819,7 +5921,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
       if (outcome.kind === 'superseded') {
         throw new Error(`Frame extraction for ${sourceAddress} was superseded by a newer run`)
       }
-      setSelectedCellId(run.outputCellId ?? actionCellId)
+      selectCanvasCell(run.outputCellId ?? actionCellId)
       return {
         ok: true,
         message: `Extracted the ${command.frameMode} frame of ${sourceAddress}`,
@@ -6162,7 +6264,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
     setBusy(true)
     setCellRunError(cellId, null)
     setCellQueued(cellId, true)
-    setSelectedCellId(cellId)
+    selectCanvasCell(cellId)
     showOptimisticGeneration(preparedAction.draft, currentNotebook)
     try {
       await materializeNotebookChatGeneration({
@@ -6354,7 +6456,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
             },
           }))
           const cellId = asString(created?.id)
-          if (cellId) setSelectedCellId(cellId)
+          if (cellId) selectCanvasCell(cellId)
         } else if (action.kind === 'move') {
           const source = notebookCellAtSlot(currentNotebook, action.source)!
           const target = notebookCellAtSlot(currentNotebook, action.destination)
@@ -6474,7 +6576,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
           firstCellId ??= cellId
           placements.push(`@${cell.slug} at ${notebookGridTag(cell.slot)}`)
         }
-        setSelectedCellId(firstCellId)
+        selectCanvasCell(firstCellId)
         await refreshBookData(bookId, notebook.id)
         const message = `Created ${placements.join(' and ')}`
         setNotice(message)
@@ -7326,6 +7428,31 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                         ))}
                       </div>
                     </details>
+                    {selectedNotebookCells.length > 0 && (
+                      <div
+                        className="canvas-selection-actions"
+                        aria-label="Notebook selection actions"
+                        title="Shift, Command, or Control-click to select more cells"
+                      >
+                        <span>
+                          <strong>{selectedNotebookCells.length}</strong> selected
+                        </span>
+                        {selectedNotebookCells.length > 1 && selectedNotebookCell && (
+                          <code>{notebookGridTag(selectedNotebookCell.slot)} active</code>
+                        )}
+                        <button
+                          type="button"
+                          className="canvas-delete-selection"
+                          aria-label={`Delete ${selectedNotebookCells.length} selected ${selectedNotebookCells.length === 1 ? 'cell' : 'cells'}`}
+                          aria-keyshortcuts="Delete Backspace"
+                          disabled={busy}
+                          onClick={() => void deleteSelectedCells()}
+                        >
+                          <Trash2 size={13} />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
                 {!notebook ? (
@@ -7339,6 +7466,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     ref={notebookScrollRef}
                     tabIndex={0}
                     aria-label="Notebook canvas"
+                    onKeyDown={handleNotebookCanvasKeyDown}
                   >
                     <div
                       className="notebook-flow-frame"
@@ -7346,9 +7474,10 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     >
                       <MediaSlotContext.Provider value={mediaSlotContextValue}>
                         <CellRunContext.Provider value={runCell}>
-                          <ReactFlow<CanvasNode, NotebookFlowEdge>
+                          <PrimaryCellContext.Provider value={selectedCellId}>
+                            <ReactFlow<CanvasNode, NotebookFlowEdge>
                           className="notebook-flow"
-                      nodes={presentedNodes}
+                      nodes={canvasPresentationNodes}
                       edges={focusedEdges}
                       nodeTypes={nodeTypes}
                       edgeTypes={edgeTypes}
@@ -7357,34 +7486,46 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       onInit={(instance) => {
                         flowRef.current = instance
                       }}
-                      onNodesChange={(changes) => setNodes((current) => {
-                        let next = applyNodeChanges(changes, current)
-                        for (const change of changes) {
-                          if (
-                            change.type !== 'position'
-                            || !change.dragging
-                            || !change.position
-                          ) continue
-                          next = snapNotebookGridMove(
-                            next,
-                            change.id,
-                            notebookGridSlot(change.position),
-                          )
-                        }
-                        return next
-                      })}
+                      onNodesChange={(changes) => {
+                        setNodes((current) => {
+                          let next = applyNodeChanges(changes, current)
+                          for (const change of changes) {
+                            if (
+                              change.type !== 'position'
+                              || !change.dragging
+                              || !change.position
+                            ) continue
+                            next = snapNotebookGridMove(
+                              next,
+                              change.id,
+                              notebookGridSlot(change.position),
+                            )
+                          }
+                          return next
+                        })
+                      }}
                       onEdgesChange={(changes) => {
                         setEdges((current) => applyEdgeChanges(changes, current))
                         const removed = changes.filter((change) => change.type === 'remove').map((change) => change.id)
                         if (removed.length > 0) void removeEdges(removed)
                       }}
-                      onNodeClick={(_event, node) => {
-                        setSelectedCellId(node.id)
+                      onNodeClick={(event, node) => {
+                        if (event.metaKey || event.ctrlKey || event.shiftKey) {
+                          const nextSelection = new Set(selectedCellIdsRef.current)
+                          if (nextSelection.has(node.id)) nextSelection.delete(node.id)
+                          else nextSelection.add(node.id)
+                          updateSelectedCellIds(nextSelection)
+                          setSelectedCellId(nextSelection.has(node.id)
+                            ? node.id
+                            : [...nextSelection].at(-1) ?? null)
+                        } else {
+                          selectCanvasCell(node.id)
+                        }
                         setSourceViewCellId(null)
                         setInspectorOpen(true)
                       }}
                       onPaneClick={() => {
-                        setSelectedCellId(null)
+                        selectCanvasCell(null)
                         setSourceViewCellId(null)
                       }}
                       onNodeDrag={(_event, node) => {
@@ -7431,9 +7572,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                       }}
                       minZoom={notebookGrid.minimumZoom}
                       maxZoom={notebookGrid.maximumZoom}
+                      elementsSelectable={false}
                       panOnDrag={notebookPanOnDragButtons}
-                      selectionOnDrag
-                      selectionMode={SelectionMode.Partial}
                       panOnScroll={false}
                       zoomOnScroll={false}
                       zoomOnPinch
@@ -7447,7 +7587,8 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                               metrics={notebookMetrics}
                               previewSlot={previewSlot}
                             />
-                          </ReactFlow>
+                            </ReactFlow>
+                          </PrimaryCellContext.Provider>
                         </CellRunContext.Provider>
                       </MediaSlotContext.Provider>
                     </div>
@@ -7480,7 +7621,9 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                 className={[
                   'inspector',
                   inspectorOpen ? '' : 'inspector-closed',
-                  deletingCellId === selectedCell?.id ? 'inspector-deleting' : '',
+                  selectedCell && deletingCellIds.has(selectedCell.id)
+                    ? 'inspector-deleting'
+                    : '',
                 ].filter(Boolean).join(' ')}
               >
                 <header>
@@ -7723,7 +7866,7 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
                     error={selectedCellError}
                     generationActions={generationActions}
                     busy={busy || Boolean(selectedMediaSlotState?.operation)}
-                    deleting={deletingCellId === selectedNotebookCell.id}
+                    deleting={deletingCellIds.has(selectedNotebookCell.id)}
                     clearing={selectedMediaSlotState?.operation === 'clear'}
                     sourceVisible={sourceViewCellId === selectedNotebookCell.id}
                     onUpdate={updateCell}

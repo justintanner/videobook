@@ -962,6 +962,67 @@ textarea:focus-visible {
   background: rgba(49, 137, 85, 0.5);
 }
 
+.canvas-selection-actions {
+  display: flex;
+  height: 32px;
+  align-items: stretch;
+  border: 1px solid rgba(114, 231, 170, 0.42);
+  color: #a9d5ba;
+  background: rgba(4, 19, 12, 0.96);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+}
+
+.canvas-selection-actions > span,
+.canvas-selection-actions > code {
+  display: flex;
+  align-items: center;
+  padding: 0 9px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.canvas-selection-actions > span strong {
+  margin-right: 5px;
+  color: #d0f6df;
+  font-size: 11px;
+}
+
+.canvas-selection-actions > code {
+  border-left: 1px solid rgba(114, 231, 170, 0.18);
+  color: #6f9f81;
+  font-family: inherit;
+}
+
+.canvas-delete-selection {
+  display: flex;
+  min-width: 74px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 0;
+  border-left: 1px solid rgba(196, 117, 117, 0.34);
+  color: #c48d8d;
+  background: rgba(96, 39, 39, 0.18);
+  cursor: pointer;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.canvas-delete-selection:hover:not(:disabled),
+.canvas-delete-selection:focus-visible:not(:disabled) {
+  color: #ffd0d0;
+  background: rgba(137, 52, 52, 0.42);
+}
+
+.canvas-delete-selection:disabled {
+  cursor: wait;
+  opacity: 0.48;
+}
+
 .canvas {
   --notebook-edge-inset: 24px;
   --notebook-composer-clearance: 86px;
@@ -1379,6 +1440,17 @@ textarea:focus-visible {
     0 0 26px rgba(79, 183, 125, 0.42),
     0 18px 38px rgba(0, 0, 0, 0.42);
   animation: cell-selection-settle 220ms ease-out;
+}
+
+.cell-node-selected:not(.cell-node-primary) {
+  box-shadow:
+    0 0 14px rgba(79, 183, 125, 0.28),
+    0 12px 28px rgba(0, 0, 0, 0.36);
+}
+
+.cell-node-primary {
+  outline: 1px solid rgba(156, 244, 187, 0.72);
+  outline-offset: 3px;
 }
 
 .cell-node-selected::before {
