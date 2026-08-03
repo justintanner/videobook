@@ -68,6 +68,22 @@ describe("chat routing catalog", () => {
     expect(downloadDefinition?.schema.start_time?.safeParse(30).success).toBe(true);
   });
 
+  it("publishes permissive source-preserving clip tools", () => {
+    const tools = buildRoutableTools(definitions);
+    const split = getRoutableTool(tools, "split_video");
+    const extract = getRoutableTool(tools, "extract_video_clip");
+    const splitDefinition = definitions.find((definition) =>
+      definition.name === "split_video");
+    const extractDefinition = definitions.find((definition) =>
+      definition.name === "extract_video_clip");
+    expect(split?.requiredParams).toEqual(["asset_id", "chunk_a_end"]);
+    expect(extract?.requiredParams).toEqual(["asset_id", "end_time"]);
+    expect(splitDefinition?.schema.chunk_a_end?.safeParse("15s").success).toBe(true);
+    expect(extractDefinition?.schema.end_time?.safeParse("0:44").success).toBe(true);
+    expect(splitDefinition?.annotations?.destructiveHint).toBe(false);
+    expect(extractDefinition?.annotations?.destructiveHint).toBe(false);
+  });
+
   it("publishes required parameters and enum domains to the router", () => {
     const tools = buildRoutableTools(definitions);
     const motionControl = getRoutableTool(
@@ -123,6 +139,9 @@ describe("chat routing catalog", () => {
     expect(prompt).toContain("- download_video:");
     expect(prompt).toContain("- delete_notebook:");
     expect(prompt).toContain("Recent conversation:");
+    expect(prompt).toContain("remaining/rest/remainder");
+    expect(prompt).toContain("use extract_video_clip");
+    expect(prompt).toContain("use trim_video only when the existing source should be changed in place");
     expect(prompt).not.toContain("\n- chat:");
   });
 
@@ -149,6 +168,7 @@ describe("chat timestamp parameters", () => {
     ]);
     expect(TIMESTAMP_PARAMS.download_video).toEqual(["start_time", "end_time"]);
     expect(TIMESTAMP_PARAMS.split_video).toEqual(["chunk_a_end", "chunk_b_start"]);
+    expect(TIMESTAMP_PARAMS.extract_video_clip).toEqual(["start_time", "end_time"]);
     expect(TIMESTAMP_PARAMS.timewarp_video).toEqual(["start_seconds", "end_seconds"]);
   });
 

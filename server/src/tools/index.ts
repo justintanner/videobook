@@ -48,6 +48,7 @@ import { readAssetMetadataDef } from "./read-asset-metadata.js";
 import { trimVideoDef } from "./trim-video.js";
 import { trimAudioDef } from "./trim-audio.js";
 import { splitVideoDef } from "./split-video.js";
+import { extractVideoClipDef } from "./extract-video-clip.js";
 import { splitVideoByDurationsDef } from "./even-split.js";
 import { padVideoDef } from "./pad-video.js";
 import { cropVideoDef } from "./crop-video.js";
@@ -220,6 +221,7 @@ export function getVideoEditingToolDefs(fs: Engine): ToolDef[] {
     trimVideoDef(fs),
     trimAudioDef(fs),
     splitVideoDef(fs),
+    extractVideoClipDef(fs),
     splitVideoByDurationsDef(fs),
     padVideoDef(fs),
     cropVideoDef(fs),
@@ -311,6 +313,7 @@ export function registerAllTools(
     server.registerTool(def.name, {
       description: def.description,
       inputSchema: z.object(def.schema),
+      ...(def.annotations ? { annotations: def.annotations } : {}),
     }, def.handler);
   }
 }

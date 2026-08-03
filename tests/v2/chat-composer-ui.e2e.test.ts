@@ -251,7 +251,7 @@ describe('chat composer browser flow', () => {
         delayedBootstrap = true
         await wait(700)
       }
-      if (calls.some((call) => call.name === 'plan_chat_command')) {
+      if (calls.some((call) => call.name === 'chat')) {
         await wait(850)
       }
       await route.continue()
@@ -312,7 +312,7 @@ describe('chat composer browser flow', () => {
     await page.getByLabel('Send command').click()
     await page.waitForFunction(() =>
       document.querySelector('[data-testid="mcp-activity"]')?.textContent
-        ?.includes('Planning chat command'))
+        ?.includes('Routing chat'))
     const shell = page.locator('.command-line-shell')
     expect(await shell.getAttribute('aria-busy')).toBe('true')
     expect(await shell.evaluate((element) => window.getComputedStyle(element).animationName))
@@ -325,6 +325,7 @@ describe('chat composer browser flow', () => {
     }).toBeTruthy()
     const chatCall = observedCalls.find((call) => call.name === 'chat')
     expect(chatCall?.arguments.model).toBe('gpt-5.6-terra')
+    expect(observedCalls.some((call) => call.name === 'plan_chat_command')).toBe(false)
     const errorResult = page.locator('.command-result-error')
     await errorResult.waitFor({ state: 'visible' })
     expect(await errorResult.textContent()).toContain('OPENAI_API_KEY')

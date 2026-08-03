@@ -375,7 +375,7 @@ async function applyChatActionPlan(
 export function chatDef(fs: Engine): ToolDef {
   return {
     name: "chat",
-    description: "Natural language interface — executes reads and previews mutations or generation for explicit application. Supports @asset tags (e.g., @vid-foo, @img-bar).",
+    description: "LLM-backed router for the Videobook app composer. It executes reads and previews mutations or generation for explicit application. ChatGPT and other LLM hosts should call the specific media tools directly instead of calling this nested router.",
     schema: {
       prompt: z.string().min(1).optional().describe("Natural language query with optional @asset tags"),
       book_id: z.string().uuid().describe("Book UUID"),

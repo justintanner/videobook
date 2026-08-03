@@ -2,7 +2,7 @@
 
 Every current MCP endpoint and canonical slash command is listed once. Historical MCP names are lookup-only compatibility keys and are not registered endpoints; slash aliases remain accepted but are hidden from command catalogs.
 
-## MCP endpoints (302)
+## MCP endpoints (303)
 
 - `add_sequence_track` — Append a canonical video, audio, or caption track
 - `add_timeline_audio` — Add a typed audio overlay to the selected book timeline
@@ -21,7 +21,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `build_generation_provider_payload` (historical names, not exposed: `translate_payload`) — Translate gen tool args to the @apicity provider payload. Returns the exact request body that would be sent, with asset slugs in place of upload URLs.
 - `cancel_job` — Cancel a queued or running persistent job
 - `change_video_speed` — Change video playback speed (speed up or slow down). Operates in-place with git versioning.
-- `chat` — Natural language interface — executes reads and previews mutations or generation for explicit application. Supports @asset tags (e.g., @vid-foo, @img-bar).
+- `chat` — LLM-backed router for the Videobook app composer. It executes reads and previews mutations or generation for explicit application. ChatGPT and other LLM hosts should call the specific media tools directly instead of calling this nested router.
 - `check_duplicate_bytes` — Find existing book files with the same immutable content hash before import
 - `check_kimi_coding_api` — Check whether the Kimi Coding API is reachable and its configured API key is valid
 - `clean_failed_assets` (historical names, not exposed: `clear_failed_tasks`) — Clean up assets with a persisted generation error: delete unmaterialized generation husks (returned as 'cleared'), but keep assets that already hold media and only clear their error row (returned as 'error_cleared').
@@ -78,6 +78,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `extract_first_frame` — Extract the first frame of a video asset as a new image asset (JPEG). Uses 0.1s offset to avoid black frames.
 - `extract_frame` — Extract a frame at a specific timestamp from a video asset as a new image asset (JPEG).
 - `extract_last_frame` — Extract the last frame of a video asset as a new image asset (JPEG). Uses duration-0.1s to avoid fade-out.
+- `extract_video_clip` — Cut or extract a new video clip from a source time range while preserving the original. Use when the user says 'create a new clip from @a1 from 15s to 44s'. start_time and end_time accept seconds or timestamps such as 15s, 1:30, or 2m20s.
 - `generate_alibaba_qwen_2_0_edit_image` (historical names, not exposed: `generate_alibaba_qwen_image_edit`) — Edit an image using Alibaba Cloud Qwen (qwen-image-edit family) via the synchronous multimodal endpoint. Requires 1-3 reference images and an instruction prompt.
 - `generate_alibaba_qwen_2_0_text_to_image` (historical names, not exposed: `generate_alibaba_qwen_image`) — Generate an image using Alibaba Cloud Qwen (qwen-image-2.0 family) via the synchronous multimodal endpoint. Creates a new img- asset. Prompt is required; 0-3 optional reference images.
 - `generate_alibaba_wan_2_7_pro_text_to_image` (historical names, not exposed: `generate_alibaba_image_pro`, `generate_alibaba_wan_2_1_pro_text_to_image`) — Generate a pro image using Alibaba Cloud Wan 2.7 Image Pro. Creates a new img- asset and enqueues a background job. Prompt is required; reference images are optional (0-9).
@@ -279,7 +280,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `slash_commands` — List all available UI commands with scope metadata
 - `smooth_scene_concat` — Smoothly concatenate two video scenes into a new vid-* asset. When their boundary audio overlaps, automatically aligns the shared waveform to avoid duplicated speech and dissolves the picture across that overlap. Otherwise uses a short crossfade.
 - `splice_video` — Splice two videos with an explicit overlap window. An overlap of 0 concatenates both complete videos; a positive overlap searches that many seconds at the end of the first video for the frame that best matches the first frame of the second. Creates a new vid- asset.
-- `split_video` — Split a video asset into two new assets at chunk_a_end / chunk_b_start. Setting chunk_b_start < chunk_a_end produces an overlap window; equal values produce a clean split. The original asset is preserved.
+- `split_video` — Create two new clips from one video while preserving the source. Use for requests such as 'trim @a1 15s and remaining'. chunk_a_end accepts seconds or timestamps such as 15s or 1:30; omit chunk_b_start for a clean split.
 - `split_video_by_durations` — Split a video into N targeted chunks plus a leftover chunk with the rest. Pass target_secs as a list (e.g. [10] or [10, 15]); each target produces an exact-length chunk, and the trailing leftover holds whatever's left. If the leftover would be sub-half-second, the last target is backed off by 1s. Source is preserved. When `destination` is provided, chunks are written as files inside an existing asset (one filename per target, no leftover) instead of minting fresh vid-* assets.
 - `storage_status` — Read catalog and object publication status
 - `storage_sync` — Publish a book's pending content-addressed objects and catalog
@@ -291,7 +292,7 @@ Every current MCP endpoint and canonical slash command is listed once. Historica
 - `transcribe` — Transcribe audio from a video or audio asset using ElevenLabs speech-to-text. Writes elevenlabs.json into the asset directory.
 - `translate_subtitles` — Translate an asset's transcribed subtitles into another language. Writes elevenlabs.<lang>.json next to elevenlabs.json; renders with subtitle_language set to that language use it. Cached per language — re-runs only after re-transcription.
 - `trim_audio` — Trim an aud-* asset: keep a time range (trim_start/trim_end) or cut out a section (cut_start/cut_end). Use trim_video for vid-* assets so picture and sound remain synchronized. Operates in-place with git versioning.
-- `trim_video` — Trim a video asset: keep a time range (trim_start/trim_end) or cut out a middle section (cut_start/cut_end). Operates in-place with git versioning.
+- `trim_video` — Modify an existing video in place by keeping a range or removing a middle section. Use extract_video_clip instead when the user asks for a new clip and wants the source preserved. Timestamp fields accept numbers or values such as 15s and 1:30.
 - `unassign_slot` — Remove a typed timeline slot and shift later slots left
 - `update_character_entity` — Update a reusable character
 - `update_notebook_cell` — Update one notebook cell

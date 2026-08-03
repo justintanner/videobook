@@ -23,7 +23,7 @@ describe("generated command documentation", () => {
     const commands = getCanonicalCommands();
     const actual = readFileSync(resolve(root, "docs/command-reference.md"), "utf8");
 
-    expect(tools).toHaveLength(302);
+    expect(tools).toHaveLength(303);
     expect(new Set(tools.map((tool) => tool.name)).size).toBe(tools.length);
     expect(actual).toBe(renderCommandReference(tools, commands, GENERATION_ACTIONS));
   });

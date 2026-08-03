@@ -66,6 +66,7 @@ export default defineConfig({
       'server/src/tools/api-status.test.ts',
       'server/src/tools/activity-policy.test.ts',
       'server/src/tools/_seedance2-shared.test.ts',
+      'server/src/tools/extract-video-clip.test.ts',
       'server/src/tools/fal-actions-contract.test.ts',
       'server/src/tools/generation-naming-manifest.test.ts',
       'server/src/tools/log-wrapper.test.ts',

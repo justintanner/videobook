@@ -6535,55 +6535,28 @@ function App({ initialWorkspace: initialPayload }: AppProps) {
         if (/\b(?:clean(?:up)?|filler|long silence|weak section)\b/iu.test(input)) {
           return await prepareNotebookCleanup('chat')
         }
-        const value = await call('plan_chat_command', {
+        const routed = await call('chat', {
           book_id: bookId,
-          actor: 'videobook-user',
           prompt: resolvedAssetInput,
-          ...(fullscreenCell
-            && notebook
-            && fullscreenCell.outputArtifactId
-            && (fullscreenCell.type === 'image' || fullscreenCell.type === 'video')
-            ? {
-                media_context: {
-                  notebook_id: notebook.id,
-                  cell_id: fullscreenCell.id,
-                  artifact_id: fullscreenCell.outputArtifactId,
-                },
-              }
-            : {}),
+          model: chatModel,
         })
-        const result = record(value)
-        if (result?.kind === 'clarification') {
-          if (result.reason === 'unsupported') {
-            const routed = await call('chat', {
-              book_id: bookId,
-              prompt: resolvedAssetInput,
-              model: chatModel,
-            })
-            const routedRecord = record(routed)
-            if (routedRecord?.kind === 'chat-action-plan') {
-              return await previewRoutedChatAction(
-                asChatActionPlan(routed),
-                input,
-              )
-            }
-            setPendingChatAction(null)
-            setPendingCommandPlan(null)
-            if (isDownloadVideoResult(routed)) {
-              return await completeVideoDownload(routed, urlFromText(input))
-            }
-            await refreshBookData(bookId, notebook?.id)
-            return {
-              ok: true,
-              message: messageFor(routed, 'Command complete'),
-            }
-          }
-          return {
-            ok: false,
-            message: asString(result.message) ?? 'Clarify the edit you want to make.',
-          }
+        const routedRecord = record(routed)
+        if (routedRecord?.kind === 'chat-action-plan') {
+          return await previewRoutedChatAction(
+            asChatActionPlan(routed),
+            input,
+          )
         }
-        return await previewCommandPlan(asCommandPlan(value))
+        setPendingChatAction(null)
+        setPendingCommandPlan(null)
+        if (isDownloadVideoResult(routed)) {
+          return await completeVideoDownload(routed, urlFromText(input))
+        }
+        await refreshBookData(bookId, notebook?.id)
+        return {
+          ok: true,
+          message: messageFor(routed, 'Command complete'),
+        }
       }
       const [commandToken, ...restParts] = input.trim().split(/\s+/)
       const rest = restParts.join(' ')

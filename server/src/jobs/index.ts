@@ -11,6 +11,7 @@ import { registerDoctorFixJob } from "./doctor-fix.js";
 import { registerTrimVideoJob } from "./trim-video.js";
 import { registerTrimAudioJob } from "./trim-audio.js";
 import { registerSplitVideoJob } from "./split-video.js";
+import { registerExtractVideoClipJob } from "./extract-video-clip.js";
 import { registerEvenSplitJob } from "./even-split.js";
 import { registerPadVideoJob } from "./pad-video.js";
 import { registerCropVideoJob } from "./crop-video.js";
@@ -147,6 +148,7 @@ export function registerAllJobHandlers(
   registerTrimVideoJob(fs);
   registerTrimAudioJob(fs);
   registerSplitVideoJob(fs);
+  registerExtractVideoClipJob(fs);
   registerEvenSplitJob(fs);
   registerPadVideoJob(fs);
   registerCropVideoJob(fs);

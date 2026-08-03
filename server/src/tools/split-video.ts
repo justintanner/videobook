@@ -1,10 +1,11 @@
-import type { Engine } from "videobook-engine";
+import { findVideoFile, type Engine } from "videobook-engine";
 import { z } from "zod";
 import { join } from "node:path";
 import { queue } from "../queue.js";
-import { findVideoFile } from "videobook-engine";
 import { probeVideo } from "../ffmpeg.js";
 import type { ToolDef } from "./tool-def.js";
+import { resolveVideoAssetReference } from "./video-source-reference.js";
+import { parseVideoTimestamp, videoTimestampSchema } from "./video-time-input.js";
 
 // Each chunk must be at least this long, otherwise downstream process_video
 // can't extract frames / probe meaningfully and the asset gets stuck.
@@ -52,22 +53,45 @@ export function splitVideoDef(fs: Engine): ToolDef {
   return {
     name: "split_video",
     description:
-      "Split a video asset into two new assets at chunk_a_end / chunk_b_start. Setting chunk_b_start < chunk_a_end produces an overlap window; equal values produce a clean split. The original asset is preserved.",
+      "Create two new clips from one video while preserving the source. Use for requests such as 'trim @a1 15s and remaining'. chunk_a_end accepts seconds or timestamps such as 15s or 1:30; omit chunk_b_start for a clean split.",
+    annotations: {
+      title: "Split video into clips",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: false,
+    },
     schema: {
-      asset_id: z.string().describe("Source video asset ID (e.g. vid-my-clip)"),
+      asset_id: z.string().describe("Source video asset ID or notebook reference such as @a1"),
       book_id: z.string().describe("Project slug"),
-      chunk_a_end: z.number().describe("End of the first chunk in seconds"),
-      chunk_b_start: z.number().optional().describe("Start of the second chunk in seconds (<= chunk_a_end for overlap, equal for clean split; defaults to chunk_a_end)"),
+      notebook_id: z.string().uuid().optional().describe("Notebook UUID when asset_id is a grid reference and the book has multiple matching notebooks"),
+      chunk_a_end: videoTimestampSchema.describe("End of the first clip in seconds or a timestamp such as 15s or 1:30"),
+      chunk_b_start: videoTimestampSchema.optional().describe("Start of the remaining clip; defaults to chunk_a_end for a clean split"),
     },
     handler: async (args) => {
-      const { asset_id, book_id, chunk_a_end, chunk_b_start } = args as {
+      const { asset_id, book_id, notebook_id, chunk_a_end, chunk_b_start } = args as {
         asset_id: string;
         book_id: string;
-        chunk_a_end: number;
-        chunk_b_start?: number;
+        notebook_id?: string;
+        chunk_a_end: string | number;
+        chunk_b_start?: string | number;
       };
 
-      const validated = validateSplitParams(chunk_a_end, chunk_b_start ?? chunk_a_end);
+      let assetId: string;
+      let chunkAEnd: number;
+      let chunkBStart: number;
+      try {
+        assetId = resolveVideoAssetReference(fs, asset_id, notebook_id);
+        chunkAEnd = parseVideoTimestamp(chunk_a_end, "chunk_a_end")!;
+        chunkBStart = parseVideoTimestamp(chunk_b_start, "chunk_b_start") ?? chunkAEnd;
+      } catch (err) {
+        return {
+          isError: true as const,
+          content: [{ type: "text" as const, text: err instanceof Error ? err.message : String(err) }],
+        };
+      }
+
+      const validated = validateSplitParams(chunkAEnd, chunkBStart);
       if ("error" in validated) {
         return {
           isError: true as const,
@@ -75,7 +99,7 @@ export function splitVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const manifestResult = await fs.files.manifest(asset_id);
+      const manifestResult = await fs.files.manifest(assetId);
       if (!manifestResult.ok) {
         return {
           isError: true as const,
@@ -88,7 +112,7 @@ export function splitVideoDef(fs: Engine): ToolDef {
       if (!videoFile) {
         return {
           isError: true as const,
-          content: [{ type: "text" as const, text: `No video file found in asset ${asset_id}` }],
+          content: [{ type: "text" as const, text: `No video file found in asset ${assetId}` }],
         };
       }
 
@@ -127,9 +151,9 @@ export function splitVideoDef(fs: Engine): ToolDef {
         };
       }
 
-      const prefix = asset_id.split("-")[0];
-      const nameA = deriveChunkName(asset_id, "1");
-      const nameB = deriveChunkName(asset_id, "2");
+      const prefix = assetId.split("-")[0];
+      const nameA = deriveChunkName(assetId, "1");
+      const nameB = deriveChunkName(assetId, "2");
 
       const createA = await fs.artifacts.create(prefix, nameA);
       if (!createA.ok) {
@@ -153,12 +177,12 @@ export function splitVideoDef(fs: Engine): ToolDef {
       const outputPathA = join(assetDirA, "original.mp4");
       const outputPathB = join(assetDirB, "original.mp4");
 
-      const jobId = `split-${asset_id}-${Date.now()}`;
+      const jobId = `split-${assetId}-${Date.now()}`;
       try {
         await queue.enqueueAndWait(jobId, {
           type: "split_video",
           sourcePath,
-          sourceAssetId: asset_id,
+          sourceAssetId: assetId,
           chunkAEnd: validated.chunkAEnd,
           chunkBStart: validated.chunkBStart,
           assetIdA,
@@ -183,7 +207,7 @@ export function splitVideoDef(fs: Engine): ToolDef {
         content: [{
           type: "text" as const,
           text: JSON.stringify({
-            source_asset_id: asset_id,
+            source_asset_id: assetId,
             chunk_a_asset_id: assetIdA,
             chunk_b_asset_id: assetIdB,
             chunk_a_end: validated.chunkAEnd,
@@ -197,4 +221,3 @@ export function splitVideoDef(fs: Engine): ToolDef {
     },
   };
 }
-

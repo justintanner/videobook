@@ -7,15 +7,24 @@ type ToolResult = {
 
 type ToolHandler = (args: Record<string, unknown>) => Promise<ToolResult>;
 
+type ToolAnnotations = {
+  title?: string;
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+};
+
 type ToolDef = {
   name: string;
   description: string;
   schema: ZodRawShape;
   handler: ToolHandler;
+  annotations?: ToolAnnotations;
   scope?: "global" | "book";
   recordsOwnActivity?: boolean;
 };
 
 type SchemaArgs<TSchema extends ZodRawShape> = zInfer<ZodObject<TSchema>>;
 
-export type { ToolDef, ToolResult, ToolHandler, SchemaArgs };
+export type { ToolDef, ToolResult, ToolHandler, ToolAnnotations, SchemaArgs };
