@@ -12,7 +12,10 @@ import {
   assertKlingMotionControlDuration,
   type KlingMotionControlOrientation,
 } from "../../server/src/kling-motion-control-duration.js";
-import { generateKling30MotionControlVideoDef } from "../../server/src/tools/generate-kling30-motion-control-video.js";
+import {
+  generateKling30MotionControlVideoDef,
+  selectMotionControlImageFiles,
+} from "../../server/src/tools/generate-kling30-motion-control-video.js";
 import { videobookDomainDefs } from "../../server/src/tools/videobook-domain.js";
 
 describe("Kling motion-control duration", () => {
@@ -129,6 +132,58 @@ describe("Kling motion-control duration", () => {
       if (previousApiKey === undefined) delete process.env.KIE_API_KEY;
       else process.env.KIE_API_KEY = previousApiKey;
     }
+  });
+
+  it.each([
+    ["original.png", "portrait"],
+    ["original.jpg", "landscape"],
+  ] as const)("selects %s instead of a generated %s crop", async (originalName, preferredOrientation) => {
+    const image = await engine.artifacts.create("img", `character ${preferredOrientation}`);
+    expect(image.ok).toBe(true);
+    if (!image.ok) return;
+    for (const filename of [
+      "landscape.jpg",
+      "portrait.jpg",
+      "square.jpg",
+      originalName,
+    ]) {
+      const written = await engine.files.write(
+        image.value.artifactId,
+        filename,
+        Buffer.from(filename),
+      );
+      expect(written.ok).toBe(true);
+    }
+    const manifest = await engine.files.manifest(image.value.artifactId);
+    expect(manifest.ok).toBe(true);
+    if (!manifest.ok) return;
+    expect(selectMotionControlImageFiles(
+      image.value.slug,
+      manifest.value.files,
+      preferredOrientation,
+    ).map((file) => file.name)).toEqual([originalName]);
+  });
+
+  it("uses the motion-video orientation when an image has no canonical original", async () => {
+    const image = await engine.artifacts.create("img", "legacy character");
+    expect(image.ok).toBe(true);
+    if (!image.ok) return;
+    for (const filename of ["landscape.jpg", "portrait.jpg", "square.jpg"]) {
+      const written = await engine.files.write(
+        image.value.artifactId,
+        filename,
+        Buffer.from(filename),
+      );
+      expect(written.ok).toBe(true);
+    }
+    const manifest = await engine.files.manifest(image.value.artifactId);
+    expect(manifest.ok).toBe(true);
+    if (!manifest.ok) return;
+    expect(selectMotionControlImageFiles(
+      image.value.slug,
+      manifest.value.files,
+      "portrait",
+    ).map((file) => file.name)).toEqual(["portrait.jpg"]);
   });
 
   it("returns the same preflight from the notebook preview surface", async () => {

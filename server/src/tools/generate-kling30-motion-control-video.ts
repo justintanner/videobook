@@ -18,6 +18,31 @@ function getImagesFromManifest(files: ArtifactManifestFile[]): ArtifactManifestF
   });
 }
 
+type ImageOrientation = "landscape" | "portrait" | "square";
+
+export function selectMotionControlImageFiles(
+  assetId: string,
+  files: ArtifactManifestFile[],
+  preferredOrientation?: ImageOrientation,
+): ArtifactManifestFile[] {
+  const images = getImagesFromManifest(files);
+  if (assetId.startsWith("char-")) return images.slice(0, 2);
+  const original = images.find((file) => /^original\.[^/]+$/i.test(file.name));
+  const matching = preferredOrientation
+    ? images.find((file) => file.name.toLowerCase() === `${preferredOrientation}.jpg`)
+    : undefined;
+  const selected = original ?? matching;
+  return selected ? [selected] : [];
+}
+
+function imageOrientation(width: unknown, height: unknown): ImageOrientation | undefined {
+  if (typeof width !== "number" || typeof height !== "number" || width <= 0 || height <= 0) {
+    return undefined;
+  }
+  if (width === height) return "square";
+  return width > height ? "landscape" : "portrait";
+}
+
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -56,6 +81,26 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
         mode, character_orientation, background_source,
       } = args as Args;
 
+      const videoInputs: RefInput[] = [];
+      let preferredImageOrientation: ImageOrientation | undefined;
+      for (const raw of motion_video_slugs) {
+        const assetId = raw.replace(/^@/, "");
+        if (!assetId.startsWith("vid-")) {
+          return { isError: true as const, content: [{ type: "text" as const, text: `motion_video_slugs entries must be vid-* assets, got: ${assetId}` }] };
+        }
+        const [manifest, metadata] = await Promise.all([
+          fs.files.manifest(assetId),
+          fs.metadata.artifacts.read<Record<string, unknown>>(assetId, "original"),
+        ]);
+        if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
+        const file = findVideoFile(manifest.value.files);
+        if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${assetId}` }] };
+        videoInputs.push({ assetId, filename: file.name });
+        if (!preferredImageOrientation && metadata.ok) {
+          preferredImageOrientation = imageOrientation(metadata.value.width, metadata.value.height);
+        }
+      }
+
       const imageInputs: RefInput[] = [];
       for (const raw of character_image_slugs) {
         const assetId = raw.replace(/^@/, "");
@@ -64,26 +109,13 @@ export function generateKling30MotionControlVideoDef(fs: Engine): ToolDef {
         }
         const manifest = await fs.files.manifest(assetId);
         if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
-        const images = getImagesFromManifest(manifest.value.files);
+        const images = selectMotionControlImageFiles(
+          assetId,
+          manifest.value.files,
+          preferredImageOrientation,
+        );
         if (images.length === 0) return { isError: true as const, content: [{ type: "text" as const, text: `No image file found in asset ${assetId}` }] };
-        
-        imageInputs.push({ assetId, filename: images[0].name });
-        if (assetId.startsWith("char-") && images.length > 1) {
-          imageInputs.push({ assetId, filename: images[1].name });
-        }
-      }
-
-      const videoInputs: RefInput[] = [];
-      for (const raw of motion_video_slugs) {
-        const assetId = raw.replace(/^@/, "");
-        if (!assetId.startsWith("vid-")) {
-          return { isError: true as const, content: [{ type: "text" as const, text: `motion_video_slugs entries must be vid-* assets, got: ${assetId}` }] };
-        }
-        const manifest = await fs.files.manifest(assetId);
-        if (!manifest.ok) return { isError: true as const, content: [{ type: "text" as const, text: manifest.error.message }] };
-        const file = findVideoFile(manifest.value.files);
-        if (!file) return { isError: true as const, content: [{ type: "text" as const, text: `No video file found in asset ${assetId}` }] };
-        videoInputs.push({ assetId, filename: file.name });
+        imageInputs.push(...images.map((image) => ({ assetId, filename: image.name })));
       }
 
       try {
